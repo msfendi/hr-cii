@@ -8,7 +8,7 @@
         <div class="text-center">
             <img src="{{ asset('img/chutex.svg') }}" style="width: 150px;">
             <h1 class="h4 text-white"><b>PT. Chutex International Indonesia</b></h1>
-            <h1 class="h1 text-white mb-4"><b>E-Signature</b></h1>
+            <h1 class="h1 text-white mb-4"><b>E-HRIS</b></h1>
         </div>
         <div class="card o-hidden border-0 shadow-lg my-5">
             <div class="card-body p-0">

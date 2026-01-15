@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'mysql'),
+    'default' => env('DB_CONNECTION', 'audit'),
 
     /*
     |--------------------------------------------------------------------------
@@ -63,6 +63,26 @@ return [
             ]) : [],
         ],
 
+        'fingerspot' => [
+            'driver' => 'mysql',
+            'url' => env('DATABASE_URL'),
+            'host' => env('DB_FINGERSPOT_HOST', '127.0.0.1'),
+            'port' => env('DB_FINGERSPOT_PORT', '3306'),
+            'database' => env('DB_FINGERSPOT_DATABASE', 'forge'),
+            'username' => env('DB_FINGERSPOT_USERNAME', 'forge'),
+            'password' => env('DB_FINGERSPOT_PASSWORD', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),
@@ -78,7 +98,37 @@ return [
             'sslmode' => 'prefer',
         ],
 
-        'sqlsrv' => [
+        // 'sqlsrv' => [
+        //     'driver' => 'sqlsrv',
+        //     'url' => env('DATABASE_URL'),
+        //     'host' => env('DB_HOST', 'localhost'),
+        //     'port' => env('DB_PORT', '1433'),
+        //     'database' => env('DB_DATABASE', 'forge'),
+        //     'username' => env('DB_USERNAME', 'forge'),
+        //     'password' => env('DB_PASSWORD', ''),
+        //     'charset' => 'utf8',
+        //     'prefix' => '',
+        //     'prefix_indexes' => true,
+        //     // 'encrypt' => env('DB_ENCRYPT', 'yes'),
+        //     // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+        // ],
+
+        'cii' => [
+            'driver' => 'sqlsrv',
+            'url' => env('DATABASE_URL'),
+            'host' => env('DB_CII_HOST', 'localhost'),
+            'port' => env('DB_CII_PORT', '1433'),
+            'database' => env('DB_CII_DATABASE', 'forge'),
+            'username' => env('DB_CII_USERNAME', 'forge'),
+            'password' => env('DB_CII_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            'trust_server_certificate' => true,
+        ],
+
+        'audit' => [
             'driver' => 'sqlsrv',
             'url' => env('DATABASE_URL'),
             'host' => env('DB_HOST', 'localhost'),
@@ -89,8 +139,8 @@ return [
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+            'encrypt' => 'yes',
+            'trust_server_certificate' => true
         ],
 
     ],

@@ -1,9 +1,15 @@
 <?php
 
+use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\AttendanceFingerController;
+use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginController;
+use App\Http\Controllers\PelamarController;
+use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,9 +29,11 @@ use Illuminate\Support\Facades\Route;
 // });
 
 Route::get('/', [LoginController::class, 'login'])->name('/');
+// Route::get('/template/auditsewing', [TemplateController::class, 'auditsewing'])->name('template.auditsewing');
+// Route::get('/template/auditnonsewing', [TemplateController::class, 'auditnonsewing'])->name('template.auditnonsewing');
 
 Route::group(['middleware' => 'guest'], function () {
-    Route::get('/register', [RegisterController::class, 'index'])->name('register');
+    // Route::get('/register', [RegisterController::class, 'index'])->name('register');
     Route::post('/register/guest', [RegisterController::class, 'store'])->name('register.guest');
 
     Route::get('/login', [LoginController::class, 'login'])->name('login.guest');
@@ -34,11 +42,35 @@ Route::group(['middleware' => 'guest'], function () {
 
 Route::group(['middleware' => 'auth'], function () {
     Route::get('/home', [HomeController::class, 'index'])->name('home');
+    Route::get('/home/get-pkwt-chart', [HomeController::class, 'getPKWTChart'])->name('home.get-pkwt-chart');
+    Route::get('/home/get-recap-count', [HomeController::class, 'getRecapCount'])->name('home.get-recap-count');
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
 
     //Register
     Route::get('/register/create', [RegisterController::class, 'create'])->name('register.create')->middleware(['auth', 'role:Admin']);
     Route::post('/register', [RegisterController::class, 'storeAuth'])->name('register')->middleware(['auth', 'role:Admin']);
+
+    // PKWT
+    Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin']);
+
+
+    // BIODATA
+    Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin']);
+    Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin']);
+    Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'role:Admin']);
+    Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'role:Admin']);
+    Route::get('/biodata/destroy/{NPK}', [BiodataController::class, 'destroy'])->name('biodata.destroy')->middleware(['auth', 'role:Admin']);
+
+    // PKWT
+    Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin']);
+
+
+    // Pelamar
+    Route::get('/pelamar/index', [PelamarController::class, 'index'])->name('pelamar.index')->middleware(['auth', 'role:Admin']);
+    Route::post('/pelamar/import', [PelamarController::class, 'import'])->name('pelamar.import')->middleware(['auth', 'role:Admin']);
+    Route::post('/pelamar/assign', [PelamarController::class, 'assign'])->name('pelamar.assign')->middleware(['auth', 'role:Admin']);
+    Route::get('/pelamar/detail/{id}', [PelamarController::class, 'detail'])->name('pelamar.detail')->middleware(['auth', 'role:Admin']);
+
 
     //Role
     Route::get('/role/index', [RoleController::class, 'index'])->name('role.index')->middleware(['auth', 'role:Admin']);
@@ -57,5 +89,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/user/assign/{id}', [UserController::class, 'assign'])->name('user.assign')->middleware(['auth', 'role:Admin']);
     Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'role:Admin']);
 
-});
 
+    // attendance finger
+    Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index');
+    Route::post('/attendance-finger/sync', [AttendanceFingerController::class, 'sync'])->name('attendance-finger.sync');
+    Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export');
+});

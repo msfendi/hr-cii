@@ -35,6 +35,33 @@
     </li>
     @endif
 
+    {{-- <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseKaryawan"
+            aria-expanded="true" aria-controls="collapseKaryawan">
+            <i class="fas fa-fw fa-users"></i>
+            <span>Karyawan</span>
+        </a>
+        <div id="collapseKaryawan" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('attendance.index') }}">Karyawan List</a>
+            </div>
+        </div>
+    </li> --}}
+
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePKWT"
+            aria-expanded="true" aria-controls="collapsePKWT">
+            <i class="fas fa-fw fa-users"></i>
+            <span>Karyawan</span>
+        </a>
+        <div id="collapsePKWT" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar List</a>
+                <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata List</a>
+            </div>
+        </div>
+    </li>
+
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">

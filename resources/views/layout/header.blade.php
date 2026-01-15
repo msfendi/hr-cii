@@ -5,7 +5,7 @@
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Chutex E-Signature</title>
+    <title>Chutex E-HRIS</title>
 
     <!-- Custom fonts for this template-->
     <link rel="icon" type="image/x-icon" href="{{asset('storage/images/signature_icon.ico')}}">
