@@ -20,6 +20,12 @@ class PelamarImport implements ToModel, WithStartRow
 
     public function model(array $row)
     {
+        $existingPelamar = Pelamar::where('NIK', $row[18])->first();
+
+        if ($existingPelamar) {
+            return null;
+        }
+
         return new Pelamar([
             'NPK' => $row[0],
             'NAMA' => $row[1],

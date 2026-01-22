@@ -163,6 +163,7 @@ class PelamarController extends Controller
         $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id)->first();
         return response()->json($pelamar);
     }
+    
 
     /**
      * Show the form for creating a new resource.
