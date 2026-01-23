@@ -8,6 +8,10 @@ use Illuminate\Database\Eloquent\Model;
 class Pelamar extends Model
 {
     use HasFactory;
+    protected $connection = 'cii';
+    protected $table = 'PELAMAR';
+    public $timestamps = false;
+
     protected $fillable = [
         'ID',
         'NPK',
@@ -34,5 +38,5 @@ class Pelamar extends Model
         'STATUS',
         'TANGGUNGAN',
         'IS_KONTRAK'
-    ];  
+    ];
 }

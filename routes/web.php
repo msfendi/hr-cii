@@ -97,4 +97,20 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index');
     Route::post('/attendance-finger/sync', [AttendanceFingerController::class, 'sync'])->name('attendance-finger.sync');
     Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export');
+
+
+     //Attendance
+    Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::post('/attendance/import', [AttendanceController::class, 'import'])->name('attendance.import');
+    Route::post('/attendance/export', [AttendanceController::class, 'export'])->name('attendance.export');
+    Route::get('/attendance/export_view', [AttendanceController::class, 'export_view'])->name('attendance.export_view');
+    Route::post('/attendance/deleteAll', [AttendanceController::class, 'deleteAll'])->name('attendance.deleteAll');
+    Route::post('/attendance/auditsewing', [AttendanceController::class, 'auditsewing'])->name('attendance.auditsewing');
+    Route::post('/attendance/auditnonsewing', [AttendanceController::class, 'auditnonsewing'])->name('attendance.auditnonsewing');
+    Route::get('/attendance/report', [AttendanceController::class, 'report'])->name('attendance.report');
+    Route::get('/attendance/check-master-data', [AttendanceController::class, 'checkMasterData'])->name('attendance.checkMasterData');
+    Route::get('/attendance/edit/{id}', [AttendanceController::class, 'edit'])->name('attendance.edit');
+    Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update');
+    Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance');
+
 });

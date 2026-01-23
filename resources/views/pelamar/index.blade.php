@@ -142,6 +142,12 @@
                                                 </div>
                                             </div>
                                             <div class="form-group row mb-1">
+                                                <label class="col-sm-4 col-form-label py-0">No KK</label>
+                                                <div class="col-sm-8">
+                                                    <input type="text" class="form-control py-0" id="assign_kk" name="no_kk">
+                                                </div>
+                                            </div>
+                                            <div class="form-group row mb-1">
                                                 <label class="col-sm-4 col-form-label py-0">Jenis Kelamin</label>
                                                 <div class="col-sm-8">
                                                     <select class="form-control py-0" id="assign_jk" name="jk">
@@ -162,12 +168,12 @@
                                                     <input type="date" class="form-control py-0" id="assign_tgl_lahir" name="tgl_lahir">
                                                 </div>
                                             </div>
-                                            {{-- <div class="form-group row mb-1">
+                                            <div class="form-group row mb-1">
                                                 <label class="col-sm-4 col-form-label py-0">Umur</label>
                                                 <div class="col-sm-8">
-                                                    <input type="number" class="form-control py-0" id="assign_umur" name="umur">
+                                                    <input type="text" class="form-control py-0" id="assign_umur" name="umur">
                                                 </div>
-                                            </div> --}}
+                                            </div>
                                             <div class="form-group row mb-1">
                                                 <label class="col-sm-4 col-form-label py-0">Agama</label>
                                                 <div class="col-sm-8">
@@ -178,6 +184,18 @@
                                                 <label class="col-sm-4 col-form-label py-0">Status</label>
                                                 <div class="col-sm-8">
                                                     <input type="text" class="form-control py-0" id="assign_status" name="status">
+                                                </div>
+                                            </div>
+                                            <div class="form-group row mb-1">
+                                                <label class="col-sm-4 col-form-label py-0">Nama Ibu</label>
+                                                <div class="col-sm-8">
+                                                    <input type="text" class="form-control py-0" id="assign_ibu" name="ibu">
+                                                </div>
+                                            </div>
+                                            <div class="form-group row mb-1">
+                                                <label class="col-sm-4 col-form-label py-0">Tanggungan</label>
+                                                <div class="col-sm-8">
+                                                    <input type="text" class="form-control py-0" id="assign_tanggungan" name="tanggungan">
                                                 </div>
                                             </div>
                                         </div>
@@ -203,6 +221,12 @@
                                                 </div>
                                             </div>
                                             <div class="form-group row mb-1">
+                                                <label class="col-sm-4 col-form-label py-0">Domisili</label>
+                                                <div class="col-sm-8">
+                                                     <input type="text" class="form-control py-0" id="assign_domisili" name="domisili" placeholder="Alamat Domisili">
+                                                </div>
+                                            </div>
+                                            <div class="form-group row mb-1">
                                                 <label class="col-sm-4 col-form-label py-0">Pendidikan</label>
                                                 <div class="col-sm-8">
                                                     <input type="text" class="form-control py-0" id="assign_pendidikan" name="pendidikan">
@@ -212,6 +236,12 @@
                                                 <label class="col-sm-4 col-form-label py-0">Sekolah/Univ</label>
                                                 <div class="col-sm-8">
                                                     <input type="text" class="form-control py-0" id="assign_sekolah" name="sekolah">
+                                                </div>
+                                            </div>
+                                            <div class="form-group row mb-1">
+                                                <label class="col-sm-4 col-form-label py-0">Kab. Sekolah</label>
+                                                <div class="col-sm-8">
+                                                    <input type="text" class="form-control py-0" id="assign_kabupaten_sekolah" name="kabupaten_sekolah">
                                                 </div>
                                             </div>
                                             <div class="form-group row mb-1">
@@ -284,28 +314,35 @@
 
 <script>
     $(document).ready(function() {
-        $('.btn-assign').on('click', function() {
+        $(document).on('click', '.btn-assign', function() {
             var id = $(this).data('id');
             $('#assign_id_pelamar').val(id);
 
             // Clear previous data
+            // Clear previous data
             $('#assign_npk').val('Loading...');
             $('#assign_nama').val('');
             $('#assign_nik').val('');
+            $('#assign_kk').val('');
             $('#assign_jk').val('');
             $('#assign_tempat_lahir').val('');
             $('#assign_tgl_lahir').val('');
             $('#assign_umur').val('');
             $('#assign_agama').val('');
             $('#assign_status').val('');
+            $('#assign_ibu').val('');
+            $('#assign_tanggungan').val('');
             $('#assign_hp').val('');
-            $('#assign_alamat').text('');
-            $('#assign_kabupaten').text('');
+            $('#assign_alamat').val('');
+            $('#assign_kabupaten').val('');
+            $('#assign_domisili').val('');
             $('#assign_pendidikan').val('');
             $('#assign_sekolah').val('');
+            $('#assign_kabupaten_sekolah').val('');
             $('#assign_jurusan').val('');
-            $('#assign_tb').text('');
-            $('#assign_bb').text('');
+            $('#assign_tb').val('');
+            $('#assign_bb').val('');
+            $('#assign_tmk').val('');
 
             $.ajax({
                 url: '/pelamar/detail/' + id,
@@ -314,24 +351,28 @@
                     $('#assign_npk').val(response.NPK);
                     $('#assign_nama').val(response.NAMA);
                     $('#assign_nik').val(response.NIK);
+                    $('#assign_kk').val(response.NO_KK);
                     $('#assign_jk').val(response.JENIS_KELAMIN);
                     $('#assign_tempat_lahir').val(response.TMPT_LAHIR);
                     $('#assign_tgl_lahir').val(response.TGL_LAHIR);
                     $('#assign_umur').val(response.UMUR);
                     $('#assign_agama').val(response.AGAMA);
                     $('#assign_status').val(response.STATUS);
+                    $('#assign_ibu').val(response.IBU);
+                    $('#assign_tanggungan').val(response.TANGGUNGAN);
                     $('#assign_hp').val(response.HP);
                     $('#assign_alamat').val(response.ALAMAT_LENGKAP);
                     $('#assign_kabupaten').val(response.KABUPATEN);
+                    $('#assign_domisili').val(response.ALAMAT_DOMISILI);
                     $('#assign_pendidikan').val(response.PENDIDIKAN);
                     $('#assign_sekolah').val(response.NAMA_SEKOLAH);
+                    $('#assign_kabupaten_sekolah').val(response.KABUPATEN_SEKOLAH);
                     $('#assign_jurusan').val(response.JURUSAN);
                     $('#assign_tb').val(response.TINGGI_BADAN);
                     $('#assign_bb').val(response.BERAT_BADAN);
-
-                    // Reformat date for date input (YYYY-MM-DD) if necessary
-                    // Assuming response.TGL_LAHIR is YYYY-MM-DD or standard format. 
-                    // If it is DD-MM-YYYY, might need conversion.
+                    if(response.TMK) {
+                        $('#assign_tmk').val(response.TMK);
+                    }
                 },
                 error: function(xhr) {
                     console.log(xhr.responseText);
@@ -348,20 +389,26 @@
                     npk: $('#assign_npk').val(),
                     nama: $('#assign_nama').val(),
                     nik: $('#assign_nik').val(),
+                    no_kk: $('#assign_kk').val(),
                     jk: $('#assign_jk').val(),
                     tempat_lahir: $('#assign_tempat_lahir').val(),
                     tgl_lahir: $('#assign_tgl_lahir').val(),
-                    // umur: $('#assign_umur').val(),
+                    umur: $('#assign_umur').val(),
                     agama: $('#assign_agama').val(),
                     status: $('#assign_status').val(),
+                    ibu: $('#assign_ibu').val(),
+                    tanggungan: $('#assign_tanggungan').val(),
                     hp: $('#assign_hp').val(),
                     alamat: $('#assign_alamat').val(),
+                    domisili: $('#assign_domisili').val(),
                     kabupaten: $('#assign_kabupaten').val(),
                     pendidikan: $('#assign_pendidikan').val(),
                     sekolah: $('#assign_sekolah').val(),
+                    kabupaten_sekolah: $('#assign_kabupaten_sekolah').val(),
                     jurusan: $('#assign_jurusan').val(),
                     tb: $('#assign_tb').val(),
                     bb: $('#assign_bb').val(),
+                    tmk: $('#assign_tmk').val(),
                 },
                 // success: function(response) {
                 //     console.log(response);

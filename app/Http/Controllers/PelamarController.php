@@ -53,62 +53,44 @@ class PelamarController extends Controller
 
     public function assign(Request $request)
     {
-        // $request->validate([
-        //     'id_pelamar' => 'required',
-        //     'id_dept' => 'required',
-        //     'tmk' => 'required|date',
-        //     'npk' => 'required',
-        //     'nama' => 'required',
-        //     'nik' => 'required',
-        //     'jk' => 'required',
-        //     'tempat_lahir' => 'required',
-        //     'tgl_lahir' => 'required|date',
-        //     'umur' => 'required|numeric',
-        //     'agama' => 'required',
-        //     'status' => 'required',
-        //     'hp' => 'required',
-        //     'alamat' => 'required',
-        //     'kabupaten' => 'required',
-        //     'pendidikan' => 'required',
-        //     'sekolah' => 'required',
-        //     'jurusan' => 'required',
-        //     'tb' => 'required|numeric',
-        //     'bb' => 'required|numeric',
-        // ]);
-
         try {
             DB::connection('cii')->beginTransaction();
+
             $id_pelamar = $request->id_pelamar;
 
             $tgl_lahir = Carbon::parse($request->tgl_lahir);
             $diff = $tgl_lahir->diff(Carbon::now());
             $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
 
-            // Updated Data from Form
-            $updateData = [
-                'NPK' => strtoupper($request->npk),
-                'NAMA' => strtoupper($request->nama),
-                'NIK' => $request->nik,
-                'JENIS_KELAMIN' => strtoupper($request->jk),
-                'TMPT_LAHIR' => strtoupper($request->tmpt_lahir),
-                'TGL_LAHIR' => $request->tgl_lahir,
-                'UMUR' => strtoupper($umur_string),
-                'AGAMA' => strtoupper($request->agama),
-                'STATUS' => strtoupper($request->status),
-                'HP' => $request->hp,
-                'ALAMAT_LENGKAP' => strtoupper($request->alamat),
-                'KABUPATEN' => strtoupper($request->kabupaten),
-                'PENDIDIKAN' => strtoupper($request->pendidikan),
-                'NAMA_SEKOLAH' => strtoupper($request->sekolah),
-                'JURUSAN' => strtoupper($request->jurusan),
-                'TINGGI_BADAN' => $request->tb,
-                'BERAT_BADAN' => $request->bb,
-                'IS_KONTRAK' => 'TRUE',
-                'TMK' => $request->tmk
-            ];
-
             $last_barcode = DB::connection('cii')->table('BIODATA')->orderBy('NPK', 'DESC')->orderBy('BARCODE', 'DESC')->first()->BARCODE + 1;
-            DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->update($updateData);
+            DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->update(
+                [
+                    'NPK' => strtoupper($request->npk),
+                    'NAMA' => strtoupper($request->nama),
+                    'JENIS_KELAMIN' => strtoupper($request->jk),
+                    'TMPT_LAHIR' => strtoupper($request->tempat_lahir),
+                    'TGL_LAHIR' => $request->tgl_lahir,
+                    'TMK' => $request->tmk,
+                    'UMUR' => $umur_string,
+                    'ALAMAT_LENGKAP' => strtoupper($request->alamat),
+                    'KABUPATEN' => strtoupper($request->kabupaten),
+                    'PENDIDIKAN' => strtoupper($request->pendidikan),
+                    'NAMA_SEKOLAH' => strtoupper($request->sekolah),
+                    'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah),
+                    'JURUSAN' => strtoupper($request->jurusan),
+                    'TINGGI_BADAN' => $request->tb,
+                    'BERAT_BADAN' => $request->bb,
+                    'HP' => $request->hp,
+                    'AGAMA' => strtoupper($request->agama),
+                    'NIK' => $request->nik,
+                    'NO_KK' => $request->no_kk,
+                    'IBU' => strtoupper($request->ibu),
+                    'STATUS' => strtoupper($request->status),
+                    'TANGGUNGAN' => $request->tanggungan,
+                    'IS_KONTRAK' => 'TRUE',
+                ]
+            );
+
             DB::connection('cii')->table('BIODATA')->insert([
                 'NPK' => strtoupper($request->npk),
                 'NAMA_KARYAWAN' => strtoupper($request->nama),
@@ -120,6 +102,9 @@ class PelamarController extends Controller
                 'STATUS' => 'A',
             ]);
 
+            $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
+            $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->first();
+
             DB::connection('cii')->table('PKWT')->insert([
                 'NPK' => strtoupper($request->npk),
                 'NAMA' => strtoupper($request->nama),
@@ -130,18 +115,18 @@ class PelamarController extends Controller
                 'TMK' => $request->tmk,
                 'USIA' => $umur_string,
                 'TKK' => $request->tkk,
-                'BAGIAN' => strtoupper($request->bag),
+                'BAGIAN' => strtoupper($dept->DEPARTEMENT),
                 'ALAMAT' => strtoupper($request->alamat),
                 'KABUPATEN' => strtoupper($request->kabupaten),
                 'KTP' => $request->nik,
                 'NO_KK' => $request->no_kk,
-                'IBU' => strtoupper($request->ibu),
+                'IBU' => strtoupper($pelamar->IBU),
                 'HP' => $request->hp,
                 'STATUS' => strtoupper($request->status),
                 'TANGGUNGAN' => $request->tanggungan,
                 'KETERANGAN' => $request->keterangan,
-                'TUTUPBUKU' => strtoupper($request->tutupbuku),
-                'TMPTLAHIR' => strtoupper($request->tmpt_lahir),
+                'TUTUPBUKU' => strtoupper('TUTUP BUKU TANGGAL 30 / 31'),
+                'TMPTLAHIR' => strtoupper($request->tempat_lahir),
                 'NOREK' => $request->norek,
                 'JURUSAN' => strtoupper($request->jurusan),
                 'FASKES' => strtoupper($request->faskes),
@@ -163,7 +148,7 @@ class PelamarController extends Controller
         $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id)->first();
         return response()->json($pelamar);
     }
-    
+
 
     /**
      * Show the form for creating a new resource.

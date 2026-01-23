@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'audit'),
+    'default' => env('DB_CONNECTION', 'cii'),
 
     /*
     |--------------------------------------------------------------------------

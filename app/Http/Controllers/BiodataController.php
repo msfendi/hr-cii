@@ -37,8 +37,9 @@ class BiodataController extends Controller
                 return redirect()->back();
             }
 
+            // Ketika karyawan pernah ada di PKWT dan TKK isi
             if (!empty($check_nama) && $check_nama[0]->TKK != null) {
-                $last_barcode = DB::connection('cii')->table('BIODATA_KELUAR')->orderBy('BARCODE', 'desc')->first()->BARCODE;
+                $last_barcode = DB::connection('cii')->table('BIODATA')->orderBy('BARCODE', 'desc')->first()->BARCODE;
                 $barcode = $last_barcode + 1;
 
                 DB::connection('cii')->beginTransaction();
@@ -170,7 +171,7 @@ class BiodataController extends Controller
     // fetch last npk
     public function fetchLastNpk()
     {
-        $last_npk = DB::connection('cii')->table('BIODATA')->select('NPK')->orderBy('NPK', 'desc')->first()->NPK;
+        $last_npk = DB::connection('cii')->table('PKWT')->select('NPK')->orderBy('NPK', 'desc')->first()->NPK;
         $explode_npk = explode('-', $last_npk);
         $incr_npk = $explode_npk[1] + 1;
         $format_npk = str_pad($incr_npk, 5, '0', STR_PAD_LEFT);
@@ -180,9 +181,9 @@ class BiodataController extends Controller
 
     public function exit(Request $request, $NPK)
     {
+        // jika karyawan keluar, pindahkan data ke biodata_keluar, hapus data dari table biodata, update tkk di pkwt
         try {
             DB::connection('cii')->beginTransaction();
-            // move from biodata and pkwt to biodata_keluar and pkwt_out
             $biodata = DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->first();
             $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->first();
 
@@ -203,13 +204,14 @@ class BiodataController extends Controller
                 'STATUS' => $biodata->STATUS,
             ]);
 
+            DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();
+
             if ($pkwt) {
                 DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->update([
                     'TKK' => $request->tkk,
                 ]);
             }
 
-            DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();
 
             DB::connection('cii')->commit();
 

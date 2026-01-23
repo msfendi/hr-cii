@@ -83,7 +83,6 @@
                                 @csrf
                                 <div class="modal-body p-4">
                                     <div class="row">
-                                        <!-- Left Side: Profile & Identity (Sticky) -->
                                         <div class="col-lg-2 border-right">
                                             <div class="d-flex flex-column align-items-center text-center p-3">
                                                 <!-- Photo Upload -->
@@ -161,12 +160,12 @@
                                                             <label class="small font-weight-bold text-muted ml-2">Agama</label>
                                                             <select class="form-control px-3" name="agama" id="edit_agama" style="height: 38px;">
                                                                 <option value="" disabled>Select</option>
-                                                                <option value="Islam">Islam</option>
-                                                                <option value="Kristen">Kristen</option>
-                                                                <option value="Katolik">Katolik</option>
-                                                                <option value="Hindu">Hindu</option>
-                                                                <option value="Buddha">Buddha</option>
-                                                                <option value="Lainnya">Others</option>
+                                                                <option value="ISLAM">Islam</option>
+                                                                <option value="KRISTEN">Kristen</option>
+                                                                <option value="KATOLIK">Katolik</option>
+                                                                <option value="HINDU">Hindu</option>
+                                                                <option value="BUDDHA">Buddha</option>
+                                                                <option value="LAINNYA">Others</option>
                                                             </select>
                                                         </div>
                                                     </div>

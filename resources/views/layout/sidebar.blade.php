@@ -62,6 +62,20 @@
         </div>
     </li>
 
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseAudit"
+            aria-expanded="true" aria-controls="collapseAudit">
+            <i class="fas fa-fw fa-users"></i>
+            <span>Audit</span>
+        </a>
+        <div id="collapseAudit" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('attendance.index') }}">Attendance List</a>
+                <a class="collapse-item" href="{{ route('attendance.checkMasterData') }}">Check Master Data</a>
+            </div>
+        </div>
+    </li>
+
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
