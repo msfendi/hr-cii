@@ -230,6 +230,7 @@
                                 </div>
                                 <div class="modal-footer border-0 pb-4 pr-5 bg-white">
                                     <button type="button" class="btn btn-secondary px-4 font-weight-bold" data-dismiss="modal">Batal</button>
+                                    <button type="button" id="btn_update_photo_only" class="btn btn-info px-4 font-weight-bold shadow-sm">Update Photo</button>
                                     <button type="submit" class="btn btn-warning px-5 font-weight-bold shadow-sm">Update Karyawan</button>
                                 </div>
                             </form>
@@ -1011,6 +1012,62 @@
                 error: function(xhr) {
                     console.log(xhr.responseText);
                     alert('Gagal mengambil data karyawan');
+                }
+            });
+        });
+
+        // Update Photo Only Button
+        $('#btn_update_photo_only').on('click', function() {
+            var npk = $('#edit_npk').val();
+            var fileInput = $('#edit_fotoInput')[0];
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                Swal.fire('Peringatan', 'Silakan pilih foto terlebih dahulu!', 'warning');
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append('foto_profil', fileInput.files[0]);
+            formData.append('_token', '{{ csrf_token() }}');
+
+            var btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Uploading...');
+
+            $.ajax({
+                url: '/biodata/update-photo/' + npk,
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.status === 'success') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Berhasil!',
+                            text: response.message,
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        
+                        // Refresh modal image with cache buster
+                        var currentSrc = $('#edit_previewImage').attr('src');
+                        if (currentSrc) {
+                            var cleanSrc = currentSrc.split('?')[0];
+                            $('#edit_previewImage').attr('src', cleanSrc + '?t=' + new Date().getTime());
+                        }
+                    } else {
+                        Swal.fire('Error', response.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Gagal upload foto';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    }
+                    Swal.fire('Error', msg, 'error');
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html('Update Photo');
                 }
             });
         });

@@ -340,6 +340,44 @@ class BiodataController extends Controller
             return redirect()->back();
         }
     }
+
+    public function updatePhoto(Request $request, $NPK)
+    {
+        try {
+            $request->validate([
+                'foto_profil' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+            ]);
+
+            $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->first();
+
+            if (!$pkwt) {
+                return response()->json(['status' => 'error', 'message' => 'Data tidak ditemukan'], 404);
+            }
+
+            $deptName = trim($pkwt->BAGIAN);
+            $name = trim($pkwt->NAMA);
+            $fileName = $NPK . '_' . $name . '.jpg';
+            $fullPath = 'public/img/profile/' . $deptName . '/' . $fileName;
+
+            // Ensure directory exists
+            if (!Storage::exists('public/img/profile/' . $deptName)) {
+                Storage::makeDirectory('public/img/profile/' . $deptName);
+            }
+
+            // Delete old file if exists
+            if (Storage::exists($fullPath)) {
+                Storage::delete($fullPath);
+            }
+
+            // Store new photo
+            $request->file('foto_profil')->storeAs('public/img/profile/' . $deptName, $fileName);
+
+            return response()->json(['status' => 'success', 'message' => 'Foto berhasil diperbarui']);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * Remove the specified resource from storage.
      */
