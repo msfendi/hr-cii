@@ -54,86 +54,12 @@ class PelamarController extends Controller
     public function assign(Request $request)
     {
         try {
-            DB::connection('cii')->beginTransaction();
-
-            $id_pelamar = $request->id_pelamar;
-
-            $tgl_lahir = Carbon::parse($request->tgl_lahir);
-            $diff = $tgl_lahir->diff(Carbon::now());
-            $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
-
-            $last_barcode = DB::connection('cii')->table('BIODATA')->orderBy('NPK', 'DESC')->orderBy('BARCODE', 'DESC')->first()->BARCODE + 1;
-            DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->update(
-                [
-                    'NPK' => strtoupper($request->npk),
-                    'NAMA' => strtoupper($request->nama),
-                    'JENIS_KELAMIN' => strtoupper($request->jk),
-                    'TMPT_LAHIR' => strtoupper($request->tempat_lahir),
-                    'TGL_LAHIR' => $request->tgl_lahir,
-                    'TMK' => $request->tmk,
-                    'UMUR' => $umur_string,
-                    'ALAMAT_LENGKAP' => strtoupper($request->alamat),
-                    'KABUPATEN' => strtoupper($request->kabupaten),
-                    'PENDIDIKAN' => strtoupper($request->pendidikan),
-                    'NAMA_SEKOLAH' => strtoupper($request->sekolah),
-                    'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah),
-                    'JURUSAN' => strtoupper($request->jurusan),
-                    'TINGGI_BADAN' => $request->tb,
-                    'BERAT_BADAN' => $request->bb,
-                    'HP' => $request->hp,
-                    'AGAMA' => strtoupper($request->agama),
-                    'NIK' => $request->nik,
-                    'NO_KK' => $request->no_kk,
-                    'IBU' => strtoupper($request->ibu),
-                    'STATUS' => strtoupper($request->status),
-                    'TANGGUNGAN' => $request->tanggungan,
-                    'IS_KONTRAK' => 'TRUE',
-                ]
-            );
-
-            DB::connection('cii')->table('BIODATA')->insert([
-                'NPK' => strtoupper($request->npk),
-                'NAMA_KARYAWAN' => strtoupper($request->nama),
-                'BAG' => strtoupper($request->bag),
-                'ID_DEPT' => $request->id_dept,
-                'JENIS_KEL' => strtoupper($request->jk),
-                'BARCODE' => $last_barcode,
-                'SECTION' => 'CHUTEX',
-                'STATUS' => 'A',
-            ]);
-
-            $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
-            $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->first();
-
-            DB::connection('cii')->table('PKWT')->insert([
-                'NPK' => strtoupper($request->npk),
-                'NAMA' => strtoupper($request->nama),
-                'JK' => strtoupper($request->jk),
-                'TGLLAHIR' => $request->tgl_lahir,
-                'PDDK' => strtoupper($request->pendidikan),
-                'AGAMA' => strtoupper($request->agama),
-                'TMK' => $request->tmk,
-                'USIA' => $umur_string,
-                'TKK' => $request->tkk,
-                'BAGIAN' => strtoupper($dept->DEPARTEMENT),
-                'ALAMAT' => strtoupper($request->alamat),
-                'KABUPATEN' => strtoupper($request->kabupaten),
-                'KTP' => $request->nik,
-                'NO_KK' => $request->no_kk,
-                'IBU' => strtoupper($pelamar->IBU),
-                'HP' => $request->hp,
-                'STATUS' => strtoupper($request->status),
-                'TANGGUNGAN' => $request->tanggungan,
-                'KETERANGAN' => $request->keterangan,
-                'TUTUPBUKU' => strtoupper('TUTUP BUKU TANGGAL 30 / 31'),
-                'TMPTLAHIR' => strtoupper($request->tempat_lahir),
-                'NOREK' => $request->norek,
-                'JURUSAN' => strtoupper($request->jurusan),
-                'FASKES' => strtoupper($request->faskes),
-            ]);
-
-            DB::connection('cii')->commit();
-
+            $check_nama = DB::connection('cii')->table('PKWT')->where('KTP', $request->nik)->where('NAMA', $request->nama)->where('TKK', null)->first();
+            if ($check_nama != null) {
+                $this->handleExistingEmployee($request);
+            } else {
+                $this->handleNewEmployee($request);
+            }
             Alert::success('Success', 'Pelamar berhasil di-assign ke Biodata & PKWT');
             return redirect()->route('pelamar.index');
         } catch (\Exception $e) {
@@ -147,6 +73,199 @@ class PelamarController extends Controller
     {
         $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id)->first();
         return response()->json($pelamar);
+    }
+
+    private function handleNewEmployee($request)
+    {
+        // jika karyawan baru dan tidak pernah exist di pkwt
+        DB::connection('cii')->beginTransaction();
+
+        $id_pelamar = $request->id_pelamar;
+
+        $tgl_lahir = Carbon::parse($request->tgl_lahir);
+        $diff = $tgl_lahir->diff(Carbon::now());
+        $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
+
+        $last_barcode = DB::connection('cii')->table('BIODATA')->orderBy('NPK', 'DESC')->orderBy('BARCODE', 'DESC')->first()->BARCODE + 1;
+        DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->update(
+            [
+                'NPK' => strtoupper($request->npk),
+                'NAMA' => strtoupper($request->nama),
+                'JENIS_KELAMIN' => strtoupper($request->jk),
+                'TMPT_LAHIR' => strtoupper($request->tempat_lahir),
+                'TGL_LAHIR' => $request->tgl_lahir,
+                'TMK' => $request->tmk,
+                'UMUR' => $umur_string,
+                'ALAMAT_LENGKAP' => strtoupper($request->alamat),
+                'KABUPATEN' => strtoupper($request->kabupaten),
+                'PENDIDIKAN' => strtoupper($request->pendidikan),
+                'NAMA_SEKOLAH' => strtoupper($request->sekolah),
+                'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah),
+                'JURUSAN' => strtoupper($request->jurusan),
+                'TINGGI_BADAN' => $request->tb,
+                'BERAT_BADAN' => $request->bb,
+                'HP' => $request->hp,
+                'AGAMA' => strtoupper($request->agama),
+                'NIK' => $request->nik,
+                'NO_KK' => $request->no_kk,
+                'IBU' => strtoupper($request->ibu),
+                'STATUS' => strtoupper($request->status),
+                'TANGGUNGAN' => $request->tanggungan,
+                'IS_KONTRAK' => 'TRUE',
+            ]
+        );
+
+        DB::connection('cii')->table('BIODATA')->insert([
+            'NPK' => strtoupper($request->npk),
+            'NAMA_KARYAWAN' => strtoupper($request->nama),
+            'BAG' => strtoupper($request->bag),
+            'ID_DEPT' => $request->id_dept,
+            'JENIS_KEL' => strtoupper($request->jk),
+            'BARCODE' => $last_barcode,
+            'SECTION' => 'CHUTEX',
+            'STATUS' => 'A',
+        ]);
+
+        $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
+        $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->first();
+
+        DB::connection('cii')->table('PKWT')->insert([
+            'NPK' => strtoupper($request->npk),
+            'NAMA' => strtoupper($request->nama),
+            'JK' => strtoupper($request->jk),
+            'TGLLAHIR' => $request->tgl_lahir,
+            'PDDK' => strtoupper($request->pendidikan),
+            'AGAMA' => strtoupper($request->agama),
+            'TMK' => $request->tmk,
+            'USIA' => $umur_string,
+            'TKK' => $request->tkk,
+            'BAGIAN' => strtoupper($dept->DEPARTEMENT),
+            'ALAMAT' => strtoupper($request->alamat),
+            'KABUPATEN' => strtoupper($request->kabupaten),
+            'KTP' => $request->nik,
+            'NO_KK' => $request->no_kk,
+            'IBU' => strtoupper($pelamar->IBU),
+            'HP' => $request->hp,
+            'STATUS' => strtoupper($request->status),
+            'TANGGUNGAN' => $request->tanggungan,
+            'KETERANGAN' => $request->keterangan,
+            'TUTUPBUKU' => strtoupper('TUTUP BUKU TANGGAL 30 / 31'),
+            'TMPTLAHIR' => strtoupper($request->tempat_lahir),
+            'NOREK' => $request->norek,
+            'JURUSAN' => strtoupper($request->jurusan),
+            'FASKES' => strtoupper($request->faskes),
+        ]);
+
+        DB::connection('cii')->commit();
+    }
+
+    private function handleExistingEmployee($request)
+    {
+        DB::connection('cii')->beginTransaction();
+        $check_nama = DB::connection('cii')->table('PKWT')->where('KTP', $request->nik)->where('NAMA', $request->nama)->where('TKK', null)->first();
+        // jika ada nik dan nama yang sama dan pernah exist di pkwt
+        
+        DB::connection('cii')->table('PKWT_OUT')->insert([
+            'NPK' => $check_nama->NPK,
+            'NAMA' => $check_nama->NAMA,
+            'JK' => $check_nama->JK,
+            'TGLLAHIR' => $check_nama->TGLLAHIR,
+            'PDDK' => $check_nama->PDDK,
+            'AGAMA' => $check_nama->AGAMA,
+            'TMK' => $check_nama->TMK,
+            'USIA' => $check_nama->USIA,
+            'TKK' => $check_nama->TKK,
+            'BAGIAN' => $check_nama->BAGIAN,
+            'ALAMAT' => $check_nama->ALAMAT,
+            'KABUPATEN' => $check_nama->KABUPATEN,
+            'KTP' => $check_nama->KTP,
+            'NO_KK' => $check_nama->NO_KK,
+            'IBU' => $check_nama->IBU,
+            'HP' => $check_nama->HP,
+            'STATUS' => $check_nama->STATUS,
+            'TANGGUNGAN' => $check_nama->TANGGUNGAN,
+            'KETERANGAN' => $check_nama->KETERANGAN,
+            'TUTUPBUKU' => $check_nama->TUTUPBUKU,
+        ]);
+        // delete from pkwt
+        DB::connection('cii')->table('PKWT')->where('NIK', $check_nama->KTP)->where('NAMA', $check_nama->NAMA)->delete();
+
+        $tgl_lahir = Carbon::parse($request->tgl_lahir);
+        $diff = $tgl_lahir->diff(Carbon::now());
+        $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
+        $last_barcode = DB::connection('cii')->table('BIODATA')->orderBy('NPK', 'DESC')->orderBy('BARCODE', 'DESC')->first()->BARCODE + 1;
+        DB::connection('cii')->table('PELAMAR')->where('ID', $request->id_pelamar)->update(
+            [
+                'NPK' => strtoupper($request->npk),
+                'NAMA' => strtoupper($request->nama),
+                'JENIS_KELAMIN' => strtoupper($request->jk),
+                'TMPT_LAHIR' => strtoupper($request->tempat_lahir),
+                'TGL_LAHIR' => $request->tgl_lahir,
+                'TMK' => $request->tmk,
+                'UMUR' => $umur_string,
+                'ALAMAT_LENGKAP' => strtoupper($request->alamat),
+                'KABUPATEN' => strtoupper($request->kabupaten),
+                'PENDIDIKAN' => strtoupper($request->pendidikan),
+                'NAMA_SEKOLAH' => strtoupper($request->sekolah),
+                'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah),
+                'JURUSAN' => strtoupper($request->jurusan),
+                'TINGGI_BADAN' => $request->tb,
+                'BERAT_BADAN' => $request->bb,
+                'HP' => $request->hp,
+                'AGAMA' => strtoupper($request->agama),
+                'NIK' => $request->nik,
+                'NO_KK' => $request->no_kk,
+                'IBU' => strtoupper($request->ibu),
+                'STATUS' => strtoupper($request->status),
+                'TANGGUNGAN' => $request->tanggungan,
+                'IS_KONTRAK' => 'TRUE',
+            ]
+        );
+
+        DB::connection('cii')->table('BIODATA')->insert([
+            'NPK' => strtoupper($request->npk),
+            'NAMA_KARYAWAN' => strtoupper($request->nama),
+            'BAG' => strtoupper($request->bag),
+            'ID_DEPT' => $request->id_dept,
+            'JENIS_KEL' => strtoupper($request->jk),
+            'BARCODE' => $last_barcode,
+            'SECTION' => 'CHUTEX',
+            'STATUS' => 'A',
+        ]);
+
+        $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
+
+
+        DB::connection('cii')->table('PKWT')->insert([
+            'NPK' => $request->npk,
+            'NAMA' => $request->nama,
+            'JK' => $request->jk,
+            'TGLLAHIR' => $request->tgl_lahir,
+            'PDDK' => $request->pendidikan,
+            'AGAMA' => $request->agama,
+            'TMK' => $request->tmk,
+            'USIA' => $request->umur,
+            'TKK' => $request->tkk,
+            'BAGIAN' => $dept->DEPARTEMENT,
+            'ALAMAT' => $request->alamat,
+            'KABUPATEN' => $request->kabupaten,
+            'KTP' => $request->nik,
+            'NO_KK' => $request->no_kk,
+            'IBU' => $request->ibu,
+            'HP' => $request->hp,
+            'STATUS' => $request->status,
+            'TANGGUNGAN' => $request->tanggungan,
+            'KETERANGAN' => $request->keterangan,
+            'TUTUPBUKU' => strtoupper('TUTUP BUKU TANGGAL 30 / 31'),
+            'TMPTLAHIR' => strtoupper($request->tempat_lahir),
+            'NOREK' => $request->norek,
+            'JURUSAN' => strtoupper($request->jurusan),
+            'FASKES' => strtoupper($request->faskes),
+        ]);
+
+        DB::connection('cii')->commit();
+        Alert::success('Success', 'Data berhasil disimpan');
+        return redirect()->route('pelamar.index');
     }
 
 

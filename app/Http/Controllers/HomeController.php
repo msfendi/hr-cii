@@ -20,20 +20,35 @@ class HomeController extends Controller
 
     public function getPKWTChart()
     {
-        $pkwts = DB::connection('cii')->table('PKWT')
-            ->select('TMK')
-            ->where('TMK', '>=', Carbon::now()->subMonths(5))
-            ->orderBy('TMK', 'asc')
-            ->get();
+        // $pkwts = DB::connection('cii')->table('PKWT')
+        //     ->select('TMK')
+        //     ->where('TMK', '>=', Carbon::now()->subMonths(5))
+        //     ->orderBy('TMK', 'asc')
+        //     ->get();
 
-        $grouped = $pkwts->groupBy(function ($item) {
-            return Carbon::parse($item->TMK)->format('F'); // Group by Month name
+        // $grouped = $pkwts->groupBy(function ($item) {
+        //     return Carbon::parse($item->TMK)->format('F'); // Group by Month name
+        // });
+
+        // $labels = $grouped->keys();
+        // $data = $grouped->map(function ($group) {
+        //     return $group->count();
+        // })->values();
+
+        // ambil dari table Rekap
+        $rekap = DB::connection('cii')->table('Rekap')
+            ->select('PKWT', 'BULAN', 'TAHUN')
+            ->orderBy('ID', 'desc')
+            ->limit(5)
+            ->get()
+            ->sortBy([['TAHUN', 'asc'], ['BULAN', 'asc']])
+            ->values();
+
+        $labels = $rekap->map(function ($item) {
+            return Carbon::createFromDate($item->TAHUN, $item->BULAN, 1)->translatedFormat('F') . ' ' . $item->TAHUN;
         });
 
-        $labels = $grouped->keys();
-        $data = $grouped->map(function ($group) {
-            return $group->count();
-        })->values();
+        $data = $rekap->pluck('PKWT');
 
         return response()->json([
             'labels' => $labels,
@@ -98,6 +113,22 @@ class HomeController extends Controller
             ->where('JENIS_KEL', 'P')
             ->count();
 
+        $recentlyHired = DB::connection('cii')->table('PKWT')
+            ->select('NPK', 'NAMA', 'TMK', 'BAGIAN', 'TKK')
+            ->where('TMK', '>=', Carbon::now()->subMonths(1))
+            ->orderBy('TMK', 'desc')
+            ->limit(5)
+            ->get();
+
+        // Count employees per department (Top 5)
+        $mostEmployee = DB::connection('cii')
+            ->table('BIODATA')
+            ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select('DEPT.DEPARTEMENT as department_name', DB::raw('COUNT(BIODATA.NPK) as employee_count'))
+            ->groupBy('DEPT.DEPARTEMENT', 'DEPT.ID_DEPT')
+            ->orderBy('employee_count', 'desc')
+            ->limit(5)
+            ->get();
 
         return response()->json([
             'totalpkwt' => $pkwtCount,
@@ -107,6 +138,8 @@ class HomeController extends Controller
             'nonsewingemployees' => $nonsewingEmployeesCount,
             'maleemployees' => $maleEmployeeCount,
             'femaleemployees' => $femaleEmployeeCount,
+            'recentlyhired' => $recentlyHired,
+            'mostemployee' => $mostEmployee,
         ]);
     }
 }

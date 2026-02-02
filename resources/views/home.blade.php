@@ -196,43 +196,15 @@
                                             cellspacing="0">
                                             <thead class="thead-light">
                                                 <tr>
+                                                    <th>NPK</th>
                                                     <th>Name</th>
-                                                    <th>Dept</th>
+                                                    <th>Department</th>
                                                     <th>Join Date</th>
                                                     <th>Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr>
-                                                    <td>Budi Santoso</td>
-                                                    <td>IT</td>
-                                                    <td>2024-01-15</td>
-                                                    <td><span class="badge badge-success">Active</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Siti Aminah</td>
-                                                    <td>Finance</td>
-                                                    <td>2024-01-20</td>
-                                                    <td><span class="badge badge-success">Active</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Agus Kurniawan</td>
-                                                    <td>Production</td>
-                                                    <td>2024-02-01</td>
-                                                    <td><span class="badge badge-warning">Probation</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Rina Wati</td>
-                                                    <td>HR</td>
-                                                    <td>2024-02-05</td>
-                                                    <td><span class="badge badge-success">Active</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Dewi Lestari</td>
-                                                    <td>Marketing</td>
-                                                    <td>2024-02-10</td>
-                                                    <td><span class="badge badge-warning">Probation</span></td>
-                                                </tr>
+                                                <!-- Data will be loaded via fetch -->
                                             </tbody>
                                         </table>
                                     </div>
@@ -273,6 +245,87 @@
                     if(document.getElementById('nonsewingemployees')) document.getElementById('nonsewingemployees').textContent = responseData.nonsewingemployees;
                     if(document.getElementById('sewingemployees')) document.getElementById('sewingemployees').textContent = responseData.sewingemployees;
                     if(document.getElementById('deptsewing')) document.getElementById('deptsewing').textContent = responseData.deptsewing;
+                    
+                    // Initialize DataTables for Recently Hired Employees
+                    $('#recentTable').DataTable({
+                        data: responseData.recentlyhired,
+                        columns: [
+                            { data: 'NPK' },
+                            { data: 'NAMA' },
+                            { data: 'BAGIAN' },
+                            { 
+                                data: 'TMK',
+                                render: function(data) {
+                                    // Format date to dd-mm-yyyy if needed
+                                    if (data) {
+                                        const date = new Date(data);
+                                        const day = String(date.getDate()).padStart(2, '0');
+                                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                                        const year = date.getFullYear();
+                                        return `${day}-${month}-${year}`;
+                                    }
+                                    return data;
+                                }
+                            },
+                            {
+                                data: 'TKK',
+                                render: function(data) {
+                                    if (data) {
+                                        return '<span class="badge badge-danger">Not Active</span>';
+                                    }
+                                    return '<span class="badge badge-success">Active</span>';
+                                }
+                            }
+                        ],
+                        pageLength: 5,
+                        lengthChange: false,
+                        searching: false,
+                        ordering: false,
+                        info: false,
+                        paging: false
+                    });
+
+                    // Department Distribution (Horizontal Bar) - REAL DATA
+                    const ctxDept = document.getElementById("departmentChart");
+                    if (ctxDept && responseData.mostemployee) {
+                        const deptLabels = responseData.mostemployee.map(item => item.department_name);
+                        const deptData = responseData.mostemployee.map(item => item.employee_count);
+
+                        new Chart(ctxDept, {
+                            type: 'bar',
+                            data: {
+                                labels: deptLabels,
+                                datasets: [{
+                                    label: 'Employees',
+                                    data: deptData,
+                                    backgroundColor: "#36b9cc",
+                                    hoverBackgroundColor: "#2c9faf",
+                                    borderColor: "#36b9cc",
+                                }],
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                maintainAspectRatio: false,
+                                layout: { padding: { left: 10, right: 25, top: 25, bottom: 0 } },
+                                scales: {
+                                    x: {
+                                        grid: { display: false, drawBorder: false },
+                                        ticks: { maxTicksLimit: 6 }
+                                    },
+                                    y: {
+                                        grid: {
+                                            color: "rgb(234, 236, 244)",
+                                            zeroLineColor: "rgb(234, 236, 244)",
+                                            drawBorder: false,
+                                            borderDash: [2],
+                                            zeroLineBorderDash: [2]
+                                        }
+                                    },
+                                },
+                                plugins: { legend: { display: false } }
+                            },
+                        });
+                    }
                 })
                 .catch(error => console.error('Error fetching recap data:', error));
 
@@ -323,81 +376,38 @@
                 })
                 .catch(error => console.error('Error fetching chart data:', error));
 
-            // --- 3. FAKE DATA: Other Charts ---
-            
-            // Gender Distribution (Doughnut)
-            // Check if element exists before creating chart to avoid errors if ID changes
-            const ctxGender = document.getElementById("genderChart");
-            if (ctxGender) {
-                new Chart(ctxGender, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ["Male", "Female"],
-                        datasets: [{
-                            data: [45, 55],
-                            backgroundColor: ['#4e73df', '#1cc88a'],
-                            hoverBackgroundColor: ['#2e59d9', '#17a673'],
-                            hoverBorderColor: "rgba(234, 236, 244, 1)",
-                        }],
-                    },
-                    options: {
-                        maintainAspectRatio: false,
-                        tooltips: {
-                            backgroundColor: "rgb(255,255,255)",
-                            bodyFontColor: "#858796",
-                            borderColor: '#dddfeb',
-                            borderWidth: 1,
-                            xPadding: 15,
-                            yPadding: 15,
-                            displayColors: false,
-                            caretPadding: 10,
+                const ctxGender = document.getElementById("genderChart");
+                if (ctxGender) {
+                    new Chart(ctxGender, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ["Male", "Female"],
+                            datasets: [{
+                                data: [45, 55],
+                                backgroundColor: ['#4e73df', '#1cc88a'],
+                                hoverBackgroundColor: ['#2e59d9', '#17a673'],
+                                hoverBorderColor: "rgba(234, 236, 244, 1)",
+                            }],
                         },
-                        legend: { display: false },
-                        cutout: '80%',
-                    },
-                });
-            }
-
-            // Department Distribution (Horizontal Bar)
-            const ctxDept = document.getElementById("departmentChart");
-            if (ctxDept) {
-                new Chart(ctxDept, {
-                    type: 'bar',
-                    data: {
-                        labels: ["Sewing", "Cutting", "Finishing", "Warehouse", "Office"],
-                        datasets: [{
-                            label: 'Employees',
-                            data: [2500, 800, 1200, 400, 150],
-                            backgroundColor: "#36b9cc",
-                            hoverBackgroundColor: "#2c9faf",
-                            borderColor: "#36b9cc",
-                        }],
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        maintainAspectRatio: false,
-                        layout: { padding: { left: 10, right: 25, top: 25, bottom: 0 } },
-                        scales: {
-                            x: {
-                                grid: { display: false, drawBorder: false },
-                                ticks: { maxTicksLimit: 6 }
+                        options: {
+                            maintainAspectRatio: false,
+                            tooltips: {
+                                backgroundColor: "rgb(255,255,255)",
+                                bodyFontColor: "#858796",
+                                borderColor: '#dddfeb',
+                                borderWidth: 1,
+                                xPadding: 15,
+                                yPadding: 15,
+                                displayColors: false,
+                                caretPadding: 10,
                             },
-                            y: {
-                                grid: {
-                                    color: "rgb(234, 236, 244)",
-                                    zeroLineColor: "rgb(234, 236, 244)",
-                                    drawBorder: false,
-                                    borderDash: [2],
-                                    zeroLineBorderDash: [2]
-                                }
-                            },
+                            legend: { display: false },
+                            cutout: '80%',
                         },
-                        plugins: { legend: { display: false } }
-                    },
-                });
-            }
-        });
-    </script>
+                    });
+                }
+            });
+        </script>
 </body>
 
 </html>

@@ -2,13 +2,18 @@
 
 namespace App\Exports;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Color;
 
-class PKWTNonActiveExport implements FromCollection, WithHeadings, WithTitle, ShouldAutoSize
+class PKWTNonActiveExport implements FromCollection, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
 {
     /**
      * @return \Illuminate\Support\Collection
@@ -39,7 +44,33 @@ class PKWTNonActiveExport implements FromCollection, WithHeadings, WithTitle, Sh
                 'JURUSAN'
             )
             ->whereNotNull('TKK')
-            ->get();
+            ->get()
+            ->map(function ($row) {
+                // Parse tanggal untuk kalkulasi (sebelum format)
+                $born = Carbon::parse($row->TGLLAHIR);
+                $tmk = Carbon::parse($row->TMK);
+                $tkk = Carbon::parse($row->TKK);
+                $now = Carbon::now();
+
+                // Hitung usia saat ini
+                $diffUsia = $born->diff($now);
+                $row->USIA_SAAT_INI = $diffUsia->y . ' Tahun ' . $diffUsia->m . ' Bulan ' . $diffUsia->d . ' Hari';
+
+                // Hitung durasi kerja
+                $diffKerja = $tmk->diff($tkk);
+                $row->DURASI_KERJA = $diffKerja->y . ' Tahun ' . $diffKerja->m . ' Bulan ' . $diffKerja->d . ' Hari';
+
+                // Format tanggal ke dd-mm-yyyy (setelah kalkulasi)
+                $row->TGLLAHIR = $born->format('d-m-Y');
+                $row->TMK = $tmk->format('d-m-Y');
+                $row->TKK = $tkk->format('d-m-Y');
+
+                // Tambahkan prefix ' untuk KTP dan NO_KK agar dibaca sebagai text di Excel
+                $row->KTP = "'" . $row->KTP;
+                $row->NO_KK = "'" . $row->NO_KK;
+
+                return $row;
+            });
     }
 
     public function headings(): array
@@ -64,12 +95,39 @@ class PKWTNonActiveExport implements FromCollection, WithHeadings, WithTitle, Sh
             'HP',
             'STATUS',
             'TANGGUNGAN',
-            'JURUSAN'
+            'JURUSAN',
+            'USIA_SAAT_INI',
+            'DURASI_KERJA'
         ];
     }
 
     public function title(): string
     {
         return 'Non-Active PKWT';
+    }
+
+    /**
+     * Apply styles to the header row
+     */
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            // Style for header row (row 1)
+            1 => [
+                'font' => [
+                    'bold' => true,
+                    'color' => ['argb' => Color::COLOR_WHITE],
+                    'size' => 12,
+                ],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['argb' => 'FF4472C4'], // Blue color
+                ],
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                    'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                ],
+            ],
+        ];
     }
 }

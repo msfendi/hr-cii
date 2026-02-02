@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class PKWT extends Model
 {
     use HasFactory;
+    protected $connection = 'cii';
     protected $fillable = [
         'NPK',
         'NAMA',
@@ -33,5 +34,5 @@ class PKWT extends Model
         'NOREK',
         'JURUSAN',
         'FASKES'
-    ]; 
+    ];
 }

@@ -56,6 +56,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // BIODATA
     Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin']);
     Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin']);
     Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin']);
     Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'role:Admin']);
@@ -99,7 +100,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export');
 
 
-     //Attendance
+    //Attendance
     Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index');
     Route::post('/attendance/import', [AttendanceController::class, 'import'])->name('attendance.import');
     Route::post('/attendance/export', [AttendanceController::class, 'export'])->name('attendance.export');
@@ -112,5 +113,4 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/attendance/edit/{id}', [AttendanceController::class, 'edit'])->name('attendance.edit');
     Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update');
     Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance');
-
 });

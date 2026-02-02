@@ -17,23 +17,25 @@ class RekapService
         $now = Carbon::now();
         $bulan = $now->month;
         $tahun = $now->year;
-        
+
         // Hitung total PKWT yang masih aktif
         $countPkwt = PKWT::where('TKK', null)->count();
-        
+
         // Hitung total Magang yang masih aktif
         $countMagang = Magang::where('TKK', null)->count();
 
         Rekap::updateOrCreate(
             [
-                'PKWT' => $countPkwt,
-                'MAGANG' => $countMagang,
                 'BULAN' => $bulan,
                 'TAHUN' => $tahun,
+            ],
+            [
+                'PKWT' => $countPkwt,
+                'MAGANG' => $countMagang,
             ]
         );
     }
-    
+
     /**
      * Update rekap untuk bulan dan tahun tertentu (jika diperlukan)
      */
@@ -44,10 +46,12 @@ class RekapService
 
         Rekap::updateOrCreate(
             [
-                'PKWT' => $countPkwt,
-                'MAGANG' => $countMagang,
                 'BULAN' => $bulan,
                 'TAHUN' => $tahun,
+            ],
+            [
+                'PKWT' => $countPkwt,
+                'MAGANG' => $countMagang,
             ]
         );
     }

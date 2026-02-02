@@ -25,6 +25,12 @@
                     <div class="card-header py-3 d-sm-flex align-items-center justify-content-between">
                         <h6 class="m-0 font-weight-bold text-primary">BIODATA</h6>
                         <div>
+                            <select id="department_filter" class="form-control form-control-sm d-inline-block shadow-sm" style="width: 200px; margin-right: 10px;">
+                                <option value="">Select Department</option>
+                                @foreach($departments as $dept)
+                                    <option value="{{ $dept->ID_DEPT }}">{{ $dept->DEPARTEMENT }}</option>
+                                @endforeach
+                            </select>
                             <a href="{{ route('biodata.export') }}" class="btn btn-success btn-sm">
                                 <i class="fas fa-file-excel"></i> Export Excel
                             </a>
@@ -41,26 +47,12 @@
                                         <th>ID</th>
                                         <th>NPK</th>
                                         <th>NAMA_KARYAWAN</th>
+                                        <th>BARCODE</th>
                                         <th>DEPARTMENT</th>
                                         <th>ACTION</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($biodatas as $biodata)
-                                    <tr>
-                                        <td>{{ $loop->iteration }}</td>
-                                        <td>{{ $biodata->NPK }}</td>
-                                        <td>{{ $biodata->NAMA_KARYAWAN }}</td>
-                                        <td>{{ $biodata->DEPARTEMENT }}</td>
-                                        <td>
-                                            <a class="btn btn-primary btn-sm btn-show" data-npk="{{ $biodata->NPK }}"
-                                                data-toggle="modal" 
-                                                data-target="#showModal">Show</a>
-                                            <a href="javascript:void(0)" class="btn btn-warning btn-sm btn-edit" data-npk="{{ $biodata->NPK }}">Update Karyawan</a>
-                                            <a href="javascript:void(0)" data-id="{{ $biodata->NPK }}" data-nama="{{ $biodata->NAMA_KARYAWAN }}" class="btn btn-danger btn-sm btn-exit">Exit</a>
-                                        </td>
-                                    </tr>
-                                    @endforeach
                                 </tbody>
                             </table>
                         </div>
@@ -729,15 +721,51 @@
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 
-<!-- Page level custom scripts -->
-<script src="{{asset('js/demo/datatables-demo.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-{{-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script> --}}
 <script src="http://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.3.0/js/bootstrap-datepicker.js"></script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.8.0/css/bootstrap-datepicker.css" rel="stylesheet"/>
 
 <script>
     $(document).ready(function() {
+        // Inisialisasi DataTables dengan fetch sederhana
+        var table = $('#dataTable').DataTable({
+            ajax: {
+                url: '{{ route("biodata.get-data") }}',
+                data: function(d) {
+                    d.department_id = $('#department_filter').val();
+                },
+                dataSrc: 'data'
+            },
+            pageLength: 15,
+            columns: [
+                { 
+                    data: null,
+                    render: function(data, type, row, meta) {
+                        return meta.row + 1;
+                    }
+                },
+                { data: 'NPK' },
+                { data: 'NAMA_KARYAWAN' },
+                { data: 'BARCODE' },
+                { data: 'DEPARTEMENT' },
+                { 
+                    data: null,
+                    render: function(data, type, row) {
+                        return `
+                            <a class="btn btn-primary btn-sm btn-show" data-npk="${row.NPK}">Show</a>
+                            <a class="btn btn-warning btn-sm btn-edit" data-npk="${row.NPK}">Update Karyawan</a>
+                            <a class="btn btn-danger btn-sm btn-exit" data-id="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}">Exit</a>
+                        `;
+                    }
+                }
+            ]
+        });
+
+        // Event listener for department filter
+        $('#department_filter').change(function() {
+            table.ajax.reload();
+        });
+
         $('body').on('click', '.btn-show', function() {
             var npk = $(this).data('npk');
             $('#show_npk').val(npk);
@@ -788,12 +816,26 @@
                     $('#show_id_dept').val(response.BAGIAN ?? 'DEPT TIDAK DIISI');
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');
-                    const imageUrl = `/storage/img/profile/${response.NAMA}.jpg`;
-
-                    // Set the image src dynamically
+                    
+                    // Set image with fallback
+                    const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
                     const imgElement = document.getElementById('show_foto_profil');
-                    imgElement.src = imageUrl;
+                    
+                    // Set default placeholder first
+                    imgElement.src = 'https://via.placeholder.com/140x140.png?text=No+Photo';
+                    
+                    // Try to load actual image
+                    const img = new Image();
+                    img.onload = function() {
+                        imgElement.src = imageUrl;
+                    };
+                    img.onerror = function() {
+                        // Keep placeholder if image not found
+                        imgElement.src = 'https://via.placeholder.com/140x140.png?text=No+Photo';
+                    };
+                    img.src = imageUrl;
                 
+                    $('#showModal').modal('show');
                 },
                 error: function(xhr) {
                     console.log(xhr.responseText);
@@ -891,7 +933,7 @@
                 success: function(response) {
                     $('#exitModal').modal('hide');
                     if(response.original && response.original.status === 'success' || response.status === 'success') {
-                         Swal.fire({
+                        Swal.fire({
                             icon: 'success',
                             title: 'Berhasil!',
                             text: 'Data karyawan berhasil di-exit.',
@@ -901,7 +943,7 @@
                             location.reload();
                         });
                     } else {
-                         Swal.fire({
+                        Swal.fire({
                             icon: 'error',
                             title: 'Error!',
                             text: 'Gagal memproses data.',
@@ -946,29 +988,13 @@
                     $('#edit_tempat_lahir').val(response.TMPTLAHIR);
                     $('#edit_tgl_lahir').val(response.TGLLAHIR);
                     $('#edit_agama').val(response.AGAMA);
-                    $('#edit_status').val(response.STATUS); // Ensure values match options
+                    $('#edit_status').val(response.STATUS);
                     $('#edit_hp').val(response.HP);
                     $('#edit_alamat').val(response.ALAMAT);
                     $('#edit_kabupaten').val(response.KABUPATEN);
                     $('#edit_pendidikan').val(response.PDDK);
                     $('#edit_sekolah').val(response.NAMA_SEKOLAH ?? '');
                     $('#edit_jurusan').val(response.JURUSAN);
-                    // For dept, we need to select by text or ID. The show response gives BAGIAN (text) or ID?
-                    // Controller show returns queries PKWT which has BAGIAN (text). 
-                    // But the select inputs use ID_DEPT values.
-                    // We need to map BAGIAN text to ID_DEPT value, OR just set it if we can.
-                    // However, standard is to store ID in backend and show text.
-                    // If PKWT stores text 'FINANCE', and select has <option value='1'>FINANCE</option>, we have a problem matching it.
-                    // Let's look at the data. 
-                    // Store method uses $request->id_dept to get DEPARTEMENT name and stores that name in PKWT.BAGIAN.
-                    // Start method uses $request->id_dept to store ID_DEPT in BIODATA.ID_DEPT.
-                    // We should rely on BIODATA table for the ID if possible, but the show method only returns PKWT data currently.
-                    // Let's assume we might need to fetch the ID or just try to match text.
-                    // Best fix: Update show method to return BIODATA.ID_DEPT as well. But I cannot change that easily right now without checking if I break other things.
-                    // Wait, index method joins BIODATA and DEPT.
-                    // Show method: $biodata = DB::connection('cii')->table('PKWT')->select('*')->where('NPK', $NPK)->first();
-                    // PKWT doesn't seem to have ID_DEPT column based on store method (it stores BAGIAN).
-                    // BUT, we can likely find the option by text.
                     
                     $("#edit_id_dept option").filter(function() {
                         return $(this).text() === response.BAGIAN;
@@ -977,7 +1003,7 @@
                     $('#edit_tmk').val(response.TMK);
                     $('#edit_tanggungan').val(response.TANGGUNGAN);
                     
-                    const imageUrl = `/storage/img/profile/${response.NAMA}.jpg`;
+                    const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
                     $('#edit_previewImage').attr('src', imageUrl);
 
                     $('#editModal').modal('show');
