@@ -164,8 +164,8 @@ $lastDate = 0;
                 @if($tempNPK != $employees[$i]->NPK)
                     <!-- KARYAWAN KELUAR TIDAK SAMPAI TUTUP BUKU -->
                     @if(($lastDate < $getTotalDays) && $lastDate != 0)
-                        @for($sisa = $lastDate; $sisa < $getTotalDays; $sisa++)
-                            @if(in_array($sisa + 1, $days) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . ($sisa + 1))->isWeekend())
+                        @for($sisa = $lastDate + 1; $sisa <= $getTotalDays; $sisa++)
+                            @if(in_array((int)$sisa, array_map('intval', $days)) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . $sisa)->isWeekend())
                                 <td> - <br style="mso-data-placement:same-cell;" /> LBR <br style="mso-data-placement:same-cell;" /> </td>
                             @else
                                 <td>-<br style="mso-data-placement:same-cell;" /> - <br style="mso-data-placement:same-cell;" /> MA <br style="mso-data-placement:same-cell;" /></td>
@@ -226,7 +226,7 @@ $lastDate = 0;
                                 <!-- {{-- <div class="mb-2"> --}} -->
                                     LBR
                                 <!-- {{-- </div> --}} -->
-                            @elseif(in_array(Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'), $days))
+                            @elseif(in_array((int)Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'), array_map('intval', $days)))
                                 <!-- {{-- <div class="mb-2"> --}} -->
                                     {{$employees[$i]->JAM_PAGI != null || $employees[$i]->JAM_SIANG != null || $employees[$i]->JAM_MALAM != null ? 'MSK' : 'LBR'}}
                                 <!-- {{-- </div> --}} -->
@@ -237,9 +237,9 @@ $lastDate = 0;
                             @endif
                         </td>
                         <!-- ANOMALI 1 TANGGAL -->
-                        @if($employees[$i]->NPK != $employees[$i+1]->NPK)
-                            @for($sisa = 1; $sisa < $getTotalDays; $sisa++)
-                                @if(in_array($sisa + 1, $days) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . ($sisa + 1))->isWeekend())
+                        @if(isset($employees[$i+1]) && $employees[$i]->NPK != $employees[$i+1]->NPK)
+                            @for($sisa = 2; $sisa <= $getTotalDays; $sisa++)
+                                @if(in_array((int)$sisa, array_map('intval', $days)) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . $sisa)->isWeekend())
                                     <td> - <br style="mso-data-placement:same-cell;" /> LBR <br style="mso-data-placement:same-cell;" /> </td>
                                 @else
                                     <td>-<br style="mso-data-placement:same-cell;" /> - <br style="mso-data-placement:same-cell;" /> MA <br style="mso-data-placement:same-cell;" /></td>
@@ -247,8 +247,8 @@ $lastDate = 0;
                             @endfor
                         @endif
                     @else
-                        @for($firstDate = 1; $firstDate < (int)\Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'); $firstDate++)
-                            @if(in_array($firstDate + 1, $days) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . ($firstDate + 1))->isWeekend())
+                        @for($dayNum = 1; $dayNum < (int)\Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'); $dayNum++)
+                            @if(in_array((int)$dayNum, array_map('intval', $days)) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . $dayNum)->isWeekend())
                                 <td> - <br style="mso-data-placement:same-cell;" /> LBR <br style="mso-data-placement:same-cell;" /> </td>
                             @else
                                 <td>-<br style="mso-data-placement:same-cell;" /> - <br style="mso-data-placement:same-cell;" /> MA <br style="mso-data-placement:same-cell;" /></td>
@@ -272,7 +272,7 @@ $lastDate = 0;
                                 <!-- {{-- <div class="mb-2"> --}} -->
                                     LBR
                                 <!-- {{-- </div> --}} -->
-                            @elseif(in_array(Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'), $days))
+                            @elseif(in_array((int)Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'), array_map('intval', $days)))
                                 <!-- {{-- <div class="mb-2"> --}} -->
                                     {{$employees[$i]->JAM_PAGI != null || $employees[$i]->JAM_SIANG != null || $employees[$i]->JAM_MALAM != null ? 'MSK' : 'LBR'}}
                                 <!-- {{-- </div> --}} -->
@@ -294,9 +294,11 @@ $lastDate = 0;
                     @php
                         $tidakFinger = (int)\Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d') - (int)\Carbon\Carbon::parse($employees[$i-1]->TANGGAL)->format('d');
                     @endphp
-                    @if($tidakFinger > 1)
-                        @for($isi = 1; $isi < $tidakFinger; $isi++)
-                            @if(in_array($isi + 1, $days) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . ($isi + 1))->isWeekend())
+                        @php
+                            $prevDay = (int)\Carbon\Carbon::parse($employees[$i-1]->TANGGAL)->format('d');
+                        @endphp
+                        @for($dayNum = $prevDay + 1; $dayNum < (int)\Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'); $dayNum++)
+                            @if(in_array((int)$dayNum, array_map('intval', $days)) || \Carbon\Carbon::createFromFormat('Y-m-d', $year . '-' . $month . '-' . $dayNum)->isWeekend())
                                 <td> - <br style="mso-data-placement:same-cell;" /> LBR <br style="mso-data-placement:same-cell;" /> </td>
                             @else
                                 <td>-<br style="mso-data-placement:same-cell;" /> - <br style="mso-data-placement:same-cell;" /> MA <br style="mso-data-placement:same-cell;" /></td>
@@ -305,7 +307,6 @@ $lastDate = 0;
                         @php
                             $tidakFinger = 0;
                         @endphp
-                    @endif
                      <td>
                         <!-- <div class="mb-2"> -->
                         {{$employees[$i]->JAM_PAGI != null ? $employees[$i]->JAM_PAGI : ($employees[$i]->JAM_SIANG != null ? $employees[$i]->JAM_SIANG : '-')}}
@@ -324,7 +325,7 @@ $lastDate = 0;
                             <!-- {{-- <div class="mb-2"> --}} -->
                                 LBR
                             <!-- {{-- </div> --}} -->
-                        @elseif(in_array(Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'), $days))
+                        @elseif(in_array((int)Carbon\Carbon::parse($employees[$i]->TANGGAL)->format('d'), array_map('intval', $days)))
                             <!-- {{-- <div class="mb-2"> --}} -->
                                 {{$employees[$i]->JAM_PAGI != null || $employees[$i]->JAM_SIANG != null || $employees[$i]->JAM_MALAM != null ? 'MSK' : 'LBR'}}
                             <!-- {{-- </div> --}} -->

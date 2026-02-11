@@ -11,6 +11,7 @@ use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\OvertimeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -100,7 +101,6 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/sync', [AttendanceFingerController::class, 'sync'])->name('attendance-finger.sync');
     Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export');
 
-
     //Attendance
     Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index');
     Route::post('/attendance/import', [AttendanceController::class, 'import'])->name('attendance.import');
@@ -114,4 +114,12 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/attendance/edit/{id}', [AttendanceController::class, 'edit'])->name('attendance.edit');
     Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update');
     Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance');
+
+    // Overtime
+    Route::get('/overtime', [OvertimeController::class, 'index'])->name('overtime.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/overtime/download-template', [OvertimeController::class, 'downloadTemplateOvertime'])->name('overtime.downloadTemplate')->middleware(['auth', 'role:Admin']);
+    Route::post('/overtime/import', [OvertimeController::class, 'importOvertime'])->name('overtime.import')->middleware(['auth', 'role:Admin']);
+    Route::get('/overtime/get-data', [OvertimeController::class, 'getData'])->name('overtime.get-data')->middleware(['auth', 'role:Admin']);
+    Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data')->middleware(['auth', 'role:Admin']);
+    Route::get('/overtime/calendar', [OvertimeController::class, 'calendarOvertime'])->name('overtime.calendar')->middleware(['auth', 'role:Admin']);
 });

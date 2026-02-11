@@ -76,6 +76,33 @@
         </div>
     </li>
 
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseSyncronize"
+            aria-expanded="true" aria-controls="collapseSyncronize">
+            <i class="fas fa-fw fa-users"></i>
+            <span>Syncronize Finger</span>
+        </a>
+        <div id="collapseSyncronize" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('attendance-finger.index') }}">Syncronize Finger</a>
+            </div>
+        </div>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseOvertime"
+            aria-expanded="true" aria-controls="collapseOvertime">
+            <i class="fas fa-fw fa-users"></i>
+            <span>Overtime</span>
+        </a>
+        <div id="collapseOvertime" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('overtime.index') }}">Overtime List</a>
+                <a class="collapse-item" href="{{ route('overtime.calendar') }}">Overtime Calendar</a>
+            </div>
+        </div>
+    </li>
+
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
