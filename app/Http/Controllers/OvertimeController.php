@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 
+use App\Exports\OvertimeCalendarExport;
 use App\Exports\OvertimeTemplateExport;
 use App\Models\Overtime;
 use App\Imports\OvertimeImport;
@@ -271,5 +272,22 @@ class OvertimeController extends Controller
             'weeks'    => $metaMinggu,
             'holidays' => $holidaysThisMonth,
         ]);
+    }
+
+    public function exportCalendar(Request $request)
+    {
+        $date = $request->input('date');
+
+        if (!$date) {
+            return redirect()->back()->with('error', 'Silahkan pilih tanggal.');
+        }
+
+        // Ambil bulan dari input date (bisa format Y-m-d atau Y-m)
+        $month = \Carbon\Carbon::parse($date)->format('Y-m');
+
+        return Excel::download(
+            new OvertimeCalendarExport($month),
+            'overtime_calendar_' . $month . '.xlsx'
+        );
     }
 }

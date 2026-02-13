@@ -59,6 +59,14 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- export --}}
+                                <form action="{{ route('overtime.export') }}" method="GET" class="form-inline mb-2" id="exportForm">
+                                    <input type="hidden" name="date" id="exportDate">
+                                    <button type="submit" class="btn btn-info btn-sm">
+                                        <i class="fas fa-file-excel"></i> Export Calendar
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -120,6 +128,11 @@
 
         $('#date, #department_filter').on('change', function() {
             table.draw();
+        });
+
+        // Sync date ke export form sebelum submit
+        $('#exportForm').on('submit', function() {
+            $('#exportDate').val($('#date').val());
         });
     });
 </script>
