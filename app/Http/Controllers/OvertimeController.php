@@ -92,10 +92,22 @@ class OvertimeController extends Controller
         foreach ($grupMinggu as $awalMinggu => $daftarHari) {
             $urutanMinggu++;
             $rangeMinggu[] = ['days' => $daftarHari];
+
+            // Metadata hari (day_of_week) untuk highlight weekend di frontend
+            $daysWithMeta = [];
+            foreach ($daftarHari as $hari) {
+                $tglObj = \Carbon\Carbon::create($tanggalAwal->year, $tanggalAwal->month, $hari);
+                $daysWithMeta[] = [
+                    'day'         => $hari,
+                    'day_of_week' => $tglObj->dayOfWeek, // 0=Sunday, 6=Saturday
+                ];
+            }
+
             $metaMinggu[]  = [
-                'label' => 'Week ' . $urutanMinggu,
-                'key'   => 'week_' . $urutanMinggu . '_sum',
-                'days'  => $daftarHari,
+                'label'     => 'Week ' . $urutanMinggu,
+                'key'       => 'week_' . $urutanMinggu . '_sum',
+                'days'      => $daftarHari,
+                'days_meta' => $daysWithMeta,
             ];
         }
 
@@ -233,6 +245,23 @@ class OvertimeController extends Controller
             return $row;
         })->values();
 
-        return response()->json(['data' => $hasilPivot, 'weeks' => $metaMinggu]);
+        // Kumpulkan info hari libur bulan ini (kecuali Cuti) untuk highlight di frontend
+        $holidaysThisMonth = [];
+        for ($d = 1; $d <= $jumlahHari; $d++) {
+            $keyDate = $tanggalAwal->format('Y-m') . '-' . str_pad($d, 2, '0', STR_PAD_LEFT);
+            if (isset($hariLibur[$keyDate]) && ($hariLibur[$keyDate]['holiday'] ?? false) === true) {
+                $summary = $hariLibur[$keyDate]['summary'] ?? [];
+                // Exclude hari libur yang mengandung kata "Cuti"
+                if (!str_contains(implode(' ', (array) $summary), 'Cuti')) {
+                    $holidaysThisMonth[$d] = $summary;
+                }
+            }
+        }
+
+        return response()->json([
+            'data'     => $hasilPivot,
+            'weeks'    => $metaMinggu,
+            'holidays' => $holidaysThisMonth,
+        ]);
     }
 }

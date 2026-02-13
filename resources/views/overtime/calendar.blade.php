@@ -92,7 +92,15 @@
     }
     .week-over {
         background-color: #dc3545 !important;
+        color: #000000af !important;
+    }
+    /* Weekend & Holiday column highlight (merah) */
+    th.col-red {
+        background-color: #e74a3b !important;
         color: #fff !important;
+    }
+    td.col-red {
+        background-color: #fce4e4 !important;
     }
 </style>
 <script>
@@ -117,6 +125,7 @@
                 success: function(response) {
                     var weeks = response.weeks;
                     var tableData = response.data;
+                    var holidays = response.holidays || {};
 
                     // Build columns based on backend week metadata
                     var columns = [
@@ -130,12 +139,21 @@
 
                     for (var w = 0; w < weeks.length; w++) {
                         var weekStartCol = colIndex;
+                        var daysMeta = weeks[w].days_meta || [];
                         for (var di = 0; di < weeks[w].days.length; di++) {
-                            var dayStr = weeks[w].days[di].toString().padStart(2, '0');
+                            var dayNum = weeks[w].days[di];
+                            var dayStr = dayNum.toString().padStart(2, '0');
+                            var dow = daysMeta[di] ? daysMeta[di].day_of_week : -1;
+                            var isWeekend = (dow === 0 || dow === 6);
+                            var isHoliday = holidays.hasOwnProperty(dayNum.toString());
+
+                            var cls = "text-center";
+                            if (isWeekend || isHoliday) cls += " col-red";
+
                             columns.push({
                                 data: monthVal + '-' + dayStr,
                                 defaultContent: "",
-                                className: "text-center"
+                                className: cls
                             });
                             colIndex++;
                         }
@@ -174,8 +192,25 @@
                     // Row 2: Individual dates + summary names
                     theadHtml += '<tr>';
                     for (var w = 0; w < weeks.length; w++) {
+                        var daysMeta = weeks[w].days_meta || [];
                         for (var di = 0; di < weeks[w].days.length; di++) {
-                            theadHtml += '<th class="text-center">' + weeks[w].days[di].toString().padStart(2, '0') + '</th>';
+                            var dayNum = weeks[w].days[di];
+                            var dow = daysMeta[di] ? daysMeta[di].day_of_week : -1;
+                            var isWeekend = (dow === 0 || dow === 6);
+                            var isHoliday = holidays.hasOwnProperty(dayNum.toString());
+
+                            var thCls = 'text-center';
+                            var tip = '';
+                            if (isWeekend) {
+                                thCls += ' col-red';
+                                tip = ' title="' + (dow === 0 ? 'Minggu' : 'Sabtu') + '"';
+                            } else if (isHoliday) {
+                                thCls += ' col-red';
+                                var s = holidays[dayNum.toString()];
+                                tip = ' title="' + (Array.isArray(s) ? s.join(', ') : s) + '"';
+                            }
+
+                            theadHtml += '<th class="' + thCls + '"' + tip + '>' + dayNum.toString().padStart(2, '0') + '</th>';
                         }
                     }
                     theadHtml += '<th class="text-center">Kehadiran</th>';
