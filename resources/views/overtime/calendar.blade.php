@@ -22,23 +22,20 @@
                 
                 <!-- Add Button in Card Header -->
                 <div class="card shadow mb-2">
-                    <div class="card-header py-3 d-sm-flex align-items-center justify-content-between">
-                        <h6 class="m-0 font-weight-bold text-primary">Overtime Data</h6>
-                        <div>
+                    <div class="card-header py-3">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">Overtime Data</h6>
                             <div class="d-flex align-items-center flex-wrap">
-                                <div class="form-inline mr-3 mb-2">
-                                    <label for="department_filter" class="mr-2">Dept:</label>
-                                    <div class="input-group input-group-sm mr-2">
-                                        <select class="form-control" name="department" id="department_filter">
-                                            <option value="">All Departments</option>
-                                            @foreach($departments as $dept)
-                                                <option value="{{ $dept->BAGIAN }}">{{ $dept->BAGIAN }}</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-
+                                <span class="mr-2 font-weight-bold text-dark" style="font-size:0.85rem;">Durasi Jam:</span>
+                                @for($i = 1; $i <= 8; $i++)
+                                <div class="custom-control custom-checkbox custom-control-inline mr-2">
+                                    <input type="checkbox" class="custom-control-input duration-cb" id="dur_{{ $i }}" value="{{ $i }}">
+                                    <label class="custom-control-label" for="dur_{{ $i }}" style="font-size:0.85rem;">{{ $i }}</label>
+                                </div>
+                                @endfor
+                                <div class="form-inline ml-3">
                                     <label for="date" class="mr-2">Date:</label>
-                                    <div class="input-group input-group-sm mr-2">
+                                    <div class="input-group input-group-sm">
                                         <input type="month" class="form-control" name="date" id="date" value="{{ date('Y-m') }}" required>
                                     </div>
                                 </div>
@@ -107,10 +104,11 @@
     $(document).ready(function() {
         function loadTable() {
             var dateVal = $('#date').val();
-            var deptVal = $('#department_filter').val();
-
             if (!dateVal) return;
             var monthVal = dateVal.substring(0, 7);
+
+            var durations = [];
+            $('.duration-cb:checked').each(function() { durations.push($(this).val()); });
 
             if ($.fn.DataTable.isDataTable('#dataTable')) {
                 $('#dataTable').DataTable().destroy();
@@ -120,7 +118,7 @@
             // Fetch data and week metadata from backend
             $.ajax({
                 url: '{{ route("overtime.calendar-data") }}',
-                data: { month: monthVal, department: deptVal },
+                data: { month: monthVal, durations: durations },
                 dataType: 'json',
                 success: function(response) {
                     var weeks = response.weeks;
@@ -254,7 +252,11 @@
             });
         }
 
-        $('#date, #department_filter').on('change', function() {
+        $('#date').on('change', function() {
+            loadTable();
+        });
+
+        $(document).on('change', '.duration-cb', function() {
             loadTable();
         });
 

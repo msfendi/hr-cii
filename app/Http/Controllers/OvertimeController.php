@@ -23,9 +23,7 @@ class OvertimeController extends Controller
 
     public function calendarOvertime()
     {
-        $departments = Overtime::select('BAGIAN')->distinct()->get();
-
-        return view('overtime.calendar', compact('departments'));
+        return view('overtime.calendar');
     }
 
     public function downloadTemplateOvertime(Request $request)
@@ -70,7 +68,7 @@ class OvertimeController extends Controller
     public function calendarDisplay(Request $request)
     {
         $bulan       = $request->input('month', date('Y-m'));
-        $departemen  = $request->input('department');
+        $durations   = $request->input('durations', []);
         $tanggalAwal = \Carbon\Carbon::parse($bulan)->startOfMonth();
         $tanggalAkhir = \Carbon\Carbon::parse($bulan)->endOfMonth();
         $jumlahHari  = $tanggalAkhir->day;
@@ -113,6 +111,16 @@ class OvertimeController extends Controller
 
         // ▸ LANGKAH 2: Ambil data lembur dari database
         $dataLembur = Overtime::whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir])->orderBy('OVERTIME_DATE')->get();
+
+        // Filter berdasarkan durasi jam lembur (multiple checkbox)
+        if (!empty($durations)) {
+            $durations = array_map('intval', $durations);
+            $npkCocok = $dataLembur->filter(function ($r) use ($durations) {
+                return is_numeric($r->JUMLAH_JAM_LEMBUR)
+                    && in_array((int)$r->JUMLAH_JAM_LEMBUR, $durations);
+            })->pluck('NPK')->unique();
+            $dataLembur = $dataLembur->whereIn('NPK', $npkCocok);
+        }
 
         // ▸ LANGKAH 3: Ambil data hari libur nasional (cache 24 jam)
         $hariLibur = Cache::remember('holidays_calendar', 86400, function () {
