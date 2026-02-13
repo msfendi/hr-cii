@@ -24,7 +24,7 @@ class OvertimeController extends Controller
     public function calendarOvertime()
     {
         $departments = Overtime::select('BAGIAN')->distinct()->get();
-        
+
         return view('overtime.calendar', compact('departments'));
     }
 
@@ -62,23 +62,48 @@ class OvertimeController extends Controller
         return response()->json(['data' => $overtimes]);
     }
 
+    /**
+     * Menampilkan data lembur dalam format kalender per bulan.
+     * Data di-pivot menjadi satu row per karyawan, kolom = tanggal.
+     * Termasuk perhitungan mingguan dan summary (kehadiran, lembur resmi, lembur khusus, dll).
+     */
     public function calendarDisplay(Request $request)
     {
-        $month = $request->input('month', date('Y-m'));
-        $dept = $request->input('department');
-        $startDate = \Carbon\Carbon::parse($month)->startOfMonth();
-        $endDate = \Carbon\Carbon::parse($month)->endOfMonth();
+        $bulan       = $request->input('month', date('Y-m'));
+        $departemen  = $request->input('department');
+        $tanggalAwal = \Carbon\Carbon::parse($bulan)->startOfMonth();
+        $tanggalAkhir = \Carbon\Carbon::parse($bulan)->endOfMonth();
+        $jumlahHari  = $tanggalAkhir->day;
 
-        $query = Overtime::whereBetween('OVERTIME_DATE', [$startDate, $endDate]);
+        // ▸ LANGKAH 1: Kelompokkan tanggal ke dalam minggu sesuai kalender
+        //   Menggunakan Carbon startOfWeek(SUNDAY)
+        $grupMinggu = [];
+        for ($hari = 1; $hari <= $jumlahHari; $hari++) {
+            $tanggal      = \Carbon\Carbon::create($tanggalAwal->year, $tanggalAwal->month, $hari);
+            $awalMinggu   = $tanggal->copy()->startOfWeek(\Carbon\Carbon::SUNDAY)->format('Y-m-d');
+            $grupMinggu[$awalMinggu][] = $hari;
+        }
+        ksort($grupMinggu);
 
-        if ($dept) {
-            $query->where('JUMLAH_JAM_LEMBUR', 1);
+        // Buat array range minggu dan metadata minggu untuk frontend
+        $rangeMinggu = [];
+        $metaMinggu  = [];
+        $urutanMinggu = 0;
+        foreach ($grupMinggu as $awalMinggu => $daftarHari) {
+            $urutanMinggu++;
+            $rangeMinggu[] = ['days' => $daftarHari];
+            $metaMinggu[]  = [
+                'label' => 'Week ' . $urutanMinggu,
+                'key'   => 'week_' . $urutanMinggu . '_sum',
+                'days'  => $daftarHari,
+            ];
         }
 
-        $overtimes = $query->orderBy('OVERTIME_DATE')->get();
+        // ▸ LANGKAH 2: Ambil data lembur dari database
+        $dataLembur = Overtime::whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir])->orderBy('OVERTIME_DATE')->get();
 
-        // Fetch holidays
-        $holidays = Cache::remember('holidays_calendar', 86400, function () {
+        // ▸ LANGKAH 3: Ambil data hari libur nasional (cache 24 jam)
+        $hariLibur = Cache::remember('holidays_calendar', 86400, function () {
             try {
                 $response = Http::get('https://raw.githubusercontent.com/guangrei/APIHariLibur_V2/main/calendar.json');
                 return $response->json();
@@ -87,89 +112,127 @@ class OvertimeController extends Controller
             }
         });
 
-        $pivoted = $overtimes->groupBy('NPK')->map(function ($group) use ($holidays) {
-            $first = $group->first();
+        // ▸ LANGKAH 4: Pivot data — satu row per karyawan (NPK)
+        $hasilPivot = $dataLembur->groupBy('NPK')->map(function ($grupKaryawan) use ($hariLibur, $rangeMinggu, $tanggalAwal) {
+
+            $employee = $grupKaryawan->first();
             $row = [
-                'NPK' => $first->NPK,
-                'NAMA_KARYAWAN' => $first->NAMA_KARYAWAN,
-                'BAGIAN' => $first->BAGIAN,
+                'NPK'            => $employee->NPK,
+                'NAMA_KARYAWAN'  => $employee->NAMA_KARYAWAN,
+                'BAGIAN'         => $employee->BAGIAN,
             ];
 
-            // Calculate custom fields
-            $lemburResmi = $group->filter(function ($record) use ($holidays) {
-                $date = \Carbon\Carbon::parse($record->OVERTIME_DATE);
-                $isWeekday = !$date->isWeekend();
-                $dateString = $date->format('Y-m-d');
-                $isHoliday = isset($holidays[$dateString]) && $holidays[$dateString]['holiday'] === true;
+            // ── Isi kolom tanggal: mapping tanggal → jam lembur ──
+            foreach ($grupKaryawan as $record) {
+                $tgl = \Carbon\Carbon::parse($record->OVERTIME_DATE)->format('Y-m-d');
+                $row[$tgl] = $record->JUMLAH_JAM_LEMBUR;
+            }
 
-                return $isWeekday &&
-                    !$isHoliday &&
-                    is_numeric($record->JUMLAH_JAM_LEMBUR) &&
-                    $record->JUMLAH_JAM_LEMBUR >= 1 &&
-                    $record->JUMLAH_JAM_LEMBUR <= 8;
+            // ── Hitung Lembur Resmi ──
+            // Syarat: hari kerja (bukan weekend), bukan hari libur, jam lembur antara 1-8
+            $lemburResmi = $grupKaryawan->filter(function ($record) use ($hariLibur) {
+                $tanggal     = \Carbon\Carbon::parse($record->OVERTIME_DATE);
+                $hariKerja   = !$tanggal->isWeekend();
+                $tglString   = $tanggal->format('Y-m-d');
+                $holidayData = $hariLibur[$tglString] ?? null;
+                $isHoliday   = ($holidayData['holiday'] ?? false) === true
+                    && !str_contains(implode(' ', (array)($holidayData['summary'] ?? [])), 'Cuti');
+                $jamLembur   = $record->JUMLAH_JAM_LEMBUR;
+
+                return $hariKerja
+                    && !$isHoliday
+                    && is_numeric($jamLembur)
+                    && $jamLembur >= 1
+                    && $jamLembur <= 8;
             });
 
-            // Field '1': Count of valid overtime days
-            $field1 = $lemburResmi->count();
+            // Kolom '1': Jumlah hari lembur resmi
+            $jumlahHariLembur = $lemburResmi->count();
 
-            // Field '2': Sum of hours > 1 minus count of days > 1
-            $overOne = $lemburResmi->filter(function ($record) {
-                return $record->JUMLAH_JAM_LEMBUR > 1;
-            });
-            $sumOverOne = $overOne->sum('JUMLAH_JAM_LEMBUR');
-            $countOverOne = $overOne->count();
-            $field2 = $sumOverOne - $countOverOne;
+            // ── Hitung Jam Lembur Lebih (kolom '2') ──
+            // Rumus: total jam yang > 1 dikurangi jumlah hari yang > 1
+            // Contoh: karyawan lembur 3 jam dan 2 jam = (3+2) - 2 = 3 jam ekstra
+            $jamLebihDariSatu   = $lemburResmi->filter(fn($r) => $r->JUMLAH_JAM_LEMBUR > 1);
+            $totalJamLebih      = $jamLebihDariSatu->sum('JUMLAH_JAM_LEMBUR');
+            $jumlahHariLebih    = $jamLebihDariSatu->count();
+            $jamEkstra          = $totalJamLebih - $jumlahHariLebih;
 
-            // Total Kehadiran: Count days that are Numeric or Null (exclude text codes like CT, MA) AND Weekdays
-            $totalKehadiran = $group->filter(function ($record) use ($holidays) {
-                $isWeekday = !\Carbon\Carbon::parse($record->OVERTIME_DATE)->isWeekend();
-                $val = $record->JUMLAH_JAM_LEMBUR;
-                $dateString = \Carbon\Carbon::parse($record->OVERTIME_DATE)->format('Y-m-d');
-                $isHoliday = isset($holidays[$dateString]) && $holidays[$dateString]['holiday'] === true;
-                return $isWeekday && (is_numeric($val) || is_null($val) || $val === '') && !$isHoliday;
+            // ── Hitung Total Kehadiran ──
+            // Syarat: hari kerja, bukan libur, dan nilai jam lembur numerik/null/kosong
+            // (exclude kode karakter seperti CT, MA)
+            $totalKehadiran = $grupKaryawan->filter(function ($record) use ($hariLibur) {
+                $tanggal     = \Carbon\Carbon::parse($record->OVERTIME_DATE);
+                $hariKerja   = !$tanggal->isWeekend();
+                $tglString   = $tanggal->format('Y-m-d');
+                $holidayData = $hariLibur[$tglString] ?? null;
+                $isHoliday   = ($holidayData['holiday'] ?? false) === true
+                    && !str_contains(implode(' ', (array)($holidayData['summary'] ?? [])), 'Cuti');
+                $nilai       = $record->JUMLAH_JAM_LEMBUR;
+
+                return $hariKerja
+                    && !$isHoliday
+                    && (is_numeric($nilai) || is_null($nilai) || $nilai === '');
             })->count();
 
-            // Lembur Khusus: Sum hours > 4 on Weekends OR Holidays
-            $lemburKhusus = $group->filter(function ($record) use ($holidays) {
-                $val = $record->JUMLAH_JAM_LEMBUR;
-                if (!is_numeric($val) || $val <= 4) {
+            // ── Hitung Lembur Khusus ──
+            // Syarat: jam lembur > 4 pada hari weekend atau hari libur nasional
+            $lemburKhusus = $grupKaryawan->filter(function ($record) use ($hariLibur) {
+                $nilai = $record->JUMLAH_JAM_LEMBUR;
+                if (!is_numeric($nilai) || $nilai <= 4) {
                     return false;
                 }
 
-                $date = \Carbon\Carbon::parse($record->OVERTIME_DATE);
-                $isWeekend = $date->isWeekend();
-                $dateString = $date->format('Y-m-d');
-                $isHoliday = isset($holidays[$dateString]) && $holidays[$dateString]['holiday'] === true;
+                $tanggal     = \Carbon\Carbon::parse($record->OVERTIME_DATE);
+                $tglString   = $tanggal->format('Y-m-d');
+                $isHoliday = isset($hariLibur[$tglString]) && $hariLibur[$tglString]['holiday'] === true;
 
-                return $isWeekend || $isHoliday;
+                return $tanggal->isWeekend() || $isHoliday;
             })->sum('JUMLAH_JAM_LEMBUR');
 
-            // Count dan kelmpokan untuk yang value nya character
-            $lemburCharacter = $group->filter(function ($record) {
-                return !is_numeric($record->JUMLAH_JAM_LEMBUR);
-            });
-            $countLemburCharacter = $lemburCharacter->count();
-            $lemburCharacterGroup = $lemburCharacter->groupBy('JUMLAH_JAM_LEMBUR');
+            // ── Hitung Kode Karakter (CT, MA, dll) ──
+            // Ambil record yang jam lemburnya bukan angka, lalu hitung per kode
+            $lemburKarakter = $grupKaryawan
+                ->filter(fn($r) => !is_numeric($r->JUMLAH_JAM_LEMBUR))
+                ->groupBy('JUMLAH_JAM_LEMBUR');
 
-
-            foreach ($group as $record) {
-                $date = \Carbon\Carbon::parse($record->OVERTIME_DATE)->format('Y-m-d');
-                $row[$date] = $record->JUMLAH_JAM_LEMBUR;
+            foreach ($lemburKarakter as $kode => $daftarRecord) {
+                $row[$kode] = $daftarRecord->count();
             }
 
+            // ── Hitung Total Lembur Per Minggu ──
+            // Untuk menandai minggu yang melebihi 16 jam (highlight merah di frontend)
+            $prefixBulan = $tanggalAwal->format('Y-m');
+            foreach ($rangeMinggu as $idx => $minggu) {
+                $totalMinggu = 0;
+                foreach ($minggu['days'] as $hari) {
+                    $keyDate = $prefixBulan . '-' . str_pad($hari, 2, '0', STR_PAD_LEFT);
+
+                    // Filter: Hanya hitung jika hari kerja (Senin-Jumat) 
+                    // dan bukan hari libur (kecuali libur Cuti Bersama)
+                    $tglObj = \Carbon\Carbon::parse($keyDate);
+                    $hData  = $hariLibur[$keyDate] ?? null;
+                    $isH    = ($hData['holiday'] ?? false) === true
+                        && !str_contains(implode(' ', (array)($hData['summary'] ?? [])), 'Cuti');
+
+                    if (!$tglObj->isWeekend() && !$isH) {
+                        if (isset($row[$keyDate]) && is_numeric($row[$keyDate])) {
+                            $totalMinggu += (float) $row[$keyDate];
+                        }
+                    }
+                }
+                $row['week_' . ($idx + 1) . '_sum'] = $totalMinggu;
+            }
+
+            // ── Isi kolom summary ──
             $row['total_kehadiran'] = $totalKehadiran;
-            $row['1'] = $field1;
-            $row['2'] = $field2;
-            $row['lembur_khusus'] = $lemburKhusus;
-            $row['total'] = $field1 + $field2;
-
-            foreach ($lemburCharacterGroup as $key => $value) {
-                $row[$key] = $value->count();
-            }
+            $row['1']               = $jumlahHariLembur;
+            $row['2']               = $jamEkstra;
+            $row['total']           = $jumlahHariLembur + $jamEkstra;
+            $row['lembur_khusus']   = $lemburKhusus;
 
             return $row;
         })->values();
-        
-        return response()->json(['data' => $pivoted]);
+
+        return response()->json(['data' => $hasilPivot, 'weeks' => $metaMinggu]);
     }
 }

@@ -48,11 +48,6 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
-                                <thead>
-                                    <!-- Dynamic headers -->
-                                </thead>
-                                <tbody>
-                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -74,6 +69,32 @@
 <script src="http://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.3.0/js/bootstrap-datepicker.js"></script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.8.0/css/bootstrap-datepicker.css" rel="stylesheet"/>
 
+<style>
+    #dataTable thead tr:first-child th.week-header {
+        background-color: #4e73df;
+        color: #fff;
+        text-align: center;
+        font-weight: bold;
+        border: 1px solid #3a5bbf;
+    }
+    #dataTable thead tr:first-child th.summary-header {
+        background-color: #1cc88a;
+        color: #fff;
+        text-align: center;
+        font-weight: bold;
+        border: 1px solid #17a673;
+    }
+    #dataTable thead tr:first-child th.info-header {
+        background-color: #858796;
+        color: #fff;
+        text-align: center;
+        font-weight: bold;
+    }
+    .week-over {
+        background-color: #dc3545 !important;
+        color: #fff !important;
+    }
+</style>
 <script>
     $(document).ready(function() {
         function loadTable() {
@@ -82,58 +103,119 @@
 
             if (!dateVal) return;
             var monthVal = dateVal.substring(0, 7);
-            var parts = monthVal.split('-');
-            var year = parseInt(parts[0]);
-            var month = parseInt(parts[1]);
-            var daysInMonth = new Date(year, month, 0).getDate();
 
             if ($.fn.DataTable.isDataTable('#dataTable')) {
                 $('#dataTable').DataTable().destroy();
-                $('#dataTable').empty();
             }
+            $('#dataTable').empty();
 
-            var columns = [
-                { title: "NPK", data: "NPK" },
-                { title: "NAMA", data: "NAMA_KARYAWAN" },
-                { title: "BAGIAN", data: "BAGIAN" }
-            ];
+            // Fetch data and week metadata from backend
+            $.ajax({
+                url: '{{ route("overtime.calendar-data") }}',
+                data: { month: monthVal, department: deptVal },
+                dataType: 'json',
+                success: function(response) {
+                    var weeks = response.weeks;
+                    var tableData = response.data;
 
-            for (var i = 1; i <= daysInMonth; i++) {
-                var dayStr = i.toString().padStart(2, '0');
-                columns.push({
-                    title: dayStr,
-                    data: monthVal + '-' + dayStr,
-                    defaultContent: "",
-                    width: "30px",
-                    className: "text-center"
-                });
-            }
+                    // Build columns based on backend week metadata
+                    var columns = [
+                        { data: "NPK" },
+                        { data: "NAMA_KARYAWAN" },
+                        { data: "BAGIAN" }
+                    ];
 
-            // Summary columns
-            columns.push({ title: "Kehadiran", data: "total_kehadiran", className: "text-center font-weight-bold", defaultContent: "0" });
-            columns.push({ title: "1", data: "1", className: "text-center font-weight-bold", defaultContent: "0" });
-            columns.push({ title: "2", data: "2", className: "text-center font-weight-bold", defaultContent: "0" });
-            columns.push({ title: "Total", data: "total", className: "text-center font-weight-bold", defaultContent: "0" });
-            columns.push({ title: "Lembur Khusus", data: "lembur_khusus", className: "text-center font-weight-bold", defaultContent: "0" });
+                    var weekColRanges = [];
+                    var colIndex = 3;
 
-            // Tambahkan kolom untuk counting yang value nya character misal CT, MA
-            columns.push({ title: "CT", data: "CT", className: "text-center font-weight-bold", defaultContent: "0" });
-            columns.push({ title: "MA", data: "MA", className: "text-center font-weight-bold", defaultContent: "0" });
-            
+                    for (var w = 0; w < weeks.length; w++) {
+                        var weekStartCol = colIndex;
+                        for (var di = 0; di < weeks[w].days.length; di++) {
+                            var dayStr = weeks[w].days[di].toString().padStart(2, '0');
+                            columns.push({
+                                data: monthVal + '-' + dayStr,
+                                defaultContent: "",
+                                className: "text-center"
+                            });
+                            colIndex++;
+                        }
+                        weekColRanges.push({
+                            startCol: weekStartCol,
+                            endCol: colIndex - 1,
+                            key: weeks[w].key
+                        });
+                    }
 
-            $('#dataTable').DataTable({
-                ajax: {
-                    url: '{{ route("overtime.calendar-data") }}',
-                    data: { 
-                        month: monthVal,
-                        department: deptVal
-                    },
-                    dataSrc: 'data'
-                },
-                columns: columns,
-                pageLength: 15,
-                scrollX: true,
-                autoWidth: false
+                    // Summary columns
+                    columns.push({ data: "total_kehadiran", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "1", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "2", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "total", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "lembur_khusus", className: "text-center font-weight-bold", defaultContent: "0" });
+
+                    // Tambahkan kolom untuk counting yang value nya character misal CT, MA
+                    columns.push({ data: "CT", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "MA", className: "text-center font-weight-bold", defaultContent: "0" });
+
+                    // Build table header from backend week metadata
+                    var theadHtml = '<thead>';
+
+                    // Row 1: Week labels
+                    theadHtml += '<tr>';
+                    theadHtml += '<th class="info-header" rowspan="2">NPK</th>';
+                    theadHtml += '<th class="info-header" rowspan="2">NAMA</th>';
+                    theadHtml += '<th class="info-header" rowspan="2">BAGIAN</th>';
+                    for (var w = 0; w < weeks.length; w++) {
+                        theadHtml += '<th class="week-header" colspan="' + weeks[w].days.length + '">' + weeks[w].label + '</th>';
+                    }
+                    theadHtml += '<th class="summary-header" colspan="7">Summary</th>';
+                    theadHtml += '</tr>';
+
+                    // Row 2: Individual dates + summary names
+                    theadHtml += '<tr>';
+                    for (var w = 0; w < weeks.length; w++) {
+                        for (var di = 0; di < weeks[w].days.length; di++) {
+                            theadHtml += '<th class="text-center">' + weeks[w].days[di].toString().padStart(2, '0') + '</th>';
+                        }
+                    }
+                    theadHtml += '<th class="text-center">Kehadiran</th>';
+                    theadHtml += '<th class="text-center">1</th>';
+                    theadHtml += '<th class="text-center">2</th>';
+                    theadHtml += '<th class="text-center">Total</th>';
+                    theadHtml += '<th class="text-center">Lembur Khusus</th>';
+                    theadHtml += '<th class="text-center">CT</th>';
+                    theadHtml += '<th class="text-center">MA</th>';
+                    theadHtml += '</tr>';
+
+                    theadHtml += '</thead>';
+
+                    // Build table
+                    $('#dataTable').append(theadHtml);
+                    $('#dataTable').append('<tbody></tbody>');
+
+                    // Initialize DataTable with local data (no DataTables ajax)
+                    $('#dataTable').DataTable({
+                        data: tableData,
+                        columns: columns,
+                        pageLength: 15,
+                        scrollX: true,
+                        autoWidth: false,
+                        ordering: true,
+                        orderCellsTop: true,
+                        orderMulti: true,
+                        createdRow: function(row, data, dataIndex) {
+                            var $tds = $(row).find('td');
+                            weekColRanges.forEach(function(wr) {
+                                var val = parseFloat(data[wr.key]) || 0;
+                                if (val > 16) {
+                                    for (var ci = wr.startCol; ci <= wr.endCol; ci++) {
+                                        $tds.eq(ci).addClass('week-over');
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
             });
         }
 
@@ -141,7 +223,6 @@
             loadTable();
         });
 
-        // Trigger initial load
         loadTable();
     });
 </script>
