@@ -15,7 +15,7 @@ class AttendanceFingerController extends Controller
      */
     public function index()
     {
-        $attendanceFingers = DB::connection('audit')->table('att_log')->limit(10)->get();
+        $attendanceFingers = DB::connection('audit')->table('att_log')->orderBy('scan_date', 'desc')->limit(10)->get();
         return view('attendance_finger.index', compact('attendanceFingers'));
     }
 
@@ -111,6 +111,6 @@ class AttendanceFingerController extends Controller
             'date' => 'required|date',
         ]);
 
-        // return Excel::download(new AttendanceFingerExport($request->date), 'attendance_finger_' . $request->date . '.xlsx');
+        return Excel::download(new AttendanceFingerExport($request->date), 'attendance_finger_' . $request->date . '.xlsx');
     }
 }

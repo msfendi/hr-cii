@@ -69,7 +69,7 @@ class OvertimeController extends Controller
     public function calendarDisplay(Request $request)
     {
         $bulan       = $request->input('month', date('Y-m'));
-        $durations   = $request->input('durations', []);
+        $duration    = $request->input('duration');
         $tanggalAwal = \Carbon\Carbon::parse($bulan)->startOfMonth();
         $tanggalAkhir = \Carbon\Carbon::parse($bulan)->endOfMonth();
         $jumlahHari  = $tanggalAkhir->day;
@@ -113,12 +113,12 @@ class OvertimeController extends Controller
         // ▸ LANGKAH 2: Ambil data lembur dari database
         $dataLembur = Overtime::whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir])->orderBy('OVERTIME_DATE')->get();
 
-        // Filter berdasarkan durasi jam lembur (multiple checkbox)
-        if (!empty($durations)) {
-            $durations = array_map('intval', $durations);
-            $npkCocok = $dataLembur->filter(function ($r) use ($durations) {
+        // Filter berdasarkan durasi jam lembur (dropdown single value)
+        if ($duration) {
+            $duration = (int) $duration;
+            $npkCocok = $dataLembur->filter(function ($r) use ($duration) {
                 return is_numeric($r->JUMLAH_JAM_LEMBUR)
-                    && in_array((int)$r->JUMLAH_JAM_LEMBUR, $durations);
+                    && (int)$r->JUMLAH_JAM_LEMBUR === $duration;
             })->pluck('NPK')->unique();
             $dataLembur = $dataLembur->whereIn('NPK', $npkCocok);
         }

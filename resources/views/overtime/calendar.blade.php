@@ -27,12 +27,12 @@
                             <h6 class="m-0 font-weight-bold text-primary">Overtime Data</h6>
                             <div class="d-flex align-items-center flex-wrap">
                                 <span class="mr-2 font-weight-bold text-dark" style="font-size:0.85rem;">Durasi Jam:</span>
-                                @for($i = 1; $i <= 8; $i++)
-                                <div class="custom-control custom-checkbox custom-control-inline mr-2">
-                                    <input type="checkbox" class="custom-control-input duration-cb" id="dur_{{ $i }}" value="{{ $i }}">
-                                    <label class="custom-control-label" for="dur_{{ $i }}" style="font-size:0.85rem;">{{ $i }}</label>
-                                </div>
-                                @endfor
+                                <select id="duration_filter" class="form-control form-control-sm mr-2" style="width: 120px;">
+                                    <option value="">Semua Jam</option>
+                                    @for($i = 1; $i <= 12; $i++)
+                                    <option value="{{ $i }}">{{ $i }} Jam</option>
+                                    @endfor
+                                </select>
                                 <div class="form-inline ml-3">
                                     <label for="date" class="mr-2">Date:</label>
                                     <div class="input-group input-group-sm">
@@ -107,8 +107,7 @@
             if (!dateVal) return;
             var monthVal = dateVal.substring(0, 7);
 
-            var durations = [];
-            $('.duration-cb:checked').each(function() { durations.push($(this).val()); });
+            var duration = $('#duration_filter').val();
 
             if ($.fn.DataTable.isDataTable('#dataTable')) {
                 $('#dataTable').DataTable().destroy();
@@ -118,7 +117,7 @@
             // Fetch data and week metadata from backend
             $.ajax({
                 url: '{{ route("overtime.calendar-data") }}',
-                data: { month: monthVal, durations: durations },
+                data: { month: monthVal, duration: duration },
                 dataType: 'json',
                 success: function(response) {
                     var weeks = response.weeks;
@@ -252,11 +251,7 @@
             });
         }
 
-        $('#date').on('change', function() {
-            loadTable();
-        });
-
-        $(document).on('change', '.duration-cb', function() {
+        $('#date, #duration_filter').on('change', function() {
             loadTable();
         });
 
