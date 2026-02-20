@@ -85,13 +85,13 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
                 }
             }
 
-            $dataRow[] = $employee['total_kehadiran'] ?? 0;
-            $dataRow[] = $employee['1'] ?? 0;
-            $dataRow[] = $employee['2'] ?? 0;
-            $dataRow[] = $employee['total'] ?? 0;
-            $dataRow[] = $employee['lembur_khusus'] ?? 0;
-            $dataRow[] = $employee['CT'] ?? 0;
-            $dataRow[] = $employee['MA'] ?? 0;
+            $dataRow[] = $employee['total_kehadiran'] ?? '0';
+            $dataRow[] = $employee['1'] ?? '0';
+            $dataRow[] = $employee['2'] ?? '0';
+            $dataRow[] = $employee['total'] ?? '0';
+            $dataRow[] = $employee['lembur_khusus'] < 8 ? '0' : $employee['lembur_khusus'];
+            $dataRow[] = $employee['CT'] ?? '0';
+            $dataRow[] = $employee['MA'] ?? '0';
 
             $rows[] = $dataRow;
         }
@@ -136,7 +136,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
 
         // Style: Header rows
         $sheet->getStyle("A1:{$lastCol}2")->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+            'font' => ['bold' => true, 'color' => ['rgb' => '000000'], 'size' => 10],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
         ]);
@@ -147,20 +147,26 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             $dayCount = count($week['days']);
             $startCol = $this->colLetter($colIdx);
             $endCol = $this->colLetter($colIdx + $dayCount - 1);
+            // $sheet->getStyle("{$startCol}1:{$endCol}1")->getFill()
+            //     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('4E73DF');
             $sheet->getStyle("{$startCol}1:{$endCol}1")->getFill()
-                ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('4E73DF');
+                ->setFillType(Fill::FILL_NONE);
             $colIdx += $dayCount;
         }
 
         // Info header background (gray) for NPK, NAMA, BAGIAN
+        // $sheet->getStyle('A1:C2')->getFill()
+        //     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('858796');
         $sheet->getStyle('A1:C2')->getFill()
-            ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('858796');
+            ->setFillType(Fill::FILL_NONE);
 
         // Summary header background (green)
         $summaryColStart = $this->colLetter($colIdx);
         $summaryColEnd = $this->colLetter($colIdx + 6);
+        // $sheet->getStyle("{$summaryColStart}1:{$summaryColEnd}2")->getFill()
+        //     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1CC88A');
         $sheet->getStyle("{$summaryColStart}1:{$summaryColEnd}2")->getFill()
-            ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1CC88A');
+            ->setFillType(Fill::FILL_NONE);
 
         // Date row (row 2) background - apply per day
         $colIdx = 4;
@@ -181,8 +187,10 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
                     }
                 } else {
                     // Default blue for date header
+                    // $sheet->getStyle("{$col}2")->getFill()
+                    //     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('4E73DF');
                     $sheet->getStyle("{$col}2")->getFill()
-                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('4E73DF');
+                        ->setFillType(Fill::FILL_NONE);
                 }
                 $colIdx++;
             }

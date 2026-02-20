@@ -57,8 +57,63 @@ class OvertimeController extends Controller
 
     public function getData(Request $request)
     {
-        $overtimes = Overtime::all();
+        $date = $request->input('date');
+
+        $query = Overtime::query();
+
+        if ($date) {
+            $query->whereDate('OVERTIME_DATE', $date);
+        }
+
+        $overtimes = $query->get();
         return response()->json(['data' => $overtimes]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        try {
+            // $request->validate([
+            //     'jumlah_jam_lembur' => 'required|numeric',
+            // ]);
+
+            $overtime = Overtime::findOrFail($id);
+            $overtime->update([
+                'JUMLAH_JAM_LEMBUR' => $request->jumlah_jam_lembur,
+            ]);
+
+            return response()->json(['status' => 'success', 'message' => 'Data overtime berhasil diperbarui.']);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'Gagal memperbarui data: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $overtime = Overtime::findOrFail($id);
+            $overtime->delete();
+
+            return response()->json(['status' => 'success', 'message' => 'Data overtime berhasil dihapus.']);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'Gagal menghapus data: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function destroyAll(Request $request)
+    {
+        try {
+            $date = $request->input('date');
+
+            if (!$date) {
+                return response()->json(['status' => 'error', 'message' => 'Tanggal tidak valid.'], 400);
+            }
+
+            $count = Overtime::whereDate('OVERTIME_DATE', $date)->delete();
+
+            return response()->json(['status' => 'success', 'message' => $count . ' data overtime berhasil dihapus.']);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'Gagal menghapus data: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
