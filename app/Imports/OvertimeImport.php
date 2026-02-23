@@ -24,20 +24,31 @@ class OvertimeImport implements ToModel, WithStartRow
      */
     public function model(array $row)
     {
-        // Must contain NPK
-        if (!isset($row[0])) {
+        // Must contain NPK and Date
+        if (!isset($row[0]) || empty($row[0]) || !isset($row[4]) || empty($row[4])) {
             return null;
         }
 
-        Carbon::setLocale('id');
+        try {
+            // Handle date from excel (could be number or string)
+            if (is_numeric($row[4])) {
+                $overtimeDate = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row[4]);
+            } else {
+                $overtimeDate = Carbon::parse($row[4]);
+            }
 
-        return new Overtime([
-            'NPK' => $row[0],
-            'NAMA_KARYAWAN' => $row[1],
-            'BAGIAN' => $row[2],
-            'DAY' => Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row[4]))->translatedFormat('l'),
-            'OVERTIME_DATE' => \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row[4]),
-            'JUMLAH_JAM_LEMBUR' => $row[5] ?? null,
-        ]);
+            Carbon::setLocale('id');
+
+            return new Overtime([
+                'NPK' => $row[0],
+                'NAMA_KARYAWAN' => $row[1],
+                'BAGIAN' => $row[2],
+                'DAY' => Carbon::instance($overtimeDate)->translatedFormat('l'),
+                'OVERTIME_DATE' => $overtimeDate,
+                'JUMLAH_JAM_LEMBUR' => $row[5] ?? null,
+            ]);
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

@@ -15,6 +15,37 @@
             <!-- Begin Page Content -->
             <div class="container-fluid">
 
+                @if (session('success'))
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        {{ session('success') }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                @endif
+
+                @if (session('error'))
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ session('error') }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                @endif
+
+                @if ($errors->any())
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <ul class="mb-0">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                @endif
+
                 <!-- Page Heading -->
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Overtime Management</h1>
@@ -26,7 +57,7 @@
                         <h6 class="m-0 font-weight-bold text-primary">Overtime Data</h6>
                         <div>
                             <div class="d-flex align-items-center flex-wrap">
-                                <form action="{{ route('overtime.import') }}" method="POST" enctype="multipart/form-data" class="form-inline mr-2 mb-2">
+                                <form id="importForm" action="{{ route('overtime.import') }}" method="POST" enctype="multipart/form-data" class="form-inline mr-2 mb-2">
                                     @csrf
                                     <label for="file" class="mr-2">Upload File:</label>
                                     <div class="input-group input-group-sm">
@@ -39,7 +70,7 @@
                                     </div>
                                 </form>
 
-                                <form action="{{ route('overtime.downloadTemplate') }}" method="GET" class="form-inline mr-2 mb-2">
+                                <form id="templateForm" action="{{ route('overtime.downloadTemplate') }}" method="GET" class="form-inline mr-2 mb-2">
                                     <label for="date" class="mr-2">Date:</label>
                                     <div class="input-group input-group-sm mr-2">
                                         <input type="date" class="form-control" name="date" id="date" value="{{ date('Y-m-d') }}" required>
@@ -183,9 +214,78 @@
             table.ajax.reload();
         });
 
+        // Import Form Submit with AJAX & SWAL
+        $('#importForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            var formData = new FormData(this);
+
+            Swal.fire({
+                title: 'Importing Data...',
+                text: 'Please wait while we process the file.',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            $.ajax({
+                url: $(this).attr('action'),
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: response.message,
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        table.ajax.reload(); // Reload table data
+                        $('#file').val('');  // Clear the file input
+                    });
+                },
+                error: function(xhr) {
+                    var errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'An error occurred during import.';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Import Failed',
+                        text: errorMsg,
+                        confirmButtonText: 'Try Again'
+                    });
+                }
+            });
+        });
+
         // Sync date ke export form sebelum submit
         $('#exportForm').on('submit', function() {
             $('#exportDate').val($('#date').val());
+
+            Swal.fire({
+                title: 'Generating Export...',
+                text: 'Please wait while we prepare your calendar file.',
+                icon: 'info',
+                timer: 15000,
+                timerProgressBar: true,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+        });
+
+        // SWAL for Template Download
+        $('#templateForm').on('submit', function() {
+            Swal.fire({
+                title: 'Downloading Template...',
+                text: 'Preparing your Excel template, please wait.',
+                icon: 'info',
+                timer: 5000,
+                timerProgressBar: true,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
         });
 
         // Edit Button Click

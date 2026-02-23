@@ -49,8 +49,15 @@ class OvertimeController extends Controller
 
             Excel::import(new OvertimeImport, $file);
 
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['status' => 'success', 'message' => 'Data overtime berhasil diimpor.']);
+            }
+
             return redirect()->back()->with('success', 'Data overtime berhasil diimpor.');
         } catch (\Throwable $th) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['status' => 'error', 'message' => 'Gagal mengimpor data overtime: ' . $th->getMessage()], 500);
+            }
             return redirect()->back()->with('error', 'Gagal mengimpor data overtime: ' . $th->getMessage());
         }
     }

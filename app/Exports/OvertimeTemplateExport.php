@@ -42,7 +42,7 @@ class OvertimeTemplateExport implements FromCollection, WithHeadings, WithMappin
         return [
             $row->NPK,
             $row->NAMA_KARYAWAN,
-            $row->BAG,
+            $row->DEPARTEMENT,
             $row->TMK,
             $this->date,
             '',
