@@ -23,9 +23,12 @@ class OvertimeTemplateExport implements FromCollection, WithHeadings, WithMappin
         return DB::connection('cii')
             ->table('BIODATA')
             ->leftJoin('PKWT', 'BIODATA.NPK', '=', 'PKWT.NPK')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BAG', 'PKWT.TMK')
+            ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BAG', 'PKWT.TMK', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING', 'BIODATA.ID_DEPT', 'BIODATA.STATUS')
             ->where('BIODATA.STATUS', 'A')
-            ->orderBy('BIODATA.NAMA_KARYAWAN')
+            ->orderBy('DEPT.IS_SEWING', 'asc')
+            ->orderBy('BIODATA.ID_DEPT', 'asc')
+            ->orderBy('BIODATA.NPK', 'asc')
             ->get();
     }
 

@@ -307,7 +307,7 @@ class OvertimeController extends Controller
             $row['lembur_khusus']   = $lemburKhusus;
 
             return $row;
-        })->values();
+        })->sortBy('NPK')->sortBy('BAGIAN')->values();
 
         // Kumpulkan info hari libur bulan ini (kecuali Cuti) untuk highlight di frontend
         $holidaysThisMonth = [];

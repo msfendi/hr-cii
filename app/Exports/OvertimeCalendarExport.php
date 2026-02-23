@@ -348,7 +348,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             $row['lembur_khusus']   = $lemburKhusus;
 
             return $row;
-        })->values()->toArray();
+        })->sortBy('NPK')->sortBy('BAGIAN')->values()->toArray();
 
         // Holidays for highlighting
         $holidaysThisMonth = [];

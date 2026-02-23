@@ -233,6 +233,7 @@
                         scrollX: true,
                         autoWidth: false,
                         ordering: true,
+                        order: [], // Disable default sorting to use server-side order
                         orderCellsTop: true,
                         orderMulti: true,
                         createdRow: function(row, data, dataIndex) {
