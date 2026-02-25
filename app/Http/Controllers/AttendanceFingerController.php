@@ -85,15 +85,17 @@ class AttendanceFingerController extends Controller
             $count = 0;
             foreach ($sourceData as $data) {
                 DB::connection('audit')->table('att_log')->updateOrInsert(
-                    ['att_id' => $data->att_id],
                     [
                         'sn' => $data->sn,
                         'scan_date' => $data->scan_date,
                         'pin' => $data->pin,
+                    ],
+                    [
                         'verifymode' => $data->verifymode,
                         'inoutmode' => $data->inoutmode,
                         'reserved' => $data->reserved,
                         'work_code' => $data->work_code,
+                        'att_id' => str_replace(['-', ' ', ':'], '', $data->scan_date . $data->sn . $data->pin),
                     ]
                 );
                 $count++;
