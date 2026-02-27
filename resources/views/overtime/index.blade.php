@@ -57,34 +57,31 @@
                         <h6 class="m-0 font-weight-bold text-primary">Overtime Data</h6>
                         <div>
                             <div class="d-flex align-items-center flex-wrap">
-                                <form id="importForm" action="{{ route('overtime.import') }}" method="POST" enctype="multipart/form-data" class="form-inline mr-2 mb-2">
-                                    @csrf
-                                    <label for="file" class="mr-2">Upload File:</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="file" class="form-control" name="file" id="file" accept=".xlsx" required style="padding-bottom: 2rem;">
-                                        <div class="input-group-append">
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="fas fa-file-excel"></i> Import Data
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
+                                <button type="button" class="btn btn-primary btn-sm mb-2 mr-2" data-toggle="modal" data-target="#importModal">
+                                    <i class="fas fa-file-excel"></i> Import Data
+                                </button>
 
-                                <form id="templateForm" action="{{ route('overtime.downloadTemplate') }}" method="GET" class="form-inline mr-2 mb-2">
+                                <form id="actionForm" method="GET" class="form-inline mr-2 mb-2">
                                     <label for="date" class="mr-2">Date:</label>
                                     <div class="input-group input-group-sm mr-2">
                                         <input type="date" class="form-control" name="date" id="date" value="{{ date('Y-m-d') }}" required>
                                     </div>
 
-                                    <button type="submit" class="btn btn-success btn-sm">
+                                    <div class="input-group input-group-sm mr-2">
+                                        <select class="form-control" name="type" id="department_filter" required>
+                                            <option value="" disabled selected>-- Pilih Tipe --</option>
+                                            <option value="all">All</option>
+                                            <option value="sewing">Sewing</option>
+                                            <option value="non_sewing">Non-Sewing</option>
+                                            <option value="staff">Staff</option>
+                                        </select>
+                                    </div>
+
+                                    <button type="submit" formaction="{{ route('overtime.downloadTemplate') }}" class="btn btn-success btn-sm mr-2">
                                         <i class="fas fa-file-excel"></i> Download Template
                                     </button>
-                                </form>
 
-                                {{-- export --}}
-                                <form action="{{ route('overtime.export') }}" method="GET" class="form-inline mb-2 mr-2" id="exportForm">
-                                    <input type="hidden" name="date" id="exportDate">
-                                    <button type="submit" class="btn btn-info btn-sm">
+                                    <button type="submit" formaction="{{ route('overtime.export') }}" class="btn btn-info btn-sm">
                                         <i class="fas fa-file-excel"></i> Export Calendar
                                     </button>
                                 </form>
@@ -123,6 +120,44 @@
         </div>
         <!-- End of Main Content -->
 @include('layout.footer')
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1" role="dialog" aria-labelledby="importModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importModalLabel">Import Overtime Data</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="importForm" action="{{ route('overtime.import') }}" method="POST" enctype="multipart/form-data">
+                @csrf
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="dept_group">Tipe / Departemen</label>
+                        <select class="form-control" name="dept_group" id="dept_group" required>
+                            <option value="" disabled selected>-- Pilih Tipe --</option>
+                            <option value="sewing">Sewing</option>
+                            <option value="non_sewing">Non-Sewing</option>
+                            <option value="staff">Staff</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="file">Upload File</label>
+                        <input type="file" class="form-control" name="file" id="file" accept=".xlsx" required style="padding-bottom: 2rem;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-file-excel"></i> Import Data
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Modal -->
 <div class="modal fade" id="editOvertimeModal" tabindex="-1" role="dialog" aria-labelledby="editOvertimeModalLabel" aria-hidden="true">
@@ -187,6 +222,7 @@
                 type: 'GET',
                 data: function(d) {
                     d.date = $('#date').val();
+                    d.department_filter = $('#department_filter').val();
                 }
             },
             columns: [
@@ -244,6 +280,8 @@
                     }).then(() => {
                         table.ajax.reload(); // Reload table data
                         $('#file').val('');  // Clear the file input
+                        $('#dept_group').val(''); // Clear the select input
+                        $('#importModal').modal('hide'); // Hide modal
                     });
                 },
                 error: function(xhr) {
@@ -258,34 +296,32 @@
             });
         });
 
-        // Sync date ke export form sebelum submit
-        $('#exportForm').on('submit', function() {
-            $('#exportDate').val($('#date').val());
-
-            Swal.fire({
-                title: 'Generating Export...',
-                text: 'Please wait while we prepare your calendar file.',
-                icon: 'info',
-                timer: 15000,
-                timerProgressBar: true,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-        });
-
-        // SWAL for Template Download
-        $('#templateForm').on('submit', function() {
-            Swal.fire({
-                title: 'Downloading Template...',
-                text: 'Preparing your Excel template, please wait.',
-                icon: 'info',
-                timer: 5000,
-                timerProgressBar: true,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
+        // Action Form Submit (Download Template or Export Calendar)
+        $('#actionForm button[type="submit"]').on('click', function() {
+            var actionUrl = $(this).attr('formaction');
+            if (actionUrl && actionUrl.includes('downloadTemplate')) {
+                Swal.fire({
+                    title: 'Downloading Template...',
+                    text: 'Preparing your Excel template, please wait.',
+                    icon: 'info',
+                    timer: 5000,
+                    timerProgressBar: true,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            } else if (actionUrl && actionUrl.includes('export')) {
+                Swal.fire({
+                    title: 'Generating Export...',
+                    text: 'Please wait while we prepare your calendar file.',
+                    icon: 'info',
+                    timer: 15000,
+                    timerProgressBar: true,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
         });
 
         // Edit Button Click

@@ -5,6 +5,7 @@ namespace App\Exports;
 use App\Models\Overtime;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -18,10 +19,12 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, WithTitle
 {
     protected $month;
+    protected $type;
 
-    public function __construct(string $month)
+    public function __construct(string $month, string $type = 'all')
     {
         $this->month = $month;
+        $this->type = $type;
     }
 
     public function title(): string
@@ -256,8 +259,21 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         }
 
         // Get overtime data
-        $dataLembur = Overtime::whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir])
-            ->orderBy('OVERTIME_DATE')->get();
+        $queryLembur = Overtime::leftJoin(
+            DB::raw('(SELECT NPK, ID_DEPT FROM BIODATA UNION SELECT NPK, ID_DEPT FROM BIODATA_KELUAR) AS BIO'),
+            'overtimes.NPK',
+            '=',
+            'BIO.NPK'
+        )
+            ->leftJoin('DEPT', 'BIO.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select('overtimes.NPK', 'overtimes.NAMA_KARYAWAN', 'overtimes.OVERTIME_DATE', 'overtimes.JUMLAH_JAM_LEMBUR', 'overtimes.DAY', 'overtimes.DEPT_GROUP', 'DEPT.DEPARTEMENT')
+            ->whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir]);
+
+        if ($this->type !== 'all') {
+            $queryLembur->where('DEPT_GROUP', $this->type);
+        }
+
+        $dataLembur = $queryLembur->orderBy('OVERTIME_DATE')->get();
 
         // Get holidays
         $hariLibur = Cache::remember('holidays_calendar', 86400, function () {
@@ -275,7 +291,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             $row = [
                 'NPK'           => $employee->NPK,
                 'NAMA_KARYAWAN' => $employee->NAMA_KARYAWAN,
-                'BAGIAN'        => $employee->BAGIAN,
+                'BAGIAN'        => $employee->DEPARTEMENT,
             ];
 
             foreach ($grupKaryawan as $record) {

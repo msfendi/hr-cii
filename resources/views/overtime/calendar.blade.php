@@ -33,6 +33,13 @@
                                     <option value="{{ $i }}">{{ $i }} Jam</option>
                                     @endfor
                                 </select>
+                                <span class="mr-2 font-weight-bold text-dark" style="font-size:0.85rem;">Dept Group:</span>
+                                <select id="dept_group_filter" class="form-control form-control-sm mr-2" style="width: 140px;">
+                                    <option value="all">Semua</option>
+                                    <option value="sewing">Sewing</option>
+                                    <option value="non_sewing">Non-Sewing</option>
+                                    <option value="staff">Staff</option>
+                                </select>
                                 <div class="form-inline ml-3">
                                     <label for="date" class="mr-2">Date:</label>
                                     <div class="input-group input-group-sm">
@@ -107,7 +114,8 @@
             if (!dateVal) return;
             var monthVal = dateVal.substring(0, 7);
 
-            var duration = $('#duration_filter').val();
+                var duration = $('#duration_filter').val();
+            var deptGroup = $('#dept_group_filter').val();
 
             if ($.fn.DataTable.isDataTable('#dataTable')) {
                 $('#dataTable').DataTable().destroy();
@@ -117,7 +125,7 @@
             // Fetch data and week metadata from backend
             $.ajax({
                 url: '{{ route("overtime.calendar-data") }}',
-                data: { month: monthVal, duration: duration },
+                data: { month: monthVal, duration: duration, dept_group: deptGroup },
                 dataType: 'json',
                 success: function(response) {
                     var weeks = response.weeks;
@@ -126,9 +134,9 @@
 
                     // Build columns based on backend week metadata
                     var columns = [
-                        { data: "NPK" },
-                        { data: "NAMA_KARYAWAN" },
-                        { data: "BAGIAN" }
+                        { data: "NPK", className: "text-nowrap" },
+                        { data: "NAMA_KARYAWAN", className: "text-nowrap" },
+                        { data: "BAGIAN", className: "text-nowrap" }
                     ];
 
                     var weekColRanges = [];
@@ -171,6 +179,7 @@
                     // Tambahkan kolom untuk counting yang value nya character misal CT, MA
                     columns.push({ data: "CT", className: "text-center font-weight-bold", defaultContent: "0" });
                     columns.push({ data: "MA", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "P1", className: "text-center font-weight-bold", defaultContent: "0" });
 
                     // Build table header from backend week metadata
                     var theadHtml = '<thead>';
@@ -217,6 +226,7 @@
                     theadHtml += '<th class="text-center">Lembur Khusus</th>';
                     theadHtml += '<th class="text-center">CT</th>';
                     theadHtml += '<th class="text-center">MA</th>';
+                    theadHtml += '<th class="text-center">P1</th>';
                     theadHtml += '</tr>';
 
                     theadHtml += '</thead>';
@@ -252,7 +262,7 @@
             });
         }
 
-        $('#date, #duration_filter').on('change', function() {
+        $('#date, #duration_filter, #dept_group_filter').on('change', function() {
             loadTable();
         });
 

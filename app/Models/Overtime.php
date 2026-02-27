@@ -9,7 +9,7 @@ class Overtime extends Model
 {
     use HasFactory;
 
-    protected $connection = 'audit';
+    protected $connection = 'cii';
     protected $table = 'overtimes';
     protected $fillable = [
         'NPK',
@@ -18,5 +18,6 @@ class Overtime extends Model
         'OVERTIME_DATE',
         'JUMLAH_JAM_LEMBUR',
         'DAY',
+        'DEPT_GROUP',
     ];
 }

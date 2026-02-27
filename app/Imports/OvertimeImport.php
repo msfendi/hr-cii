@@ -9,6 +9,13 @@ use Maatwebsite\Excel\Concerns\WithStartRow;
 
 class OvertimeImport implements ToModel, WithStartRow
 {
+    protected $deptGroup;
+
+    public function __construct($deptGroup)
+    {
+        $this->deptGroup = $deptGroup;
+    }
+
     /**
      * @return int
      */
@@ -46,6 +53,7 @@ class OvertimeImport implements ToModel, WithStartRow
                 'DAY' => Carbon::instance($overtimeDate)->translatedFormat('l'),
                 'OVERTIME_DATE' => $overtimeDate,
                 'JUMLAH_JAM_LEMBUR' => $row[5] ?? null,
+                'DEPT_GROUP' => $this->deptGroup,
             ]);
         } catch (\Exception $e) {
             return null;

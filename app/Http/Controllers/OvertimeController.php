@@ -8,6 +8,8 @@ use App\Exports\OvertimeCalendarExport;
 use App\Exports\OvertimeTemplateExport;
 use App\Models\Overtime;
 use App\Imports\OvertimeImport;
+use App\Models\PKWT;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -30,12 +32,19 @@ class OvertimeController extends Controller
     public function downloadTemplateOvertime(Request $request)
     {
         $date = $request->input('date');
+        $type = $request->input('type', 'sewing');
 
         if (!$date) {
             return redirect()->back()->with('error', 'Silahkan pilih tanggal.');
         }
 
-        return Excel::download(new OvertimeTemplateExport($date), 'template_overtime_' . $date . '.xlsx');
+        if (!in_array($type, ['sewing', 'non_sewing', 'staff', 'all'])) {
+            return redirect()->back()->with('error', 'Silahkan pilih tipe template.');
+        }
+
+        $filename = 'template_overtime_' . $type . '_' . $date . '.xlsx';
+
+        return Excel::download(new OvertimeTemplateExport($date, $type), $filename);
     }
 
     public function importOvertime(Request $request)
@@ -43,11 +52,36 @@ class OvertimeController extends Controller
         try {
             $request->validate([
                 'file' => 'required|mimes:xlsx,xls',
+                'dept_group' => 'required|in:sewing,non_sewing,staff',
             ]);
 
             $file = $request->file('file');
+            $deptGroup = $request->input('dept_group');
 
-            Excel::import(new OvertimeImport, $file);
+            Excel::import(new OvertimeImport($deptGroup), $file);
+
+            // INSERT UNTUK HARI HARI SEBELUM KARYAWAN BARU MASUK
+            $newEmployee = PKWT::whereMonth('TMK', Carbon::now()->month)->whereYear('TMK', Carbon::now()->year)->get();
+
+            foreach ($newEmployee as $employee) {
+                $tmk = Carbon::parse($employee->TMK);
+                for ($i = 1; $i < $tmk->day; $i++) {
+                    $loopDate = Carbon::create($tmk->year, $tmk->month, $i);
+                    Overtime::firstOrCreate(
+                        [
+                            'NPK'          => $employee->NPK,
+                            'OVERTIME_DATE' => $loopDate->format('Y-m-d'),
+                        ],
+                        [
+                            'NAMA_KARYAWAN'     => $employee->NAMA_KARYAWAN,
+                            'BAGIAN'            => $employee->BAGIAN,
+                            'JUMLAH_JAM_LEMBUR' => 'BR',
+                            'DAY'               => $loopDate->translatedFormat('l'),
+                            'DEPT_GROUP'        => $deptGroup,
+                        ]
+                    );
+                }
+            }
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['status' => 'success', 'message' => 'Data overtime berhasil diimpor.']);
@@ -72,7 +106,11 @@ class OvertimeController extends Controller
             $query->whereDate('OVERTIME_DATE', $date);
         }
 
-        $overtimes = $query->get();
+        if ($request->department_filter) {
+            $query->where('DEPT_GROUP', $request->department_filter);
+        }
+
+        $overtimes = $query->orderBy('BAGIAN')->orderBy('NPK')->get();
         return response()->json(['data' => $overtimes]);
     }
 
@@ -173,7 +211,14 @@ class OvertimeController extends Controller
         }
 
         // ▸ LANGKAH 2: Ambil data lembur dari database
-        $dataLembur = Overtime::whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir])->orderBy('OVERTIME_DATE')->get();
+        $deptGroup   = $request->input('dept_group');
+        $queryLembur = Overtime::whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir]);
+
+        if ($deptGroup && $deptGroup !== 'all') {
+            $queryLembur->where('DEPT_GROUP', $deptGroup);
+        }
+
+        $dataLembur = $queryLembur->get();
 
         // Filter berdasarkan durasi jam lembur (dropdown single value)
         if ($duration) {
@@ -339,17 +384,24 @@ class OvertimeController extends Controller
     public function exportCalendar(Request $request)
     {
         $date = $request->input('date');
+        $type = $request->input('type', 'all');
 
         if (!$date) {
             return redirect()->back()->with('error', 'Silahkan pilih tanggal.');
         }
 
+        if (!in_array($type, ['sewing', 'non_sewing', 'staff', 'all'])) {
+            return redirect()->back()->with('error', 'Silahkan pilih tipe export.');
+        }
+
         // Ambil bulan dari input date (bisa format Y-m-d atau Y-m)
         $month = \Carbon\Carbon::parse($date)->format('Y-m');
 
+        $filename = 'overtime_calendar_' . $type . '_' . $month . '.xlsx';
+
         return Excel::download(
-            new OvertimeCalendarExport($month),
-            'overtime_calendar_' . $month . '.xlsx'
+            new OvertimeCalendarExport($month, $type),
+            $filename
         );
     }
 }
