@@ -233,8 +233,8 @@ class OvertimeController extends Controller
         // ▸ LANGKAH 3: Ambil data hari libur nasional (cache 24 jam)
         $hariLibur = Cache::remember('holidays_calendar', 86400, function () {
             try {
-                $response = Http::get('https://raw.githubusercontent.com/guangrei/APIHariLibur_V2/main/calendar.json');
-                return $response->json();
+                $json = file_get_contents(storage_path('app/calendar.json'));
+                return json_decode($json, true) ?? [];
             } catch (\Exception $e) {
                 return [];
             }

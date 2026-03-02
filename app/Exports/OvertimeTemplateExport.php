@@ -31,10 +31,14 @@ class OvertimeTemplateExport implements FromCollection, WithHeadings, WithMappin
         //     ->where('BIODATA.STATUS', 'A');
 
         $query = DB::connection('cii')->table('PKWT')
-            ->leftJoin('BIODATA', 'PKWT.NPK', '=', 'BIODATA.NPK')
-            ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'PKWT.TMK', 'PKWT.TKK', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING', 'BIODATA.ID_DEPT', 'BIODATA.STATUS', 'BIODATA.IS_STAFF')
-            ->where('BIODATA.STATUS', 'A')
+            ->leftJoin(
+                DB::raw('(SELECT NPK, NAMA_KARYAWAN, ID_DEPT, STATUS, IS_STAFF FROM BIODATA UNION SELECT NPK, NAMA_KARYAWAN, ID_DEPT, STATUS, IS_STAFF FROM BIODATA_KELUAR) AS BIO'),
+                'PKWT.NPK',
+                '=',
+                'BIO.NPK'
+            )
+            ->leftJoin('DEPT', 'BIO.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select('PKWT.NPK', 'BIO.NAMA_KARYAWAN', 'PKWT.TMK', 'PKWT.TKK', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING', 'BIO.ID_DEPT', 'BIO.STATUS', 'BIO.IS_STAFF')
             ->where(function ($q) {
                 $q->whereNull('PKWT.TKK')
                     ->orWhere(function ($q2) {
@@ -45,13 +49,13 @@ class OvertimeTemplateExport implements FromCollection, WithHeadings, WithMappin
 
         switch ($this->type) {
             case 'sewing':
-                $query->where('DEPT.IS_SEWING', 0)->where('BIODATA.IS_STAFF', 1);
+                $query->where('DEPT.IS_SEWING', 0)->where('BIO.IS_STAFF', 1);
                 break;
             case 'non_sewing':
-                $query->where('DEPT.IS_SEWING', 1)->where('BIODATA.IS_STAFF', 1);
+                $query->where('DEPT.IS_SEWING', 1)->where('BIO.IS_STAFF', 1);
                 break;
             case 'staff':
-                $query->where('DEPT.IS_SEWING', 1)->where('BIODATA.IS_STAFF', 0);
+                $query->where('DEPT.IS_SEWING', 1)->where('BIO.IS_STAFF', 0);
                 break;
             case 'all':
             default:
@@ -61,8 +65,8 @@ class OvertimeTemplateExport implements FromCollection, WithHeadings, WithMappin
 
         return $query
             ->orderBy('DEPT.IS_SEWING', 'asc')
-            ->orderBy('BIODATA.ID_DEPT', 'asc')
-            ->orderBy('BIODATA.NPK', 'asc')
+            ->orderBy('BIO.ID_DEPT', 'asc')
+            ->orderBy('BIO.NPK', 'asc')
             ->get();
     }
 
