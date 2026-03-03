@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Overtime;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithStartRow;
 
@@ -46,15 +47,28 @@ class OvertimeImport implements ToModel, WithStartRow
 
             Carbon::setLocale('id');
 
-            return new Overtime([
-                'NPK' => $row[0],
-                'NAMA_KARYAWAN' => $row[1],
-                'BAGIAN' => $row[2],
-                'DAY' => Carbon::instance($overtimeDate)->translatedFormat('l'),
-                'OVERTIME_DATE' => $overtimeDate,
-                'JUMLAH_JAM_LEMBUR' => $row[5] ?? null,
-                'DEPT_GROUP' => $this->deptGroup,
-            ]);
+            // use transaction
+            DB::beginTransaction();
+            try {
+                $overtime = Overtime::firstOrCreate(
+                    [
+                        'NPK' => $row[0],
+                        'OVERTIME_DATE' => $overtimeDate,
+                    ],
+                    [
+                        'NAMA_KARYAWAN' => $row[1],
+                        'BAGIAN' => $row[2],
+                        'DAY' => Carbon::instance($overtimeDate)->translatedFormat('l'),
+                        'JUMLAH_JAM_LEMBUR' => $row[5] ?? null,
+                        'DEPT_GROUP' => $this->deptGroup,
+                    ]
+                );
+                DB::commit();
+                return $overtime;
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return null;
+            }
         } catch (\Exception $e) {
             return null;
         }
