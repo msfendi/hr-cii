@@ -30,7 +30,7 @@ class AdminKunjunganController extends Controller
      */
     public function getData(Request $request)
     {
-        $query = DB::connection('audit')->table('kunjungans')
+        $query = DB::connection('cii')->table('kunjungans')
             ->select([
                 'kunjungans.id',
                 'kunjungans.NPK',
@@ -157,7 +157,7 @@ class AdminKunjunganController extends Controller
 
         // Get dokter name
         $dokter = $kunjungan->dokter_id
-            ? DB::connection('audit')->table('users')->where('id', $kunjungan->dokter_id)->value('name')
+            ? DB::connection('cii')->table('users')->where('id', $kunjungan->dokter_id)->value('name')
             : null;
 
         $pdf = Pdf::loadView('reports.kartu-kunjungan', compact('kunjungan', 'karyawan', 'dokter'))

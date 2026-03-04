@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'cii'),
+    'default' => env('DB_CII_CONNECTION', 'cii'),
 
     /*
     |--------------------------------------------------------------------------

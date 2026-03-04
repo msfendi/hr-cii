@@ -9,7 +9,7 @@ class ResepObat extends Model
 {
     use HasFactory;
 
-    protected $connection = 'audit';
+    protected $connection = 'cii';
     protected $table = 'resep_obats';
     protected $fillable = [
         'kunjungan_id',

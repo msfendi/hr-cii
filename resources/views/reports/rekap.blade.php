@@ -51,8 +51,13 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label for="nama">Nama / NPK</label>
-                                        <input type="text" class="form-control form-control-sm" id="nama" name="nama"
-                                            value="{{ request('nama') }}" placeholder="Cari Nama atau NPK...">
+                                        <select class="form-control form-control-sm" id="nama" name="nama">
+                                            @if($selectedKaryawan)
+                                                <option value="{{ $selectedKaryawan->NPK }}" selected>{{ $selectedKaryawan->NPK }} - {{ $selectedKaryawan->NAMA_KARYAWAN }}</option>
+                                            @else
+                                                <option value="">-- Cari Nama atau NPK --</option>
+                                            @endif
+                                        </select>
                                     </div>
                                 </div>
                                 <div class="col-md-2 d-flex align-items-end">
@@ -68,7 +73,7 @@
                 </div>
 
                 <!-- Summary Cards -->
-                <div class="row">
+                {{-- <div class="row">
                     <div class="col-xl-4 col-md-6 mb-4">
                         <div class="card border-left-primary shadow h-100 py-2">
                             <div class="card-body">
@@ -82,7 +87,7 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </div> --}}
 
                 <!-- Top Diagnosa & Per Departemen -->
                 {{-- <div class="row">
@@ -205,5 +210,29 @@
             </div>
         </div>
 @include('layout.footer')
+<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css" rel="stylesheet" />
+
+<script>
+$(document).ready(function() {
+    $('#nama').select2({
+        theme: 'bootstrap4',
+        placeholder: '-- Cari Nama atau NPK --',
+        allowClear: true,
+        ajax: {
+            url: '{{ route("kunjungan.search-karyawan") }}',
+            dataType: 'json',
+            delay: 300,
+            data: function(params) {
+                return { q: params.term };
+            },
+            processResults: function(data) {
+                return { results: data.results };
+            },
+            cache: true
+        },
+        minimumInputLength: 2
+    });
+});
+</script>
 </body>
 </html>

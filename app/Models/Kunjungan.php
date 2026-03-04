@@ -9,7 +9,7 @@ class Kunjungan extends Model
 {
     use HasFactory;
 
-    protected $connection = 'audit';
+    protected $connection = 'cii';
     protected $table = 'kunjungans';
     protected $fillable = [
         'NPK',
@@ -32,5 +32,10 @@ class Kunjungan extends Model
     public function resepObats()
     {
         return $this->hasMany(ResepObat::class);
+    }
+
+    public function users()
+    {
+        return $this->belongsTo(User::class, 'dokter_id');
     }
 }

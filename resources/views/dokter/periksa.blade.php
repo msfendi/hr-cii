@@ -39,31 +39,39 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <p class="mb-1"><strong>NPK:</strong></p>
                                 <p>{{ $karyawan->NPK ?? '-' }}</p>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <p class="mb-1"><strong>Nama Karyawan:</strong></p>
                                 <p>{{ $karyawan->NAMA_KARYAWAN ?? '-' }}</p>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <p class="mb-1"><strong>Departemen:</strong></p>
                                 <p>{{ $karyawan->DEPARTEMENT ?? '-' }}</p>
                             </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>Dokter:</strong></p>
+                                <p>{{ $kunjungan->users->name ?? '-' }}</p>
+                            </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <p class="mb-1"><strong>No. Antrian:</strong></p>
                                 <p><span class="badge badge-primary p-2" style="font-size: 1rem;">{{ $kunjungan->no_antrian }}</span></p>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <p class="mb-1"><strong>Tanggal Kunjungan:</strong></p>
                                 <p>{{ $kunjungan->tanggal_kunjungan->format('d/m/Y') }}</p>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <p class="mb-1"><strong>Jam Masuk:</strong></p>
-                                <p>{{ $kunjungan->jam_masuk ? substr($kunjungan->jam_masuk, 0, 5) : '-' }}</p>
+                                <p>{{ $kunjungan->jam_masuk ? substr($kunjungan->jam_masuk) : '-' }}</p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>Jam Selesai:</strong></p>
+                                <p>{{ $kunjungan->jam_selesai ? substr($kunjungan->jam_selesai) : '-' }}</p>
                             </div>
                         </div>
                         <div class="row">
@@ -113,11 +121,6 @@
                                     @endif
                                 </div>
                             </div>
-                            <hr>
-                            <p class="text-muted mb-0">
-                                <strong>Jam Selesai:</strong> {{ $kunjungan->jam_selesai ? substr($kunjungan->jam_selesai, 0, 5) : '-' }} |
-                                <strong>Dokter:</strong> -
-                            </p>
                         </div>
                     </div>
                 @else

@@ -63,6 +63,11 @@ class AdminReportController extends Controller
      */
     public function rekap(Request $request)
     {
+        $selectedKaryawan = null;
+        if ($request->filled('nama')) {
+            $selectedKaryawan = DB::connection('cii')->table('BIODATA')->where('NPK', $request->nama)->first();
+        }
+
         $query = Kunjungan::where('status', 'selesai');
 
         // Filter by date range
@@ -149,7 +154,8 @@ class AdminReportController extends Controller
             'totalKunjungan',
             'diagnosaTerbanyak',
             'perDepartemen',
-            'departemens'
+            'departemens',
+            'selectedKaryawan'
         ));
     }
 }

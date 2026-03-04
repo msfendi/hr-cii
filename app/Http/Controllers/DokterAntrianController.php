@@ -77,7 +77,7 @@ class DokterAntrianController extends Controller
      */
     public function formPeriksa($id)
     {
-        $kunjungan = Kunjungan::with('resepObats')->findOrFail($id);
+        $kunjungan = Kunjungan::with(['resepObats', 'users'])->findOrFail($id);
 
         if ($kunjungan->status === 'menunggu') {
             return redirect()->route('dokter.antrian')
