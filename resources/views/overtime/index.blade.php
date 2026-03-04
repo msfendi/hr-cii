@@ -86,9 +86,9 @@
                                     </button>
                                 </form>
 
-                                <button type="button" class="btn btn-danger btn-sm mb-2 mr-2" id="btnDeleteAll">
+                                {{-- <button type="button" class="btn btn-danger btn-sm mb-2 mr-2" id="btnDeleteAll">
                                     <i class="fas fa-trash"></i> Delete All by Date
-                                </button>
+                                </button> --}}
                             </div>
                         </div>
                     </div>

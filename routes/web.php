@@ -12,6 +12,9 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
+use App\Http\Controllers\AdminKunjunganController;
+use App\Http\Controllers\AdminReportController;
+use App\Http\Controllers\DokterAntrianController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -126,4 +129,33 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'role:Admin|HRD']);
     Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|HRD']);
+
+    // ========================================
+    // POLIKLINIK — Admin Kunjungan
+    // ========================================
+    Route::prefix('kunjungan')->middleware('role:Admin|Dokter')->group(function () {
+        Route::get('/', [AdminKunjunganController::class, 'index'])->name('kunjungan.index');
+        Route::get('/get-data', [AdminKunjunganController::class, 'getData'])->name('kunjungan.get-data');
+        Route::post('/store', [AdminKunjunganController::class, 'store'])->name('kunjungan.store');
+        Route::get('/cetak-kartu/{id}', [AdminKunjunganController::class, 'cetakKartu'])->name('kunjungan.cetak-kartu');
+        Route::get('/search-karyawan', [AdminKunjunganController::class, 'searchKaryawan'])->name('kunjungan.search-karyawan');
+    });
+
+    // ========================================
+    // POLIKLINIK — Report
+    // ========================================
+    Route::prefix('report-poliklinik')->middleware('role:Admin|Dokter')->group(function () {
+        Route::get('/kartu-berobat/{npk}', [AdminReportController::class, 'kartuBerobat'])->name('report.kartu-berobat');
+        Route::get('/rekap', [AdminReportController::class, 'rekap'])->name('report.rekap');
+    });
+
+    // ========================================
+    // POLIKLINIK — Dokter Antrian
+    // ========================================
+    Route::prefix('dokter')->middleware('role:Dokter|Admin')->group(function () {
+        Route::get('/antrian', [DokterAntrianController::class, 'index'])->name('dokter.antrian');
+        Route::post('/mulai-periksa/{id}', [DokterAntrianController::class, 'mulaiPeriksa'])->name('dokter.mulai-periksa');
+        Route::get('/periksa/{id}', [DokterAntrianController::class, 'formPeriksa'])->name('dokter.periksa');
+        Route::post('/selesai-periksa/{id}', [DokterAntrianController::class, 'selesaiPeriksa'])->name('dokter.selesai-periksa');
+    });
 });

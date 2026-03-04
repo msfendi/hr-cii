@@ -103,6 +103,21 @@
         </div>
     </li>
 
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePoliklinik"
+            aria-expanded="true" aria-controls="collapsePoliklinik">
+            <i class="fas fa-fw fa-medkit"></i>
+            <span>Poliklinik</span>
+        </a>
+        <div id="collapsePoliklinik" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('kunjungan.index') }}">Daftar Kunjungan</a>
+                <a class="collapse-item" href="{{ route('dokter.antrian') }}">Antrian Dokter</a>
+                <a class="collapse-item" href="{{ route('report.rekap') }}">Rekap Kunjungan</a>
+            </div>
+        </div>
+    </li>
+
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
