@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 
 class EmployeePayrollController extends Controller
 {
@@ -68,12 +70,33 @@ class EmployeePayrollController extends Controller
     public function showSlip($run_id, $npk)
     {
 
-        $employee = DB::table('payroll_run_details')
-            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'payroll_run_details.run_id')
+        $employee = DB::table('payroll_run_details as prd')
+            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->where('run_id', $run_id)
-            ->where('employee_npk', $npk)
+            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'prd.employee_npk')
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'b.id_dept')
+            ->where('prd.run_id', $run_id)
+            ->where('prd.employee_npk', $npk)
+            ->select(
+                'prd.*',
+                'pp.id as period_id',
+                'pp.name as period_name',
+                'b.NAMA_KARYAWAN as employee_name',
+                'b.BARCODE',
+                'd.DEPARTEMENT'
+            )
             ->first();
+        // dd($employee);
+
+        if (!$employee) {
+            abort(404);
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | Payroll Components
+    |--------------------------------------------------------------------------
+    */
 
         $components = json_decode($employee->components, true);
 
@@ -94,19 +117,78 @@ class EmployeePayrollController extends Controller
             }
         }
 
-        $data = [
-            'employee' => $employee,
-            'earnings' => $earnings,
-            'deductions' => $deductions
-        ];
+        /*
+|--------------------------------------------------------------------------
+| Attendance (1 bulan sesuai periode payroll)
+|--------------------------------------------------------------------------
+*/
 
-        // dd($data);
+        $period = DB::table('payroll_periods')
+            ->where('id', $employee->period_id)
+            ->first();
+
+        // dd($period);
+
+        $startDate = Carbon::parse($period->start_date);
+        $endDate   = Carbon::parse($period->end_date);
+
+        $logs = DB::table('att_log')
+            ->where('pin', $employee->BARCODE)
+            ->whereBetween('scan_date', [$startDate, $endDate])
+            ->orderBy('scan_date')
+            ->get();
+
+        $attendance = [];
+
+        $dates = CarbonPeriod::create($startDate, $endDate);
+
+        foreach ($dates as $date) {
+
+            $dailyLogs = $logs->filter(function ($log) use ($date) {
+                return Carbon::parse($log->scan_date)->format('Y-m-d') == $date->format('Y-m-d');
+            });
+
+            $jamMasuk = null;
+            $jamPulang = null;
+
+            if ($dailyLogs->count() > 0) {
+
+                $first = Carbon::parse($dailyLogs->first()->scan_date);
+                $last  = Carbon::parse($dailyLogs->last()->scan_date);
+
+                // jika hanya 1 scan
+                if ($dailyLogs->count() == 1) {
+
+                    if ($first->hour < 12) {
+                        $jamMasuk = $first->format('H:i');
+                    } else {
+                        $jamPulang = $first->format('H:i');
+                    }
+                } else {
+
+                    $jamMasuk = $first->format('H:i');
+                    $jamPulang = $last->format('H:i');
+                }
+            }
+
+            $attendance[] = (object)[
+                'tanggal' => $date->format('Y-m-d'),
+                'jam_masuk' => $jamMasuk,
+                'jam_pulang' => $jamPulang
+            ];
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | Return View
+    |--------------------------------------------------------------------------
+    */
 
         return view('payroll.viewslip', [
-            'data' => $data,
             'employee' => $employee,
             'earnings' => $earnings,
-            'deductions' => $deductions
+            'deductions' => $deductions,
+            'attendance' => $attendance
         ]);
     }
 }

@@ -347,7 +347,7 @@
         tableDetails.destroy();
     }
 
-    let slipUrl = "{{ route('payroll-slip', ['run_id' => ':run_id', 'npk' => ':npk']) }}";
+    let slipUrl = "{{ route('view-slip', ['run_id' => ':run_id', 'npk' => ':npk']) }}";
 
     tableDetails = $('#table-details').DataTable({
         processing: true,
@@ -417,21 +417,29 @@
                     .replace(':run_id', row.run_id)
                     .replace(':npk', row.employee_npk);
 
-                let viewUrl = "/payroll-slip/show/" + row.run_id + "/" + row.employee_npk;
+                let viewUrl = "/employee-payroll/show/" + row.run_id + "/" + row.employee_npk;
 
                 return `
-                    <a href="${pdfUrl}" 
-                    class="btn btn-success btn-circle btn-sm d-flex align-items-center justify-content-center"
-                    title="Download Slip">
-                        <i class="fa fa-file-pdf"></i>
-                    </a>
+                     <a href="${viewUrl}" 
+                     class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
+                     title="View Slip">
+                         <i class="fa fa-eye"></i>
+                     </a>
+                 `;
 
-                    <a href="${viewUrl}" 
-                    class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
-                    title="View Slip">
-                        <i class="fa fa-eye"></i>
-                    </a>
-                `;
+                // return `
+                //     <a href="${pdfUrl}" 
+                //     class="btn btn-success btn-circle btn-sm d-flex align-items-center justify-content-center"
+                //     title="Download Slip">
+                //         <i class="fa fa-file-pdf"></i>
+                //     </a>
+
+                //     <a href="${viewUrl}" 
+                //     class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
+                //     title="View Slip">
+                //         <i class="fa fa-eye"></i>
+                //     </a>
+                // `;
             }
         }
         ]

@@ -135,4 +135,26 @@
     }
 
     </style>
+    <style>
+
+    .file-input{
+    height:31px;
+    padding-top:3px;
+    }
+
+    .input-group-sm > .form-control,
+    .input-group-sm > .input-group-append > .btn{
+    height:31px;
+    }
+
+    </style>
+    <style>
+    #fileName{
+        max-width:200px;
+        overflow:hidden;
+        white-space:nowrap;
+        text-overflow:ellipsis;
+    }
+    </style>
+    
 </head>

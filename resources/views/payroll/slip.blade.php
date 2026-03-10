@@ -3,6 +3,11 @@
    <head>
       <meta charset="utf-8">
       <style>
+         .page-break {
+            page-break-after: always;
+         }
+      </style>
+      <style>
          body{
          font-family: Arial, Helvetica, sans-serif;
          font-size:12px;
@@ -45,6 +50,7 @@
       </style>
    </head>
    <body>
+      <!-- SLIP GAJI -->
       <div class="header">
          <table width="100%">
             <tr>
@@ -69,7 +75,7 @@
          </tr>
          <tr>
             <td>Periode</td>
-            <td>: {{ $employee->name }}</td>
+            <td>: {{ $employee->period_name }}</td>
          </tr>
       </table>
       <div class="section-title">Pendapatan</div>
@@ -129,5 +135,35 @@
             </td>
          </tr>
       </table>
+      <div class="page-break"></div>
+      <h3 style="text-align:center;">REKAP ABSENSI KARYAWAN</h3>
+         <table width="100%" style="margin-bottom:20px;">
+            <tr>
+               <td width="120">NPK</td>
+               <td>: {{ $employee->employee_npk }}</td>
+            </tr>
+            <tr>
+               <td>Nama</td>
+               <td>: {{ $employee->employee_name }}</td>
+            </tr>
+            <tr>
+               <td>Departement</td>
+               <td>: {{ $employee->DEPARTEMENT ?? '-' }}</td>
+            </tr>
+         </table>
+         <table class="table">
+            <tr>
+               <th width="120">Tanggal</th>
+               <th width="120">Jam Masuk</th>
+               <th width="120">Jam Pulang</th>
+            </tr>
+            @foreach($attendance as $row)
+            <tr>
+               <td>{{ date('d-m-Y', strtotime($row->tanggal)) }}</td>
+               <td class="right">{{ $row->jam_masuk ?? '' }}</td>
+               <td class="right">{{ $row->jam_pulang ?? '' }}</td>
+            </tr>
+            @endforeach
+         </table>
    </body>
 </html>

@@ -49,17 +49,14 @@ class PayrollProcessController extends Controller
 
         $employees = DB::connection('cii')
             ->table('BIODATA as b')
-
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-
             ->leftJoin('overtimes as o', 'b.NPK', '=', 'o.NPK')
-
+            ->leftJoin('payroll_masters as pm', 'b.NPK', '=', 'pm.npk')
             ->select(
                 'b.NPK',
                 'b.NAMA_KARYAWAN',
-                'b.SALARY',
-                'b.ALLOWANCE',
-
+                'pm.salary',
+                'pm.allowance',
                 DB::raw("
             COALESCE(SUM(
                 CASE 
@@ -69,7 +66,6 @@ class PayrollProcessController extends Controller
                 END
             ),0) as overtime_hours
         "),
-
                 DB::raw("
             COALESCE(SUM(
                 CASE 
@@ -79,18 +75,15 @@ class PayrollProcessController extends Controller
                 END
             ),0) as special_overtime_hours
         "),
-
                 DB::raw("DATEDIFF(YEAR, p.TMK, '$endDate') as working_years")
             )
-
             ->groupBy(
                 'b.NPK',
                 'b.NAMA_KARYAWAN',
-                'b.SALARY',
-                'b.ALLOWANCE',
+                'pm.salary',
+                'pm.allowance',
                 'p.TMK'
             )
-
             ->get();
 
         $components = PayrollComponent::where('is_active', 1)
@@ -107,8 +100,8 @@ class PayrollProcessController extends Controller
         foreach ($employees as $employee) {
 
             $inputVariables = [
-                'basic_salary'   => (float) $employee->SALARY,
-                'allowance'      => (float) $employee->ALLOWANCE,
+                'basic_salary'   => (float) $employee->salary,
+                'allowance'      => (float) $employee->allowance,
                 'overtime_hours' => (float) $employee->overtime_hours,
                 'absence_days'   => (float) ($request->absence_days ?? 0),
                 'special_overtime_hours'  => (float) $employee->special_overtime_hours,
@@ -270,7 +263,7 @@ class PayrollProcessController extends Controller
         ]);
 
         GeneratePayrollExport::dispatch($export->id);
-        
+
         Alert::success('Sukses', 'Export payroll selesai diproses!');
         return redirect('payroll-process/index');
         // return response()->json([
@@ -289,83 +282,6 @@ class PayrollProcessController extends Controller
             'status' => $export->status
         ]);
     }
-
-    // public function exportRekap($run_id)
-    // {
-
-    //     $rows = DB::connection('cii')
-    //         ->table('payroll_run_details as prd')
-    //         ->leftJoin('BIODATA as b', 'b.NPK', '=', 'prd.employee_npk')
-    //         ->leftJoin('DEPT as d', 'd.id_dept', '=', 'b.id_dept')
-    //         ->where('prd.run_id', $run_id)
-    //         ->select(
-    //             'prd.employee_npk',
-    //             'prd.employee_name',
-    //             'prd.components',
-    //             'prd.total_salary',
-    //             'd.DEPARTEMENT'
-    //         )
-    //         ->orderBy('d.DEPARTEMENT')
-    //         ->orderBy('prd.employee_npk')
-    //         ->limit(100)
-    //         ->get();
-
-    //     // mapping component
-    //     $componentMap = DB::table('payroll_components')
-    //         ->pluck('name', 'code')
-    //         ->toArray();
-
-    //     $employees = [];
-    //     $grandTotals = [];
-    //     $allComponents = [];
-
-    //     foreach ($rows as $row) {
-
-    //         $components = json_decode($row->components, true);
-
-    //         if (!$components) {
-    //             $components = [];
-    //         }
-
-    //         $formatted = [];
-
-    //         foreach ($components as $code => $value) {
-
-    //             $name = $componentMap[$code] ?? $code;
-
-    //             $formatted[$name] = $value;
-
-    //             $allComponents[$name] = true;
-
-    //             if (!isset($grandTotals[$name])) {
-    //                 $grandTotals[$name] = 0;
-    //             }
-
-    //             $grandTotals[$name] += $value;
-    //         }
-
-    //         $employees[] = [
-    //             'npk' => $row->employee_npk,
-    //             'name' => $row->employee_name,
-    //             'dept' => $row->DEPARTEMENT ?? 'Unknown',
-    //             'components' => $formatted,
-    //             'total_salary' => $row->total_salary
-    //         ];
-    //     }
-
-    //     $allComponents = array_keys($allComponents);
-
-    //     $grouped = collect($employees)->groupBy('dept');
-
-    //     $pdf = Pdf::loadView('payroll.rekap_pdf', [
-    //         'grouped' => $grouped,
-    //         'grandTotals' => $grandTotals,
-    //         'allComponents' => $allComponents,
-    //         'run_id' => $run_id
-    //     ])->setPaper('A4', 'landscape');
-
-    //     return $pdf->download('rekap_payroll_' . $run_id . '.pdf');
-    // }
 
     private function evaluateFormula($formula, $results, $inputVariables)
     {

@@ -18,6 +18,7 @@ use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\PayrollComponentController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PayrollMasterController;
 use App\Http\Controllers\PayrollPeriodController;
 use App\Http\Controllers\PayrollProcessController;
 use App\Models\PayrollComponent;
@@ -112,7 +113,6 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-components/update', [PayrollComponentController::class, 'update'])->name('payroll-components.update')->middleware(['auth', 'role:Admin']);
     Route::get('/payroll-components/delete/{id}', [PayrollComponentController::class, 'delete'])->name('payroll-components.delete')->middleware(['auth', 'role:Admin']);
 
-
     // Payroll Period
     Route::get('/payroll-periods/index', [PayrollPeriodController::class, 'index'])->name('payroll-periods.index')->middleware(['auth', 'role:Admin']);
     Route::get('/payroll-periods/create', [PayrollPeriodController::class, 'create'])->name('payroll-periods.create')->middleware(['auth', 'role:Admin']);
@@ -135,6 +135,14 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export');
     Route::get('/payroll/export-progress/{id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress');
     Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm']);
+
+    //Payroll Master
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
+    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create');
+    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit');
+    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete');
+    Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import');
+    Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template');
 
     // attendance finger
     Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index');
