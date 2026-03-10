@@ -153,15 +153,15 @@
          </table>
          <table class="table">
             <tr>
-               <th>Tanggal</th>
-               <th>Jam Masuk</th>
-               <th>Jam Pulang</th>
+               <th width="120">Tanggal</th>
+               <th width="120">Jam Masuk</th>
+               <th width="120">Jam Pulang</th>
             </tr>
-            @foreach($attendance as $att)
+            @foreach($attendance as $row)
             <tr>
-               <td>{{ date('d-m-Y', strtotime($att->tanggal)) }}</td>
-               <td class="right">{{ $att->jam_masuk ?? '-' }}</td>
-               <td class="right">{{ $att->jam_pulang ?? '-' }}</td>
+               <td>{{ date('d-m-Y', strtotime($row->tanggal)) }}</td>
+               <td class="right">{{ $row->jam_masuk ?? '' }}</td>
+               <td class="right">{{ $row->jam_pulang ?? '' }}</td>
             </tr>
             @endforeach
          </table>
