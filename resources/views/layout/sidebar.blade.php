@@ -58,6 +58,7 @@
             <div class="bg-white py-2 collapse-inner rounded">
                 <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar List</a>
                 <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata List</a>
+                <a class="collapse-item" href="{{ route('dept.index') }}">Departement List</a>
             </div>
         </div>
     </li>

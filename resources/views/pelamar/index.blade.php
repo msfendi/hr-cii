@@ -266,7 +266,7 @@
                                     
                                     <h6 class="font-weight-bold text-success mb-3 px-3">Assign Employee</h6>
                                     <div class="row px-3">
-                                        <div class="col-md-6">
+                                        <div class="col-md-5">
                                             <div class="form-group">
                                                 <label for="assign_id_dept">Department <span class="text-danger">*</span></label>
                                                 <select class="form-control" id="assign_id_dept" name="id_dept" required>
@@ -277,10 +277,16 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-5">
                                             <div class="form-group">
                                                 <label for="assign_tmk">Tanggal Masuk Kerja (TMK) <span class="text-danger">*</span></label>
                                                 <input type="date" class="form-control" id="assign_tmk" name="tmk" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="custom-control custom-checkbox mt-4 ml-2">
+                                                <input type="checkbox" class="custom-control-input" id="assign_is_staff" name="is_staff">
+                                                <label class="custom-control-label font-weight-bold text-muted" for="assign_is_staff" style="cursor: pointer;">Is Staff</label>
                                             </div>
                                         </div>
                                     </div>

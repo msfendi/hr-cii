@@ -222,6 +222,14 @@
                                                             <label class="small font-weight-bold text-muted ml-2">Jumlah Tanggungan</label>
                                                             <input type="number" class="form-control px-3" name="tanggungan" id="edit_tanggungan">
                                                         </div>
+
+                                                        {{-- adding is_staff checkbox, check existing data --}}
+                                                        <div class="col-md-6 mb-3">
+                                                            <div class="custom-control custom-checkbox mt-4 ml-2">
+                                                                <input type="checkbox" class="custom-control-input" id="edit_is_staff" name="is_staff">
+                                                                <label class="custom-control-label font-weight-bold text-muted" for="edit_is_staff" style="cursor: pointer;">Is Staff Personel</label>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -547,6 +555,12 @@
                                                         <label class="small font-weight-bold text-muted ml-2">Dependents</label>
                                                         <input type="text" class="form-control px-3" id="show_tanggungan" readonly>
                                                     </div>
+                                                    <div class="col-md-6 mb-3">
+                                                        <div class="custom-control custom-checkbox mt-4 ml-2">
+                                                            <input type="checkbox" class="custom-control-input" id="show_is_staff" name="is_staff" disabled>
+                                                            <label class="custom-control-label font-weight-bold text-muted pointer" for="show_is_staff">Is Staff</label>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -817,6 +831,7 @@
                     $('#show_id_dept').val(response.BAGIAN ?? 'DEPT TIDAK DIISI');
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');
+                    $('#show_is_staff').prop('checked', response.IS_STAFF == 0).prop('disabled', true);
                     
                     // Set image with fallback
                     const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
@@ -1003,6 +1018,7 @@
 
                     $('#edit_tmk').val(response.TMK);
                     $('#edit_tanggungan').val(response.TANGGUNGAN);
+                    $('#edit_is_staff').prop('checked', response.IS_STAFF == 0);
                     
                     const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
                     $('#edit_previewImage').attr('src', imageUrl);

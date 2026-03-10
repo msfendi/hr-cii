@@ -77,8 +77,12 @@
                                         </select>
                                     </div>
 
-                                    <button type="submit" formaction="{{ route('overtime.downloadTemplate') }}" class="btn btn-success btn-sm mr-2">
-                                        <i class="fas fa-file-excel"></i> Download Template
+                                    {{-- <button type="submit" formaction="{{ route('overtime.downloadTemplate') }}" class="btn btn-success btn-sm mr-2" title="Template berdasarkan tanggal hari (untuk insert harian)">
+                                        <i class="fas fa-file-excel"></i> Template (Harian)
+                                    </button> --}}
+
+                                    <button type="submit" formaction="{{ route('overtime.export-template') }}" class="btn btn-success btn-sm mr-2" title="Template berdasarkan bulan kalender (1 - 31)">
+                                        <i class="fas fa-file-excel"></i> Template (Kalender)
                                     </button>
 
                                     <button type="submit" formaction="{{ route('overtime.export') }}" class="btn btn-info btn-sm">

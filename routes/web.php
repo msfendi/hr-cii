@@ -12,6 +12,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
+use App\Http\Controllers\DeptController;
 use App\Http\Controllers\AdminKunjunganController;
 use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\DokterAntrianController;
@@ -118,6 +119,13 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update');
     Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance');
 
+    // DEPT
+    Route::get('/dept/index', [DeptController::class, 'index'])->name('dept.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/dept/get-data', [DeptController::class, 'getData'])->name('dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/store', [DeptController::class, 'store'])->name('dept.store')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/update/{id}', [DeptController::class, 'update'])->name('dept.update')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/destroy/{id}', [DeptController::class, 'destroy'])->name('dept.destroy')->middleware(['auth', 'role:Admin|HRD']);
+
     // Overtime
     Route::get('/overtime', [OvertimeController::class, 'index'])->name('overtime.index')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/overtime/download-template', [OvertimeController::class, 'downloadTemplateOvertime'])->name('overtime.downloadTemplate')->middleware(['auth', 'role:Admin|HRD']);
@@ -126,6 +134,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/overtime/calendar', [OvertimeController::class, 'calendarOvertime'])->name('overtime.calendar')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/overtime/export', [OvertimeController::class, 'exportCalendar'])->name('overtime.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/overtime/export-template', [OvertimeController::class, 'exportCalendarTemplate'])->name('overtime.export-template')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'role:Admin|HRD']);
     Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|HRD']);

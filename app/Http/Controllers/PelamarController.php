@@ -124,6 +124,7 @@ class PelamarController extends Controller
             'BARCODE' => $last_barcode,
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
+            'IS_STAFF' => $request->has('is_staff') ? 0 : 1,
         ]);
 
         $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
@@ -231,6 +232,7 @@ class PelamarController extends Controller
             'BARCODE' => $last_barcode,
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
+            'IS_STAFF' => $request->has('is_staff') ? 0 : 1,
         ]);
 
         $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
