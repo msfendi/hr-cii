@@ -16,6 +16,8 @@ use App\Http\Controllers\AdminKunjunganController;
 use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\EmployeePayrollController;
+use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\InsentifMasterController;
 use App\Http\Controllers\PayrollComponentController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PayrollMasterController;
@@ -125,7 +127,7 @@ Route::group(['middleware' => 'auth'], function () {
     // Payroll Process
     Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index');
     Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate');
-    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
+    // Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
     Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details');
     Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy');
     Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin']);
@@ -143,6 +145,36 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete');
     Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import');
     Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template');
+
+    // Holiday
+    Route::get('holidays/sync', [HolidayController::class, 'sync'])->name('holidays.sync');
+    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');
+    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create');
+    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store');
+    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete');
+    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit');
+    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import');
+    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export');
+
+    // Insentif
+    Route::get('insentif-master/index', [InsentifMasterController::class, 'index'])->name('insentif-master.index');
+    Route::get('insentif-master/create', [InsentifMasterController::class, 'create'])->name('insentif-master.create');
+    Route::post('insentif-master/store', [InsentifMasterController::class, 'store'])->name('insentif-master.store');
+    Route::delete('insentif-master/delete/{id}', [InsentifMasterController::class, 'destroy'])->name('insentif-master.delete');
+    Route::get('/insentif-master/edit/{id}', [InsentifMasterController::class, 'edit'])->name('insentif-master.edit');
+    Route::post('insentif-master/import', [InsentifMasterController::class, 'import'])->name('insentif-master.import');
+    Route::get('insentif-master/export', [InsentifMasterController::class, 'export'])->name('insentif-master.export');
+    Route::get('/insentif-master/template', [InsentifMasterController::class, 'template'])->name('insentif-master.template');
+    Route::post('/insentif-master/import', [InsentifMasterController::class, 'import'])->name('insentif-master.import');
+
+    // Holiday
+    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');
+    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create');
+    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store');
+    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete');
+    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit');
+    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import');
+    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export');
 
     // attendance finger
     Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index');
@@ -207,6 +239,7 @@ Route::group(['middleware' => 'auth'], function () {
 
 // Payroll 
 Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
+Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
 
 // Employee Payroll
 Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');

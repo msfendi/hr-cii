@@ -12,7 +12,8 @@ class PayrollMasterTemplateExport implements WithHeadings
         return [
             'npk',
             'salary',
-            'allowance'
+            'allowance',
+            'pph21'
         ];
     }
 }

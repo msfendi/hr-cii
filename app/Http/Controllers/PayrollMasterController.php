@@ -37,7 +37,8 @@ class PayrollMasterController extends Controller
         $request->validate([
             'npk' => 'required',
             'salary' => 'required|numeric',
-            'allowance' => 'required|numeric'
+            'allowance' => 'required|numeric',
+            'pph21' => 'required|numeric'
         ]);
 
         PayrollMaster::create($request->all());

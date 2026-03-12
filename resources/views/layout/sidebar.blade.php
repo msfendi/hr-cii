@@ -127,10 +127,23 @@
         <div id="collapsePayroll" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
                 <a class="collapse-item" href="{{ route('payroll-master.index') }}">Payroll Master</a>
+                <a class="collapse-item" href="{{ route('insentif-master.index') }}">Insentif Master</a>
                 <a class="collapse-item" href="{{ route('payroll-process.index') }}">Payroll Process</a>
                 <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Payroll Period</a>
                 <a class="collapse-item" href="{{ route('payroll-components.index') }}">Payroll Components</a>
                 <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>
+            </div>
+        </div>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseHoliday"
+            aria-expanded="true" aria-controls="collapseHoliday">
+            <i class="fas fa-fw fa-calculator"></i>
+            <span>Holiday</span>
+        </a>
+        <div id="collapseHoliday" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('holidays.index') }}">Holiday List</a>
             </div>
         </div>
     </li>

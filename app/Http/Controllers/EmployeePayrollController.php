@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use Cmixin\BusinessDay;
 
 class EmployeePayrollController extends Controller
 {
@@ -93,10 +95,10 @@ class EmployeePayrollController extends Controller
         }
 
         /*
-    |--------------------------------------------------------------------------
-    | Payroll Components
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | Payroll Components
+        |--------------------------------------------------------------------------
+        */
 
         $components = json_decode($employee->components, true);
 
@@ -118,10 +120,10 @@ class EmployeePayrollController extends Controller
         }
 
         /*
-|--------------------------------------------------------------------------
-| Attendance (1 bulan sesuai periode payroll)
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | Attendance (1 bulan sesuai periode payroll)
+        |--------------------------------------------------------------------------
+        */
 
         $period = DB::table('payroll_periods')
             ->where('id', $employee->period_id)
@@ -138,57 +140,188 @@ class EmployeePayrollController extends Controller
             ->orderBy('scan_date')
             ->get();
 
+        $overtimeRaw = DB::table('overtimes')
+            ->where('NPK', $employee->employee_npk)
+            ->whereBetween('OVERTIME_DATE', [$startDate, $endDate])
+            ->select('OVERTIME_DATE', 'JUMLAH_JAM_LEMBUR')
+            ->get();
+
+        // dd($overtimeRaw);
+
+        $overtimes = [];
+
+        foreach ($overtimeRaw as $ot) {
+            $key = Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
+            $overtimes[$key] = trim($ot->JUMLAH_JAM_LEMBUR);
+        }
+
+        $summary = [
+            'hadir' => 0,
+            'absent' => 0,
+            'lembur_resmi' => 0,
+            'lembur_khusus' => 0,
+            'status' => []
+        ];
+
         $attendance = [];
 
         $dates = CarbonPeriod::create($startDate, $endDate);
 
+        BusinessDay::enable(Carbon::class, 'id');
+
+        $holidays = DB::table('holidays')
+            ->whereBetween('holiday_date', [$startDate, $endDate])
+            ->pluck('holiday_date')
+            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+            ->toArray();
+
         foreach ($dates as $date) {
 
-            $dailyLogs = $logs->filter(function ($log) use ($date) {
-                return Carbon::parse($log->scan_date)->format('Y-m-d') == $date->format('Y-m-d');
+            $tanggal = $date->format('Y-m-d');
+
+            $dailyLogs = $logs->filter(function ($log) use ($tanggal) {
+                return Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal;
             });
 
             $jamMasuk = null;
             $jamPulang = null;
+            $status = '';
+            $overtime = null;
+
+            $lembur = $overtimes[$tanggal] ?? null;
+
+            $isWeekend = $date->isWeekend();
+            $isHoliday = in_array($tanggal, $holidays);
+
+            /*
+            |------------------------------------------
+            | Ada Scan
+            |------------------------------------------
+            */
 
             if ($dailyLogs->count() > 0) {
-
                 $first = Carbon::parse($dailyLogs->first()->scan_date);
                 $last  = Carbon::parse($dailyLogs->last()->scan_date);
-
-                // jika hanya 1 scan
                 if ($dailyLogs->count() == 1) {
 
                     if ($first->hour < 12) {
+                        $status = 'Scan Masuk';
                         $jamMasuk = $first->format('H:i');
                     } else {
+                        $status = 'Scan Pulang';
                         $jamPulang = $first->format('H:i');
                     }
-                } else {
+                } elseif ($dailyLogs->count() > 1) {
 
                     $jamMasuk = $first->format('H:i');
                     $jamPulang = $last->format('H:i');
+                    $status = 'Hadir';
+                } else {
+                    $status = 'Tidak Finger';
+                }
+
+                $summary['hadir']++;
+            } else {
+
+                /*
+                |------------------------------------------
+                | Jika Weekend / Holiday
+                |------------------------------------------
+                */
+                if ($isWeekend || $isHoliday) {
+                    // Jika hari libur
+                    $status = 'Holiday';
+                } elseif ($dailyLogs->count() > 0) {
+                    // Jika ada scan absensi
+                    $first = Carbon::parse($dailyLogs->first()->scan_date);
+                    $last  = Carbon::parse($dailyLogs->last()->scan_date);
+                    if ($dailyLogs->count() == 1) {
+                        if ($first->hour < 12) {
+                            $status = 'Scan Masuk';
+                            $jamMasuk = $first->format('H:i');
+                        } else {
+                            $status = 'Scan Pulang';
+                            $jamPulang = $first->format('H:i');
+                        }
+                    } elseif ($dailyLogs->count() > 1) {
+
+                        $jamMasuk = $first->format('H:i');
+                        $jamPulang = $last->format('H:i');
+                        $status = 'Hadir';
+                    } else {
+                        $status = 'Tidak Finger';
+                    }
+
+                    $summary['hadir']++;
+                } else {
+                    if ($lembur === null || $lembur === '') {
+                        $status = 'Tidak Finger';
+                        $summary['hadir']++;
+                    } elseif (is_numeric($lembur)) {
+                        $status = 'Lembur';
+                    } else {
+                        $status = $lembur;
+                        $summary['absent']++;
+
+                        if (!isset($summary['status'][$lembur])) {
+                            $summary['status'][$lembur] = 0;
+                        }
+                        $summary['status'][$lembur]++;
+                    }
+                }
+            }
+
+            /*
+            |------------------------------------------
+            | Hitung Overtime
+            |------------------------------------------
+            */
+
+            if (is_numeric($lembur)) {
+                $overtime = $lembur;
+                if ($isWeekend || $isHoliday) {
+                    $summary['lembur_khusus'] += $lembur;
+                } else {
+                    $summary['lembur_resmi'] += $lembur;
                 }
             }
 
             $attendance[] = (object)[
-                'tanggal' => $date->format('Y-m-d'),
+                'tanggal' => $tanggal,
                 'jam_masuk' => $jamMasuk,
-                'jam_pulang' => $jamPulang
+                'jam_pulang' => $jamPulang,
+                'status' => $status,
+                'overtime' => $overtime,
+                'is_holiday' => ($isWeekend || $isHoliday)
             ];
         }
+        // dd($attendance);
 
         /*
-    |--------------------------------------------------------------------------
-    | Return View
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | Return View
+        |--------------------------------------------------------------------------
+        */
+
+        // $pdf = Pdf::loadView('payroll.viewslip', [
+        //     'employee' => $employee,
+        //     'earnings' => $earnings,
+        //     'deductions' => $deductions,
+        //     'attendance' => $attendance,
+        //     'summary' => $summary,
+        //     'holidays' => $holidays
+        // ])
+        //     ->setPaper('A4', 'portrait');
+
+        // return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
 
         return view('payroll.viewslip', [
             'employee' => $employee,
             'earnings' => $earnings,
             'deductions' => $deductions,
-            'attendance' => $attendance
+            'attendance' => $attendance,
+            'summary' => $summary,
+            'holidays' => $holidays
         ]);
     }
 }

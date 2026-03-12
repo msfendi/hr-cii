@@ -13,6 +13,7 @@ return new class extends Migration
             $table->string('npk')->unique();
             $table->decimal('salary', 15, 2)->default(0);
             $table->decimal('allowance', 15, 2)->default(0);
+            $table->decimal('pph21', 15, 2)->default(0);
             $table->timestamps();
         });
     }

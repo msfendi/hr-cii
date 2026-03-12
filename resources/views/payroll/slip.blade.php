@@ -6,6 +6,9 @@
          .page-break {
             page-break-after: always;
          }
+         .holiday{
+            background:#ffd6d6;
+         }
       </style>
       <style>
          body{
@@ -158,11 +161,16 @@
                <th width="120">Jam Pulang</th>
             </tr>
             @foreach($attendance as $row)
-            <tr>
-               <td>{{ date('d-m-Y', strtotime($row->tanggal)) }}</td>
-               <td class="right">{{ $row->jam_masuk ?? '' }}</td>
-               <td class="right">{{ $row->jam_pulang ?? '' }}</td>
-            </tr>
+               @php
+               $date = \Carbon\Carbon::parse($row->tanggal);
+               $isWeekend = $date->isWeekend();
+               $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []);
+               @endphp
+               <tr class="{{ ($isWeekend || $isHoliday) ? 'holiday' : '' }}">
+                  <td>{{ $date->format('d-m-Y') }}</td>
+                  <td class="right">{{ $row->jam_masuk ?? '' }}</td>
+                  <td class="right">{{ $row->jam_pulang ?? '' }}</td>
+               </tr>
             @endforeach
          </table>
    </body>

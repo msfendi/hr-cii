@@ -6,11 +6,28 @@
          .page-break {
             page-break-after: always;
          }
+         .holiday{
+            background:#ffd6d6;
+         }
+
+         .weekend{
+            background:#ffeaea;
+         }
+
+         .absent{
+            background:#ffef9f;
+         }
+
+         .status{
+            font-weight:bold;
+            text-align:center;
+         }
       </style>
       <style>
          body{
          font-family: Arial, Helvetica, sans-serif;
          font-size:12px;
+         padding: 20px;
          }
          .header{
          width:100%;
@@ -34,10 +51,13 @@
          }
          .table th, .table td{
          border:1px solid #ccc;
-         padding:6px;
+         padding:3px;
          }
          .right{
          text-align:right;
+         }
+         .center{
+         text-align:center;
          }
          .section-title{
          margin-top:20px;
@@ -54,13 +74,14 @@
       <div class="header">
          <table width="100%">
             <tr>
-               <td width="150">
-                  <img src="{{ asset('img/chutex_logo.png') }}" class="logo">
+               <td width="100">
+                     <img src="{{ public_path('img/chutex_logo.png') }}" class="logo" style="width: 50px;">
                </td>
-               <td class="title">
-                  PT CHUTEX INTERNATIONAL<br>
-                  SLIP GAJI KARYAWAN
+               <td style="text-align: center; vertical-align: middle;">
+                     <strong>PT CHUTEX INTERNATIONAL</strong><br>
+                     SLIP GAJI KARYAWAN
                </td>
+               <td width="100"></td> <!-- kosong supaya logo tidak mempengaruhi center -->
             </tr>
          </table>
       </div>
@@ -125,7 +146,7 @@
             </td>
          </tr>
       </table>
-      <br><br><br>
+      <!-- <br><br><br>
       <table width="100%">
          <tr>
             <td width="50%"></td>
@@ -134,7 +155,7 @@
                _______________________
             </td>
          </tr>
-      </table>
+      </table> -->
       <div class="page-break"></div>
       <h3 style="text-align:center;">REKAP ABSENSI KARYAWAN</h3>
          <table width="100%" style="margin-bottom:20px;">
@@ -153,15 +174,58 @@
          </table>
          <table class="table">
             <tr>
-               <th width="120">Tanggal</th>
-               <th width="120">Jam Masuk</th>
-               <th width="120">Jam Pulang</th>
+               <th>Tanggal</th>
+               <th>Hari</th>
+               <th>Jam Masuk</th>
+               <th>Jam Pulang</th>
+               <th>Status</th>
+               <th>Overtime</th>
             </tr>
             @foreach($attendance as $row)
+            @php
+            $date = \Carbon\Carbon::parse($row->tanggal);
+            $day = $date->translatedFormat('l');
+            $isWeekend = $date->isWeekend();
+            $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []);
+               $rowClass = '';
+            if($isHoliday){
+               $rowClass = 'holiday';
+            }
+            elseif($isWeekend){
+               $rowClass = 'weekend';
+            }
+            elseif(!$row->jam_masuk && !$row->jam_pulang){
+               $rowClass = 'absent';
+            }
+            @endphp
+            <tr class="{{ $rowClass }}">
+               <td class="center">{{ $date->format('d-m-Y') }}</td>
+               <td class="center">{{ $day }}</td>
+               <td class="center">{{ $row->jam_masuk ?? '-' }}</td>
+               <td class="center">{{ $row->jam_pulang ?? '-' }}</td>
+               <td class="status">{{ $row->status }}</td>
+               <td class="center">{{ $row->overtime }}</td>
+            </tr>
+            @endforeach
+         </table>
+         <br>
+         <table class="table" width="50%">
             <tr>
-               <td>{{ date('d-m-Y', strtotime($row->tanggal)) }}</td>
-               <td class="right">{{ $row->jam_masuk ?? '' }}</td>
-               <td class="right">{{ $row->jam_pulang ?? '' }}</td>
+               <td>Total Hadir</td>
+               <td class="right">{{ $summary['hadir'] }}</td>
+            </tr>
+            <tr>
+               <td>Lembur Resmi</td>
+               <td class="right">{{ $summary['lembur_resmi'] }} Jam</td>
+            </tr>
+            <tr>
+               <td>Lembur Khusus</td>
+               <td class="right">{{ $summary['lembur_khusus'] }} Jam</td>
+            </tr>
+            @foreach($summary['status'] as $status => $count)
+            <tr>
+               <td>{{ $status }}</td>
+               <td class="right">{{ $count }}</td>
             </tr>
             @endforeach
          </table>

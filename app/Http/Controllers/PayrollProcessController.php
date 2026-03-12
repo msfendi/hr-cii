@@ -52,6 +52,7 @@ class PayrollProcessController extends Controller
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
             ->leftJoin('overtimes as o', 'b.NPK', '=', 'o.NPK')
             ->leftJoin('payroll_masters as pm', 'b.NPK', '=', 'pm.npk')
+            ->where('b.NPK', '=', 'C-00827')
             ->select(
                 'b.NPK',
                 'b.NAMA_KARYAWAN',
@@ -90,21 +91,29 @@ class PayrollProcessController extends Controller
             ->orderByDesc('priority')
             ->get();
 
-        $run = PayrollRun::create([
-            'period_id' => $period->id,
-            'processed_at' => now(),
-        ]);
+        $overtimeComponent = PayrollComponent::where('code', 'overtime_pay')->first();
+        $overtimeFormula = $overtimeComponent->formula;
+        $overtimeComponent = PayrollComponent::where('code', 'special_overtime_pay')->first();
+        $specialOvertimeFormula = $overtimeComponent->formula;
+        // $insentifComponent = PayrollComponent::where('code', 'insentif_pay')->first();
+        // $insentifFormula = $insentifComponent->formula;
+        $insentifComponent = PayrollComponent::where('code', 'insentif_pay')->first();
+        $insentifFormula = json_decode($insentifComponent->formula, true);
+
+        // $run = PayrollRun::create([
+        //     'period_id' => $period->id,
+        //     'processed_at' => now(),
+        // ]);
 
         $totalPayroll = 0;
+        // dd($employees);
 
         foreach ($employees as $employee) {
 
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
-                'overtime_hours' => (float) $employee->overtime_hours,
                 'absence_days'   => (float) ($request->absence_days ?? 0),
-                'special_overtime_hours'  => (float) $employee->special_overtime_hours,
                 'working_years'  => (float) $employee->working_years,
             ];
 
@@ -114,14 +123,87 @@ class PayrollProcessController extends Controller
             foreach ($components as $component) {
 
                 if ($component->calculation_method === 'fixed') {
+
                     $amount = $component->value;
                 } else {
 
-                    $amount = $this->evaluateFormula(
-                        $component->formula,
-                        $results,
-                        $inputVariables
-                    );
+                    // KHUSUS KOMPONEN LEMBUR RESMI
+                    if ($component->code === 'overtime_pay') {
+                        $overtimes = DB::connection('cii')
+                            ->table('overtimes')
+                            ->where('NPK', $employee->NPK)
+                            ->whereNotIn('DAY', ['Sabtu', 'Minggu'])
+                            ->select('JUMLAH_JAM_LEMBUR')
+                            ->get();
+
+                        $amount = 0;
+
+                        foreach ($overtimes as $ot) {
+
+                            $hours = (float) $ot->JUMLAH_JAM_LEMBUR;
+
+                            if ($hours > 0) {
+
+                                $variables = [
+                                    'basic_salary' => (float) $employee->salary,
+                                    'overtime_hours' => $hours
+                                ];
+
+                                $amount += $this->evaluateFormula(
+                                    $overtimeFormula,
+                                    $results,
+                                    $variables
+                                );
+                            }
+                        }
+                    }
+                    // KHUSUS KOMPONEN LEMBUR KHUSUS
+                    else if ($component->code === 'special_overtime_pay') {
+                        $overtimes = DB::connection('cii')
+                            ->table('overtimes')
+                            ->where('NPK', $employee->NPK)
+                            ->whereIn('DAY', ['Sabtu', 'Minggu'])
+                            ->select('JUMLAH_JAM_LEMBUR')
+                            ->get();
+                        $amount = 0;
+                        foreach ($overtimes as $ot) {
+                            $hours = (float) $ot->JUMLAH_JAM_LEMBUR;
+                            if ($hours > 0) {
+                                $variables = [
+                                    'basic_salary' => (float) $employee->salary,
+                                    'special_overtime_hours' => $hours
+                                ];
+                                $amount += $this->evaluateFormula(
+                                    $specialOvertimeFormula,
+                                    $results,
+                                    $variables
+                                );
+                            }
+                        }
+                    } else if ($component->code === 'insentif_pay') {
+                        $insentifData = DB::connection('cii')
+                            ->table('insentif_masters')
+                            ->where('npk', $employee->NPK)
+                            ->select('efficiency')
+                            ->get();
+
+                        $amount = 0;
+                        foreach ($insentifData as $ins) {
+
+                            $efficiency = floatval($ins->efficiency);
+
+                            if ($efficiency > 0) {
+                                $amount += $this->evaluateEfficiency($efficiency, $insentifFormula);
+                            }
+                        }
+                        // dd($insentifFormula, $variables, $amount, $results);
+                    } else {
+                        $amount = $this->evaluateFormula(
+                            $component->formula,
+                            $results,
+                            $inputVariables
+                        );
+                    }
                 }
 
                 $amount = (float) $amount;
@@ -135,24 +217,30 @@ class PayrollProcessController extends Controller
                 }
             }
 
-            PayrollRunDetail::create([
-                'run_id'        => $run->id,
-                'employee_npk'  => $employee->NPK,
-                'employee_name' => $employee->NAMA_KARYAWAN,
-                'components'    => $results,
-                'total_salary'  => $grandTotal
-            ]);
+            // PayrollRunDetail::create([
+            //     'run_id'        => $run->id,
+            //     'employee_npk'  => $employee->NPK,
+            //     'employee_name' => $employee->NAMA_KARYAWAN,
+            //     'components'    => $results,
+            //     'total_salary'  => $grandTotal
+            // ]);
+            $payrollResults[] = [
+                'npk' => $employee->NPK,
+                'name' => $employee->NAMA_KARYAWAN,
+                'components' => $results,
+                'total_salary' => $grandTotal
+            ];
 
             $totalPayroll += $grandTotal;
         }
 
-        $run->update([
-            'employee_count' => $employees->count(),
-            'total_payroll'  => $totalPayroll
-        ]);
-
-        Alert::success('Payroll processed successfully!');
-        return redirect('payroll-process/index');
+        // $run->update([
+        //     'employee_count' => $employees->count(),
+        //     'total_payroll'  => $totalPayroll
+        // ]);
+        return response()->json($payrollResults);
+        // Alert::success('Payroll processed successfully!');
+        // return redirect('payroll-process/index');
     }
 
     public function details($id)
@@ -296,5 +384,18 @@ class PayrollProcessController extends Controller
         } catch (\Throwable $e) {
             return 0;
         }
+    }
+
+    private function evaluateEfficiency($efficiency, $rules)
+    {
+        krsort($rules); // urutkan descending
+
+        foreach ($rules as $threshold => $value) {
+            if ($efficiency >= $threshold) {
+                return $value;
+            }
+        }
+
+        return 0;
     }
 }

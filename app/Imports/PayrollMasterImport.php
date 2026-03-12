@@ -20,7 +20,8 @@ class PayrollMasterImport implements ToModel, WithHeadingRow
 
             [
                 'salary' => $row['salary'] ?? 0,
-                'allowance' => $row['allowance'] ?? 0
+                'allowance' => $row['allowance'] ?? 0,
+                'pph21' => $row['pph21'] ?? 0
             ]
 
         );

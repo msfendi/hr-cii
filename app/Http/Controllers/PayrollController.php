@@ -14,6 +14,7 @@ class PayrollController extends Controller
         $employeesalary = DB::connection('cii')
             ->table('BIODATA')
             ->select('NPK', 'NAMA_KARYAWAN', 'SALARY', 'ALLOWANCE')
+            ->where('NPK', '=', 'C-00827')
             ->get();
 
         $components = PayrollComponent::where('is_active', 1)
@@ -27,10 +28,11 @@ class PayrollController extends Controller
             $inputVariables = [
                 'overtime_hours' => $request->overtime_hours ?? 0,
                 'absence_days'   => $request->absence_days ?? 0,
-                'basic_salary'   => $employee->SALARY ?? 0,
+                'basic_salary'   => $request->salary ?? 0,
                 'working_years'   => $request->working_years ?? 0,
-                'allowance'   => $employee->ALLOWANCE ?? 0,
+                'allowance'   => $request->allowance ?? 0,
                 'special_overtime_hours'  => $request->special_overtime_hours,
+                'absence_days'  => $request->absence_days,
             ];
 
             $results = [];
