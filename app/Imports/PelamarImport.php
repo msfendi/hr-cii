@@ -21,6 +21,11 @@ class PelamarImport implements ToModel, WithStartRow
 
     public function model(array $row)
     {
+        // Skip empty rows or rows without NPK
+        if (!isset($row[1]) || trim((string)$row[1]) === '') {
+            return null;
+        }
+
         // Update NIK index to 19 after shifting
         $existingPelamar = Pelamar::where('NIK', $row[19])->first();
 

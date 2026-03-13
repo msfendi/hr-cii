@@ -36,7 +36,7 @@ class AdminReportController extends Controller
         $dokterIds = $kunjungans->pluck('dokter_id')->filter()->unique()->toArray();
         $dokters = [];
         if (!empty($dokterIds)) {
-            $dokters = DB::connection('audit')->table('users')
+            $dokters = DB::connection('cii')->table('users')
                 ->whereIn('id', $dokterIds)
                 ->pluck('name', 'id')
                 ->toArray();
@@ -101,7 +101,7 @@ class AdminReportController extends Controller
         $dokterIds = $kunjungans->pluck('dokter_id')->filter()->unique()->toArray();
         $dokterMap = [];
         if (!empty($dokterIds)) {
-            $dokterMap = DB::connection('audit')->table('users')
+            $dokterMap = DB::connection('cii')->table('users')
                 ->whereIn('id', $dokterIds)
                 ->pluck('name', 'id')
                 ->toArray();

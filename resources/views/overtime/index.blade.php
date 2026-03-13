@@ -148,6 +148,10 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="month">Bulan Format (Tahun-Bulan)</label>
+                        <input type="month" class="form-control" name="month" id="month" required value="{{ date('Y-m') }}">
+                    </div>
+                    <div class="form-group">
                         <label for="file">Upload File</label>
                         <input type="file" class="form-control" name="file" id="file" accept=".xlsx" required style="padding-bottom: 2rem;">
                     </div>

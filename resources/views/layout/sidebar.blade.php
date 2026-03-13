@@ -35,19 +35,7 @@
     </li>
     @endif
 
-    {{-- <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseKaryawan"
-            aria-expanded="true" aria-controls="collapseKaryawan">
-            <i class="fas fa-fw fa-users"></i>
-            <span>Karyawan</span>
-        </a>
-        <div id="collapseKaryawan" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('attendance.index') }}">Karyawan List</a>
-            </div>
-        </div>
-    </li> --}}
-
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'HRD')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePKWT"
             aria-expanded="true" aria-controls="collapsePKWT">
@@ -103,7 +91,9 @@
             </div>
         </div>
     </li>
+    @endif
 
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Dokter')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePoliklinik"
             aria-expanded="true" aria-controls="collapsePoliklinik">
@@ -118,6 +108,7 @@
             </div>
         </div>
     </li>
+    @endif
 
 
     <!-- Divider -->

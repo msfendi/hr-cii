@@ -19,6 +19,7 @@
     <link href="{{asset('css/select2.min.css')}}" rel="stylesheet">
     <!-- Custom styles for this page -->
     <link href="{{asset('vendor/datatables/dataTables.bootstrap4.min.css')}}" rel="stylesheet">   
+    
     <!-- <link rel="stylesheet" type="text/css" href="http://keith-wood.name/css/jquery.signature.css"> -->
     <!-- <script src="https://cdn.tailwindcss.com"></script> -->
     <style>
@@ -117,4 +118,43 @@
             border-top: none;
         }
     </style>
+    <style>
+
+    #table-details{
+        font-size:12px;
+    }
+
+    #table-details th{
+        font-size:12px;
+        white-space:nowrap;
+    }
+
+    #table-details td{
+        font-size:12px;
+        white-space:nowrap;
+    }
+
+    </style>
+    <style>
+
+    .file-input{
+    height:31px;
+    padding-top:3px;
+    }
+
+    .input-group-sm > .form-control,
+    .input-group-sm > .input-group-append > .btn{
+    height:31px;
+    }
+
+    </style>
+    <style>
+    #fileName{
+        max-width:200px;
+        overflow:hidden;
+        white-space:nowrap;
+        text-overflow:ellipsis;
+    }
+    </style>
+    
 </head>

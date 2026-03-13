@@ -104,7 +104,6 @@ class BiodataController extends Controller
             'HP' => $check_nama[0]->HP,
             'STATUS' => $check_nama[0]->STATUS,
             'TANGGUNGAN' => $check_nama[0]->TANGGUNGAN,
-            'TMPTLAHIR' => strtoupper($check_nama[0]->TMPTLAHIR),
             'JURUSAN' => strtoupper($check_nama[0]->JURUSAN)
         ]);
 
@@ -138,7 +137,6 @@ class BiodataController extends Controller
             'HP' => $request->hp,
             'STATUS' => $request->status,
             'TANGGUNGAN' => $request->tanggungan,
-            'TMPTLAHIR' => strtoupper($request->tempat_lahir),
             'JURUSAN' => strtoupper($request->jurusan)
         ]);
 
@@ -186,7 +184,6 @@ class BiodataController extends Controller
             'HP' => $request->hp,
             'STATUS' => $request->status,
             'TANGGUNGAN' => $request->tanggungan,
-            'TMPTLAHIR' => strtoupper($request->tempat_lahir),
             'JURUSAN' => strtoupper($request->jurusan)
         ]);
 

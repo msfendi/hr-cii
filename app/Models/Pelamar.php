@@ -13,7 +13,6 @@ class Pelamar extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'ID',
         'NPK',
         'NAMA',
         'JENIS_KELAMIN',

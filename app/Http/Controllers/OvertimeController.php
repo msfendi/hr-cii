@@ -54,35 +54,37 @@ class OvertimeController extends Controller
             $request->validate([
                 'file' => 'required|mimes:xlsx,xls',
                 'dept_group' => 'required|in:sewing,non_sewing,staff',
+                'month' => 'required',
             ]);
 
             $file = $request->file('file');
             $deptGroup = $request->input('dept_group');
+            $month = $request->input('month');
 
-            Excel::import(new OvertimeImport($deptGroup), $file);
+            Excel::import(new OvertimeImport($deptGroup, $month), $file);
 
-            // INSERT UNTUK HARI HARI SEBELUM KARYAWAN BARU MASUK
-            $newEmployee = PKWT::whereMonth('TMK', Carbon::now()->month)->whereYear('TMK', Carbon::now()->year)->get();
+            // // INSERT UNTUK HARI HARI SEBELUM KARYAWAN BARU MASUK
+            // $newEmployee = PKWT::whereMonth('TMK', Carbon::now()->month)->whereYear('TMK', Carbon::now()->year)->get();
 
-            foreach ($newEmployee as $employee) {
-                $tmk = Carbon::parse($employee->TMK);
-                for ($i = 1; $i < $tmk->day; $i++) {
-                    $loopDate = Carbon::create($tmk->year, $tmk->month, $i);
-                    Overtime::firstOrCreate(
-                        [
-                            'NPK'          => $employee->NPK,
-                            'OVERTIME_DATE' => $loopDate->format('Y-m-d'),
-                        ],
-                        [
-                            'NAMA_KARYAWAN'     => $employee->NAMA_KARYAWAN,
-                            'BAGIAN'            => $employee->BAGIAN,
-                            'JUMLAH_JAM_LEMBUR' => 'BR',
-                            'DAY'               => $loopDate->translatedFormat('l'),
-                            'DEPT_GROUP'        => $deptGroup,
-                        ]
-                    );
-                }
-            }
+            // foreach ($newEmployee as $employee) {
+            //     $tmk = Carbon::parse($employee->TMK);
+            //     for ($i = 1; $i < $tmk->day; $i++) {
+            //         $loopDate = Carbon::create($tmk->year, $tmk->month, $i);
+            //         Overtime::firstOrCreate(
+            //             [
+            //                 'NPK'          => $employee->NPK,
+            //                 'OVERTIME_DATE' => $loopDate->format('Y-m-d'),
+            //             ],
+            //             [
+            //                 'NAMA_KARYAWAN'     => $employee->NAMA_KARYAWAN,
+            //                 'BAGIAN'            => $employee->BAGIAN,
+            //                 'JUMLAH_JAM_LEMBUR' => 'BR',
+            //                 'DAY'               => $loopDate->translatedFormat('l'),
+            //                 'DEPT_GROUP'        => $deptGroup,
+            //             ]
+            //         );
+            //     }
+            // }
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['status' => 'success', 'message' => 'Data overtime berhasil diimpor.']);
