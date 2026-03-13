@@ -28,7 +28,7 @@
                         <h6 class="m-0 font-weight-bold text-primary">Payroll Process</h6>
                     </div>
                     <div class="card-body">
-                            <form method="POST" action="{{ route('payroll-process.process') }}">
+                            <form method="POST" action="{{ route('payroll-process.process') }}" id="payrollForm">
                             @csrf
 
                             <div class="mb-3">
@@ -83,6 +83,7 @@
 <!-- Page level plugins -->
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <!-- Page level custom scripts -->
 <script src="{{asset('js/demo/datatables-demo.js')}}"></script>
@@ -93,6 +94,21 @@
           allowClear: true,
           placeholder: 'Pilih Periode Payroll',
     });
+</script>
+<script>
+$('#payrollForm').on('submit', function () {
+
+    Swal.fire({
+        title: 'Processing Payroll',
+        text: 'Mohon tunggu, payroll sedang diproses...',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => {
+            Swal.showLoading()
+        }
+    });
+
+});
 </script>
 <script>
     $('.btn-delete-payroll_comp').on('click', function () {

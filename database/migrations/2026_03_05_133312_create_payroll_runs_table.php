@@ -17,6 +17,8 @@ return new class extends Migration
             $table->timestamp('processed_at');
             $table->decimal('total_payroll', 18, 2)->default(0);
             $table->integer('employee_count')->default(0);
+            $table->integer('progress')->default(0);
+            $table->string('status')->nullable();
             $table->timestamps();
         });
     }

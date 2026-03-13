@@ -1,61 +1,37 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Jobs;
 
-use App\Jobs\GeneratePayrollExport;
-use App\Jobs\GeneratePayrollRekap;
 use App\Models\PayrollComponent;
 use App\Models\PayrollExport;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRun;
 use App\Models\PayrollRunDetail;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Request;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
-use RealRashid\SweetAlert\Facades\Alert;
-use Yajra\DataTables\DataTables;
 
-class PayrollProcessController extends Controller
+class GeneratePayrollProcess implements ShouldQueue
 {
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function index()
+    public $runId;
+
+    public function __construct($runId)
     {
-        $periods = PayrollRun::leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')
-            ->leftJoin('payroll_exports', 'payroll_exports.run_id', '=', 'payroll_runs.id')
-            ->select(
-                'payroll_runs.*',
-                'payroll_periods.name as period_name',
-                'payroll_exports.status as export_status',
-                'payroll_exports.file_excel as file_excel',
-                'payroll_exports.file_pdf as file_pdf',
-            )
-            ->orderByDesc('payroll_runs.processed_at')
-            ->get();
-
-        return view('payroll.index', compact('periods'));
+        $this->runId = $runId;
     }
 
-    public function generate()
+    public function handle()
     {
-        $periods = PayrollPeriod::all();
-        return view('payroll.process', compact('periods'));
-    }
 
-    public function process(Request $request)
-    {
-        $period = PayrollPeriod::findOrFail($request->period_id);
+        $run = PayrollRun::findOrFail($this->runId);
+        $period = PayrollPeriod::findOrFail($run->period_id);
 
-        // PROTEKSI: cek apakah payroll sudah pernah digenerate
-        $exists = PayrollRun::where('period_id', $period->id)->exists();
-
-        if ($exists) {
-            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
-            return redirect()->back();
-        }
-        $run = PayrollRun::create([
-            'period_id' => $period->id,
-            'processed_at' => now(),
-        ]);
+        $endDate = $period->end_date;
 
         $employees = DB::connection('cii')
             ->table('BIODATA as b')
@@ -102,7 +78,7 @@ class PayrollProcessController extends Controller
             ) as absence_days
         "),
 
-                DB::raw("DATEDIFF(YEAR, p.TMK, '$period->end_date') as working_years")
+                DB::raw("DATEDIFF(YEAR, p.TMK, '$endDate') as working_years")
             )
             ->groupBy(
                 'b.NPK',
@@ -132,6 +108,16 @@ class PayrollProcessController extends Controller
 
         $padInsentifComponent = PayrollComponent::where('code', 'pad_insentif')->first();
         $padInsentifFormula = json_decode($padInsentifComponent->formula, true);
+
+        $run = PayrollRun::create([
+            'period_id' => $period->id,
+            'processed_at' => now(),
+            'progress' => 0,
+            'status' => 'Starting payroll process'
+        ]);
+
+        GeneratePayrollProcess::dispatch($run->id);
+
         $totalPayroll = 0;
         // dd($employees);
 
@@ -499,138 +485,8 @@ class PayrollProcessController extends Controller
             'employee_count' => $employees->count(),
             'total_payroll'  => $totalPayroll
         ]);
-        // return response()->json($payrollResults);
-        Alert::success('Payroll generated successfully!');
-        return redirect('payroll-process/index');
     }
 
-    public function details($id)
-    {
-        $data = DB::table('payroll_run_details')
-            ->where('run_id', $id)
-            ->select(
-                'run_id',
-                'employee_npk',
-                'employee_name',
-                'components',
-                'total_salary'
-            )
-            ->orderBy('employee_npk')
-            ->get();
-
-        $data->transform(function ($item) {
-
-            $components = json_decode($item->components, true);
-
-            foreach ($components as $key => $value) {
-                $item->$key = $value;
-            }
-
-            return $item;
-        });
-
-        return response()->json([
-            'data' => $data
-        ]);
-    }
-
-    public function destroy($period_id)
-    {
-        DB::beginTransaction();
-
-        try {
-
-            // ambil semua run id dari period
-            $runIds = PayrollRun::where('id', $period_id)->pluck('id');
-            if ($runIds->count() > 0) {
-
-                // hapus detail payroll
-                PayrollRunDetail::whereIn('run_id', $runIds)->delete();
-
-                // hapus run payroll
-                PayrollRun::whereIn('id', $runIds)->delete();
-            }
-
-            DB::commit();
-
-            return redirect()->back()->with('success', 'Payroll deleted successfully');
-        } catch (\Exception $e) {
-
-            DB::rollBack();
-
-            return redirect()->back()->with('error', $e->getMessage());
-        }
-    }
-
-    public function slip($run_id, $npk)
-    {
-        $employee = DB::table('payroll_run_details')
-            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'payroll_run_details.run_id')
-            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->where('run_id', $run_id)
-            ->where('employee_npk', $npk)
-            ->first();
-
-        $components = json_decode($employee->components, true);
-
-        $componentTypes = DB::table('payroll_components')
-            ->pluck('type', 'code');
-
-        $earnings = [];
-        $deductions = [];
-
-        foreach ($components as $code => $value) {
-
-            $type = $componentTypes[$code] ?? 'earning';
-
-            if ($type == 'earning') {
-                $earnings[$code] = $value;
-            } else {
-                $deductions[$code] = $value;
-            }
-        }
-
-        $data = [
-            'employee' => $employee,
-            'earnings' => $earnings,
-            'deductions' => $deductions
-        ];
-
-        $pdf = Pdf::loadView('payroll.slip', $data)
-            ->setPaper('A4', 'portrait');
-
-        return $pdf->download('slip-gaji-' . $employee->employee_npk . '.pdf');
-    }
-
-    public function export($run_id)
-    {
-
-        $export = PayrollExport::create([
-            'run_id' => $run_id,
-            'status' => 'processing',
-            'progress' => 0
-        ]);
-
-        GeneratePayrollExport::dispatch($export->id);
-
-        Alert::success('Sukses', 'Export payroll selesai diproses!');
-        return redirect('payroll-process/index');
-        // return response()->json([
-        //     'message' => 'Export started',
-        //     'export_id' => $export->id
-        // ]);
-    }
-
-    public function progress($id)
-    {
-
-        $export = PayrollExport::findOrFail($id);
-
-        return response()->json([
-            'progress' => $export->progress,
-            'status' => $export->status
-        ]);
-    }
 
     private function evaluateFormula($formula, $results, $inputVariables)
     {

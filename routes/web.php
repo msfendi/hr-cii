@@ -14,10 +14,13 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\AdminKunjunganController;
 use App\Http\Controllers\AdminReportController;
+use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\InsentifMasterController;
+use App\Http\Controllers\LineInsentifMasterController;
+use App\Http\Controllers\PadInsentifMasterController;
 use App\Http\Controllers\PayrollComponentController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PayrollMasterController;
@@ -156,16 +159,38 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import');
     Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export');
 
-    // Insentif
-    Route::get('insentif-master/index', [InsentifMasterController::class, 'index'])->name('insentif-master.index');
-    Route::get('insentif-master/create', [InsentifMasterController::class, 'create'])->name('insentif-master.create');
-    Route::post('insentif-master/store', [InsentifMasterController::class, 'store'])->name('insentif-master.store');
-    Route::delete('insentif-master/delete/{id}', [InsentifMasterController::class, 'destroy'])->name('insentif-master.delete');
-    Route::get('/insentif-master/edit/{id}', [InsentifMasterController::class, 'edit'])->name('insentif-master.edit');
-    Route::post('insentif-master/import', [InsentifMasterController::class, 'import'])->name('insentif-master.import');
-    Route::get('insentif-master/export', [InsentifMasterController::class, 'export'])->name('insentif-master.export');
-    Route::get('/insentif-master/template', [InsentifMasterController::class, 'template'])->name('insentif-master.template');
-    Route::post('/insentif-master/import', [InsentifMasterController::class, 'import'])->name('insentif-master.import');
+    // Line Insentif Master
+    Route::get('line-insentif-master/index', [LineInsentifMasterController::class, 'index'])->name('line-insentif-master.index');
+    Route::get('line-insentif-master/create', [LineInsentifMasterController::class, 'create'])->name('line-insentif-master.create');
+    Route::post('line-insentif-master/store', [LineInsentifMasterController::class, 'store'])->name('line-insentif-master.store');
+    Route::delete('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete');
+    Route::get('/line-insentif-master/edit/{id}', [LineInsentifMasterController::class, 'edit'])->name('line-insentif-master.edit');
+    Route::post('line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import');
+    Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export');
+    Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template');
+    Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import');
+
+    // Cutting Insentif Master
+    Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index');
+    Route::get('cutting-insentif-master/create', [CuttingInsentifMasterController::class, 'create'])->name('cutting-insentif-master.create');
+    Route::post('cutting-insentif-master/store', [CuttingInsentifMasterController::class, 'store'])->name('cutting-insentif-master.store');
+    Route::delete('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete');
+    Route::get('/cutting-insentif-master/edit/{id}', [CuttingInsentifMasterController::class, 'edit'])->name('cutting-insentif-master.edit');
+    Route::post('cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import');
+    Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export');
+    Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template');
+    Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import');
+
+    // Pad Print Insentif Master
+    Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index');
+    Route::get('pad-insentif-master/create', [PadInsentifMasterController::class, 'create'])->name('pad-insentif-master.create');
+    Route::post('pad-insentif-master/store', [PadInsentifMasterController::class, 'store'])->name('pad-insentif-master.store');
+    Route::delete('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete');
+    Route::get('/pad-insentif-master/edit/{id}', [PadInsentifMasterController::class, 'edit'])->name('pad-insentif-master.edit');
+    Route::post('pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import');
+    Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export');
+    Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template');
+    Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import');
 
     // Holiday
     Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');

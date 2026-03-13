@@ -11,16 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('line_efficiencies', function (Blueprint $table) {
+        Schema::create('cutting_efficiencies', function (Blueprint $table) {
 
             $table->id();
-            $table->unsignedBigInteger('line_number');
+            $table->string('npk', 20);
             $table->decimal('efficiency', 5, 2);
             $table->date('date');
 
             $table->timestamps();
 
-            $table->index(['line_number', 'date']);
+            $table->index(['npk', 'date']);
         });
     }
 
@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('line_efficiencies');
+        Schema::dropIfExists('cutting_efficiencies');
     }
 };

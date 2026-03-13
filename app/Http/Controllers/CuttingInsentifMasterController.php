@@ -6,19 +6,39 @@ use Illuminate\Http\Request;
 use App\Models\InsentifMaster;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\InsentifMasterTemplateExport;
+use App\Exports\InsentifTemplateExport;
+use App\Exports\CuttingInsentifTemplateExport;
+use App\Imports\InsentifImport;
 use App\Imports\InsentifMasterImport;
+use App\Imports\CuttingInsentifImport;
+use Illuminate\Support\Facades\DB;
 
-class InsentifMasterController extends Controller
+class CuttingInsentifMasterController extends Controller
 {
     public function index()
     {
-        $data = InsentifMaster::all();
-        return view('insentif_master.index', compact('data'));
+        $data = DB::table('cutting_efficiencies as l')
+            ->join('employee_cutting_assignments as e', function ($join) {
+                $join->on('l.npk', '=', 'e.npk')
+                    ->whereRaw('l.date BETWEEN e.start_date AND COALESCE(e.end_date, l.date)');
+            })
+            ->select(
+                'e.id',
+                'e.npk',
+                'e.role',
+                'l.efficiency',
+                'l.date'
+            )
+            ->orderBy('e.npk')
+            ->orderBy('l.date')
+            ->get();
+        // dd($data);
+        return view('cutting_insentif_master.index', compact('data'));
     }
 
     public function create()
     {
-        return view('insentif_master.create');
+        return view('cutting_insentif_master.create');
     }
 
     public function store(Request $request)
@@ -32,14 +52,14 @@ class InsentifMasterController extends Controller
 
         InsentifMaster::create($request->all());
 
-        return redirect()->route('insentif-master.index')
+        return redirect()->route('cutting-insentif-master.index')
             ->with('success', 'Data berhasil disimpan');
     }
 
     public function edit($id)
     {
         $data = InsentifMaster::findOrFail($id);
-        return view('insentif-master.edit', compact('data'));
+        return view('cutting-insentif-master.edit', compact('data'));
     }
 
     public function update(Request $request, $id)
@@ -54,7 +74,7 @@ class InsentifMasterController extends Controller
         $data = InsentifMaster::findOrFail($id);
         $data->update($request->all());
 
-        return redirect()->route('insentif-master.index')
+        return redirect()->route('cutting-insentif-master.index')
             ->with('success', 'Data berhasil diupdate');
     }
 
@@ -63,13 +83,13 @@ class InsentifMasterController extends Controller
         $data = InsentifMaster::findOrFail($id);
         $data->delete();
 
-        return redirect()->route('insentif-master.index')
+        return redirect()->route('cutting-insentif-master.index')
             ->with('success', 'Data berhasil dihapus');
     }
 
     public function template()
     {
-        return Excel::download(new InsentifMasterTemplateExport, 'template_insentif_master.xlsx');
+        return Excel::download(new CuttingInsentifTemplateExport, 'template_cutting_insentif_master.xlsx');
     }
 
     public function import(Request $request)
@@ -78,7 +98,7 @@ class InsentifMasterController extends Controller
             'file' => 'required|mimes:xlsx,xls'
         ]);
 
-        Excel::import(new InsentifMasterImport, $request->file('file'));
+        Excel::import(new CuttingInsentifImport, $request->file('file'));
 
         return redirect()->back()->with('success', 'Data berhasil diimport');
     }

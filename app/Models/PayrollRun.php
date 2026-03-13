@@ -11,7 +11,9 @@ class PayrollRun extends Model
         'period_id',
         'processed_at',
         'total_payroll',
-        'employee_count'
+        'employee_count',
+        'progress',
+        'status'
     ];
 
     public function details()

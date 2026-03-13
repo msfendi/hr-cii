@@ -230,7 +230,11 @@ class EmployeePayrollController extends Controller
                 */
                 if ($isWeekend || $isHoliday) {
                     // Jika hari libur
-                    $status = 'Holiday';
+                    if (is_numeric($lembur)) {
+                        $status = 'Lembur Khusus';
+                    } else {
+                        $status = 'Holiday';
+                    }
                 } elseif ($dailyLogs->count() > 0) {
                     // Jika ada scan absensi
                     $first = Carbon::parse($dailyLogs->first()->scan_date);
@@ -303,25 +307,25 @@ class EmployeePayrollController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        // $pdf = Pdf::loadView('payroll.viewslip', [
-        //     'employee' => $employee,
-        //     'earnings' => $earnings,
-        //     'deductions' => $deductions,
-        //     'attendance' => $attendance,
-        //     'summary' => $summary,
-        //     'holidays' => $holidays
-        // ])
-        //     ->setPaper('A4', 'portrait');
-
-        // return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
-
-        return view('payroll.viewslip', [
+        $pdf = Pdf::loadView('payroll.viewslip', [
             'employee' => $employee,
             'earnings' => $earnings,
             'deductions' => $deductions,
             'attendance' => $attendance,
             'summary' => $summary,
             'holidays' => $holidays
-        ]);
+        ])
+            ->setPaper('A4', 'portrait');
+
+        return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
+
+        // return view('payroll.viewslip', [
+        //     'employee' => $employee,
+        //     'earnings' => $earnings,
+        //     'deductions' => $deductions,
+        //     'attendance' => $attendance,
+        //     'summary' => $summary,
+        //     'holidays' => $holidays
+        // ]);
     }
 }

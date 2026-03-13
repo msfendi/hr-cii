@@ -10,10 +10,10 @@
             @include('layout.navbar')
             <div class="container-fluid">
                <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                  <h1 class="h3 mb-0 text-gray-800">Insentif Master</h1>
+                  <h1 class="h3 mb-0 text-gray-800">Line Insentif Master</h1>
                   <div>
-                     <a href="{{ route('insentif-master.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
-                        <i class="fas fa-plus fa-sm text-white-50"></i> Create Insentif Master
+                     <a href="{{ route('line-insentif-master.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
+                        <i class="fas fa-plus fa-sm text-white-50"></i> Create Line Insentif Master
                      </a>
                   </div>
                </div>
@@ -22,18 +22,18 @@
                     <div class="d-flex justify-content-between align-items-center flex-wrap">
                         <!-- KIRI -->
                         <h6 class="m-0 font-weight-bold text-primary">
-                            Data Insentif Master
+                            Data Line Insentif Master
                         </h6>
                         <!-- KANAN -->
                         <div class="d-flex align-items-center">
                             <!-- DOWNLOAD TEMPLATE -->
-                            <a href="{{ route('insentif-master.template') }}"
+                            <a href="{{ route('line-insentif-master.template') }}"
                                 class="btn btn-info btn-sm mr-2">
                             <i class="fas fa-download"></i> Download Template
                             </a>
                             <!-- IMPORT FORM -->
                             <form id="importForm"
-                                action="{{ route('insentif-master.import') }}"
+                                action="{{ route('line-insentif-master.import') }}"
                                 method="POST"
                                 enctype="multipart/form-data">
                                 @csrf
@@ -98,10 +98,10 @@
                               <tr>
                                  <th>ID</th>
                                  <th>NPK</th>
-                                 <th>Dates</th>
-                                 <th>Type</th>
+                                 <th>Line Number</th>
+                                 <th>Role</th>
                                  <th>Efficiency</th>
-                                 <th>Piece</th>
+                                 <th>Tanggal</th>
                                  <th>Action</th>
                               </tr>
                            </thead>
@@ -110,17 +110,17 @@
                               <tr>
                                  <td>{{ $row->id }}</td>
                                  <td>{{ $row->npk }}</td>
-                                 <td>{{ $row->date }}</td>
-                                 <td>{{ $row->type }}</td>
+                                 <td>{{ $row->line_number }}</td>
+                                 <td>{{ $row->role }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
-                                 <td>{{ number_format($row->piece,0,',','.') }}</td>
+                                 <td>{{ $row->date }}</td>
                                  <td class="text-center">
-                                    <a href="{{ route('insentif-master.edit',$row->id) }}"
+                                    <a href="{{ route('line-insentif-master.edit',$row->id) }}"
                                        class="btn btn-primary btn-circle btn-sm">
                                     <i class="fas fa-edit"></i>
                                     </a>
                                     <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
-                                       data-delete-link="{{ route('insentif-master.delete',$row->id) }}"
+                                       data-delete-link="{{ route('line-insentif-master.delete',$row->id) }}"
                                        data-npk="{{ $row->npk }}"
                                        data-toggle="modal"
                                        data-target="#deleteModal">

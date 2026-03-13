@@ -80,7 +80,7 @@
                                         <td>{{ $period->id }}</td>
                                         <td>{{ $period->period_name }}</td>
                                         <td>{{ $period->processed_at }}</td>
-                                        <td>{{ $period->total_payroll }}</td>
+                                        <td>Rp {{ number_format($period->total_payroll,0,',','.') }}</td>
                                         <td>{{ $period->employee_count }}</td>
                                         
                                         <td class="text-center">
@@ -177,6 +177,10 @@
                                         <th>Monthly Premi</th>
                                         <th>Long Service</th>
                                         <th>Allowance</th>
+                                        
+                                        <th>Sewing Insentif</th>
+                                        <th>Pad Print Insentif</th>
+                                        <th>Cutting Insentif</th>
 
                                         <th>BPJS Kes</th>
                                         <th>BPJS TK</th>
@@ -380,6 +384,18 @@
             },
             { 
                 data: 'allowance',
+                render: data => formatRupiah(data)
+            },
+            { 
+                data: 'sewing_insentif',
+                render: data => formatRupiah(data)
+            },
+            { 
+                data: 'pad_insentif',
+                render: data => formatRupiah(data)
+            },
+            { 
+                data: 'cutting_insentif',
                 render: data => formatRupiah(data)
             },
             { 

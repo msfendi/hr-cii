@@ -11,21 +11,26 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('insentif_masters', function (Blueprint $table) {
+        Schema::create('pad_efficiencies', function (Blueprint $table) {
+
             $table->id();
-            $table->string('npk', 20);
+            $table->string('npk');
+            $table->string('dept');
+            $table->decimal('efficiency', 5, 2);
+            $table->decimal('piece', 10, 2);
             $table->date('date');
-            $table->string('type', 50);
-            $table->decimal('efficiency', 8, 2)->nullable();
-            $table->decimal('piece', 12, 2)->nullable();
+
             $table->timestamps();
 
-            $table->index('npk');
+            $table->index(['date']);
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
-        Schema::dropIfExists('insentif_masters');
+        Schema::dropIfExists('pad_efficiencies');
     }
 };

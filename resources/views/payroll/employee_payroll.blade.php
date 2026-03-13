@@ -17,13 +17,13 @@
 
             <ul class="nav nav-tabs" id="loginTab">
                 <li class="nav-item">
-                    <a class="nav-link active" data-toggle="tab" href="#manual">
-                        Manual Login
+                    <a class="nav-link active" data-toggle="tab" href="#qrlogin">
+                        QR Code Login
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" data-toggle="tab" href="#qrlogin">
-                        QR Code Login
+                    <a class="nav-link" data-toggle="tab" href="#manual">
+                        Manual Login
                     </a>
                 </li>
             </ul>
@@ -31,7 +31,7 @@
             <div class="tab-content mt-4">
 
                 <!-- TAB 1 -->
-                <div class="tab-pane fade show active" id="manual">
+                <div class="tab-pane fade" id="manual">
 
                     <form method="POST" action="{{ route('employee-payroll.verify-password') }}">
                         @csrf
@@ -66,7 +66,7 @@
                 </div>
 
                 <!-- TAB 2 -->
-                <div class="tab-pane fade" id="qrlogin">
+                <div class="tab-pane fade show active" id="qrlogin">
 
                     <div id="step1">
 

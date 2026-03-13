@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Line extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'line_number',
+        'line_name'
+    ];
+
+    public function efficiencies()
+    {
+        return $this->hasMany(LineEfficiency::class);
+    }
+
+    public function assignments()
+    {
+        return $this->hasMany(EmployeeLineAssignment::class);
+    }
+}
