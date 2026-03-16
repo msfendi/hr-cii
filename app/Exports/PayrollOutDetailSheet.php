@@ -10,7 +10,7 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
-class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading,  WithTitle, ShouldAutoSize
+class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading,  WithTitle, ShouldAutoSize
 {
     protected $run_id;
 
@@ -20,7 +20,7 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
     }
     public function title(): string
     {
-        return 'Payrol_Active';
+        return 'Payroll_Out';
     }
 
     private function baseBiodataQuery()
@@ -67,7 +67,7 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
 
             ->where('prd.run_id', $this->run_id)
-            ->whereNull('bio.TKK')
+            ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
 
             ->select(
                 'prd.*',

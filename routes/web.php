@@ -130,7 +130,7 @@ Route::group(['middleware' => 'auth'], function () {
     // Payroll Process
     Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index');
     Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate');
-    // Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
+    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
     Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details');
     Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy');
     Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin']);
@@ -264,7 +264,7 @@ Route::group(['middleware' => 'auth'], function () {
 
 // Payroll 
 Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
-Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
+// Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
 
 // Employee Payroll
 Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');

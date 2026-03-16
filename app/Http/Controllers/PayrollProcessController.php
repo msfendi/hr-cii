@@ -57,62 +57,95 @@ class PayrollProcessController extends Controller
             'processed_at' => now(),
         ]);
 
-        $employees = DB::connection('cii')
-            ->table('BIODATA as b')
-            ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->leftJoin('overtimes as o', 'b.NPK', '=', 'o.NPK')
-            ->leftJoin('payroll_masters as pm', 'b.NPK', '=', 'pm.npk')
-            // ->where('b.NPK', '=', 'C-00827')
+        $periodStart = $period->start_date;
+        $periodEnd   = $period->end_date;
+
+        $employeeBase = DB::connection('cii')
+            ->table('PKWT as p')
+            ->leftJoin('BIODATA as b', 'p.NPK', '=', 'b.NPK')
+            ->leftJoin('BIODATA_KELUAR as bk', 'p.NPK', '=', 'bk.NPK')
+
+            ->where(function ($q) use ($periodStart, $periodEnd) {
+
+                // karyawan aktif
+                $q->whereNull('p.TKK')
+
+                    // karyawan keluar di periode
+                    ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
+            })
+
             ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
+                'p.NPK',
+                DB::raw('COALESCE(b.NAMA_KARYAWAN, bk.NAMA_KARYAWAN) as NAMA_KARYAWAN'),
+                'p.TMK',
+                'p.TKK'
+            );
+
+        $overtimeSummary = DB::connection('cii')
+            ->table('overtimes')
+            ->select(
+                'NPK',
+
+                DB::raw("
+        SUM(
+            CASE 
+                WHEN DAY NOT IN ('Sabtu','Minggu')
+                AND TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT) IS NOT NULL
+                THEN TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT)
+                ELSE 0
+            END
+        ) as overtime_hours
+        "),
+
+                DB::raw("
+        SUM(
+            CASE 
+                WHEN DAY IN ('Sabtu','Minggu')
+                AND TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT) IS NOT NULL
+                THEN TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT)
+                ELSE 0
+            END
+        ) as special_overtime_hours
+        "),
+
+                DB::raw("
+        SUM(
+            CASE
+                WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
+                AND TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT) IS NULL
+                THEN 1
+                ELSE 0
+            END
+        ) as absence_days
+        ")
+            )
+            ->groupBy('NPK');
+
+        $employees = DB::connection('cii')
+            ->query()
+            ->fromSub($employeeBase, 'emp')
+
+            ->leftJoinSub($overtimeSummary, 'ot', function ($join) {
+                $join->on('emp.NPK', '=', 'ot.NPK');
+            })
+
+            ->leftJoin('payroll_masters as pm', 'emp.NPK', '=', 'pm.npk')
+
+            ->select(
+                'emp.NPK',
+                'emp.NAMA_KARYAWAN',
                 'pm.salary',
                 'pm.allowance',
 
-                DB::raw("
-            COALESCE(SUM(
-                CASE 
-                    WHEN o.DAY NOT IN ('Sabtu','Minggu') 
-                    AND TRY_CAST(o.JUMLAH_JAM_LEMBUR as FLOAT) IS NOT NULL
-                    THEN TRY_CAST(o.JUMLAH_JAM_LEMBUR as FLOAT) 
-                    ELSE 0 
-                END
-            ),0) as overtime_hours
-        "),
+                DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
+                DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
+                DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
 
-                DB::raw("
-            COALESCE(SUM(
-                CASE 
-                    WHEN o.DAY IN ('Sabtu','Minggu') 
-                    AND TRY_CAST(o.JUMLAH_JAM_LEMBUR as FLOAT) IS NOT NULL
-                    THEN TRY_CAST(o.JUMLAH_JAM_LEMBUR as FLOAT) 
-                    ELSE 0 
-                END
-            ),0) as special_overtime_hours
-        "),
-
-                DB::raw("
-            SUM(
-                CASE
-                    WHEN o.JUMLAH_JAM_LEMBUR IS NOT NULL
-                    AND TRY_CAST(o.JUMLAH_JAM_LEMBUR as FLOAT) IS NULL
-                    THEN 1
-                    ELSE 0
-                END
-            ) as absence_days
-        "),
-
-                DB::raw("DATEDIFF(YEAR, p.TMK, '$period->end_date') as working_years")
+                DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
-            ->groupBy(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'pm.salary',
-                'pm.allowance',
-                'p.TMK'
-            )
+            // ->where('emp.NPK', '=', 'C-01783')
+
             ->get();
-        // dd($employees);
 
         $components = PayrollComponent::where('is_active', 1)
             ->orderByDesc('priority')
@@ -156,57 +189,30 @@ class PayrollProcessController extends Controller
 
                     // KHUSUS KOMPONEN LEMBUR RESMI
                     if ($component->code === 'overtime_pay') {
-                        $overtimes = DB::connection('cii')
-                            ->table('overtimes')
-                            ->where('NPK', $employee->NPK)
-                            ->whereNotIn('DAY', ['Sabtu', 'Minggu'])
-                            ->select('JUMLAH_JAM_LEMBUR')
-                            ->get();
-
                         $amount = 0;
+                        $variables = [
+                            'basic_salary' => (float) $employee->salary,
+                            'overtime_hours' => (float) $employee->overtime_hours
+                        ];
 
-                        foreach ($overtimes as $ot) {
-
-                            $hours = (float) $ot->JUMLAH_JAM_LEMBUR;
-
-                            if ($hours > 0) {
-
-                                $variables = [
-                                    'basic_salary' => (float) $employee->salary,
-                                    'overtime_hours' => $hours
-                                ];
-
-                                $amount += $this->evaluateFormula(
-                                    $overtimeFormula,
-                                    $results,
-                                    $variables
-                                );
-                            }
-                        }
+                        $amount += $this->evaluateFormula(
+                            $overtimeFormula,
+                            $results,
+                            $variables
+                        );
                     }
                     // KHUSUS KOMPONEN LEMBUR KHUSUS
                     else if ($component->code === 'special_overtime_pay') {
-                        $overtimes = DB::connection('cii')
-                            ->table('overtimes')
-                            ->where('NPK', $employee->NPK)
-                            ->whereIn('DAY', ['Sabtu', 'Minggu'])
-                            ->select('JUMLAH_JAM_LEMBUR')
-                            ->get();
                         $amount = 0;
-                        foreach ($overtimes as $ot) {
-                            $hours = (float) $ot->JUMLAH_JAM_LEMBUR;
-                            if ($hours > 0) {
-                                $variables = [
-                                    'basic_salary' => (float) $employee->salary,
-                                    'special_overtime_hours' => $hours
-                                ];
-                                $amount += $this->evaluateFormula(
-                                    $specialOvertimeFormula,
-                                    $results,
-                                    $variables
-                                );
-                            }
-                        }
+                        $variables = [
+                            'basic_salary' => (float) $employee->salary,
+                            'special_overtime_hours' => (float) $employee->special_overtime_hours
+                        ];
+                        $amount += $this->evaluateFormula(
+                            $specialOvertimeFormula,
+                            $results,
+                            $variables
+                        );
                     } else if ($component->code === 'sewing_insentif') {
                         $lineefficiencies = DB::table('line_efficiencies as le')
                             ->join('employee_line_assignments as ela', function ($join) use ($employee) {

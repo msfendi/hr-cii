@@ -89,7 +89,9 @@
 
                     <div id="step2" style="display:none">
 
-                        <video id="video" width="100%" height="300" object-fit="cover"></video>
+                        <div class="camera-box">
+                            <video id="video"></video>
+                        </div>
 
                     </div>
 

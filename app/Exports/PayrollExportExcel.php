@@ -18,7 +18,8 @@ class PayrollExportExcel implements WithMultipleSheets
         return [
 
             new PayrollDetailSheet($this->run_id), // sheet 1
-            new PayrollSummarySheet($this->run_id) // sheet 2
+            new PayrollOutDetailSheet($this->run_id), // sheet 2
+            new PayrollSummarySheet($this->run_id) // sheet 3
 
         ];
     }

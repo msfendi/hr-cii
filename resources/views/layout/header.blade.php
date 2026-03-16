@@ -156,5 +156,24 @@
         text-overflow:ellipsis;
     }
     </style>
-    
+    <style>
+
+    .camera-box{
+        width:100%;
+        height:500px;
+        background:#fff;
+        border-radius:20px;
+        overflow:hidden;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+
+    #video{
+        width:100%;
+        height:100%;
+        object-fit:cover;
+    }
+
+    </style>
 </head>

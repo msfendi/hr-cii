@@ -14,11 +14,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
-use RealRashid\SweetAlert\Facades\Alert;
 
 class GeneratePayrollExport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $timeout = 0;
+    public $tries = 1;
 
     protected $export_id;
 
@@ -29,6 +31,10 @@ class GeneratePayrollExport implements ShouldQueue
 
     public function handle()
     {
+
+        ini_set('memory_limit', '2048M');
+        set_time_limit(0);
+
         $export = PayrollExport::find($this->export_id);
 
         if (!$export) {
@@ -37,53 +43,82 @@ class GeneratePayrollExport implements ShouldQueue
 
         $run_id = $export->run_id;
 
-        $query = DB::table('payroll_run_details as prd')
-            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'prd.employee_npk')
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'b.id_dept')
-            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
-            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->where('prd.run_id', $run_id)
-            ->select(
-                'prd.*',
-                'd.DEPARTEMENT',
-                'pp.name as period_name'
-            )
-            ->orderBy('d.DEPARTEMENT')
-            ->orderBy('prd.employee_npk');
-
-        // dd($query->get());
-
-        $total = $query->count();
-        $periodName = $query->get()->value('period_name');
-        $periodNameFormatted = strtoupper(str_replace(' ', '_', $periodName ?? 'UNKNOWN'));
-        $processed = 0;
-
         /*
         |--------------------------------------------------------------------------
-        | Progress Process
+        | UNION BIODATA + BIODATA_KELUAR
         |--------------------------------------------------------------------------
         */
 
-        $query->chunk(1000, function ($rows) use (&$processed, $total, $export) {
-
-            foreach ($rows as $row) {
-
-                $components = json_decode($row->components, true);
-
-                // proses data payroll jika perlu
-
-                $processed++;
-            }
-
-            $progress = intval(($processed / $total) * 100);
-
-            PayrollExport::where('id', $export->id)
-                ->update(['progress' => $progress]);
-        }, 'id');
+        $employeeUnion = DB::table('BIODATA')
+            ->select('NPK', 'id_dept')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'id_dept')
+            );
 
         /*
         |--------------------------------------------------------------------------
-        | Generate Excel
+        | PKWT TERAKHIR (BERDASARKAN TMK)
+        |--------------------------------------------------------------------------
+        */
+
+        $pkwtLatest = DB::raw("
+            (
+                SELECT p1.NPK, p1.TKK
+                FROM PKWT p1
+                WHERE p1.TMK = (
+                    SELECT MAX(p2.TMK)
+                    FROM PKWT p2
+                    WHERE p2.NPK = p1.NPK
+                )
+            ) as p
+        ");
+
+        /*
+        |--------------------------------------------------------------------------
+        | QUERY PAYROLL
+        |--------------------------------------------------------------------------
+        */
+
+        $data = DB::table('payroll_run_details as prd')
+
+            ->leftJoinSub($employeeUnion, 'emp', function ($join) {
+                $join->on('emp.NPK', '=', 'prd.employee_npk');
+            })
+
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
+
+            ->leftJoin($pkwtLatest, 'p.NPK', '=', 'prd.employee_npk')
+
+            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
+            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+
+            ->where('prd.run_id', $run_id)
+
+            ->select(
+                'prd.*',
+                'd.DEPARTEMENT',
+                'pp.name as period_name',
+                'pp.start_date',
+                'pp.end_date',
+                'p.TKK'
+            )
+
+            ->orderBy('d.DEPARTEMENT')
+            ->orderBy('prd.employee_npk')
+
+            ->get();
+
+        if ($data->isEmpty()) {
+            return;
+        }
+
+        $periodName = $data->first()->period_name ?? 'UNKNOWN';
+        $periodNameFormatted = strtoupper(str_replace(' ', '_', $periodName));
+
+        /*
+        |--------------------------------------------------------------------------
+        | GENERATE EXCEL
         |--------------------------------------------------------------------------
         */
 
@@ -99,7 +134,7 @@ class GeneratePayrollExport implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | Generate PDF
+        | COMPONENT STRUCTURE
         |--------------------------------------------------------------------------
         */
 
@@ -107,54 +142,82 @@ class GeneratePayrollExport implements ShouldQueue
             ->get()
             ->keyBy('code');
 
-        $data = DB::table('payroll_run_details as prd')
-            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'prd.employee_npk')
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'b.id_dept')
-            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
-            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->where('prd.run_id', $run_id)
-            ->select(
-                'prd.*',
-                'd.DEPARTEMENT',
-                'pp.name as period_name'
-            )
-            ->orderBy('d.DEPARTEMENT')
-            ->orderBy('prd.employee_npk')
-            ->get();
+        /*
+        |--------------------------------------------------------------------------
+        | DECODE COMPONENT JSON
+        |--------------------------------------------------------------------------
+        */
 
-        $data->transform(function ($item) {
+        $data = $data->map(function ($item) {
 
             $components = json_decode($item->components, true);
 
-            foreach ($components as $key => $value) {
-                $item->$key = $value;
+            if ($components) {
+                foreach ($components as $key => $value) {
+                    $item->$key = $value;
+                }
             }
 
             return $item;
         });
 
-        $grouped = $data->groupBy('DEPARTEMENT');
+        /*
+        |--------------------------------------------------------------------------
+        | PISAH AKTIF VS RESIGN
+        |--------------------------------------------------------------------------
+        */
 
-        ini_set('memory_limit', '1024M');
-        set_time_limit(0);
+        $activeEmployees = $data->filter(function ($row) {
+            return empty($row->TKK);
+        });
 
+        $resignEmployees = $data->filter(function ($row) {
+
+            if (empty($row->TKK)) {
+                return false;
+            }
+
+            return $row->TKK >= $row->start_date &&
+                $row->TKK <= $row->end_date;
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | GROUP BY DEPARTMENT
+        |--------------------------------------------------------------------------
+        */
+
+        $groupedActive = $activeEmployees->groupBy('DEPARTEMENT');
+        $groupedResign = $resignEmployees->groupBy('DEPARTEMENT');
+
+        /*
+        |--------------------------------------------------------------------------
+        | GENERATE PDF (STREAM SAVE)
+        |--------------------------------------------------------------------------
+        */
 
         $pdf = Pdf::loadView('payroll.rekap_pdf', [
-            'grouped' => $grouped,
+            'groupedActive' => $groupedActive,
+            'groupedResign' => $groupedResign,
             'allComponents' => $allComponents,
             'run_id' => $run_id
-        ])->setPaper('a4', 'landscape');
-
-        $pdf->setOption('isPhpEnabled', true);
+        ])
+            ->setPaper('a4', 'landscape')
+            ->setOption('defaultFont', 'sans-serif')
+            ->setOption('isPhpEnabled', true)
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', false);
 
         $pdfPath = 'public/payroll/REKAP_' . $periodNameFormatted . '.pdf';
         $pdfPathDB = 'payroll/REKAP_' . $periodNameFormatted . '.pdf';
 
-        Storage::put($pdfPath, $pdf->output());
+        $fullPath = storage_path('app/' . $pdfPath);
+
+        $pdf->save($fullPath);
 
         /*
         |--------------------------------------------------------------------------
-        | Update Export Status
+        | UPDATE STATUS
         |--------------------------------------------------------------------------
         */
 
@@ -165,7 +228,5 @@ class GeneratePayrollExport implements ShouldQueue
                 'file_excel' => $excelPathDB,
                 'file_pdf' => $pdfPathDB
             ]);
-
-        Alert::success('Sukses', 'Export payroll selesai diproses!');
     }
 }
