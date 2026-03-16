@@ -37,7 +37,7 @@ class PayrollProcessController extends Controller
 
     public function generate()
     {
-        $periods = PayrollPeriod::all();
+        $periods = PayrollPeriod::orderBy('start_date')->get();
         return view('payroll.process', compact('periods'));
     }
 

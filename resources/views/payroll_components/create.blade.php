@@ -83,7 +83,7 @@
                             <br>
                             <div>
                                 <label>Value :</label>
-                                <input class="form-control" type="text" id="value" name="value">
+                                <input class="form-control" type="number" id="value" name="value">
                             </div>
                             <br>
                             <div>

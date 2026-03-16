@@ -65,7 +65,7 @@
                                         <th>Name</th>
                                         <th>Start Date</th>
                                         <th>End Date</th>
-                                        <th>Is Closed</th>
+                                        <!-- <th>Is Closed</th> -->
                                         <th>Action</th>
                                     </tr>
                                 </thead>
@@ -76,11 +76,11 @@
                                         <td>{{ $period->name }}</td>
                                         <td>{{ $period->start_date }}</td>
                                         <td>{{ $period->end_date }}</td>
-                                        <td>{{ $period->is_closed ? 'Yes' : 'No' }}</td>
+                                        <!-- <td>{{ $period->is_closed ? 'Yes' : 'No' }}</td> -->
                                         <td class="text-center">
-                                            <a href="{{ route('payroll-periods.edit', ['id' => $period->id]) }}" class="btn btn-primary btn-circle btn-sm">
+                                            <!-- <a href="{{ route('payroll-periods.edit', ['id' => $period->id]) }}" class="btn btn-primary btn-circle btn-sm">
                                                 <i class="fas fa-edit"></i>
-                                            </a>
+                                            </a> -->
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_comp" data-delete-link="{{ route('payroll-periods.delete', ['id' => $period->id]) }}" data-payroll_comp-name="{{ $period->name }}" data-toggle="modal" data-target="#deleteModal">
                                                 <i class="fas fa-trash"></i>
                                             </a>

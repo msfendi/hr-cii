@@ -87,7 +87,7 @@
                             <br>
                             <div>
                                 <label>Value :</label>
-                                <input class="form-control" type="text" id="value" name="value" value="{{ $components->value}}">
+                                <input class="form-control" type="number" id="value" name="value" value="{{ $components->value}}">
                             </div>
                             <br>
                             <div>

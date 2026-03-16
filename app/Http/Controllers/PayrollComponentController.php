@@ -70,4 +70,13 @@ class PayrollComponentController extends Controller
         Alert::success('Update Successfully!', 'Payroll Component ' . $component->name . ' successfully updated!');
         return redirect('payroll-components/index');
     }
+
+    public function delete($id)
+    {
+        $component = PayrollComponent::findOrFail($id);
+        $component->delete();
+
+        Alert::success('Delete Successfully!', 'Payroll Component ' . $component->name . ' successfully updated!');
+        return redirect('payroll-components/index');
+    }
 }

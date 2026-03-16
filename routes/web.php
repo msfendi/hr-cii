@@ -144,8 +144,11 @@ Route::group(['middleware' => 'auth'], function () {
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
     Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create');
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
     Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit');
+    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update');
     Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete');
+    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store');
     Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import');
     Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template');
 
@@ -273,3 +276,4 @@ Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->na
 Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin']);
 Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('view-slip');
+Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');

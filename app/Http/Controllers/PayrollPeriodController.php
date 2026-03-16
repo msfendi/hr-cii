@@ -34,6 +34,15 @@ class PayrollPeriodController extends Controller
         $endDate   = $periode->endOfMonth()->toDateString();
 
 
+        // PROTEKSI: cek apakah payroll sudah pernah digenerate
+        $exists = PayrollPeriod::where('name', $request->name)->exists();
+
+        if ($exists) {
+            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
+            return redirect()
+                ->route('payroll-periods.index');
+        }
+
         PayrollPeriod::create([
             'name' => $request->name,
             'start_date' => $startDate,
@@ -64,6 +73,15 @@ class PayrollPeriodController extends Controller
         $periods->save();
 
         Alert::success('Update Successfully!', 'Period ' . $periods->name . ' successfully updated!');
+        return redirect()->route('payroll-periods.index');
+    }
+
+    public function delete($id)
+    {
+        $periods = PayrollPeriod::findOrFail($id);
+        $periods->delete();
+
+        Alert::success('Delete Successfully!', 'Payroll Period ' . $periods->name . ' successfully deleted!');
         return redirect()->route('payroll-periods.index');
     }
 }
