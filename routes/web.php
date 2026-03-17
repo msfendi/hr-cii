@@ -17,6 +17,8 @@ use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\EmployeePayrollController;
+use App\Http\Controllers\EvaluationEmployeeController;
+use App\Http\Controllers\EvaluationQuestionnaireController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\InsentifMasterController;
 use App\Http\Controllers\LineInsentifMasterController;
@@ -152,6 +154,17 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import');
     Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template');
 
+    // Evaluation Questionnaire
+    Route::prefix('evaluation-questionnaire')->group(function () {
+        Route::get('/', [EvaluationQuestionnaireController::class, 'index'])->name('evaluation-questionnaire.index');
+        Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import');
+        Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template');
+        Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete');
+    });
+
+    //  Evaluation Employee
+    Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index');
+
     // Holiday
     Route::get('holidays/sync', [HolidayController::class, 'sync'])->name('holidays.sync');
     Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');
@@ -277,3 +290,9 @@ Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrL
 Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('view-slip');
 Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
+
+// Employee Evaluation
+Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class, 'submit'])->name('evaluation-employee.submit');
+Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cbt'])->name('evaluation-employee.cbt');
+Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
+Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');

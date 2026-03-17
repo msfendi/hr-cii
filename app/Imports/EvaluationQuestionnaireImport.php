@@ -12,10 +12,10 @@ class EvaluationQuestionnaireImport implements ToModel, WithHeadingRow
     {
         return EvaluationQuestionnaire::updateOrCreate(
             [
-                'jobscope_id' => $row['jobscope_id']
+                'jobscope_id' => $row['jobscope_id'],
+                'question' => $row['question'],
             ],
             [
-                'question' => $row['question'],
                 'optiona' => $row['optiona'],
                 'optionb' => $row['optionb'],
                 'optionc' => $row['optionc'],

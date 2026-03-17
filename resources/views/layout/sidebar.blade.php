@@ -160,6 +160,20 @@
             </div>
         </div>
     </li>
+    
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseEvaluation"
+            aria-expanded="true" aria-controls="collapseEvaluation">
+            <i class="fas fa-fw fa-calculator"></i>
+            <span>Evaluation</span>
+        </a>
+        <div id="collapseEvaluation" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation List</a>
+                <a class="collapse-item" href="{{ route('evaluation-employee.index') }}">Employee Evaluation</a>
+            </div>
+        </div>
+    </li>
 
 
     <!-- Divider -->
