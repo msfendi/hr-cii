@@ -9,6 +9,7 @@ use App\Imports\PayrollMasterImport;
 use App\Exports\PayrollMasterTemplateExport;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PayrollMasterController extends Controller
 {
@@ -17,13 +18,37 @@ class PayrollMasterController extends Controller
     {
         $canViewSalary = Auth::user()->hasRole(['Admin', 'Payroll']);
 
-        // dd(Auth::user()->getRoleNames(), $canViewSalary);
+        // UNION BIODATA dan BIODATA_KELUAR
+        $biodataUnion = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            ->union(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            );
 
-        if ($canViewSalary) {
-            $data = PayrollMaster::all();
-        } else {
-            $data = PayrollMaster::select('id', 'npk')->get();
+        // Query utama
+        $query = PayrollMaster::query()
+            ->leftJoinSub($biodataUnion, 'biodata', function ($join) {
+                $join->on('payroll_masters.npk', '=', 'biodata.NPK');
+            })
+            ->leftJoin('DEPT', 'biodata.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select(
+                'payroll_masters.*',
+                'biodata.NAMA_KARYAWAN',
+                'DEPT.DEPARTEMENT'
+            );
+
+        if (!$canViewSalary) {
+            $query->select(
+                'payroll_masters.id',
+                'payroll_masters.npk',
+                'biodata.NAMA_KARYAWAN',
+                'DEPT.DEPARTEMENT'
+            );
         }
+
+        $data = $query->get();
+
         return view('payroll_master.index', compact('data', 'canViewSalary'));
     }
 
