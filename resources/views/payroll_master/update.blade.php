@@ -29,6 +29,16 @@
                   </div>
                   <br>
                   <div>
+                    <label>Bank Name :</label>
+                    <input type="text" class="form-control" name="bank_name" value="{{ $data->bank_name }}" required readonly>
+                  </div>
+                  <br>
+                  <div>
+                    <label>Bank Account :</label>
+                    <input type="text" class="form-control" name="bank_account" value="{{ $data->bank_account }}" required readonly>
+                  </div>
+                  <br>
+                  <div>
                     <label>Salary :</label>
                     <input type="number" class="form-control" name="salary" value="{{ $data->salary }}" required>
                   </div>

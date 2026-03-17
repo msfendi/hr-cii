@@ -11,6 +11,8 @@ class PayrollMasterTemplateExport implements WithHeadings
     {
         return [
             'npk',
+            'bank_name',
+            'bank_account',
             'salary',
             'allowance',
             'pph21'

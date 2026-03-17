@@ -59,6 +59,16 @@
                                 </div>
                                 <br>
                                 <div>
+                                    <label>Bank Name :</label>
+                                    <input type="text" class="form-control" name="bank_name" value="{{ old('bank_name') }}" required>
+                                </div>
+                                <br>
+                                <div>
+                                    <label>Bank Account :</label>
+                                    <input type="text" class="form-control" name="bank_account" value="{{ old('bank_account') }}" required>
+                                </div>
+                                <br>
+                                <div>
                                     <label>Salary :</label>
                                     <input type="number" class="form-control" name="salary" value="{{ old('salary') }}" required>
                                 </div>

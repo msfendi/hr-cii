@@ -8,9 +8,62 @@
             </div>
             <div class="card shadow mb-4">
               <div class="card-header py-3">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="m-0 font-weight-bold text-primary"> Data Payroll Master </h6>
-                </div>
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                        <!-- KIRI -->
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            Data Line Insentif Master
+                        </h6>
+                        <!-- KANAN -->
+                        <div class="d-flex align-items-center">
+                            <!-- DOWNLOAD TEMPLATE -->
+                            <a href="{{ route('payroll-master.template') }}"
+                                class="btn btn-info btn-sm mr-2">
+                            <i class="fas fa-download"></i> Download Template
+                            </a>
+                            <!-- IMPORT FORM -->
+                            <form id="importForm"
+                                action="{{ route('payroll-master.import') }}"
+                                method="POST"
+                                enctype="multipart/form-data">
+                                @csrf
+                                <div class="input-group input-group-sm">
+                                <input type="file"
+                                    name="file"
+                                    id="fileInput"
+                                    class="d-none"
+                                    accept=".xlsx,.xls,.csv">
+                                <button type="button"
+                                    class="btn btn-primary btn-sm"
+                                    id="btnUpload">
+                                <i class="fas fa-upload"></i>
+                                Upload Excel Master
+                                </button>
+                                <span id="fileName"
+                                    class="form-control form-control-sm text-truncate"
+                                    style="max-width:200px; display:inline-block;">
+                                    No file selected
+                                </span>
+                                <div class="input-group-append">
+                                    <button type="submit"
+                                        class="btn btn-success btn-sm"
+                                        id="btnImport">
+                                    <i class="fas fa-file-excel"></i>
+                                    Import
+                                    </button>
+                                </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <!-- PROGRESS BAR -->
+                    <div class="progress mt-3" style="height:18px; display:none;" id="uploadProgress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                            role="progressbar"
+                            style="width:0%"
+                            id="progressBar">
+                            0%
+                        </div>
+                    </div>
               </div>
               <div class="card-body"> @if ($message = Session::get('success')) <div class="alert alert-success">
                   {{ $message }}
@@ -20,6 +73,8 @@
                       <tr>
                         <th width="50">ID</th>
                         <th>NPK</th>
+                        <th>Bank Name</th>
+                        <th>Bank Account</th>
                         <th>Salary</th>
                         <th>Allowance</th>
                         <th>PPH21</th>
@@ -29,9 +84,11 @@
                     <tbody> @foreach($data as $row) <tr>
                         <td>{{ $row->id }}</td>
                         <td>{{ $row->npk }}</td>
-                        <td>Rp {{ number_format($row->salary,0,',','.') }}</td>
-                        <td>Rp {{ number_format($row->allowance,0,',','.') }}</td>
-                        <td>Rp {{ number_format($row->pph21,0,',','.') }}</td>
+                        <td>{{ $row->bank_name }}</td>
+                        <td>{{ $row->bank_account }}</td>
+                        <td> @if($canViewSalary) Rp {{ number_format($row->salary,0,',','.') }} @else **** @endif </td>
+                        <td> @if($canViewSalary) Rp {{ number_format($row->allowance,0,',','.') }} @else **** @endif </td>
+                        <td> @if($canViewSalary) Rp {{ number_format($row->pph21,0,',','.') }} @else **** @endif </td>
                         <td class="text-center">
                           <a href="{{ route('payroll-master.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>
@@ -84,4 +141,109 @@
       $('#deleteText').text('Apakah anda yakin ingin menghapus data payroll NPK ' + npk + ' ?');
     });
   </script>
+  <script>
+
+$('#btnUpload').click(function(){
+    $('#fileInput').click();
+});
+
+
+$('#fileInput').change(function(){
+
+    let file = this.files[0];
+
+    if(!file) return;
+
+    let allowed = ['xlsx','xls','csv'];
+    let ext = file.name.split('.').pop().toLowerCase();
+
+    if(!allowed.includes(ext)){
+
+        Swal.fire({
+            icon:'error',
+            title:'Format tidak valid',
+            text:'File harus Excel (.xlsx, .xls, .csv)'
+        });
+
+        $(this).val('');
+        return;
+
+    }
+
+    $('#fileName').text(file.name);
+
+});
+
+
+$('#importForm').submit(function(e){
+
+    e.preventDefault();
+
+    let form = this;
+    let formData = new FormData(form);
+
+    $('#uploadProgress').show();
+
+    $.ajax({
+
+        xhr:function(){
+
+            let xhr = new window.XMLHttpRequest();
+
+            xhr.upload.addEventListener("progress",function(evt){
+
+                if(evt.lengthComputable){
+
+                    let percent = Math.round((evt.loaded / evt.total) * 100);
+
+                    $('#progressBar').css('width',percent+'%');
+                    $('#progressBar').text(percent+'%');
+
+                }
+
+            },false);
+
+            return xhr;
+
+        },
+
+        url:$(form).attr('action'),
+        type:'POST',
+        data:formData,
+        processData:false,
+        contentType:false,
+
+        success:function(response){
+
+            $('#progressBar').css('width','100%');
+            $('#progressBar').text('100%');
+
+            Swal.fire({
+                icon:'success',
+                title:'Import berhasil',
+                text:'Halaman akan diperbarui...',
+                showConfirmButton:false,
+                timer:1500
+            });
+
+            setTimeout(function(){
+                location.reload();
+            },1500);
+
+        },
+
+        error:function(){
+
+            Swal.fire({
+                icon:'error',
+                title:'Import gagal'
+            });
+
+        }
+
+    });
+
+});
+
+</script>
 </html>

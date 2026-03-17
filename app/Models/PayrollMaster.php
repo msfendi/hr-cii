@@ -13,6 +13,8 @@ class PayrollMaster extends Model
 
     protected $fillable = [
         'npk',
+        'bank_name',
+        'bank_account',
         'salary',
         'allowance',
         'pph21'

@@ -8,15 +8,23 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\PayrollMasterImport;
 use App\Exports\PayrollMasterTemplateExport;
 use RealRashid\SweetAlert\Facades\Alert;
+use Illuminate\Support\Facades\Auth;
 
 class PayrollMasterController extends Controller
 {
 
     public function index()
     {
-        $data = PayrollMaster::all();
+        $canViewSalary = Auth::user()->hasRole(['Admin', 'Payroll']);
 
-        return view('payroll_master.index', compact('data'));
+        // dd(Auth::user()->getRoleNames(), $canViewSalary);
+
+        if ($canViewSalary) {
+            $data = PayrollMaster::all();
+        } else {
+            $data = PayrollMaster::select('id', 'npk')->get();
+        }
+        return view('payroll_master.index', compact('data', 'canViewSalary'));
     }
 
     public function create()
@@ -44,6 +52,8 @@ class PayrollMasterController extends Controller
 
         $data->update([
             'salary' => $request->salary,
+            'bank_name' => $request->bank_name,
+            'bank_account' => $request->bank_account,
             'allowance' => $request->allowance,
             'pph21' => $request->pph21
         ]);
@@ -80,6 +90,8 @@ class PayrollMasterController extends Controller
 
         $request->validate([
             'npk' => 'required',
+            'bank_name' => 'required',
+            'bank_account' => 'required',
             'salary' => 'required|numeric',
             'allowance' => 'required|numeric',
             'pph21' => 'required|numeric'
