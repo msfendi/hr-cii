@@ -144,6 +144,7 @@
                 <a class="collapse-item" href="{{ route('payroll-components.index') }}">Payroll Components</a>
                 <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Payroll Period</a>
                 <a class="collapse-item" href="{{ route('payroll-process.index') }}">Payroll Process</a>
+                <a class="collapse-item" href="{{ route('payroll-approve.index') }}">Payroll Approve</a>
                 <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>
             </div>
         </div>
@@ -151,7 +152,7 @@
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseHoliday"
             aria-expanded="true" aria-controls="collapseHoliday">
-            <i class="fas fa-fw fa-calculator"></i>
+            <i class="fas fa-fw fa-plane"></i>
             <span>Holiday</span>
         </a>
         <div id="collapseHoliday" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
@@ -164,12 +165,13 @@
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseEvaluation"
             aria-expanded="true" aria-controls="collapseEvaluation">
-            <i class="fas fa-fw fa-calculator"></i>
+            <i class="fas fa-fw fa-history"></i>
             <span>Evaluation</span>
         </a>
         <div id="collapseEvaluation" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation List</a>
+                <a class="collapse-item" href="{{ route('evaluation-jobscope.index') }}">Evaluation Jobscope</a>
+                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation Questionnaire</a>
                 <a class="collapse-item" href="{{ route('evaluation-employee.index') }}">Employee Evaluation</a>
             </div>
         </div>

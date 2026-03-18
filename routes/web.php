@@ -18,16 +18,19 @@ use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EvaluationEmployeeController;
+use App\Http\Controllers\EvaluationJobscopeController;
 use App\Http\Controllers\EvaluationQuestionnaireController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\InsentifMasterController;
 use App\Http\Controllers\LineInsentifMasterController;
 use App\Http\Controllers\PadInsentifMasterController;
+use App\Http\Controllers\PayrollApproveController;
 use App\Http\Controllers\PayrollComponentController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PayrollMasterController;
 use App\Http\Controllers\PayrollPeriodController;
 use App\Http\Controllers\PayrollProcessController;
+use App\Http\Controllers\PayrollSettingController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 
@@ -160,6 +163,27 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import');
         Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template');
         Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete');
+    });
+
+    // Payroll Approve
+    Route::post('/payroll-approve/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve');
+    Route::prefix('payroll-approve')->group(function () {
+        Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index');
+        Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create');
+        Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve');
+    });
+
+    Route::prefix('payroll-setting')->group(function () {
+        Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index');
+        Route::post('/store', [PayrollSettingController::class, 'store'])->name('payroll-setting.store');
+        Route::put('/update/{id}', [PayrollSettingController::class, 'update'])->name('payroll-setting.update');
+        Route::delete('/delete/{id}', [PayrollSettingController::class, 'destroy'])->name('payroll-setting.delete');
+    });
+
+    // Evaluation Jobscope
+    Route::prefix('evaluation-jobscope')->group(function () {
+        Route::get('/', [EvaluationJobscopeController::class, 'index'])->name('evaluation-jobscope.index');
+        Route::get('/delete/{id}', [EvaluationJobscopeController::class, 'delete'])->name('evaluation-jobscope.delete');
     });
 
     //  Evaluation Employee

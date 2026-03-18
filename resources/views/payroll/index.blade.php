@@ -18,7 +18,7 @@
 
                 <!-- Page Heading -->
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                    <h1 class="h3 mb-0 text-gray-800">Daftar Payroll Period</h1>
+                    <h1 class="h3 mb-0 text-gray-800">Daftar Payroll Process</h1>
                     <div>
                     <a href="{{ route('payroll-process.generate') }}" class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Generate Payroll</a>
@@ -30,7 +30,7 @@
                 <!-- DataTales Example -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Data Payroll Period</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Data Payroll Process</h6>
                     </div>
                     <div class="card-body">
                         @if ($message = Session::get('success'))
@@ -69,8 +69,9 @@
                                         <th>Process Date</th>
                                         <th>Total Payroll</th>
                                         <th>Employee Count</th>
-                                        <th>Status</th>
+                                        <th>Export Status</th>
                                         <th>Downloads</th>
+                                        <th>Approval Status</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>
@@ -117,6 +118,28 @@
                                                     target="_blank">
                                                     <i class="fas fa-file-pdf"></i>
                                                 </a>
+                                            @endif
+
+                                            {{-- DOWNLOAD BANK (HANYA JIKA APPROVAL FINISH) --}}
+                                            @if($period->approve_status == 'finish' && $period->export_status == 'finished')
+                                                <a class="btn btn-primary btn-circle btn-sm"
+                                                    href="{{ asset('storage/'.$period->file_bank) }}"
+                                                    title="Download Bank">
+                                                    <i class="fas fa-university"></i>
+                                                </a>
+                                            @endif
+
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            @if($period->approve_status == 'finish')
+                                            <span class="badge badge-success">
+                                            Approved
+                                            </span>
+                                            @elseif($period->approve_status == 'pending')
+                                            <span class="badge badge-warning">
+                                            <i class="fas fa-spinner fa-spin"></i> Waiting
+                                            </span>
                                             @endif
                                         </td>
                                         <td class="text-center">

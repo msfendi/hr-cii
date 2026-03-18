@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('status')->default('processing');
             $table->string('file_excel')->nullable();
             $table->string('file_pdf')->nullable();
+            $table->string('file_bank')->nullable();
             $table->timestamps();
         });
     }

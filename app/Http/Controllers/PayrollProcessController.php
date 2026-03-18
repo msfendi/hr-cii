@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GeneratePayrollExport;
 use App\Jobs\GeneratePayrollRekap;
+use App\Models\PayrollApprove;
 use App\Models\PayrollComponent;
 use App\Models\PayrollExport;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRun;
 use App\Models\PayrollRunDetail;
+use App\Models\PayrollSetting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,17 +22,23 @@ class PayrollProcessController extends Controller
 
     public function index()
     {
-        $periods = PayrollRun::leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')
+        $periods = PayrollRun::query()
+            ->leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')
             ->leftJoin('payroll_exports', 'payroll_exports.run_id', '=', 'payroll_runs.id')
+            ->leftJoin('payroll_approve', 'payroll_approve.payroll_run_id', '=', 'payroll_runs.id')
             ->select(
                 'payroll_runs.*',
                 'payroll_periods.name as period_name',
                 'payroll_exports.status as export_status',
-                'payroll_exports.file_excel as file_excel',
-                'payroll_exports.file_pdf as file_pdf',
+                'payroll_exports.file_excel',
+                'payroll_exports.file_pdf',
+                'payroll_exports.file_bank',
+                'payroll_approve.status as approve_status' // 🔥 penting
             )
             ->orderByDesc('payroll_runs.processed_at')
             ->get();
+
+        // dd($periods);
 
         return view('payroll.index', compact('periods'));
     }
@@ -505,6 +513,50 @@ class PayrollProcessController extends Controller
             'employee_count' => $employees->count(),
             'total_payroll'  => $totalPayroll
         ]);
+
+        // ==============================
+        // CREATE APPROVAL PAYROLL
+        // ==============================
+
+        $existsApprove = PayrollApprove::where('payroll_run_id', $run->id)->exists();
+
+        if (!$existsApprove) {
+
+            $settings = PayrollSetting::where('component', 'payroll')
+                ->orderBy('level')
+                ->get();
+
+            if ($settings->count() > 0) {
+
+                $approvals = $settings->pluck('approval')->toArray();
+
+                $progress = collect($approvals)->map(function ($npk) {
+
+                    // 🔥 pastikan npk jadi array
+                    $npkList = is_array($npk) ? $npk : json_decode($npk, true);
+
+                    if (!is_array($npkList)) {
+                        $npkList = [$npk]; // fallback kalau string biasa
+                    }
+
+                    // 🔥 default semua waiting
+                    $statusList = array_fill(0, count($npkList), 'waiting');
+
+                    return [
+                        'npk' => json_encode($npkList),      // tetap simpan string json
+                        'status' => json_encode($statusList) // ⬅️ INI YANG PENTING
+                    ];
+                })->values();
+
+                PayrollApprove::create([
+                    'payroll_run_id' => $run->id,
+                    'approval'       => $approvals,
+                    'progress'       => $progress,
+                    'approved_at'    => [], // nanti jadi array per user
+                    'status'         => 'pending'
+                ]);
+            }
+        }
         // return response()->json($payrollResults);
         Alert::success('Payroll generated successfully!');
         return redirect('payroll-process/index');

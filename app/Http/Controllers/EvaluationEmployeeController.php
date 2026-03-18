@@ -54,9 +54,9 @@ class EvaluationEmployeeController extends Controller
         $jobscope_id = $request->jobscope_id;
 
         // CEK SESSION
-        if (session('cbt_done_' . $npk . '_' . $jobscope_id)) {
-            return redirect('evaluation-employee/thankyou');
-        }
+        // if (session('cbt_done_' . $npk . '_' . $jobscope_id)) {
+        //     return redirect('evaluation-employee/thankyou');
+        // }
 
         // CEK DATABASE
         $already = EvaluationEmployee::where('npk', $npk)
@@ -116,7 +116,7 @@ class EvaluationEmployeeController extends Controller
         ]);
 
         // LOCK SESSION (ANTI BACK)
-        Session::put('cbt_done_' . $npk . '_' . $jobscope_id, true);
+        // Session::put('cbt_done_' . $npk . '_' . $jobscope_id, true);
 
         // Alert::success('Test selesai. Score: ' . $score);
         return redirect('evaluation-employee/thankyou');

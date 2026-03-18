@@ -14,6 +14,7 @@ class PayrollExport extends Model
         'status',
         'progress',
         'file_excel',
-        'file_pdf'
+        'file_pdf',
+        'file_bank'
     ];
 }
