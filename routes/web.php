@@ -16,6 +16,9 @@ use App\Http\Controllers\DeptController;
 use App\Http\Controllers\AdminKunjunganController;
 use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\DokterAntrianController;
+use App\Http\Controllers\PengajuanCutiController;
+use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\LeaveApprovalController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -140,6 +143,23 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|HRD']);
 
     // ========================================
+    // APPROVAL RULES (Master)
+    // ========================================
+    Route::prefix('approval')->middleware('role:Admin|HRD')->group(function () {
+        Route::get('/', [ApprovalController::class, 'index'])->name('approval.index');
+        Route::get('/get-data', [ApprovalController::class, 'getData'])->name('approval.get-data');
+        Route::get('/search-employee', [ApprovalController::class, 'searchEmployee'])->name('approval.search-employee');
+        Route::post('/store', [ApprovalController::class, 'store'])->name('approval.store');
+        Route::post('/update/{id}', [ApprovalController::class, 'update'])->name('approval.update');
+        Route::post('/destroy/{id}', [ApprovalController::class, 'destroy'])->name('approval.destroy');
+        
+        // Nested Rule inside Group
+        Route::post('/rule/store', [ApprovalController::class, 'storeRule'])->name('approval.rule.store');
+        Route::post('/rule/update/{id}', [ApprovalController::class, 'updateRule'])->name('approval.rule.update');
+        Route::post('/rule/destroy/{id}', [ApprovalController::class, 'destroyRule'])->name('approval.rule.destroy');
+    });
+
+    // ========================================
     // POLIKLINIK — Admin Kunjungan
     // ========================================
     Route::prefix('kunjungan')->middleware('role:Admin|Dokter')->group(function () {
@@ -167,4 +187,24 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/periksa/{id}', [DokterAntrianController::class, 'formPeriksa'])->name('dokter.periksa');
         Route::post('/selesai-periksa/{id}', [DokterAntrianController::class, 'selesaiPeriksa'])->name('dokter.selesai-periksa');
     });
+});
+
+// ========================================
+// PENGAJUAN CUTI ONLINE
+// ========================================
+Route::prefix('pengajuan-cuti')->group(function () {
+    Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
+    Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
+    Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
+    Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
+    Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
+    Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
+    Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
+    Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
+    Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
+
+    // Cuti Approval (Leave Management by session logged in user)
+    Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval');
+    Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve');
+    Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject');
 });

@@ -47,6 +47,7 @@
                 <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar List</a>
                 <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata List</a>
                 <a class="collapse-item" href="{{ route('dept.index') }}">Departement List</a>
+                <a class="collapse-item" href="{{ route('approval.index') }}">Master Approval</a>
             </div>
         </div>
     </li>

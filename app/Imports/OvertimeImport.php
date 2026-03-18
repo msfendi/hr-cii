@@ -60,6 +60,14 @@ class OvertimeImport implements ToCollection
                             $tanggal
                         )->format('Y-m-d');
 
+                        $existingFromLeave = Overtime::where('NPK', $npk)->where('OVERTIME_DATE', $date)->first();
+                        if ($existingFromLeave && !empty($existingFromLeave->JUMLAH_JAM_LEMBUR) && !is_numeric(trim($existingFromLeave->JUMLAH_JAM_LEMBUR))) {
+                            $existingFromLeave->update([
+                                'DEPT_GROUP' => $this->deptGroup,
+                            ]);
+                            continue;
+                        }
+
                         Overtime::updateOrCreate(
                             [
                                 'NPK' => $npk,
