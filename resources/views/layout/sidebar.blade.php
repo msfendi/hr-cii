@@ -111,6 +111,65 @@
     </li>
     @endif
 
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseInsentif"
+            aria-expanded="true" aria-controls="collapseInsentif">
+            <i class="fas fa-fw fa-calculator"></i>
+            <span>Insentif</span>
+        </a>
+        <div id="collapseInsentif" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif Master</a>
+                <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif Master</a>
+                <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif Master</a>
+            </div>
+        </div>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePayroll"
+            aria-expanded="true" aria-controls="collapsePayroll">
+            <i class="fas fa-fw fa-calculator"></i>
+            <span>Payroll</span>
+        </a>
+        <div id="collapsePayroll" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('payroll-master.index') }}">Payroll Master</a>
+                <a class="collapse-item" href="{{ route('payroll-components.index') }}">Payroll Components</a>
+                <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Payroll Period</a>
+                <a class="collapse-item" href="{{ route('payroll-process.index') }}">Payroll Process</a>
+                <a class="collapse-item" href="{{ route('payroll-approve.index') }}">Payroll Approve</a>
+                <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>
+            </div>
+        </div>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseHoliday"
+            aria-expanded="true" aria-controls="collapseHoliday">
+            <i class="fas fa-fw fa-plane"></i>
+            <span>Holiday</span>
+        </a>
+        <div id="collapseHoliday" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('holidays.index') }}">Holiday List</a>
+            </div>
+        </div>
+    </li>
+    
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseEvaluation"
+            aria-expanded="true" aria-controls="collapseEvaluation">
+            <i class="fas fa-fw fa-history"></i>
+            <span>Evaluation</span>
+        </a>
+        <div id="collapseEvaluation" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('evaluation-jobscope.index') }}">Evaluation Jobscope</a>
+                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation Questionnaire</a>
+                <a class="collapse-item" href="{{ route('evaluation-employee.index') }}">Employee Evaluation</a>
+            </div>
+        </div>
+    </li>
+
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">

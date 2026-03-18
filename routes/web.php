@@ -15,10 +15,27 @@ use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\DeptController;
 use App\Http\Controllers\AdminKunjunganController;
 use App\Http\Controllers\AdminReportController;
+use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\LeaveApprovalController;
+use App\Http\Controllers\EmployeePayrollController;
+use App\Http\Controllers\EvaluationEmployeeController;
+use App\Http\Controllers\EvaluationJobscopeController;
+use App\Http\Controllers\EvaluationQuestionnaireController;
+use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\InsentifMasterController;
+use App\Http\Controllers\LineInsentifMasterController;
+use App\Http\Controllers\PadInsentifMasterController;
+use App\Http\Controllers\PayrollApproveController;
+use App\Http\Controllers\PayrollComponentController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PayrollMasterController;
+use App\Http\Controllers\PayrollPeriodController;
+use App\Http\Controllers\PayrollProcessController;
+use App\Http\Controllers\PayrollSettingController;
+use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -102,6 +119,132 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/user/assign/{id}', [UserController::class, 'assign'])->name('user.assign')->middleware(['auth', 'role:Admin']);
     Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'role:Admin']);
 
+    // Payroll Component
+    Route::get('/payroll-components/index', [PayrollComponentController::class, 'index'])->name('payroll-components.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-components/create', [PayrollComponentController::class, 'create'])->name('payroll-components.create')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-components/store', [PayrollComponentController::class, 'store'])->name('payroll-components.store')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-components/detail/{id}', [PayrollComponentController::class, 'detail'])->name('payroll-components.detail')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-components/edit/{id}', [PayrollComponentController::class, 'edit'])->name('payroll-components.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-components/update', [PayrollComponentController::class, 'update'])->name('payroll-components.update')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-components/delete/{id}', [PayrollComponentController::class, 'delete'])->name('payroll-components.delete')->middleware(['auth', 'role:Admin']);
+
+    // Payroll Period
+    Route::get('/payroll-periods/index', [PayrollPeriodController::class, 'index'])->name('payroll-periods.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-periods/create', [PayrollPeriodController::class, 'create'])->name('payroll-periods.create')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-periods/store', [PayrollPeriodController::class, 'store'])->name('payroll-periods.store')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-periods/detail/{id}', [PayrollPeriodController::class, 'detail'])->name('payroll-periods.detail')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-periods/edit/{id}', [PayrollPeriodController::class, 'edit'])->name('payroll-periods.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-periods/update', [PayrollPeriodController::class, 'update'])->name('payroll-periods.update')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-periods/delete/{id}', [PayrollPeriodController::class, 'delete'])->name('payroll-periods.delete')->middleware(['auth', 'role:Admin']);
+
+    // Payroll Process
+    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index');
+    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate');
+    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
+    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details');
+    Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy');
+    Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-process/update', [PayrollProcessController::class, 'update'])->name('payroll-process.update')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-slip/{run_id}/{npk}', [PayrollProcessController::class, 'slip'])->name('payroll-slip');
+    Route::get('payroll-process/export-rekap/{run_id}', [PayrollProcessController::class, 'exportRekap'])->name('payroll.export.rekap');
+    Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export');
+    Route::get('/payroll/export-progress/{id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress');
+    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm']);
+
+    //Payroll Master
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
+    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create');
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
+    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit');
+    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update');
+    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete');
+    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store');
+    Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import');
+    Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template');
+
+    // Evaluation Questionnaire
+    Route::prefix('evaluation-questionnaire')->group(function () {
+        Route::get('/', [EvaluationQuestionnaireController::class, 'index'])->name('evaluation-questionnaire.index');
+        Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import');
+        Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template');
+        Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete');
+    });
+
+    // Payroll Approve
+    Route::post('/payroll-approve/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve');
+    Route::prefix('payroll-approve')->group(function () {
+        Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index');
+        Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create');
+        Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve');
+    });
+
+    Route::prefix('payroll-setting')->group(function () {
+        Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index');
+        Route::post('/store', [PayrollSettingController::class, 'store'])->name('payroll-setting.store');
+        Route::put('/update/{id}', [PayrollSettingController::class, 'update'])->name('payroll-setting.update');
+        Route::delete('/delete/{id}', [PayrollSettingController::class, 'destroy'])->name('payroll-setting.delete');
+    });
+
+    // Evaluation Jobscope
+    Route::prefix('evaluation-jobscope')->group(function () {
+        Route::get('/', [EvaluationJobscopeController::class, 'index'])->name('evaluation-jobscope.index');
+        Route::get('/delete/{id}', [EvaluationJobscopeController::class, 'delete'])->name('evaluation-jobscope.delete');
+    });
+
+    //  Evaluation Employee
+    Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index');
+
+    // Holiday
+    Route::get('holidays/sync', [HolidayController::class, 'sync'])->name('holidays.sync');
+    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');
+    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create');
+    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store');
+    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete');
+    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit');
+    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import');
+    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export');
+
+    // Line Insentif Master
+    Route::get('line-insentif-master/index', [LineInsentifMasterController::class, 'index'])->name('line-insentif-master.index');
+    Route::get('line-insentif-master/create', [LineInsentifMasterController::class, 'create'])->name('line-insentif-master.create');
+    Route::post('line-insentif-master/store', [LineInsentifMasterController::class, 'store'])->name('line-insentif-master.store');
+    Route::delete('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete');
+    Route::get('/line-insentif-master/edit/{id}', [LineInsentifMasterController::class, 'edit'])->name('line-insentif-master.edit');
+    Route::post('line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import');
+    Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export');
+    Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template');
+    Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import');
+
+    // Cutting Insentif Master
+    Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index');
+    Route::get('cutting-insentif-master/create', [CuttingInsentifMasterController::class, 'create'])->name('cutting-insentif-master.create');
+    Route::post('cutting-insentif-master/store', [CuttingInsentifMasterController::class, 'store'])->name('cutting-insentif-master.store');
+    Route::delete('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete');
+    Route::get('/cutting-insentif-master/edit/{id}', [CuttingInsentifMasterController::class, 'edit'])->name('cutting-insentif-master.edit');
+    Route::post('cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import');
+    Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export');
+    Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template');
+    Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import');
+
+    // Pad Print Insentif Master
+    Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index');
+    Route::get('pad-insentif-master/create', [PadInsentifMasterController::class, 'create'])->name('pad-insentif-master.create');
+    Route::post('pad-insentif-master/store', [PadInsentifMasterController::class, 'store'])->name('pad-insentif-master.store');
+    Route::delete('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete');
+    Route::get('/pad-insentif-master/edit/{id}', [PadInsentifMasterController::class, 'edit'])->name('pad-insentif-master.edit');
+    Route::post('pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import');
+    Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export');
+    Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template');
+    Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import');
+
+    // Holiday
+    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');
+    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create');
+    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store');
+    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete');
+    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit');
+    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import');
+    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export');
 
     // attendance finger
     Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index');
@@ -208,3 +351,21 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve');
     Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject');
 });
+// Payroll 
+Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
+// Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
+
+// Employee Payroll
+Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
+Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
+Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->name('employee-payroll.index');
+Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin']);
+Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
+Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('view-slip');
+Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
+
+// Employee Evaluation
+Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class, 'submit'])->name('evaluation-employee.submit');
+Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cbt'])->name('evaluation-employee.cbt');
+Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
+Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');
