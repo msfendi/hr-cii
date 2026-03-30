@@ -11,6 +11,7 @@ class CuttingEfficiency extends Model
 
     protected $fillable = [
         'npk',
+        'period_id',
         'efficiency',
         'date'
     ];

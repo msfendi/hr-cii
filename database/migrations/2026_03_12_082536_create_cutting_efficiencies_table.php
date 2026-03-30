@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('cutting_efficiencies', function (Blueprint $table) {
 
             $table->id();
+            $table->string('period_id');
             $table->string('npk', 20);
             $table->decimal('efficiency', 5, 2);
             $table->date('date');

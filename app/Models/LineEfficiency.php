@@ -11,6 +11,7 @@ class LineEfficiency extends Model
 
     protected $fillable = [
         'line_number',
+        'period_id',
         'efficiency',
         'date'
     ];

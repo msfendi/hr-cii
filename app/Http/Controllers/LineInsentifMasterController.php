@@ -11,6 +11,8 @@ use App\Exports\LineInsentifTemplateExport;
 use App\Imports\InsentifImport;
 use App\Imports\InsentifMasterImport;
 use App\Imports\LineInsentifImport;
+use App\Models\InsentifApproval;
+use App\Models\PayrollPeriod;
 use Illuminate\Support\Facades\DB;
 
 class LineInsentifMasterController extends Controller
@@ -33,8 +35,12 @@ class LineInsentifMasterController extends Controller
             ->orderBy('e.npk')
             ->orderBy('l.date')
             ->get();
+
+        $periods = PayrollPeriod::select('id', 'name')
+            ->orderBy('id', 'desc')
+            ->get();
         // dd($data);
-        return view('line_insentif_master.index', compact('data'));
+        return view('line_insentif_master.index', compact('data', 'periods'));
     }
 
     public function create()
@@ -96,11 +102,81 @@ class LineInsentifMasterController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls'
+            'period_id'   => 'required|exists:payroll_periods,id',
+            'is_insentif' => 'required|in:0,1',
+            'file'        => 'required_if:is_insentif,1|mimes:xlsx,xls'
         ]);
 
-        Excel::import(new LineInsentifImport, $request->file('file'));
+        $component = 'sewing_insentif';
 
-        return redirect()->back()->with('success', 'Data berhasil diimport');
+        /*
+    =====================================
+    JIKA INSENTIF → IMPORT EXCEL
+    =====================================
+    */
+        if ($request->is_insentif == 1) {
+
+            Excel::import(
+                new LineInsentifImport($request->period_id),
+                $request->file('file')
+            );
+        }
+
+        /*
+    =====================================
+    GET APPROVAL SETTING
+    =====================================
+    */
+
+        $setting = DB::table('payroll_settings')
+            ->where('component', $component)
+            ->first();
+
+        if ($setting) {
+
+            $approvalArray = json_decode($setting->approval, true);
+
+            $approval = [
+                json_encode($approvalArray)
+            ];
+
+            $waitingStatus = array_fill(
+                0,
+                count($approvalArray),
+                'waiting'
+            );
+
+            $progress = [
+                [
+                    'npk' => json_encode($approvalArray),
+                    'status' => json_encode($waitingStatus),
+                ]
+            ];
+
+            /*
+        =====================================
+        STATUS AUTO FINISH JIKA NO INSENTIF
+        =====================================
+        */
+
+            // $status = $request->is_insentif == 1
+            //     ? 'pending'
+            //     : 'finish';
+
+            InsentifApproval::updateOrCreate(
+                [
+                    'period_id' => $request->period_id,
+                    'payroll_component' => $component
+                ],
+                [
+                    'approval'     => $approval,
+                    'progress'     => $progress,
+                    'approved_at'  => null,
+                    'status'       => 'pending'
+                ]
+            );
+        }
+
+        return back()->with('success', 'Process berhasil dijalankan');
     }
 }

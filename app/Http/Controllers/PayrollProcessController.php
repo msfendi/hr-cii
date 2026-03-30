@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GeneratePayrollExport;
 use App\Jobs\GeneratePayrollRekap;
+use App\Models\InsentifApproval;
 use App\Models\PayrollApprove;
 use App\Models\PayrollComponent;
 use App\Models\PayrollExport;
@@ -47,6 +48,20 @@ class PayrollProcessController extends Controller
     {
         $periods = PayrollPeriod::orderBy('start_date')->get();
         return view('payroll.process', compact('periods'));
+    }
+
+    public function approvalStatus($periodId)
+    {
+        $data = InsentifApproval::where('period_id', $periodId)
+            ->orderBy('payroll_component')
+            ->get([
+                'id',
+                'payroll_component',
+                'status',
+                'approved_at'
+            ]);
+
+        return response()->json($data);
     }
 
     public function process(Request $request)
@@ -221,7 +236,21 @@ class PayrollProcessController extends Controller
                             $results,
                             $variables
                         );
-                    } else if ($component->code === 'sewing_insentif') {
+                    }
+                    // ==============================
+                    // INSENTIF SEWING
+                    // ==============================
+
+                    else if ($component->code === 'sewing_insentif') {
+
+                        $amount = 0;
+
+                        /*
+                        ======================================
+                        OPERATOR & SUPERVISOR
+                        ======================================
+                        */
+
                         $lineefficiencies = DB::table('line_efficiencies as le')
                             ->join('employee_line_assignments as ela', function ($join) use ($employee) {
 
@@ -233,7 +262,16 @@ class PayrollProcessController extends Controller
                                             ->orWhereNull('ela.end_date');
                                     });
                             })
-                            ->whereBetween('le.date', [$period->start_date, $period->end_date])
+
+                            // ✅ FILTER PERIOD
+                            ->where('le.period_id', $period->id)
+
+                            // ✅ FILTER TANGGAL PAYROLL
+                            ->whereBetween('le.date', [
+                                $period->start_date,
+                                $period->end_date
+                            ])
+
                             ->select(
                                 'le.line_number',
                                 'le.efficiency',
@@ -242,45 +280,45 @@ class PayrollProcessController extends Controller
                             )
                             ->get();
 
-                        $amount = 0;
-
-                        /*
-                        ========================
-                        OPERATOR & SUPERVISOR
-                        ========================
-                        */
 
                         foreach ($lineefficiencies as $row) {
 
-                            if (in_array($row->role, ['operator', 'supervisor'])) {
-
-                                $lineInsentif = $this->getInsentifByEfficiency(
-                                    $row->efficiency,
-                                    $sewingInsentifFormula
-                                );
-
-                                $amount += $this->calculateRoleSewingInsentif(
-                                    $row->role,
-                                    $lineInsentif,
-                                    1
-                                );
+                            if (!in_array($row->role, ['operator', 'supervisor'])) {
+                                continue;
                             }
+
+                            $lineInsentif = $this->getInsentifByEfficiency(
+                                $row->efficiency,
+                                $sewingInsentifFormula
+                            );
+
+                            $amount += $this->calculateRoleSewingInsentif(
+                                $row->role,
+                                $lineInsentif,
+                                1
+                            );
                         }
 
+
                         /*
-                        ========================
-                        CHIEF / MEKANIK
-                        ========================
+                        ======================================
+                        CHIEF / MEKANIK / MEKANIK LEADER
+                        ======================================
                         */
 
                         $grouped = DB::table('line_efficiencies')
-                            ->whereBetween('date', [$period->start_date, $period->end_date])
+                            ->where('period_id', $period->id) // ✅ WAJIB
+                            ->whereBetween('date', [
+                                $period->start_date,
+                                $period->end_date
+                            ])
                             ->select(
                                 'date',
                                 DB::raw('count(distinct line_number) as jumlah_line')
                             )
                             ->groupBy('date')
                             ->get();
+
 
                         foreach ($grouped as $day) {
 
@@ -295,11 +333,17 @@ class PayrollProcessController extends Controller
 
                             if (!$assignment) continue;
 
-                            if (!in_array($assignment->role, ['chief', 'mekanik', 'mekanik_leader'])) continue;
+                            if (!in_array(
+                                $assignment->role,
+                                ['chief', 'mekanik', 'mekanik_leader']
+                            )) continue;
+
 
                             $lines = DB::table('line_efficiencies')
+                                ->where('period_id', $period->id) // ✅ WAJIB
                                 ->where('date', $day->date)
                                 ->get();
+
 
                             $totalLineInsentif = 0;
 
@@ -321,6 +365,7 @@ class PayrollProcessController extends Controller
 
                         $assignments = DB::table('employee_pad_assignments')
                             ->where('npk', $employee->NPK)
+                            ->where('period_id', $period->id) // ✅ FILTER PERIOD
                             ->where(function ($q) use ($period) {
                                 $q->whereBetween('start_date', [$period->start_date, $period->end_date])
                                     ->orWhere(function ($q2) use ($period) {
@@ -346,18 +391,17 @@ class PayrollProcessController extends Controller
                                 : $period->end_date;
 
                             /*
-                            ===============================
+                            ======================
                             OPERATOR
-                            ===============================
+                            ======================
                             */
                             if ($role === 'operator') {
 
                                 $padEfficiencies = DB::table('pad_efficiencies')
                                     ->where('npk', $employee->NPK)
+                                    ->where('period_id', $period->id) // ✅
                                     ->whereBetween('date', [$start, $end])
                                     ->get();
-
-                                $totalOperatorInsentif = 0;
 
                                 foreach ($padEfficiencies as $row) {
 
@@ -366,16 +410,14 @@ class PayrollProcessController extends Controller
                                         $padInsentifFormula
                                     );
 
-                                    $totalOperatorInsentif += $rate * $row->piece;
+                                    $amount += $rate * $row->piece;
                                 }
-
-                                $amount += $totalOperatorInsentif;
                             }
 
                             /*
-                            ===============================
+                            ======================
                             NON OPERATOR
-                            ===============================
+                            ======================
                             */ else {
 
                                 $padEfficiencies = DB::table('pad_efficiencies as pe')
@@ -383,6 +425,8 @@ class PayrollProcessController extends Controller
                                         $join->on('pe.npk', '=', 'epa.npk')
                                             ->on('pe.dept', '=', 'epa.dept');
                                     })
+                                    ->where('pe.period_id', $period->id) // ✅
+                                    ->where('epa.period_id', $period->id) // ✅
                                     ->where('epa.role', 'operator')
                                     ->where('pe.dept', $dept)
                                     ->whereBetween('pe.date', [$start, $end])
@@ -391,12 +435,7 @@ class PayrollProcessController extends Controller
                                         $q->whereColumn('pe.date', '<=', 'epa.end_date')
                                             ->orWhereNull('epa.end_date');
                                     })
-                                    ->select(
-                                        'pe.npk',
-                                        'pe.efficiency',
-                                        'pe.piece',
-                                        'pe.date'
-                                    )
+                                    ->select('pe.efficiency', 'pe.piece')
                                     ->get();
 
                                 $totalDeptInsentif = 0;
@@ -414,16 +453,7 @@ class PayrollProcessController extends Controller
                                 $jumlahOperator = DB::table('employee_pad_assignments')
                                     ->where('dept', $dept)
                                     ->where('role', 'operator')
-                                    ->where(function ($q) use ($start, $end) {
-                                        $q->whereBetween('start_date', [$start, $end])
-                                            ->orWhere(function ($q2) use ($start, $end) {
-                                                $q2->where('start_date', '<=', $end)
-                                                    ->where(function ($q3) use ($start) {
-                                                        $q3->whereNull('end_date')
-                                                            ->orWhere('end_date', '>=', $start);
-                                                    });
-                                            });
-                                    })
+                                    ->where('period_id', $period->id) // ✅
                                     ->pluck('npk')
                                     ->unique()
                                     ->count();
@@ -438,7 +468,7 @@ class PayrollProcessController extends Controller
                     } else if ($component->code === 'cutting_insentif') {
 
                         $cuttingEfficiencies = DB::table('cutting_efficiencies as ce')
-                            ->join('employee_cutting_assignments as eca', function ($join) use ($employee) {
+                            ->join('employee_cutting_assignments as eca', function ($join) {
 
                                 $join->on('ce.npk', '=', 'eca.npk')
                                     ->whereColumn('ce.date', '>=', 'eca.start_date')
@@ -448,10 +478,11 @@ class PayrollProcessController extends Controller
                                     });
                             })
                             ->where('ce.npk', $employee->NPK)
+                            ->where('ce.period_id', $period->id) // ✅
+                            ->where('eca.period_id', $period->id) // ✅
                             ->whereBetween('ce.date', [$period->start_date, $period->end_date])
                             ->select(
                                 'ce.efficiency',
-                                'ce.date',
                                 'eca.role'
                             )
                             ->get();
@@ -460,13 +491,11 @@ class PayrollProcessController extends Controller
 
                         foreach ($cuttingEfficiencies as $row) {
 
-                            // ambil insentif dari efficiency
                             $insentif = $this->getInsentifByEfficiency(
                                 $row->efficiency,
                                 $cuttingInsentifFormula
                             );
 
-                            // hitung berdasarkan role
                             $amount += $this->calculateRoleCuttingInsentif(
                                 $row->role,
                                 $insentif

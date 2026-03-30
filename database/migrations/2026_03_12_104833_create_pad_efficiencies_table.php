@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('pad_efficiencies', function (Blueprint $table) {
 
             $table->id();
+            $table->string('period_id');
             $table->string('npk');
             $table->string('dept');
             $table->decimal('efficiency', 5, 2);

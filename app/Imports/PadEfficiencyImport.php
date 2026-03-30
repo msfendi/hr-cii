@@ -8,13 +8,21 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class PadEfficiencyImport implements ToModel, WithHeadingRow
 {
+    protected $periodId;
+
+    public function __construct($periodId)
+    {
+        $this->periodId = $periodId;
+    }
+
     public function model(array $row)
     {
         return PadEfficiency::updateOrCreate(
             [
                 'npk' => $row['npk'],
                 'dept' => $row['dept'],
-                'date' => $row['date']
+                'date' => $row['date'],
+                'period_id'   => $this->periodId,
             ],
             [
                 'efficiency' => $row['efficiency'],

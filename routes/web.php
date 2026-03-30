@@ -21,6 +21,7 @@ use App\Http\Controllers\EvaluationEmployeeController;
 use App\Http\Controllers\EvaluationJobscopeController;
 use App\Http\Controllers\EvaluationQuestionnaireController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\InsentifApprovalController;
 use App\Http\Controllers\InsentifMasterController;
 use App\Http\Controllers\LineInsentifMasterController;
 use App\Http\Controllers\PadInsentifMasterController;
@@ -145,6 +146,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export');
     Route::get('/payroll/export-progress/{id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress');
     Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm']);
+    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus']);
 
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
@@ -172,6 +174,11 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create');
         Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve');
     });
+
+    // Insentif Approve
+    Route::get('/insentif-approve', [InsentifApprovalController::class, 'index'])->name('insentif-approve.index');
+    Route::post('/insentif-approve/{id}/approve', [InsentifApprovalController::class, 'approve'])->name('insentif-approve.approve');
+    Route::get('/insentif-approve/{id}/detail', [InsentifApprovalController::class, 'detail'])->name('insentif-approve.detail');
 
     Route::prefix('payroll-setting')->group(function () {
         Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index');

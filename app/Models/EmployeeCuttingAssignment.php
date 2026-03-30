@@ -11,6 +11,7 @@ class EmployeeCuttingAssignment extends Model
 
     protected $fillable = [
         'npk',
+        'period_id',
         'role',
         'start_date',
         'end_date'
