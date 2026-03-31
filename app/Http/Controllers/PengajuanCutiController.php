@@ -5,13 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\ApprovalDept;
 use App\Models\ApprovalRule;
 use App\Models\Biodata;
+use App\Models\Holiday;
 use App\Models\LeaveBalances;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RealRashid\SweetAlert\Facades\Alert;
+use Yajra\DataTables\Facades\DataTables;
 
 class PengajuanCutiController extends Controller
 {
@@ -98,7 +101,9 @@ class PengajuanCutiController extends Controller
 
         $masterLeaveType = LeaveTypes::all();
         
-        $holidays = null;
+        $holidays = Holiday::pluck('holiday_date')->map(function($date) {
+            return Carbon::parse($date)->format('Y-m-d');
+        })->toArray();
 
         return view('cuti.form', compact('employee', 'masterLeaveType', 'holidays'));
     }
@@ -123,6 +128,25 @@ class PengajuanCutiController extends Controller
                 return back();
             }
 
+            $startDate = Carbon::parse($request->tanggal_mulai);
+            $endDate = Carbon::parse($request->tanggal_selesai);
+
+            $holidays = Holiday::whereBetween('holiday_date', [
+                $startDate->format('Y-m-d'),
+                $endDate->format('Y-m-d')
+            ])->get()->map(function ($h) {
+                return Carbon::parse($h->holiday_date)->format('Y-m-d');
+            })->toArray();
+
+            // dari tanggal selesai dikurangi tanggal mulai, dikurangi hari weekdays, dan holidays
+            $total_days = 0;
+            for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+                if ($date->isWeekend() || in_array($date->format('Y-m-d'), $holidays)) {
+                    continue;
+                }
+                $total_days++;
+            }
+
             $balance = LeaveBalances::where('NPK', $request->npk)
                 ->where('leave_type_id', $request->jenis_cuti)
                 ->where('year', date('Y'))
@@ -133,8 +157,8 @@ class PengajuanCutiController extends Controller
                 return back();
             }
 
-            if ($balance->remained_days < $request->jumlah_hari) {
-                Alert::error('Error', 'Jumlah Hari Cuti Melebihi Jatah Cuti.');
+            if ($balance->remained_days < $total_days) {
+                Alert::error('Error', 'Jumlah Hari Cuti Melebihi Jatah Cuti. (Hitungan sistem: '.$total_days.' hari)');
                 return back();
             }
 
@@ -148,7 +172,7 @@ class PengajuanCutiController extends Controller
                     'leave_type_id' => $request->jenis_cuti,
                     'start_date' => $request->tanggal_mulai,
                     'end_date' => $request->tanggal_selesai,
-                    'total_days' => $request->jumlah_hari,
+                    'total_days' => $total_days,
                     'reason' => $request->keterangan ?? '',
                     'approval_id' => $approval_actor->approval_id,
                     'approval_level' => $approval_actor->level,
@@ -273,14 +297,14 @@ class PengajuanCutiController extends Controller
         }
 
         if (request()->ajax()) {
-            return \Yajra\DataTables\Facades\DataTables::of(collect($rows))
+            return DataTables::of(collect($rows))
                 ->addIndexColumn()
                 ->addColumn('karyawan', function($row) {
                     return '<strong>'.$row['nama'].'</strong><br><small class="text-muted">'.$row['npk'].' &middot; '.$row['dept'].'</small>';
                 })
                 ->addColumn('periode', function($row) {
-                    $start = \Carbon\Carbon::parse($row['start_date'])->format('d M Y');
-                    $end   = \Carbon\Carbon::parse($row['end_date'])->format('d M Y');
+                    $start = Carbon::parse($row['start_date'])->format('d M Y');
+                    $end   = Carbon::parse($row['end_date'])->format('d M Y');
                     return $start . ' – ' . $end;
                 })
                 ->addColumn('hari', function($row) {
@@ -293,9 +317,9 @@ class PengajuanCutiController extends Controller
                     return '<span class="badge badge-secondary">Menunggu</span>';
                 })
                 ->addColumn('aksi', function($row) {
-                    $row['start_date'] = \Carbon\Carbon::parse($row['start_date'])->format('d M Y');
-                    $row['end_date'] = \Carbon\Carbon::parse($row['end_date'])->format('d M Y');
-                    $row['created_at'] = \Carbon\Carbon::parse($row['created_at'])->format('d M Y');
+                    $row['start_date'] = Carbon::parse($row['start_date'])->format('d M Y');
+                    $row['end_date'] = Carbon::parse($row['end_date'])->format('d M Y');
+                    $row['created_at'] = Carbon::parse($row['created_at'])->format('d M Y');
                     $info = htmlspecialchars(json_encode($row), ENT_QUOTES, 'UTF-8');
                     return '<button type="button" class="btn btn-sm btn-info btn-detail" data-info="'.$info.'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
                 })
