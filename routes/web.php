@@ -183,8 +183,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::prefix('payroll-setting')->group(function () {
         Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index');
         Route::post('/store', [PayrollSettingController::class, 'store'])->name('payroll-setting.store');
+        Route::get('/edit/{id}', [PayrollSettingController::class, 'edit'])->name('payroll-setting.edit');
         Route::put('/update/{id}', [PayrollSettingController::class, 'update'])->name('payroll-setting.update');
-        Route::delete('/delete/{id}', [PayrollSettingController::class, 'destroy'])->name('payroll-setting.delete');
+        Route::delete('/delete/{id}', [PayrollSettingController::class, 'delete'])->name('payroll-setting.delete');
     });
 
     // Evaluation Jobscope

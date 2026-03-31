@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->string('component');
             $table->string('approval'); // NPK
-            $table->integer('level');
             $table->timestamps();
         });
     }

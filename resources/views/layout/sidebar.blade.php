@@ -141,6 +141,7 @@
         </a>
         <div id="collapsePayroll" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('payroll-setting.index') }}">Payroll Setting</a>
                 <a class="collapse-item" href="{{ route('payroll-master.index') }}">Payroll Master</a>
                 <a class="collapse-item" href="{{ route('payroll-components.index') }}">Payroll Components</a>
                 <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Payroll Period</a>
