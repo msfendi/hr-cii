@@ -119,6 +119,7 @@
         </a>
         <div id="collapseInsentif" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('insentif-approve.index') }}">Insentif Approval</a>
                 <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif Master</a>
                 <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif Master</a>
                 <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif Master</a>

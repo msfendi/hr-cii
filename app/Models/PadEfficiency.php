@@ -11,6 +11,7 @@ class PadEfficiency extends Model
 
     protected $fillable = [
         'npk',
+        'period_id',
         'dept',
         'efficiency',
         'piece',

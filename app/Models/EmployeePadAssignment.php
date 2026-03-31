@@ -11,6 +11,7 @@ class EmployeePadAssignment extends Model
 
     protected $fillable = [
         'npk',
+        'period_id',
         'dept',
         'role',
         'start_date',

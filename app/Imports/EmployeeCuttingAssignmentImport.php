@@ -2,25 +2,30 @@
 
 namespace App\Imports;
 
-use App\Models\EvaluationQuestionnaire;
+use App\Models\EmployeeCuttingAssignment;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class EvaluationQuestionnaireImport implements ToModel, WithHeadingRow
+class EmployeeCuttingAssignmentImport implements ToModel, WithHeadingRow
 {
+    protected $periodId;
+
+    public function __construct($periodId)
+    {
+        $this->periodId = $periodId;
+    }
+
     public function model(array $row)
     {
-        return EvaluationQuestionnaire::updateOrCreate(
+        return EmployeeCuttingAssignment::updateOrCreate(
             [
-                'jobscope_id' => $row['jobscope_id']
+                'npk' => $row['npk'],
+                'start_date' => $row['start_date'],
+                'period_id'   => $this->periodId,
             ],
             [
-                'question' => $row['question'],
-                'optiona' => $row['optiona'],
-                'optionb' => $row['optionb'],
-                'optionc' => $row['optionc'],
-                'optiond' => $row['optiond'],
-                'correct_answer' => $row['correct_answer']
+                'role' => $row['role'],
+                'end_date' => $row['end_date']
             ]
         );
     }

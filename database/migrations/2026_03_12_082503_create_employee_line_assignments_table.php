@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('employee_line_assignments', function (Blueprint $table) {
             $table->id();
+            $table->string('period_id');
 
             $table->string('npk', 20);
             $table->unsignedBigInteger('line_number');

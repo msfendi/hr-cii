@@ -11,6 +11,7 @@ class EmployeeLineAssignment extends Model
 
     protected $fillable = [
         'npk',
+        'period_id',
         'line_number',
         'role',
         'start_date',

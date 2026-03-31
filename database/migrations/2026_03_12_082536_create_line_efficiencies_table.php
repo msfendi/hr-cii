@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('line_efficiencies', function (Blueprint $table) {
 
             $table->id();
+            $table->string('period_id');
             $table->unsignedBigInteger('line_number');
             $table->decimal('efficiency', 5, 2);
             $table->date('date');

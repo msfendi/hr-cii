@@ -32,38 +32,12 @@
                             <i class="fas fa-download"></i> Download Template
                             </a>
                             <!-- IMPORT FORM -->
-                            <form id="importForm"
-                                action="{{ route('line-insentif-master.import') }}"
-                                method="POST"
-                                enctype="multipart/form-data">
-                                @csrf
-                                <div class="input-group input-group-sm">
-                                <input type="file"
-                                    name="file"
-                                    id="fileInput"
-                                    class="d-none"
-                                    accept=".xlsx,.xls,.csv">
-                                <button type="button"
-                                    class="btn btn-primary btn-sm"
-                                    id="btnUpload">
-                                <i class="fas fa-upload"></i>
-                                Upload Excel Insentif
-                                </button>
-                                <span id="fileName"
-                                    class="form-control form-control-sm text-truncate"
-                                    style="max-width:200px; display:inline-block;">
-                                    No file selected
-                                </span>
-                                <div class="input-group-append">
-                                    <button type="submit"
-                                        class="btn btn-success btn-sm"
-                                        id="btnImport">
-                                    <i class="fas fa-file-excel"></i>
-                                    Import
-                                    </button>
-                                </div>
-                                </div>
-                            </form>
+                            <button class="btn btn-success btn-sm"
+                                 data-toggle="modal"
+                                 data-target="#importModal">
+                              <i class="fas fa-file-excel"></i>
+                              Import Excel Insentif
+                           </button>
                         </div>
                     </div>
                     <!-- PROGRESS BAR -->
@@ -136,49 +110,166 @@
                </div>
             </div>
          </div>
-      </div>
       <!-- DELETE MODAL -->
-      <div class="modal fade"
-         id="deleteModal"
-         tabindex="-1"
-         role="dialog">
-         <div class="modal-dialog modal-md"
-            role="document">
-            <div class="modal-content">
-               <div class="modal-header">
-                  <h5 class="modal-title">
-                     Delete Record
-                  </h5>
-                  <button class="close"
-                     type="button"
-                     data-dismiss="modal">
-                  <span>×</span>
-                  </button>
-               </div>
-               <div class="modal-body">
-                  <p id="modal-text-payroll_master"></p>
-               </div>
-               <div class="modal-footer">
-                  <button class="btn btn-secondary"
-                     type="button"
-                     data-dismiss="modal">
-                  Tutup
-                  </button>
-                  <a id="btn-confirm" href="">
-                  <button class="btn btn-danger"
-                     type="button">
-                  Confirm
-                  </button>
-                  </a>
-               </div>
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Record</h5>
+                <button class="close" data-dismiss="modal">
+                    <span>×</span>
+                </button>
             </div>
-         </div>
+
+            <div class="modal-body">
+                <p id="modal-text-payroll_master"></p>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-dismiss="modal">
+                    Tutup
+                </button>
+
+                <a id="btn-confirm" href="">
+                    <button class="btn btn-danger" type="button">
+                        Confirm
+                    </button>
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+         <!-- IMPORT MODAL -->
+<div class="modal fade" id="importModal">
+    <div class="modal-dialog">
+        <form id="importForm"
+              action="{{ route('line-insentif-master.import') }}"
+              method="POST"
+              enctype="multipart/form-data">
+
+            @csrf
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        Import Line Insentif
+                    </h5>
+                    <button class="close" data-dismiss="modal">
+                        <span>×</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+
+                    <!-- PAYROLL PERIOD -->
+                    <div class="form-group">
+                        <label>Payroll Period</label>
+
+                        <select name="period_id"
+                                id="periodSelect"
+                                class="form-control"
+                                required>
+
+                            <option value="">-- Pilih Period --</option>
+
+                            @foreach($periods as $period)
+                                <option value="{{ $period->id }}">
+                                    {{ $period->name }}
+                                </option>
+                            @endforeach
+
+                        </select>
+                    </div>
+
+                    <!-- TIPE INSENTIF -->
+                    <div class="form-group">
+                        <label>Tipe Insentif</label>
+
+                        <select name="is_insentif"
+                                id="insentifSelect"
+                                class="form-control"
+                                required>
+
+                            <option value="">-- Pilih --</option>
+                            <option value="1">Insentif</option>
+                            <option value="0">No Insentif</option>
+
+                        </select>
+                    </div>
+
+                    <!-- FILE -->
+                    <div class="form-group" id="fileWrapper">
+                        <label>Upload File Excel</label>
+
+                        <input type="file"
+                            name="file"
+                            id="fileInput"
+                            class="form-control"
+                            accept=".xlsx,.xls">
+                    </div>
+
+                    <!-- PROGRESS -->
+                    <div class="progress"
+                         style="height:18px;display:none"
+                         id="uploadProgress">
+
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             id="progressBar"
+                             style="width:0%">
+                            0%
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button"
+                            class="btn btn-secondary"
+                            data-dismiss="modal">
+                        Cancel
+                    </button>
+
+                    <button type="submit"
+                            class="btn btn-success">
+                        Import Data
+                    </button>
+                </div>
+
+            </div>
+        </form>
+    </div>
+</div>
       @include('layout.footer')
    </body>
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 <script src="{{asset('js/demo/datatables-demo.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
+<script>
+
+$('#insentifSelect').on('change', function(){
+
+    let val = $(this).val();
+
+    if(val == '1'){ // INSENTIF
+        $('#fileWrapper').show();
+        $('#fileInput').prop('required',true);
+    }
+    else if(val == '0'){ // NO INSENTIF
+        $('#fileWrapper').hide();
+        $('#fileInput').prop('required',false);
+    }
+
+}).trigger('change');
+
+</script>
 <script>
     $('.btn-delete-payroll_master').on('click', function () {
     
@@ -190,42 +281,13 @@
     );
     
     });
-    
+
+         $("#periodSelect").select2({
+         allowClear:true,
+         placeholder:'Pilih Periode Payroll'
+         });
 </script>
 <script>
-
-$('#btnUpload').click(function(){
-    $('#fileInput').click();
-});
-
-
-$('#fileInput').change(function(){
-
-    let file = this.files[0];
-
-    if(!file) return;
-
-    let allowed = ['xlsx','xls','csv'];
-    let ext = file.name.split('.').pop().toLowerCase();
-
-    if(!allowed.includes(ext)){
-
-        Swal.fire({
-            icon:'error',
-            title:'Format tidak valid',
-            text:'File harus Excel (.xlsx, .xls, .csv)'
-        });
-
-        $(this).val('');
-        return;
-
-    }
-
-    $('#fileName').text(file.name);
-
-});
-
-
 $('#importForm').submit(function(e){
 
     e.preventDefault();
@@ -233,7 +295,20 @@ $('#importForm').submit(function(e){
     let form = this;
     let formData = new FormData(form);
 
-    $('#uploadProgress').show();
+    // CLOSE MODAL
+    $('#importModal').modal('hide');
+
+    // SHOW LOADING
+    Swal.fire({
+        title: 'Import sedang diproses...',
+        html: 'Mohon tunggu, jangan tutup halaman',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false, // ✅ HILANGKAN OK
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
 
     $.ajax({
 
@@ -245,17 +320,18 @@ $('#importForm').submit(function(e){
 
                 if(evt.lengthComputable){
 
-                    let percent = Math.round((evt.loaded / evt.total) * 100);
+                    let percent =
+                        Math.round((evt.loaded / evt.total) * 100);
 
-                    $('#progressBar').css('width',percent+'%');
-                    $('#progressBar').text(percent+'%');
+                    Swal.update({
+                        html: 'Uploading... ' + percent + '%'
+                    });
 
                 }
 
-            },false);
+            });
 
             return xhr;
-
         },
 
         url:$(form).attr('action'),
@@ -264,30 +340,29 @@ $('#importForm').submit(function(e){
         processData:false,
         contentType:false,
 
-        success:function(response){
-
-            $('#progressBar').css('width','100%');
-            $('#progressBar').text('100%');
+        success:function(){
 
             Swal.fire({
                 icon:'success',
                 title:'Import berhasil',
-                text:'Halaman akan diperbarui...',
-                showConfirmButton:false,
-                timer:1500
+                timer:1500,
+                showConfirmButton:false // ✅ TANPA OK
             });
 
-            setTimeout(function(){
+            setTimeout(()=>{
                 location.reload();
             },1500);
 
         },
 
-        error:function(){
+        error:function(xhr){
 
             Swal.fire({
                 icon:'error',
-                title:'Import gagal'
+                title:'Import gagal',
+                text:xhr.responseJSON?.message ?? 'Terjadi kesalahan',
+                timer:2500,
+                showConfirmButton:false // ✅ TANPA OK
             });
 
         }
@@ -295,6 +370,5 @@ $('#importForm').submit(function(e){
     });
 
 });
-
 </script>
 </html>

@@ -177,7 +177,7 @@ class EmployeePayrollController extends Controller
 
         $dates = CarbonPeriod::create($startDate, $endDate);
 
-        BusinessDay::enable(Carbon::class, 'id');
+        // BusinessDay::enable(Carbon::class, 'id');
 
         $holidays = DB::table('holidays')
             ->whereBetween('holiday_date', [$startDate, $endDate])

@@ -8,12 +8,20 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class CuttingEfficiencyImport implements ToModel, WithHeadingRow
 {
+    protected $periodId;
+
+    public function __construct($periodId)
+    {
+        $this->periodId = $periodId;
+    }
+
     public function model(array $row)
     {
         return CuttingEfficiency::updateOrCreate(
             [
                 'npk' => $row['npk'],
-                'date' => $row['date']
+                'date' => $row['date'],
+                'period_id'   => $this->periodId,
             ],
             [
                 'efficiency' => $row['efficiency']

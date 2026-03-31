@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('employee_cutting_assignments', function (Blueprint $table) {
             $table->id();
 
+            $table->string('period_id');
             $table->string('npk', 20);
 
             $table->string('role');
