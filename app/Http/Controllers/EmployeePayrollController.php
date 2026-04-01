@@ -33,9 +33,15 @@ class EmployeePayrollController extends Controller
 
     public function apiPeriods()
     {
-        $periods = DB::table('payroll_periods')
-            ->leftJoin('payroll_runs as pr', 'pr.period_id', '=', 'payroll_periods.id')
-            ->orderBy('start_date', 'desc')
+        $periods = DB::table('payroll_runs as pr')
+            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+            ->orderBy('pp.start_date', 'desc')
+            ->select(
+                'pr.*',
+                'pp.start_date',
+                'pp.end_date',
+                'pp.name'
+            )
             ->get();
 
         return response()->json($periods);
