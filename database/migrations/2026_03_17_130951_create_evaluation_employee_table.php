@@ -17,6 +17,8 @@ return new class extends Migration
             $table->string('jobscope_id');
             $table->integer('score')->default(0);
             $table->timestamp('evaluation_date')->nullable();
+            $table->string('employee_question')->nullable();
+            $table->string('employee_answer')->nullable();
             $table->timestamps();
         });
     }

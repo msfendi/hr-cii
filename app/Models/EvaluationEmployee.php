@@ -12,6 +12,13 @@ class EvaluationEmployee extends Model
         'npk',
         'jobscope_id',
         'score',
-        'evaluation_date'
+        'evaluation_date',
+        'employee_question',
+        'employee_answer',
+    ];
+
+    protected $casts = [
+        'employee_question' => 'array',
+        'employee_answer'   => 'array',
     ];
 }

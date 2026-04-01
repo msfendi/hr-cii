@@ -24,7 +24,8 @@ class PayrollApproveController extends Controller
             ->select(
                 'payroll_approve.*',
                 'payroll_periods.name as period_name',
-                'payroll_exports.file_bank',
+                'payroll_exports.file_bank_active',
+                'payroll_exports.file_bank_resign',
                 'payroll_exports.file_excel',
                 'payroll_exports.file_pdf'
             )
@@ -183,9 +184,11 @@ class PayrollApproveController extends Controller
 
     public function generateBank($runId)
     {
-        // =========================
-        // VALIDASI APPROVAL
-        // =========================
+        /*
+    |--------------------------------------------------------------------------
+    | VALIDASI APPROVAL
+    |--------------------------------------------------------------------------
+    */
         $approve = DB::table('payroll_approve')
             ->where('payroll_run_id', $runId)
             ->first();
@@ -194,71 +197,191 @@ class PayrollApproveController extends Controller
             return false;
         }
 
-        // =========================
-        // AMBIL NAMA PERIODE
-        // =========================
-        $period = DB::table('payroll_runs')
-            ->join('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')
-            ->where('payroll_runs.id', $runId)
-            ->value('payroll_periods.name');
+        /*
+    |--------------------------------------------------------------------------
+    | PERIODE
+    |--------------------------------------------------------------------------
+    */
+        $period = DB::table('payroll_runs as pr')
+            ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+            ->where('pr.id', $runId)
+            ->select('pp.name', 'pp.start_date', 'pp.end_date')
+            ->first();
 
-        // =========================
-        // AMBIL DATA GAJI
-        // =========================
-        $data = DB::table('payroll_run_details as pd')
-            ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'pd.employee_npk')
-            ->where('pd.run_id', $runId)
-            ->whereRaw("LOWER(pm.bank_name) = 'permata'")
+        if (!$period) {
+            return false;
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | EMPLOYEE UNION (AKTIF + RESIGN)
+    |--------------------------------------------------------------------------
+    */
+        $employeeUnion = DB::table('BIODATA')
+            ->select('NPK', 'id_dept')
+
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'id_dept')
+            );
+
+        $employeeData = DB::query()
+            ->fromSub($employeeUnion, 'bio')
+            ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'bio.NPK')
             ->select(
-                'pd.employee_npk',
-                'pd.employee_name',
-                'pm.bank_account',
-                'pd.total_salary'
+                'bio.NPK',
+                'bio.id_dept',
+                'pm.bank_name',
+                'pm.bank_account'
+            );
+
+        /*
+    |--------------------------------------------------------------------------
+    | TANGGAL RESIGN TERBARU
+    |--------------------------------------------------------------------------
+    */
+        $pkwtLatest = DB::table('PKWT')
+            ->select('NPK', DB::raw('MAX(TKK) as TKK'))
+            ->groupBy('NPK');
+
+        /*
+    |--------------------------------------------------------------------------
+    | DATA PAYROLL
+    |--------------------------------------------------------------------------
+    */
+        $data = DB::table('payroll_run_details as prd')
+
+            ->leftJoinSub($employeeData, 'emp', function ($join) {
+                $join->on('emp.NPK', '=', 'prd.employee_npk')
+                    ->whereRaw("LOWER(emp.bank_name) = 'permata'");
+            })
+
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
+
+            ->leftJoinSub($pkwtLatest, 'p', function ($join) {
+                $join->on('p.NPK', '=', 'prd.employee_npk');
+            })
+
+            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
+            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+
+            ->where('prd.run_id', $runId)
+
+            ->select(
+                'prd.employee_npk',
+                'prd.employee_name',
+                'prd.total_salary',
+                'emp.bank_account',
+                'd.DEPARTEMENT',
+                'pp.start_date',
+                'pp.end_date',
+                'p.TKK'
             )
+
+            ->orderBy('d.DEPARTEMENT')
+            ->orderBy('prd.employee_npk')
             ->get();
 
-        // =========================
-        // CSV CONTENT
-        // =========================
-        $rows = [];
+        if ($data->isEmpty()) {
+            return false;
+        }
 
-        $rows[] = [
+        /*
+    |--------------------------------------------------------------------------
+    | PISAH AKTIF VS RESIGN
+    |--------------------------------------------------------------------------
+    */
+        $activeEmployees = $data->filter(function ($row) {
+            return empty($row->TKK);
+        });
+
+        $resignEmployees = $data->filter(function ($row) {
+
+            if (empty($row->TKK)) {
+                return false;
+            }
+
+            return $row->TKK >= $row->start_date &&
+                $row->TKK <= $row->end_date;
+        });
+
+        /*
+    |--------------------------------------------------------------------------
+    | GROUP DEPARTMENT
+    |--------------------------------------------------------------------------
+    */
+        $groupedActive = $activeEmployees->groupBy('DEPARTEMENT');
+        $groupedResign = $resignEmployees->groupBy('DEPARTEMENT');
+
+        /*
+    |--------------------------------------------------------------------------
+    | GENERATE CSV
+    |--------------------------------------------------------------------------
+    */
+        $cleanPeriod = str_replace(' ', '_', $period->name);
+
+        $activePath = "payroll/PERMATA_{$cleanPeriod}_AKTIF.csv";
+        $resignPath = "payroll/PERMATA_{$cleanPeriod}_RESIGN.csv";
+
+        $this->createBankCSV($groupedActive, $period->name, $activePath);
+        $this->createBankCSV($groupedResign, $period->name, $resignPath);
+
+        /*
+    |--------------------------------------------------------------------------
+    | UPDATE EXPORT TABLE
+    |--------------------------------------------------------------------------
+    */
+        DB::table('payroll_exports')->updateOrInsert(
+            ['run_id' => $runId],
+            [
+                'file_bank_active' => $activePath,
+                'file_bank_resign' => $resignPath
+            ]
+        );
+
+        return true;
+    }
+
+    private function createBankCSV($groupedData, $periodName, $path)
+    {
+        $handle = fopen('php://temp', 'r+');
+
+        /*
+    |--------------------------------------------------------------------------
+    | HEADER
+    |--------------------------------------------------------------------------
+    */
+        fputcsv($handle, [
             'No Rekening Tujuan',
             'Nama Penerima',
             'Bank',
             'Kode Bank',
             'Nominal',
             'Keterangan'
-        ];
+        ]);
 
-        foreach ($data as $d) {
+        /*
+    |--------------------------------------------------------------------------
+    | DATA
+    |--------------------------------------------------------------------------
+    */
+        foreach ($groupedData as $dept => $employees) {
 
-            if (empty($d->bank_account) || $d->total_salary <= 0) continue;
+            foreach ($employees as $emp) {
 
-            $rows[] = [
-                $d->bank_account,
-                strtoupper($d->employee_name),
-                'PERMATA',
-                '013',
-                number_format($d->total_salary, 0, '', ''),
-                'GAJI ' . strtoupper($period)
-            ];
-        }
+                // if (empty($emp->bank_account) || $emp->total_salary <= 0) {
+                //     continue;
+                // }
 
-        // =========================
-        // NAMA FILE
-        // =========================
-        $cleanPeriod = str_replace(' ', '_', $period);
-        $filename = "PERMATA_{$cleanPeriod}.csv";
-        $path = "payroll/{$filename}";
-
-        // =========================
-        // SIMPAN FILE
-        // =========================
-        $handle = fopen('php://temp', 'r+');
-
-        foreach ($rows as $row) {
-            fputcsv($handle, $row);
+                fputcsv($handle, [
+                    $emp->bank_account ?? '',
+                    strtoupper($emp->employee_name),
+                    'PERMATA',
+                    '013',
+                    number_format($emp->total_salary ?? 0, 0, '', ''),
+                    'GAJI ' . strtoupper($periodName)
+                ]);
+            }
         }
 
         rewind($handle);
@@ -266,16 +389,5 @@ class PayrollApproveController extends Controller
         fclose($handle);
 
         Storage::disk('public')->put($path, $content);
-
-        // =========================
-        // UPDATE payroll_exports
-        // =========================
-        DB::table('payroll_exports')
-            ->updateOrInsert(
-                ['run_id' => $runId],
-                ['file_bank' => $path]
-            );
-
-        return true;
     }
 }

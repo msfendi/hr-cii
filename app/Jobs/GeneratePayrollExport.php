@@ -217,6 +217,74 @@ class GeneratePayrollExport implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
+        | HITUNG TOTAL KOMPONEN (AKTIF)
+        |--------------------------------------------------------------------------
+        */
+
+        $activeTotals = [];
+
+        foreach ($activeEmployees as $row) {
+            foreach ($allComponents as $code => $component) {
+                $value = $row->$code ?? 0;
+
+                if (!isset($activeTotals[$code])) {
+                    $activeTotals[$code] = 0;
+                }
+
+                $activeTotals[$code] += $value;
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | HITUNG TOTAL KOMPONEN (RESIGN) (OPTIONAL)
+        |--------------------------------------------------------------------------
+        */
+
+        $resignTotals = [];
+
+        foreach ($resignEmployees as $row) {
+            foreach ($allComponents as $code => $component) {
+                $value = $row->$code ?? 0;
+
+                if (!isset($resignTotals[$code])) {
+                    $resignTotals[$code] = 0;
+                }
+
+                $resignTotals[$code] += $value;
+            }
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | GENERATE PDF PENGELUARAN GAJI (STREAM SAVE)
+        |--------------------------------------------------------------------------
+        */
+
+        $pdfPeng = Pdf::loadView('payroll.pengeluaran_pdf', [
+            'groupedActive' => $groupedActive,
+            'groupedResign' => $groupedResign,
+            'allComponents' => $allComponents,
+            'activeTotals' => $activeTotals,
+            'resignTotals' => $resignTotals,
+            'run_id' => $run_id
+        ])
+            ->setPaper('a4')
+            ->setOption('defaultFont', 'sans-serif')
+            ->setOption('isPhpEnabled', true)
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', false);
+
+        $pdfPengPath = 'public/payroll/PENGELUARAN_' . $periodNameFormatted . '.pdf';
+        $pdfPengPathDB = 'payroll/PENGELUARAN_' . $periodNameFormatted . '.pdf';
+
+        $pdfPengPath = storage_path('app/' . $pdfPengPath);
+
+        $pdfPeng->save($pdfPengPath);
+
+        /*
+        |--------------------------------------------------------------------------
         | UPDATE STATUS
         |--------------------------------------------------------------------------
         */
@@ -226,7 +294,8 @@ class GeneratePayrollExport implements ShouldQueue
                 'status' => 'finished',
                 'progress' => 100,
                 'file_excel' => $excelPathDB,
-                'file_pdf' => $pdfPathDB
+                'file_pdf' => $pdfPathDB,
+                'file_peng' => $pdfPengPathDB,
             ]);
     }
 }

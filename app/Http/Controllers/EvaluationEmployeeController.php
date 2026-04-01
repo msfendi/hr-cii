@@ -15,7 +15,9 @@ class EvaluationEmployeeController extends Controller
 
     public function index(Request $request)
     {
-        // UNION BIODATA dan BIODATA_KELUAR
+        // =============================
+        // UNION BIODATA
+        // =============================
         $biodataUnion = DB::table('BIODATA')
             ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
             ->union(
@@ -23,7 +25,7 @@ class EvaluationEmployeeController extends Controller
                     ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
             );
 
-        $query = EvaluationEmployee::query()
+        $data = EvaluationEmployee::query()
             ->leftJoinSub($biodataUnion, 'biodata', function ($join) {
                 $join->on('evaluation_employee.npk', '=', 'biodata.NPK');
             })
@@ -34,16 +36,43 @@ class EvaluationEmployeeController extends Controller
                 'evaluation_jobscope.job_name',
                 'biodata.NAMA_KARYAWAN',
                 'DEPT.DEPARTEMENT'
-            );
+            )
+            ->get();
 
-        $query->select(
-            'evaluation_employee.*',
-            'evaluation_jobscope.job_name',
-            'biodata.NAMA_KARYAWAN',
-            'DEPT.DEPARTEMENT'
-        );
+        // =============================
+        // AMBIL QUESTION MASTER
+        // =============================
+        $questions = EvaluationQuestionnaire::get()
+            ->keyBy('id');
 
-        $data = $query->get();
+        // =============================
+        // BUILD QUESTIONNAIRE RESULT
+        // =============================
+        foreach ($data as $row) {
+
+            $employeeQuestions = $row->employee_question ?? [];
+            $employeeAnswers   = $row->employee_answer ?? [];
+
+            $result = [];
+
+            foreach ($employeeQuestions as $i => $questionId) {
+
+                $question = $questions[$questionId] ?? null;
+                if (!$question) continue;
+
+                $answer = $employeeAnswers[$i] ?? null;
+
+                $result[] = [
+                    'step' => $i + 1,
+                    'question' => $question->question,
+                    'answer' => $answer,
+                    'correct_answer' => $question->correct_answer,
+                    'is_correct' => $answer === $question->correct_answer,
+                ];
+            }
+
+            $row->questionnaire_result = $result;
+        }
 
         return view('evaluation_employee.index', compact('data'));
     }
@@ -80,10 +109,12 @@ class EvaluationEmployeeController extends Controller
     public function submit(Request $request)
     {
         $npk = $request->npk;
-        $answers = $request->answers;
+        $answers = $request->answers ?? [];
         $jobscope_id = $request->jobscope_id;
 
+        // =============================
         // CEK SUDAH PERNAH TEST
+        // =============================
         $already = EvaluationEmployee::where('npk', $npk)
             ->where('jobscope_id', $jobscope_id)
             ->exists();
@@ -93,32 +124,41 @@ class EvaluationEmployeeController extends Controller
                 ->with('error', 'Anda sudah mengerjakan evaluasi ini');
         }
 
+        // =============================
+        // HITUNG SCORE + SIMPAN DETAIL
+        // =============================
         $score = 0;
-        $total = count($answers);
+
+        $employeeQuestions = [];
+        $employeeAnswers   = [];
 
         foreach ($answers as $questionId => $answer) {
 
             $question = EvaluationQuestionnaire::find($questionId);
-
             if (!$question) continue;
 
+            // simpan detail jawaban
+            $employeeQuestions[] = $questionId;
+            $employeeAnswers[]   = $answer;
+
+            // hitung score
             if ($question->correct_answer == $answer) {
                 $score++;
             }
         }
 
-        // SIMPAN 1 RECORD (FINAL SCORE)
+        // =============================
+        // SIMPAN HASIL
+        // =============================
         EvaluationEmployee::create([
             'npk' => $npk,
             'jobscope_id' => $jobscope_id,
             'score' => $score,
-            'evaluation_date' => Carbon::now()
+            'employee_question' => $employeeQuestions,
+            'employee_answer' => $employeeAnswers,
+            'evaluation_date' => now(),
         ]);
 
-        // LOCK SESSION (ANTI BACK)
-        // Session::put('cbt_done_' . $npk . '_' . $jobscope_id, true);
-
-        // Alert::success('Test selesai. Score: ' . $score);
         return redirect('evaluation-employee/thankyou');
     }
 

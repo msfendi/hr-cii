@@ -161,10 +161,10 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Evaluation Questionnaire
     Route::prefix('evaluation-questionnaire')->group(function () {
-        Route::get('/', [EvaluationQuestionnaireController::class, 'index'])->name('evaluation-questionnaire.index');
-        Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import');
-        Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template');
-        Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete');
+        Route::get('/', [EvaluationQuestionnaireController::class, 'index'])->name('evaluation-questionnaire.index')->middleware(['auth', 'role:Admin|HRD']);
+        Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import')->middleware(['auth', 'role:Admin|HRD']);
+        Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template')->middleware(['auth', 'role:Admin|HRD']);
+        Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete')->middleware(['auth', 'role:Admin|HRD']);
     });
 
     // Payroll Approve

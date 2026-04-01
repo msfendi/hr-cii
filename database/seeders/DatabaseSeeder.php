@@ -17,5 +17,6 @@ class DatabaseSeeder extends Seeder
         $this->call(ModelHasRolesSeeder::class);
         $this->call(SectionsSeeder::class);
         $this->call(PayrollComponentSeeder::class);
+        $this->call(PayrollSettingSeeder::class);
     }
 }

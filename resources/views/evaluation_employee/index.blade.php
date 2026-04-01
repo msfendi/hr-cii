@@ -23,24 +23,56 @@
                         <th>Dept</th>
                         <th>Jobscope</th>
                         <th>Evaluation Date</th>
+                        <th width="400">Questionnaire</th>
                         <th>Score</th>
                         <th width="100">Action</th>
                       </tr>
                     </thead>
-                    <tbody> @foreach($data as $row) <tr>
-                        <td>{{ $row->id }}</td>
-                        <td>{{ $row->npk }}</td>
-                        <td>{{ $row->NAMA_KARYAWAN }}</td>
-                        <td>{{ $row->DEPARTEMENT }}</td>
-                        <td>{{ $row->job_name }}</td>
-                        <td>{{ $row->evaluation_date }}</td>
-                        <td>{{ $row->score }}</td>
-                        <td class="text-center">
-                          <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('evaluation-questionnaire.delete',$row->id) }}" data-question="{{ $row->question }}" data-toggle="modal" data-target="#deleteModal">
-                            <i class="fas fa-trash"></i>
-                          </button>
-                        </td>
-                      </tr> @endforeach </tbody>
+                    <tbody>
+                      @foreach($data as $row)
+                      <tr>
+                          <td>{{ $row->id }}</td>
+                          <td>{{ $row->npk }}</td>
+                          <td>{{ $row->NAMA_KARYAWAN }}</td>
+                          <td>{{ $row->DEPARTEMENT }}</td>
+                          <td>{{ $row->job_name }}</td>
+                          <td>{{ $row->evaluation_date }}</td>
+                          <td>
+
+                            @foreach($row->questionnaire_result as $q)
+
+                            <div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded
+                                {{ $q['is_correct'] ? 'bg-success text-white' : 'bg-danger text-white' }}">
+
+                                {{-- NAMA SOAL --}}
+                                <div style="width:75%">
+                                    Q{{ $q['step'] }}: {{ $q['question'] }}
+                                </div>
+
+                                {{-- STEP + JAWABAN --}}
+                                <span class="badge badge-light">
+                                    Answer : {{ $q['answer'] }}
+                                </span>
+
+                            </div>
+
+                            @endforeach
+
+                            </td>
+                          <td>{{ $row->score }}</td>
+                          <td class="text-center">
+                              <button class="btn btn-danger btn-circle btn-sm btn-delete"
+                                  data-link="{{ route('evaluation-questionnaire.delete',$row->id) }}"
+                                  data-question="{{ $row->id }}"
+                                  data-toggle="modal"
+                                  data-target="#deleteModal">
+                                  <i class="fas fa-trash"></i>
+                              </button>
+                          </td>
+
+                      </tr>
+                      @endforeach
+                      </tbody>
                   </table>
                 </div>
               </div>

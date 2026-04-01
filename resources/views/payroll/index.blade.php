@@ -70,7 +70,8 @@
                                         <th>Total Payroll</th>
                                         <th>Employee Count</th>
                                         <th>Export Status</th>
-                                        <th>Downloads</th>
+                                        <th>Payroll File</th>
+                                        <th>Bank Format</th>
                                         <th>Approval Status</th>
                                         <th>Action</th>
                                     </tr>
@@ -102,33 +103,49 @@
                                         <td class="text-center">
                                             {{-- DOWNLOAD EXCEL --}}
                                             @if($period->export_status == 'finished' && $period->file_excel)
-                                                <a class="btn btn-success btn-circle btn-sm"
-                                                    href="{{ asset('storage/'.$period->file_excel) }}"
-                                                    title="Download Excel"
-                                                    target="_blank">
-                                                    <i class="fas fa-file-excel"></i>
+                                                <a class="btn btn-success btn-sm"
+                                                href="{{ asset('storage/'.$period->file_excel) }}"
+                                                target="_blank">
+                                                    <i class="fas fa-file-excel mr-1"></i> Excel
                                                 </a>
                                             @endif
 
                                             {{-- DOWNLOAD PDF --}}
                                             @if($period->export_status == 'finished' && $period->file_pdf)
-                                                <a class="btn btn-danger btn-circle btn-sm"
+                                                <a class="btn btn-danger btn-sm"
                                                     href="{{ asset('storage/'.$period->file_pdf) }}"
-                                                    title="Download PDF"
-                                                    target="_blank">
-                                                    <i class="fas fa-file-pdf"></i>
+                                                target="_blank">
+                                                    <i class="fas fa-file-pdf mr-1"></i> PDF
                                                 </a>
                                             @endif
 
+                                            {{-- DOWNLOAD PDF PENGELUARAN --}}
+                                            @if($period->export_status == 'finished' && $period->file_peng)
+                                                <a class="btn btn-warning btn-sm"
+                                                    href="{{ asset('storage/'.$period->file_peng) }}"
+                                                target="_blank">
+                                                    <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
+                                                </a>
+                                            @endif
+
+                                        </td>
+
+                                        <td class="text-center">
                                             {{-- DOWNLOAD BANK (HANYA JIKA APPROVAL FINISH) --}}
                                             @if($period->approve_status == 'finish' && $period->export_status == 'finished')
-                                                <a class="btn btn-primary btn-circle btn-sm"
-                                                    href="{{ asset('storage/'.$period->file_bank) }}"
-                                                    title="Download Bank">
-                                                    <i class="fas fa-university"></i>
+                                            
+                                                <a class="btn btn-primary btn-sm"
+                                                    href="{{ asset('storage/'.$period->file_bank_active) }}"
+                                                target="_blank">
+                                                    <i class="fas fa-university mr-1"></i> Active
+                                                </a>
+                                                
+                                                <a class="btn btn-secondary btn-sm"
+                                                    href="{{ asset('storage/'.$period->file_bank_resign) }}"
+                                                target="_blank">
+                                                    <i class="fas fa-university mr-1"></i> Resign
                                                 </a>
                                             @endif
-
                                         </td>
                                         
                                         <td class="text-center">

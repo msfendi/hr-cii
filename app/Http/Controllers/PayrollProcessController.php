@@ -33,7 +33,9 @@ class PayrollProcessController extends Controller
                 'payroll_exports.status as export_status',
                 'payroll_exports.file_excel',
                 'payroll_exports.file_pdf',
-                'payroll_exports.file_bank',
+                'payroll_exports.file_bank_active',
+                'payroll_exports.file_bank_resign',
+                'payroll_exports.file_peng',
                 'payroll_approve.status as approve_status' // 🔥 penting
             )
             ->orderByDesc('payroll_runs.processed_at')
