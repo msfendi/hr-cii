@@ -221,6 +221,8 @@
                                         <th>Sewing Insentif</th>
                                         <th>Pad Print Insentif</th>
                                         <th>Cutting Insentif</th>
+                                        
+                                        <th>Adjusments</th>
 
                                         <th>BPJS Kes</th>
                                         <th>BPJS TK</th>
@@ -436,6 +438,10 @@
             },
             { 
                 data: 'cutting_insentif',
+                render: data => formatRupiah(data)
+            },
+            { 
+                data: 'adjusment',
                 render: data => formatRupiah(data)
             },
             { 

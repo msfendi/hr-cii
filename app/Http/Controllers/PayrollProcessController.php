@@ -156,11 +156,19 @@ class PayrollProcessController extends Controller
 
             ->leftJoin('payroll_masters as pm', 'emp.NPK', '=', 'pm.npk')
 
+            // ✅ FIX ADJUSMENT BERDASARKAN PERIOD
+            ->leftJoin('payroll_adjusments as pa', function ($join) use ($period) {
+                $join->on('emp.NPK', '=', 'pa.npk')
+                    ->where('pa.period_id', '=', $period->id);
+            })
+
             ->select(
                 'emp.NPK',
                 'emp.NAMA_KARYAWAN',
                 'pm.salary',
                 'pm.allowance',
+                'pm.pph21',
+                DB::raw('COALESCE(pa.adjusment,0) as adjusment'),
 
                 DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
                 DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
@@ -168,8 +176,6 @@ class PayrollProcessController extends Controller
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
-            // ->where('emp.NPK', '=', 'C-01783')
-
             ->get();
 
         $components = PayrollComponent::where('is_active', 1)
@@ -200,6 +206,8 @@ class PayrollProcessController extends Controller
                 'allowance'      => (float) $employee->allowance,
                 'absence_days'   => (float) $employee->absence_days,
                 'working_years'  => (float) $employee->working_years,
+                'adjusment'  => (float) $employee->adjusment,
+                'pph_21'  => (float) $employee->pph21,
             ];
 
             $results = [];
@@ -554,7 +562,6 @@ class PayrollProcessController extends Controller
         if (!$existsApprove) {
 
             $settings = PayrollSetting::where('component', 'payroll')
-                ->orderBy('level')
                 ->get();
 
             if ($settings->count() > 0) {

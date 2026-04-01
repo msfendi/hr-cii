@@ -25,6 +25,7 @@ use App\Http\Controllers\InsentifApprovalController;
 use App\Http\Controllers\InsentifMasterController;
 use App\Http\Controllers\LineInsentifMasterController;
 use App\Http\Controllers\PadInsentifMasterController;
+use App\Http\Controllers\PayrollAdjusmentController;
 use App\Http\Controllers\PayrollApproveController;
 use App\Http\Controllers\PayrollComponentController;
 use App\Http\Controllers\PayrollController;
@@ -239,6 +240,15 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export')->middleware(['auth', 'role:Admin']);
     Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template')->middleware(['auth', 'role:Admin']);
     Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin']);
+
+    Route::prefix('payroll-adjusments')->group(function () {
+        Route::get('/', [PayrollAdjusmentController::class, 'index'])->name('payroll-adjusments.index');
+        Route::get('/create', [PayrollAdjusmentController::class, 'create'])->name('payroll-adjusments.create');
+        Route::post('/store', [PayrollAdjusmentController::class, 'store'])->name('payroll-adjusments.store');
+        Route::get('/edit/{id}', [PayrollAdjusmentController::class, 'edit'])->name('payroll-adjusments.edit');
+        Route::post('/update/{id}', [PayrollAdjusmentController::class, 'update'])->name('payroll-adjusments.update');
+        Route::delete('/delete/{id}', [PayrollAdjusmentController::class, 'destroy'])->name('payroll-adjusments.destroy');
+    });
 
     // attendance finger
     Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index');

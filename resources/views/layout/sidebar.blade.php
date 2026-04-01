@@ -149,6 +149,7 @@
                 <a class="collapse-item" href="{{ route('payroll-master.index') }}">Payroll Master</a>
                 <a class="collapse-item" href="{{ route('payroll-components.index') }}">Payroll Components</a>
                 <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Payroll Period</a>
+                <a class="collapse-item" href="{{ route('payroll-adjusments.index') }}">Payroll Adjusments</a>
                 <a class="collapse-item" href="{{ route('payroll-process.index') }}">Payroll Process</a>
                 <a class="collapse-item" href="{{ route('payroll-approve.index') }}">Payroll Approve</a>
                 <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>

@@ -99,6 +99,7 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
             $components['sewing_insentif'] ?? 0,
             $components['pad_insentif'] ?? 0,
             $components['cutting_insentif'] ?? 0,
+            $components['adjusment'] ?? 0,
 
             $components['bpjs_kesehatan'] ?? 0,
             $components['bpjs_ketenagakerjaan'] ?? 0,
@@ -128,6 +129,7 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
             'Sewing Insentif',
             'Pad Print Insentif',
             'Cutting Insentif',
+            'Adjusment',
 
             'BPJS Kesehatan',
             'BPJS Ketenagakerjaan',
