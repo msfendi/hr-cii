@@ -68,11 +68,26 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
     if (result && !scanned) {
 
-        scanned = true;
-        codeReader.reset();
-
         let arr = result.text.split("_");
         let npk = arr[0];
+
+        // ✅ VALIDASI FORMAT NPK (C-00000)
+        let regexNpk = /^C-\d{5}$/;
+
+        if(!regexNpk.test(npk)){
+
+            Swal.fire({
+                icon: 'error',
+                title: 'QR Tidak Valid',
+                text: 'Format NPK Tidak Valid',
+                confirmButtonText: 'Scan Ulang'
+            });
+
+            return; // STOP PROCESS
+        }
+
+        scanned = true;
+        codeReader.reset();
 
         Swal.fire({
             icon: 'success',

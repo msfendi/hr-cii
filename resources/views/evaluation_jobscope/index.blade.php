@@ -30,7 +30,25 @@
                         <td>{{ $row->job_code }}</td>
                         <td>{{ $row->job_name }}</td>
                         <td>{{ $row->description }}</td>
-                        <td style="text-align: center;">{!! QrCode::size(200)->generate('https://hris.chutex.id:8015/evaluation-employee/portal?jobscope_id=' . $row->id) !!}</td>
+                        <td class="text-center" style="width:200px;">
+
+                        @php
+                        $qrBig = QrCode::size(450)->generate(
+                                url('/evaluation-employee/portal?jobscope_id='.$row->id)
+                            );
+                        @endphp
+
+                        <div class="qr-preview"
+                            data-qr="{{ e($qrBig) }}"
+                            style="cursor:pointer">
+
+                            {!! QrCode::size(120)->generate(
+                                url('/evaluation-employee/portal?jobscope_id='.$row->id)
+                            ) !!}
+
+                        </div>
+
+                        </td>
                         <td class="text-center">
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('evaluation-jobscope.delete',$row->id) }}" data-job_name="{{ $row->job_name }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
@@ -64,7 +82,36 @@
               </div>
             </div>
           </div>
-        </div> @include('layout.footer') <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
+        </div> 
+        {{-- QR PREVIEW MODAL --}}
+        <div class="modal fade" id="qrModal">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content text-center">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">QR Code Preview</h5>
+                        <button class="close" data-dismiss="modal">
+                            <span>×</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body p-4">
+
+                        <div id="qrContainer"
+                            style="
+                                display:flex;
+                                justify-content:center;
+                                align-items:center;
+                                min-height:500px;
+                            ">
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+@include('layout.footer') <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
         <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
         <script src="{{asset('js/demo/datatables-demo.js')}}"></script>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -75,6 +122,24 @@
             $('#deleteLink').attr('href', link);
             $('#deleteText').text('Yakin hapus jobscope: ' + job_name + ' ?');
           });
+        </script>
+
+        <script>
+        $('.btn-delete').click(function() {
+            let link = $(this).data('link');
+            let job_name = $(this).data('job_name');
+
+            $('#deleteLink').attr('href', link);
+            $('#deleteText').text('Yakin hapus jobscope: ' + job_name + ' ?');
+        });
+
+        // ✅ CLICK QR SHOW MODAL
+        $(document).on('click', '.qr-preview', function () {
+            let qr = $(this).data('qr');
+
+            $('#qrContainer').html(qr);
+            $('#qrModal').modal('show');
+        });
         </script>
   </body>
 </html>
