@@ -134,30 +134,30 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll-periods/delete/{id}', [PayrollPeriodController::class, 'delete'])->name('payroll-periods.delete')->middleware(['auth', 'role:Admin']);
 
     // Payroll Process
-    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index');
-    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate');
-    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
-    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details');
-    Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy');
+    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'role:Admin']);
+    Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'role:Admin']);
     Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin']);
     Route::post('/payroll-process/update', [PayrollProcessController::class, 'update'])->name('payroll-process.update')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-slip/{run_id}/{npk}', [PayrollProcessController::class, 'slip'])->name('payroll-slip');
-    Route::get('payroll-process/export-rekap/{run_id}', [PayrollProcessController::class, 'exportRekap'])->name('payroll.export.rekap');
-    Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export');
-    Route::get('/payroll/export-progress/{id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress');
-    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm']);
-    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus']);
+    Route::get('/payroll-slip/{run_id}/{npk}', [PayrollProcessController::class, 'slip'])->name('payroll-slip')->middleware(['auth', 'role:Admin']);
+    Route::get('payroll-process/export-rekap/{run_id}', [PayrollProcessController::class, 'exportRekap'])->name('payroll.export.rekap')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll/export-progress/{id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin']);
 
     //Payroll Master
-    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
-    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create');
-    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index');
-    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit');
-    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update');
-    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete');
-    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store');
-    Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import');
-    Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template');
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store')->middleware(['auth', 'role:Admin']);
+    Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template')->middleware(['auth', 'role:Admin']);
 
     // Evaluation Questionnaire
     Route::prefix('evaluation-questionnaire')->group(function () {
@@ -168,86 +168,77 @@ Route::group(['middleware' => 'auth'], function () {
     });
 
     // Payroll Approve
-    Route::post('/payroll-approve/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve');
+    Route::post('/payroll-approve/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve')->middleware(['auth', 'role:Admin']);
     Route::prefix('payroll-approve')->group(function () {
-        Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index');
-        Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create');
-        Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve');
+        Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index')->middleware(['auth', 'role:Admin']);
+        Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create')->middleware(['auth', 'role:Admin']);
+        Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve')->middleware(['auth', 'role:Admin']);
     });
 
     // Insentif Approve
-    Route::get('/insentif-approve', [InsentifApprovalController::class, 'index'])->name('insentif-approve.index');
-    Route::post('/insentif-approve/{id}/approve', [InsentifApprovalController::class, 'approve'])->name('insentif-approve.approve');
-    Route::get('/insentif-approve/{id}/detail', [InsentifApprovalController::class, 'detail'])->name('insentif-approve.detail');
+    Route::get('/insentif-approve', [InsentifApprovalController::class, 'index'])->name('insentif-approve.index')->middleware(['auth', 'role:Admin']);
+    Route::post('/insentif-approve/{id}/approve', [InsentifApprovalController::class, 'approve'])->name('insentif-approve.approve')->middleware(['auth', 'role:Admin']);
+    Route::get('/insentif-approve/{id}/detail', [InsentifApprovalController::class, 'detail'])->name('insentif-approve.detail')->middleware(['auth', 'role:Admin']);
 
     Route::prefix('payroll-setting')->group(function () {
-        Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index');
-        Route::post('/store', [PayrollSettingController::class, 'store'])->name('payroll-setting.store');
-        Route::get('/edit/{id}', [PayrollSettingController::class, 'edit'])->name('payroll-setting.edit');
-        Route::put('/update/{id}', [PayrollSettingController::class, 'update'])->name('payroll-setting.update');
-        Route::delete('/delete/{id}', [PayrollSettingController::class, 'delete'])->name('payroll-setting.delete');
+        Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index')->middleware(['auth', 'role:Admin']);
+        Route::post('/store', [PayrollSettingController::class, 'store'])->name('payroll-setting.store')->middleware(['auth', 'role:Admin']);
+        Route::get('/edit/{id}', [PayrollSettingController::class, 'edit'])->name('payroll-setting.edit')->middleware(['auth', 'role:Admin']);
+        Route::put('/update/{id}', [PayrollSettingController::class, 'update'])->name('payroll-setting.update')->middleware(['auth', 'role:Admin']);
+        Route::delete('/delete/{id}', [PayrollSettingController::class, 'delete'])->name('payroll-setting.delete')->middleware(['auth', 'role:Admin']);
     });
 
     // Evaluation Jobscope
     Route::prefix('evaluation-jobscope')->group(function () {
-        Route::get('/', [EvaluationJobscopeController::class, 'index'])->name('evaluation-jobscope.index');
-        Route::get('/delete/{id}', [EvaluationJobscopeController::class, 'delete'])->name('evaluation-jobscope.delete');
+        Route::get('/', [EvaluationJobscopeController::class, 'index'])->name('evaluation-jobscope.index')->middleware(['auth', 'role:Admin|HRD']);
+        Route::get('/delete/{id}', [EvaluationJobscopeController::class, 'delete'])->name('evaluation-jobscope.delete')->middleware(['auth', 'role:Admin|HRD']);
     });
 
     //  Evaluation Employee
-    Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index');
+    Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index')->middleware(['auth', 'role:Admin|HRD']);
 
     // Holiday
-    Route::get('holidays/sync', [HolidayController::class, 'sync'])->name('holidays.sync');
-    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');
-    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create');
-    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store');
-    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete');
-    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit');
-    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import');
-    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export');
+    Route::get('holidays/sync', [HolidayController::class, 'sync'])->name('holidays.sync')->middleware(['auth', 'role:Admin']);
+    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index')->middleware(['auth', 'role:Admin']);
+    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create')->middleware(['auth', 'role:Admin']);
+    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store')->middleware(['auth', 'role:Admin']);
+    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import')->middleware(['auth', 'role:Admin']);
+    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export')->middleware(['auth', 'role:Admin']);
 
     // Line Insentif Master
-    Route::get('line-insentif-master/index', [LineInsentifMasterController::class, 'index'])->name('line-insentif-master.index');
-    Route::get('line-insentif-master/create', [LineInsentifMasterController::class, 'create'])->name('line-insentif-master.create');
-    Route::post('line-insentif-master/store', [LineInsentifMasterController::class, 'store'])->name('line-insentif-master.store');
-    Route::delete('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete');
-    Route::get('/line-insentif-master/edit/{id}', [LineInsentifMasterController::class, 'edit'])->name('line-insentif-master.edit');
-    Route::post('line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import');
-    Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export');
-    Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template');
-    Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import');
+    Route::get('line-insentif-master/index', [LineInsentifMasterController::class, 'index'])->name('line-insentif-master.index')->middleware(['auth', 'role:Admin']);
+    Route::get('line-insentif-master/create', [LineInsentifMasterController::class, 'create'])->name('line-insentif-master.create')->middleware(['auth', 'role:Admin']);
+    Route::post('line-insentif-master/store', [LineInsentifMasterController::class, 'store'])->name('line-insentif-master.store')->middleware(['auth', 'role:Admin']);
+    Route::delete('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('/line-insentif-master/edit/{id}', [LineInsentifMasterController::class, 'edit'])->name('line-insentif-master.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'role:Admin']);
+    Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export')->middleware(['auth', 'role:Admin']);
+    Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template')->middleware(['auth', 'role:Admin']);
+    Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'role:Admin']);
 
     // Cutting Insentif Master
-    Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index');
-    Route::get('cutting-insentif-master/create', [CuttingInsentifMasterController::class, 'create'])->name('cutting-insentif-master.create');
-    Route::post('cutting-insentif-master/store', [CuttingInsentifMasterController::class, 'store'])->name('cutting-insentif-master.store');
-    Route::delete('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete');
-    Route::get('/cutting-insentif-master/edit/{id}', [CuttingInsentifMasterController::class, 'edit'])->name('cutting-insentif-master.edit');
-    Route::post('cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import');
-    Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export');
-    Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template');
-    Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import');
+    Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index')->middleware(['auth', 'role:Admin']);
+    Route::get('cutting-insentif-master/create', [CuttingInsentifMasterController::class, 'create'])->name('cutting-insentif-master.create')->middleware(['auth', 'role:Admin']);
+    Route::post('cutting-insentif-master/store', [CuttingInsentifMasterController::class, 'store'])->name('cutting-insentif-master.store')->middleware(['auth', 'role:Admin']);
+    Route::delete('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('/cutting-insentif-master/edit/{id}', [CuttingInsentifMasterController::class, 'edit'])->name('cutting-insentif-master.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin']);
+    Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export')->middleware(['auth', 'role:Admin']);
+    Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template')->middleware(['auth', 'role:Admin']);
+    Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin']);
 
     // Pad Print Insentif Master
-    Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index');
-    Route::get('pad-insentif-master/create', [PadInsentifMasterController::class, 'create'])->name('pad-insentif-master.create');
-    Route::post('pad-insentif-master/store', [PadInsentifMasterController::class, 'store'])->name('pad-insentif-master.store');
-    Route::delete('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete');
-    Route::get('/pad-insentif-master/edit/{id}', [PadInsentifMasterController::class, 'edit'])->name('pad-insentif-master.edit');
-    Route::post('pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import');
-    Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export');
-    Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template');
-    Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import');
-
-    // Holiday
-    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index');
-    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create');
-    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store');
-    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete');
-    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit');
-    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import');
-    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export');
+    Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index')->middleware(['auth', 'role:Admin']);
+    Route::get('pad-insentif-master/create', [PadInsentifMasterController::class, 'create'])->name('pad-insentif-master.create')->middleware(['auth', 'role:Admin']);
+    Route::post('pad-insentif-master/store', [PadInsentifMasterController::class, 'store'])->name('pad-insentif-master.store')->middleware(['auth', 'role:Admin']);
+    Route::delete('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('/pad-insentif-master/edit/{id}', [PadInsentifMasterController::class, 'edit'])->name('pad-insentif-master.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin']);
+    Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export')->middleware(['auth', 'role:Admin']);
+    Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template')->middleware(['auth', 'role:Admin']);
+    Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin']);
 
     // attendance finger
     Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index');
