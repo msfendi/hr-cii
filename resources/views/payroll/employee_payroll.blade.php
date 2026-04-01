@@ -48,16 +48,20 @@
 
                         <div class="form-group">
                             <label>Payroll Period</label>
-                            <select class="form-control" name="run_id">
+
+                            <select class="form-control" name="run_id" id="run_id_manual">
+                                <option value="" selected disabled>-- Pilih Periode --</option>
+
                                 @foreach($periods as $period)
                                 <option value="{{$period->id}}">
                                     {{ date('F Y',strtotime($period->start_date)) }}
                                 </option>
                                 @endforeach
+
                             </select>
                         </div>
 
-                        <button class="btn btn-primary btn-block">
+                        <button type="submit" class="btn btn-primary btn-block" id="btnManual" disabled>
                             Show Payroll Slip
                         </button>
 
@@ -72,16 +76,20 @@
 
                         <div class="form-group">
                             <label>Pilih Periode</label>
+
                             <select class="form-control" id="run_id_qr">
+                                <option value="" selected disabled>-- Pilih Periode --</option>
+
                                 @foreach($periods as $period)
                                 <option value="{{$period->id}}">
                                     {{ date('F Y',strtotime($period->start_date)) }}
                                 </option>
                                 @endforeach
                             </select>
+
                         </div>
 
-                        <button class="btn btn-success btn-block" onclick="nextQR()">
+                        <button type="button" class="btn btn-success btn-block" id="btnNextQR" disabled onclick="nextQR()">
                             Next
                         </button>
 
@@ -109,11 +117,6 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-
-function nextQR(){
-    $("#step1").hide();
-    $("#step2").show();
-}
 
 let scanned = false;
 
@@ -152,6 +155,49 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 });
 
 </script>
+<script>
 
+function toggleQR(){
+    $("#btnNextQR").prop("disabled", !$("#run_id_qr").val());
+}
+
+function toggleManual(){
+    $("#btnManual").prop("disabled", !$("#run_id_manual").val());
+}
+
+$(document).ready(function(){
+
+    $("#run_id_manual").on("change", toggleManual);
+    $("#run_id_qr").on("change", toggleQR);
+
+    // FORCE refresh state saat load
+    setTimeout(function(){
+        $("#run_id_manual").trigger("change");
+        $("#run_id_qr").trigger("change");
+    },100);
+
+    // Saat pindah TAB
+    $('a[data-toggle="tab"]').on('shown.bs.tab', function () {
+        $("#run_id_manual").trigger("change");
+        $("#run_id_qr").trigger("change");
+    });
+
+});
+
+function nextQR(){
+
+    if(!$("#run_id_qr").val()){
+        Swal.fire({
+            icon:'warning',
+            title:'Pilih Periode dulu'
+        });
+        return;
+    }
+
+    $("#step1").hide();
+    $("#step2").show();
+}
+
+</script>
 </body>
 </html>

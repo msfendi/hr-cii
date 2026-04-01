@@ -14,14 +14,19 @@ class EmployeePayrollController extends Controller
 
     public function index(Request $request)
     {
-        $periods = DB::table('payroll_periods')
-            ->leftJoin('payroll_runs as pr', 'pr.period_id', '=', 'payroll_periods.id')
-            ->orderBy('start_date', 'desc')
+        $periods = DB::table('payroll_runs as pr')
+            ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+            ->select(
+                'pr.id',
+                'pr.id as run_id',
+                'pp.start_date',
+                'pp.end_date'
+            )
+            ->orderBy('pp.start_date', 'desc')
             ->get();
-        // dd($periods);
 
         return view('payroll.employee_payroll', [
-            'npk' => $request['npk'],
+            'npk' => $request->npk,
             'periods' => $periods
         ]);
     }
