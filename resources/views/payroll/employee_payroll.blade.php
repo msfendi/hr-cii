@@ -126,12 +126,28 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
     if (result && !scanned) {
 
+        let arr = result.text.split("_");
+        let npk = arr[0];
+
+        // ✅ VALIDASI FORMAT NPK
+        let regexNpk = /^C-\d{5}$/;
+
+        if(!regexNpk.test(npk)){
+
+            Swal.fire({
+                icon: 'error',
+                title: 'QR Tidak Valid',
+                text: 'Format NPK Tidak Valid',
+                confirmButtonText: 'Scan Ulang'
+            });
+
+            return; // stop proses
+        }
+
         scanned = true;
 
         codeReader.reset(); // stop kamera
 
-        let arr = result.text.split("_");
-        let npk = arr[0];
         let run_id = $("#run_id_qr").val();
 
         Swal.fire({
@@ -149,7 +165,6 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
             "/employee-payroll/qr-login?npk="+npk+"&run_id="+run_id;
 
         },1500);
-
     }
 
 });
