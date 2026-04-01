@@ -118,6 +118,7 @@
         </div>
     </li>
 
+    @if($roleusers[0]->rolename == 'Admin')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseInsentif"
             aria-expanded="true" aria-controls="collapseInsentif">
@@ -133,6 +134,9 @@
             </div>
         </div>
     </li>
+    @endif
+    
+    @if($roleusers[0]->rolename == 'Admin')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePayroll"
             aria-expanded="true" aria-controls="collapsePayroll">
@@ -151,6 +155,9 @@
             </div>
         </div>
     </li>
+    @endif
+    
+    @if($roleusers[0]->rolename == 'Admin')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseHoliday"
             aria-expanded="true" aria-controls="collapseHoliday">
@@ -163,7 +170,9 @@
             </div>
         </div>
     </li>
+    @endif
     
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'HRD')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseEvaluation"
             aria-expanded="true" aria-controls="collapseEvaluation">
@@ -178,6 +187,7 @@
             </div>
         </div>
     </li>
+    @endif
 
 
     <!-- Divider -->
