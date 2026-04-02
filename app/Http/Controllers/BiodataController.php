@@ -157,6 +157,7 @@ class BiodataController extends Controller
             'BARCODE' => strtoupper($barcode),
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
+            'IS_STAFF' => '1'
         ]);
 
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
@@ -184,6 +185,7 @@ class BiodataController extends Controller
             'HP' => $request->hp,
             'STATUS' => $request->status,
             'TANGGUNGAN' => $request->tanggungan,
+            'TMPTLAHIR' => strtoupper($request->tempat_lahir),
             'JURUSAN' => strtoupper($request->jurusan)
         ]);
 
@@ -224,6 +226,7 @@ class BiodataController extends Controller
                 'BARCODE' => $biodata->BARCODE,
                 'SECTION' => $biodata->SECTION,
                 'STATUS' => $biodata->STATUS,
+                'IS_STAFF' => $biodata->IS_STAFF
             ]);
 
             DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();

@@ -180,6 +180,8 @@
                     columns.push({ data: "CT", className: "text-center font-weight-bold", defaultContent: "0" });
                     columns.push({ data: "MA", className: "text-center font-weight-bold", defaultContent: "0" });
                     columns.push({ data: "P1", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "PE", className: "text-center font-weight-bold", defaultContent: "0" });
+                    columns.push({ data: "SD", className: "text-center font-weight-bold", defaultContent: "0" });
 
                     // Build table header from backend week metadata
                     var theadHtml = '<thead>';
@@ -227,6 +229,8 @@
                     theadHtml += '<th class="text-center">CT</th>';
                     theadHtml += '<th class="text-center">MA</th>';
                     theadHtml += '<th class="text-center">P1</th>';
+                    theadHtml += '<th class="text-center">PE</th>';
+                    theadHtml += '<th class="text-center">SD</th>';
                     theadHtml += '</tr>';
 
                     theadHtml += '</thead>';

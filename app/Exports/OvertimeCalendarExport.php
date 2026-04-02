@@ -54,6 +54,9 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         $headerRow1[] = 'Lembur Khusus';
         $headerRow1[] = 'CT';
         $headerRow1[] = 'MA';
+        $headerRow1[] = 'P1';
+        $headerRow1[] = 'PE';
+        $headerRow1[] = 'SD';
         $rows[] = $headerRow1;
 
         // Row 2: Date numbers
@@ -63,6 +66,9 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
                 $headerRow2[] = str_pad($day, 2, '0', STR_PAD_LEFT);
             }
         }
+        $headerRow2[] = '';
+        $headerRow2[] = '';
+        $headerRow2[] = '';
         $headerRow2[] = '';
         $headerRow2[] = '';
         $headerRow2[] = '';
@@ -95,6 +101,9 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             $dataRow[] = $employee['lembur_khusus'] < 8 ? '0' : $employee['lembur_khusus'];
             $dataRow[] = $employee['CT'] ?? '0';
             $dataRow[] = $employee['MA'] ?? '0';
+            $dataRow[] = $employee['P1'] ?? '0';
+            $dataRow[] = $employee['PE'] ?? '0';
+            $dataRow[] = $employee['SD'] ?? '0';
 
             $rows[] = $dataRow;
         }
@@ -109,7 +118,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         foreach ($data['weeks'] as $week) {
             $totalDataCols += count($week['days']);
         }
-        $totalDataCols += 7; // summary columns
+        $totalDataCols += 10; // summary columns
         $lastCol = $this->colLetter($totalDataCols);
         $lastRow = count($data['pivotData']) + 2; // 2 header rows + data
 
@@ -132,7 +141,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         $sheet->mergeCells('C1:C2');
 
         // Merge summary sub-headers across rows 1-2
-        for ($i = 0; $i < 7; $i++) {
+        for ($i = 0; $i < 10; $i++) {
             $col = $this->colLetter($colIdx + $i);
             $sheet->mergeCells("{$col}1:{$col}2");
         }
