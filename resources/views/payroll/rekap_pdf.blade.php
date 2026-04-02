@@ -39,23 +39,6 @@
         page-break-inside: avoid;
       }
 
-      h4 {
-        margin-top: 10px;
-        margin-bottom: 5px;
-      }
-
-      .col-npk {
-        width: 70px;
-      }
-
-      .col-name {
-        width: 160px;
-      }
-
-      .col-component {
-        width: 75px;
-      }
-
       .title {
         text-align: center;
         margin-bottom: 15px;
@@ -81,42 +64,38 @@
         page-break-before: always;
       }
 
+      .col-npk {
+        width: 70px;
+      }
+
+      .col-name {
+        width: 160px;
+      }
+
+      .col-component {
+        width: 75px;
+      }
+
       .summary-table {
-        width: 400px;
+        width: 100%;
         margin-top: 20px;
-      }
-
-      .summary-table th {
-        background: #eee;
-      }
-
-      .rekap-container{
-        width:100%;
-        margin-top:20px;
-      }
-
-      .rekap-container td{
-        vertical-align:top;
-        border:none;
-      }
-
-      .rekap-box{
-        width:100%;
       }
     </style>
   </head>
   <body>
-    <div class="logo">
-      <img src="{{ public_path('img/chutex_logo.png') }}" height="60">
+    {{-- ================= HEADER ================= --}}
+    <div>
+      <strong>PT. CHUTEX INTERNATIONAL INDONESIA</strong>
+      <br> SUKOHARJO
     </div>
-    <div class="title">
-      <h2>REKAP PAYROLL</h2>
-      <h4> Periode : {{ $groupedActive->first()->first()->period_name ?? $groupedResign->first()->first()->period_name ?? '-' }}
-      </h4>
-    </div>
-    {{-- ========================= --}}
-    {{-- KARYAWAN AKTIF --}}
-    {{-- ========================= --}} @php $activeTotals = []; $activeEarning = 0; $activeDeduction = 0; @endphp <div class="section-title">KARYAWAN AKTIF</div> @foreach($groupedActive as $dept => $employees) <div class="dept-block">
+    <br>
+    <div class="center bold"> REKAP PAYROLL </div>
+    <br>
+    <div class="center">Periode : {{ optional($groupedActive->first())->first()->period_name
+    ?? optional($groupedResign->first())->first()->period_name
+    ?? '-' }}</div>
+    {{-- ================= KARYAWAN AKTIF ================= --}}
+    <div class="section-title">KARYAWAN AKTIF</div> @forelse($groupedActive as $dept => $employees) <div class="dept-block">
       <h4>Department : {{ $dept }}</h4>
       <table>
         <thead>
@@ -127,17 +106,14 @@
         </thead>
         <tbody> @foreach($employees as $item) <tr>
             <td>{{ $item->employee_npk }}</td>
-            <td>{{ $item->employee_name }}</td> @foreach($allComponents as $code => $component) @php $value = $item->$code ?? 0; $activeTotals[$code] = ($activeTotals[$code] ?? 0) + $value; @endphp <td align="right">
-              {{ number_format($value,0,',','.') }}
+            <td>{{ $item->employee_name }}</td> @foreach($allComponents as $code => $component) <td align="right">
+              {{ number_format($item->$code ?? 0,0,',','.') }}
             </td> @endforeach <td align="right">
               {{ number_format($item->total_salary,0,',','.') }}
             </td>
           </tr> @endforeach </tbody>
       </table>
-    </div> @endforeach <div class="page-break"></div>
-    {{-- ========================= --}}
-    {{-- KARYAWAN RESIGN --}}
-    {{-- ========================= --}} @if($groupedResign->count()) @php $resignTotals = []; $resignEarning = 0; $resignDeduction = 0; @endphp <div class="page-break"></div>
+    </div> @empty <p>Tidak ada karyawan aktif</p> @endforelse {{-- ================= KARYAWAN RESIGN ================= --}} @if($groupedResign->count()) <div class="page-break"></div>
     <div class="section-title">KARYAWAN RESIGN</div> @foreach($groupedResign as $dept => $employees) <div class="dept-block">
       <h4>Department : {{ $dept }}</h4>
       <table>
@@ -149,17 +125,17 @@
         </thead>
         <tbody> @foreach($employees as $item) <tr>
             <td>{{ $item->employee_npk }}</td>
-            <td>{{ $item->employee_name }}</td> @foreach($allComponents as $code => $component) @php $value = $item->$code ?? 0; $resignTotals[$code] = ($resignTotals[$code] ?? 0) + $value; @endphp <td align="right">
-              {{ number_format($value,0,',','.') }}
+            <td>{{ $item->employee_name }}</td> @foreach($allComponents as $code => $component) <td align="right">
+              {{ number_format($item->$code ?? 0,0,',','.') }}
             </td> @endforeach <td align="right">
               {{ number_format($item->total_salary,0,',','.') }}
             </td>
           </tr> @endforeach </tbody>
       </table>
-    </div> @endforeach
+    </div> @endforeach @endif {{-- ================= REKAP (SELALU MUNCUL) ================= --}}
     <div class="page-break"></div>
     <h3>REKAP PAYROLL</h3>
-    <table class="summary-table" style="width:100%">
+    <table class="summary-table">
       <thead>
         <tr>
           <th>Component</th>
@@ -168,18 +144,14 @@
           <th>Total Resign</th>
         </tr>
       </thead>
-      <tbody> @php $activeEarning = 0; $activeDeduction = 0; $resignEarning = 0; $resignDeduction = 0; @endphp @foreach($allComponents as $code => $component) @php $activeValue = $activeTotals[$code] ?? 0; $resignValue = $resignTotals[$code] ?? 0; $type = $component->type ?? 'earning'; if($type == 'deduction'){ $activeValue = -$activeValue; $resignValue = -$resignValue; $activeDeduction += $activeValue; $resignDeduction += $resignValue; }else{ $activeEarning += $activeValue; $resignEarning += $resignValue; } @endphp <tr>
+      <tbody> @php $activeEarning=0; $activeDeduction=0; $resignEarning=0; $resignDeduction=0; @endphp @foreach($allComponents as $code=>$component) @php $activeValue = $activeTotals[$code] ?? 0; $resignValue = $resignTotals[$code] ?? 0; $type = $component->type ?? 'earning'; if($type=='deduction'){ $activeValue *= -1; $resignValue *= -1; $activeDeduction += $activeValue; $resignDeduction += $resignValue; }else{ $activeEarning += $activeValue; $resignEarning += $resignValue; } @endphp <tr>
           <td>{{ $component->name }}</td>
-          <td align="center"> @if($type == 'earning') <span style="color:green;font-weight:bold">EARNING</span> @else <span style="color:red;font-weight:bold">DEDUCTION</span> @endif </td>
-          <td align="right">
-            {{ number_format($activeValue,0,',','.') }}
-          </td>
-          <td align="right">
-            {{ number_format($resignValue,0,',','.') }}
-          </td>
+          <td align="center"> @if($type=='earning') <span style="color:green;font-weight:bold">EARNING</span> @else <span style="color:red;font-weight:bold">DEDUCTION</span> @endif </td>
+          <td align="right">{{ number_format($activeValue,0,',','.') }}</td>
+          <td align="right">{{ number_format($resignValue,0,',','.') }}</td>
         </tr> @endforeach </tbody>
     </table>
-    <table class="summary-table" style="width:100%">
+    <table class="summary-table">
       <tr>
         <th width="40%">Total Earning</th>
         <td align="right" style="color:green;font-weight:bold"> Aktif : {{ number_format($activeEarning,0,',','.') }}
@@ -196,11 +168,11 @@
       </tr>
       <tr>
         <th>Net Payroll</th>
-        <td align="right" style="font-weight:bold"> Aktif : {{ number_format($activeEarning + $activeDeduction,0,',','.') }}
+        <td align="right" style="font-weight:bold"> Aktif : {{ number_format($activeEarning+$activeDeduction,0,',','.') }}
         </td>
-        <td align="right" style="font-weight:bold"> Resign : {{ number_format($resignEarning + $resignDeduction,0,',','.') }}
+        <td align="right" style="font-weight:bold"> Resign : {{ number_format($resignEarning+$resignDeduction,0,',','.') }}
         </td>
       </tr>
-    </table>@endif
+    </table>
   </body>
 </html>

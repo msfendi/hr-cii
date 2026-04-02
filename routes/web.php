@@ -17,6 +17,7 @@ use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\EmployeePayrollController;
+use App\Http\Controllers\EmployeeThrController;
 use App\Http\Controllers\EvaluationEmployeeController;
 use App\Http\Controllers\EvaluationJobscopeController;
 use App\Http\Controllers\EvaluationQuestionnaireController;
@@ -33,6 +34,9 @@ use App\Http\Controllers\PayrollMasterController;
 use App\Http\Controllers\PayrollPeriodController;
 use App\Http\Controllers\PayrollProcessController;
 use App\Http\Controllers\PayrollSettingController;
+use App\Http\Controllers\ThrApproveController;
+use App\Http\Controllers\ThrPeriodController;
+use App\Http\Controllers\ThrProcessController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 
@@ -160,6 +164,31 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import')->middleware(['auth', 'role:Admin']);
     Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template')->middleware(['auth', 'role:Admin']);
 
+
+    // Thr Period
+    Route::get('/thr-periods/index', [ThrPeriodController::class, 'index'])->name('thr-periods.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-periods/create', [ThrPeriodController::class, 'create'])->name('thr-periods.create')->middleware(['auth', 'role:Admin']);
+    Route::post('/thr-periods/store', [ThrPeriodController::class, 'store'])->name('thr-periods.store')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-periods/detail/{id}', [ThrPeriodController::class, 'detail'])->name('thr-periods.detail')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-periods/edit/{id}', [ThrPeriodController::class, 'edit'])->name('thr-periods.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('/thr-periods/update', [ThrPeriodController::class, 'update'])->name('thr-periods.update')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-periods/delete/{id}', [ThrPeriodController::class, 'delete'])->name('thr-periods.delete')->middleware(['auth', 'role:Admin']);
+
+    // Thr Process
+    Route::get('/thr-process/index', [ThrProcessController::class, 'index'])->name('thr-process.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-process/generate', [ThrProcessController::class, 'generate'])->name('thr-process.generate')->middleware(['auth', 'role:Admin']);
+    Route::post('/thr-process/process', [ThrProcessController::class, 'process'])->name('thr-process.process')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-process/details/{id}', [ThrProcessController::class, 'details'])->name('thr-process.details')->middleware(['auth', 'role:Admin']);
+    Route::delete('/thr-process/delete/{period_id}', [ThrProcessController::class, 'destroy'])->name('thr-process.destroy')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-process/edit/{id}', [ThrProcessController::class, 'edit'])->name('thr-process.edit')->middleware(['auth', 'role:Admin']);
+    Route::post('/thr-process/update', [ThrProcessController::class, 'update'])->name('thr-process.update')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-slip/{run_id}/{npk}', [ThrProcessController::class, 'slip'])->name('thr-slip')->middleware(['auth', 'role:Admin']);
+    Route::get('thr-process/export-rekap/{run_id}', [ThrProcessController::class, 'exportRekap'])->name('thr.export.rekap')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr/export/{run_id}', [ThrProcessController::class, 'export'])->name('thr.export.export')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr/export-progress/{id}', [ThrProcessController::class, 'progress'])->name('thr.export.progress')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-slip/view/{run_id}/{npk}', [ThrProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-process/approval/{period}', [ThrProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin']);
+
     // Evaluation Questionnaire
     Route::prefix('evaluation-questionnaire')->group(function () {
         Route::get('/', [EvaluationQuestionnaireController::class, 'index'])->name('evaluation-questionnaire.index')->middleware(['auth', 'role:Admin|HRD']);
@@ -175,6 +204,17 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create')->middleware(['auth', 'role:Admin']);
         Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve')->middleware(['auth', 'role:Admin']);
     });
+
+
+
+    // Thr Approve
+    Route::post('/thr-approve/{id}/approve', [ThrApproveController::class, 'approve'])->name('thr-approve.approve')->middleware(['auth', 'role:Admin']);
+    Route::prefix('thr-approve')->group(function () {
+        Route::get('/', [ThrApproveController::class, 'index'])->name('thr-approve.index')->middleware(['auth', 'role:Admin']);
+        Route::post('/create/{thr_run_id}', [ThrApproveController::class, 'store'])->name('thr-approve.create')->middleware(['auth', 'role:Admin']);
+        Route::post('/{id}/approve', [ThrApproveController::class, 'approve'])->name('thr-approve.approve')->middleware(['auth', 'role:Admin']);
+    });
+
 
     // Insentif Approve
     Route::get('/insentif-approve', [InsentifApprovalController::class, 'index'])->name('insentif-approve.index')->middleware(['auth', 'role:Admin']);
@@ -323,6 +363,16 @@ Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrL
 Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('view-slip');
 Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
+
+// Employee Thr
+Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('view-slip');
+Route::post('/employee-thr/{npk}/show-slip', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.show-slip');
+Route::post('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
+Route::get('/employee-thr', [EmployeeThrController::class, 'index'])->name('employee-thr.index');
+Route::get('/employee-thr/qr-login', [EmployeeThrController::class, 'qrLogin']);
+Route::get('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
+Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('view-slip');
+Route::get('/employee-thr/api/period', [EmployeeThrController::class, 'apiPeriods'])->name('employee-thr-api.period');
 
 // Employee Evaluation
 Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class, 'submit'])->name('evaluation-employee.submit');

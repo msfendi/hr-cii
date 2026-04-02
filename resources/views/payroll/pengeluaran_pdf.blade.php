@@ -143,7 +143,7 @@ function terbilang($nilai) {
     </table>
     <br>
     <br>
-    <div> Terbilang: 
+    <div>
         @php
         $netto_aktif = $total_bruto - $total_potongan; // bisa float besar
 
@@ -273,7 +273,7 @@ $total_potongan = 0;
     </table>
     <br>
     <br>
-    <div> Terbilang: 
+    <div>
         @php
         $netto_resign = $total_bruto - $total_potongan; // bisa float besar
 

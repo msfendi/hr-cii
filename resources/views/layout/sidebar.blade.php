@@ -157,6 +157,23 @@
         </div>
     </li>
     @endif
+
+    @if($roleusers[0]->rolename == 'Admin')
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseTHR"
+            aria-expanded="true" aria-controls="collapsePayroll">
+            <i class="fas fa-fw fa-calculator"></i>
+            <span>THR</span>
+        </a>
+        <div id="collapseTHR" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
+                <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
+                <a class="collapse-item" href="{{ route('thr-approve.index') }}">THR Approve</a>
+            </div>
+        </div>
+    </li>
+    @endif
     
     @if($roleusers[0]->rolename == 'Admin')
     <li class="nav-item">

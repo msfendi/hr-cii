@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\PayrollApprove;
 use App\Models\PayrollSetting;
+use App\Models\ThrApprove;
+use App\Models\ThrSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 
-class PayrollApproveController extends Controller
+class ThrApproveController extends Controller
 {
 
     public function index()
@@ -17,20 +18,19 @@ class PayrollApproveController extends Controller
         // =========================
         // JOIN PAYROLL RUN + PERIOD + EXPORT
         // =========================
-        $data = PayrollApprove::query()
-            ->join('payroll_runs', 'payroll_approve.payroll_run_id', '=', 'payroll_runs.id')
-            ->join('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')
-            ->leftJoin('payroll_exports', 'payroll_exports.run_id', '=', 'payroll_runs.id') // 🔥 tambahan
+        $data = ThrApprove::query()
+            ->join('thr_runs', 'thr_approve.thr_run_id', '=', 'thr_runs.id')
+            ->join('thr_periods', 'thr_runs.period_id', '=', 'thr_periods.id')
+            ->leftJoin('thr_exports', 'thr_exports.run_id', '=', 'thr_runs.id') // 🔥 tambahan
             ->select(
-                'payroll_approve.*',
-                'payroll_periods.name as period_name',
-                'payroll_exports.file_bank_active',
-                'payroll_exports.file_bank_resign',
-                'payroll_exports.file_excel',
-                'payroll_exports.file_pdf',
-                'payroll_exports.file_peng',
+                'thr_approve.*',
+                'thr_periods.name as period_name',
+                'thr_exports.file_bank',
+                'thr_exports.file_excel',
+                'thr_exports.file_pdf',
+                'thr_exports.file_peng',
             )
-            ->latest('payroll_approve.id')
+            ->latest('thr_approve.id')
             ->get();
 
         // =========================
@@ -76,10 +76,10 @@ class PayrollApproveController extends Controller
             return $row;
         });
 
-        return view('payroll_approve.index', compact('data'));
+        return view('thr_approve.index', compact('data'));
     }
     // 🔹 Create approval dari setting
-    public function store($payroll_run_id)
+    public function store($thr_run_id)
     {
         $settings = PayrollSetting::orderBy('level')->get();
 
@@ -92,8 +92,8 @@ class PayrollApproveController extends Controller
             ];
         });
 
-        return PayrollApprove::create([
-            'payroll_run_id' => $payroll_run_id,
+        return ThrApprove::create([
+            'thr_run_id' => $thr_run_id,
             'approval' => $approvals,
             'progress' => $progress,
             'status' => 'pending'
@@ -103,7 +103,7 @@ class PayrollApproveController extends Controller
     // 🔹 Approve by NPK
     public function approve(Request $request, $id)
     {
-        $data = PayrollApprove::findOrFail($id);
+        $data = ThrApprove::findOrFail($id);
         $npkLogin = $request->npk;
 
         $progress = collect($data->progress);
@@ -175,7 +175,7 @@ class PayrollApproveController extends Controller
         // 🔥 AUTO GENERATE BANK
         // =========================
         if ($finalApprove) {
-            $this->generateBank($data->payroll_run_id); // 🔥 pakai run_id
+            $this->generateBank($data->thr_run_id); // 🔥 pakai run_id
         }
 
         return response()->json([
@@ -190,8 +190,8 @@ class PayrollApproveController extends Controller
     | VALIDASI APPROVAL
     |--------------------------------------------------------------------------
     */
-        $approve = DB::table('payroll_approve')
-            ->where('payroll_run_id', $runId)
+        $approve = DB::table('thr_approve')
+            ->where('thr_run_id', $runId)
             ->first();
 
         if (!$approve || $approve->status !== 'finish') {
@@ -203,19 +203,17 @@ class PayrollApproveController extends Controller
     | PERIODE
     |--------------------------------------------------------------------------
     */
-        $period = DB::table('payroll_runs as pr')
-            ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+        $period = DB::table('thr_runs as pr')
+            ->join('thr_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('pr.id', $runId)
-            ->select('pp.name', 'pp.start_date', 'pp.end_date')
+            ->select('pp.name')
             ->first();
 
-        if (!$period) {
-            return false;
-        }
+        if (!$period) return false;
 
         /*
     |--------------------------------------------------------------------------
-    | EMPLOYEE UNION (AKTIF + RESIGN)
+    | UNION EMPLOYEE
     |--------------------------------------------------------------------------
     */
         $employeeUnion = DB::table('BIODATA')
@@ -228,7 +226,7 @@ class PayrollApproveController extends Controller
 
         $employeeData = DB::query()
             ->fromSub($employeeUnion, 'bio')
-            ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'bio.NPK')
+            ->leftJoin('thr_masters as pm', 'pm.npk', '=', 'bio.NPK')
             ->select(
                 'bio.NPK',
                 'bio.id_dept',
@@ -238,81 +236,43 @@ class PayrollApproveController extends Controller
 
         /*
     |--------------------------------------------------------------------------
-    | TANGGAL RESIGN TERBARU
+    | DATA THR
     |--------------------------------------------------------------------------
     */
-        $pkwtLatest = DB::table('PKWT')
-            ->select('NPK', DB::raw('MAX(TKK) as TKK'))
-            ->groupBy('NPK');
-
-        /*
-    |--------------------------------------------------------------------------
-    | DATA PAYROLL
-    |--------------------------------------------------------------------------
-    */
-        $data = DB::table('payroll_run_details as prd')
+        $data = DB::table('thr_run_details as trd')
 
             ->leftJoinSub($employeeData, 'emp', function ($join) {
-                $join->on('emp.NPK', '=', 'prd.employee_npk')
+                $join->on('emp.NPK', '=', 'trd.employee_npk')
                     ->whereRaw("LOWER(emp.bank_name) = 'permata'");
             })
 
             ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
 
-            ->leftJoinSub($pkwtLatest, 'p', function ($join) {
-                $join->on('p.NPK', '=', 'prd.employee_npk');
-            })
+            ->leftJoin('thr_runs as tr', 'tr.id', '=', 'trd.run_id')
+            ->leftJoin('thr_periods as pp', 'pp.id', '=', 'tr.period_id')
 
-            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
-            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-
-            ->where('prd.run_id', $runId)
+            ->where('trd.run_id', $runId)
 
             ->select(
-                'prd.employee_npk',
-                'prd.employee_name',
-                'prd.total_salary',
+                'trd.employee_npk',
+                'trd.employee_name',
+                'trd.total_salary',
                 'emp.bank_account',
-                'd.DEPARTEMENT',
-                'pp.start_date',
-                'pp.end_date',
-                'p.TKK'
+                'd.DEPARTEMENT'
             )
 
             ->orderBy('d.DEPARTEMENT')
-            ->orderBy('prd.employee_npk')
+            ->orderBy('trd.employee_npk')
             ->get();
 
-        if ($data->isEmpty()) {
-            return false;
-        }
+        if ($data->isEmpty()) return false;
 
         /*
     |--------------------------------------------------------------------------
-    | PISAH AKTIF VS RESIGN
+    | GROUP BY DEPARTMENT
     |--------------------------------------------------------------------------
     */
-        $activeEmployees = $data->filter(function ($row) {
-            return empty($row->TKK);
-        });
-
-        $resignEmployees = $data->filter(function ($row) {
-
-            if (empty($row->TKK)) {
-                return false;
-            }
-
-            return $row->TKK >= $row->start_date &&
-                $row->TKK <= $row->end_date;
-        });
-
-        /*
-    |--------------------------------------------------------------------------
-    | GROUP DEPARTMENT
-    |--------------------------------------------------------------------------
-    */
-        $groupedActive = $activeEmployees->groupBy('DEPARTEMENT');
-        $groupedResign = $resignEmployees->groupBy('DEPARTEMENT');
+        $groupedData = $data->groupBy('DEPARTEMENT');
 
         /*
     |--------------------------------------------------------------------------
@@ -321,22 +281,19 @@ class PayrollApproveController extends Controller
     */
         $cleanPeriod = str_replace(' ', '_', $period->name);
 
-        $activePath = "payroll/PERMATA_{$cleanPeriod}_AKTIF.csv";
-        $resignPath = "payroll/PERMATA_{$cleanPeriod}_RESIGN.csv";
+        $filePath = "thr/PERMATA_{$cleanPeriod}.csv";
 
-        $this->createBankCSV($groupedActive, $period->name, $activePath);
-        $this->createBankCSV($groupedResign, $period->name, $resignPath);
+        $this->createBankCSV($groupedData, $period->name, $filePath);
 
         /*
     |--------------------------------------------------------------------------
     | UPDATE EXPORT TABLE
     |--------------------------------------------------------------------------
     */
-        DB::table('payroll_exports')->updateOrInsert(
+        DB::table('thr_exports')->updateOrInsert(
             ['run_id' => $runId],
             [
-                'file_bank_active' => $activePath,
-                'file_bank_resign' => $resignPath
+                'file_bank' => $filePath
             ]
         );
 
@@ -370,17 +327,13 @@ class PayrollApproveController extends Controller
 
             foreach ($employees as $emp) {
 
-                // if (empty($emp->bank_account) || $emp->total_salary <= 0) {
-                //     continue;
-                // }
-
                 fputcsv($handle, [
                     $emp->bank_account ?? '',
                     strtoupper($emp->employee_name),
                     'PERMATA',
                     '013',
                     number_format($emp->total_salary ?? 0, 0, '', ''),
-                    'GAJI ' . strtoupper($periodName)
+                    'THR ' . strtoupper($periodName)
                 ]);
             }
         }

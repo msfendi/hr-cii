@@ -10,11 +10,11 @@
          @include('layout.navbar')
          <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
-               <h1 class="h3 mb-0 text-gray-800">Payroll Approval</h1>
+               <h1 class="h3 mb-0 text-gray-800">Thr Approval</h1>
             </div>
             <div class="card shadow mb-4">
                <div class="card-header py-3">
-                  <h6 class="m-0 font-weight-bold text-primary">Data Approval Payroll</h6>
+                  <h6 class="m-0 font-weight-bold text-primary">Data Approval Thr</h6>
                </div>
                <div class="card-body">
                   <div class="table-responsive">
@@ -22,8 +22,8 @@
                         <thead>
                            <tr>
                               <th>ID</th>
-                              <th>Payroll Run</th>
-                              <th>Payroll Period</th>
+                              <th>Thr Run</th>
+                              <th>Thr Period</th>
                               <th>Export File</th>
                               <th>Export Status</th>
                               <th>Progress</th>
@@ -35,7 +35,7 @@
                            @foreach($data as $row)
                            <tr>
                               <td>{{ $row->id }}</td>
-                              <td>{{ $row->payroll_run_id }}</td>
+                              <td>{{ $row->thr_run_id }}</td>
                               <td>{{ $row->period_name }}</td>
                               
                                 <td class="text-center">
@@ -229,7 +229,7 @@
              }).then((result) => {
                  if (result.isConfirmed) {
                      $.ajax({
-                         url: '/payroll-approve/' + id + '/approve',
+                         url: '/thr-approve/' + id + '/approve',
                          type: 'POST',
                          data: {
                              _token: '{{ csrf_token() }}',
