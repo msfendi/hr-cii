@@ -9,18 +9,34 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading,  WithTitle, ShouldAutoSize
+class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading, WithTitle, ShouldAutoSize, WithStrictNullComparison, WithColumnFormatting
 {
     protected $run_id;
+    protected $componentTypes = [];
 
     public function __construct($run_id)
     {
         $this->run_id = $run_id;
+
+        // Ambil tipe komponen dari payroll_components
+        $this->componentTypes = DB::table('payroll_components')
+            ->pluck('type', 'code') // ['thr' => 'earning', 'pph_21' => 'deduction', ...]
+            ->toArray();
     }
+
     public function title(): string
     {
         return 'Payroll_Out';
+    }
+    public function columnFormats(): array
+    {
+        return [
+            'D:Z' => NumberFormat::FORMAT_NUMBER,
+        ];
     }
 
     private function baseBiodataQuery()
@@ -57,25 +73,20 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
         $biodataUnion = $this->baseBiodataQuery();
 
         return DB::table('payroll_run_details as prd')
-
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-
             ->leftJoin('DEPT as d', 'd.id_dept', '=', 'bio.id_dept')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-
             ->where('prd.run_id', $this->run_id)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',
                 'd.DEPARTEMENT as departement',
                 'pp.name as period_name'
             )
-
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk');
     }
@@ -84,38 +95,50 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
     {
         $components = json_decode($row->components, true);
 
-        return [
+        // Daftar komponen yang akan tampil di Excel
+        $fields = [
+            'basic_salary',
+            'overtime_pay',
+            'special_overtime_pay',
+            'monthly_premi',
+            'long_service_allowance',
+            'allowance',
+            'sewing_insentif',
+            'pad_insentif',
+            'cutting_insentif',
+            'adjusment',
+            'bpjs_kesehatan',
+            'bpjs_ketenagakerjaan',
+            'pph_21',
+            'pph_21_deduction',
+            'absence_deduction'
+        ];
 
+        $values = [];
+
+        foreach ($fields as $field) {
+            $value = array_key_exists($field, $components) ? (float)$components[$field] : 0;
+            $type  = $this->componentTypes[$field] ?? 'earning';
+
+            if ($type === 'deduction') {
+                $value = -abs($value); // pastikan deduction negatif
+            }
+
+            $values[] = $value;
+        }
+
+        return array_merge([
             $row->employee_npk,
             $row->employee_name,
-            $row->departement,
-
-            $components['basic_salary'] ?? 0,
-            $components['overtime_pay'] ?? 0,
-            $components['special_overtime_pay'] ?? 0,
-            $components['monthly_premi'] ?? 0,
-            $components['long_service_allowance'] ?? 0,
-            $components['allowance'] ?? 0,
-            $components['sewing_insentif'] ?? 0,
-            $components['pad_insentif'] ?? 0,
-            $components['cutting_insentif'] ?? 0,
-            $components['adjusment'] ?? 0,
-
-            $components['bpjs_kesehatan'] ?? 0,
-            $components['bpjs_ketenagakerjaan'] ?? 0,
-
-            $components['pph_21'] ?? 0,
-            $components['pph_21_deduction'] ?? 0,
-            $components['absence_deduction'] ?? 0,
-
-            $row->total_salary
-        ];
+            $row->departement
+        ], $values, [
+            array_key_exists('total_salary', (array)$row) ? (float)$row->total_salary : 0
+        ]);
     }
 
     public function headings(): array
     {
         return [
-
             'NPK',
             'Employee Name',
             'Departement',

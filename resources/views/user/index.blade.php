@@ -62,9 +62,9 @@
                                 <thead>
                                     <tr>
                                         <th>ID</th>
+                                        <th>NPK</th>
                                         <th>Name</th>
                                         <th>Email</th>
-                                        <th>Dept</th>
                                         <th>Created At</th>
                                         <th>Updated At</th>
                                         <th>Action</th>
@@ -74,9 +74,9 @@
                                     @foreach($users as $user)
                                     <tr>
                                         <td>{{ $user->id }}</td>
+                                        <td>{{ $user->npk }}</td>
                                         <td>{{ $user->name }}</td>
                                         <td>{{ $user->email }}</td>
-                                        <td>{{ $user->dept }}</td>
                                         <td>{{ $user->created_at }}</td>
                                         <td>{{ $user->updated_at }}</td>
                                         <td class="text-center">

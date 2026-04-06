@@ -6,6 +6,11 @@ use Illuminate\Support\Facades\DB;
 use App\Models\PayrollComponent;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithCharts;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 
 use PhpOffice\PhpSpreadsheet\Chart\Chart;
 use PhpOffice\PhpSpreadsheet\Chart\Title;
@@ -13,16 +18,19 @@ use PhpOffice\PhpSpreadsheet\Chart\Legend;
 use PhpOffice\PhpSpreadsheet\Chart\PlotArea;
 use PhpOffice\PhpSpreadsheet\Chart\DataSeries;
 use PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues;
-use Maatwebsite\Excel\Concerns\WithCharts;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Chart\Layout;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class PayrollSummarySheet implements FromArray, WithTitle, WithCharts, WithStyles, ShouldAutoSize
+class PayrollSummarySheet implements
+    FromArray,
+    WithTitle,
+    WithCharts,
+    WithStyles,
+    ShouldAutoSize,
+    WithStrictNullComparison,
+    WithColumnFormatting
 {
-
     protected $run_id;
     protected $componentCount;
 
@@ -37,33 +45,37 @@ class PayrollSummarySheet implements FromArray, WithTitle, WithCharts, WithStyle
         return 'Payroll_Summary';
     }
 
-    public function array(): array
-    {
-        /*
-    =====================================
-    AMBIL PERIODE PAYROLL
-    =====================================
+    /*
+    =====================================================
+    FORMAT ANGKA
+    =====================================================
     */
 
+    public function columnFormats(): array
+    {
+        return [
+            'B:Z' => NumberFormat::FORMAT_NUMBER,
+        ];
+    }
+
+    /*
+    =====================================================
+    BUILD DATA
+    =====================================================
+    */
+
+    public function array(): array
+    {
         $period = DB::table('payroll_runs as pr')
             ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('pr.id', $this->run_id)
             ->select('pp.start_date', 'pp.end_date')
             ->first();
 
-        /*
-    =====================================
-    AMBIL DATA PAYROLL + TKK
-    =====================================
-    */
-
         $data = DB::table('payroll_run_details as prd')
             ->leftJoin('PKWT as p', 'p.NPK', '=', 'prd.employee_npk')
             ->where('prd.run_id', $this->run_id)
-            ->select(
-                'prd.components',
-                'p.TKK'
-            )
+            ->select('prd.components', 'p.TKK')
             ->get();
 
         $components = PayrollComponent::orderBy('priority')->get();
@@ -73,53 +85,61 @@ class PayrollSummarySheet implements FromArray, WithTitle, WithCharts, WithStyle
 
         $earningActive = 0;
         $deductionActive = 0;
-
         $earningResign = 0;
         $deductionResign = 0;
 
         /*
-    =====================================
-    HITUNG TOTAL PER STATUS
-    =====================================
-    */
+        =====================================================
+        HITUNG TOTAL
+        =====================================================
+        */
 
         foreach ($data as $row) {
 
-            $items = json_decode($row->components, true);
+            // ⭐ FORCE ARRAY
+            $items = json_decode($row->components, true) ?? [];
 
             $isResign = $row->TKK &&
                 $row->TKK >= $period->start_date &&
                 $row->TKK <= $period->end_date;
 
-            foreach ($items as $code => $value) {
+            foreach ($components as $component) {
+
+                $code = $component->code;
+
+                // ⭐ FORCE ZERO
+                $value = isset($items[$code])
+                    ? (float)$items[$code]
+                    : 0.0;
 
                 if ($isResign) {
-
-                    $totalsResign[$code] = ($totalsResign[$code] ?? 0) + $value;
+                    $totalsResign[$code] =
+                        (float)($totalsResign[$code] ?? 0) + $value;
                 } else {
-
-                    $totalsActive[$code] = ($totalsActive[$code] ?? 0) + $value;
+                    $totalsActive[$code] =
+                        (float)($totalsActive[$code] ?? 0) + $value;
                 }
             }
         }
 
         /*
-    =====================================
-    BUILD EXCEL ROW
-    =====================================
-    */
+        =====================================================
+        BUILD EXCEL ROW
+        =====================================================
+        */
 
+        $rows = [];
         $rows[] = ['Component', 'Active Payroll', 'Resigned Payroll', 'Total'];
 
         foreach ($components as $component) {
 
-            $activeValue = $totalsActive[$component->code] ?? 0;
-            $resignValue = $totalsResign[$component->code] ?? 0;
+            $activeValue = (float)($totalsActive[$component->code] ?? 0);
+            $resignValue = (float)($totalsResign[$component->code] ?? 0);
 
-            if ($component->type == 'deduction') {
+            if ($component->type === 'deduction') {
 
-                $activeValue = -$activeValue;
-                $resignValue = -$resignValue;
+                $activeValue = -abs($activeValue);
+                $resignValue = -abs($resignValue);
 
                 $deductionActive += $activeValue;
                 $deductionResign += $resignValue;
@@ -129,11 +149,12 @@ class PayrollSummarySheet implements FromArray, WithTitle, WithCharts, WithStyle
                 $earningResign += $resignValue;
             }
 
+            // ⭐ FORCE NUMERIC ZERO
             $rows[] = [
                 $component->name,
-                $activeValue,
-                $resignValue,
-                $activeValue + $resignValue
+                (float)$activeValue,
+                (float)$resignValue,
+                (float)($activeValue + $resignValue),
             ];
         }
 
@@ -141,42 +162,56 @@ class PayrollSummarySheet implements FromArray, WithTitle, WithCharts, WithStyle
 
         $rows[] = [
             'Total Earning',
-            $earningActive,
-            $earningResign,
-            $earningActive + $earningResign
+            (float)$earningActive,
+            (float)$earningResign,
+            (float)($earningActive + $earningResign),
         ];
 
         $rows[] = [
             'Total Deduction',
-            $deductionActive,
-            $deductionResign,
-            $deductionActive + $deductionResign
+            (float)$deductionActive,
+            (float)$deductionResign,
+            (float)($deductionActive + $deductionResign),
         ];
 
         $rows[] = [
             'Net Payroll',
-            $earningActive + $deductionActive,
-            $earningResign + $deductionResign,
-            ($earningActive + $deductionActive) + ($earningResign + $deductionResign)
+            (float)($earningActive + $deductionActive),
+            (float)($earningResign + $deductionResign),
+            (float)(
+                ($earningActive + $deductionActive) +
+                ($earningResign + $deductionResign)
+            ),
         ];
 
         return $rows;
     }
 
+    /*
+    =====================================================
+    STYLE
+    =====================================================
+    */
+
     public function styles(Worksheet $sheet)
     {
-        $sheet->getStyle('B2:D100')
+        $sheet->getStyle('B2:D500')
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
     }
+
+    /*
+    =====================================================
+    CHART
+    =====================================================
+    */
 
     public function charts()
     {
         $startRow = 2;
         $endRow = $this->componentCount + 1;
 
-        $labelRange = "Payroll_Summary!\$A\${$startRow}:\$A\${$endRow}";
-
+        $labelRange  = "Payroll_Summary!\$A\${$startRow}:\$A\${$endRow}";
         $activeRange = "Payroll_Summary!\$B\${$startRow}:\$B\${$endRow}";
         $resignRange = "Payroll_Summary!\$C\${$startRow}:\$C\${$endRow}";
         $totalRange  = "Payroll_Summary!\$D\${$startRow}:\$D\${$endRow}";
@@ -198,7 +233,7 @@ class PayrollSummarySheet implements FromArray, WithTitle, WithCharts, WithStyle
         ];
 
         $layout = new Layout();
-        $layout->setShowVal(false); // agar chart tidak penuh angka
+        $layout->setShowVal(false);
 
         $series = new DataSeries(
             DataSeries::TYPE_BARCHART,
@@ -220,7 +255,6 @@ class PayrollSummarySheet implements FromArray, WithTitle, WithCharts, WithStyle
             $plot
         );
 
-        // posisi chart dibuat lebih panjang
         $chart->setTopLeftPosition('F2');
         $chart->setBottomRightPosition('T28');
 

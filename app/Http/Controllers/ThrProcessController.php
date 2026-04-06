@@ -196,29 +196,21 @@ class ThrProcessController extends Controller
                 $approvals = $settings->pluck('approval')->toArray();
 
                 $progress = collect($approvals)->map(function ($npk) {
-
-                    $npkList = is_array($npk)
-                        ? $npk
-                        : json_decode($npk, true);
-
-                    if (!is_array($npkList)) {
-                        $npkList = [$npk];
-                    }
-
+                    $npkList = is_array($npk) ? $npk : json_decode($npk, true);
+                    if (!is_array($npkList)) $npkList = [$npk];
                     $statusList = array_fill(0, count($npkList), 'waiting');
-
                     return [
-                        'npk'    => json_encode($npkList),
+                        'npk' => json_encode($npkList),
                         'status' => json_encode($statusList)
                     ];
-                })->values()->toArray();
+                })->values();
 
                 ThrApprove::create([
-                    'thr_run_id'  => $run->id,
-                    'approval'    => json_encode($approvals),
-                    'progress'    => json_encode($progress),
-                    'approved_at' => json_encode([]),
-                    'status'      => 'pending'
+                    'thr_run_id'     => $run->id,
+                    'approval'       => $approvals,
+                    'progress'       => $progress,
+                    'approved_at'    => [],
+                    'status'         => 'pending'
                 ]);
             }
         }

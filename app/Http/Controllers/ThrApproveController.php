@@ -226,7 +226,7 @@ class ThrApproveController extends Controller
 
         $employeeData = DB::query()
             ->fromSub($employeeUnion, 'bio')
-            ->leftJoin('thr_masters as pm', 'pm.npk', '=', 'bio.NPK')
+            ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'bio.NPK')
             ->select(
                 'bio.NPK',
                 'bio.id_dept',
@@ -333,7 +333,7 @@ class ThrApproveController extends Controller
                     'PERMATA',
                     '013',
                     number_format($emp->total_salary ?? 0, 0, '', ''),
-                    'THR ' . strtoupper($periodName)
+                    strtoupper($periodName)
                 ]);
             }
         }

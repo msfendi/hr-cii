@@ -61,6 +61,11 @@
                             </div>
                             <br>
                             <div>
+                                <label>NPK :</label>
+                                <input class="form-control" type="text" id="npk" name="npk" value="{{ $users->npk }}">
+                            </div>
+                            <br>
+                            <div>
                                 <label>Nama Lengkap :</label>
                                 <input class="form-control" type="text" id="name" name="name" value="{{ $users->name }}">
                             </div>
@@ -68,11 +73,6 @@
                             <div>
                                 <label>Email :</label>
                                 <input class="form-control" type="email" id="email" name="email" value="{{ $users->email }}">
-                            </div>
-                            <br>
-                            <div>
-                                <label>Dept :</label>
-                                <input class="form-control" type="text" id="dept" name="dept" value="{{ $users->dept }}">
                             </div>
                             <br>
                             <div class="row">

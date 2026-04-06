@@ -188,8 +188,6 @@ class EmployeePayrollController extends Controller
 
         $dates = CarbonPeriod::create($startDate, $endDate);
 
-        // BusinessDay::enable(Carbon::class, 'id');
-
         $holidays = DB::table('holidays')
             ->whereBetween('holiday_date', [$startDate, $endDate])
             ->pluck('holiday_date')
@@ -200,9 +198,10 @@ class EmployeePayrollController extends Controller
 
             $tanggal = $date->format('Y-m-d');
 
-            $dailyLogs = $logs->filter(function ($log) use ($tanggal) {
-                return Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal;
-            });
+            $dailyLogs = $logs->filter(
+                fn($log) =>
+                Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+            );
 
             $jamMasuk = null;
             $jamPulang = null;
@@ -213,101 +212,109 @@ class EmployeePayrollController extends Controller
 
             $isWeekend = $date->isWeekend();
             $isHoliday = in_array($tanggal, $holidays);
+            $isWorkday = !($isWeekend || $isHoliday);
+
+            $hasLog = $dailyLogs->count() > 0;
+            $isNumericOT = is_numeric($lembur);
 
             /*
-            |------------------------------------------
-            | Ada Scan
-            |------------------------------------------
-            */
+    ======================================================
+    GROUP STATUS IZIN
+    ======================================================
+    */
+            $izinCodes = ['MA', 'BR', 'PE', 'DL', 'SA', 'SI', 'CT'];
 
-            if ($dailyLogs->count() > 0) {
-                $first = Carbon::parse($dailyLogs->first()->scan_date);
-                $last  = Carbon::parse($dailyLogs->last()->scan_date);
-                if ($dailyLogs->count() == 1) {
+            if (in_array($lembur, $izinCodes)) {
 
-                    if ($first->hour < 12) {
-                        $status = 'Scan Masuk';
-                        $jamMasuk = $first->format('H:i');
-                    } else {
-                        $status = 'Scan Pulang';
-                        $jamPulang = $first->format('H:i');
-                    }
-                } elseif ($dailyLogs->count() > 1) {
+                $jamMasuk = '-';
+                $jamPulang = '-';
 
-                    $jamMasuk = $first->format('H:i');
-                    $jamPulang = $last->format('H:i');
-                    $status = 'Hadir';
-                } else {
-                    $status = 'Tidak Finger';
+                $status = $lembur;
+
+                if (!isset($summary['status'][$status])) {
+                    $summary['status'][$status] = 0;
                 }
+                $summary['status'][$status]++;
 
-                $summary['hadir']++;
-            } else {
-
-                /*
-                |------------------------------------------
-                | Jika Weekend / Holiday
-                |------------------------------------------
-                */
-                if ($isWeekend || $isHoliday) {
-                    // Jika hari libur
-                    if (is_numeric($lembur)) {
-                        $status = 'Lembur Khusus';
-                    } else {
-                        $status = 'Holiday';
-                    }
-                } elseif ($dailyLogs->count() > 0) {
-                    // Jika ada scan absensi
-                    $first = Carbon::parse($dailyLogs->first()->scan_date);
-                    $last  = Carbon::parse($dailyLogs->last()->scan_date);
-                    if ($dailyLogs->count() == 1) {
-                        if ($first->hour < 12) {
-                            $status = 'Scan Masuk';
-                            $jamMasuk = $first->format('H:i');
-                        } else {
-                            $status = 'Scan Pulang';
-                            $jamPulang = $first->format('H:i');
-                        }
-                    } elseif ($dailyLogs->count() > 1) {
-
-                        $jamMasuk = $first->format('H:i');
-                        $jamPulang = $last->format('H:i');
-                        $status = 'Hadir';
-                    } else {
-                        $status = 'Tidak Finger';
-                    }
-
-                    $summary['hadir']++;
-                } else {
-                    if ($lembur === null || $lembur === '') {
-                        $status = 'Tidak Finger';
-                        $summary['hadir']++;
-                    } elseif (is_numeric($lembur)) {
-                        $status = 'Lembur';
-                    } else {
-                        $status = $lembur;
-                        $summary['absent']++;
-
-                        if (!isset($summary['status'][$lembur])) {
-                            $summary['status'][$lembur] = 0;
-                        }
-                        $summary['status'][$lembur]++;
-                    }
+                if ($isWorkday) {
+                    $summary['absent']++;
                 }
             }
 
             /*
-            |------------------------------------------
-            | Hitung Overtime
-            |------------------------------------------
-            */
+    ======================================================
+    ADA FINGERPRINT
+    ======================================================
+    */ elseif ($hasLog) {
 
-            if (is_numeric($lembur)) {
-                $overtime = $lembur;
-                if ($isWeekend || $isHoliday) {
-                    $summary['lembur_khusus'] += $lembur;
+                $first = Carbon::parse($dailyLogs->first()->scan_date);
+                $last  = Carbon::parse($dailyLogs->last()->scan_date);
+
+                if ($dailyLogs->count() == 1) {
+
+                    if ($first->hour < 12) {
+                        $jamMasuk = $first->format('H:i');
+                        $status = 'Scan Masuk';
+                    } else {
+                        $jamPulang = $first->format('H:i');
+                        $status = 'Scan Pulang';
+                    }
                 } else {
-                    $summary['lembur_resmi'] += $lembur;
+
+                    $jamMasuk = $first->format('H:i');
+                    $jamPulang = $last->format('H:i');
+                    $status = 'Hadir';
+                }
+
+                if ($isWorkday) {
+                    $summary['hadir']++;
+                }
+            }
+
+            /*
+    ======================================================
+    TIDAK ADA FINGERPRINT
+    ======================================================
+    */ else {
+
+                if ($lembur === 'IN') {
+
+                    $status = 'Masuk (Finger tidak terbaca)';
+
+                    if ($isWorkday) {
+                        $summary['hadir']++;
+                    }
+                } elseif ($isNumericOT) {
+
+                    $status = 'Lembur';
+
+                    // ⭐ lembur hari libur TIDAK dihitung hadir
+                    if ($isWorkday) {
+                        $summary['hadir']++;
+                    }
+                } elseif ($isWeekend || $isHoliday) {
+
+                    $status = 'Holiday';
+                } else {
+
+                    $status = 'Tidak Masuk';
+                    $summary['absent']++;
+                }
+            }
+
+            /*
+    ======================================================
+    HITUNG OVERTIME
+    ======================================================
+    */
+            if ($isNumericOT) {
+
+                $overtime = (float)$lembur;
+
+                if ($isWeekend || $isHoliday) {
+                    $summary['lembur_khusus'] += $overtime;
+                } else {
+                    $summary['lembur_resmi'] += $overtime;
                 }
             }
 
@@ -317,7 +324,7 @@ class EmployeePayrollController extends Controller
                 'jam_pulang' => $jamPulang,
                 'status' => $status,
                 'overtime' => $overtime,
-                'is_holiday' => ($isWeekend || $isHoliday)
+                'is_holiday' => ($isWeekend || $isHoliday),
             ];
         }
         // dd($attendance);

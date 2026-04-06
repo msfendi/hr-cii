@@ -9,117 +9,119 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading,  WithTitle, ShouldAutoSize
+class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading, WithTitle, ShouldAutoSize, WithStrictNullComparison, WithColumnFormatting
 {
     protected $run_id;
+    protected $componentTypes = [];
 
     public function __construct($run_id)
     {
         $this->run_id = $run_id;
+
+        // Ambil tipe komponen: earning / deduction
+        $this->componentTypes = DB::table('payroll_components')
+            ->pluck('type', 'code') // ['thr' => 'earning', 'pph_21' => 'deduction', ...]
+            ->toArray();
     }
+
     public function title(): string
     {
-        return 'Payrol_Active';
+        return 'Payroll_Active';
+    }
+
+    public function columnFormats(): array
+    {
+        return [
+            'D:Z' => NumberFormat::FORMAT_NUMBER,
+        ];
     }
 
     private function baseBiodataQuery()
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK'
-            );
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK'
-            );
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK');
 
         return $biodataAktif->union($biodataKeluar);
     }
 
     public function query()
     {
-        $period = DB::table('payroll_runs as pr')
-            ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->where('pr.id', $this->run_id)
-            ->select('pp.start_date', 'pp.end_date')
-            ->first();
-
         $biodataUnion = $this->baseBiodataQuery();
 
         return DB::table('payroll_run_details as prd')
-
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-
             ->leftJoin('DEPT as d', 'd.id_dept', '=', 'bio.id_dept')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-
             ->where('prd.run_id', $this->run_id)
             ->whereNull('bio.TKK')
-
-            ->select(
-                'prd.*',
-                'bio.NAMA_KARYAWAN',
-                'd.DEPARTEMENT as departement',
-                'pp.name as period_name'
-            )
-
+            ->select('prd.*', 'bio.NAMA_KARYAWAN', 'd.DEPARTEMENT as departement', 'pp.name as period_name')
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk');
     }
 
     public function map($row): array
     {
-        $components = json_decode($row->components, true);
+        $components = json_decode($row->components, true) ?? [];
 
-        return [
+        $fields = [
+            'basic_salary',
+            'overtime_pay',
+            'special_overtime_pay',
+            'monthly_premi',
+            'long_service_allowance',
+            'allowance',
+            'sewing_insentif',
+            'pad_insentif',
+            'cutting_insentif',
+            'adjusment',
+            'bpjs_kesehatan',
+            'bpjs_ketenagakerjaan',
+            'pph_21',
+            'pph_21_deduction',
+            'absence_deduction'
+        ];
 
+        $values = [];
+
+        foreach ($fields as $field) {
+            // Gunakan array_key_exists supaya 0 tetap muncul
+            $value = array_key_exists($field, $components) ? (float)$components[$field] : 0;
+            $type  = $this->componentTypes[$field] ?? 'earning';
+
+            if ($type === 'deduction') {
+                $value = -abs($value);
+            }
+
+            $values[] = $value;
+        }
+
+        return array_merge([
             $row->employee_npk,
             $row->employee_name,
-            $row->departement,
-
-            $components['basic_salary'] ?? 0,
-            $components['overtime_pay'] ?? 0,
-            $components['special_overtime_pay'] ?? 0,
-            $components['monthly_premi'] ?? 0,
-            $components['long_service_allowance'] ?? 0,
-            $components['allowance'] ?? 0,
-            $components['sewing_insentif'] ?? 0,
-            $components['pad_insentif'] ?? 0,
-            $components['cutting_insentif'] ?? 0,
-            $components['adjusment'] ?? 0,
-
-            $components['bpjs_kesehatan'] ?? 0,
-            $components['bpjs_ketenagakerjaan'] ?? 0,
-
-            $components['pph_21'] ?? 0,
-            $components['pph_21_deduction'] ?? 0,
-            $components['absence_deduction'] ?? 0,
-
-            $row->total_salary
-        ];
+            $row->departement
+        ], $values, [
+            array_key_exists('total_salary', (array)$row) ? (float)$row->total_salary : 0
+        ]);
     }
 
     public function headings(): array
     {
         return [
-
             'NPK',
             'Employee Name',
             'Departement',
-
             'Basic Salary',
             'Overtime Weekday',
             'Overtime Weekend',
@@ -130,14 +132,11 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
             'Pad Print Insentif',
             'Cutting Insentif',
             'Adjusment',
-
             'BPJS Kesehatan',
             'BPJS Ketenagakerjaan',
-
             'PPH21',
             'PPH21 Deduction',
             'Absence Deduction',
-
             'Total Salary'
         ];
     }

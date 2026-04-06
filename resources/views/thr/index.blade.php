@@ -53,8 +53,7 @@
                           @if($period->export_status=='finished' && $period->file_peng) <a class="btn btn-secondary btn-sm" href="{{ asset('storage/'.$period->file_peng) }}" target="_blank">
                             <i class="fas fa-file-pdf"></i> Pengeluaran </a> @endif </td>
                         {{-- BANK --}}
-                        <td class="text-center"> @if($period->approve_status=='finish' && $period->export_status=='finished') <a class="btn btn-primary btn-sm" href="{{ asset('storage/'.$period->file_bank_active) }}" target="_blank"> Active </a>
-                          <a class="btn btn-secondary btn-sm" href="{{ asset('storage/'.$period->file_bank_resign) }}" target="_blank"> Resign </a> @endif
+                        <td class="text-center"> @if($period->approve_status=='finish' && $period->export_status=='finished') <a class="btn btn-primary btn-sm" href="{{ asset('storage/'.$period->file_bank) }}" target="_blank"> Active </a>@endif
                         </td>
                         {{-- APPROVAL --}}
                         <td class="text-center"> @if($period->approve_status=='finish') <span class="badge badge-success">Approved</span> @else <span class="badge badge-warning">

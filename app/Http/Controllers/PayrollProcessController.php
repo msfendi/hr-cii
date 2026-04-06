@@ -86,23 +86,39 @@ class PayrollProcessController extends Controller
         $periodStart = $period->start_date;
         $periodEnd   = $period->end_date;
 
+        /*
+        |--------------------------------------------------------------------------
+        | BIODATA UNION
+        |--------------------------------------------------------------------------
+        */
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN')
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+            );
+
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
-            ->leftJoin('BIODATA as b', 'p.NPK', '=', 'b.NPK')
-            ->leftJoin('BIODATA_KELUAR as bk', 'p.NPK', '=', 'bk.NPK')
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('p.NPK', '=', 'bio.NPK');
+            })
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
             })
             ->select(
                 'p.NPK',
-                DB::raw('COALESCE(b.NAMA_KARYAWAN, bk.NAMA_KARYAWAN) as NAMA_KARYAWAN'),
+                'bio.NAMA_KARYAWAN',
                 'p.TMK',
                 'p.TKK'
             );
 
         $overtimeSummary = DB::connection('cii')
             ->table('overtimes')
+            ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
             ->select(
                 'NPK',
                 DB::raw("
@@ -129,7 +145,8 @@ class PayrollProcessController extends Controller
                 SUM(
                     CASE
                         WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
-                        AND TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT) IS NULL
+                        AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                        AND LTRIM(RTRIM(UPPER(JUMLAH_JAM_LEMBUR))) NOT IN ('IN','CT')
                         THEN 1
                         ELSE 0
                     END
@@ -161,7 +178,10 @@ class PayrollProcessController extends Controller
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
+            // ->where('emp.NPK', '=', 'C-00827')
             ->get();
+
+        // dd($employees);
 
         $components = PayrollComponent::where('is_active', 1)
             ->where('code', '!=', 'thr')
