@@ -120,7 +120,7 @@ THR COMPONENT
       <tr>
         <td>Masa Kerja</td>
         <td class="right">
-          {{ $components['working_years'] }} Bulan
+          {{ $components['working_months'] }} Bulan
         </td>
       </tr>
     </table>

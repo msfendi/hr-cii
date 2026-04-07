@@ -222,7 +222,7 @@ class EmployeePayrollController extends Controller
     GROUP STATUS IZIN
     ======================================================
     */
-            $izinCodes = ['MA', 'BR', 'PE', 'DL', 'SA', 'SI', 'CT'];
+            $izinCodes = ['MA', 'BR', 'PE', 'SI', 'CT', 'H'];
 
             if (in_array($lembur, $izinCodes)) {
 

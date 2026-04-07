@@ -32,11 +32,10 @@ class EmployeeThrController extends Controller
     {
         $periods = DB::table('thr_runs as pr')
             ->leftJoin('thr_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->orderBy('pp.start_date', 'desc')
+            ->orderBy('pp.cutoff_date', 'desc')
             ->select(
                 'pr.*',
-                'pp.start_date',
-                'pp.end_date',
+                'pp.cutoff_date',
                 'pp.name'
             )
             ->get();

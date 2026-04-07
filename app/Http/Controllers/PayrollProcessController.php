@@ -144,14 +144,18 @@ class PayrollProcessController extends Controller
                 DB::raw("
                 SUM(
                     CASE
+                        WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
+                            THEN 0.5
+
                         WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
-                        AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                        AND LTRIM(RTRIM(UPPER(JUMLAH_JAM_LEMBUR))) NOT IN ('IN','CT')
-                        THEN 1
+                            AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) NOT IN ('IN','CT','H')
+                            THEN 1
+
                         ELSE 0
                     END
                 ) as absence_days
-            ")
+            "),
             )
             ->groupBy('NPK');
 

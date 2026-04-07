@@ -192,7 +192,7 @@
           data: 'allowance',
           render: d => formatRupiah(d)
         }, {
-          data: 'working_years'
+          data: 'working_months'
         }, {
           data: 'thr',
           render: d => formatRupiah(d)
