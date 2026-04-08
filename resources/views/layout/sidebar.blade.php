@@ -118,7 +118,7 @@
         </div>
     </li>
 
-    @if($roleusers[0]->rolename == 'Admin')
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Payroll')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseInsentif"
             aria-expanded="true" aria-controls="collapseInsentif">
@@ -136,7 +136,7 @@
     </li>
     @endif
     
-    @if($roleusers[0]->rolename == 'Admin')
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Payroll')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePayroll"
             aria-expanded="true" aria-controls="collapsePayroll">
@@ -158,7 +158,7 @@
     </li>
     @endif
 
-    @if($roleusers[0]->rolename == 'Admin')
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Payroll')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseTHR"
             aria-expanded="true" aria-controls="collapsePayroll">
@@ -175,7 +175,7 @@
     </li>
     @endif
     
-    @if($roleusers[0]->rolename == 'Admin')
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'HRD')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseHoliday"
             aria-expanded="true" aria-controls="collapseHoliday">
@@ -208,7 +208,7 @@
     @endif
 
     
-    @if($roleusers[0]->rolename == 'Admin')
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'HRD')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseWA"
             aria-expanded="true" aria-controls="collapseWA">
@@ -217,9 +217,11 @@
         </a>
         <div id="collapseWA" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('templates.index') }}">Templates</a>
                 <a class="collapse-item" href="{{ route('devices.index') }}">Devices</a>
-                <a class="collapse-item" href="{{ route('send.create') }}">Send Message</a>
+                <!-- <a class="collapse-item" href="{{ route('templates.index') }}">Templates</a> -->
+                <!-- <a class="collapse-item" href="{{ route('applicant-contact.index') }}">Contact</a> -->
+                <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
+                <!-- <a class="collapse-item" href="{{ route('send.create') }}">Send Message</a> -->
             </div>
         </div>
     </li>

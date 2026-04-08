@@ -14,6 +14,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\AdminKunjunganController;
 use App\Http\Controllers\AdminReportController;
+use App\Http\Controllers\ApplicantContactController;
 use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\EmployeePayrollController;
@@ -34,6 +35,7 @@ use App\Http\Controllers\PayrollMasterController;
 use App\Http\Controllers\PayrollPeriodController;
 use App\Http\Controllers\PayrollProcessController;
 use App\Http\Controllers\PayrollSettingController;
+use App\Http\Controllers\RecruitmentController;
 use App\Http\Controllers\ThrApproveController;
 use App\Http\Controllers\ThrPeriodController;
 use App\Http\Controllers\ThrProcessController;
@@ -354,20 +356,25 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/selesai-periksa/{id}', [DokterAntrianController::class, 'selesaiPeriksa'])->name('dokter.selesai-periksa');
     });
 
+    // Recruitment
+    Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'role:Admin|HRD']);
+
     /*
     |--------------------------------------------------------------------------
     | WHATSAPP DEVICE
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/devices', [WhatsappDeviceController::class, 'index'])->name('devices.index');
-    Route::get('/devices/create', [WhatsappDeviceController::class, 'create'])->name('devices.create');
-    Route::post('/devices/store', [WhatsappDeviceController::class, 'store'])->name('devices.store');
-    Route::get('/devices/edit/{id}', [WhatsappDeviceController::class, 'edit'])->name('devices.edit');
-    Route::post('/devices/update/{id}', [WhatsappDeviceController::class, 'update'])->name('devices.update');
-    Route::delete('/devices/destroy/{id}', [WhatsappDeviceController::class, 'destroy'])->name('devices.destroy');
-    Route::get('/devices/status/{id}', [WhatsappDeviceController::class, 'checkStatus'])->name('devices.status');
-    Route::get('devices/{id}/qr', [WhatsappDeviceController::class, 'qr'])->name('devices.qr');
+    Route::get('/devices', [WhatsappDeviceController::class, 'index'])->name('devices.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/devices/create', [WhatsappDeviceController::class, 'create'])->name('devices.create')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/devices/store', [WhatsappDeviceController::class, 'store'])->name('devices.store')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/devices/edit/{id}', [WhatsappDeviceController::class, 'edit'])->name('devices.edit')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/devices/update/{id}', [WhatsappDeviceController::class, 'update'])->name('devices.update')->middleware(['auth', 'role:Admin|HRD']);
+    Route::delete('/devices/destroy/{id}', [WhatsappDeviceController::class, 'destroy'])->name('devices.destroy')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/devices/status/{id}', [WhatsappDeviceController::class, 'checkStatus'])->name('devices.status')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('devices/{id}/qr', [WhatsappDeviceController::class, 'qr'])->name('devices.qr')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/devices/{device}/disconnect', [WhatsappDeviceController::class, 'disconnect'])->name('devices.disconnect')->middleware(['auth', 'role:Admin|HRD']);
 
 
     /*
@@ -376,12 +383,12 @@ Route::group(['middleware' => 'auth'], function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index');
-    Route::get('/templates/create', [WhatsappTemplateController::class, 'create'])->name('templates.create');
-    Route::post('/templates/store', [WhatsappTemplateController::class, 'store'])->name('templates.store');
-    Route::get('/templates/edit/{id}', [WhatsappTemplateController::class, 'edit'])->name('templates.edit');
-    Route::post('/templates/update/{id}', [WhatsappTemplateController::class, 'update'])->name('templates.update');
-    Route::get('/templates/destroy/{id}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy');
+    Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/templates/create', [WhatsappTemplateController::class, 'create'])->name('templates.create')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/templates/store', [WhatsappTemplateController::class, 'store'])->name('templates.store')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/templates/edit/{id}', [WhatsappTemplateController::class, 'edit'])->name('templates.edit')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/templates/update/{id}', [WhatsappTemplateController::class, 'update'])->name('templates.update')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/templates/destroy/{id}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy')->middleware(['auth', 'role:Admin|HRD']);
 
     /*
     |--------------------------------------------------------------------------
@@ -389,9 +396,15 @@ Route::group(['middleware' => 'auth'], function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/send/create', [WhatsappSendController::class, 'create'])->name('send.create');
-    Route::get('/send-whatsapp', [WhatsappSendController::class, 'create'])->name('send.create');
-    Route::post('/send-template', [WhatsappSendController::class, 'sendTemplate'])->name('send-template');
+    Route::get('/send/create', [WhatsappSendController::class, 'create'])->name('send.create')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/send-whatsapp', [WhatsappSendController::class, 'create'])->name('send.create')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/send-template', [WhatsappSendController::class, 'sendTemplate'])->name('send-template')->middleware(['auth', 'role:Admin|HRD']);
+
+    Route::get('/applicant-contact', [ApplicantContactController::class, 'index'])->name('applicant-contact.index');
+    Route::get('/applicant-contact/send', [ApplicantContactController::class, 'send'])->name('applicant-contact.send');
+    Route::get('/applicant-contact/create', [ApplicantContactController::class, 'create'])->name('applicant-contact.create');
+    Route::post('/applicant-contact/store', [ApplicantContactController::class, 'store'])->name('applicant-contact.store');
+    Route::delete('/applicant-contact/{id}', [ApplicantContactController::class, 'destroy'])->name('applicant-contact.destroy');
 });
 
 // Payroll 

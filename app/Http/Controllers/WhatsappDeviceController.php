@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\WhatsappDevice;
 use App\Services\FonnteService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class WhatsappDeviceController extends Controller
 {
@@ -13,11 +15,73 @@ class WhatsappDeviceController extends Controller
     | INDEX
     |--------------------------------------------------------------------------
     */
-    public function index()
+    public function index(FonnteService $fonnte)
     {
+        /*
+        |--------------------------------------------------------------------------
+        | GET DEVICES DB
+        |--------------------------------------------------------------------------
+        */
         $devices = WhatsappDevice::latest()->get();
 
-        return view('whatsapp.devices.index', compact('devices'));
+        /*
+        |--------------------------------------------------------------------------
+        | GET DEVICES FROM FONNTE MASTER API
+        |--------------------------------------------------------------------------
+        */
+        $fonnteDevices = [];
+
+        try {
+
+            $response = Http::withHeaders([
+                'Authorization' => env('FONNTE_MASTER_KEY')
+            ])->post('https://api.fonnte.com/get-devices');
+
+            $result = $response->json();
+
+            if (($result['status'] ?? false) === true) {
+
+                foreach ($result['data'] as $apiDevice) {
+
+                    /*
+            |--------------------------------------------------------------------------
+            | SIMPAN DATA UNTUK VIEW
+            |--------------------------------------------------------------------------
+            */
+                    $fonnteDevices[$apiDevice['device']] = [
+                        'status' => strtolower($apiDevice['status']),
+                        'quota'  => $apiDevice['quota']
+                    ];
+
+                    /*
+            |--------------------------------------------------------------------------
+            | SYNC STATUS KE DATABASE
+            |--------------------------------------------------------------------------
+            */
+                    $device = $devices
+                        ->where('phone', $apiDevice['device'])
+                        ->first();
+
+                    if ($device) {
+
+                        $device->update([
+                            'is_active' =>
+                            strtolower($apiDevice['status']) === 'connect'
+                                ? 1
+                                : 0
+                        ]);
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // fail silent supaya page tetap load
+        }
+
+
+        return view('whatsapp.devices.index', compact(
+            'devices',
+            'fonnteDevices'
+        ));
     }
 
     /*
@@ -47,8 +111,33 @@ class WhatsappDeviceController extends Controller
             $request->phone
         );
 
-        if (!$result['status']) {
-            return back()->with('error', $result['reason']);
+        // dd($result['reason']);
+
+        /*
+        |--------------------------------------------------------------------------
+        | DEVICE ALREADY EXIST
+        |--------------------------------------------------------------------------
+        */
+        if (($result['reason'] ?? null) === 'device already exist') {
+
+            Alert::warning(
+                'Device already exist',
+                'Device with phone ' . $request->phone . ' already exist in Fonnte.'
+            );
+
+            return back();
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | FAILED RESPONSE
+        |--------------------------------------------------------------------------
+        */
+        if (!($result['status'] ?? false)) {
+
+            Alert::error('Failed!', $result['reason'] ?? 'Unknown error');
+
+            return back();
         }
 
 
@@ -59,9 +148,9 @@ class WhatsappDeviceController extends Controller
             'is_active'  => 0
         ]);
 
+        Alert::success('Create Successfully!', 'Device ' . $request->name . ' successfully created!');
         return redirect()
-            ->route('devices.index')
-            ->with('success', 'Device berhasil dibuat, scan QR sekarang');
+            ->route('devices.index');
     }
 
     public function qr($id, FonnteService $fonnte)
@@ -176,5 +265,57 @@ class WhatsappDeviceController extends Controller
         return redirect()
             ->route('devices.index')
             ->with('success', 'Device berhasil dihapus');
+    }
+
+    public function disconnect(WhatsappDevice $device)
+    {
+        try {
+
+            /*
+            |--------------------------------------------------------------------------
+            | CALL FONNTE API
+            |--------------------------------------------------------------------------
+            */
+
+            $response = Http::withHeaders([
+                'Authorization' => $device->token // DEVICE TOKEN
+            ])->post('https://api.fonnte.com/disconnect');
+
+            $result = $response->json();
+
+            /*
+            |--------------------------------------------------------------------------
+            | SUCCESS / ALREADY DISCONNECTED
+            |--------------------------------------------------------------------------
+            */
+
+            if (($result['status'] ?? false) === true ||
+                ($result['detail'] ?? '') === 'device already disconnected'
+            ) {
+
+                $device->update([
+                    'is_active' => 0
+                ]);
+
+                Alert::success(
+                    'Disconnected!',
+                    'Device successfully disconnected.'
+                );
+            } else {
+
+                Alert::error(
+                    'Failed',
+                    $result['detail'] ?? 'Disconnect failed'
+                );
+            }
+        } catch (\Exception $e) {
+
+            Alert::error(
+                'Error',
+                'Cannot connect to Fonnte API'
+            );
+        }
+
+        return redirect()->route('devices.index');
     }
 }

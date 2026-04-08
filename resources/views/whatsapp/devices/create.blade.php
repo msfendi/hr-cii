@@ -2,6 +2,7 @@
 <html lang="en">
 @include('layout.header')
 <body id="page-top">
+@include('sweetalert::alert')
 <!-- Page Wrapper -->
 <div id="wrapper">
 @include('layout.sidebar')

@@ -9,6 +9,7 @@ class WhatsappLog extends Model
 {
     protected $fillable = [
         'device_id',
+        'template_id',
         'target',
         'message',
         'status'

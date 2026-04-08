@@ -89,7 +89,7 @@ class FonnteService
         ])->get('https://api.fonnte.com/device')->json();
     }
 
-    public function send($deviceId, $target, $message)
+    public function send($deviceId, $target, $message, $template_id)
     {
         $device = WhatsappDevice::findOrFail($deviceId);
 
@@ -99,6 +99,47 @@ class FonnteService
             'target' => $target,
             'message' => $message,
         ]);
+
+        WhatsappLog::create([
+            'device_id' => $device->id,
+            'template_id' => $template_id,
+            'target' => $target,
+            'message' => $message,
+            'status' => $response->successful() ? 'success' : 'failed'
+        ]);
+
+        return $response->json();
+    }
+
+    public function sendMessage($deviceId, $target, $message)
+    {
+        if (empty($this->masterKey)) {
+            return [
+                'status' => false,
+                'reason' => 'Fonnte master key is missing. Please check your .env file and ensure FONNTE_MASTER_KEY is set.',
+            ];
+        }
+
+        // Remove non-numeric characters
+        $target = preg_replace('/[^0-9]/', '', $target);
+
+        // Convert 08... to 628...
+        if (substr($target, 0, 1) === '0') {
+            $target = '62' . substr($target, 1);
+        }
+
+        $device = WhatsappDevice::findOrFail($deviceId);
+
+        $response = Http::withHeaders([
+            'Authorization' => $device->token
+        ])->asForm()
+            ->retry(3, 2000) // Retry up to 3 times with a 2-second delay between attempts
+            ->timeout(60)    // Increased total timeout to 60 seconds
+            ->connectTimeout(30) // Increased connection/DNS resolution timeout to 30 seconds
+            ->post(config('fonnte.base_url') . '/send', [
+                'target' => $target,
+                'message' => $message,
+            ]);
 
         WhatsappLog::create([
             'device_id' => $device->id,
