@@ -207,6 +207,24 @@
     </li>
     @endif
 
+    
+    @if($roleusers[0]->rolename == 'Admin')
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseWA"
+            aria-expanded="true" aria-controls="collapseWA">
+            <i class="fas fa-fw fa-calculator"></i>
+            <span>Whatsapp</span>
+        </a>
+        <div id="collapseWA" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('templates.index') }}">Templates</a>
+                <a class="collapse-item" href="{{ route('devices.index') }}">Devices</a>
+                <a class="collapse-item" href="{{ route('send.create') }}">Send Message</a>
+            </div>
+        </div>
+    </li>
+    @endif
+
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">

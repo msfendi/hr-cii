@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'fonnte' => [
+        'master_key' => env('FONNTE_MASTER_KEY'),
+    ],
+
 ];

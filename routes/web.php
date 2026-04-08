@@ -37,6 +37,9 @@ use App\Http\Controllers\PayrollSettingController;
 use App\Http\Controllers\ThrApproveController;
 use App\Http\Controllers\ThrPeriodController;
 use App\Http\Controllers\ThrProcessController;
+use App\Http\Controllers\WhatsappDeviceController;
+use App\Http\Controllers\WhatsappSendController;
+use App\Http\Controllers\WhatsappTemplateController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 
@@ -350,6 +353,45 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/periksa/{id}', [DokterAntrianController::class, 'formPeriksa'])->name('dokter.periksa');
         Route::post('/selesai-periksa/{id}', [DokterAntrianController::class, 'selesaiPeriksa'])->name('dokter.selesai-periksa');
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | WHATSAPP DEVICE
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/devices', [WhatsappDeviceController::class, 'index'])->name('devices.index');
+    Route::get('/devices/create', [WhatsappDeviceController::class, 'create'])->name('devices.create');
+    Route::post('/devices/store', [WhatsappDeviceController::class, 'store'])->name('devices.store');
+    Route::get('/devices/edit/{id}', [WhatsappDeviceController::class, 'edit'])->name('devices.edit');
+    Route::post('/devices/update/{id}', [WhatsappDeviceController::class, 'update'])->name('devices.update');
+    Route::delete('/devices/destroy/{id}', [WhatsappDeviceController::class, 'destroy'])->name('devices.destroy');
+    Route::get('/devices/status/{id}', [WhatsappDeviceController::class, 'checkStatus'])->name('devices.status');
+    Route::get('devices/{id}/qr', [WhatsappDeviceController::class, 'qr'])->name('devices.qr');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | WHATSAPP TEMPLATE
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index');
+    Route::get('/templates/create', [WhatsappTemplateController::class, 'create'])->name('templates.create');
+    Route::post('/templates/store', [WhatsappTemplateController::class, 'store'])->name('templates.store');
+    Route::get('/templates/edit/{id}', [WhatsappTemplateController::class, 'edit'])->name('templates.edit');
+    Route::post('/templates/update/{id}', [WhatsappTemplateController::class, 'update'])->name('templates.update');
+    Route::get('/templates/destroy/{id}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy');
+
+    /*
+    |--------------------------------------------------------------------------
+    | SEND WHATSAPP
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/send/create', [WhatsappSendController::class, 'create'])->name('send.create');
+    Route::get('/send-whatsapp', [WhatsappSendController::class, 'create'])->name('send.create');
+    Route::post('/send-template', [WhatsappSendController::class, 'sendTemplate'])->name('send-template');
 });
 
 // Payroll 
