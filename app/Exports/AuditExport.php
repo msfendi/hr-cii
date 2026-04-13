@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Audit;
+use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\Exportable;
@@ -67,8 +68,8 @@ class AuditExport implements WithHeadings, WithStrictNullComparison, FromView
             'Nama Karyawan',
         ];
 
-        $start = \Carbon\Carbon::parse($this->fromdate);
-        $end = \Carbon\Carbon::parse($this->todate);
+        $start = Carbon::parse($this->fromdate);
+        $end = Carbon::parse($this->todate);
 
         for ($date = $start; $date->lte($end); $date->addDay()) {
             $headings[] = $date->format('d');

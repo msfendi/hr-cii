@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Biodata;
 use App\Models\LeaveBalances;
 use App\Models\LeaveTypes;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -103,8 +104,8 @@ class AdminLeaveBalanceController extends Controller
             }
             $leaveHistory[] = (object) [
                 'leave_type' => $req->leaveType->name ?? '-',
-                'start_date' => \Carbon\Carbon::parse($req->start_date)->format('d M Y'),
-                'end_date'   => \Carbon\Carbon::parse($req->end_date)->format('d M Y'),
+                'start_date' => Carbon::parse($req->start_date)->format('d M Y'),
+                'end_date'   => Carbon::parse($req->end_date)->format('d M Y'),
                 'total_days' => $req->total_days,
                 'reason'     => $req->reason,
                 'status'     => $status,
@@ -184,7 +185,7 @@ class AdminLeaveBalanceController extends Controller
             $sudahSetahun = false;
             if (!empty($emp->TMK) && trim($emp->TMK) !== '') {
                 try {
-                    $tmk = \Carbon\Carbon::parse($emp->TMK);
+                    $tmk = Carbon::parse($emp->TMK);
                     if ($tmk->diffInYears(now()) >= 1) {
                         $sudahSetahun = true;
                     }

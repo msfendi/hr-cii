@@ -127,7 +127,7 @@ class AdminLeaveRecapController extends Controller
                 'level' => $req->approval_level,
                 'approver_name' => $approvers->get($req->approval_id, $req->approval_id),
                 'status' => $req->status,
-                'date' => $req->approval_date ? \Carbon\Carbon::parse($req->approval_date)->format('d M Y') : '-',
+                'date' => $req->approval_date ? Carbon::parse($req->approval_date)->format('d M Y') : '-',
                 'comment' => $req->comment,
             ];
         });

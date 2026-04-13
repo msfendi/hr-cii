@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
 use App\Models\Overtime;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -77,8 +78,8 @@ class LeaveApprovalController extends Controller
                     return '<strong>'.$row['nama'].'</strong><br><small class="text-muted">'.$row['npk'].' &middot; '.$row['dept'].'</small>';
                 })
                 ->addColumn('periode', function($row) {
-                    $start = \Carbon\Carbon::parse($row['start_date'])->format('d M Y');
-                    $end   = \Carbon\Carbon::parse($row['end_date'])->format('d M Y');
+                    $start = Carbon::parse($row['start_date'])->format('d M Y');
+                    $end   = Carbon::parse($row['end_date'])->format('d M Y');
                     return $start . ' – ' . $end;
                 })
                 ->addColumn('hari', function($row) {
@@ -161,8 +162,8 @@ class LeaveApprovalController extends Controller
                 });
                 $holidays = array_keys($holidays);
 
-                $startDate = \Carbon\Carbon::parse($leave->start_date);
-                $endDate = \Carbon\Carbon::parse($leave->end_date);
+                $startDate = Carbon::parse($leave->start_date);
+                $endDate = Carbon::parse($leave->end_date);
 
                 for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
                     $dayOfWeek = $date->dayOfWeek; // 0 = Minggu, 6 = Sabtu
