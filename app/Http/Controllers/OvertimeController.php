@@ -173,7 +173,7 @@ class OvertimeController extends Controller
     {
         $bulan       = $request->input('month', date('Y-m'));
         $duration    = $request->input('duration');
-        $tanggalAwal = \Carbon\Carbon::parse($bulan)->startOfMonth();
+        $tanggalAwal = Carbon::parse($bulan)->startOfMonth();
         $tanggalAkhir = $tanggalAwal->copy()->endOfMonth();
         $jumlahHari  = $tanggalAkhir->day;
 
@@ -181,8 +181,8 @@ class OvertimeController extends Controller
         //   Menggunakan Carbon startOfWeek(SUNDAY)
         $grupMinggu = [];
         for ($hari = 1; $hari <= $jumlahHari; $hari++) {
-            $tanggal      = \Carbon\Carbon::create($tanggalAwal->year, $tanggalAwal->month, $hari);
-            $awalMinggu   = $tanggal->copy()->startOfWeek(\Carbon\Carbon::SUNDAY)->format('Y-m-d');
+            $tanggal      = Carbon::create($tanggalAwal->year, $tanggalAwal->month, $hari);
+            $awalMinggu   = $tanggal->copy()->startOfWeek(Carbon::SUNDAY)->format('Y-m-d');
             $grupMinggu[$awalMinggu][] = $hari;
         }
         ksort($grupMinggu);
@@ -198,7 +198,7 @@ class OvertimeController extends Controller
             // Metadata hari (day_of_week) untuk highlight weekend di frontend
             $daysWithMeta = [];
             foreach ($daftarHari as $hari) {
-                $tglObj = \Carbon\Carbon::create($tanggalAwal->year, $tanggalAwal->month, $hari);
+                $tglObj = Carbon::create($tanggalAwal->year, $tanggalAwal->month, $hari);
                 $daysWithMeta[] = [
                     'day'         => $hari,
                     'day_of_week' => $tglObj->dayOfWeek, // 0=Sunday, 6=Saturday
@@ -251,7 +251,7 @@ class OvertimeController extends Controller
         $holidaysThisMonth = [];
 
         for ($d = 1; $d <= $jumlahHari; $d++) {
-            $tglObj = \Carbon\Carbon::create($tanggalAwal->year, $tanggalAwal->month, $d);
+            $tglObj = Carbon::create($tanggalAwal->year, $tanggalAwal->month, $d);
             $dateStr = $tglObj->format('Y-m-d');
             $isWeekend = $tglObj->isWeekend();
 
@@ -398,7 +398,7 @@ class OvertimeController extends Controller
         }
 
         // Ambil bulan dari input date (bisa format Y-m-d atau Y-m)
-        $month = \Carbon\Carbon::parse($date)->format('Y-m');
+        $month = Carbon::parse($date)->format('Y-m');
 
         $filename = 'overtime_calendar_' . $type . '_' . $month . '.xlsx';
 
@@ -422,7 +422,7 @@ class OvertimeController extends Controller
         }
 
         // Accept both Y-m-d and Y-m formats
-        $month    = \Carbon\Carbon::parse($date)->format('Y-m');
+        $month    = Carbon::parse($date)->format('Y-m');
         $filename = 'template_kalender_' . $type . '_' . $month . '.xlsx';
 
         return Excel::download(

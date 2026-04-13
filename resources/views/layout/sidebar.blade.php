@@ -20,103 +20,110 @@
     </li>
 
     @if($roleusers[0]->rolename == 'Admin')
-    <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseUser"
-            aria-expanded="true" aria-controls="collapseUser">
-            <i class="fas fa-fw fa-users"></i>
-            <span>User</span>
-        </a>
-        <div id="collapseUser" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('user.index') }}">Daftar User</a>
-                <a class="collapse-item" href="{{ route('role.index') }}">Daftar Role</a>
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseUser" aria-expanded="true"
+                aria-controls="collapseUser">
+                <i class="fas fa-fw fa-users"></i>
+                <span>User</span>
+            </a>
+            <div id="collapseUser" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item" href="{{ route('user.index') }}">Daftar User</a>
+                    <a class="collapse-item" href="{{ route('role.index') }}">Daftar Role</a>
+                </div>
             </div>
-        </div>
-    </li>
+        </li>
     @endif
 
-    {{-- <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseKaryawan"
-            aria-expanded="true" aria-controls="collapseKaryawan">
-            <i class="fas fa-fw fa-users"></i>
-            <span>Karyawan</span>
-        </a>
-        <div id="collapseKaryawan" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('attendance.index') }}">Karyawan List</a>
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'HRD')
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePKWT" aria-expanded="true"
+                aria-controls="collapsePKWT">
+                <i class="fas fa-fw fa-users"></i>
+                <span>Karyawan</span>
+            </a>
+            <div id="collapsePKWT" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar List</a>
+                    <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata List</a>
+                    <a class="collapse-item" href="{{ route('dept.index') }}">Departement List</a>
+                </div>
             </div>
-        </div>
-    </li> --}}
+        </li>
 
-    <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePKWT"
-            aria-expanded="true" aria-controls="collapsePKWT">
-            <i class="fas fa-fw fa-users"></i>
-            <span>Karyawan</span>
-        </a>
-        <div id="collapsePKWT" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar List</a>
-                <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata List</a>
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseAudit" aria-expanded="true"
+                aria-controls="collapseAudit">
+                <i class="fas fa-fw fa-users"></i>
+                <span>Audit</span>
+            </a>
+            <div id="collapseAudit" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item" href="{{ route('attendance.index') }}">Attendance List</a>
+                    <a class="collapse-item" href="{{ route('attendance.checkMasterData') }}">Check Master Data</a>
+                </div>
             </div>
-        </div>
-    </li>
+        </li>
 
-    <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseAudit"
-            aria-expanded="true" aria-controls="collapseAudit">
-            <i class="fas fa-fw fa-users"></i>
-            <span>Audit</span>
-        </a>
-        <div id="collapseAudit" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('attendance.index') }}">Attendance List</a>
-                <a class="collapse-item" href="{{ route('attendance.checkMasterData') }}">Check Master Data</a>
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseSyncronize"
+                aria-expanded="true" aria-controls="collapseSyncronize">
+                <i class="fas fa-fw fa-users"></i>
+                <span>Syncronize Finger</span>
+            </a>
+            <div id="collapseSyncronize" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item" href="{{ route('attendance-finger.index') }}">Syncronize Finger</a>
+                </div>
             </div>
-        </div>
-    </li>
+        </li>
 
-    <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseSyncronize"
-            aria-expanded="true" aria-controls="collapseSyncronize">
-            <i class="fas fa-fw fa-users"></i>
-            <span>Syncronize Finger</span>
-        </a>
-        <div id="collapseSyncronize" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('attendance-finger.index') }}">Syncronize Finger</a>
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseOvertime"
+                aria-expanded="true" aria-controls="collapseOvertime">
+                <i class="fas fa-fw fa-users"></i>
+                <span>Overtime</span>
+            </a>
+            <div id="collapseOvertime" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item" href="{{ route('overtime.index') }}">Overtime List</a>
+                    <a class="collapse-item" href="{{ route('overtime.calendar') }}">Overtime Calendar</a>
+                </div>
             </div>
-        </div>
-    </li>
+        </li>
 
-    <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseOvertime"
-            aria-expanded="true" aria-controls="collapseOvertime">
-            <i class="fas fa-fw fa-users"></i>
-            <span>Overtime</span>
-        </a>
-        <div id="collapseOvertime" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('overtime.index') }}">Overtime List</a>
-                <a class="collapse-item" href="{{ route('overtime.calendar') }}">Overtime Calendar</a>
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseLeave" aria-expanded="true"
+                aria-controls="collapseLeave">
+                <i class="fas fa-fw fa-users"></i>
+                <span>Leave</span>
+            </a>
+            <div id="collapseLeave" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item" href="{{ route('leave-balances.index') }}">Leave Balances</a>
+                    <a class="collapse-item" href="{{ route('leave-recap.index') }}">Leave Recap</a>
+                    <a class="collapse-item" href="{{ route('approval.index') }}">Master Approval Leaver</a>
+                </div>
             </div>
-        </div>
-    </li>
+        </li>
+    @endif
 
-    <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePoliklinik"
-            aria-expanded="true" aria-controls="collapsePoliklinik">
-            <i class="fas fa-fw fa-medkit"></i>
-            <span>Poliklinik</span>
-        </a>
-        <div id="collapsePoliklinik" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('kunjungan.index') }}">Daftar Kunjungan</a>
-                <a class="collapse-item" href="{{ route('dokter.antrian') }}">Antrian Dokter</a>
-                <a class="collapse-item" href="{{ route('report.rekap') }}">Rekap Kunjungan</a>
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Dokter')
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePoliklinik"
+                aria-expanded="true" aria-controls="collapsePoliklinik">
+                <i class="fas fa-fw fa-medkit"></i>
+                <span>Poliklinik</span>
+            </a>
+            <div id="collapsePoliklinik" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item" href="{{ route('kunjungan.index') }}">Daftar Kunjungan</a>
+                    <a class="collapse-item" href="{{ route('dokter.antrian') }}">Antrian Dokter</a>
+                    <a class="collapse-item" href="{{ route('report.rekap') }}">Rekap Kunjungan</a>
+                </div>
             </div>
-        </div>
-    </li>
+        </li>
+    @endif
 
     
     @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Payroll')
@@ -215,7 +222,8 @@
         <div id="collapseEvaluation" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
                 <a class="collapse-item" href="{{ route('evaluation-jobscope.index') }}">Evaluation Jobscope</a>
-                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation Questionnaire</a>
+                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation
+                    Questionnaire</a>
                 <a class="collapse-item" href="{{ route('evaluation-employee.index') }}">Employee Evaluation</a>
             </div>
         </div>

@@ -12,11 +12,16 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
+use App\Http\Controllers\DeptController;
 use App\Http\Controllers\AdminKunjunganController;
+use App\Http\Controllers\AdminLeaveBalanceController;
 use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\ApplicantContactController;
 use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
+use App\Http\Controllers\PengajuanCutiController;
+use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeeThrController;
 use App\Http\Controllers\EvaluationEmployeeController;
@@ -60,13 +65,13 @@ use Illuminate\Support\Facades\Route;
 //     return view('welcome');
 // });
 
-Route::get('/', [HomeController::class, 'index'])->name('/');
+Route::get('/', [LoginController::class, 'login'])->name('/');
 // Route::get('/template/auditsewing', [TemplateController::class, 'auditsewing'])->name('template.auditsewing');
 // Route::get('/template/auditnonsewing', [TemplateController::class, 'auditnonsewing'])->name('template.auditnonsewing');
 
-// Route::group(['middleware' => 'guest'], function () {
-// Route::get('/register', [RegisterController::class, 'index'])->name('register');
-Route::post('/register/guest', [RegisterController::class, 'store'])->name('register.guest');
+Route::group(['middleware' => 'guest'], function () {
+    // Route::get('/register', [RegisterController::class, 'index'])->name('register');
+    Route::post('/register/guest', [RegisterController::class, 'store'])->name('register.guest');
 
 Route::get('/login', [LoginController::class, 'login'])->name('login.guest');
 Route::post('/login', [LoginController::class, 'authenticate'])->name('login');
@@ -74,7 +79,7 @@ Route::get('/login/qrauth', [LoginController::class, 'qrauth'])->name('login.qra
 // });
 
 Route::group(['middleware' => 'auth'], function () {
-    Route::get('/home', [HomeController::class, 'home'])->name('home');
+    Route::get('/home', [HomeController::class, 'index'])->name('home');
     Route::get('/home/get-pkwt-chart', [HomeController::class, 'getPKWTChart'])->name('home.get-pkwt-chart');
     Route::get('/home/get-recap-count', [HomeController::class, 'getRecapCount'])->name('home.get-recap-count');
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
@@ -101,6 +106,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // PKWT
     Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin|HRD']);
+
 
     // Pelamar
     Route::get('/pelamar/index', [PelamarController::class, 'index'])->name('pelamar.index')->middleware(['auth', 'role:Admin|HRD']);
@@ -315,6 +321,13 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update');
     Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance');
 
+    // DEPT
+    Route::get('/dept/index', [DeptController::class, 'index'])->name('dept.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/dept/get-data', [DeptController::class, 'getData'])->name('dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/store', [DeptController::class, 'store'])->name('dept.store')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/update/{id}', [DeptController::class, 'update'])->name('dept.update')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/destroy/{id}', [DeptController::class, 'destroy'])->name('dept.destroy')->middleware(['auth', 'role:Admin|HRD']);
+
     // Overtime
     Route::get('/overtime', [OvertimeController::class, 'index'])->name('overtime.index')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/overtime/download-template', [OvertimeController::class, 'downloadTemplateOvertime'])->name('overtime.downloadTemplate')->middleware(['auth', 'role:Admin|HRD']);
@@ -323,9 +336,50 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/overtime/calendar', [OvertimeController::class, 'calendarOvertime'])->name('overtime.calendar')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/overtime/export', [OvertimeController::class, 'exportCalendar'])->name('overtime.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/overtime/export-template', [OvertimeController::class, 'exportCalendarTemplate'])->name('overtime.export-template')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'role:Admin|HRD']);
     Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|HRD']);
+
+    // ========================================
+    // APPROVAL RULES (Master)
+    // ========================================
+    Route::prefix('approval')->middleware('role:Admin|HRD')->group(function () {
+        Route::get('/', [ApprovalController::class, 'index'])->name('approval.index');
+        Route::get('/get-data', [ApprovalController::class, 'getData'])->name('approval.get-data');
+        Route::get('/search-employee', [ApprovalController::class, 'searchEmployee'])->name('approval.search-employee');
+        Route::post('/store', [ApprovalController::class, 'store'])->name('approval.store');
+        Route::post('/update/{id}', [ApprovalController::class, 'update'])->name('approval.update');
+        Route::post('/destroy/{id}', [ApprovalController::class, 'destroy'])->name('approval.destroy');
+        
+        // Nested Rule inside Group
+        Route::post('/rule/store', [ApprovalController::class, 'storeRule'])->name('approval.rule.store');
+        Route::post('/rule/update/{id}', [ApprovalController::class, 'updateRule'])->name('approval.rule.update');
+        Route::post('/rule/destroy/{id}', [ApprovalController::class, 'destroyRule'])->name('approval.rule.destroy');
+    });
+
+    // ========================================
+    // LEAVE RECAP (Admin)
+    // ========================================
+    Route::prefix('leave-recap')->middleware('role:Admin|HRD')->group(function () {
+        Route::get('/', [\App\Http\Controllers\AdminLeaveRecapController::class, 'index'])->name('leave-recap.index');
+        Route::get('/get-data', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getData'])->name('leave-recap.get-data');
+        Route::get('/detail/{token}', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getDetail'])->name('leave-recap.detail');
+    });
+
+    // ========================================
+    // LEAVE BALANCES (Admin)
+    // ========================================
+    Route::prefix('leave-balances')->middleware('role:Admin|HRD')->group(function () {
+        Route::get('/', [AdminLeaveBalanceController::class, 'index'])->name('leave-balances.index');
+        Route::get('/get-data', [AdminLeaveBalanceController::class, 'getData'])->name('leave-balances.get-data');
+        Route::get('/show/{NPK}', [AdminLeaveBalanceController::class, 'show'])->name('leave-balances.show');
+        Route::post('/store', [AdminLeaveBalanceController::class, 'storeBalance'])->name('leave-balances.store');
+        Route::post('/update/{id}', [AdminLeaveBalanceController::class, 'updateBalance'])->name('leave-balances.update');
+        Route::delete('/destroy/{id}', [AdminLeaveBalanceController::class, 'destroyBalance'])->name('leave-balances.destroy');
+        
+        Route::post('/generate-yearly', [AdminLeaveBalanceController::class, 'generateYearlyBalance'])->name('leave-balances.generate-yearly');
+    });
 
     // ========================================
     // POLIKLINIK — Admin Kunjungan
@@ -407,6 +461,25 @@ Route::group(['middleware' => 'auth'], function () {
     Route::delete('/applicant-contact/{id}', [ApplicantContactController::class, 'destroy'])->name('applicant-contact.destroy');
 });
 
+// ========================================
+// PENGAJUAN CUTI ONLINE
+// ========================================
+Route::prefix('pengajuan-cuti')->group(function () {
+    Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
+    Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
+    Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
+    Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
+    Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
+    Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
+    Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
+    Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
+    Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
+
+    // Cuti Approval (Leave Management by session logged in user)
+    Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval');
+    Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve');
+    Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject');
+});
 // Payroll 
 Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
 // Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');

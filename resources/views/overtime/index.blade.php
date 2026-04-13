@@ -77,8 +77,12 @@
                                         </select>
                                     </div>
 
-                                    <button type="submit" formaction="{{ route('overtime.downloadTemplate') }}" class="btn btn-success btn-sm mr-2">
-                                        <i class="fas fa-file-excel"></i> Download Template
+                                    {{-- <button type="submit" formaction="{{ route('overtime.downloadTemplate') }}" class="btn btn-success btn-sm mr-2" title="Template berdasarkan tanggal hari (untuk insert harian)">
+                                        <i class="fas fa-file-excel"></i> Template (Harian)
+                                    </button> --}}
+
+                                    <button type="submit" formaction="{{ route('overtime.export-template') }}" class="btn btn-success btn-sm mr-2" title="Template berdasarkan bulan kalender (1 - 31)">
+                                        <i class="fas fa-file-excel"></i> Template (Kalender)
                                     </button>
 
                                     <button type="submit" formaction="{{ route('overtime.export') }}" class="btn btn-info btn-sm">
@@ -142,6 +146,10 @@
                             <option value="non_sewing">Non-Sewing</option>
                             <option value="staff">Staff</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="month">Bulan Format (Tahun-Bulan)</label>
+                        <input type="month" class="form-control" name="month" id="month" required value="{{ date('Y-m') }}">
                     </div>
                     <div class="form-group">
                         <label for="file">Upload File</label>

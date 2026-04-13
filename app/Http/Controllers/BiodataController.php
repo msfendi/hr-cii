@@ -104,7 +104,6 @@ class BiodataController extends Controller
             'HP' => $check_nama[0]->HP,
             'STATUS' => $check_nama[0]->STATUS,
             'TANGGUNGAN' => $check_nama[0]->TANGGUNGAN,
-            'TMPTLAHIR' => strtoupper($check_nama[0]->TMPTLAHIR),
             'JURUSAN' => strtoupper($check_nama[0]->JURUSAN)
         ]);
 
@@ -138,7 +137,6 @@ class BiodataController extends Controller
             'HP' => $request->hp,
             'STATUS' => $request->status,
             'TANGGUNGAN' => $request->tanggungan,
-            'TMPTLAHIR' => strtoupper($request->tempat_lahir),
             'JURUSAN' => strtoupper($request->jurusan)
         ]);
 
@@ -186,7 +184,6 @@ class BiodataController extends Controller
             'HP' => $request->hp,
             'STATUS' => $request->status,
             'TANGGUNGAN' => $request->tanggungan,
-            'TMPTLAHIR' => strtoupper($request->tempat_lahir),
             'JURUSAN' => strtoupper($request->jurusan)
         ]);
 
@@ -261,8 +258,14 @@ class BiodataController extends Controller
      */
     public function show($NPK)
     {
-        $biodata = DB::connection('cii')->table('PKWT')->select('*')->where('NPK', $NPK)->first();
-        return response()->json($biodata);
+        $pkwt    = DB::connection('cii')->table('PKWT')->select('*')->where('NPK', $NPK)->first();
+        $biodata = DB::connection('cii')->table('BIODATA')->select('IS_STAFF')->where('NPK', $NPK)->first();
+
+        if ($pkwt && $biodata) {
+            $pkwt->IS_STAFF = $biodata->IS_STAFF ?? 0;
+        }
+
+        return response()->json($pkwt);
     }
 
     /**
@@ -304,6 +307,7 @@ class BiodataController extends Controller
                 'NAMA_KARYAWAN' => strtoupper($request->nama),
                 'ID_DEPT' => $request->id_dept,
                 'JENIS_KEL' => strtoupper($request->jk),
+                'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
             ]);
 
             $tgl_lahir = Carbon::parse($request->tgl_lahir);

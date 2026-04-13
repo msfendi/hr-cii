@@ -67,11 +67,11 @@
                             </div>
                             <div class="col-md-3">
                                 <p class="mb-1"><strong>Jam Masuk:</strong></p>
-                                <p>{{ $kunjungan->jam_masuk ? substr($kunjungan->jam_masuk) : '-' }}</p>
+                                <p>{{ $kunjungan->jam_masuk ? $kunjungan->jam_masuk : '-' }}</p>
                             </div>
                             <div class="col-md-3">
                                 <p class="mb-1"><strong>Jam Selesai:</strong></p>
-                                <p>{{ $kunjungan->jam_selesai ? substr($kunjungan->jam_selesai) : '-' }}</p>
+                                <p>{{ $kunjungan->jam_selesai ? $kunjungan->jam_selesai : '-' }}</p>
                             </div>
                         </div>
                         <div class="row">

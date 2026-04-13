@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class Biodata extends Model
 {
     use HasFactory;
+    protected $table = 'BIODATA';
+    protected $connection = 'cii';
     protected $fillable = [
         'NPK',
         'NAMA_KARYAWAN',
@@ -16,6 +18,7 @@ class Biodata extends Model
         'JENIS_KEL',
         'BARCODE',
         'SECTION',
-        'STATUS'
+        'STATUS',
+        'IS_STAFF'
     ]; 
 }

@@ -38,7 +38,7 @@ class LoginController extends Controller
         $username = Auth::user()->name;
         Auth::logout();
         Alert::success('Logout Successfully!', 'See You Next Time');
-        return redirect('/');
+        return redirect('/login');
     }
 
     public function qrauth(Request $request)
