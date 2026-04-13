@@ -14,6 +14,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\DeptController;
 use App\Http\Controllers\AdminKunjunganController;
+use App\Http\Controllers\AdminLeaveBalanceController;
 use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
@@ -307,6 +308,29 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/rule/store', [ApprovalController::class, 'storeRule'])->name('approval.rule.store');
         Route::post('/rule/update/{id}', [ApprovalController::class, 'updateRule'])->name('approval.rule.update');
         Route::post('/rule/destroy/{id}', [ApprovalController::class, 'destroyRule'])->name('approval.rule.destroy');
+    });
+
+    // ========================================
+    // LEAVE RECAP (Admin)
+    // ========================================
+    Route::prefix('leave-recap')->middleware('role:Admin|HRD')->group(function () {
+        Route::get('/', [\App\Http\Controllers\AdminLeaveRecapController::class, 'index'])->name('leave-recap.index');
+        Route::get('/get-data', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getData'])->name('leave-recap.get-data');
+        Route::get('/detail/{token}', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getDetail'])->name('leave-recap.detail');
+    });
+
+    // ========================================
+    // LEAVE BALANCES (Admin)
+    // ========================================
+    Route::prefix('leave-balances')->middleware('role:Admin|HRD')->group(function () {
+        Route::get('/', [AdminLeaveBalanceController::class, 'index'])->name('leave-balances.index');
+        Route::get('/get-data', [AdminLeaveBalanceController::class, 'getData'])->name('leave-balances.get-data');
+        Route::get('/show/{NPK}', [AdminLeaveBalanceController::class, 'show'])->name('leave-balances.show');
+        Route::post('/store', [AdminLeaveBalanceController::class, 'storeBalance'])->name('leave-balances.store');
+        Route::post('/update/{id}', [AdminLeaveBalanceController::class, 'updateBalance'])->name('leave-balances.update');
+        Route::delete('/destroy/{id}', [AdminLeaveBalanceController::class, 'destroyBalance'])->name('leave-balances.destroy');
+        
+        Route::post('/generate-yearly', [AdminLeaveBalanceController::class, 'generateYearlyBalance'])->name('leave-balances.generate-yearly');
     });
 
     // ========================================

@@ -91,8 +91,9 @@ class PengajuanCutiController extends Controller
         $employee = DB::connection('cii')
                 ->table('BIODATA')
                 ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-                ->where('NPK', $npk)
-                ->select('BIODATA.*', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING')
+                ->join('PKWT','BIODATA.NPK','=','PKWT.NPK')
+                ->where('BIODATA.NPK', $npk)
+                ->select('BIODATA.*', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING', 'PKWT.JK')
                 ->first();
 
         if (!$employee) {
@@ -293,6 +294,7 @@ class PengajuanCutiController extends Controller
                 'overall_status' => $overallStatus,
                 'void'           => $activeRow->void,
                 'created_at'     => $activeRow->created_at,
+                'comment'        => $activeRow->comment,
             ];
         }
 

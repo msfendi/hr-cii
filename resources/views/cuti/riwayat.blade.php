@@ -39,6 +39,7 @@
                                         <th>Periode</th>
                                         <th>Total Hari</th>
                                         <th>Status</th>
+                                        <th>Komentar</th>
                                         <th>Aksi</th>
                                     </tr>
                                 </thead>
@@ -81,6 +82,7 @@
                     <tr><td class="text-muted">Tanggal Selesai</td><td id="mdEnd">-</td></tr>
                     <tr><td class="text-muted">Jumlah Hari</td><td id="mdDays">-</td></tr>
                     <tr><td class="text-muted">Alasan</td><td id="mdReason">-</td></tr>
+                    <tr><td class="text-muted">Komentar</td><td id="mdComment">-</td></tr>
                     <tr><td class="text-muted">Approver</td><td id="mdApprover">-</td></tr>
                     <tr><td class="text-muted">Status</td><td id="mdStatus">-</td></tr>
                     <tr><td class="text-muted">Tanggal Diajukan</td><td id="mdCreated">-</td></tr>
@@ -113,6 +115,15 @@ $(document).ready(function () {
             {data: 'periode', name: 'periode', orderable: false, searchable: false},
             {data: 'hari', name: 'hari', orderable: false, searchable: false},
             {data: 'status_badge', name: 'status_badge', orderable: false, searchable: false},
+            {
+                data: 'comment', 
+                name: 'comment', 
+                orderable: false, 
+                searchable: false,
+                render: function(data, type, row) {
+                    return data ? '<span class="text-muted small">' + data + '</span>' : '-';
+                }
+            },
             {data: 'aksi', name: 'aksi', orderable: false, searchable: false}
         ],
         language: {
@@ -140,6 +151,7 @@ $(document).ready(function () {
         $('#mdEnd').text(info.end_date || '-');
         $('#mdDays').text((info.total_days || 0) + ' hari');
         $('#mdReason').text(info.reason || '-');
+        $('#mdComment').text(info.comment || '-');
         $('#mdApprover').text((info.approver_name || '-') + ' (Level ' + (info.approval_level||0) + ')');
         $('#mdCreated').text(info.created_at || '-');
 

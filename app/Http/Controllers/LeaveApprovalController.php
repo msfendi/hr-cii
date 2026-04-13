@@ -202,7 +202,7 @@ class LeaveApprovalController extends Controller
     /**
      * Proses cancel (reject) dari form Admin
      */
-    public function reject($id)
+    public function reject(Request $request, $id)
     {
         try {
             DB::beginTransaction();
@@ -214,6 +214,7 @@ class LeaveApprovalController extends Controller
 
             // Set ke rejected
             $leave->status = 'rejected';
+            $leave->comment = $request->comment;
             $leave->approval_date = now();
             $leave->save();
 

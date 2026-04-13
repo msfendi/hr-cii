@@ -94,11 +94,13 @@ $(document).ready(function () {
     });
 
     // Helper function for AJAX actions
-    function handleAction(url, successMessage) {
+    function handleAction(url, postData, successMessage) {
+        var dataToSend = $.extend({ _token: '{{ csrf_token() }}' }, postData);
+        
         $.ajax({
             url: url,
             type: 'POST',
-            data: { _token: '{{ csrf_token() }}' },
+            data: dataToSend,
             success: function (response) {
                 if (response.success) {
                     Swal.fire('Berhasil', response.message || successMessage, 'success')
@@ -129,7 +131,7 @@ $(document).ready(function () {
             cancelButtonText: 'Batal'
         }).then(function (result) {
             if (result.isConfirmed) {
-                handleAction('/pengajuan-cuti/approval/approve/' + id, 'Permohonan berhasil disetujui.');
+                handleAction('/pengajuan-cuti/approval/approve/' + id, {}, 'Permohonan berhasil disetujui.');
             }
         });
     });
@@ -141,15 +143,25 @@ $(document).ready(function () {
 
         Swal.fire({
             title: 'Tolak Cuti?',
-            text: 'Anda akan menolak permohonan cuti dari ' + nama,
+            html: 'Anda akan menolak permohonan cuti dari <b>' + nama + '</b>.<br><br>Silakan masukkan alasan/komentar penolakan:',
+            input: 'textarea',
+            inputPlaceholder: 'Tulis komentar di sini...',
+            inputAttributes: {
+                'aria-label': 'Tulis komentar penolakan di sini'
+            },
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#e74a3b',
             confirmButtonText: 'Ya, Tolak',
-            cancelButtonText: 'Batal'
+            cancelButtonText: 'Batal',
+            inputValidator: (value) => {
+                if (!value.trim()) {
+                    return 'Komentar/Alasan penolakan wajib diisi!';
+                }
+            }
         }).then(function (result) {
             if (result.isConfirmed) {
-                handleAction('/pengajuan-cuti/approval/reject/' + id, 'Permohonan berhasil ditolak.');
+                handleAction('/pengajuan-cuti/approval/reject/' + id, { comment: result.value }, 'Permohonan berhasil ditolak.');
             }
         });
     });

@@ -14,6 +14,7 @@ class Kernel extends ConsoleKernel
     {
         // $schedule->command('inspire')->hourly();
         $schedule->command('rekap:generate-harian')->everyFiveMinutes();
+        $schedule->command('leave:generate-daily')->dailyAt('00:01')->appendOutputTo(storage_path('logs/leave-generate-daily.log'));
     }
 
     /**
