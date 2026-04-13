@@ -17,6 +17,7 @@ class PayrollMaster extends Model
         'bank_account',
         'salary',
         'allowance',
-        'pph21'
+        'pph21',
+        'type'
     ];
 }

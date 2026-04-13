@@ -24,6 +24,8 @@ class InsentifApprovalController extends Controller
             ->latest('insentif_approvals.id')
             ->get();
 
+        // dd($data);
+
         // =========================
         // EMPLOYEE MASTER
         // =========================
@@ -36,30 +38,35 @@ class InsentifApprovalController extends Controller
         // =========================
         // FORMAT PROGRESS USER
         // =========================
-        $data->transform(function ($row) use ($employees) {
+        $data = $data
+            ->sortByDesc('id')
+            ->values()
+            ->transform(function ($row) use ($employees) {
 
-            $progress = collect($row->progress)->map(function ($p) use ($employees) {
+                $progress = collect($row->progress)->map(function ($p) use ($employees) {
 
-                $npkList = is_array($p['npk'])
-                    ? $p['npk']
-                    : json_decode($p['npk'], true);
+                    $npkList = is_array($p['npk'])
+                        ? $p['npk']
+                        : json_decode($p['npk'], true);
 
-                if (!is_array($npkList)) $npkList = [];
+                    if (!is_array($npkList)) $npkList = [];
 
-                $p['users'] = collect($npkList)->map(function ($npk) use ($employees) {
-                    return [
-                        'npk' => $npk,
-                        'name' => $employees[$npk]->NAMA_KARYAWAN ?? '-'
-                    ];
+                    $p['users'] = collect($npkList)->map(function ($npk) use ($employees) {
+                        return [
+                            'npk' => $npk,
+                            'name' => $employees[$npk]->NAMA_KARYAWAN ?? '-'
+                        ];
+                    });
+
+                    return $p;
                 });
 
-                return $p;
+                $row->progress = $progress;
+
+                return $row;
             });
 
-            $row->progress = $progress;
-
-            return $row;
-        });
+        // dd($data);
 
         return view('insentif_approve.index', compact('data'));
     }

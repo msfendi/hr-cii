@@ -118,6 +118,24 @@
         </div>
     </li>
 
+    
+    @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Payroll')
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseApproval"
+            aria-expanded="true" aria-controls="collapseApproval">
+            <i class="fas fa-fw fa-calculator"></i>
+            <span>Approval</span>
+        </a>
+        <div id="collapseApproval" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{ route('insentif-approve.index') }}">Insentif Approval</a>
+                <a class="collapse-item" href="{{ route('payroll-approve.index') }}">Payroll Approval</a>
+                <a class="collapse-item" href="{{ route('thr-approve.index') }}">THR Approval</a>
+            </div>
+        </div>
+    </li>
+    @endif
+
     @if($roleusers[0]->rolename == 'Admin' || $roleusers[0]->rolename == 'Payroll')
     <li class="nav-item">
         <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseInsentif"
@@ -127,7 +145,6 @@
         </a>
         <div id="collapseInsentif" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="{{ route('insentif-approve.index') }}">Insentif Approval</a>
                 <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif Master</a>
                 <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif Master</a>
                 <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif Master</a>
@@ -151,7 +168,6 @@
                 <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Payroll Period</a>
                 <a class="collapse-item" href="{{ route('payroll-adjusments.index') }}">Payroll Adjusments</a>
                 <a class="collapse-item" href="{{ route('payroll-process.index') }}">Payroll Process</a>
-                <a class="collapse-item" href="{{ route('payroll-approve.index') }}">Payroll Approve</a>
                 <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>
             </div>
         </div>
@@ -169,7 +185,6 @@
             <div class="bg-white py-2 collapse-inner rounded">
                 <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
                 <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
-                <a class="collapse-item" href="{{ route('thr-approve.index') }}">THR Approve</a>
             </div>
         </div>
     </li>

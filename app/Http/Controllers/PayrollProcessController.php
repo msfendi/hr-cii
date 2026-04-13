@@ -13,6 +13,7 @@ use App\Models\PayrollRun;
 use App\Models\PayrollRunDetail;
 use App\Models\PayrollSetting;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
@@ -68,6 +69,7 @@ class PayrollProcessController extends Controller
 
     public function process(Request $request)
     {
+        $payrollResults = [];
         $period = PayrollPeriod::findOrFail($request->period_id);
 
         // PROTEKSI: cek apakah payroll sudah pernah digenerate
@@ -85,6 +87,7 @@ class PayrollProcessController extends Controller
 
         $periodStart = $period->start_date;
         $periodEnd   = $period->end_date;
+        $count_days  = Carbon::parse($periodStart)->diffInDays(Carbon::parse($periodEnd)) + 1;
 
         /*
         |--------------------------------------------------------------------------
@@ -176,13 +179,15 @@ class PayrollProcessController extends Controller
                 'pm.salary',
                 'pm.allowance',
                 'pm.pph21',
+                'pm.type',
+                'pm.daily_salary',
                 DB::raw('COALESCE(pa.adjusment,0) as adjusment'),
                 DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
                 DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
-            // ->where('emp.NPK', '=', 'C-00827')
+            // ->where('emp.NPK', '=', 'C-00005')
             ->get();
 
         // dd($employees);
@@ -218,6 +223,10 @@ class PayrollProcessController extends Controller
                 'working_years'  => (float) $employee->working_years,
                 'adjusment'      => (float) $employee->adjusment,
                 'pph_21'         => (float) $employee->pph21,
+                'daily_salary'   => (float) $employee->daily_salary,
+                'count_days'     => (float) $count_days,
+                'is_contract' => $employee->type === 'Contract' ? 1 : 0,
+                'is_daily'    => $employee->type === 'Daily' ? 1 : 0,
             ];
 
             $results = [];
@@ -431,6 +440,17 @@ class PayrollProcessController extends Controller
             ]);
 
             $totalPayroll += $grandTotal;
+
+            // $payrollResults[] = [
+            //     // 'run_id'        => $run->id,
+            //     'absence_days'  => $employee->absence_days,
+            //     'count_days'    => $count_days,
+            //     'type' => $employee->type,
+            //     'employee_npk'  => $employee->NPK,
+            //     'employee_name' => $employee->NAMA_KARYAWAN,
+            //     'components'    => $results,
+            //     'total_salary'  => $grandTotal
+            // ];
         }
 
         $run->update([
@@ -438,9 +458,12 @@ class PayrollProcessController extends Controller
             'total_payroll'  => round($totalPayroll, 0)
         ]);
 
-        // ==============================
-        // CREATE APPROVAL PAYROLL
-        // ==============================
+
+        /*
+        |--------------------------------------------------------------------------
+        | CREATE APPROVAL PAYROLL
+        |--------------------------------------------------------------------------
+        */
 
         $existsApprove = PayrollApprove::where('payroll_run_id', $run->id)->exists();
 
@@ -469,6 +492,9 @@ class PayrollProcessController extends Controller
                 ]);
             }
         }
+
+
+        // return response()->json($payrollResults);
 
         Alert::success('Payroll generated successfully!');
         return redirect('payroll-process/index');

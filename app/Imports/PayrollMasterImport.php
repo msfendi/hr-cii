@@ -23,7 +23,8 @@ class PayrollMasterImport implements ToModel, WithHeadingRow
                 'bank_name' => $row['bank_name'] ?? "",
                 'bank_account' => $row['bank_account'] ?? "",
                 'allowance' => $row['allowance'] ?? 0,
-                'pph21' => $row['pph21'] ?? 0
+                'pph21' => $row['pph21'] ?? 0,
+                'type' => $row['type'] ?? "Contract",
             ]
 
         );

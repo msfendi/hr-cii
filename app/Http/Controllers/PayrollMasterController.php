@@ -70,7 +70,8 @@ class PayrollMasterController extends Controller
         $request->validate([
             'salary' => 'required|numeric',
             'allowance' => 'nullable|numeric',
-            'pph21' => 'nullable|numeric'
+            'pph21' => 'nullable|numeric',
+            'type' => 'required|in:Contract,Daily',
         ]);
 
         $data = PayrollMaster::findOrFail($id);
@@ -80,7 +81,8 @@ class PayrollMasterController extends Controller
             'bank_name' => $request->bank_name,
             'bank_account' => $request->bank_account,
             'allowance' => $request->allowance,
-            'pph21' => $request->pph21
+            'pph21' => $request->pph21,
+            'type' => $request->type
         ]);
 
         Alert::success('Update Successfully!', 'Payroll Master ' . $request->id . ' successfully updated!');
@@ -119,7 +121,8 @@ class PayrollMasterController extends Controller
             'bank_account' => 'required',
             'salary' => 'required|numeric',
             'allowance' => 'required|numeric',
-            'pph21' => 'required|numeric'
+            'pph21' => 'required|numeric',
+            'type' => 'required|in:Contract,Daily',
         ]);
 
         PayrollMaster::create($request->all());
