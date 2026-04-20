@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GeneratePayrollExport;
 use App\Models\PayrollApprove;
 use App\Models\PayrollSetting;
 use Illuminate\Http\Request;
@@ -29,6 +30,7 @@ class PayrollApproveController extends Controller
                 'payroll_exports.file_excel',
                 'payroll_exports.file_pdf',
                 'payroll_exports.file_peng',
+                'payroll_exports.status as export_status'
             )
             ->latest('payroll_approve.id')
             ->get();
@@ -106,6 +108,8 @@ class PayrollApproveController extends Controller
         $data = PayrollApprove::findOrFail($id);
         $npkLogin = $request->npk;
 
+        $export = DB::table('payroll_exports')->where('run_id', $data->payroll_run_id)->first();
+
         $progress = collect($data->progress);
         $approvedAt = collect($data->approved_at ?? []);
 
@@ -175,7 +179,7 @@ class PayrollApproveController extends Controller
         // 🔥 AUTO GENERATE BANK
         // =========================
         if ($finalApprove) {
-            $this->generateBank($data->payroll_run_id); // 🔥 pakai run_id
+            $this->generateBank($data->payroll_run_id, $export->id); // 🔥 pakai run_id dan export_id
         }
 
         return response()->json([
@@ -183,7 +187,7 @@ class PayrollApproveController extends Controller
         ]);
     }
 
-    public function generateBank($runId)
+    public function generateBank($runId, $exportId)
     {
         /*
     |--------------------------------------------------------------------------
@@ -326,6 +330,9 @@ class PayrollApproveController extends Controller
 
         $this->createBankCSV($groupedActive, $period->name, $activePath);
         $this->createBankCSV($groupedResign, $period->name, $resignPath);
+
+
+        GeneratePayrollExport::dispatch($exportId, 'approve');
 
         /*
     |--------------------------------------------------------------------------

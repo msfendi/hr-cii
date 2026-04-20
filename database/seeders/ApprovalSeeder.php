@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\ApprovalDept;
+use App\Models\ApprovalRule;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -44,7 +45,7 @@ class ApprovalSeeder extends Seeder
                 'approval_id' => 1,
                 'level' => 1,
             ],
-            
+
         ];
 
         foreach ($rules as $rule) {

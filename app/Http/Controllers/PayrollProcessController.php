@@ -73,12 +73,12 @@ class PayrollProcessController extends Controller
         $period = PayrollPeriod::findOrFail($request->period_id);
 
         // PROTEKSI: cek apakah payroll sudah pernah digenerate
-        $exists = PayrollRun::where('period_id', $period->id)->exists();
+        // $exists = PayrollRun::where('period_id', $period->id)->exists();
 
-        if ($exists) {
-            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
-            return redirect()->back();
-        }
+        // if ($exists) {
+        //     Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
+        //     return redirect()->back();
+        // }
 
         $run = PayrollRun::create([
             'period_id' => $period->id,
@@ -91,17 +91,25 @@ class PayrollProcessController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | BIODATA UNION
+        | BIODATA UNION (DITAMBAHKAN BARCODE)
         |--------------------------------------------------------------------------
         */
+
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN')
+            ->select('NPK', 'NAMA_KARYAWAN', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
             ->unionAll(
                 DB::connection('cii')
                     ->table('BIODATA_KELUAR')
-                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->select('NPK', 'NAMA_KARYAWAN', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
             );
+
+        // dd($biodataUnion->get());
+        /*
+        |--------------------------------------------------------------------------
+        | EMPLOYEE BASE
+        |--------------------------------------------------------------------------
+        */
 
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
@@ -115,9 +123,12 @@ class PayrollProcessController extends Controller
             ->select(
                 'p.NPK',
                 'bio.NAMA_KARYAWAN',
+                DB::raw("CAST(bio.BARCODE AS VARCHAR(50)) AS BARCODE"),
                 'p.TMK',
                 'p.TKK'
             );
+
+        // dd($employeeBase->get());
 
         $overtimeSummary = DB::connection('cii')
             ->table('overtimes')
@@ -162,11 +173,55 @@ class PayrollProcessController extends Controller
             )
             ->groupBy('NPK');
 
+        /*
+        |--------------------------------------------------------------------------
+        | 🔥 LATE HOURS FROM FINGERPRINT
+        |--------------------------------------------------------------------------
+        */
+
+        $lateSummary = DB::connection('cii')
+            ->table('att_log')
+            ->whereBetween(DB::raw('CAST(scan_date as DATE)'), [$periodStart, $periodEnd])
+            ->select(
+                DB::raw('CAST(pin as VARCHAR(50)) as pin'),
+                DB::raw("
+            SUM(
+                CASE 
+                    WHEN CAST(scan_date as TIME) > '08:00:00'
+                     AND CAST(scan_date as TIME) < '17:00:00'
+                    THEN CEILING(
+                        DATEDIFF(
+                            MINUTE,
+                            '08:00:00',
+                            CAST(scan_date as TIME)
+                        ) / 60.0
+                    )
+                    ELSE 0
+                END
+            ) as late_hours
+        ")
+            )->groupBy(DB::raw('CAST(pin as VARCHAR(50))'));
+
+        // dd($lateSummary->get());
+
+        /*
+        |--------------------------------------------------------------------------
+        | EMPLOYEES QUERY (DITAMBAHKAN LATE HOURS)
+        |--------------------------------------------------------------------------
+        */
+
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
             ->leftJoinSub($overtimeSummary, 'ot', function ($join) {
                 $join->on('emp.NPK', '=', 'ot.NPK');
+            })
+            ->leftJoinSub($lateSummary, 'lt', function ($join) {
+                $join->on(
+                    DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
+                    '=',
+                    DB::raw('CAST(lt.pin AS VARCHAR(50))')
+                );
             })
             ->leftJoin('payroll_masters as pm', 'emp.NPK', '=', 'pm.npk')
             ->leftJoin('payroll_adjusments as pa', function ($join) use ($period) {
@@ -176,6 +231,7 @@ class PayrollProcessController extends Controller
             ->select(
                 'emp.NPK',
                 'emp.NAMA_KARYAWAN',
+                'emp.BARCODE',
                 'pm.salary',
                 'pm.allowance',
                 'pm.pph21',
@@ -185,9 +241,9 @@ class PayrollProcessController extends Controller
                 DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
                 DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
+                DB::raw('COALESCE(lt.late_hours,0) as late_hours'),
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
-            // ->where('emp.NPK', '=', 'C-00005')
             ->get();
 
         // dd($employees);
@@ -227,6 +283,7 @@ class PayrollProcessController extends Controller
                 'count_days'     => (float) $count_days,
                 'is_contract' => $employee->type === 'Contract' ? 1 : 0,
                 'is_daily'    => $employee->type === 'Daily' ? 1 : 0,
+                'late_hours'     => (float) $employee->late_hours,
             ];
 
             $results = [];
@@ -607,7 +664,9 @@ class PayrollProcessController extends Controller
             'progress' => 0
         ]);
 
-        GeneratePayrollExport::dispatch($export->id);
+        $type = 'process';
+
+        GeneratePayrollExport::dispatch($export->id, $type);
 
         Alert::success('Sukses', 'Export payroll selesai diproses!');
         return redirect('payroll-process/index');

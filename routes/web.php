@@ -27,6 +27,7 @@ use App\Http\Controllers\EmployeeThrController;
 use App\Http\Controllers\EvaluationEmployeeController;
 use App\Http\Controllers\EvaluationJobscopeController;
 use App\Http\Controllers\EvaluationQuestionnaireController;
+use App\Http\Controllers\ExpatController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\InsentifApprovalController;
 use App\Http\Controllers\InsentifMasterController;
@@ -73,10 +74,10 @@ Route::group(['middleware' => 'guest'], function () {
     // Route::get('/register', [RegisterController::class, 'index'])->name('register');
     Route::post('/register/guest', [RegisterController::class, 'store'])->name('register.guest');
 
-Route::get('/login', [LoginController::class, 'login'])->name('login.guest');
-Route::post('/login', [LoginController::class, 'authenticate'])->name('login');
-Route::get('/login/qrauth', [LoginController::class, 'qrauth'])->name('login.qrauth');
-// });
+    Route::get('/login', [LoginController::class, 'login'])->name('login.guest');
+    Route::post('/login', [LoginController::class, 'authenticate'])->name('login');
+    Route::get('/login/qrauth', [LoginController::class, 'qrauth'])->name('login.qrauth');
+});
 
 Route::group(['middleware' => 'auth'], function () {
     Route::get('/home', [HomeController::class, 'index'])->name('home');
@@ -351,7 +352,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/store', [ApprovalController::class, 'store'])->name('approval.store');
         Route::post('/update/{id}', [ApprovalController::class, 'update'])->name('approval.update');
         Route::post('/destroy/{id}', [ApprovalController::class, 'destroy'])->name('approval.destroy');
-        
+
         // Nested Rule inside Group
         Route::post('/rule/store', [ApprovalController::class, 'storeRule'])->name('approval.rule.store');
         Route::post('/rule/update/{id}', [ApprovalController::class, 'updateRule'])->name('approval.rule.update');
@@ -377,7 +378,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/store', [AdminLeaveBalanceController::class, 'storeBalance'])->name('leave-balances.store');
         Route::post('/update/{id}', [AdminLeaveBalanceController::class, 'updateBalance'])->name('leave-balances.update');
         Route::delete('/destroy/{id}', [AdminLeaveBalanceController::class, 'destroyBalance'])->name('leave-balances.destroy');
-        
+
         Route::post('/generate-yearly', [AdminLeaveBalanceController::class, 'generateYearlyBalance'])->name('leave-balances.generate-yearly');
     });
 
@@ -459,6 +460,35 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/applicant-contact/create', [ApplicantContactController::class, 'create'])->name('applicant-contact.create');
     Route::post('/applicant-contact/store', [ApplicantContactController::class, 'store'])->name('applicant-contact.store');
     Route::delete('/applicant-contact/{id}', [ApplicantContactController::class, 'destroy'])->name('applicant-contact.destroy');
+
+    Route::prefix('expat')->group(function () {
+
+        Route::get('master/index', [ExpatController::class, 'indexMaster'])->name('expat.master.index');
+        Route::get('master/create', [ExpatController::class, 'createMaster'])->name('expat.master.create');
+        Route::get('master/edit/{id}', [ExpatController::class, 'editMaster'])->name('expat.master.edit');
+        Route::post('master/delete/{id}', [ExpatController::class, 'deleteMaster'])->name('expat.master.delete');
+        Route::post('master/store', [ExpatController::class, 'storeMaster'])->name('expat.master.store');
+        Route::post('import/master', [ExpatController::class, 'importMaster'])->name('expat.import.master');
+        Route::get('template/master', [ExpatController::class, 'templateMaster'])->name('expat.template.master');
+
+        Route::get('onleave/index', [ExpatController::class, 'indexOnleave'])->name('expat.onleave.index');
+        Route::get('onleave/create', [ExpatController::class, 'createOnLeave'])->name('expat.onleave.create');
+        Route::post('onleave/store', [ExpatController::class, 'storeOnleave'])->name('expat.onleave.store');
+        Route::get('onleave/edit/{id}', [ExpatController::class, 'editOnleave'])->name('expat.onleave.edit');
+        Route::post('onleave/delete/{id}', [ExpatController::class, 'deleteOnleave'])->name('expat.onleave.delete');
+        Route::post('import/onleave', [ExpatController::class, 'importOnleave'])->name('expat.import.onleave');
+        Route::get('template/onleave', [ExpatController::class, 'templateOnleave'])->name('expat.template.onleave');
+
+        Route::get('cost/index', [ExpatController::class, 'indexCost'])->name('expat.cost.index');
+        Route::get('cost/create', [ExpatController::class, 'createCost'])->name('expat.cost.create');
+        Route::post('cost/store', [ExpatController::class, 'storeCost'])->name('expat.cost.store');
+        Route::get('cost/edit/{id}', [ExpatController::class, 'editCost'])->name('expat.cost.edit');
+        Route::post('cost/delete/{id}', [ExpatController::class, 'deleteCost'])->name('expat.cost.delete');
+        Route::post('import/cost', [ExpatController::class, 'importCost'])->name('expat.import.cost');
+        Route::get('template/cost', [ExpatController::class, 'templateCost'])->name('expat.template.cost');
+
+        Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export');
+    });
 });
 
 // ========================================

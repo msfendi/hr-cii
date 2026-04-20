@@ -90,7 +90,8 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
             'bpjs_ketenagakerjaan',
             'pph_21',
             'pph_21_deduction',
-            'absence_deduction'
+            'absence_deduction',
+            'late_deduction'
         ];
 
         $values = [];
@@ -137,6 +138,7 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
             'PPH21',
             'PPH21 Deduction',
             'Absence Deduction',
+            'Late Deduction',
             'Total Salary'
         ];
     }

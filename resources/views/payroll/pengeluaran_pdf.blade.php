@@ -166,24 +166,42 @@ function terbilang($nilai) {
     <br>
     <br>
     <br>
-    <table width="100%">
+    
+    {{-- ================= APPROVAL ================= --}}
+    @if(!empty($approvals))
+      <table style="width:100%;border:none">
       <tr>
-        <td>Mengetahui,</td>
-        <td class="right">Diajukan,</td>
+
+      @foreach($approvals as $approve)
+      <td align="center" style="border:none;width:25%">
+
+          <div style="height:80px">
+
+              @if($approve['status']=='approve' && !empty($approve['signature_img']))
+                  <img
+                      src="{{ storage_path('app/public/signature/'.$approve['signature_img']) }}"
+                      style="height:70px"
+                  >
+              @endif
+
+          </div>
+
+          <div style="margin-top:5px">
+              <strong>{{ $approve['nama_karyawan'] }}</strong><br>
+              {{ $approve['bagian'] }}<br>
+              @if($approve['status']=='approve')
+                  <span style="color:green;font-weight:bold">APPROVED</span>
+              @else
+                  <span style="color:orange;font-weight:bold">WAITING</span>
+              @endif
+          </div>
+
+      </td>
+      @endforeach
+
       </tr>
-      <tr>
-        <td>
-          <br>
-          <br>
-          <br>
-        </td>
-        <td></td>
-      </tr>
-      <tr>
-        <td>Vice President</td>
-        <td class="right">Manager HRD</td>
-      </tr>
-    </table>
+      </table>
+      @endif
     {{-- ===================================== --}}
 {{-- HALAMAN 2 - KARYAWAN RESIGN --}}
 {{-- ===================================== --}}
@@ -296,24 +314,41 @@ $total_potongan = 0;
     <br>
     <br>
     <br>
-    <table width="100%">
+    {{-- ================= APPROVAL ================= --}}
+    @if(!empty($approvals))
+      <table style="width:100%;border:none">
       <tr>
-        <td>Mengetahui,</td>
-        <td class="right">Diajukan,</td>
+
+      @foreach($approvals as $approve)
+      <td align="center" style="border:none;width:25%">
+
+          <div style="height:80px">
+
+              @if($approve['status']=='approve' && !empty($approve['signature_img']))
+                  <img
+                      src="{{ storage_path('app/public/signature/'.$approve['signature_img']) }}"
+                      style="height:70px"
+                  >
+              @endif
+
+          </div>
+
+          <div style="margin-top:5px">
+              <strong>{{ $approve['nama_karyawan'] }}</strong><br>
+              {{ $approve['bagian'] }}<br>
+              @if($approve['status']=='approve')
+                  <span style="color:green;font-weight:bold">APPROVED</span>
+              @else
+                  <span style="color:orange;font-weight:bold">WAITING</span>
+              @endif
+          </div>
+
+      </td>
+      @endforeach
+
       </tr>
-      <tr>
-        <td>
-          <br>
-          <br>
-          <br>
-        </td>
-        <td></td>
-      </tr>
-      <tr>
-        <td>Vice President</td>
-        <td class="right">Manager HRD</td>
-      </tr>
-    </table>
+      </table>
+      @endif
 
 @endif
   </body>

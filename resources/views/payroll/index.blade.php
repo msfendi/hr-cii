@@ -95,44 +95,53 @@
                                             <i class="fas fa-spinner fa-spin"></i> Processing
                                             </span>
                                             @elseif($period->export_status == 'finished')
-                                            <span class="badge badge-success">
+                                            <span class="badge badge-primary">
                                             Finished
+                                            </span>
+                                            @elseif($period->export_status == 'approved')
+                                            <span class="badge badge-success">
+                                            Approved
                                             </span>
                                             @endif
                                         </td>
                                         <td class="text-center">
-                                            {{-- DOWNLOAD EXCEL --}}
-                                            @if($period->export_status == 'finished' && $period->file_excel)
-                                                <a class="btn btn-success btn-sm"
-                                                href="{{ asset('storage/'.$period->file_excel) }}"
-                                                target="_blank">
-                                                    <i class="fas fa-file-excel mr-1"></i> Excel
-                                                </a>
-                                            @endif
+                                            @if($period->export_status == 'processing' && $period->file_excel && $period->file_pdf && $period->file_peng)
+                                                <span class="badge badge-warning">
+                                                    <i class="fas fa-spinner fa-spin"></i> Finalizing Document Approved
+                                                </span>
+                                            @else
+                                                {{-- DOWNLOAD EXCEL --}}
+                                                @if(($period->export_status == 'finished' || $period->export_status == 'approved') && $period->file_excel)
+                                                    <a class="btn btn-success btn-sm"
+                                                    href="{{ asset('storage/'.$period->file_excel) }}"
+                                                    target="_blank">
+                                                        <i class="fas fa-file-excel mr-1"></i> Excel
+                                                    </a>
+                                                @endif
 
-                                            {{-- DOWNLOAD PDF --}}
-                                            @if($period->export_status == 'finished' && $period->file_pdf)
-                                                <a class="btn btn-danger btn-sm"
-                                                    href="{{ asset('storage/'.$period->file_pdf) }}"
-                                                target="_blank">
-                                                    <i class="fas fa-file-pdf mr-1"></i> PDF
-                                                </a>
-                                            @endif
+                                                {{-- DOWNLOAD PDF --}}
+                                                @if(($period->export_status == 'finished' || $period->export_status == 'approved') && $period->file_pdf)
+                                                    <a class="btn btn-danger btn-sm"
+                                                        href="{{ asset('storage/'.$period->file_pdf) }}"
+                                                    target="_blank">
+                                                        <i class="fas fa-file-pdf mr-1"></i> PDF
+                                                    </a>
+                                                @endif
 
-                                            {{-- DOWNLOAD PDF PENGELUARAN --}}
-                                            @if($period->export_status == 'finished' && $period->file_peng)
-                                                <a class="btn btn-warning btn-sm"
-                                                    href="{{ asset('storage/'.$period->file_peng) }}"
-                                                target="_blank">
-                                                    <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
-                                                </a>
+                                                {{-- DOWNLOAD PDF PENGELUARAN --}}
+                                                @if(($period->export_status == 'finished' || $period->export_status == 'approved') && $period->file_peng)
+                                                    <a class="btn btn-secondary btn-sm"
+                                                        href="{{ asset('storage/'.$period->file_peng) }}"
+                                                    target="_blank">
+                                                        <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
+                                                    </a>
+                                                @endif
                                             @endif
-
                                         </td>
 
                                         <td class="text-center">
                                             {{-- DOWNLOAD BANK (HANYA JIKA APPROVAL FINISH) --}}
-                                            @if($period->approve_status == 'finish' && $period->export_status == 'finished')
+                                            @if($period->approve_status == 'finish' && $period->export_status == 'approved')
                                             
                                                 <a class="btn btn-primary btn-sm"
                                                     href="{{ asset('storage/'.$period->file_bank_active) }}"
@@ -230,6 +239,7 @@
                                         <th>PPh21</th>
                                         <th>PPh21 Deduction</th>
                                         <th>Absence</th>
+                                        <th>Late</th>
 
                                         <th>Total Salary</th>
                                         <th>Slip</th>
@@ -283,9 +293,18 @@
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+      <script>
+        $(document).ready(function(){
 
-<!-- Page level custom scripts -->
-<script src="{{asset('js/demo/datatables-demo.js')}}"></script>
+            $('#dataTable').DataTable({
+                order: [[0,'desc']], // pakai urutan ID dari Laravel
+                pageLength: 10,
+                responsive: true,
+                autoWidth:false
+            });
+
+        });
+        </script>
 
 <script>
 
@@ -462,6 +481,10 @@
             },
             { 
                 data: 'absence_deduction',
+                render: data => formatRupiah(data)
+            },
+            { 
+                data: 'late_deduction',
                 render: data => formatRupiah(data)
             },
             { 

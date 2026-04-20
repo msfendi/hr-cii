@@ -11,6 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -22,10 +23,12 @@ class GeneratePayrollExport implements ShouldQueue
     public $tries = 1;
 
     protected $export_id;
+    protected $type;
 
-    public function __construct($export_id)
+    public function __construct($export_id, $type)
     {
         $this->export_id = $export_id;
+        $this->type = $type;
     }
 
     public function handle()
@@ -38,40 +41,68 @@ class GeneratePayrollExport implements ShouldQueue
 
         $run_id = $export->run_id;
 
-        /*
-        |---------------------------------------------------------------------- 
-        | UNION BIODATA + BIODATA_KELUAR
-        |---------------------------------------------------------------------- 
-        */
-        $employeeUnion = DB::table('BIODATA')->select('NPK', 'id_dept')
-            ->unionAll(DB::table('BIODATA_KELUAR')->select('NPK', 'id_dept'));
+
+        $export->update([
+            'status' => 'processing',
+            'progress' => 0,
+        ]);
 
         /*
-        |---------------------------------------------------------------------- 
-        | PKWT TERAKHIR (BERDASARKAN TMK)
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | EMPLOYEE UNION (LOAD ONCE)
+        |--------------------------------------------------------------------------
         */
-        $pkwtLatest = DB::raw("
-            (
-                SELECT p1.NPK, p1.TKK
-                FROM PKWT p1
-                WHERE p1.TMK = (
-                    SELECT MAX(p2.TMK)
-                    FROM PKWT p2
-                    WHERE p2.NPK = p1.NPK
-                )
-            ) as p
-        ");
+        $employeeUnion = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept')
+            );
+
+        $employees = DB::query()
+            ->fromSub($employeeUnion, 'emp')
+            ->get()
+            ->keyBy('NPK');
 
         /*
-        |---------------------------------------------------------------------- 
-        | QUERY PAYROLL
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | SIGNATURE CACHE
+        |--------------------------------------------------------------------------
+        */
+        $signatures = DB::table('users as u')
+            ->leftJoin('signatures as s', 's.user_id', '=', 'u.id')
+            ->select('u.npk', 's.signature_img')
+            ->get()
+            ->keyBy('npk');
+
+        /*
+        |--------------------------------------------------------------------------
+        | PKWT LATEST (OPTIMIZED)
+        |--------------------------------------------------------------------------
+        */
+        $pkwtLatest = DB::table('PKWT as p1')
+            ->select('p1.NPK', 'p1.TKK')
+            ->whereRaw('p1.TMK = (SELECT MAX(p2.TMK) FROM PKWT p2 WHERE p2.NPK = p1.NPK)');
+
+        /*
+        |--------------------------------------------------------------------------
+        | PAYROLL QUERY
+        |--------------------------------------------------------------------------
         */
         $data = DB::table('payroll_run_details as prd')
-            ->leftJoinSub($employeeUnion, 'emp', fn($join) => $join->on('emp.NPK', '=', 'prd.employee_npk'))
+            ->leftJoinSub(
+                $employeeUnion,
+                'emp',
+                fn($j) =>
+                $j->on('emp.NPK', '=', 'prd.employee_npk')
+            )
             ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
-            ->leftJoin($pkwtLatest, 'p.NPK', '=', 'prd.employee_npk')
+            ->leftJoinSub(
+                $pkwtLatest,
+                'p',
+                fn($j) =>
+                $j->on('p.NPK', '=', 'prd.employee_npk')
+            )
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $run_id)
@@ -92,147 +123,178 @@ class GeneratePayrollExport implements ShouldQueue
         $periodName = $data->first()->period_name ?? 'UNKNOWN';
         $periodNameFormatted = strtoupper(str_replace(' ', '_', $periodName));
 
-        /*
-        |---------------------------------------------------------------------- 
-        | GENERATE EXCEL
-        |---------------------------------------------------------------------- 
-        */
-        $excelPath = 'public/payroll/REKAP_' . $periodNameFormatted . '.xlsx';
-        $excelPathDB = 'payroll/REKAP_' . $periodNameFormatted . '.xlsx';
-        Excel::store(new PayrollExportExcel($run_id), $excelPath, null, \Maatwebsite\Excel\Excel::XLSX);
+        $folder = "public/payroll/$periodNameFormatted";
+        Storage::makeDirectory($folder, 0775, true);
 
         /*
-        |---------------------------------------------------------------------- 
-        | COMPONENT STRUCTURE DARI JSON + TYPE MASTER
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | EXCEL
+        |--------------------------------------------------------------------------
+        */
+        if ($this->type === 'process') {
+
+            $excelPath = "$folder/REKAP_$periodNameFormatted.xlsx";
+
+            Excel::store(new PayrollExportExcel($run_id), $excelPath);
+
+            $export->update([
+                'status' => 'processing',
+                'progress' => 30,
+                'file_excel' => str_replace('public/', '', $excelPath),
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | COMPONENT MASTER
+        |--------------------------------------------------------------------------
         */
         $componentKeys = collect($data)
-            ->flatMap(fn($row) => array_keys(json_decode($row->components, true) ?? []))
+            ->flatMap(fn($r) => array_keys(json_decode($r->components, true) ?? []))
             ->unique()
-            ->filter(fn($code) => strtolower($code) !== 'thr'); // exclude THR
+            ->reject(fn($c) => strtolower($c) === 'thr');
 
-        // Ambil type & name dari master table payroll_components
         $componentMasters = PayrollComponent::whereIn('code', $componentKeys)
             ->get()
             ->keyBy('code');
 
-        $allComponents = $componentKeys->map(function ($code) use ($componentMasters) {
-            $master = $componentMasters[$code] ?? null;
-            return (object)[
-                'code' => $code,
-                'name' => $master->name ?? strtoupper(str_replace('_', ' ', $code)), // ambil name dari master
-                'type' => $master->type ?? 'earning',
-                'orders' => 0
-            ];
-        })->keyBy('code');
+        $allComponents = $componentKeys->mapWithKeys(function ($code) use ($componentMasters) {
 
-        /*
-        |---------------------------------------------------------------------- 
-        | DECODE COMPONENT JSON
-        |---------------------------------------------------------------------- 
-        */
-        $data = $data->map(function ($item) {
-            $components = json_decode($item->components, true);
-            if ($components) {
-                foreach ($components as $key => $value) {
-                    $item->$key = $value;
-                }
-            }
-            return $item;
+            $m = $componentMasters[$code] ?? null;
+
+            return [$code => (object)[
+                'code' => $code,
+                'name' => $m->name ?? strtoupper(str_replace('_', ' ', $code)),
+                'type' => $m->type ?? 'earning',
+                'orders' => 0
+            ]];
         });
 
         /*
-        |---------------------------------------------------------------------- 
-        | PISAH AKTIF VS RESIGN
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | DECODE COMPONENT (1 PASS ONLY)
+        |--------------------------------------------------------------------------
         */
-        $activeEmployees = $data->filter(fn($row) => empty($row->TKK));
-        $resignEmployees = $data->filter(fn($row) => !empty($row->TKK) && $row->TKK >= $row->start_date && $row->TKK <= $row->end_date);
+        foreach ($data as $item) {
+            foreach (json_decode($item->components, true) ?? [] as $k => $v) {
+                $item->$k = $v;
+            }
+        }
 
         /*
-        |---------------------------------------------------------------------- 
-        | GROUP BY DEPARTMENT
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | SPLIT EMPLOYEE
+        |--------------------------------------------------------------------------
         */
+        $activeEmployees = $data->filter(fn($r) => empty($r->TKK));
+
+        $resignEmployees = $data->filter(
+            fn($r) =>
+            !empty($r->TKK)
+                && $r->TKK >= $r->start_date
+                && $r->TKK <= $r->end_date
+        );
+
         $groupedActive = $activeEmployees->groupBy('DEPARTEMENT');
         $groupedResign = $resignEmployees->groupBy('DEPARTEMENT');
 
         /*
-        |---------------------------------------------------------------------- 
-        | HITUNG TOTAL KOMPONEN
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | TOTAL ENGINE
+        |--------------------------------------------------------------------------
         */
-        $activeTotals = [];
-        foreach ($activeEmployees as $row) {
-            foreach ($allComponents as $code => $component) {
-                $value = $row->$code ?? 0;
-                $activeTotals[$code] = ($activeTotals[$code] ?? 0) + $value;
+        $calcTotals = function ($rows) use ($allComponents) {
+
+            $totals = array_fill_keys(array_keys($allComponents->toArray()), 0);
+
+            foreach ($rows as $row) {
+                foreach ($totals as $code => &$total) {
+                    $total += $row->$code ?? 0;
+                }
+            }
+
+            return $totals;
+        };
+
+        $activeTotals = $calcTotals($activeEmployees);
+        $resignTotals = $calcTotals($resignEmployees);
+
+        /*
+        |--------------------------------------------------------------------------
+        | APPROVAL BUILDER
+        |--------------------------------------------------------------------------
+        */
+        $approvals = [];
+
+        $approve = DB::table('payroll_approve')
+            ->where('payroll_run_id', $run_id)
+            ->first();
+
+        if ($approve && $approve->progress) {
+
+            foreach (json_decode($approve->progress, true) as $row) {
+
+                $npks = json_decode($row['npk'], true) ?? [];
+
+                $statuses = json_decode($row['status'], true);
+                if (!is_array($statuses)) {
+                    $statuses = array_fill(0, count($npks), $row['status']);
+                }
+
+                foreach ($npks as $i => $npk) {
+
+                    $approvals[] = [
+                        'npk' => $npk,
+                        'nama_karyawan' => $employees[$npk]->NAMA_KARYAWAN ?? '-',
+                        'bagian' => $employees[$npk]->BAG ?? '-',
+                        'status' => strtolower($statuses[$i] ?? 'waiting'),
+                        'signature_img' => $signatures[$npk]->signature_img ?? null
+                    ];
+                }
             }
         }
 
-        $resignTotals = [];
-        foreach ($resignEmployees as $row) {
-            foreach ($allComponents as $code => $component) {
-                $value = $row->$code ?? 0;
-                $resignTotals[$code] = ($resignTotals[$code] ?? 0) + $value;
-            }
-        }
-
         /*
-        |---------------------------------------------------------------------- 
-        | GENERATE PDF REKAP
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | PDF GENERATION
+        |--------------------------------------------------------------------------
         */
-        $pdf = Pdf::loadView('payroll.rekap_pdf', [
-            'groupedActive' => $groupedActive,
-            'groupedResign' => $groupedResign,
-            'allComponents' => $allComponents,
-            'activeTotals' => $activeTotals,
-            'resignTotals' => $resignTotals,
-            'run_id' => $run_id
-        ])->setPaper('a4', 'landscape')
+        $viewData = compact(
+            'groupedActive',
+            'groupedResign',
+            'allComponents',
+            'activeTotals',
+            'resignTotals',
+            'run_id',
+            'approvals'
+        );
+
+        $pdf = Pdf::loadView('payroll.rekap_pdf', $viewData)
+            ->setPaper('a4', 'landscape')
             ->setOption('defaultFont', 'sans-serif')
-            ->setOption('isPhpEnabled', true)
-            ->setOption('isHtml5ParserEnabled', true)
-            ->setOption('isRemoteEnabled', false);
+            ->setOption('isPhpEnabled', true);
 
-        $pdfPath = 'public/payroll/REKAP_' . $periodNameFormatted . '.pdf';
-        $pdfPathDB = 'payroll/REKAP_' . $periodNameFormatted . '.pdf';
-        $pdf->save(storage_path('app/' . $pdfPath));
+        $pdfPeng = Pdf::loadView('payroll.pengeluaran_pdf', $viewData)
+            ->setPaper('a4');
 
-        /*
-        |---------------------------------------------------------------------- 
-        | GENERATE PDF PENGELUARAN
-        |---------------------------------------------------------------------- 
-        */
-        $pdfPeng = Pdf::loadView('payroll.pengeluaran_pdf', [
-            'groupedActive' => $groupedActive,
-            'groupedResign' => $groupedResign,
-            'allComponents' => $allComponents,
-            'activeTotals' => $activeTotals,
-            'resignTotals' => $resignTotals,
-            'run_id' => $run_id
-        ])->setPaper('a4')
-            ->setOption('defaultFont', 'sans-serif')
-            ->setOption('isPhpEnabled', true)
-            ->setOption('isHtml5ParserEnabled', true)
-            ->setOption('isRemoteEnabled', false);
+        $suffix = $this->type === 'process' ? '' : '_APPROVED';
 
-        $pdfPengPath = 'public/payroll/PENGELUARAN_' . $periodNameFormatted . '.pdf';
-        $pdfPengPathDB = 'payroll/PENGELUARAN_' . $periodNameFormatted . '.pdf';
-        $pdfPeng->save(storage_path('app/' . $pdfPengPath));
+        $pdfPath = "$folder/REKAP_{$periodNameFormatted}{$suffix}.pdf";
+        $pdfPengPath = "$folder/PENGELUARAN_{$periodNameFormatted}{$suffix}.pdf";
+
+        $pdf->save(storage_path("app/$pdfPath"));
+        $pdfPeng->save(storage_path("app/$pdfPengPath"));
 
         /*
-        |---------------------------------------------------------------------- 
-        | UPDATE STATUS
-        |---------------------------------------------------------------------- 
+        |--------------------------------------------------------------------------
+        | FINAL UPDATE
+        |--------------------------------------------------------------------------
         */
-        PayrollExport::where('id', $export->id)->update([
-            'status' => 'finished',
+        $export->update([
+            'status' => $this->type === 'process' ? 'finished' : 'approved',
             'progress' => 100,
-            'file_excel' => $excelPathDB,
-            'file_pdf' => $pdfPathDB,
-            'file_peng' => $pdfPengPathDB
+            'file_pdf' => str_replace('public/', '', $pdfPath),
+            'file_peng' => str_replace('public/', '', $pdfPengPath),
         ]);
     }
 }

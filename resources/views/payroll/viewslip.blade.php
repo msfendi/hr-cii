@@ -211,7 +211,7 @@
             elseif(!$row->jam_masuk && !$row->jam_pulang){
                $rowClass = 'absent';
             }
-            elseif($row->status === 'MA' || $row->status === 'BR' || $row->status === 'PE'){
+            elseif($row->status === 'MA' || $row->status === 'BR' || $row->status === 'PE' || $row->status === 'Terlambat'){
                $rowClass = 'absent';
             }
             @endphp

@@ -254,7 +254,11 @@ class EmployeePayrollController extends Controller
 
                     if ($first->hour < 12) {
                         $jamMasuk = $first->format('H:i');
-                        $status = 'Scan Masuk';
+                        if ($first->hour >= 8) {
+                            $status = 'Terlambat';
+                        } else {
+                            $status = 'Scan Masuk';
+                        }
                     } else {
                         $jamPulang = $first->format('H:i');
                         $status = 'Scan Pulang';
@@ -263,7 +267,11 @@ class EmployeePayrollController extends Controller
 
                     $jamMasuk = $first->format('H:i');
                     $jamPulang = $last->format('H:i');
-                    $status = 'Hadir';
+                    if ($first->hour >= 8) {
+                        $status = 'Terlambat';
+                    } else {
+                        $status = 'Hadir';
+                    }
                 }
 
                 if ($isWorkday) {

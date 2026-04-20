@@ -174,5 +174,40 @@
         </td>
       </tr>
     </table>
+    {{-- ================= APPROVAL ================= --}}
+    @if(!empty($approvals))
+      <table style="width:100%;border:none">
+      <tr>
+
+      @foreach($approvals as $approve)
+      <td align="center" style="border:none;width:25%">
+
+          <div style="height:80px">
+
+              @if($approve['status']=='approve' && !empty($approve['signature_img']))
+                  <img
+                      src="{{ storage_path('app/public/signature/'.$approve['signature_img']) }}"
+                      style="height:70px"
+                  >
+              @endif
+
+          </div>
+
+          <div style="margin-top:5px">
+              <strong>{{ $approve['nama_karyawan'] }}</strong><br>
+              {{ $approve['bagian'] }}<br>
+              @if($approve['status']=='approve')
+                  <span style="color:green;font-weight:bold">APPROVED</span>
+              @else
+                  <span style="color:orange;font-weight:bold">WAITING</span>
+              @endif
+          </div>
+
+      </td>
+      @endforeach
+
+      </tr>
+      </table>
+      @endif
   </body>
 </html>

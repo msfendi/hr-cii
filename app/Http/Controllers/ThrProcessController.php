@@ -234,7 +234,9 @@ class ThrProcessController extends Controller
             'progress' => 0
         ]);
 
-        GenerateThrExport::dispatch($export->id);
+        $type = 'process';
+
+        GenerateThrExport::dispatch($export->id, $type);
 
         Alert::success('Export THR Finished');
         return redirect('thr-process/index');

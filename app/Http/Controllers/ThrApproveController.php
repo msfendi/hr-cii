@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateThrExport;
 use App\Models\PayrollSetting;
 use App\Models\ThrApprove;
 use App\Models\ThrSetting;
@@ -29,6 +30,7 @@ class ThrApproveController extends Controller
                 'thr_exports.file_excel',
                 'thr_exports.file_pdf',
                 'thr_exports.file_peng',
+                'thr_exports.status as export_status'
             )
             ->latest('thr_approve.id')
             ->get();
@@ -106,6 +108,8 @@ class ThrApproveController extends Controller
         $data = ThrApprove::findOrFail($id);
         $npkLogin = $request->npk;
 
+        $export = DB::table('thr_exports')->where('run_id', $data->thr_run_id)->first();
+
         $progress = collect($data->progress);
         $approvedAt = collect($data->approved_at ?? []);
 
@@ -175,7 +179,7 @@ class ThrApproveController extends Controller
         // 🔥 AUTO GENERATE BANK
         // =========================
         if ($finalApprove) {
-            $this->generateBank($data->thr_run_id); // 🔥 pakai run_id
+            $this->generateBank($data->thr_run_id, $export->id); // 🔥 pakai run_id
         }
 
         return response()->json([
@@ -183,7 +187,7 @@ class ThrApproveController extends Controller
         ]);
     }
 
-    public function generateBank($runId)
+    public function generateBank($runId, $exportId)
     {
         /*
     |--------------------------------------------------------------------------
@@ -284,6 +288,9 @@ class ThrApproveController extends Controller
         $filePath = "thr/PERMATA_{$cleanPeriod}.csv";
 
         $this->createBankCSV($groupedData, $period->name, $filePath);
+
+
+        GenerateThrExport::dispatch($exportId, 'approve');
 
         /*
     |--------------------------------------------------------------------------

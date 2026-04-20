@@ -39,33 +39,38 @@
                               <td>{{ $row->period_name }}</td>
                               
                                 <td class="text-center">
-                                    {{-- DOWNLOAD EXCEL --}}
-                                    @if($row->is_exported && $row->file_excel)
-                                        <a class="btn btn-success btn-sm"
-                                        href="{{ asset('storage/'.$row->file_excel) }}"
-                                        target="_blank">
-                                            <i class="fas fa-file-excel mr-1"></i> Excel
-                                        </a>
-                                    @endif
+                                    @if($row->is_exported && $row->export_status == 'processing')
+                                        <span class="badge badge-warning">
+                                            <i class="fas fa-spinner fa-spin"></i> Finalizing Document Approved
+                                        </span>
+                                    @else
+                                        {{-- DOWNLOAD EXCEL --}}
+                                        @if($row->is_exported && $row->file_excel)
+                                            <a class="btn btn-success btn-sm"
+                                            href="{{ asset('storage/'.$row->file_excel) }}"
+                                            target="_blank">
+                                                <i class="fas fa-file-excel mr-1"></i> Excel
+                                            </a>
+                                        @endif
 
-                                    {{-- DOWNLOAD PDF --}}
-                                    @if($row->is_exported && $row->file_pdf)
-                                        <a class="btn btn-danger btn-sm"
-                                            href="{{ asset('storage/'.$row->file_pdf) }}"
-                                        target="_blank">
-                                            <i class="fas fa-file-pdf mr-1"></i> PDF
-                                        </a>
-                                    @endif
+                                        {{-- DOWNLOAD PDF --}}
+                                        @if($row->is_exported && $row->file_pdf)
+                                            <a class="btn btn-danger btn-sm"
+                                                href="{{ asset('storage/'.$row->file_pdf) }}"
+                                            target="_blank">
+                                                <i class="fas fa-file-pdf mr-1"></i> PDF
+                                            </a>
+                                        @endif
 
-                                    {{-- DOWNLOAD PDF PENGELUARAN --}}
-                                    @if($row->is_exported && $row->file_peng)
-                                        <a class="btn btn-warning btn-sm"
-                                            href="{{ asset('storage/'.$row->file_peng) }}"
-                                        target="_blank">
-                                            <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
-                                        </a>
+                                        {{-- DOWNLOAD PDF PENGELUARAN --}}
+                                        @if($row->is_exported && $row->file_peng)
+                                            <a class="btn btn-secondary btn-sm"
+                                                href="{{ asset('storage/'.$row->file_peng) }}"
+                                            target="_blank">
+                                                <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
+                                            </a>
+                                        @endif
                                     @endif
-
                                 </td>
                               <td>
                                 @if($row->is_exported)
@@ -239,21 +244,37 @@
                  confirmButtonText: 'Yes'
              }).then((result) => {
                  if (result.isConfirmed) {
-                     $.ajax({
-                         url: '/thr-approve/' + id + '/approve',
-                         type: 'POST',
-                         data: {
-                             _token: '{{ csrf_token() }}',
-                             npk: '{{ auth()->user()->npk }}'
-                         },
-                         success: function(res) {
-                             Swal.fire('Success', res.message, 'success');
-                             setTimeout(() => location.reload(), 1000);
-                         },
-                         error: function(err) {
-                             Swal.fire('Error', err.responseJSON.message, 'error');
-                         }
-                     });
+                    Swal.fire({
+                        title: "Finalizing Payroll Approval...",
+                        text: "Mohon tunggu...",
+                        allowOutsideClick: false,
+                        showConfirmButton: false,
+                        allowEscapeKey: false,
+                        timer: 3000,
+                        timerProgressBar: true,
+                        didOpen: () => {
+                            // Swal.showLoading()
+        
+                            $.ajax({
+                                url: '/thr-approve/' + id + '/approve',
+                                type: 'POST',
+                                data: {
+                                    _token: '{{ csrf_token() }}',
+                                    npk: '{{ auth()->user()->npk }}'
+                                },
+                                success: function(res) {
+                                    Swal.fire('Success', res.message, 'success');
+                                    setTimeout(() => location.reload(), 1000);
+                                },
+                                error: function(err) {
+                                    Swal.fire('Error', err.responseJSON.message, 'error');
+                                }
+                            });
+        
+                        }
+                    }).then(() => {
+                        location.reload(); // refresh page
+                    });
                  }
              });
          });
