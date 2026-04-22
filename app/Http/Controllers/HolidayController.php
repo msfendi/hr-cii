@@ -8,6 +8,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\HolidayImport;
 use App\Exports\HolidayExport;
 use Illuminate\Support\Facades\Http;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class HolidayController extends Controller
 {
@@ -34,6 +35,7 @@ class HolidayController extends Controller
 
         Holiday::create($request->all());
 
+        Alert::success('Holiday created successfully!');
         return redirect()->route('holidays.index');
     }
 
@@ -41,6 +43,7 @@ class HolidayController extends Controller
     {
         Holiday::findOrFail($id)->delete();
 
+        Alert::success('Holiday deleted successfully!');
         return back();
     }
 
@@ -48,7 +51,8 @@ class HolidayController extends Controller
     {
         Excel::import(new HolidayImport, $request->file('file'));
 
-        return back()->with('success', 'Import berhasil');
+        Alert::success('Import berhasil');
+        return back();
     }
 
 

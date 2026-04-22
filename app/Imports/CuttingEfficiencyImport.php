@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Models\CuttingEfficiency;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class CuttingEfficiencyImport implements ToModel, WithHeadingRow
 {
@@ -20,7 +21,10 @@ class CuttingEfficiencyImport implements ToModel, WithHeadingRow
         return CuttingEfficiency::updateOrCreate(
             [
                 'npk' => $row['npk'],
-                'date' => $row['date'],
+                'date' =>
+                !empty($row['date'])
+                    ? Date::excelToDateTimeObject($row['date'])
+                    : null,
                 'period_id'   => $this->periodId,
             ],
             [

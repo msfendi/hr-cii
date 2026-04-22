@@ -245,6 +245,10 @@
                 <td class="right">{{ $count }}</td>
             </tr>
         @endforeach
+        <tr>
+            <td>Total Terlambat</td>
+            <td class="right">{{ $late_minutes }} Menit</td>
+        </tr>
     </table>
 </body>
 

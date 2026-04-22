@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Models\PadEfficiency;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class PadEfficiencyImport implements ToModel, WithHeadingRow
 {
@@ -21,7 +22,10 @@ class PadEfficiencyImport implements ToModel, WithHeadingRow
             [
                 'npk' => $row['npk'],
                 'dept' => $row['dept'],
-                'date' => $row['date'],
+                'date' =>
+                !empty($row['date'])
+                    ? Date::excelToDateTimeObject($row['date'])
+                    : null,
                 'period_id'   => $this->periodId,
             ],
             [

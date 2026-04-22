@@ -129,6 +129,8 @@ class EmployeePayrollController extends Controller
         $earnings = [];
         $deductions = [];
 
+        $late_minutes = $components['late_minutes'];
+
         foreach ($components as $code => $value) {
 
             $type = $componentTypes[$code] ?? 'earning';
@@ -198,10 +200,79 @@ class EmployeePayrollController extends Controller
 
             $tanggal = $date->format('Y-m-d');
 
-            $dailyLogs = $logs->filter(
-                fn($log) =>
-                Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
-            );
+            /*
+    ======================================================
+    AMBIL SHIFT (ANCHOR)
+    ======================================================
+    */
+            $shift = DB::connection('cii')
+                ->table('employee_shifts as es')
+                ->join('shifts as s', 's.id', '=', 'es.shift_id')
+                ->where('es.npk', $employee->employee_npk)
+                ->whereDate('es.shift_date', $tanggal)
+                ->select('s.name', 's.work_start', 's.work_end')
+                ->first();
+
+            /*
+    ======================================================
+    FALLBACK SHIFT NORMAL
+    ======================================================
+    */
+            if (!$shift) {
+                $shift = (object)[
+                    'name' => 'NORMAL',
+                    'work_start' => '08:00:00',
+                    'work_end'   => '17:00:00',
+                ];
+            }
+
+            $workStart = Carbon::parse($shift->work_start);
+            $workEnd   = Carbon::parse($shift->work_end);
+
+            /*
+    ======================================================
+    DETECT NIGHT SHIFT
+    ======================================================
+    */
+            $isNightShift = $workStart->gt($workEnd);
+
+            /*
+    ======================================================
+    BUILD SHIFT RANGE
+    ======================================================
+    */
+            if ($isNightShift) {
+
+                $shiftStartDT = Carbon::parse($tanggal)
+                    ->setTimeFrom($workStart);
+
+                $shiftEndDT = Carbon::parse($tanggal)
+                    ->addDay()
+                    ->setTimeFrom($workEnd);
+
+                $dailyLogs = $logs->filter(function ($log) use ($shiftStartDT, $shiftEndDT) {
+                    $scan = Carbon::parse($log->scan_date);
+                    return $scan->between($shiftStartDT, $shiftEndDT);
+                });
+            } else {
+
+                $shiftStartDT = Carbon::parse($tanggal)
+                    ->setTimeFrom($workStart);
+
+                $shiftEndDT = Carbon::parse($tanggal)
+                    ->setTimeFrom($workEnd);
+
+                $dailyLogs = $logs->filter(
+                    fn($log) =>
+                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                );
+            }
+
+            /*
+    ======================================================
+    ORIGINAL ATTENDANCE LOGIC
+    ======================================================
+    */
 
             $jamMasuk = null;
             $jamPulang = null;
@@ -219,7 +290,7 @@ class EmployeePayrollController extends Controller
 
             /*
     ======================================================
-    GROUP STATUS IZIN
+    IZIN
     ======================================================
     */
             $izinCodes = ['MA', 'BR', 'PE', 'SI', 'CT', 'H'];
@@ -228,13 +299,10 @@ class EmployeePayrollController extends Controller
 
                 $jamMasuk = '-';
                 $jamPulang = '-';
-
                 $status = $lembur;
 
-                if (!isset($summary['status'][$status])) {
-                    $summary['status'][$status] = 0;
-                }
-                $summary['status'][$status]++;
+                $summary['status'][$status] =
+                    ($summary['status'][$status] ?? 0) + 1;
 
                 if ($isWorkday) {
                     $summary['absent']++;
@@ -247,31 +315,50 @@ class EmployeePayrollController extends Controller
     ======================================================
     */ elseif ($hasLog) {
 
+                $dailyLogs = $dailyLogs->sortBy('scan_date')->values();
+
                 $first = Carbon::parse($dailyLogs->first()->scan_date);
                 $last  = Carbon::parse($dailyLogs->last()->scan_date);
 
+                $isLate = $first->gt($shiftStartDT);
+
+                /*
+        ======================================================
+        ⭐ SINGLE SCAN SMART DETECTION ⭐
+        ======================================================
+        */
                 if ($dailyLogs->count() == 1) {
 
-                    if ($first->hour < 12) {
-                        $jamMasuk = $first->format('H:i');
-                        if ($first->hour >= 8) {
-                            $status = 'Terlambat';
-                        } else {
-                            $status = 'Scan Masuk';
-                        }
-                    } else {
-                        $jamPulang = $first->format('H:i');
+                    $scan = $first;
+
+                    $distanceStart = abs($scan->diffInSeconds($shiftStartDT, false));
+                    $distanceEnd   = abs($scan->diffInSeconds($shiftEndDT, false));
+
+                    if ($distanceEnd < $distanceStart) {
+
+                        // ✅ lebih dekat ke pulang
+                        $jamPulang = $scan->format('H:i');
                         $status = 'Scan Pulang';
+                    } else {
+
+                        // ✅ lebih dekat ke masuk
+                        $jamMasuk = $scan->format('H:i');
+
+                        $status = $scan->gt($shiftStartDT)
+                            ? 'Terlambat'
+                            : 'Scan Masuk';
                     }
                 } else {
 
-                    $jamMasuk = $first->format('H:i');
+                    /*
+            MULTI SCAN
+            */
+                    $jamMasuk  = $first->format('H:i');
                     $jamPulang = $last->format('H:i');
-                    if ($first->hour >= 8) {
-                        $status = 'Terlambat';
-                    } else {
-                        $status = 'Hadir';
-                    }
+
+                    $status = $isLate
+                        ? 'Terlambat'
+                        : 'Hadir';
                 }
 
                 if ($isWorkday) {
@@ -296,7 +383,6 @@ class EmployeePayrollController extends Controller
 
                     $status = 'Lembur';
 
-                    // ⭐ lembur hari libur TIDAK dihitung hadir
                     if ($isWorkday) {
                         $summary['hadir']++;
                     }
@@ -335,7 +421,6 @@ class EmployeePayrollController extends Controller
                 'is_holiday' => ($isWeekend || $isHoliday),
             ];
         }
-        // dd($attendance);
 
         /*
         |--------------------------------------------------------------------------
@@ -349,7 +434,8 @@ class EmployeePayrollController extends Controller
             'deductions' => $deductions,
             'attendance' => $attendance,
             'summary' => $summary,
-            'holidays' => $holidays
+            'holidays' => $holidays,
+            'late_minutes' => $late_minutes
         ])
             ->setPaper('A4', 'portrait');
 

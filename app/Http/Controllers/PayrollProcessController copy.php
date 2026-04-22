@@ -18,8 +18,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
 use Yajra\DataTables\DataTables;
-use App\Models\InsentifRoleFormula;
-use Illuminate\Support\Facades\Cache;
 
 class PayrollProcessController extends Controller
 {
@@ -64,23 +62,7 @@ class PayrollProcessController extends Controller
                 'payroll_component',
                 'status',
                 'approved_at'
-            ])
-            ->map(function ($item) {
-
-                $approved = $item->approved_at;
-
-                // jika masih string JSON
-                if (is_string($approved)) {
-                    $approved = json_decode($approved, true);
-                }
-
-                // ambil data terakhir
-                $item->approved_at = is_array($approved)
-                    ? end($approved)
-                    : null;
-
-                return $item;
-            });
+            ]);
 
         return response()->json($data);
     }
@@ -91,12 +73,12 @@ class PayrollProcessController extends Controller
         $period = PayrollPeriod::findOrFail($request->period_id);
 
         // PROTEKSI: cek apakah payroll sudah pernah digenerate
-        $exists = PayrollRun::where('period_id', $period->id)->exists();
+        // $exists = PayrollRun::where('period_id', $period->id)->exists();
 
-        if ($exists) {
-            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
-            return redirect()->back();
-        }
+        // if ($exists) {
+        //     Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
+        //     return redirect()->back();
+        // }
 
         $run = PayrollRun::create([
             'period_id' => $period->id,
@@ -199,24 +181,24 @@ class PayrollProcessController extends Controller
 
         // CHECK PER DATE LATE
 
-        // $lateSummary =
-        //     DB::connection('cii')
-        //     ->query()
+        //         $lateSummary =
+        //             DB::connection('cii')
+        //             ->query()
 
-        //     /*
+        //             /*
         // |--------------------------------------------------------------------------
         // | EMPLOYEE + PERIOD GENERATOR
         // |--------------------------------------------------------------------------
         // */
-        //     ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
+        //             ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
 
-        //         $q->fromSub($employeeBase, 'emp')
+        //                 $q->fromSub($employeeBase, 'emp')
 
-        //             ->crossJoinSub(
+        //                     ->crossJoinSub(
 
-        //                 DB::connection('cii')
-        //                     ->query()
-        //                     ->selectRaw("
+        //                         DB::connection('cii')
+        //                             ->query()
+        //                             ->selectRaw("
         //             DATEADD(
         //                 DAY,
         //                 v.number,
@@ -224,9 +206,9 @@ class PayrollProcessController extends Controller
         //             ) as shift_date
         //         ", [$periodStart])
 
-        //                     ->from(DB::raw('master..spt_values v'))
-        //                     ->where('v.type', 'P')
-        //                     ->whereRaw("
+        //                             ->from(DB::raw('master..spt_values v'))
+        //                             ->where('v.type', 'P')
+        //                             ->whereRaw("
         //             v.number <= DATEDIFF(
         //                 DAY,
         //                 CAST(? AS DATE),
@@ -234,94 +216,95 @@ class PayrollProcessController extends Controller
         //             )
         //         ", [$periodStart, $periodEnd]),
 
-        //                 'cal'
-        //             )
+        //                         'cal'
+        //                     )
 
-        //             ->select(
-        //                 'emp.*',
-        //                 DB::raw('cal.shift_date')
-        //             );
-        //     }, 'emp')
+        //                     ->select(
+        //                         'emp.*',
+        //                         DB::raw('cal.shift_date')
+        //                     );
+        //             }, 'emp')
 
-        //     /*
+
+        //             /*
         // |--------------------------------------------------------------------------
         // | SHIFT AS ANCHOR
         // |--------------------------------------------------------------------------
         // */
-        //     ->leftJoin('employee_shifts as es', function ($join) {
+        //             ->leftJoin('employee_shifts as es', function ($join) {
 
-        //         $join->on('emp.NPK', '=', 'es.npk')
-        //             ->on(
-        //                 DB::raw('CAST(emp.shift_date AS DATE)'),
-        //                 '=',
-        //                 DB::raw('CAST(es.shift_date AS DATE)')
-        //             );
-        //     })
+        //                 $join->on('emp.NPK', '=', 'es.npk')
+        //                     ->on(
+        //                         DB::raw('CAST(emp.shift_date AS DATE)'),
+        //                         '=',
+        //                         DB::raw('CAST(es.shift_date AS DATE)')
+        //                     );
+        //             })
 
-        //     ->leftJoin('shifts as s', 'es.shift_id', '=', 's.id')
+        //             ->leftJoin('shifts as s', 'es.shift_id', '=', 's.id')
 
 
-        //     /*
+        //             /*
         // |--------------------------------------------------------------------------
         // | FINGER SOURCE (CROSS DATE NIGHT SHIFT)
         // |--------------------------------------------------------------------------
         // */
-        //     ->leftJoinSub(
+        //             ->leftJoinSub(
 
-        //         DB::connection('cii')
-        //             ->table('att_log')
-        //             ->whereBetween(
-        //                 DB::raw('CAST(scan_date AS DATE)'),
-        //                 [$periodStart, $periodEnd]
-        //             )
-        //             ->select(
-        //                 DB::raw('CAST(pin AS VARCHAR(50)) as pin'),
-        //                 DB::raw('CAST(scan_date AS DATE) as scan_day'),
-        //                 'scan_date'
-        //             ),
+        //                 DB::connection('cii')
+        //                     ->table('att_log')
+        //                     ->whereBetween(
+        //                         DB::raw('CAST(scan_date AS DATE)'),
+        //                         [$periodStart, $periodEnd]
+        //                     )
+        //                     ->select(
+        //                         DB::raw('CAST(pin AS VARCHAR(50)) as pin'),
+        //                         DB::raw('CAST(scan_date AS DATE) as scan_day'),
+        //                         'scan_date'
+        //                     ),
 
-        //         'att',
+        //                 'att',
 
-        //         function ($join) {
+        //                 function ($join) {
 
-        //             $join->on(
-        //                 DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
-        //                 '=',
-        //                 'att.pin'
-        //             )
+        //                     $join->on(
+        //                         DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
+        //                         '=',
+        //                         'att.pin'
+        //                     )
 
-        //                 ->where(function ($q) {
+        //                         ->where(function ($q) {
 
-        //                     /* SAME DAY */
-        //                     $q->whereRaw("
+        //                             /* SAME DAY */
+        //                             $q->whereRaw("
         //             CAST(att.scan_day AS DATE)
         //             =
         //             CAST(emp.shift_date AS DATE)
         //         ")
 
-        //                         /* CROSS DATE NIGHT SHIFT */
-        //                         ->orWhereRaw("
-        //             (
-        //                 es.shift_id IS NOT NULL
-        //                 AND CAST(s.work_start AS TIME) >
-        //                     CAST(s.work_end AS TIME)
+        //                                 /* CROSS DATE NIGHT SHIFT */
+        //                                 ->orWhereRaw("
+        //         (
+        //             es.shift_id IS NOT NULL
+        //             AND CAST(s.work_start AS TIME) >
+        //                 CAST(s.work_end AS TIME)
 
-        //                 AND CAST(att.scan_day AS DATE)
-        //                 =
-        //                 DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        //             )
+        //             AND CAST(att.scan_day AS DATE)
+        //             =
+        //             DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
+        //         )
         //         ");
-        //                 });
-        //         }
-        //     )
+        //                         });
+        //                 }
+        //             )
 
 
-        //     /*
+        //             /*
         // |--------------------------------------------------------------------------
         // | BASE SELECT
         // |--------------------------------------------------------------------------
         // */
-        //     ->selectRaw("
+        //             ->selectRaw("
         // CAST(emp.BARCODE AS VARCHAR(50)) as pin,
         // CAST(emp.shift_date AS DATE) as scan_day,
 
@@ -337,12 +320,12 @@ class PayrollProcessController extends Controller
         // ")
 
 
-        //     /*
+        //             /*
         // |--------------------------------------------------------------------------
-        // | FIRST SCAN (TIDAK DIUBAH)
+        // | FIRST SCAN
         // |--------------------------------------------------------------------------
         // */
-        //     ->selectRaw("
+        //             ->selectRaw("
         // MIN(
         // CASE
 
@@ -395,21 +378,21 @@ class PayrollProcessController extends Controller
         // ")
 
 
-        //     ->groupBy(
-        //         DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
-        //         DB::raw('CAST(emp.shift_date AS DATE)'),
-        //         's.work_start',
-        //         's.work_end',
-        //         'es.shift_id'
-        //     )
+        //             ->groupBy(
+        //                 DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
+        //                 DB::raw('CAST(emp.shift_date AS DATE)'),
+        //                 's.work_start',
+        //                 's.work_end',
+        //                 'es.shift_id'
+        //             )
 
 
-        //     /*
+        //             /*
         // |--------------------------------------------------------------------------
-        // | LATE MINUTE ENGINE ✅ NEW VERSION
+        // | LATE HOUR ENGINE ✅ FIXED
         // |--------------------------------------------------------------------------
         // */
-        //     ->selectRaw("
+        //             ->selectRaw("
         // CASE
         // WHEN MIN(att.scan_date) IS NULL THEN 0
 
@@ -426,15 +409,11 @@ class PayrollProcessController extends Controller
         // END,'17:00:00'
         // )
 
-        // /* ================= NIGHT SHIFT ================= */
+        // /* NIGHT SHIFT */
         // THEN
-
-        // CASE
-        // WHEN DATEDIFF(
+        // CEILING(
+        // DATEDIFF(
         // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5, /* ✅ tolerance */
         // DATEADD(
         // SECOND,
         // DATEDIFF(
@@ -442,9 +421,7 @@ class PayrollProcessController extends Controller
         // COALESCE(CAST(s.work_start AS TIME),'23:00:00')
         // ),
         // CAST(emp.shift_date AS DATETIME)
-        // )
         // ),
-
         // MIN(
         // CASE
         // WHEN
@@ -463,55 +440,14 @@ class PayrollProcessController extends Controller
         // THEN att.scan_date
         // END
         // )
-        // ) < 0 THEN 0
+        // )/60.0
+        // )
 
+        // /* NORMAL SHIFT ✅ FIX */
         // ELSE
+        // CEILING(
         // DATEDIFF(
         // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5,
-        // DATEADD(
-        // SECOND,
-        // DATEDIFF(
-        // SECOND,'00:00:00',
-        // COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        // ),
-        // CAST(emp.shift_date AS DATETIME)
-        // )
-        // ),
-
-        // MIN(
-        // CASE
-        // WHEN
-        // (
-        // CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        // AND CAST(att.scan_date AS TIME)
-        // >= COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        // )
-        // OR
-        // (
-        // CAST(att.scan_date AS DATE)
-        // = DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        // AND CAST(att.scan_date AS TIME)
-        // < COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        // )
-        // THEN att.scan_date
-        // END
-        // )
-        // )
-        // END
-
-
-        // /* ================= NORMAL SHIFT ================= */
-        // ELSE
-
-        // CASE
-        // WHEN DATEDIFF(
-        // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5, /* ✅ tolerance */
         // DATEADD(
         // SECOND,
         // DATEDIFF(
@@ -523,9 +459,7 @@ class PayrollProcessController extends Controller
         // )
         // ),
         // CAST(emp.shift_date AS DATETIME)
-        // )
         // ),
-
         // MIN(
         // CASE
         // WHEN CAST(att.scan_date AS TIME)
@@ -544,59 +478,19 @@ class PayrollProcessController extends Controller
         // THEN att.scan_date
         // END
         // )
-        // ) < 0 THEN 0
+        // )/60.0
+        // )
 
-        // ELSE
-        // DATEDIFF(
-        // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5,
-        // DATEADD(
-        // SECOND,
-        // DATEDIFF(
-        // SECOND,'00:00:00',
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // ),
-        // CAST(emp.shift_date AS DATETIME)
-        // )
-        // ),
-
-        // MIN(
-        // CASE
-        // WHEN CAST(att.scan_date AS TIME)
-        // BETWEEN
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // AND
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        // ELSE CAST(s.work_end AS TIME)
-        // END,'17:00:00'
-        // )
-        // THEN att.scan_date
-        // END
-        // )
-        // )
-        // END
-
-        // END as late_minute
+        // END as late_hour
         // ")
 
 
-        //     ->whereBetween(
-        //         DB::raw('CAST(emp.shift_date AS DATE)'),
-        //         [$periodStart, $periodEnd]
-        //     )
+        //             ->whereBetween(
+        //                 DB::raw('CAST(emp.shift_date AS DATE)'),
+        //                 [$periodStart, $periodEnd]
+        //             )
 
-        //     ->orderBy(DB::raw('CAST(emp.shift_date AS DATE)'));
+        //             ->orderBy(DB::raw('CAST(emp.shift_date AS DATE)'));
 
         // SUMMARY LATE
         $lateSummary =
@@ -604,10 +498,10 @@ class PayrollProcessController extends Controller
             ->query()
 
             /*
-        |--------------------------------------------------------------------------
-        | SOURCE LATE ENGINE (ORIGINAL LOGIC)
-        |--------------------------------------------------------------------------
-        */
+|--------------------------------------------------------------------------
+| SOURCE LATE ENGINE (ORIGINAL LOGIC)
+|--------------------------------------------------------------------------
+*/
             ->fromSub(function ($query) use ($employeeBase, $periodStart, $periodEnd) {
 
                 $query->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
@@ -619,22 +513,22 @@ class PayrollProcessController extends Controller
                             DB::connection('cii')
                                 ->query()
                                 ->selectRaw("
-        DATEADD(
-        DAY,
-        v.number,
-        CAST(? AS DATE)
-        ) as shift_date
-        ", [$periodStart])
+                DATEADD(
+                    DAY,
+                    v.number,
+                    CAST(? AS DATE)
+                ) as shift_date
+            ", [$periodStart])
 
                                 ->from(DB::raw('master..spt_values v'))
                                 ->where('v.type', 'P')
                                 ->whereRaw("
-        v.number <= DATEDIFF(
-        DAY,
-        CAST(? AS DATE),
-        CAST(? AS DATE)
-        )
-        ", [$periodStart, $periodEnd]),
+                v.number <= DATEDIFF(
+                    DAY,
+                    CAST(? AS DATE),
+                    CAST(? AS DATE)
+                )
+            ", [$periodStart, $periodEnd]),
 
                             'cal'
                         )
@@ -687,22 +581,22 @@ class PayrollProcessController extends Controller
                                 ->where(function ($q) {
 
                                     $q->whereRaw("
-        CAST(att.scan_day AS DATE)
-        =
-        CAST(emp.shift_date AS DATE)
-        ")
+                    CAST(att.scan_day AS DATE)
+                    =
+                    CAST(emp.shift_date AS DATE)
+                ")
 
                                         ->orWhereRaw("
-        (
-        es.shift_id IS NOT NULL
-        AND CAST(s.work_start AS TIME)>
-        CAST(s.work_end AS TIME)
+                (
+                    es.shift_id IS NOT NULL
+                    AND CAST(s.work_start AS TIME)>
+                        CAST(s.work_end AS TIME)
 
-        AND CAST(att.scan_day AS DATE)
-        =
-        DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        )
-        ");
+                    AND CAST(att.scan_day AS DATE)
+                    =
+                    DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
+                )
+                ");
                                 });
                         }
                     )
@@ -719,10 +613,10 @@ class PayrollProcessController extends Controller
 
 
                     /*
-        |--------------------------------------------------------------------------
-        | DAILY LATE RESULT (MINUTE + 5 MIN TOLERANCE)
-        |--------------------------------------------------------------------------
-        */
+|--------------------------------------------------------------------------
+| DAILY LATE RESULT
+|--------------------------------------------------------------------------
+*/
                     ->selectRaw("
         emp.NPK,
         CAST(emp.BARCODE AS VARCHAR(50)) as pin,
@@ -741,163 +635,72 @@ class PayrollProcessController extends Controller
         ELSE CAST(s.work_end AS TIME)
         END,'17:00:00')
 
-        /* ================= NIGHT SHIFT ================= */
         THEN
-
-        CASE
-        WHEN DATEDIFF(
-        MINUTE,
-
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
+        CEILING(
         DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
-
-        MIN(
-        CASE
-        WHEN
-        (
-        CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        AND CAST(att.scan_date AS TIME)>=COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        )
-        OR
-        (
-        CAST(att.scan_date AS DATE)=DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        AND CAST(att.scan_date AS TIME)<COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        )
-        THEN att.scan_date
-        END
-        )
-        ) < 0 THEN 0
+            MINUTE,
+            DATEADD(
+                SECOND,
+                DATEDIFF(
+                    SECOND,'00:00:00',
+                    COALESCE(CAST(s.work_start AS TIME),'23:00:00')
+                ),
+                CAST(emp.shift_date AS DATETIME)
+            ),
+            MIN(
+                CASE
+                WHEN
+                (
+                    CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
+                    AND CAST(att.scan_date AS TIME)>=COALESCE(CAST(s.work_start AS TIME),'23:00:00')
+                )
+                OR
+                (
+                    CAST(att.scan_date AS DATE)=DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
+                    AND CAST(att.scan_date AS TIME)<COALESCE(CAST(s.work_end AS TIME),'08:00:00')
+                )
+                THEN att.scan_date
+                END
+            )
+        )/60.0)
 
         ELSE
+        CEILING(
         DATEDIFF(
-        MINUTE,
-
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
-        DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
-
-        MIN(
-        CASE
-        WHEN
-        (
-        CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        AND CAST(att.scan_date AS TIME)>=COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        )
-        OR
-        (
-        CAST(att.scan_date AS DATE)=DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        AND CAST(att.scan_date AS TIME)<COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        )
-        THEN att.scan_date
-        END
-        )
-        )
-        END
-
-
-        /* ================= NORMAL SHIFT ================= */
-        ELSE
-
-        CASE
-        WHEN DATEDIFF(
-        MINUTE,
-
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
-        DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
-
-        MIN(
-        CASE
-        WHEN CAST(att.scan_date AS TIME)
-        BETWEEN
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        AND
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        ELSE CAST(s.work_end AS TIME)
-        END,'17:00:00'
-        )
-        THEN att.scan_date
-        END
-        )
-        ) < 0 THEN 0
-
-        ELSE
-        DATEDIFF(
-        MINUTE,
-
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
-        DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
-
-        MIN(
-        CASE
-        WHEN CAST(att.scan_date AS TIME)
-        BETWEEN
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        AND
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        ELSE CAST(s.work_end AS TIME)
-        END,'17:00:00'
-        )
-        THEN att.scan_date
-        END
-        )
-        )
-        END
-
-        END as late_minute
-        ")
+            MINUTE,
+            DATEADD(
+                SECOND,
+                DATEDIFF(
+                    SECOND,'00:00:00',
+                    COALESCE(
+                        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
+                        ELSE CAST(s.work_start AS TIME)
+                        END,'08:00:00'
+                    )
+                ),
+                CAST(emp.shift_date AS DATETIME)
+            ),
+            MIN(
+                CASE
+                WHEN CAST(att.scan_date AS TIME)
+                BETWEEN
+                COALESCE(
+                    CASE WHEN es.shift_id IS NULL THEN '08:00:00'
+                    ELSE CAST(s.work_start AS TIME)
+                    END,'08:00:00'
+                )
+                AND
+                COALESCE(
+                    CASE WHEN es.shift_id IS NULL THEN '17:00:00'
+                    ELSE CAST(s.work_end AS TIME)
+                    END,'17:00:00'
+                )
+                THEN att.scan_date
+                END
+            )
+        )/60.0)
+        END as late_hour
+    ")
 
                     ->whereBetween(
                         DB::raw('CAST(emp.shift_date AS DATE)'),
@@ -907,21 +710,19 @@ class PayrollProcessController extends Controller
 
 
             /*
-        |--------------------------------------------------------------------------
-        | FINAL RESULT (NO DATE)
-        |--------------------------------------------------------------------------
-        */
+|--------------------------------------------------------------------------
+| FINAL RESULT (NO DATE)
+|--------------------------------------------------------------------------
+*/
             ->selectRaw("
-        NPK as npk,
-        pin,
-        SUM(late_minute) as late_minutes
-        ")
+NPK as npk,
+pin,
+SUM(late_hour) as late_hours
+")
 
             ->groupBy('NPK', 'pin');
 
         // dd($lateSummary->get());
-
-        $lateSummary->get();
 
 
         // dd(DB::query()
@@ -974,7 +775,7 @@ class PayrollProcessController extends Controller
                 DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
                 DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
-                DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
+                DB::raw('COALESCE(lt.late_hours,0) as late_hours'),
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
@@ -1017,10 +818,10 @@ class PayrollProcessController extends Controller
                 'count_days'     => (float) $count_days,
                 'is_contract' => $employee->type === 'Contract' ? 1 : 0,
                 'is_daily'    => $employee->type === 'Daily' ? 1 : 0,
-                'late_minutes'     => (float) $employee->late_minutes,
+                'late_hours'     => (float) $employee->late_hours,
             ];
 
-            // dd($employee->late_minutes);
+            // dd($employee->late_hours);
 
             $results = [];
             $grandTotal = 0;
@@ -1073,7 +874,7 @@ class PayrollProcessController extends Controller
                         foreach ($lineefficiencies as $row) {
                             if (!in_array($row->role, ['operator', 'supervisor'])) continue;
                             $lineInsentif = $this->getInsentifByEfficiency($row->efficiency, $sewingInsentifFormula);
-                            $amount += $this->calculateRoleSewingInsentif($row->role, 'sewing', $lineInsentif, 1);
+                            $amount += $this->calculateRoleSewingInsentif($row->role, $lineInsentif, 1);
                         }
 
                         // Chief / Mekanik / Mekanik Leader
@@ -1109,7 +910,7 @@ class PayrollProcessController extends Controller
                                 $totalLineInsentif += $this->getInsentifByEfficiency($line->efficiency, $sewingInsentifFormula);
                             }
 
-                            $amount += $this->calculateRoleSewingInsentif($assignment->role, 'sewing', $totalLineInsentif, $day->jumlah_line);
+                            $amount += $this->calculateRoleSewingInsentif($assignment->role, $totalLineInsentif, $day->jumlah_line);
                         }
                     } else if ($component->code === 'pad_insentif') {
 
@@ -1180,7 +981,7 @@ class PayrollProcessController extends Controller
                                     ->unique()
                                     ->count();
 
-                                $amount += $this->calculateRolePadInsentif($role, 'pad', $totalDeptInsentif, $jumlahOperator);
+                                $amount += $this->calculateRolePadInsentif($role, $totalDeptInsentif, $jumlahOperator);
                             }
                         }
                     } else if ($component->code === 'cutting_insentif') {
@@ -1204,7 +1005,7 @@ class PayrollProcessController extends Controller
                         $amount = 0;
                         foreach ($cuttingEfficiencies as $row) {
                             $insentif = $this->getInsentifByEfficiency($row->efficiency, $cuttingInsentifFormula);
-                            $amount += $this->calculateRoleCuttingInsentif($row->role, 'cutting', $insentif);
+                            $amount += $this->calculateRoleCuttingInsentif($row->role, $insentif);
                         }
                     } else {
                         $amount = $this->evaluateFormula($component->formula, $results, $inputVariables);
@@ -1214,7 +1015,7 @@ class PayrollProcessController extends Controller
                 // 🔹 PERBAIKAN: bulatkan setiap komponen
                 $amount = round((float) $amount, 0);
                 $results[$component->code] = $amount;
-                $results['late_minutes'] = $employee->late_minutes;
+                $results['late_hours'] = $employee->late_hours;
 
                 // dd($results);
 
@@ -1469,210 +1270,73 @@ class PayrollProcessController extends Controller
         return 0;
     }
 
-    private function calculateRoleSewingInsentif(
-        $role,
-        $dept,
-        $totalLineInsentif,
-        $jumlahLine
-    ) {
+    private function calculateRoleSewingInsentif($role, $totalLineInsentif, $jumlahLine)
+    {
 
-        $jumlahLine = max($jumlahLine, 1);
+        switch ($role) {
 
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
+            case 'supervisor':
+                return $totalLineInsentif * 2;
 
-        $formula = Cache::remember(
-            "insentif_formula_{$dept}_{$role}",
-            300,
-            function () use ($role, $dept) {
+            case 'chief':
+                return ($totalLineInsentif * $jumlahLine) / 2;
 
-                return InsentifRoleFormula::where('role', $role)
-                    ->where('dept', $dept)
-                    ->value('formula');
-            }
-        );
+            case 'mekanik':
+                return ($totalLineInsentif * $jumlahLine) / 4;
 
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
+            case 'mekanik_leader':
+                return ($totalLineInsentif * $jumlahLine) * 0.15;
 
-        if (!$formula) {
-            return $totalLineInsentif;
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
-
-        $variables = [
-            'totalLineInsentif' => $totalLineInsentif,
-            'jumlahLine'        => $jumlahLine,
-        ];
-
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
-        try {
-
-            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
-                throw new \Exception('Invalid formula');
-            }
-
-            return eval("return {$formula};");
-        } catch (\Throwable $e) {
-
-            return $totalLineInsentif;
+            default:
+                return $totalLineInsentif;
         }
     }
 
-    private function calculateRolePadInsentif(
-        $role,
-        $dept,
-        $totalDeptInsentif,
-        $jumlahOperator
-    ) {
-
+    private function calculateRolePadInsentif($role, $totalDeptInsentif, $jumlahOperator)
+    {
         $jumlahOperator = max($jumlahOperator, 1);
 
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
+        switch ($role) {
 
-        $formula = Cache::remember(
-            "insentif_formula_{$dept}_{$role}",
-            300,
-            function () use ($role, $dept) {
+            case 'supervisor':
+            case 'leader':
+            case 'inkmaking':
+                return $totalDeptInsentif / $jumlahOperator;
 
-                return InsentifRoleFormula::where('role', $role)
-                    ->where('dept', $dept)
-                    ->value('formula');
-            }
-        );
+            case 'helper':
+                return ($totalDeptInsentif / $jumlahOperator) * 0.75;
 
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
-        if (!$formula) {
-            return $totalDeptInsentif;
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
-
-        $variables = [
-            'totalDeptInsentif' => $totalDeptInsentif,
-            'jumlahOperator'    => $jumlahOperator,
-        ];
-
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
-        try {
-
-            // hanya izinkan karakter matematika
-            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
-                throw new \Exception('Invalid formula');
-            }
-
-            return eval("return {$formula};");
-        } catch (\Throwable $e) {
-
-            return $totalDeptInsentif;
+            default:
+                return $totalDeptInsentif;
         }
     }
 
-    private function calculateRoleCuttingInsentif(
-        $role,
-        $dept,
-        $insentif
-    ) {
+    private function calculateRoleCuttingInsentif($role, $insentif)
+    {
+        switch ($role) {
+            case 'Bundling':
+            case 'Rib':
+            case 'Htl':
+            case 'Accescories':
+            case 'Supermarket':
+            case 'Loading to Sewing':
+            case 'Waste':
+            case 'Ganti BS':
+            case 'Piping':
+            case 'Cutting Admin':
+            case 'Supermarket Admin':
+                return $insentif * 0.75;
 
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
+            case 'Manual Cutter':
+            case 'Auto Cutter':
+                return $insentif * 1.2;
 
-        $formula = Cache::remember(
-            "insentif_formula_{$dept}_{$role}",
-            300,
-            function () use ($role, $dept) {
+            case 'Spreading Auto':
+            case 'Spreading Manual':
+                return $insentif * 1;
 
-                return InsentifRoleFormula::where('role', $role)
-                    ->where('dept', $dept)
-                    ->value('formula');
-            }
-        );
-
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
-        if (!$formula) {
-            return $insentif;
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
-
-        $variables = [
-            'insentif' => $insentif,
-        ];
-
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
-        try {
-
-            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
-                throw new \Exception('Invalid formula');
-            }
-
-            return eval("return {$formula};");
-        } catch (\Throwable $e) {
-
-            return $insentif;
+            default:
+                return $insentif;
         }
     }
 }

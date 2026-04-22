@@ -23,6 +23,7 @@ use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\EmployeePayrollController;
+use App\Http\Controllers\EmployeeShiftController;
 use App\Http\Controllers\EmployeeThrController;
 use App\Http\Controllers\EvaluationEmployeeController;
 use App\Http\Controllers\EvaluationJobscopeController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\PayrollPeriodController;
 use App\Http\Controllers\PayrollProcessController;
 use App\Http\Controllers\PayrollSettingController;
 use App\Http\Controllers\RecruitmentController;
+use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ThrApproveController;
 use App\Http\Controllers\ThrPeriodController;
 use App\Http\Controllers\ThrProcessController;
@@ -256,7 +258,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index')->middleware(['auth', 'role:Admin']);
     Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create')->middleware(['auth', 'role:Admin']);
     Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store')->middleware(['auth', 'role:Admin']);
-    Route::delete('holidays/delete/{id}', [HolidayController::class, 'delete'])->name('holidays.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('holidays/delete/{id}', [HolidayController::class, 'destroy'])->name('holidays.delete')->middleware(['auth', 'role:Admin']);
     Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit')->middleware(['auth', 'role:Admin']);
     Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import')->middleware(['auth', 'role:Admin']);
     Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export')->middleware(['auth', 'role:Admin']);
@@ -271,6 +273,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export')->middleware(['auth', 'role:Admin']);
     Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template')->middleware(['auth', 'role:Admin']);
     Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'role:Admin']);
+    Route::get('/line-insentif-master/{period}/check', [LineInsentifMasterController::class, 'check'])->name('line-insentif-master.check')->middleware(['auth', 'role:Admin']);
 
     // Cutting Insentif Master
     Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index')->middleware(['auth', 'role:Admin']);
@@ -282,6 +285,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export')->middleware(['auth', 'role:Admin']);
     Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template')->middleware(['auth', 'role:Admin']);
     Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin']);
+    Route::get('/cutting-insentif-master/{period}/check', [CuttingInsentifMasterController::class, 'check'])->name('cutting-insentif-master.check')->middleware(['auth', 'role:Admin']);
 
     // Pad Print Insentif Master
     Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index')->middleware(['auth', 'role:Admin']);
@@ -293,6 +297,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export')->middleware(['auth', 'role:Admin']);
     Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template')->middleware(['auth', 'role:Admin']);
     Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin']);
+    Route::get('/pad-insentif-master/{period}/check', [PadInsentifMasterController::class, 'check'])->name('pad-insentif-master.check')->middleware(['auth', 'role:Admin']);
 
     Route::prefix('payroll-adjusments')->group(function () {
         Route::get('/', [PayrollAdjusmentController::class, 'index'])->name('payroll-adjusments.index');
@@ -489,6 +494,32 @@ Route::group(['middleware' => 'auth'], function () {
 
         Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export');
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | SHIFT
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/shift', [ShiftController::class, 'index'])->name('shift.index');
+    Route::get('/shift/create', [ShiftController::class, 'create'])->name('shift.create');
+    Route::post('/shift/store', [ShiftController::class, 'store'])->name('shift.store');
+    Route::get('/shift/edit/{id}', [ShiftController::class, 'edit'])->name('shift.edit');
+    Route::post('/shift/update/{id}', [ShiftController::class, 'update'])->name('shift.update');
+    Route::get('/shift/delete/{id}', [ShiftController::class, 'delete'])->name('shift.delete');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | EMPLOYEE SHIFT
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/employee-shift', [EmployeeShiftController::class, 'index'])->name('employee-shift.index');
+    Route::get('/employee-shift/create', [EmployeeShiftController::class, 'create'])->name('employee-shift.create');
+    Route::get('/employee-shift/edit/{id}', [EmployeeShiftController::class, 'edit'])->name('employee-shift.edit');
+    Route::post('/employee-shift/store', [EmployeeShiftController::class, 'store'])->name('employee-shift.store');
+    Route::get('/employee-shift/delete/{id}', [EmployeeShiftController::class, 'delete'])->name('employee-shift.delete');
 });
 
 // ========================================

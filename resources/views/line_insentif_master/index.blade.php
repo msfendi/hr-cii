@@ -1,115 +1,197 @@
 <!DOCTYPE html>
 <html lang="en">
-   @include('layout.header')
-   <body id="page-top">
-      @include('sweetalert::alert')
-      <div id="wrapper">
-      @include('layout.sidebar')
-      <div id="content-wrapper" class="d-flex flex-column">
-         <div id="content">
-            @include('layout.navbar')
-            <div class="container-fluid">
-               <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                  <h1 class="h3 mb-0 text-gray-800">Line Insentif Master</h1>
-                  <div>
-                     <a href="{{ route('line-insentif-master.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
-                        <i class="fas fa-plus fa-sm text-white-50"></i> Create Line Insentif Master
-                     </a>
-                  </div>
-               </div>
-               <div class="card shadow mb-4">
-                  <div class="card-header py-3">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap">
-                        <!-- KIRI -->
-                        <h6 class="m-0 font-weight-bold text-primary">
-                            Data Line Insentif Master
-                        </h6>
-                        <!-- KANAN -->
-                        <div class="d-flex align-items-center">
-                            <!-- DOWNLOAD TEMPLATE -->
-                            <a href="{{ route('line-insentif-master.template') }}"
-                                class="btn btn-info btn-sm mr-2">
-                            <i class="fas fa-download"></i> Download Template
-                            </a>
-                            <!-- IMPORT FORM -->
-                            <button class="btn btn-success btn-sm"
-                                 data-toggle="modal"
-                                 data-target="#importModal">
-                              <i class="fas fa-file-excel"></i>
-                              Import Excel Insentif
-                           </button>
-                        </div>
-                    </div>
-                    <!-- PROGRESS BAR -->
-                    <div class="progress mt-3" style="height:18px; display:none;" id="uploadProgress">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated"
-                            role="progressbar"
-                            style="width:0%"
-                            id="progressBar">
-                            0%
-                        </div>
-                    </div>
-                    </div>
-                  <div class="card-body">
-                     @if ($message = Session::get('success'))
-                     <div class="alert alert-success alert-block">
-                        <button type="button" class="close" data-dismiss="alert">×</button>
-                        <strong>{{ $message }}</strong>
-                     </div>
-                     @endif
-                     @if ($message = Session::get('error'))
-                     <div class="alert alert-danger alert-block">
-                        <button type="button" class="close" data-dismiss="alert">×</button>
-                        <strong>{{ $message }}</strong>
-                     </div>
-                     @endif
-                     <div class="table-responsive">
-                        <table class="table table-bordered table-sm"
-                           id="dataTable"
-                           width="100%"
-                           cellspacing="0">
-                           <thead>
-                              <tr>
-                                 <th>ID</th>
-                                 <th>NPK</th>
-                                 <th>Line Number</th>
-                                 <th>Role</th>
-                                 <th>Efficiency</th>
-                                 <th>Tanggal</th>
-                                 <th>Action</th>
-                              </tr>
-                           </thead>
-                           <tbody>
-                              @foreach($data as $row)
-                              <tr>
-                                 <td>{{ $row->id }}</td>
-                                 <td>{{ $row->npk }}</td>
-                                 <td>{{ $row->line_number }}</td>
-                                 <td>{{ $row->role }}</td>
-                                 <td>{{ number_format($row->efficiency,0,',','.') }}</td>
-                                 <td>{{ $row->date }}</td>
-                                 <td class="text-center">
-                                    <a href="{{ route('line-insentif-master.edit',$row->id) }}"
-                                       class="btn btn-primary btn-circle btn-sm">
-                                    <i class="fas fa-edit"></i>
-                                    </a>
-                                    <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
-                                       data-delete-link="{{ route('line-insentif-master.delete',$row->id) }}"
-                                       data-npk="{{ $row->npk }}"
-                                       data-toggle="modal"
-                                       data-target="#deleteModal">
-                                    <i class="fas fa-trash"></i>
-                                    </a>
-                                 </td>
-                              </tr>
-                              @endforeach
-                           </tbody>
-                        </table>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         </div>
+@include('layout.header')
+<style>
+.select-period + .select2-container{
+    width:200px !important;
+}
+</style>
+
+<body id="page-top">
+
+@include('sweetalert::alert')
+
+<div id="wrapper">
+
+@include('layout.sidebar')
+
+<div id="content-wrapper" class="d-flex flex-column">
+<div id="content">
+
+@include('layout.navbar')
+
+<div class="container-fluid">
+
+<!-- ===================================================== -->
+<!-- TITLE -->
+<!-- ===================================================== -->
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800">
+        Line Insentif Master
+    </h1>
+
+    <a href="{{ route('line-insentif-master.create') }}"
+       class="btn btn-sm btn-primary shadow-sm">
+        <i class="fas fa-plus"></i>
+        Create Line Insentif Master
+    </a>
+</div>
+
+
+<!-- ===================================================== -->
+<!-- DETAIL INSENTIF TABLE (NEW) -->
+<!-- ===================================================== -->
+<div class="card shadow mb-4">
+
+<div class="card-header py-3">
+
+<div class="d-flex justify-content-between align-items-center">
+
+<h6 class="m-0 font-weight-bold text-primary">
+Detail Insentif Karyawan
+</h6>
+
+<select id="checkPeriod"
+        class="form-control select-period">
+    <option value="">Pilih Payroll Period</option>
+
+    @foreach($periods as $period)
+        <option value="{{ $period->id }}">
+            {{ $period->name }}
+        </option>
+    @endforeach
+
+</select>
+
+</div>
+
+</div>
+
+<div class="card-body">
+
+<div class="table-responsive">
+
+<table class="table table-bordered table-sm"
+       id="insentifTable"
+       width="100%">
+
+<thead>
+<tr>
+    <th>NPK</th>
+    <th>Name</th>
+    <th>Insentif</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+</div>
+
+</div>
+</div>
+
+
+<!-- ===================================================== -->
+<!-- MASTER TABLE (EXISTING) -->
+<!-- ===================================================== -->
+<div class="card shadow mb-4">
+
+<div class="card-header py-3">
+
+<div class="d-flex justify-content-between align-items-center flex-wrap">
+
+<h6 class="m-0 font-weight-bold text-primary">
+Data Line Insentif Master
+</h6>
+
+<div>
+
+<a href="{{ route('line-insentif-master.template') }}"
+   class="btn btn-info btn-sm mr-2">
+<i class="fas fa-download"></i>
+Download Template
+</a>
+
+<button class="btn btn-success btn-sm"
+        data-toggle="modal"
+        data-target="#importModal">
+<i class="fas fa-file-excel"></i>
+Import Excel Insentif
+</button>
+
+</div>
+</div>
+</div>
+
+
+<div class="card-body">
+
+<div class="table-responsive">
+
+<table class="table table-bordered table-sm"
+       id="dataTable"
+       width="100%">
+
+<thead>
+<tr>
+    <th>ID</th>
+    <th>Period</th>
+    <th>NPK</th>
+    <th>Name</th>
+    <th>Line Number</th>
+    <th>Role</th>
+    <th>Efficiency</th>
+    <th>Tanggal</th>
+    <th>Action</th>
+</tr>
+</thead>
+
+<tbody>
+
+@foreach($data as $row)
+<tr>
+<td>{{ $row->id }}</td>
+<td>{{ $row->period }}</td>
+<td>{{ $row->npk }}</td>
+<td>{{ $row->name }}</td>
+<td>{{ $row->line_number }}</td>
+<td>{{ $row->role }}</td>
+<td>{{ number_format($row->efficiency,0,',','.') }}</td>
+<td>{{ $row->date }}</td>
+
+<td class="text-center">
+
+<a href="{{ route('line-insentif-master.edit',$row->id) }}"
+   class="btn btn-primary btn-circle btn-sm">
+<i class="fas fa-edit"></i>
+</a>
+
+<a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
+   data-delete-link="{{ route('line-insentif-master.delete',$row->id) }}"
+   data-npk="{{ $row->npk }}"
+   data-toggle="modal"
+   data-target="#deleteModal">
+<i class="fas fa-trash"></i>
+</a>
+
+</td>
+
+</tr>
+@endforeach
+
+</tbody>
+
+</table>
+
+</div>
+</div>
+</div>
+
+</div>
+</div>
+
       <!-- DELETE MODAL -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
     <div class="modal-dialog modal-md">
@@ -244,14 +326,33 @@
         </form>
     </div>
 </div>
-      @include('layout.footer')
-   </body>
+@include('layout.footer')
+
+</body>
+
+
+<!-- ===================================================== -->
+<!-- JS SECTION -->
+<!-- ===================================================== -->
+
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
-<script src="{{asset('js/demo/datatables-demo.js')}}"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet"/>
+
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+      <script>
+        $(document).ready(function(){
+
+            $('#dataTable').DataTable({
+                order: [[0,'desc']], // pakai urutan ID dari Laravel
+                pageLength: 10,
+                responsive: true,
+                autoWidth:false
+            });
+
+        });
+        </script>
 <script>
 
 $('#insentifSelect').on('change', function(){
@@ -371,4 +472,109 @@ $('#importForm').submit(function(e){
 
 });
 </script>
+
+<script>
+
+let insentifTable;
+
+/*
+|--------------------------------------------------------------------------
+| INIT PAGE
+|--------------------------------------------------------------------------
+*/
+$(document).ready(function(){
+
+    /*
+    | SELECT2
+    */
+    $('#checkPeriod').select2({
+        placeholder:'Pilih Payroll Period',
+        allowClear:true,
+        width:'100%'
+    });
+
+    /*
+    | DATATABLE INIT (EMPTY FIRST)
+    */
+    insentifTable = $('#insentifTable').DataTable({
+        processing:true,
+        searching:false,
+        paging:true,
+        info:false,
+        autoWidth:false,
+        data:[],
+        columns:[
+            {data:'npk'},
+            {data:'name'},
+            {data:'sewing_insentif'},
+        ]
+    });
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| LOAD DATA WHEN PERIOD SELECTED
+|--------------------------------------------------------------------------
+*/
+$('#checkPeriod').on('change',function(){
+
+    let period = $(this).val();
+
+    /*
+    | CLEAR TABLE IF EMPTY
+    */
+    if(!period){
+        insentifTable.clear().draw();
+        return;
+    }
+
+    /*
+    | LOADING STATE
+    */
+    insentifTable.clear().draw();
+
+    Swal.fire({
+        title:'Loading insentif...',
+        allowOutsideClick:false,
+        showConfirmButton:false,
+        didOpen:()=>Swal.showLoading()
+    });
+
+    /*
+    | AJAX LOAD
+    */
+    $.ajax({
+
+        url:'/line-insentif-master/'+period+'/check',
+        type:'GET',
+        dataType:'json',
+
+        success:function(res){
+
+            console.log('DATA:',res);
+
+            insentifTable.clear();
+            insentifTable.rows.add(res.data);
+            insentifTable.draw();
+
+            Swal.close();
+        },
+
+        error:function(xhr){
+
+            console.log(xhr.responseText);
+
+            Swal.fire({
+                icon:'error',
+                title:'Gagal load data'
+            });
+        }
+
+    });
+
+});
+</script>
+
 </html>

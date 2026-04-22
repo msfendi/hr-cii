@@ -276,10 +276,8 @@
                         @csrf
                         @method('DELETE')
 
-                        <div class="modal-footer">
                         <button class="btn btn-secondary" type="button" data-dismiss="modal">Tutup</button>
                         <button class="btn btn-danger" type="submit">Delete</button>
-                        </div>
 
                         </form>
                     </div>

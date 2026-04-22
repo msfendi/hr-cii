@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Models\EmployeePadAssignment;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class EmployeePadAssignmentImport implements ToModel, WithHeadingRow
 {
@@ -21,12 +22,18 @@ class EmployeePadAssignmentImport implements ToModel, WithHeadingRow
             [
                 'npk' => $row['npk'],
                 'dept' => $row['dept'],
-                'start_date' => $row['start_date'],
+                'start_date' =>
+                !empty($row['start_date'])
+                    ? Date::excelToDateTimeObject($row['start_date'])
+                    : null,
                 'period_id'   => $this->periodId,
             ],
             [
                 'role' => $row['role'],
-                'end_date' => $row['end_date']
+                'end_date' =>
+                !empty($row['end_date'])
+                    ? Date::excelToDateTimeObject($row['end_date'])
+                    : null,
             ]
         );
     }

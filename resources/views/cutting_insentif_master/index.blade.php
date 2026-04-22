@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
    @include('layout.header')
+   <style>
+.select-period + .select2-container{
+    width:200px !important;
+}
+</style>
    <body id="page-top">
       @include('sweetalert::alert')
       <div id="wrapper">
@@ -17,6 +22,65 @@
                      </a>
                   </div>
                </div>
+               
+<!-- ===================================================== -->
+<!-- DETAIL INSENTIF TABLE (NEW) -->
+<!-- ===================================================== -->
+<div class="card shadow mb-4">
+
+<div class="card-header py-3">
+
+<div class="d-flex justify-content-between align-items-center">
+
+<h6 class="m-0 font-weight-bold text-primary">
+Detail Insentif Karyawan
+</h6>
+
+<select id="checkPeriod"
+        class="form-control select-period">
+    <option value="">Pilih Payroll Period</option>
+
+    @foreach($periods as $period)
+        <option value="{{ $period->id }}">
+            {{ $period->name }}
+        </option>
+    @endforeach
+
+</select>
+
+</div>
+
+</div>
+
+<div class="card-body">
+
+<div class="table-responsive">
+
+<table class="table table-bordered table-sm"
+       id="insentifTable"
+       width="100%">
+
+<thead>
+<tr>
+    <th>NPK</th>
+    <th>Name</th>
+    <th>Insentif</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+</div>
+
+</div>
+</div>
+
+
+<!-- ===================================================== -->
+<!-- MASTER TABLE (EXISTING) -->
+<!-- ===================================================== -->
                <div class="card shadow mb-4">
                   <div class="card-header py-3">
                     <div class="d-flex justify-content-between align-items-center flex-wrap">
@@ -72,7 +136,9 @@
                            <thead>
                               <tr>
                                  <th>ID</th>
+                                 <th>Period</th>
                                  <th>NPK</th>
+                                 <th>Name</th>
                                  <th>Role</th>
                                  <th>Efficiency</th>
                                  <th>Tanggal</th>
@@ -83,7 +149,9 @@
                               @foreach($data as $row)
                               <tr>
                                  <td>{{ $row->id }}</td>
+                                 <td>{{ $row->period }}</td>
                                  <td>{{ $row->npk }}</td>
+                                 <td>{{ $row->name }}</td>
                                  <td>{{ $row->role }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
                                  <td>{{ $row->date }}</td>
@@ -348,6 +416,109 @@ $('#importForm').submit(function(e){
                 showConfirmButton:false // ✅ TANPA OK
             });
 
+        }
+
+    });
+
+});
+</script>
+<script>
+
+let insentifTable;
+
+/*
+|--------------------------------------------------------------------------
+| INIT PAGE
+|--------------------------------------------------------------------------
+*/
+$(document).ready(function(){
+
+    /*
+    | SELECT2
+    */
+    $('#checkPeriod').select2({
+        placeholder:'Pilih Payroll Period',
+        allowClear:true,
+        width:'100%'
+    });
+
+    /*
+    | DATATABLE INIT (EMPTY FIRST)
+    */
+    insentifTable = $('#insentifTable').DataTable({
+        processing:true,
+        searching:false,
+        paging:true,
+        info:false,
+        autoWidth:false,
+        data:[],
+        columns:[
+            {data:'npk'},
+            {data:'name'},
+            {data:'cutting_insentif'},
+        ]
+    });
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| LOAD DATA WHEN PERIOD SELECTED
+|--------------------------------------------------------------------------
+*/
+$('#checkPeriod').on('change',function(){
+
+    let period = $(this).val();
+
+    /*
+    | CLEAR TABLE IF EMPTY
+    */
+    if(!period){
+        insentifTable.clear().draw();
+        return;
+    }
+
+    /*
+    | LOADING STATE
+    */
+    insentifTable.clear().draw();
+
+    Swal.fire({
+        title:'Loading insentif...',
+        allowOutsideClick:false,
+        showConfirmButton:false,
+        didOpen:()=>Swal.showLoading()
+    });
+
+    /*
+    | AJAX LOAD
+    */
+    $.ajax({
+
+        url:'/cutting-insentif-master/'+period+'/check',
+        type:'GET',
+        dataType:'json',
+
+        success:function(res){
+
+            console.log('DATA:',res);
+
+            insentifTable.clear();
+            insentifTable.rows.add(res.data);
+            insentifTable.draw();
+
+            Swal.close();
+        },
+
+        error:function(xhr){
+
+            console.log(xhr.responseText);
+
+            Swal.fire({
+                icon:'error',
+                title:'Gagal load data'
+            });
         }
 
     });
