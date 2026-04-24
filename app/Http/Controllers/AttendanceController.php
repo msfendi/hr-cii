@@ -25,7 +25,7 @@ class AttendanceController extends Controller
     public function index()
     {
         // Use Cache Cache for employee group
-        $employeeGroupChutex = DB::connection('audit')->table('AUDIT')
+        $employeeGroupChutex = DB::connection('cii')->table('AUDIT')
             ->select(DB::raw('MIN(SUBDIVISI) AS SUBDIVISI'), 'KODE_BAGIAN')
             ->groupBy('KODE_BAGIAN')
             ->orderBy('KODE_BAGIAN', 'ASC')
@@ -36,8 +36,8 @@ class AttendanceController extends Controller
 
     public function showAttendance()
     {
-        $query = DB::connection('audit')->table('AUDIT')
-            ->select('id', 'NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS')
+        $query = DB::connection('cii')->table('AUDIT')
+            ->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS')
             ->orderBy('NPK', 'ASC')
             ->take(50)
             ->get();
@@ -80,10 +80,10 @@ class AttendanceController extends Controller
 
     public function report(Request $request)
     {
-        $employeeGroupChutex = DB::connection('audit')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->whereIn('KODE_BAGIAN', $request->department);
+        $employeeGroupChutex = DB::connection('cii')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->whereIn('KODE_BAGIAN', $request->department);
         $employeeGroup = $employeeGroupChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->get();
 
-        $employeesChutex = DB::connection('audit')->table('AUDIT')->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS AS KETERANGAN')->whereIn('KODE_BAGIAN', $request->department)->whereBetween('TANGGAL', [$request->fromdate, $request->todate]);
+        $employeesChutex = DB::connection('cii')->table('AUDIT')->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS AS KETERANGAN')->whereIn('KODE_BAGIAN', $request->department)->whereBetween('TANGGAL', [$request->fromdate, $request->todate]);
         $employees = $employeesChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->orderBy('TANGGAL', 'ASC')->get();
 
         $days = $request->days;
@@ -99,13 +99,13 @@ class AttendanceController extends Controller
                 $request->department,
                 $request->days
             ),
-            'audit.xlsx'
+            'cii.xlsx'
         );
     }
 
     public function deleteAll(Request $request)
     {
-        $deleteAllData = DB::connection('audit')->table('AUDIT')->truncate();
+        $deleteAllData = DB::connection('cii')->table('AUDIT')->truncate();
 
         if ($deleteAllData) {
             Alert::success('Delete Successfully!', 'All attendance data successfully deleted!');
@@ -118,7 +118,7 @@ class AttendanceController extends Controller
 
     public function checkMasterData()
     {
-        $checkDatas = DB::connection('audit')->table('AUDIT')
+        $checkDatas = DB::connection('cii')->table('AUDIT')
             ->select(DB::raw('COUNT(NPK) AS COUNT'), 'NPK', 'TANGGAL')
             ->groupBy('NPK', 'TANGGAL')
             ->having(DB::raw('COUNT(NPK)'), '>=', 2)
@@ -129,7 +129,7 @@ class AttendanceController extends Controller
 
     public function edit($id)
     {
-        $employee = DB::connection('audit')->table('AUDIT')->where('id', $id)->first();
+        $employee = DB::connection('cii')->table('AUDIT')->where('id', $id)->first();
         return view('attendance.update', compact('employee'));
     }
 
@@ -141,7 +141,7 @@ class AttendanceController extends Controller
             'jam_malam' => 'nullable|date_format:H:i',
         ]);
 
-        $update = DB::connection('audit')->table('AUDIT')->where('id', $id)->update([
+        $update = DB::connection('cii')->table('AUDIT')->where('id', $id)->update([
             'JAM_PAGI' => $request->jam_pagi,
             'JAM_SIANG' => $request->jam_siang,
             'JAM_MALAM' => $request->jam_malam,
@@ -186,7 +186,7 @@ class AttendanceController extends Controller
     // }
 
 
-    // public function auditsewing()
+    // public function ciisewing()
     // {
     //     $employeeGroupChutex = DB::connection('sqlsrv')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->where('SUBDIVISI', 'LIKE', "%LINE%");
     //     $employeeGroup = $employeeGroupChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->get();
@@ -197,7 +197,7 @@ class AttendanceController extends Controller
     //     return view('template.report2', compact('employees', 'employeeGroup'));
     // }
 
-    // public function auditnonsewing(Request $request)
+    // public function ciinonsewing(Request $request)
     // {
     //     $employeeGroupChutex = DB::connection('sqlsrv')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->where('SUBDIVISI', 'NOT LIKE', "%LINE%");
     //     $employeeGroup = $employeeGroupChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->get();
