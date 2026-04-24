@@ -13,40 +13,67 @@ use App\Imports\InsentifMasterImport;
 use App\Imports\CuttingInsentifImport;
 use App\Imports\PadInsentifImport;
 use App\Models\InsentifApproval;
+use App\Models\InsentifRoleFormula;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class CuttingInsentifMasterController extends Controller
 {
     public function index()
     {
-        $data = DB::table('cutting_efficiencies as l')
+        $data = DB::table('cutting_efficiencies as ce')
+
+            /*
+        |--------------------------------------------------------------------------
+        | MATCH ASSIGNMENT BY DATE RANGE ONLY
+        |--------------------------------------------------------------------------
+        */
             ->join('employee_cutting_assignments as e', function ($join) {
-                $join->on('l.npk', '=', 'e.npk')
-                    ->on('l.period_id', '=', 'e.period_id')
-                    ->whereRaw('l.date BETWEEN e.start_date AND COALESCE(e.end_date, l.date)');
-            })->join('BIODATA as b', function ($join) {
-                $join->on('e.npk', '=', 'b.NPK');
-            })->join('payroll_periods as pp', function ($join) {
-                $join->on('e.period_id', '=', 'pp.id');
+                $join->on('ce.period_id', '=', 'e.period_id')
+                    ->whereRaw('ce.date >= e.start_date')
+                    ->whereRaw('(e.end_date IS NULL OR ce.date <= e.end_date)');
             })
+
+            /*
+        |--------------------------------------------------------------------------
+        | BIODATA
+        |--------------------------------------------------------------------------
+        */
+            ->join('BIODATA as b', function ($join) {
+                $join->on('e.npk', '=', 'b.NPK');
+            })
+
+            /*
+        |--------------------------------------------------------------------------
+        | PERIOD
+        |--------------------------------------------------------------------------
+        */
+            ->join('payroll_periods as pp', function ($join) {
+                $join->on('ce.period_id', '=', 'pp.id');
+            })
+
             ->select(
                 'e.id',
                 'e.npk',
                 'b.NAMA_KARYAWAN as name',
                 'pp.name as period',
                 'e.role',
-                'l.efficiency',
-                'l.date'
+                'ce.efficiency',
+                'ce.date'
             )
+
             ->orderBy('e.npk')
-            ->orderBy('l.date')
+            ->orderBy('ce.date')
             ->get();
+
+
         $periods = PayrollPeriod::select('id', 'name')
+            ->where('is_closed', 0)
             ->orderBy('id', 'desc')
             ->get();
-        // dd($data);
+
         return view('cutting_insentif_master.index', compact('data', 'periods'));
     }
 
@@ -279,31 +306,132 @@ class CuttingInsentifMasterController extends Controller
     {
         $amount = 0;
 
-        $rows = DB::table('cutting_efficiencies as ce')
-            ->join('employee_cutting_assignments as eca', function ($join) {
-                $join->on('ce.npk', '=', 'eca.npk')
-                    ->whereColumn('ce.date', '>=', 'eca.start_date')
-                    ->where(function ($q) {
-                        $q->whereColumn('ce.date', '<=', 'eca.end_date')
-                            ->orWhereNull('eca.end_date');
-                    });
-            })
-            ->where('ce.npk', $employee->NPK)
-            ->where('ce.period_id', $period->id)
-            ->where('eca.period_id', $period->id)
-            ->whereBetween('ce.date', [$period->start_date, $period->end_date])
-            ->select('ce.efficiency', 'eca.role')
+        /*
+    |--------------------------------------------------------------------------
+    | LOAD OVERTIME (ONLY ONCE)
+    |--------------------------------------------------------------------------
+    */
+        $overtimes = DB::table('overtimes')
+            ->where('NPK', $employee->NPK)
+            ->whereBetween('OVERTIME_DATE', [
+                $period->start_date,
+                $period->end_date
+            ])
+            ->get()
+            ->keyBy(fn($o) => $o->OVERTIME_DATE);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | VALIDATE OVERTIME
+    |--------------------------------------------------------------------------
+    */
+        $isValidOvertime = function ($date) use ($overtimes) {
+
+            // tidak ada record → tetap dihitung
+            if (!isset($overtimes[$date])) {
+                return true;
+            }
+
+            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
+
+            // NULL / kosong → tetap dihitung
+            if ($lembur === null || $lembur === '') {
+                return true;
+            }
+
+            // angka → tetap dihitung
+            if (is_numeric($lembur)) {
+                return true;
+            }
+
+            // MA / CT / BR / S1 dll → skip
+            return false;
+        };
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | LOAD ASSIGNMENTS (NO JOIN)
+    |--------------------------------------------------------------------------
+    */
+        $assignments = DB::table('employee_cutting_assignments')
+            ->where('npk', $employee->NPK)
+            ->where('period_id', $period->id)
             ->get();
 
-        foreach ($rows as $row) {
 
+        /*
+    |--------------------------------------------------------------------------
+    | LOAD CUTTING EFFICIENCY
+    |--------------------------------------------------------------------------
+    */
+        $cuttingEfficiencies = DB::table('cutting_efficiencies')
+            ->where('period_id', $period->id)
+            ->whereBetween('date', [
+                $period->start_date,
+                $period->end_date
+            ])
+            ->get();
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CALCULATE INSENTIF
+    |--------------------------------------------------------------------------
+    */
+        foreach ($cuttingEfficiencies as $row) {
+
+            /*
+        |----------------------------------
+        | CHECK OVERTIME
+        |----------------------------------
+        */
+            if (!$isValidOvertime($row->date)) {
+                continue;
+            }
+
+            /*
+        |----------------------------------
+        | FIND ACTIVE ASSIGNMENT BY DATE
+        |----------------------------------
+        */
+            $assignment = $assignments->first(function ($a) use ($row) {
+
+                if ($row->date < $a->start_date) {
+                    return false;
+                }
+
+                if ($a->end_date && $row->date > $a->end_date) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            // tidak ada role di tanggal tersebut
+            if (!$assignment) {
+                continue;
+            }
+
+            /*
+        |----------------------------------
+        | GET INSENTIF BY EFFICIENCY
+        |----------------------------------
+        */
             $insentif = $this->getInsentifByEfficiency(
                 $row->efficiency,
                 $formula
             );
 
+            /*
+        |----------------------------------
+        | ADD AMOUNT BASED ROLE
+        |----------------------------------
+        */
             $amount += $this->calculateRoleCuttingInsentif(
-                $row->role,
+                $assignment->role,
+                'cutting',
                 $insentif
             );
         }
@@ -311,32 +439,69 @@ class CuttingInsentifMasterController extends Controller
         return $amount;
     }
 
-    private function calculateRoleCuttingInsentif($role, $insentif)
-    {
-        switch ($role) {
-            case 'Bundling':
-            case 'Rib':
-            case 'Htl':
-            case 'Accescories':
-            case 'Supermarket':
-            case 'Loading to Sewing':
-            case 'Waste':
-            case 'Ganti BS':
-            case 'Piping':
-            case 'Cutting Admin':
-            case 'Supermarket Admin':
-                return $insentif * 0.75;
+    private function calculateRoleCuttingInsentif(
+        $role,
+        $dept,
+        $insentif
+    ) {
 
-            case 'Manual Cutter':
-            case 'Auto Cutter':
-                return $insentif * 1.2;
+        /*
+    |--------------------------------------------------------------------------
+    | GET FORMULA FROM DB (CACHE)
+    |--------------------------------------------------------------------------
+    */
 
-            case 'Spreading Auto':
-            case 'Spreading Manual':
-                return $insentif * 1;
+        $formula = Cache::remember(
+            "insentif_formula_{$dept}_{$role}",
+            300,
+            function () use ($role, $dept) {
 
-            default:
-                return $insentif;
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', $dept)
+                    ->value('formula');
+            }
+        );
+
+        /*
+    |--------------------------------------------------------------------------
+    | DEFAULT FALLBACK
+    |--------------------------------------------------------------------------
+    */
+
+        if (!$formula) {
+            return $insentif;
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | VARIABLE REPLACEMENT
+    |--------------------------------------------------------------------------
+    */
+
+        $variables = [
+            'insentif' => $insentif,
+        ];
+
+        foreach ($variables as $key => $value) {
+            $formula = str_replace($key, $value, $formula);
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | SAFE EVALUATION
+    |--------------------------------------------------------------------------
+    */
+
+        try {
+
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+
+            return $insentif;
         }
     }
 }

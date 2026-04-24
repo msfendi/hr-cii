@@ -127,12 +127,13 @@ $role = $roleusers[0]->rolename;
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#payroll">
       <i class="fas fa-calculator"></i>
-      <span>Payroll & Finance</span>
+      <span>Payroll</span>
       </a>
       <div id="payroll" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
             <a class="collapse-item" href="{{ route('payroll-setting.index') }}">Setting</a>
             <a class="collapse-item" href="{{ route('payroll-master.index') }}">Master</a>
+            <a class="collapse-item" href="{{ route('payroll-adjusments.index') }}">Payroll Adjusments</a>
             <a class="collapse-item" href="{{ route('payroll-components.index') }}">Components</a>
             <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Period</a>
             <a class="collapse-item" href="{{ route('payroll-process.index') }}">Process</a>
@@ -148,11 +149,45 @@ $role = $roleusers[0]->rolename;
       </div>
    </li>
    @endif
+   {{-- ================= INSENTIF ================= --}}
+   @if(in_array($role,['Admin','Payroll']))
+   <li class="nav-item">
+      <a class="nav-link collapsed" data-toggle="collapse" data-target="#insentif">
+      <i class="fas fa-hand-holding-usd"></i>
+      <span>Insentif</span>
+      </a>
+      <div id="insentif" class="collapse" data-parent="#accordionSidebar">
+         <div class="collapse-inner bg-white rounded">
+            <a class="collapse-item" href="{{ route('insentif.threshold.index') }}">Insentif Threshold</a>
+            <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif</a>
+            <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif</a>
+            <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif</a>
+         </div>
+      </div>
+   </li>
+   @endif
+   {{-- ================= EVALUATION ================= --}}
+   @if(in_array($role,['Admin','HRD']))
+   <li class="nav-item">
+      <a class="nav-link collapsed" data-toggle="collapse" data-target="#evaluation">
+      <i class="fas fa-clipboard-check"></i>
+      <span>Evaluation</span>
+      </a>
+      <div id="evaluation" class="collapse" data-parent="#accordionSidebar">
+         <div class="collapse-inner bg-white rounded">
+                <a class="collapse-item" href="{{ route('evaluation-jobscope.index') }}">Evaluation Jobscope</a>
+                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation
+                    Questionnaire</a>
+                <a class="collapse-item" href="{{ route('evaluation-employee.index') }}">Employee Evaluation</a>
+         </div>
+      </div>
+   </li>
+   @endif
    {{-- ================= SYSTEM ================= --}}
    @if(in_array($role,['Admin','HRD']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#system">
-      <i class="fab fa-whatsapp"></i>
+      <i class="fas fa-cog"></i>
       <span>System</span>
       </a>
       <div id="system" class="collapse" data-parent="#accordionSidebar">

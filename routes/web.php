@@ -32,6 +32,7 @@ use App\Http\Controllers\ExpatController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\InsentifApprovalController;
 use App\Http\Controllers\InsentifMasterController;
+use App\Http\Controllers\InsentifThresholdController;
 use App\Http\Controllers\LineInsentifMasterController;
 use App\Http\Controllers\PadInsentifMasterController;
 use App\Http\Controllers\PayrollAdjusmentController;
@@ -520,6 +521,27 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/employee-shift/edit/{id}', [EmployeeShiftController::class, 'edit'])->name('employee-shift.edit');
     Route::post('/employee-shift/store', [EmployeeShiftController::class, 'store'])->name('employee-shift.store');
     Route::get('/employee-shift/delete/{id}', [EmployeeShiftController::class, 'delete'])->name('employee-shift.delete');
+});
+
+Route::prefix('insentif-threshold')->group(function () {
+
+    Route::get('/', [InsentifThresholdController::class, 'index'])
+        ->name('insentif.threshold.index');
+
+    Route::get('/create', [InsentifThresholdController::class, 'create'])
+        ->name('insentif.threshold.create');
+
+    Route::post('/store', [InsentifThresholdController::class, 'store'])
+        ->name('insentif.threshold.store');
+
+    Route::get('/edit/{id}', [InsentifThresholdController::class, 'edit'])
+        ->name('insentif.threshold.edit');
+
+    Route::post('/update/{id}', [InsentifThresholdController::class, 'update'])
+        ->name('insentif.threshold.update');
+
+    Route::get('/delete/{id}', [InsentifThresholdController::class, 'delete'])
+        ->name('insentif.threshold.delete');
 });
 
 // ========================================

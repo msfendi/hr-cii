@@ -210,7 +210,7 @@ class PayrollApproveController extends Controller
         $period = DB::table('payroll_runs as pr')
             ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('pr.id', $runId)
-            ->select('pp.name', 'pp.start_date', 'pp.end_date')
+            ->select('pp.name', 'pp.start_date', 'pp.end_date', 'pp.id')
             ->first();
 
         if (!$period) {
@@ -344,6 +344,13 @@ class PayrollApproveController extends Controller
             [
                 'file_bank_active' => $activePath,
                 'file_bank_resign' => $resignPath
+            ]
+        );
+
+        DB::table('payroll_periods')->updateOrInsert(
+            ['id' => $period->id],
+            [
+                'is_closed' => 1
             ]
         );
 

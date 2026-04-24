@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ThrPeriod extends Model
 {
-    protected $fillable = ['name', 'cutoff_date'];
+    protected $fillable = ['name', 'cutoff_date', 'is_closed'];
 
     public function run()
     {

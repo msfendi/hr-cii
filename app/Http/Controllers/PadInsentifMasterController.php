@@ -8,8 +8,10 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\PadInsentifTemplateExport;
 use App\Imports\PadInsentifImport;
 use App\Models\InsentifApproval;
+use App\Models\InsentifRoleFormula;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class PadInsentifMasterController extends Controller
@@ -19,6 +21,7 @@ class PadInsentifMasterController extends Controller
         $data = DB::table('pad_efficiencies as l')
             ->join('employee_pad_assignments as e', function ($join) {
                 $join->on('l.dept', '=', 'e.dept')
+                    ->on('l.npk', '=', 'e.npk')
                     ->on('l.period_id', '=', 'e.period_id')
                     ->whereRaw('l.date BETWEEN e.start_date AND COALESCE(e.end_date, l.date)');
             })->join('BIODATA as b', function ($join) {
@@ -40,6 +43,7 @@ class PadInsentifMasterController extends Controller
             ->orderBy('l.date')
             ->get();
         $periods = PayrollPeriod::select('id', 'name')
+            ->where('is_closed', 0)
             ->orderBy('id', 'desc')
             ->get();
         // dd($data);
@@ -277,19 +281,37 @@ class PadInsentifMasterController extends Controller
     {
         $amount = 0;
 
+        /*
+    |--------------------------------------------------------------------------
+    | VALIDATE OVERTIME
+    |--------------------------------------------------------------------------
+    */
+        $isValidOvertime = function ($npk, $date) {
+
+            $ot = DB::table('overtimes')
+                ->where('NPK', $npk)
+                ->where('OVERTIME_DATE', $date)
+                ->first();
+
+            if (!$ot) return true;
+
+            $lembur = $ot->JUMLAH_JAM_LEMBUR;
+
+            if ($lembur === null || $lembur === '') return true;
+
+            if (is_numeric($lembur)) return true;
+
+            return false; // MA / CT / BR / S1
+        };
+
+        /*
+    |--------------------------------------------------------------------------
+    | LOAD ASSIGNMENT
+    |--------------------------------------------------------------------------
+    */
         $assignments = DB::table('employee_pad_assignments')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
-            ->where(function ($q) use ($period) {
-                $q->whereBetween('start_date', [$period->start_date, $period->end_date])
-                    ->orWhere(function ($q2) use ($period) {
-                        $q2->where('start_date', '<=', $period->end_date)
-                            ->where(function ($q3) use ($period) {
-                                $q3->whereNull('end_date')
-                                    ->orWhere('end_date', '>=', $period->start_date);
-                            });
-                    });
-            })
             ->get();
 
         foreach ($assignments as $assignment) {
@@ -302,6 +324,11 @@ class PadInsentifMasterController extends Controller
                 ? min($assignment->end_date, $period->end_date)
                 : $period->end_date;
 
+            /*
+        |--------------------------------------------------------------------------
+        | OPERATOR
+        |--------------------------------------------------------------------------
+        */
             if ($role === 'operator') {
 
                 $rows = DB::table('pad_efficiencies')
@@ -311,14 +338,32 @@ class PadInsentifMasterController extends Controller
                     ->get();
 
                 foreach ($rows as $row) {
+
+                    if (!$isValidOvertime($employee->NPK, $row->date)) {
+                        continue;
+                    }
+
                     $rate = $this->getInsentifByEfficiency(
                         $row->efficiency,
                         $formula
                     );
+
                     $amount += $rate * $row->piece;
                 }
-            } else {
+            }
 
+            /*
+        |--------------------------------------------------------------------------
+        | NON OPERATOR (SPV / LEADER / HELPER)
+        |--------------------------------------------------------------------------
+        */ else {
+
+                /*
+            |----------------------------------
+            | TOTAL DEPT INSENTIF
+            | ONLY VALID OPERATOR
+            |----------------------------------
+            */
                 $rows = DB::table('pad_efficiencies as pe')
                     ->join('employee_pad_assignments as epa', function ($join) {
                         $join->on('pe.npk', '=', 'epa.npk')
@@ -329,24 +374,31 @@ class PadInsentifMasterController extends Controller
                     ->where('epa.role', 'operator')
                     ->where('pe.dept', $dept)
                     ->whereBetween('pe.date', [$start, $end])
-                    ->whereColumn('pe.date', '>=', 'epa.start_date')
-                    ->where(function ($q) {
-                        $q->whereColumn('pe.date', '<=', 'epa.end_date')
-                            ->orWhereNull('epa.end_date');
-                    })
-                    ->select('pe.efficiency', 'pe.piece')
+                    ->select('pe.npk', 'pe.efficiency', 'pe.piece', 'pe.date')
                     ->get();
 
                 $totalDeptInsentif = 0;
 
                 foreach ($rows as $row) {
+
+                    // FILTER HANYA NUMERATOR
+                    if (!$isValidOvertime($row->npk, $row->date)) {
+                        continue;
+                    }
+
                     $rate = $this->getInsentifByEfficiency(
                         $row->efficiency,
                         $formula
                     );
+
                     $totalDeptInsentif += $rate * $row->piece;
                 }
 
+                /*
+            |----------------------------------
+            | DENOMINATOR (ALL OPERATOR)
+            |----------------------------------
+            */
                 $jumlahOperator = DB::table('employee_pad_assignments')
                     ->where('dept', $dept)
                     ->where('role', 'operator')
@@ -355,8 +407,13 @@ class PadInsentifMasterController extends Controller
                     ->unique()
                     ->count();
 
+                if ($jumlahOperator == 0) {
+                    continue;
+                }
+
                 $amount += $this->calculateRolePadInsentif(
                     $role,
+                    'pad',
                     $totalDeptInsentif,
                     $jumlahOperator
                 );
@@ -367,21 +424,74 @@ class PadInsentifMasterController extends Controller
     }
 
 
-    private function calculateRolePadInsentif($role, $total, $operator)
-    {
-        $operator = max($operator, 1);
+    private function calculateRolePadInsentif(
+        $role,
+        $dept,
+        $totalDeptInsentif,
+        $jumlahOperator
+    ) {
 
-        switch ($role) {
-            case 'supervisor':
-            case 'leader':
-            case 'inkmaking':
-                return $total / $operator;
+        $jumlahOperator = max($jumlahOperator, 1);
 
-            case 'helper':
-                return ($total / $operator) * 0.75;
+        /*
+    |--------------------------------------------------------------------------
+    | GET FORMULA FROM DB (CACHE)
+    |--------------------------------------------------------------------------
+    */
 
-            default:
-                return $total;
+        $formula = Cache::remember(
+            "insentif_formula_{$dept}_{$role}",
+            300,
+            function () use ($role, $dept) {
+
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', $dept)
+                    ->value('formula');
+            }
+        );
+
+        /*
+    |--------------------------------------------------------------------------
+    | DEFAULT FALLBACK
+    |--------------------------------------------------------------------------
+    */
+
+        if (!$formula) {
+            return $totalDeptInsentif;
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | VARIABLE REPLACEMENT
+    |--------------------------------------------------------------------------
+    */
+
+        $variables = [
+            'totalDeptInsentif' => $totalDeptInsentif,
+            'jumlahOperator'    => $jumlahOperator,
+        ];
+
+        foreach ($variables as $key => $value) {
+            $formula = str_replace($key, $value, $formula);
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | SAFE EVALUATION
+    |--------------------------------------------------------------------------
+    */
+
+        try {
+
+            // hanya izinkan karakter matematika
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+
+            return $totalDeptInsentif;
         }
     }
 }

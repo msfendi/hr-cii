@@ -18,8 +18,10 @@ class DatabaseSeeder extends Seeder
         // $this->call(SectionsSeeder::class);
         // $this->call(PayrollComponentSeeder::class);
         // $this->call(PayrollSettingSeeder::class);
-        $this->call(ApprovalSeeder::class);
-        $this->call(LeavesTypeSeeder::class);
+        // $this->call(ApprovalSeeder::class);
+        // $this->call(LeavesTypeSeeder::class);
         // $this->call(LeavesBalancesSeeder::class);
+        // $this->call(InsentifRoleFormulaSeeder::class);
+        // $this->call(InsentifThresholdSeeder::class);
     }
 }

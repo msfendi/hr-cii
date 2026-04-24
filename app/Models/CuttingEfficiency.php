@@ -10,7 +10,6 @@ class CuttingEfficiency extends Model
     use HasFactory;
 
     protected $fillable = [
-        'npk',
         'period_id',
         'efficiency',
         'date'

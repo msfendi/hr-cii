@@ -65,6 +65,7 @@
                                         <th>NPK</th>
                                         <th>Name</th>
                                         <th>Email</th>
+                                        <th>Role</th>
                                         <th>Created At</th>
                                         <th>Updated At</th>
                                         <th>Action</th>
@@ -77,6 +78,7 @@
                                         <td>{{ $user->npk }}</td>
                                         <td>{{ $user->name }}</td>
                                         <td>{{ $user->email }}</td>
+                                        <td>{{ $user->role }}</td>
                                         <td>{{ $user->created_at }}</td>
                                         <td>{{ $user->updated_at }}</td>
                                         <td class="text-center">

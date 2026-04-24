@@ -15,7 +15,19 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users   = User::all();
+        $users = User::query()
+            ->leftJoin('model_has_roles as mhr', function ($join) {
+                $join->on('users.id', '=', 'mhr.model_id')
+                    ->where('mhr.model_type', User::class);
+            })
+            ->leftJoin('roles as r', 'mhr.role_id', '=', 'r.id')
+            ->select(
+                'users.*',
+                'r.name as role'
+            )
+            ->orderBy('users.name')
+            ->get();
+
         return view('user.index', compact('users'));
     }
 
@@ -67,7 +79,8 @@ class UserController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|max:255',
             'npk' => 'required|max:255',
-            'email' => 'required|email|max:255|'
+            'email' => 'required|email|max:255|',
+            'password' => 'nullable|min:8|confirmed',
         ]);
 
         if ($validator->fails()) {
@@ -80,6 +93,7 @@ class UserController extends Controller
             'name' => $request->name,
             'npk' => $request->npk,
             'email' => $request->email,
+            'password' => $request->password ? Hash::make($request->password) : $user->password,
         ]);
 
         $user->save();

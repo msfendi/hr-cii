@@ -20,7 +20,6 @@ class CuttingEfficiencyImport implements ToModel, WithHeadingRow
     {
         return CuttingEfficiency::updateOrCreate(
             [
-                'npk' => $row['npk'],
                 'date' =>
                 !empty($row['date'])
                     ? Date::excelToDateTimeObject($row['date'])

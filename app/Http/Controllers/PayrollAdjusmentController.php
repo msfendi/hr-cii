@@ -25,7 +25,7 @@ class PayrollAdjusmentController extends Controller
      */
     public function create()
     {
-        $periods = DB::table('payroll_periods')->get();
+        $periods = DB::table('payroll_periods')->where('is_closed', 0)->get();
 
         $employees = DB::select("
         SELECT NPK, NAMA_KARYAWAN FROM BIODATA

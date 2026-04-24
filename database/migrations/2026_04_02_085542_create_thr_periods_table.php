@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->date('cutoff_date');
+            $table->boolean('is_closed')->default(false);
             $table->timestamps();
         });
     }

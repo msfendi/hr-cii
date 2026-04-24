@@ -15,7 +15,6 @@ return new class extends Migration
 
             $table->id();
             $table->string('period_id');
-            $table->string('npk', 20);
             $table->decimal('efficiency', 5, 2);
             $table->date('date');
 
