@@ -25,7 +25,7 @@ class LoginController extends Controller
             $request->session()->regenerate();
             $username = Auth::user()->name;
 
-            Alert::success('Login Successfully!', 'Welcome To Chutex E-Signature Sistem');
+            Alert::success('Login Successfully!', 'Welcome To Chutex HRIS Sistem');
             return redirect()->intended('/home');
         }
         return back()->withErrors([

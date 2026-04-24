@@ -53,8 +53,10 @@
                 <!-- TAB 2 -->
                 <div class="tab-pane fade" id="qrlogin">
                     <div id="step2">
-                        <video id="video" width="100%" height="300" style="object-fit: cover"></video>
-                        <p class="text-center text-muted mt-2">Arahkan QR Code ID Card Anda ke kamera utama.</p>
+                        <div class="camera-box">
+                            <video id="video"></video>
+                        </div>
+                            <p class="text-center text-muted mt-2">Arahkan QR Code ID Card Anda ke kamera utama.</p>
                     </div>
                 </div>
 

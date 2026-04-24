@@ -69,7 +69,7 @@ use Illuminate\Support\Facades\Route;
 //     return view('welcome');
 // });
 
-Route::get('/', [LoginController::class, 'login'])->name('/');
+Route::get('/', [HomeController::class, 'index'])->name('/');
 // Route::get('/template/auditsewing', [TemplateController::class, 'auditsewing'])->name('template.auditsewing');
 // Route::get('/template/auditnonsewing', [TemplateController::class, 'auditnonsewing'])->name('template.auditnonsewing');
 
@@ -83,7 +83,7 @@ Route::group(['middleware' => 'guest'], function () {
 });
 
 Route::group(['middleware' => 'auth'], function () {
-    Route::get('/home', [HomeController::class, 'index'])->name('home');
+    Route::get('/home', [HomeController::class, 'home'])->name('home');
     Route::get('/home/get-pkwt-chart', [HomeController::class, 'getPKWTChart'])->name('home.get-pkwt-chart');
     Route::get('/home/get-recap-count', [HomeController::class, 'getRecapCount'])->name('home.get-recap-count');
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
