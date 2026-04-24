@@ -206,7 +206,7 @@ class PayrollProcessController extends Controller
 
         //     /*
         // |--------------------------------------------------------------------------
-        // | EMPLOYEE + PERIOD GENERATOR
+        // | EMPLOYEE + CALENDAR
         // |--------------------------------------------------------------------------
         // */
         //     ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
@@ -218,22 +218,22 @@ class PayrollProcessController extends Controller
         //                 DB::connection('cii')
         //                     ->query()
         //                     ->selectRaw("
-        //             DATEADD(
-        //                 DAY,
-        //                 v.number,
-        //                 CAST(? AS DATE)
-        //             ) as shift_date
-        //         ", [$periodStart])
+        //                     DATEADD(
+        //                         DAY,
+        //                         v.number,
+        //                         CAST(? AS DATE)
+        //                     ) as shift_date
+        //                 ", [$periodStart])
 
         //                     ->from(DB::raw('master..spt_values v'))
         //                     ->where('v.type', 'P')
         //                     ->whereRaw("
-        //             v.number <= DATEDIFF(
-        //                 DAY,
-        //                 CAST(? AS DATE),
-        //                 CAST(? AS DATE)
-        //             )
-        //         ", [$periodStart, $periodEnd]),
+        //                     v.number <= DATEDIFF(
+        //                         DAY,
+        //                         CAST(? AS DATE),
+        //                         CAST(? AS DATE)
+        //                     )
+        //                 ", [$periodStart, $periodEnd]),
 
         //                 'cal'
         //             )
@@ -244,9 +244,10 @@ class PayrollProcessController extends Controller
         //             );
         //     }, 'emp')
 
+
         //     /*
         // |--------------------------------------------------------------------------
-        // | SHIFT AS ANCHOR
+        // | DAILY SHIFT (PRIORITY)
         // |--------------------------------------------------------------------------
         // */
         //     ->leftJoin('employee_shifts as es', function ($join) {
@@ -264,7 +265,7 @@ class PayrollProcessController extends Controller
 
         //     /*
         // |--------------------------------------------------------------------------
-        // | FINGER SOURCE (CROSS DATE NIGHT SHIFT)
+        // | ATT LOG SOURCE
         // |--------------------------------------------------------------------------
         // */
         //     ->leftJoinSub(
@@ -291,108 +292,114 @@ class PayrollProcessController extends Controller
         //                 'att.pin'
         //             )
 
-        //                 ->where(function ($q) {
-
-        //                     /* SAME DAY */
-        //                     $q->whereRaw("
-        //             CAST(att.scan_day AS DATE)
-        //             =
-        //             CAST(emp.shift_date AS DATE)
-        //         ")
-
-        //                         /* CROSS DATE NIGHT SHIFT */
-        //                         ->orWhereRaw("
-        //             (
-        //                 es.shift_id IS NOT NULL
-        //                 AND CAST(s.work_start AS TIME) >
-        //                     CAST(s.work_end AS TIME)
-
-        //                 AND CAST(att.scan_day AS DATE)
+        //                 ->whereRaw("
+        //                 CAST(att.scan_day AS DATE)
         //                 =
-        //                 DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        //             )
-        //         ");
-        //                 });
+        //                 CAST(emp.shift_date AS DATE)
+        //             ");
         //         }
         //     )
 
 
         //     /*
         // |--------------------------------------------------------------------------
-        // | BASE SELECT
+        // | FALLBACK SHIFT BY SCAN DATE ⭐ FIXED
+        // |--------------------------------------------------------------------------
+        // */
+        //     ->leftJoin('shifts as fs', function ($join) {
+
+        //         $join->whereRaw("
+        //         es.shift_id IS NULL
+        //         AND CAST(att.scan_date AS DATE)
+        //             BETWEEN fs.start_date
+        //             AND COALESCE(fs.end_date, CAST(att.scan_date AS DATE))
+        //     ");
+        //     })
+
+
+        //     /*
+        // |--------------------------------------------------------------------------
+        // | SHIFT RESOLUTION
         // |--------------------------------------------------------------------------
         // */
         //     ->selectRaw("
-        // CAST(emp.BARCODE AS VARCHAR(50)) as pin,
-        // CAST(emp.shift_date AS DATE) as scan_day,
+        //     CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+        //     CAST(emp.shift_date AS DATE) as scan_day,
 
-        // CASE
-        // WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END as work_start,
+        //     COALESCE(
+        //         CAST(s.work_start AS TIME),
+        //         CAST(fs.work_start AS TIME),
+        //         '08:00:00'
+        //     ) as work_start,
 
-        // CASE
-        // WHEN es.shift_id IS NULL THEN '17:00:00'
-        // ELSE CAST(s.work_end AS TIME)
-        // END as work_end
+        //     COALESCE(
+        //         CAST(s.work_end AS TIME),
+        //         CAST(fs.work_end AS TIME),
+        //         '17:00:00'
+        //     ) as work_end
         // ")
 
 
         //     /*
         // |--------------------------------------------------------------------------
-        // | FIRST SCAN (TIDAK DIUBAH)
+        // | FIRST SCAN
         // |--------------------------------------------------------------------------
         // */
         //     ->selectRaw("
-        // MIN(
-        // CASE
+        //     MIN(att.scan_date) as first_scan
+        // ")
 
-        // WHEN
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // >
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        // ELSE CAST(s.work_end AS TIME)
-        // END,'17:00:00'
-        // )
 
-        // THEN
+        //     /*
+        // |--------------------------------------------------------------------------
+        // | LATE ENGINE
+        // |--------------------------------------------------------------------------
+        // */
+        //     ->selectRaw("
         //     CASE
-        //         WHEN CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        //          AND CAST(att.scan_date AS TIME)
-        //             >= COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        //         THEN att.scan_date
+        //         WHEN MIN(att.scan_date) IS NULL THEN 0
 
-        //         WHEN CAST(att.scan_date AS DATE)
-        //             = DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        //          AND CAST(att.scan_date AS TIME)
-        //             < COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        //         THEN att.scan_date
-        //     END
+        //         WHEN DATEDIFF(
+        //             MINUTE,
+        //             DATEADD(
+        //                 MINUTE,5,
+        //                 DATEADD(
+        //                     SECOND,
+        //                     DATEDIFF(
+        //                         SECOND,'00:00:00',
+        //                         COALESCE(
+        //                             CAST(s.work_start AS TIME),
+        //                             CAST(fs.work_start AS TIME),
+        //                             '08:00:00'
+        //                         )
+        //                     ),
+        //                     CAST(emp.shift_date AS DATETIME)
+        //                 )
+        //             ),
+        //             MIN(att.scan_date)
+        //         ) < 0 THEN 0
 
-        // ELSE
-        //     CASE
-        //         WHEN CAST(att.scan_date AS TIME)
-        //         BETWEEN
-        //             COALESCE(
-        //                 CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        //                 ELSE CAST(s.work_start AS TIME)
-        //                 END,'08:00:00'
-        //             )
-        //         AND
-        //             COALESCE(
-        //                 CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        //                 ELSE CAST(s.work_end AS TIME)
-        //                 END,'17:00:00'
-        //             )
-        //         THEN att.scan_date
-        //     END
-        // END
-        // ) as first_scan
+        //         ELSE
+        //         DATEDIFF(
+        //             MINUTE,
+        //             DATEADD(
+        //                 MINUTE,5,
+        //                 DATEADD(
+        //                     SECOND,
+        //                     DATEDIFF(
+        //                         SECOND,'00:00:00',
+        //                         COALESCE(
+        //                             CAST(s.work_start AS TIME),
+        //                             CAST(fs.work_start AS TIME),
+        //                             '08:00:00'
+        //                         )
+        //                     ),
+        //                     CAST(emp.shift_date AS DATETIME)
+        //                 )
+        //             ),
+        //             MIN(att.scan_date)
+        //         )
+        //     END as late_minute
         // ")
 
 
@@ -401,196 +408,9 @@ class PayrollProcessController extends Controller
         //         DB::raw('CAST(emp.shift_date AS DATE)'),
         //         's.work_start',
         //         's.work_end',
-        //         'es.shift_id'
+        //         'fs.work_start',
+        //         'fs.work_end'
         //     )
-
-
-        //     /*
-        // |--------------------------------------------------------------------------
-        // | LATE MINUTE ENGINE ✅ NEW VERSION
-        // |--------------------------------------------------------------------------
-        // */
-        //     ->selectRaw("
-        // CASE
-        // WHEN MIN(att.scan_date) IS NULL THEN 0
-
-        // WHEN
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // >
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        // ELSE CAST(s.work_end AS TIME)
-        // END,'17:00:00'
-        // )
-
-        // /* ================= NIGHT SHIFT ================= */
-        // THEN
-
-        // CASE
-        // WHEN DATEDIFF(
-        // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5, /* ✅ tolerance */
-        // DATEADD(
-        // SECOND,
-        // DATEDIFF(
-        // SECOND,'00:00:00',
-        // COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        // ),
-        // CAST(emp.shift_date AS DATETIME)
-        // )
-        // ),
-
-        // MIN(
-        // CASE
-        // WHEN
-        // (
-        // CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        // AND CAST(att.scan_date AS TIME)
-        // >= COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        // )
-        // OR
-        // (
-        // CAST(att.scan_date AS DATE)
-        // = DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        // AND CAST(att.scan_date AS TIME)
-        // < COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        // )
-        // THEN att.scan_date
-        // END
-        // )
-        // ) < 0 THEN 0
-
-        // ELSE
-        // DATEDIFF(
-        // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5,
-        // DATEADD(
-        // SECOND,
-        // DATEDIFF(
-        // SECOND,'00:00:00',
-        // COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        // ),
-        // CAST(emp.shift_date AS DATETIME)
-        // )
-        // ),
-
-        // MIN(
-        // CASE
-        // WHEN
-        // (
-        // CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        // AND CAST(att.scan_date AS TIME)
-        // >= COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        // )
-        // OR
-        // (
-        // CAST(att.scan_date AS DATE)
-        // = DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        // AND CAST(att.scan_date AS TIME)
-        // < COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        // )
-        // THEN att.scan_date
-        // END
-        // )
-        // )
-        // END
-
-
-        // /* ================= NORMAL SHIFT ================= */
-        // ELSE
-
-        // CASE
-        // WHEN DATEDIFF(
-        // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5, /* ✅ tolerance */
-        // DATEADD(
-        // SECOND,
-        // DATEDIFF(
-        // SECOND,'00:00:00',
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // ),
-        // CAST(emp.shift_date AS DATETIME)
-        // )
-        // ),
-
-        // MIN(
-        // CASE
-        // WHEN CAST(att.scan_date AS TIME)
-        // BETWEEN
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // AND
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        // ELSE CAST(s.work_end AS TIME)
-        // END,'17:00:00'
-        // )
-        // THEN att.scan_date
-        // END
-        // )
-        // ) < 0 THEN 0
-
-        // ELSE
-        // DATEDIFF(
-        // MINUTE,
-
-        // DATEADD(
-        // MINUTE,5,
-        // DATEADD(
-        // SECOND,
-        // DATEDIFF(
-        // SECOND,'00:00:00',
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // ),
-        // CAST(emp.shift_date AS DATETIME)
-        // )
-        // ),
-
-        // MIN(
-        // CASE
-        // WHEN CAST(att.scan_date AS TIME)
-        // BETWEEN
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        // ELSE CAST(s.work_start AS TIME)
-        // END,'08:00:00'
-        // )
-        // AND
-        // COALESCE(
-        // CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        // ELSE CAST(s.work_end AS TIME)
-        // END,'17:00:00'
-        // )
-        // THEN att.scan_date
-        // END
-        // )
-        // )
-        // END
-
-        // END as late_minute
-        // ")
-
 
         //     ->whereBetween(
         //         DB::raw('CAST(emp.shift_date AS DATE)'),
@@ -620,22 +440,22 @@ class PayrollProcessController extends Controller
                             DB::connection('cii')
                                 ->query()
                                 ->selectRaw("
-        DATEADD(
-        DAY,
-        v.number,
-        CAST(? AS DATE)
-        ) as shift_date
-        ", [$periodStart])
+                                DATEADD(
+                                    DAY,
+                                    v.number,
+                                    CAST(? AS DATE)
+                                ) as shift_date
+                            ", [$periodStart])
 
                                 ->from(DB::raw('master..spt_values v'))
                                 ->where('v.type', 'P')
                                 ->whereRaw("
-        v.number <= DATEDIFF(
-        DAY,
-        CAST(? AS DATE),
-        CAST(? AS DATE)
-        )
-        ", [$periodStart, $periodEnd]),
+                                v.number <= DATEDIFF(
+                                    DAY,
+                                    CAST(? AS DATE),
+                                    CAST(? AS DATE)
+                                )
+                            ", [$periodStart, $periodEnd]),
 
                             'cal'
                         )
@@ -648,6 +468,11 @@ class PayrollProcessController extends Controller
                 }, 'emp')
 
 
+                    /*
+            |--------------------------------------------------------------------------
+            | DAILY SHIFT
+            |--------------------------------------------------------------------------
+            */
                     ->leftJoin('employee_shifts as es', function ($join) {
 
                         $join->on('emp.NPK', '=', 'es.npk')
@@ -661,6 +486,11 @@ class PayrollProcessController extends Controller
                     ->leftJoin('shifts as s', 'es.shift_id', '=', 's.id')
 
 
+                    /*
+            |--------------------------------------------------------------------------
+            | ATT LOG
+            |--------------------------------------------------------------------------
+            */
                     ->leftJoinSub(
 
                         DB::connection('cii')
@@ -688,25 +518,41 @@ class PayrollProcessController extends Controller
                                 ->where(function ($q) {
 
                                     $q->whereRaw("
-        CAST(att.scan_day AS DATE)
-        =
-        CAST(emp.shift_date AS DATE)
-        ")
+                                CAST(att.scan_day AS DATE)
+                                =
+                                CAST(emp.shift_date AS DATE)
+                            ")
 
                                         ->orWhereRaw("
-        (
-        es.shift_id IS NOT NULL
-        AND CAST(s.work_start AS TIME)>
-        CAST(s.work_end AS TIME)
+                                (
+                                    es.shift_id IS NOT NULL
+                                    AND CAST(s.work_start AS TIME)>
+                                        CAST(s.work_end AS TIME)
 
-        AND CAST(att.scan_day AS DATE)
-        =
-        DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        )
-        ");
+                                    AND CAST(att.scan_day AS DATE)
+                                    =
+                                    DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
+                                )
+                            ");
                                 });
                         }
                     )
+
+
+                    /*
+            |--------------------------------------------------------------------------
+            | FALLBACK SHIFT BY SCAN DATE ⭐ NEW
+            |--------------------------------------------------------------------------
+            */
+                    ->leftJoin('shifts as fs', function ($join) {
+
+                        $join->whereRaw("
+                    es.shift_id IS NULL
+                    AND CAST(att.scan_date AS DATE)
+                        BETWEEN fs.start_date
+                        AND COALESCE(fs.end_date, CAST(att.scan_date AS DATE))
+                ");
+                    })
 
 
                     ->groupBy(
@@ -715,190 +561,139 @@ class PayrollProcessController extends Controller
                         DB::raw('CAST(emp.shift_date AS DATE)'),
                         's.work_start',
                         's.work_end',
+                        'fs.work_start',
+                        'fs.work_end',
                         'es.shift_id'
                     )
 
 
                     /*
-        |--------------------------------------------------------------------------
-        | DAILY LATE RESULT (MINUTE + 5 MIN TOLERANCE)
-        |--------------------------------------------------------------------------
-        */
+            |--------------------------------------------------------------------------
+            | DAILY LATE RESULT (ORIGINAL LOGIC — NOT MODIFIED)
+            |--------------------------------------------------------------------------
+            */
                     ->selectRaw("
-        emp.NPK,
-        CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+                emp.NPK,
+                CAST(emp.BARCODE AS VARCHAR(50)) as pin,
 
-        CASE
-        WHEN MIN(att.scan_date) IS NULL THEN 0
+                CASE
+                WHEN MIN(att.scan_date) IS NULL THEN 0
 
-        WHEN
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00')
-        >
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        ELSE CAST(s.work_end AS TIME)
-        END,'17:00:00')
+                WHEN
+                COALESCE(
+                    CAST(s.work_start AS TIME),
+                    CAST(fs.work_start AS TIME),
+                    '08:00:00'
+                )
+                >
+                COALESCE(
+                    CAST(s.work_end AS TIME),
+                    CAST(fs.work_end AS TIME),
+                    '17:00:00'
+                )
 
-        /* ================= NIGHT SHIFT ================= */
-        THEN
+                /* ================= NIGHT SHIFT ================= */
+                THEN
 
-        CASE
-        WHEN DATEDIFF(
-        MINUTE,
+                CASE
+                WHEN DATEDIFF(
+                    MINUTE,
 
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
-        DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
+                    DATEADD(
+                        MINUTE,5,
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(
+                                SECOND,'00:00:00',
+                                COALESCE(
+                                    CAST(s.work_start AS TIME),
+                                    CAST(fs.work_start AS TIME),
+                                    '23:00:00'
+                                )
+                            ),
+                            CAST(emp.shift_date AS DATETIME)
+                        )
+                    ),
 
-        MIN(
-        CASE
-        WHEN
-        (
-        CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        AND CAST(att.scan_date AS TIME)>=COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        )
-        OR
-        (
-        CAST(att.scan_date AS DATE)=DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        AND CAST(att.scan_date AS TIME)<COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        )
-        THEN att.scan_date
-        END
-        )
-        ) < 0 THEN 0
+                    MIN(att.scan_date)
+                ) < 0 THEN 0
 
-        ELSE
-        DATEDIFF(
-        MINUTE,
+                ELSE
+                DATEDIFF(
+                    MINUTE,
 
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
-        DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
+                    DATEADD(
+                        MINUTE,5,
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(
+                                SECOND,'00:00:00',
+                                COALESCE(
+                                    CAST(s.work_start AS TIME),
+                                    CAST(fs.work_start AS TIME),
+                                    '23:00:00'
+                                )
+                            ),
+                            CAST(emp.shift_date AS DATETIME)
+                        )
+                    ),
 
-        MIN(
-        CASE
-        WHEN
-        (
-        CAST(att.scan_date AS DATE)=CAST(emp.shift_date AS DATE)
-        AND CAST(att.scan_date AS TIME)>=COALESCE(CAST(s.work_start AS TIME),'23:00:00')
-        )
-        OR
-        (
-        CAST(att.scan_date AS DATE)=DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-        AND CAST(att.scan_date AS TIME)<COALESCE(CAST(s.work_end AS TIME),'08:00:00')
-        )
-        THEN att.scan_date
-        END
-        )
-        )
-        END
+                    MIN(att.scan_date)
+                )
+                END
 
+                /* ================= NORMAL SHIFT ================= */
+                ELSE
 
-        /* ================= NORMAL SHIFT ================= */
-        ELSE
+                CASE
+                WHEN DATEDIFF(
+                    MINUTE,
 
-        CASE
-        WHEN DATEDIFF(
-        MINUTE,
+                    DATEADD(
+                        MINUTE,5,
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(
+                                SECOND,'00:00:00',
+                                COALESCE(
+                                    CAST(s.work_start AS TIME),
+                                    CAST(fs.work_start AS TIME),
+                                    '08:00:00'
+                                )
+                            ),
+                            CAST(emp.shift_date AS DATETIME)
+                        )
+                    ),
 
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
-        DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
+                    MIN(att.scan_date)
+                ) < 0 THEN 0
 
-        MIN(
-        CASE
-        WHEN CAST(att.scan_date AS TIME)
-        BETWEEN
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        AND
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        ELSE CAST(s.work_end AS TIME)
-        END,'17:00:00'
-        )
-        THEN att.scan_date
-        END
-        )
-        ) < 0 THEN 0
+                ELSE
+                DATEDIFF(
+                    MINUTE,
 
-        ELSE
-        DATEDIFF(
-        MINUTE,
+                    DATEADD(
+                        MINUTE,5,
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(
+                                SECOND,'00:00:00',
+                                COALESCE(
+                                    CAST(s.work_start AS TIME),
+                                    CAST(fs.work_start AS TIME),
+                                    '08:00:00'
+                                )
+                            ),
+                            CAST(emp.shift_date AS DATETIME)
+                        )
+                    ),
 
-        DATEADD(
-        MINUTE,5,
-        DATEADD(
-        SECOND,
-        DATEDIFF(
-        SECOND,'00:00:00',
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        ),
-        CAST(emp.shift_date AS DATETIME)
-        )
-        ),
+                    MIN(att.scan_date)
+                )
+                END
 
-        MIN(
-        CASE
-        WHEN CAST(att.scan_date AS TIME)
-        BETWEEN
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '08:00:00'
-        ELSE CAST(s.work_start AS TIME)
-        END,'08:00:00'
-        )
-        AND
-        COALESCE(
-        CASE WHEN es.shift_id IS NULL THEN '17:00:00'
-        ELSE CAST(s.work_end AS TIME)
-        END,'17:00:00'
-        )
-        THEN att.scan_date
-        END
-        )
-        )
-        END
-
-        END as late_minute
-        ")
+                END as late_minute
+            ")
 
                     ->whereBetween(
                         DB::raw('CAST(emp.shift_date AS DATE)'),
@@ -909,13 +704,13 @@ class PayrollProcessController extends Controller
 
             /*
         |--------------------------------------------------------------------------
-        | FINAL RESULT (NO DATE)
+        | FINAL RESULT
         |--------------------------------------------------------------------------
         */
             ->selectRaw("
-        NPK as npk,
-        pin,
-        SUM(late_minute) as late_minutes
+            NPK as npk,
+            pin,
+            SUM(late_minute) as late_minutes
         ")
 
             ->groupBy('NPK', 'pin');
