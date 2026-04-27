@@ -33,6 +33,8 @@
                               <th>Gender</th>
                               <th>Start Time</th>
                               <th>End Time</th>
+                              <th>Start Date</th>
+                              <th>End Date</th>
                               <th>Action</th>
                            </tr>
                         </thead>
@@ -44,6 +46,8 @@
                               <td>{{ $shift->gender }}</td>
                               <td>{{ $shift->work_start }}</td>
                               <td>{{ $shift->work_end }}</td>
+                              <td>{{ $shift->start_date }}</td>
+                              <td>{{ $shift->end_date }}</td>
                               <td class="text-center">
                                  <a href="{{ route('shift.edit',$shift->id) }}"
                                     class="btn btn-primary btn-circle btn-sm">

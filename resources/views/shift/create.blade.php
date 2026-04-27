@@ -30,6 +30,16 @@
                         <label>End Time</label>
                         <input type="time" name="work_end" class="form-control" required>
                      </div>
+                     
+                     <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date" name="start_date" class="form-control" required>
+                     </div>
+                     
+                     <div class="form-group">
+                        <label>End Date</label>
+                        <input type="date" name="end_date" class="form-control" required>
+                     </div>
                      <div>
                         <label>Shift Gender :</label>
                         <select class="form-control" id="gender" name="gender">

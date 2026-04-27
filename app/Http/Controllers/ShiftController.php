@@ -26,7 +26,9 @@ class ShiftController extends Controller
             'name' => 'required',
             'work_start' => 'required',
             'work_end' => 'required',
-            'gender' => 'required'
+            'gender' => 'required',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
 
