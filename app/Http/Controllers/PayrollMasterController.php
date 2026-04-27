@@ -54,7 +54,14 @@ class PayrollMasterController extends Controller
 
     public function create()
     {
-        return view('payroll_master.create');
+        $employees = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN')
+            ->union(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+            )
+            ->get();
+        return view('payroll_master.create', compact('employees'));
     }
 
     public function edit($id)
@@ -115,13 +122,18 @@ class PayrollMasterController extends Controller
     public function store(Request $request)
     {
 
+        $request->merge([
+            'allowance' => $request->allowance ?? 0,
+            'pph21'     => $request->pph21 ?? 0,
+        ]);
+
         $request->validate([
             'npk' => 'required',
             'bank_name' => 'required',
             'bank_account' => 'required',
             'salary' => 'required|numeric',
-            'allowance' => 'required|numeric',
-            'pph21' => 'required|numeric',
+            'allowance' => 'numeric',
+            'pph21' => 'numeric',
             'type' => 'required|in:Contract,Daily',
         ]);
 

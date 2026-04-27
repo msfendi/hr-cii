@@ -55,12 +55,22 @@
                                 {{-- Form Fields --}}
                                 <div>
                                     <label>NPK :</label>
-                                    <input type="text" class="form-control" name="npk" value="{{ old('npk') }}" required>
+                                    <select id="npk" class="form-control" name="npk" required>
+                                        <option value="">Select Employee</option>
+                                        @foreach ($employees as $employee)
+                                            <option value="{{ $employee->NPK }}" {{ old('npk') == $employee->NPK ? 'selected' : '' }}>
+                                                {{ $employee->NPK }} - {{ $employee->NAMA_KARYAWAN }}
+                                            </option>
+                                        @endforeach
+                                        </select>
                                 </div>
                                 <br>
                                 <div>
                                     <label>Bank Name :</label>
-                                    <input type="text" class="form-control" name="bank_name" value="{{ old('bank_name') }}" required>
+                                    <select class="form-control" name="bank_name" required>
+                                        <option value="">Select Bank</option>
+                                        <option value="Permata Bank" {{ old('bank_name') == 'Permata Bank' ? 'selected' : '' }}>Permata Bank</option>
+                                    </select>
                                 </div>
                                 <br>
                                 <div>
@@ -83,6 +93,15 @@
                                     <input type="number" class="form-control" name="pph21" value="{{ old('pph21') }}">
                                 </div>
                                 <br>
+                                <div>
+                                    <label>Type :</label>
+                                    <select class="form-control" name="type" required>
+                                        <option value="">Select Type</option>
+                                        <option value="Contract" {{ old('type') == 'Contract' ? 'selected' : '' }}>Contract</option>
+                                        <option value="Daily" {{ old('type') == 'Daily' ? 'selected' : '' }}>Daily</option>
+                                    </select>
+                                </div>
+                                <br>
                                 <div class="row">
                                     <div class="col-12">
                                         <button type="submit" class="btn btn-primary btn-block">Create Payroll Master</button>
@@ -97,4 +116,13 @@
         </div>
     </div>
 </body>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css" rel="stylesheet" />
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js"></script>
+<script>
+    $("#npk").select2({
+    allowClear:true,
+    placeholder:'Choose Employee'
+    });
+</script>
 </html>
