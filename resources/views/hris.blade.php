@@ -40,8 +40,19 @@
                     </div>
                 </a>
             </div>
-
             <!-- Menu 2 -->
+            <div class="col-lg-3 col-md-4 col-6 mb-4">
+                <a href="/employee-thr" class="text-decoration-none">
+                    <div class="card shadow h-100 text-center menu-card">
+                        <div class="card-body">
+                            <i class="fas fa-gift fa-3x text-primary mb-3"></i>
+                            <h6 class="text-dark">Lihat Slip THR</h6>
+                        </div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Menu 3 -->
             <div class="col-lg-3 col-md-4 col-6 mb-4">
                 <a href="/pengajuan-cuti/login" class="text-decoration-none">
                     <div class="card shadow h-100 text-center menu-card">

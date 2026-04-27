@@ -141,10 +141,6 @@ $role = $roleusers[0]->rolename;
             <hr>
             <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
             <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
-            <hr>
-            <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif</a>
-            <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif</a>
-            <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif</a>
          </div>
       </div>
    </li>

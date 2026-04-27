@@ -22,6 +22,7 @@ class EmployeePayrollController extends Controller
                 'pp.start_date',
                 'pp.end_date'
             )
+            ->where('pp.is_closed', '=', 1)
             ->orderBy('pp.start_date', 'desc')
             ->get();
 
@@ -35,6 +36,7 @@ class EmployeePayrollController extends Controller
     {
         $periods = DB::table('payroll_runs as pr')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+            ->where('pp.is_closed', '=', 1)
             ->orderBy('pp.start_date', 'desc')
             ->select(
                 'pr.*',
@@ -49,22 +51,33 @@ class EmployeePayrollController extends Controller
 
     public function verifyPassword(Request $request)
     {
-
         $birth = DB::table('PKWT')
-            ->where('NPK', $request['npk'])
+            ->where('NPK', $request->npk)
             ->value('TGLLAHIR');
 
         if (!$birth) {
-            return back()->with('error', 'Data tanggal lahir tidak ditemukan');
+            return response()->json([
+                'status' => false,
+                'message' => 'Data tanggal lahir tidak ditemukan'
+            ]);
         }
 
         $password = date('ymd', strtotime($birth));
 
         if ($request->password != $password) {
-            return back()->with('error', 'Password salah');
+            return response()->json([
+                'status' => false,
+                'message' => 'Password salah'
+            ]);
         }
 
-        return redirect()->route('view-slip', [$request['run_id'], $request['npk']]);
+        return response()->json([
+            'status' => true,
+            'redirect' => route(
+                'employee-payroll.view-slip',
+                [$request->run_id, $request->npk, $password]
+            )
+        ]);
     }
 
     public function qrLogin(Request $request)
@@ -92,6 +105,12 @@ class EmployeePayrollController extends Controller
 
     public function showSlip($run_id, $npk)
     {
+
+        $birth = DB::table('PKWT')
+            ->where('NPK', $npk)
+            ->value('TGLLAHIR');
+
+        $password = date('ymd', strtotime($birth));
 
         $employee = DB::table('payroll_run_details as prd')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
@@ -438,6 +457,10 @@ class EmployeePayrollController extends Controller
             'late_minutes' => $late_minutes
         ])
             ->setPaper('A4', 'portrait');
+
+        // SET PASSWORD
+        $pdf->getDomPDF()->getCanvas()->get_cpdf()
+            ->setEncryption($password, $password, ['print', 'copy']);
 
         return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
 

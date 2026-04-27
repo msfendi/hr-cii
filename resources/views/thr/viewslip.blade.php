@@ -139,20 +139,5 @@ TOTAL THR
 NOTE
 =============================== --}}
     <p style="margin-top:20px;font-size:11px;"> THR diberikan sesuai Peraturan Menteri Ketenagakerjaan Republik Indonesia tentang Tunjangan Hari Raya Keagamaan bagi Pekerja/Buruh di Perusahaan. </p>
-    {{-- ===============================
-SIGNATURE
-=============================== --}}
-    <div class="footer">
-      <table width="100%">
-        <tr>
-          <td width="50%"></td>
-          <td class="center"> HR Department <br>
-            <br>
-            <br>
-            <br> _______________________
-          </td>
-        </tr>
-      </table>
-    </div>
   </body>
 </html>

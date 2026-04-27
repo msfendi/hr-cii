@@ -447,16 +447,15 @@ class InsentifApprovalController extends Controller
 
         $rows = DB::table('cutting_efficiencies as ce')
             ->join('employee_cutting_assignments as eca', function ($join) {
-                $join->on('ce.npk', '=', 'eca.npk')
+                $join->whereColumn('ce.period_id', 'eca.period_id') // ✅ period harus sama
                     ->whereColumn('ce.date', '>=', 'eca.start_date')
                     ->where(function ($q) {
                         $q->whereColumn('ce.date', '<=', 'eca.end_date')
                             ->orWhereNull('eca.end_date');
                     });
             })
-            ->where('ce.npk', $employee->NPK)
+            ->where('eca.npk', $employee->NPK)
             ->where('ce.period_id', $period->id)
-            ->where('eca.period_id', $period->id)
             ->whereBetween('ce.date', [$period->start_date, $period->end_date])
             ->select('ce.efficiency', 'eca.role')
             ->get();

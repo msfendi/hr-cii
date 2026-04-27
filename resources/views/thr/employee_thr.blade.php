@@ -42,7 +42,7 @@
                               <option disabled selected>-- Pilih Periode --</option>
                               @foreach($periods as $period)
                               <option value="{{$period->id}}">
-                                 {{ date('F Y',strtotime($period->start_date)) }}
+                                 {{ date('F Y',strtotime($period->cutoff_date)) }}
                               </option>
                               @endforeach
                            </select>
@@ -61,7 +61,7 @@
                               <option disabled selected>-- Pilih Periode --</option>
                               @foreach($periods as $period)
                               <option value="{{$period->id}}">
-                                 {{ date('F Y',strtotime($period->start_date)) }}
+                                 {{ date('F Y',strtotime($period->cutoff_date)) }}
                               </option>
                               @endforeach
                            </select>
@@ -95,7 +95,7 @@
       <script src="https://unpkg.com/@zxing/library@latest"></script>
       <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
       <script>
-         const verifyUrl = "{{ route('employee-payroll.verify-password') }}";
+         const verifyUrl = "{{ route('employee-thr.verify-password') }}";
          const csrf = "{{ csrf_token() }}";
          
          let scanned=false;

@@ -573,19 +573,18 @@ Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name(
 Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
 Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->name('employee-payroll.index');
-Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin']);
+Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
 Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
-Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('view-slip');
+Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
 Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
 
 // Employee Thr
-Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('view-slip');
+Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.view-slip');
 Route::post('/employee-thr/{npk}/show-slip', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.show-slip');
 Route::post('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
 Route::get('/employee-thr', [EmployeeThrController::class, 'index'])->name('employee-thr.index');
-Route::get('/employee-thr/qr-login', [EmployeeThrController::class, 'qrLogin']);
+Route::get('/employee-thr/qr-login', [EmployeeThrController::class, 'qrLogin'])->name('employee-thr.qr-login');
 Route::get('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
-Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('view-slip');
 Route::get('/employee-thr/api/period', [EmployeeThrController::class, 'apiPeriods'])->name('employee-thr-api.period');
 
 // Employee Evaluation

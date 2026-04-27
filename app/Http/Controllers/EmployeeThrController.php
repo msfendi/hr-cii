@@ -11,15 +11,14 @@ class EmployeeThrController extends Controller
 
     public function index(Request $request)
     {
-        $periods = DB::table('thr_runs as pr')
-            ->join('thr_periods as pp', 'pp.id', '=', 'pr.period_id')
+        $periods = DB::table('thr_runs as tr')
+            ->join('thr_periods as tp', 'tp.id', '=', 'tr.period_id')
             ->select(
-                'pr.id',
-                'pr.id as run_id',
-                'pp.start_date',
-                'pp.end_date'
+                'tr.id',
+                'tr.id as run_id',
+                'tp.cutoff_date'
             )
-            ->orderBy('pp.start_date', 'desc')
+            ->orderBy('tp.cutoff_date', 'desc')
             ->get();
 
         return view('thr.employee_thr', [
@@ -45,22 +44,33 @@ class EmployeeThrController extends Controller
 
     public function verifyPassword(Request $request)
     {
-
         $birth = DB::table('PKWT')
-            ->where('NPK', $request['npk'])
+            ->where('NPK', $request->npk)
             ->value('TGLLAHIR');
 
         if (!$birth) {
-            return back()->with('error', 'Data tanggal lahir tidak ditemukan');
+            return response()->json([
+                'status' => false,
+                'message' => 'Data tanggal lahir tidak ditemukan'
+            ]);
         }
 
         $password = date('ymd', strtotime($birth));
 
         if ($request->password != $password) {
-            return back()->with('error', 'Password salah');
+            return response()->json([
+                'status' => false,
+                'message' => 'Password salah'
+            ]);
         }
 
-        return redirect()->route('view-slip', [$request['run_id'], $request['npk']]);
+        return response()->json([
+            'status' => true,
+            'redirect' => route(
+                'employee-thr.view-slip',
+                [$request->run_id, $request->npk, $password]
+            )
+        ]);
     }
 
     public function qrLogin(Request $request)
@@ -88,11 +98,11 @@ class EmployeeThrController extends Controller
 
     public function showSlip($run_id, $npk)
     {
-        /*
-    |--------------------------------------------------------------------------
-    | GET THR EMPLOYEE
-    |--------------------------------------------------------------------------
-    */
+        $birth = DB::table('PKWT')
+            ->where('NPK', $npk)
+            ->value('TGLLAHIR');
+
+        $password = date('ymd', strtotime($birth));
 
         $employee = DB::table('thr_run_details as trd')
             ->leftJoin('thr_runs as tr', 'tr.id', '=', 'trd.run_id')
@@ -141,6 +151,9 @@ class EmployeeThrController extends Controller
             'employee'   => $employee,
             'components' => $components
         ])->setPaper('A4', 'portrait');
+        // SET PASSWORD
+        $pdf->getDomPDF()->getCanvas()->get_cpdf()
+            ->setEncryption($password, $password, ['print', 'copy']);
 
         return $pdf->download(
             'SLIP_THR_' .
