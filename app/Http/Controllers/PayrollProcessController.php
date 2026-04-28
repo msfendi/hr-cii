@@ -1434,32 +1434,89 @@ class PayrollProcessController extends Controller
     |--------------------------------------------------------------------------
     */
 
-        $canSeeSalary = Auth::user()->hasRole(['Admin', 'Payroll']);
+        $user = Auth::user();
 
+        $canSeeSalary = $user->hasRole([
+            'Admin',
+            'Payroll_STAFF',
+            'Payroll_SEWING',
+            'Payroll_NONSEWING'
+        ]);
+
+        /*
+    |--------------------------------------------------------------------------
+    | EMPLOYEE UNION
+    |--------------------------------------------------------------------------
+    */
+
+        $employeeUnion = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
+            );
+
+        /*
+    |--------------------------------------------------------------------------
+    | BASE QUERY
+    |--------------------------------------------------------------------------
+    */
+
+        $query = DB::table('payroll_run_details as prd')
+            ->leftJoinSub(
+                $employeeUnion,
+                'emp',
+                fn($j) => $j->on('emp.NPK', '=', 'prd.employee_npk')
+            )
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
+            ->where('prd.run_id', $id)
+            ->select(
+                'prd.run_id',
+                'prd.employee_npk',
+                'prd.employee_name',
+                'prd.components',
+                'prd.total_salary',
+                'emp.IS_STAFF',
+                'd.IS_SEWING'
+            );
+
+        /*
+    |--------------------------------------------------------------------------
+    | ROLE FILTERING (NEW)
+    |--------------------------------------------------------------------------
+    */
+
+        if (!$user->hasRole('Admin')) {
+
+            if ($user->hasRole('Payroll_STAFF')) {
+                $query->where('emp.IS_STAFF', 1);
+            }
+
+            if ($user->hasRole('Payroll_SEWING')) {
+                $query->where('d.IS_SEWING', 0)->where('emp.IS_STAFF', 0);
+            }
+
+            if ($user->hasRole('Payroll_NONSEWING')) {
+                $query->where('d.IS_SEWING', 1)->where('emp.IS_STAFF', 0);
+            }
+        }
 
         /*
     |--------------------------------------------------------------------------
     | GET DATA
     |--------------------------------------------------------------------------
     */
-        $data = DB::table('payroll_run_details')
-            ->where('run_id', $id)
-            ->select(
-                'run_id',
-                'employee_npk',
-                'employee_name',
-                'components',
-                'total_salary'
-            )
-            ->orderBy('employee_npk')
-            ->get();
 
+        $data = $query
+            ->orderBy('prd.employee_npk')
+            ->get();
 
         /*
     |--------------------------------------------------------------------------
     | TRANSFORM COMPONENTS
     |--------------------------------------------------------------------------
     */
+
         $data->transform(function ($item) use ($canSeeSalary) {
 
             $components = json_decode($item->components, true) ?? [];
@@ -1488,12 +1545,12 @@ class PayrollProcessController extends Controller
             return $item;
         });
 
-
         /*
     |--------------------------------------------------------------------------
     | RESPONSE
     |--------------------------------------------------------------------------
     */
+
         return response()->json([
             'data' => $data
         ]);

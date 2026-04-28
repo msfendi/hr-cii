@@ -14,6 +14,7 @@ use App\Exports\ExpatRekapExport;
 use App\Models\ExpatCost;
 use App\Models\ExpatCostComponent;
 use Illuminate\Support\Facades\DB;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class ExpatController extends Controller
 {
@@ -67,6 +68,11 @@ class ExpatController extends Controller
                 ? $row->amount
                 : json_decode($row->amount, true) ?? [];
 
+            // ✅ TOTAL AMOUNT
+            $row->total_amount = collect($row->amount_array)
+                ->map(fn($val) => (float) $val)
+                ->sum();
+
             // COMPONENT NAME
             $row->component_name = collect($row->component_array)
                 ->map(fn($id) => $components[$id] ?? $id)
@@ -78,8 +84,6 @@ class ExpatController extends Controller
                 ? $row->transactions_date
                 : json_decode($row->transactions_date, true) ?? [];
         }
-
-        // dd($row->component_name, $row->amount_array, $row->transactions_date);
 
         return view('expat_onleave.index', compact('data'));
     }
@@ -224,5 +228,62 @@ class ExpatController extends Controller
             new ExpatRekapExport($start, $end),
             $filename
         );
+    }
+
+    public function deleteMaster($id)
+    {
+        ExpatMaster::findOrFail($id)->delete();
+
+        Alert::success('Expat Master deleted successfully!');
+        return back();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | EDIT
+    |--------------------------------------------------------------------------
+    */
+
+    public function editMaster($id)
+    {
+        $data = DB::table('expat_master')->where('id', $id)->first();
+
+        return view('expat_master.edit', compact('data'));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE
+    |--------------------------------------------------------------------------
+    */
+
+    public function updateMaster(Request $request, $id)
+    {
+        DB::table('expat_master')
+            ->where('id', $id)
+            ->update([
+                'npk' => $request->npk,
+                'name' => $request->name,
+                'position' => $request->position,
+                'joining_date' => $request->joining_date,
+                'end_date' => $request->end_date,
+                'passport_number' => $request->passport_number,
+                'passport_expiry' => $request->passport_expiry,
+                'kitas_expiry' => $request->kitas_expiry,
+                'rptka_expiry' => $request->rptka_expiry,
+                'merp_expiry' => $request->merp_expiry,
+                'house_address' => $request->house_address,
+                'house_startdate' => $request->house_startdate,
+                'lease_enddate' => $request->lease_enddate,
+                'place' => $request->place,
+                'nationality' => $request->nationality,
+                'direct_report' => $request->direct_report,
+                'npwp' => $request->npwp,
+                'updated_at' => now()
+            ]);
+
+        return redirect()
+            ->route('expat.master.index')
+            ->with('success', 'Expat Master Updated');
     }
 }

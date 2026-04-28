@@ -155,19 +155,19 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll-periods/delete/{id}', [PayrollPeriodController::class, 'delete'])->name('payroll-periods.delete')->middleware(['auth', 'role:Admin']);
 
     // Payroll Process
-    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin']);
-    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'role:Admin']);
-    Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin']);
-    Route::post('/payroll-process/update', [PayrollProcessController::class, 'update'])->name('payroll-process.update')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-slip/{run_id}/{npk}', [PayrollProcessController::class, 'slip'])->name('payroll-slip')->middleware(['auth', 'role:Admin']);
-    Route::get('payroll-process/export-rekap/{run_id}', [PayrollProcessController::class, 'exportRekap'])->name('payroll.export.rekap')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll/export-progress/{id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/payroll-process/update', [PayrollProcessController::class, 'update'])->name('payroll-process.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-slip/{run_id}/{npk}', [PayrollProcessController::class, 'slip'])->name('payroll-slip')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('payroll-process/export-rekap/{run_id}', [PayrollProcessController::class, 'exportRekap'])->name('payroll.export.rekap')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll/export-progress/{id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
 
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'role:Admin']);
@@ -474,8 +474,9 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('master/index', [ExpatController::class, 'indexMaster'])->name('expat.master.index');
         Route::get('master/create', [ExpatController::class, 'createMaster'])->name('expat.master.create');
         Route::get('master/edit/{id}', [ExpatController::class, 'editMaster'])->name('expat.master.edit');
-        Route::post('master/delete/{id}', [ExpatController::class, 'deleteMaster'])->name('expat.master.delete');
+        Route::get('master/delete/{id}', [ExpatController::class, 'deleteMaster'])->name('expat.master.delete');
         Route::post('master/store', [ExpatController::class, 'storeMaster'])->name('expat.master.store');
+        Route::post('master/update/{id}', [ExpatController::class, 'updateMaster'])->name('expat.master.update');
         Route::post('import/master', [ExpatController::class, 'importMaster'])->name('expat.import.master');
         Route::get('template/master', [ExpatController::class, 'templateMaster'])->name('expat.template.master');
 

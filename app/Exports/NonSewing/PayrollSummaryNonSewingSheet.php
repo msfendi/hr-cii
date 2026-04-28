@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports;
+namespace App\Exports\NonSewing;
 
 use Illuminate\Support\Facades\DB;
 use App\Models\PayrollComponent;
@@ -16,7 +16,7 @@ use PhpOffice\PhpSpreadsheet\Chart\Chart;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class PayrollSummarySheet implements
+class PayrollSummaryNonSewingSheet implements
     FromArray,
     WithTitle,
     WithStyles,
@@ -120,13 +120,7 @@ class PayrollSummarySheet implements
         */
 
         $groups = [
-            'active_all' => [],
-            'active_staff' => [],
-            'active_sewing' => [],
             'active_non_sewing' => [],
-            'resign_all' => [],
-            'resign_staff' => [],
-            'resign_sewing' => [],
             'resign_non_sewing' => [],
         ];
 
@@ -160,27 +154,9 @@ class PayrollSummarySheet implements
             $targetGroups = [];
 
             if ($isResign) {
-
-                $targetGroups[] = 'resign_all';
-
-                if ($isStaff)
-                    $targetGroups[] = 'resign_staff';
-
-                if ($isSewing)
-                    $targetGroups[] = 'resign_sewing';
-
                 if ($isNonSewing)
                     $targetGroups[] = 'resign_non_sewing';
             } else {
-
-                $targetGroups[] = 'active_all';
-
-                if ($isStaff)
-                    $targetGroups[] = 'active_staff';
-
-                if ($isSewing)
-                    $targetGroups[] = 'active_sewing';
-
                 if ($isNonSewing)
                     $targetGroups[] = 'active_non_sewing';
             }
@@ -208,13 +184,7 @@ class PayrollSummarySheet implements
 
         $header = [
             'Component',
-            'Active All',
-            'Active Staff',
-            'Active Sewing',
             'Active Non Sewing',
-            'Resign All',
-            'Resign Staff',
-            'Resign Sewing',
             'Resign Non Sewing',
         ];
 

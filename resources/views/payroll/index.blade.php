@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
-
 <body id="page-top">
 <!-- Page Wrapper -->
 @include('sweetalert::alert')
@@ -78,6 +77,9 @@
                                 </thead>
                                 <tbody>
                                     @foreach($periods as $period)
+                                    @php
+                                    $folder = strtoupper(str_replace(' ', '_', $period->period_name));
+                                    @endphp
                                     <tr>
                                         <td>{{ $period->id }}</td>
                                         <td>{{ $period->period_name }}</td>
@@ -110,28 +112,43 @@
                                                     <i class="fas fa-spinner fa-spin"></i> Finalizing Document Approved
                                                 </span>
                                             @else
+                                                @php
+                                                    $roleFolder = '';
+
+                                                    if(auth()->user()->hasRole('Payroll_STAFF')){
+                                                        $roleFolder = 'STAFF/';
+                                                    } elseif(auth()->user()->hasRole('Payroll_SEWING')){
+                                                        $roleFolder = 'SEWING/';
+                                                    } elseif(auth()->user()->hasRole('Payroll_NONSEWING')){
+                                                        $roleFolder = 'NON_SEWING/';
+                                                    }
+                                                @endphp
+
+
                                                 {{-- DOWNLOAD EXCEL --}}
                                                 @if(($period->export_status == 'finished' || $period->export_status == 'approved') && $period->file_excel)
                                                     <a class="btn btn-success btn-sm"
-                                                    href="{{ asset('storage/'.$period->file_excel) }}"
+                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$roleFolder.$period->file_excel) }}"
                                                     target="_blank">
                                                         <i class="fas fa-file-excel mr-1"></i> Excel
                                                     </a>
                                                 @endif
 
+
                                                 {{-- DOWNLOAD PDF --}}
                                                 @if(($period->export_status == 'finished' || $period->export_status == 'approved') && $period->file_pdf)
                                                     <a class="btn btn-danger btn-sm"
-                                                        href="{{ asset('storage/'.$period->file_pdf) }}"
+                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$roleFolder.$period->file_pdf) }}"
                                                     target="_blank">
                                                         <i class="fas fa-file-pdf mr-1"></i> PDF
                                                     </a>
                                                 @endif
 
+
                                                 {{-- DOWNLOAD PDF PENGELUARAN --}}
                                                 @if(($period->export_status == 'finished' || $period->export_status == 'approved') && $period->file_peng)
                                                     <a class="btn btn-secondary btn-sm"
-                                                        href="{{ asset('storage/'.$period->file_peng) }}"
+                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$roleFolder.$period->file_peng) }}"
                                                     target="_blank">
                                                         <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
                                                     </a>
@@ -141,16 +158,16 @@
 
                                         <td class="text-center">
                                             {{-- DOWNLOAD BANK (HANYA JIKA APPROVAL FINISH) --}}
-                                            @if($period->approve_status == 'finish' && $period->export_status == 'approved')
+                                            @if($period->approve_status == 'finish' && $period->export_status == 'approved' && auth()->user()->hasRole('Accounting'))
                                             
                                                 <a class="btn btn-primary btn-sm"
-                                                    href="{{ asset('storage/'.$period->file_bank_active) }}"
+                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$period->file_bank_active) }}"
                                                 target="_blank">
                                                     <i class="fas fa-university mr-1"></i> Active
                                                 </a>
                                                 
                                                 <a class="btn btn-secondary btn-sm"
-                                                    href="{{ asset('storage/'.$period->file_bank_resign) }}"
+                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$period->file_bank_resign) }}"
                                                 target="_blank">
                                                     <i class="fas fa-university mr-1"></i> Resign
                                                 </a>
@@ -410,7 +427,7 @@
         tableDetails.destroy();
     }
 
-    let slipUrl = "{{ route('view-slip', ['run_id' => ':run_id', 'npk' => ':npk']) }}";
+    let slipUrl = "{{ route('employee-payroll.view-slip', ['run_id' => ':run_id', 'npk' => ':npk']) }}";
 
     tableDetails = $('#table-details').DataTable({
         processing: true,

@@ -123,7 +123,7 @@ $role = $roleusers[0]->rolename;
    </li>
    @endif
    {{-- ================= PAYROLL ================= --}}
-   @if(in_array($role,['Admin','Payroll']))
+   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#payroll">
       <i class="fas fa-calculator"></i>
@@ -146,7 +146,7 @@ $role = $roleusers[0]->rolename;
    </li>
    @endif
    {{-- ================= INSENTIF ================= --}}
-   @if(in_array($role,['Admin','Payroll']))
+   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#insentif">
       <i class="fas fa-hand-holding-usd"></i>

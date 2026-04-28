@@ -46,6 +46,7 @@
                         <th>Component</th>
                         <th>Amount</th>
                         <th>Transaction Date</th>
+                        <th>Total Amount</th>
                         <th>Remark</th>
                         <th width="120">Action</th>
                       </tr>
@@ -68,6 +69,7 @@
                         {{-- ================= AMOUNT ================= --}}
                         <td> @forelse($row->amount_array ?? [] as $amt) <div>Rp {{ number_format($amt,0,',','.') }}</div> @empty <span class="text-muted">-</span> @endforelse </td>
                         <td> @forelse($row->transactions_date ?? [] as $date) <div>{{ $date }}</div> @empty <span class="text-muted">-</span> @endforelse </td>
+                        <td>Rp {{ number_format($row->total_amount,0,',','.') }}</td>
                         <td>{{ $row->remark }}</td>
                         <td class="text-center">
                           <a href="{{ route('expat.onleave.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">

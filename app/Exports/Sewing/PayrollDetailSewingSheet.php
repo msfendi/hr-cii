@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports;
+namespace App\Exports\Sewing;
 
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromQuery;
@@ -13,7 +13,7 @@ use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading, WithTitle, ShouldAutoSize, WithStrictNullComparison, WithColumnFormatting
+class PayrollDetailSewingSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading, WithTitle, ShouldAutoSize, WithStrictNullComparison, WithColumnFormatting
 {
     protected $run_id;
     protected $componentTypes = [];
@@ -30,7 +30,7 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
 
     public function title(): string
     {
-        return 'Payroll_Active';
+        return 'Payroll_Sewing_Active';
     }
 
     public function columnFormats(): array
@@ -65,6 +65,8 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
+            ->where('bio.IS_STAFF', 0)
+            ->where('d.IS_SEWING', 0)
             ->whereNull('bio.TKK')
             ->select('prd.*', 'bio.NAMA_KARYAWAN', 'd.DEPARTEMENT as departement', 'pp.name as period_name')
             ->orderBy('d.DEPARTEMENT')

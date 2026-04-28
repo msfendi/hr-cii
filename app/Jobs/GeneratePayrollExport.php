@@ -2,7 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Exports\NonSewing\PayrollExportNonSewingExcel;
 use App\Exports\PayrollExportExcel;
+use App\Exports\Sewing\PayrollExportSewingExcel;
+use App\Exports\Staff\PayrollExportStaffExcel;
 use App\Models\PayrollComponent;
 use App\Models\PayrollExport;
 use Illuminate\Bus\Queueable;
@@ -41,7 +44,6 @@ class GeneratePayrollExport implements ShouldQueue
 
         $run_id = $export->run_id;
 
-
         $export->update([
             'status' => 'processing',
             'progress' => 0,
@@ -53,10 +55,10 @@ class GeneratePayrollExport implements ShouldQueue
         |--------------------------------------------------------------------------
         */
         $employeeUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
             ->unionAll(
                 DB::table('BIODATA_KELUAR')
-                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
             );
 
         $employees = DB::query()
@@ -77,7 +79,7 @@ class GeneratePayrollExport implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | PKWT LATEST (OPTIMIZED)
+        | PKWT LATEST
         |--------------------------------------------------------------------------
         */
         $pkwtLatest = DB::table('PKWT as p1')
@@ -93,15 +95,13 @@ class GeneratePayrollExport implements ShouldQueue
             ->leftJoinSub(
                 $employeeUnion,
                 'emp',
-                fn($j) =>
-                $j->on('emp.NPK', '=', 'prd.employee_npk')
+                fn($j) => $j->on('emp.NPK', '=', 'prd.employee_npk')
             )
             ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
             ->leftJoinSub(
                 $pkwtLatest,
                 'p',
-                fn($j) =>
-                $j->on('p.NPK', '=', 'prd.employee_npk')
+                fn($j) => $j->on('p.NPK', '=', 'prd.employee_npk')
             )
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
@@ -112,7 +112,9 @@ class GeneratePayrollExport implements ShouldQueue
                 'pp.name as period_name',
                 'pp.start_date',
                 'pp.end_date',
-                'p.TKK'
+                'p.TKK',
+                'emp.IS_STAFF',
+                'd.IS_SEWING'
             )
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk')
@@ -123,41 +125,67 @@ class GeneratePayrollExport implements ShouldQueue
         $periodName = $data->first()->period_name ?? 'UNKNOWN';
         $periodNameFormatted = strtoupper(str_replace(' ', '_', $periodName));
 
+        /*
+        |--------------------------------------------------------------------------
+        | FOLDER
+        |--------------------------------------------------------------------------
+        */
         $folder = "public/payroll/$periodNameFormatted";
-        Storage::makeDirectory($folder, 0775, true);
+        $folderStaff = "$folder/STAFF";
+        $folderSewing = "$folder/SEWING";
+        $folderNonSewing = "$folder/NON_SEWING";
+
+        Storage::makeDirectory($folder, true);
+        Storage::makeDirectory($folderStaff, true);
+        Storage::makeDirectory($folderSewing, true);
+        Storage::makeDirectory($folderNonSewing, true);
 
         /*
         |--------------------------------------------------------------------------
-        | EXCEL
+        | EXCEL (UNCHANGED)
         |--------------------------------------------------------------------------
         */
         if ($this->type === 'process') {
 
-            $excelPath = "$folder/REKAP_$periodNameFormatted.xlsx";
+            Excel::store(
+                new PayrollExportExcel($run_id),
+                "$folder/REKAP_$periodNameFormatted.xlsx"
+            );
 
-            Excel::store(new PayrollExportExcel($run_id), $excelPath);
+            Excel::store(
+                new PayrollExportStaffExcel($run_id),
+                "$folderStaff/REKAP_$periodNameFormatted.xlsx"
+            );
+
+            Excel::store(
+                new PayrollExportSewingExcel($run_id),
+                "$folderSewing/REKAP_$periodNameFormatted.xlsx"
+            );
+
+            Excel::store(
+                new PayrollExportNonSewingExcel($run_id),
+                "$folderNonSewing/REKAP_$periodNameFormatted.xlsx"
+            );
 
             $export->update([
-                'status' => 'processing',
                 'progress' => 30,
-                'file_excel' => str_replace('public/', '', $excelPath),
+                'file_excel' => "REKAP_$periodNameFormatted.xlsx"
             ]);
         }
 
         /*
         |--------------------------------------------------------------------------
-        | COMPONENT MASTER
+        | COMPONENT MASTER (UNCHANGED)
         |--------------------------------------------------------------------------
         */
         $componentKeys = collect($data)
             ->flatMap(fn($r) => array_keys(json_decode($r->components, true) ?? []))
             ->unique()
             ->reject(fn($c) => strtolower($c) === 'thr')
-            ->reject(fn($c) => strtolower($c) === 'late_hours');
+            ->reject(fn($c) => strtolower($c) === 'late_minutes');
 
         $componentMasters = PayrollComponent::whereIn('code', $componentKeys)
-            ->get()
-            ->keyBy('code');
+            ->get()->keyBy('code');
 
         $allComponents = $componentKeys->mapWithKeys(function ($code) use ($componentMasters) {
 
@@ -171,11 +199,6 @@ class GeneratePayrollExport implements ShouldQueue
             ]];
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | DECODE COMPONENT (1 PASS ONLY)
-        |--------------------------------------------------------------------------
-        */
         foreach ($data as $item) {
             foreach (json_decode($item->components, true) ?? [] as $k => $v) {
                 $item->$k = $v;
@@ -184,20 +207,32 @@ class GeneratePayrollExport implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | SPLIT EMPLOYEE
+        | SPLIT EMPLOYEE BASE
         |--------------------------------------------------------------------------
         */
         $activeEmployees = $data->filter(fn($r) => empty($r->TKK));
 
         $resignEmployees = $data->filter(
-            fn($r) =>
-            !empty($r->TKK)
+            fn($r) => !empty($r->TKK)
                 && $r->TKK >= $r->start_date
                 && $r->TKK <= $r->end_date
         );
 
-        $groupedActive = $activeEmployees->groupBy('DEPARTEMENT');
-        $groupedResign = $resignEmployees->groupBy('DEPARTEMENT');
+        /*
+        |--------------------------------------------------------------------------
+        | CATEGORY SPLIT (NEW ADDITION)
+        |--------------------------------------------------------------------------
+        */
+        $categories = [
+
+            'ALL' => fn($r) => true,
+
+            'STAFF' => fn($r) => $r->IS_STAFF == 1,
+
+            'SEWING' => fn($r) => $r->IS_SEWING == 0 && $r->IS_STAFF == 0,
+
+            'NON_SEWING' => fn($r) => $r->IS_SEWING == 1 && $r->IS_STAFF == 0,
+        ];
 
         /*
         |--------------------------------------------------------------------------
@@ -213,16 +248,12 @@ class GeneratePayrollExport implements ShouldQueue
                     $total += $row->$code ?? 0;
                 }
             }
-
             return $totals;
         };
 
-        $activeTotals = $calcTotals($activeEmployees);
-        $resignTotals = $calcTotals($resignEmployees);
-
         /*
         |--------------------------------------------------------------------------
-        | APPROVAL BUILDER
+        | APPROVAL BUILDER (UNCHANGED)
         |--------------------------------------------------------------------------
         */
         $approvals = [];
@@ -243,7 +274,6 @@ class GeneratePayrollExport implements ShouldQueue
                 }
 
                 foreach ($npks as $i => $npk) {
-
                     $approvals[] = [
                         'npk' => $npk,
                         'nama_karyawan' => $employees[$npk]->NAMA_KARYAWAN ?? '-',
@@ -257,34 +287,57 @@ class GeneratePayrollExport implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | PDF GENERATION
+        | PDF GENERATION SPLIT (NEW)
         |--------------------------------------------------------------------------
         */
-        $viewData = compact(
-            'groupedActive',
-            'groupedResign',
-            'allComponents',
-            'activeTotals',
-            'resignTotals',
-            'run_id',
-            'approvals'
-        );
-
-        $pdf = Pdf::loadView('payroll.rekap_pdf', $viewData)
-            ->setPaper('a4', 'landscape')
-            ->setOption('defaultFont', 'sans-serif')
-            ->setOption('isPhpEnabled', true);
-
-        $pdfPeng = Pdf::loadView('payroll.pengeluaran_pdf', $viewData)
-            ->setPaper('a4');
 
         $suffix = $this->type === 'process' ? '' : '_APPROVED';
 
-        $pdfPath = "$folder/REKAP_{$periodNameFormatted}{$suffix}.pdf";
-        $pdfPengPath = "$folder/PENGELUARAN_{$periodNameFormatted}{$suffix}.pdf";
+        foreach ($categories as $key => $filter) {
 
-        $pdf->save(storage_path("app/$pdfPath"));
-        $pdfPeng->save(storage_path("app/$pdfPengPath"));
+            $folderTarget = match ($key) {
+                'STAFF' => $folderStaff,
+                'SEWING' => $folderSewing,
+                'NON_SEWING' => $folderNonSewing,
+                default => $folder
+            };
+
+            $active = $activeEmployees->filter($filter);
+            $resign = $resignEmployees->filter($filter);
+
+            if ($active->isEmpty() && $resign->isEmpty()) continue;
+
+            $viewData = [
+                'groupedActive' => $active->groupBy('DEPARTEMENT'),
+                'groupedResign' => $resign->groupBy('DEPARTEMENT'),
+                'allComponents' => $allComponents,
+                'activeTotals' => $calcTotals($active),
+                'resignTotals' => $calcTotals($resign),
+                'run_id' => $run_id,
+                'approvals' => $approvals
+            ];
+
+            $pdf = Pdf::loadView('payroll.rekap_pdf', $viewData)
+                ->setPaper('a4', 'landscape')
+                ->setOption('defaultFont', 'sans-serif')
+                ->setOption('isPhpEnabled', true);
+
+            $pdfPeng = Pdf::loadView('payroll.pengeluaran_pdf', $viewData)
+                ->setPaper('a4');
+
+            $pdfPath = "$folderTarget/REKAP_{$periodNameFormatted}{$suffix}.pdf";
+            $pdfPengPath = "$folderTarget/PENGELUARAN_{$periodNameFormatted}{$suffix}.pdf";
+
+            $pdf->save(storage_path("app/$pdfPath"));
+            $pdfPeng->save(storage_path("app/$pdfPengPath"));
+
+            if ($key === 'ALL') {
+                $export->update([
+                    'file_pdf' => str_replace('public/', '', "REKAP_{$periodNameFormatted}{$suffix}.pdf"),
+                    'file_peng' => str_replace('public/', '', "PENGELUARAN_{$periodNameFormatted}{$suffix}.pdf"),
+                ]);
+            }
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -293,9 +346,7 @@ class GeneratePayrollExport implements ShouldQueue
         */
         $export->update([
             'status' => $this->type === 'process' ? 'finished' : 'approved',
-            'progress' => 100,
-            'file_pdf' => str_replace('public/', '', $pdfPath),
-            'file_peng' => str_replace('public/', '', $pdfPengPath),
+            'progress' => 100
         ]);
     }
 }

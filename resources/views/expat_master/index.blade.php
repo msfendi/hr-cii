@@ -50,12 +50,18 @@
                         <th>NPK</th>
                         <th>Name</th>
                         <th>Position</th>
+                        <th>Place</th>
+                        <th>Nationality</th>
+                        <th>Direct Report</th>
+                        <th>NPWP</th>
                         <th>Joining</th>
                         <th>End</th>
                         <th>Passport</th>
                         <th>Passport Exp</th>
                         <th>KITAS Exp</th>
+                        <th>KITAS Status</th>
                         <th>RPTKA Exp</th>
+                        <th>RPTKA Status</th>
                         <th>MERP Exp</th>
                         <th>Lease End</th>
                         <th width="120">Action</th>
@@ -72,22 +78,91 @@
                         <td> @if($row->position) <span class="badge badge-primary">
                             {{ $row->position }}
                           </span> @endif </td>
-                        <td>{{ $row->joining_date }}</td>
-                        <td>{{ $row->end_date }}</td>
+                        <td>{{ $row->place }}</td>
+                        <td>{{ $row->nationality }}</td>
+                        <td>{{ $row->direct_report }}</td>
+                        <td>{{ $row->npwp }}</td>
+                        <td> @if($row->joining_date) <span class="badge badge-secondary">
+                            {{ $row->joining_date }}
+                          </span> @endif </td>
+                        <td>@if($row->end_date) <span class="badge badge-secondary">
+                            {{ $row->end_date }}
+                          </span> @endif</td>
                         <td>{{ $row->passport_number }}</td>
-                        <td> @if($row->passport_expiry) <span class="badge badge-warning">
+                        <td> @if($row->passport_expiry) <span class="badge badge-secondary">
                             {{ $row->passport_expiry }}
                           </span> @endif </td>
-                        <td> @if($row->kitas_expiry) <span class="badge badge-info">
+                        <td> @if($row->kitas_expiry) <span class="badge badge-secondary">
                             {{ $row->kitas_expiry }}
                           </span> @endif </td>
+                          <td>
+                            @php
+                            $today = \Carbon\Carbon::today();
+
+                            /* ================= KITAS ================= */
+                            $kitasStatus = '-';
+                            $kitasClass = 'secondary';
+
+                            if($row->kitas_expiry){
+
+                                $diff = $today->diffInDays(
+                                    \Carbon\Carbon::parse($row->kitas_expiry),
+                                    false
+                                );
+
+                                if($diff < 0){
+                                    $kitasStatus = 'EXPIRED';
+                                    $kitasClass = 'danger';
+                                }elseif($diff <= 30){
+                                    $kitasStatus = $diff.' Days Left';
+                                    $kitasClass = 'warning';
+                                }else{
+                                    $kitasStatus = $diff.' Days';
+                                    $kitasClass = 'success';
+                                }
+                            }
+                            @endphp
+                            <span class="badge badge-{{ $kitasClass }}">
+                                {{ $kitasStatus }}
+                          </td>
                         <td> @if($row->rptka_expiry) <span class="badge badge-secondary">
                             {{ $row->rptka_expiry }}
                           </span> @endif </td>
-                        <td> @if($row->merp_expiry) <span class="badge badge-danger">
+                          <td>
+                            
+                            @php
+                            /* ================= RPTKA ================= */
+                            $rptkaStatus = '-';
+                            $rptkaClass = 'secondary';
+
+                            if($row->rptka_expiry){
+
+                                $diff = $today->diffInDays(
+                                    \Carbon\Carbon::parse($row->rptka_expiry),
+                                    false
+                                );
+
+                                if($diff < 0){
+                                    $rptkaStatus = 'EXPIRED';
+                                    $rptkaClass = 'danger';
+                                }elseif($diff <= 30){
+                                    $rptkaStatus = $diff.' Days Left';
+                                    $rptkaClass = 'warning';
+                                }else{
+                                    $rptkaStatus = $diff.' Days';
+                                    $rptkaClass = 'success';
+                                }
+                            }
+                            @endphp
+                            <span class="badge badge-{{ $rptkaClass }}">
+                                {{ $rptkaStatus }}
+                          </td>
+                        <td> @if($row->merp_expiry) <span class="badge badge-secondary">
                             {{ $row->merp_expiry }}
                           </span> @endif </td>
-                        <td>{{ $row->lease_enddate }}</td>
+                        <td>@if($row->lease_enddate) <span class="badge badge-secondary">
+                            {{ $row->lease_enddate }}
+                          </span> @endif</td>
                         <td class="text-center">
                           <a href="{{ route('expat.master.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>

@@ -80,7 +80,7 @@ class UserController extends Controller
             'name' => 'required|max:255',
             'npk' => 'required|max:255',
             'email' => 'required|email|max:255|',
-            'password' => 'nullable|min:8|confirmed',
+            'password' => 'nullable|min:8',
         ]);
 
         if ($validator->fails()) {

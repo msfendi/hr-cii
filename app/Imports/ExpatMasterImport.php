@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class ExpatMasterImport implements ToModel, WithHeadingRow
 {
@@ -17,16 +18,49 @@ class ExpatMasterImport implements ToModel, WithHeadingRow
             [
                 'name' => $row['name'],
                 'position' => $row['position'],
-                'joining_date' => $row['joining_date'],
-                'end_date' => $row['end_date'],
+                'place' => $row['place'],
+                'nationality' => $row['nationality'],
+                'direct_report' => $row['direct_report'],
+                'npwp' => $row['npwp'],
+                'joining_date' =>
+                !empty($row['joining_date'])
+                    ? Date::excelToDateTimeObject($row['joining_date'])
+                    : null,
+                'end_date' =>
+                !empty($row['end_date'])
+                    ? Date::excelToDateTimeObject($row['end_date'])
+                    : null,
                 'passport_number' => $row['passport_number'],
-                'passport_expiry' => $row['passport_expiry'],
-                'kitas_expiry' => $row['kitas_expiry'],
-                'rptka_expiry' => $row['rptka_expiry'],
-                'merp_expiry' => $row['merp_expiry'],
+
+                'passport_expiry' =>
+                !empty($row['passport_expiry'])
+                    ? Date::excelToDateTimeObject($row['passport_expiry'])
+                    : null,
+
+                'kitas_expiry' =>
+                !empty($row['kitas_expiry'])
+                    ? Date::excelToDateTimeObject($row['kitas_expiry'])
+                    : null,
+
+                'rptka_expiry' =>
+                !empty($row['rptka_expiry'])
+                    ? Date::excelToDateTimeObject($row['rptka_expiry'])
+                    : null,
+
+                'merp_expiry' =>
+                !empty($row['merp_expiry'])
+                    ? Date::excelToDateTimeObject($row['merp_expiry'])
+                    : null,
                 'house_address' => $row['house_address'],
-                'house_startdate' => $row['house_startdate'],
-                'lease_enddate' => $row['lease_enddate'],
+
+                'house_startdate' =>
+                !empty($row['house_startdate'])
+                    ? Date::excelToDateTimeObject($row['house_startdate'])
+                    : null,
+                'lease_enddate' =>
+                !empty($row['lease_enddate'])
+                    ? Date::excelToDateTimeObject($row['lease_enddate'])
+                    : null,
             ]
         );
     }

@@ -17,6 +17,10 @@ return new class extends Migration
             $table->string('npk')->unique();
             $table->string('name')->nullable();
             $table->string('position')->nullable();
+            $table->string('place')->nullable();
+            $table->string('nationality')->nullable();
+            $table->string('direct_report')->nullable();
+            $table->string('npwp')->nullable();
 
             $table->date('joining_date')->nullable();
             $table->date('end_date')->nullable();
