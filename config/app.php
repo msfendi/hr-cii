@@ -214,6 +214,8 @@ return [
     'aliases' => Facade::defaultAliases()->merge([
         // 'ExampleClass' => App\Example\ExampleClass::class,
         'QrCode' => SimpleSoftwareIO\QrCode\Facades\QrCode::class,
+        'PDFDom' => Barryvdh\DomPDF\Facade\Pdf::class,
+        'PDFSnappy' => Barryvdh\Snappy\Facades\SnappyPdf::class,
 
     ])->toArray(),
 

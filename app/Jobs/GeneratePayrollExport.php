@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Barryvdh\Snappy\Facades\SnappyPdf;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\View;
+use App\Services\FastExcelExport;
 
 class GeneratePayrollExport implements ShouldQueue
 {
@@ -122,6 +127,10 @@ class GeneratePayrollExport implements ShouldQueue
 
         if ($data->isEmpty()) return;
 
+        $export->update([
+            'progress' => 15,
+        ]);
+
         $periodName = $data->first()->period_name ?? 'UNKNOWN';
         $periodNameFormatted = strtoupper(str_replace(' ', '_', $periodName));
 
@@ -147,22 +156,22 @@ class GeneratePayrollExport implements ShouldQueue
         */
         if ($this->type === 'process') {
 
-            Excel::store(
+            FastExcelExport::store(
                 new PayrollExportExcel($run_id),
                 "$folder/REKAP_$periodNameFormatted.xlsx"
             );
 
-            Excel::store(
+            FastExcelExport::store(
                 new PayrollExportStaffExcel($run_id),
                 "$folderStaff/REKAP_$periodNameFormatted.xlsx"
             );
 
-            Excel::store(
+            FastExcelExport::store(
                 new PayrollExportSewingExcel($run_id),
                 "$folderSewing/REKAP_$periodNameFormatted.xlsx"
             );
 
-            Excel::store(
+            FastExcelExport::store(
                 new PayrollExportNonSewingExcel($run_id),
                 "$folderNonSewing/REKAP_$periodNameFormatted.xlsx"
             );
@@ -285,6 +294,10 @@ class GeneratePayrollExport implements ShouldQueue
             }
         }
 
+        $export->update([
+            'progress' => 50,
+        ]);
+
         /*
         |--------------------------------------------------------------------------
         | PDF GENERATION SPLIT (NEW)
@@ -317,19 +330,56 @@ class GeneratePayrollExport implements ShouldQueue
                 'approvals' => $approvals
             ];
 
-            $pdf = Pdf::loadView('payroll.rekap_pdf', $viewData)
-                ->setPaper('a4', 'landscape')
-                ->setOption('defaultFont', 'sans-serif')
-                ->setOption('isPhpEnabled', true);
+            /*
+            |--------------------------------------------------------------------------
+            | RENDER HTML MANUAL
+            |--------------------------------------------------------------------------
+            */
 
-            $pdfPeng = Pdf::loadView('payroll.pengeluaran_pdf', $viewData)
-                ->setPaper('a4');
+            $htmlRekap = View::make('payroll.rekap_pdf', $viewData)->render();
+            $htmlPeng  = View::make('payroll.pengeluaran_pdf', $viewData)->render();
 
             $pdfPath = "$folderTarget/REKAP_{$periodNameFormatted}{$suffix}.pdf";
             $pdfPengPath = "$folderTarget/PENGELUARAN_{$periodNameFormatted}{$suffix}.pdf";
 
-            $pdf->save(storage_path("app/$pdfPath"));
-            $pdfPeng->save(storage_path("app/$pdfPengPath"));
+            /*
+            |--------------------------------------------------------------------------
+            | GENERATE PDF
+            |--------------------------------------------------------------------------
+            */
+
+            $pdf = App::make('snappy.pdf.wrapper');
+            $pdf->loadHTML($htmlRekap)
+                ->setPaper('a4')
+                ->setOrientation('landscape')
+                ->setOption('enable-local-file-access', true)
+                ->setOption('encoding', 'UTF-8');
+
+            $pdfPeng = App::make('snappy.pdf.wrapper');
+            $pdfPeng->loadHTML($htmlPeng)
+                ->setPaper('a4')
+                ->setOption('enable-local-file-access', true);
+
+            /*
+            |--------------------------------------------------------------------------
+            | DELETE OLD FILE
+            |--------------------------------------------------------------------------
+            */
+
+            $fullPdfPath = storage_path("app/$pdfPath");
+            $fullPdfPengPath = storage_path("app/$pdfPengPath");
+
+            if (File::exists($fullPdfPath)) File::delete($fullPdfPath);
+            if (File::exists($fullPdfPengPath)) File::delete($fullPdfPengPath);
+
+            /*
+            |--------------------------------------------------------------------------
+            | SAVE
+            |--------------------------------------------------------------------------
+            */
+
+            $pdf->save($fullPdfPath);
+            $pdfPeng->save($fullPdfPengPath);
 
             if ($key === 'ALL') {
                 $export->update([

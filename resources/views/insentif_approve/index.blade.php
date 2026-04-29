@@ -48,7 +48,6 @@
                                  <span class="badge badge-warning">Pending</span>
                                  @endif
                               </td>
-                              {{-- ================= PROGRESS ================= --}}
                               <td>
                                  @foreach($row->progress as $p)
                                  @php
@@ -64,7 +63,8 @@
                                     @php
                                     $beforeApproved=true;
                                     for($i=0;$i<$idx;$i++){
-                                    if($statusList[$i]!=='approve') $beforeApproved=false;
+                                    if($statusList[$i]!=='approve')
+                                    $beforeApproved=false;
                                     }
                                     @endphp
                                     <div class="d-flex justify-content-between">
@@ -139,63 +139,68 @@
                   </div>
                </div>
             </div>
-            {{-- =====================================================
-            DETAIL SECTION
-            ===================================================== --}}
-            <div id="insentif-detail-container" style="display:none" class="mt-4">
-               <div class="card shadow">
-                  <div class="card-header">
-                     <h6 id="detail-title" class="m-0 font-weight-bold text-primary">
-                        Insentif Detail
-                     </h6>
+         </div>
+      </div>
+      @include('layout.footer')
+      {{-- =========================================
+      MODAL DETAIL
+      ========================================= --}}
+      <div class="modal fade" id="detailModal" tabindex="-1">
+         <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+               <div class="modal-header">
+                  <h5 class="modal-title" id="detail-title">
+                     Insentif Detail
+                  </h5>
+                  <button type="button" class="close" data-dismiss="modal">
+                  <span>&times;</span>
+                  </button>
+               </div>
+               <div class="modal-body">
+                  <div id="loadingDetail" class="text-center p-4" style="display:none;">
+                     <i class="fas fa-spinner fa-spin fa-2x"></i>
                   </div>
-                  <div class="card-body">
-                     <div id="loadingDetail" class="text-center p-4" style="display:none;">
-                        <i class="fas fa-spinner fa-spin fa-2x"></i>
-                     </div>
-                     <div class="table-responsive">
-                        <table class="table table-bordered table-sm" id="detailTable">
-                           <thead>
-                              <tr id="detailHead"></tr>
-                           </thead>
-                           <tbody></tbody>
-                           <tfoot id="detailFooter" style="display:none;">
-                              <tr>
-                                 <th colspan="2" class="text-right font-weight-bold">
-                                    TOTAL INSENTIF
-                                 </th>
-                                 <th id="totalInsentif" class="text-right font-weight-bold text-success"></th>
-                              </tr>
-                           </tfoot>
-                        </table>
-                     </div>
+                  <div class="table-responsive">
+                     <table class="table table-bordered table-sm" id="detailTable">
+                        <thead>
+                           <tr id="detailHead"></tr>
+                        </thead>
+                        <tbody></tbody>
+                        <tfoot id="detailFooter" style="display:none;">
+                           <tr>
+                              <th colspan="2" class="text-right font-weight-bold">
+                                 TOTAL INSENTIF
+                              </th>
+                              <th id="totalInsentif"
+                                 class="text-right font-weight-bold text-success"></th>
+                           </tr>
+                        </tfoot>
+                     </table>
                   </div>
                </div>
             </div>
          </div>
       </div>
-      @include('layout.footer')
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
       <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
       <script>
-      $(document).ready(function(){
-
+         $(document).ready(function(){
+         
          $('#dataTable').DataTable({
-            order: [[0,'desc']], // pakai urutan ID dari Laravel
-            pageLength: 10,
-            responsive: true,
-            autoWidth:false
+         order:[[0,'desc']],
+         pageLength:10,
+         responsive:true,
+         autoWidth:false
          });
-
-      });
-      </script>
-      <script>
-         /* ======================================
-         SHOW DETAIL
-         ====================================== */
+         
+         });
          
          let detailTable=null;
+         
+         /* ======================================
+         SHOW DETAIL (NOW USING MODAL)
+         ====================================== */
          
          $('.btn-detail').on('click',function(){
          
@@ -203,14 +208,13 @@
          let period=$(this).data('period');
          let component=$(this).data('component');
          
-         $('#insentif-detail-container').show();
+         $('#detailModal').modal('show');
+         
          $('#detail-title').text('Insentif Detail - '+period);
          
          if($.fn.DataTable.isDataTable('#detailTable')){
          $('#detailTable').DataTable().clear().destroy();
          }
-         
-         detailTable=null;
          
          $('#detailHead').html('');
          $('#detailTable tbody').html('');
@@ -218,29 +222,16 @@
          
          $('#loadingDetail').show();
          
-         $('html,body').animate({
-         scrollTop:$('#insentif-detail-container').offset().top-80
-         },400);
-         
-         
          $.get('/insentif-approve/'+id+'/detail',function(res){
          
          let head='';
          let rows='';
          let total=0;
          
-         /*
-         ===============================
-         DATA KOSONG
-         ===============================
-         */
+         /* DATA KOSONG */
          if(!res || res.length===0){
          
-         head=`
-         <th>NPK</th>
-         <th>Name</th>
-         <th>Insentif</th>
-         `;
+         head=`<th>NPK</th><th>Name</th><th>Insentif</th>`;
          
          rows=`
          <tr>
@@ -248,8 +239,7 @@
          class="text-center text-muted font-weight-bold">
          Tidak ada Insentif pada periode bulan ini
          </td>
-         </tr>
-         `;
+         </tr>`;
          
          $('#detailHead').html(head);
          $('#detailTable tbody').html(rows);
@@ -258,18 +248,11 @@
          return;
          }
          
-         /*
-         ===============================
-         SEWING
-         ===============================
-         */
+         /* SEWING */
          if(component==='sewing_insentif'){
          
-         head=`
-         <th>NPK</th>
-         <th>Name</th>
-         <th class="text-right">Sewing Insentif</th>
-         `;
+         head=`<th>NPK</th><th>Name</th>
+         <th class="text-right">Sewing Insentif</th>`;
          
          res.forEach(r=>{
          let val=parseFloat(r.sewing_insentif)||0;
@@ -284,18 +267,11 @@
          });
          }
          
-         /*
-         ===============================
-         PAD
-         ===============================
-         */
+         /* PAD */
          else if(component==='pad_insentif'){
          
-         head=`
-         <th>NPK</th>
-         <th>Name</th>
-         <th class="text-right">Pad Insentif</th>
-         `;
+         head=`<th>NPK</th><th>Name</th>
+         <th class="text-right">Pad Insentif</th>`;
          
          res.forEach(r=>{
          let val=parseFloat(r.pad_insentif)||0;
@@ -310,18 +286,11 @@
          });
          }
          
-         /*
-         ===============================
-         CUTTING
-         ===============================
-         */
+         /* CUTTING */
          else if(component==='cutting_insentif'){
          
-         head=`
-         <th>NPK</th>
-         <th>Name</th>
-         <th class="text-right">Cutting Insentif</th>
-         `;
+         head=`<th>NPK</th><th>Name</th>
+         <th class="text-right">Cutting Insentif</th>`;
          
          res.forEach(r=>{
          let val=parseFloat(r.cutting_insentif)||0;
@@ -336,20 +305,8 @@
          });
          }
          
-         /*
-         ===============================
-         RENDER TABLE
-         ===============================
-         */
-         
          $('#detailHead').html(head);
          $('#detailTable tbody').html(rows);
-         
-         /*
-         ===============================
-         SHOW TOTAL (ONLY IF DATA ADA)
-         ===============================
-         */
          
          if(total>0){
          $('#totalInsentif').text(total.toLocaleString());
@@ -357,12 +314,6 @@
          }
          
          $('#loadingDetail').hide();
-         
-         /*
-         ===============================
-         INIT DATATABLE
-         ===============================
-         */
          
          detailTable=$('#detailTable').DataTable({
          pageLength:25,
@@ -375,7 +326,6 @@
          });
          
          });
-         
          
          /* ======================================
          APPROVE

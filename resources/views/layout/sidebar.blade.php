@@ -85,6 +85,7 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('overtime.calendar') }}">Calendar</a>
             <a class="collapse-item" href="{{ route('shift.index') }}">Shift</a>
             <a class="collapse-item" href="{{ route('employee-shift.index') }}">Employee Shift</a>
+            <a class="collapse-item" href="{{ route('late-compensation.index') }}">Late Compensation</a>
          </div>
       </div>
    </li>

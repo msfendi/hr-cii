@@ -39,6 +39,7 @@ class PadInsentifMasterController extends Controller
                 'l.efficiency',
                 'l.date'
             )
+            ->where('pp.is_closed', 0)
             ->orderBy('e.npk')
             ->orderBy('l.date')
             ->get();
@@ -189,14 +190,27 @@ class PadInsentifMasterController extends Controller
 
     public function check($period_id)
     {
-        $period   = PayrollPeriod::findOrFail($period_id);
+        $period = PayrollPeriod::findOrFail($period_id);
 
         $periodStart = $period->start_date;
         $periodEnd   = $period->end_date;
 
+
         /*
     |--------------------------------------------------------------------------
-    | EMPLOYEE SOURCE (COPY PAYROLL)
+    | AMBIL NPK YANG BENAR-BENAR ADA ASSIGNMENT
+    |--------------------------------------------------------------------------
+    */
+
+        $assignmentNpk = DB::table('employee_pad_assignments')
+            ->where('period_id', $period_id)
+            ->distinct()
+            ->pluck('npk');
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | EMPLOYEE SOURCE (TETAP SAMA LOGIC)
     |--------------------------------------------------------------------------
     */
 
@@ -204,6 +218,7 @@ class PadInsentifMasterController extends Controller
             ->table('PKWT as p')
             ->leftJoin('BIODATA as b', 'p.NPK', '=', 'b.NPK')
             ->leftJoin('BIODATA_KELUAR as bk', 'p.NPK', '=', 'bk.NPK')
+            ->whereIn('p.NPK', $assignmentNpk) // 🔥 FILTER CEPAT
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
@@ -221,24 +236,35 @@ class PadInsentifMasterController extends Controller
 
 
         /*
-        |--------------------------------------------------------------------------
-        | FORMULA (COPY PAYROLL)
-        |--------------------------------------------------------------------------
-        */
-
+    |--------------------------------------------------------------------------
+    | FORMULA (TETAP)
+    |--------------------------------------------------------------------------
+    */
 
         $padInsentifFormula = json_decode(
-            PayrollComponent::where('code', 'pad_insentif')->value('formula'),
+            PayrollComponent::where('code', 'pad_insentif')
+                ->value('formula'),
             true
         );
 
 
+        /*
+    |--------------------------------------------------------------------------
+    | CALCULATION (LOGIC TIDAK DIUBAH)
+    |--------------------------------------------------------------------------
+    */
+
         $results = [];
 
         foreach ($employees as $employee) {
-            $pad     = $this->calculatePad($employee, $period, $padInsentifFormula);
 
-            if (($pad) <= 0) continue;
+            $pad = $this->calculatePad(
+                $employee,
+                $period,
+                $padInsentifFormula
+            );
+
+            if ($pad <= 0) continue;
 
             $results[] = [
                 'npk' => $employee->NPK,

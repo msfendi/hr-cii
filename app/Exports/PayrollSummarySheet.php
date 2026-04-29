@@ -4,20 +4,27 @@ namespace App\Exports;
 
 use Illuminate\Support\Facades\DB;
 use App\Models\PayrollComponent;
-use Maatwebsite\Excel\Concerns\FromArray;
+
+use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\WithCharts;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 
-use PhpOffice\PhpSpreadsheet\Chart\Chart;
+use Maatwebsite\Excel\Events\AfterSheet;
+
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class PayrollSummarySheet implements
-    FromArray,
+    FromQuery,
+    WithMapping,
+    WithHeadings,
+    WithEvents,
     WithTitle,
     WithStyles,
     ShouldAutoSize,
@@ -25,12 +32,39 @@ class PayrollSummarySheet implements
     WithColumnFormatting
 {
     protected $run_id;
-    protected $componentCount;
+    protected $components;
+    protected $period;
+
+    protected $groups = [
+        'active_all' => [],
+        'active_staff' => [],
+        'active_sewing' => [],
+        'active_non_sewing' => [],
+        'resign_all' => [],
+        'resign_staff' => [],
+        'resign_sewing' => [],
+        'resign_non_sewing' => [],
+    ];
+
+    protected $earning = [];
+    protected $deduction = [];
 
     public function __construct($run_id)
     {
         $this->run_id = $run_id;
-        $this->componentCount = PayrollComponent::count();
+
+        $this->components = PayrollComponent::orderBy('priority')->get();
+
+        foreach ($this->groups as $k => $v) {
+            $this->earning[$k] = 0;
+            $this->deduction[$k] = 0;
+        }
+
+        $this->period = DB::table('payroll_runs as pr')
+            ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+            ->where('pr.id', $this->run_id)
+            ->select('pp.start_date', 'pp.end_date')
+            ->first();
     }
 
     public function title(): string
@@ -47,164 +81,89 @@ class PayrollSummarySheet implements
 
     /*
     =====================================================
-    BIODATA UNION
+    QUERY
     =====================================================
     */
-
-    private function baseBiodataQuery()
+    public function query()
     {
         $aktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK',
-                'b.IS_STAFF'
-            );
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
 
         $keluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK',
-                'b.IS_STAFF'
-            );
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
 
-        return $aktif->union($keluar);
-    }
+        $union = $aktif->union($keluar);
 
-    /*
-    =====================================================
-    BUILD DATA
-    =====================================================
-    */
-
-    public function array(): array
-    {
-        $biodataUnion = $this->baseBiodataQuery();
-
-        $period = DB::table('payroll_runs as pr')
-            ->join('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->where('pr.id', $this->run_id)
-            ->select('pp.start_date', 'pp.end_date')
-            ->first();
-
-        /*
-        =====================================================
-        JOIN BIODATA + DEPT
-        =====================================================
-        */
-
-        $data = DB::query()
-            ->fromSub($biodataUnion, 'bio')
+        return DB::query()
+            ->fromSub($union, 'bio')
             ->join('payroll_run_details as prd', 'prd.employee_npk', '=', 'bio.NPK')
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.id_dept')
             ->where('prd.run_id', $this->run_id)
             ->select(
+                'bio.NPK',
                 'prd.components',
                 'bio.TKK',
                 'bio.IS_STAFF',
                 'd.IS_SEWING'
-            )
-            ->get();
+            );
+    }
 
-        $components = PayrollComponent::orderBy('priority')->get();
+    /*
+    =====================================================
+    MAP (LOGIC ORIGINAL — TIDAK DIUBAH)
+    =====================================================
+    */
+    public function map($row): array
+    {
+        $items = json_decode($row->components, true) ?? [];
 
-        /*
-        =====================================================
-        GROUP CONTAINER
-        =====================================================
-        */
+        $isResign =
+            $row->TKK &&
+            $row->TKK >= $this->period->start_date &&
+            $row->TKK <= $this->period->end_date;
 
-        $groups = [
-            'active_all' => [],
-            'active_staff' => [],
-            'active_sewing' => [],
-            'active_non_sewing' => [],
-            'resign_all' => [],
-            'resign_staff' => [],
-            'resign_sewing' => [],
-            'resign_non_sewing' => [],
-        ];
+        $isStaff = $row->IS_STAFF == 1;
+        $isSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 0;
+        $isNonSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 1;
 
-        $earning = array_fill_keys(array_keys($groups), 0);
-        $deduction = array_fill_keys(array_keys($groups), 0);
+        $targets = [];
 
-        /*
-        =====================================================
-        HITUNG TOTAL
-        =====================================================
-        */
+        if ($isResign) {
+            $targets[] = 'resign_all';
+            if ($isStaff) $targets[] = 'resign_staff';
+            if ($isSewing) $targets[] = 'resign_sewing';
+            if ($isNonSewing) $targets[] = 'resign_non_sewing';
+        } else {
+            $targets[] = 'active_all';
+            if ($isStaff) $targets[] = 'active_staff';
+            if ($isSewing) $targets[] = 'active_sewing';
+            if ($isNonSewing) $targets[] = 'active_non_sewing';
+        }
 
-        foreach ($data as $row) {
+        foreach ($this->components as $component) {
 
-            $items = json_decode($row->components, true) ?? [];
+            $code = $component->code;
+            $value = (float)($items[$code] ?? 0);
 
-            $isResign = $row->TKK &&
-                $row->TKK >= $period->start_date &&
-                $row->TKK <= $period->end_date;
-
-            /*
-            ===============================
-            CATEGORY RULE (UPDATED)
-            ===============================
-            */
-
-            $isStaff = $row->IS_STAFF == 1;
-            $isSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 0;
-            $isNonSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 1;
-
-            $targetGroups = [];
-
-            if ($isResign) {
-
-                $targetGroups[] = 'resign_all';
-
-                if ($isStaff)
-                    $targetGroups[] = 'resign_staff';
-
-                if ($isSewing)
-                    $targetGroups[] = 'resign_sewing';
-
-                if ($isNonSewing)
-                    $targetGroups[] = 'resign_non_sewing';
-            } else {
-
-                $targetGroups[] = 'active_all';
-
-                if ($isStaff)
-                    $targetGroups[] = 'active_staff';
-
-                if ($isSewing)
-                    $targetGroups[] = 'active_sewing';
-
-                if ($isNonSewing)
-                    $targetGroups[] = 'active_non_sewing';
-            }
-
-            foreach ($components as $component) {
-
-                $code = $component->code;
-
-                $value = isset($items[$code])
-                    ? (float)$items[$code]
-                    : 0.0;
-
-                foreach ($targetGroups as $grp) {
-                    $groups[$grp][$code] =
-                        ($groups[$grp][$code] ?? 0) + $value;
-                }
+            foreach ($targets as $grp) {
+                $this->groups[$grp][$code] =
+                    ($this->groups[$grp][$code] ?? 0) + $value;
             }
         }
 
-        /*
-        =====================================================
-        BUILD EXCEL
-        =====================================================
-        */
+        return [];
+    }
+
+    /*
+    =====================================================
+    HEADINGS
+    =====================================================
+    */
+    public function headings(): array
+    {
+        $rows = [];
 
         $header = [
             'Component',
@@ -220,58 +179,104 @@ class PayrollSummarySheet implements
 
         $rows[] = $header;
 
-        foreach ($components as $component) {
-
-            $row = [$component->name];
-
-            foreach ($groups as $key => $values) {
-
-                $val = (float)($values[$component->code] ?? 0);
-
-                if ($component->type === 'deduction') {
-                    $val = -abs($val);
-                    $deduction[$key] += $val;
-                } else {
-                    $earning[$key] += $val;
-                }
-
-                $row[] = $val;
-            }
-
-            $rows[] = $row;
+        foreach ($this->components as $c) {
+            $rows[] = [$c->name, '', '', '', '', '', '', '', ''];
         }
 
         $rows[] = array_fill(0, count($header), '');
-
-        /*
-        =====================================================
-        TOTAL ROWS
-        =====================================================
-        */
-
-        $totalEarning = ['Total Earning'];
-        $totalDeduction = ['Total Deduction'];
-        $net = ['Net Payroll'];
-
-        foreach ($groups as $key => $v) {
-            $totalEarning[] = $earning[$key];
-            $totalDeduction[] = $deduction[$key];
-            $net[] = $earning[$key] + $deduction[$key];
-        }
-
-        $rows[] = $totalEarning;
-        $rows[] = $totalDeduction;
-        $rows[] = $net;
+        $rows[] = ['Total Earning'];
+        $rows[] = ['Total Deduction'];
+        $rows[] = ['Net Payroll'];
 
         return $rows;
     }
 
     /*
     =====================================================
-    STYLE
+    AFTER SHEET — UNIVERSAL VERSION
     =====================================================
     */
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function ($event) {
 
+                // 🔥 UNIVERSAL SHEET DETECTOR
+                $sheet = $event->sheet;
+
+                if (method_exists($sheet, 'getDelegate')) {
+                    $sheet = $sheet->getDelegate();
+                }
+
+                $rowStart = 2;
+
+                foreach ($this->components as $i => $component) {
+
+                    $row = $rowStart + $i;
+
+                    foreach ($this->groups as $group => $v) {
+
+                        $val = $this->groups[$group][$component->code] ?? 0;
+
+                        if ($component->type === 'deduction') {
+                            $val = -abs($val);
+                            $this->deduction[$group] += $val;
+                        } else {
+                            $this->earning[$group] += $val;
+                        }
+
+                        $col = $this->getColumnIndex($group);
+
+                        if (method_exists($sheet, 'setCellValue')) {
+                            $sheet->setCellValue($col . $row, $val);
+                        }
+                    }
+                }
+
+                $base = count($this->components) + 3;
+
+                foreach (array_keys($this->groups) as $grp) {
+
+                    $col = $this->getColumnIndex($grp);
+
+                    $sheet->setCellValue(
+                        $col . $base,
+                        $this->earning[$grp]
+                    );
+
+                    $sheet->setCellValue(
+                        $col . ($base + 1),
+                        $this->deduction[$grp]
+                    );
+
+                    $sheet->setCellValue(
+                        $col . ($base + 2),
+                        $this->earning[$grp] + $this->deduction[$grp]
+                    );
+                }
+            }
+        ];
+    }
+
+    private function getColumnIndex($group)
+    {
+        return [
+            'active_all' => 'B',
+            'active_staff' => 'C',
+            'active_sewing' => 'D',
+            'active_non_sewing' => 'E',
+            'resign_all' => 'F',
+            'resign_staff' => 'G',
+            'resign_sewing' => 'H',
+            'resign_non_sewing' => 'I',
+        ][$group] ?? 'B';
+    }
+
+    /*
+    =====================================================
+    STYLE (Laravel Excel ONLY)
+    =====================================================
+    */
     public function styles(Worksheet $sheet)
     {
         $sheet->getStyle('B2:Z500')

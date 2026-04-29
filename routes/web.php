@@ -33,6 +33,7 @@ use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\InsentifApprovalController;
 use App\Http\Controllers\InsentifMasterController;
 use App\Http\Controllers\InsentifThresholdController;
+use App\Http\Controllers\LateCompensationController;
 use App\Http\Controllers\LineInsentifMasterController;
 use App\Http\Controllers\PadInsentifMasterController;
 use App\Http\Controllers\PayrollAdjusmentController;
@@ -349,6 +350,17 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'role:Admin|HRD']);
     Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|HRD']);
+
+    // Late Compensation
+    Route::prefix('late-compensation')->name('late-compensation.')->group(function () {
+
+        Route::get('/', [LateCompensationController::class, 'index'])->name('index');
+        Route::get('/create', [LateCompensationController::class, 'create'])->name('create');
+        Route::post('/store', [LateCompensationController::class, 'store'])->name('store');
+        Route::get('/edit/{id}', [LateCompensationController::class, 'edit'])->name('edit');
+        Route::post('/update/{id}', [LateCompensationController::class, 'update'])->name('update');
+        Route::get('/delete/{id}', [LateCompensationController::class, 'delete'])->name('delete');
+    });
 
     // ========================================
     // APPROVAL RULES (Master)
