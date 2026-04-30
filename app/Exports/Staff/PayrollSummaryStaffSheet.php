@@ -4,32 +4,13 @@ namespace App\Exports\Staff;
 
 use Illuminate\Support\Facades\DB;
 use App\Models\PayrollComponent;
-
-use Maatwebsite\Excel\Concerns\FromQuery;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithEvents;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
-use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\WithStyles;
-
-use Maatwebsite\Excel\Events\AfterSheet;
-
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PayrollSummaryStaffSheet implements
-    FromQuery,
-    WithMapping,
-    WithHeadings,
-    WithEvents,
-    WithTitle,
-    WithStyles,
-    ShouldAutoSize,
-    WithStrictNullComparison,
-    WithColumnFormatting
+class PayrollSummaryStaffSheet
 {
     protected $run_id;
     protected $components;
@@ -66,11 +47,128 @@ class PayrollSummaryStaffSheet implements
         return 'Payroll_Summary';
     }
 
-    public function columnFormats(): array
+    public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex)
     {
-        return [
-            'B:Z' => NumberFormat::FORMAT_NUMBER,
-        ];
+        $sheet = $sheetIndex === 0
+            ? $spreadsheet->getActiveSheet()
+            : $spreadsheet->createSheet($sheetIndex);
+
+        $sheet->setTitle($this->title());
+
+        // =========================
+        // HEADER
+        // =========================
+        $rows = $this->headings();
+
+        $rowNum = 1;
+        foreach ($rows as $row) {
+            $col = 1;
+            foreach ($row as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
+                $col++;
+            }
+            $rowNum++;
+        }
+
+        $lastCol = chr(64 + count($rows[0]));
+
+        // =========================
+        // HEADER STYLE
+        // =========================
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF'],
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '1F4E79']
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+
+        // =========================
+        // QUERY + MAP (TETAP)
+        // =========================
+        $rowsData = $this->query()->get();
+
+        foreach ($rowsData as $row) {
+            $this->map($row);
+        }
+
+        // =========================
+        // AFTER SHEET LOGIC (TETAP)
+        // =========================
+        $rowStart = 2;
+
+        foreach ($this->components as $i => $component) {
+
+            $row = $rowStart + $i;
+
+            foreach ($this->groups as $group => $v) {
+
+                $val = $this->groups[$group][$component->code] ?? 0;
+
+                if ($component->type === 'deduction') {
+                    $val = -abs($val);
+                    $this->deduction[$group] += $val;
+                } else {
+                    $this->earning[$group] += $val;
+                }
+
+                $col = $this->getColumnIndex($group);
+
+                $sheet->setCellValue($col . $row, $val);
+            }
+        }
+
+        $base = count($this->components) + 3;
+
+        foreach (array_keys($this->groups) as $grp) {
+
+            $col = $this->getColumnIndex($grp);
+
+            $sheet->setCellValue($col . $base, $this->earning[$grp]);
+            $sheet->setCellValue($col . ($base + 1), $this->deduction[$grp]);
+            $sheet->setCellValue($col . ($base + 2), $this->earning[$grp] + $this->deduction[$grp]);
+        }
+
+        // =========================
+        // BORDER TABLE
+        // =========================
+        $sheet->getStyle("A1:{$lastCol}" . ($rowNum - 1))
+            ->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+
+        // =========================
+        // NUMBER FORMAT
+        // =========================
+        foreach (range('B', 'Z') as $colLetter) {
+            $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
+                ->getNumberFormat()
+                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+        }
+
+        // =========================
+        // AUTO SIZE COLUMN
+        // =========================
+        foreach (range('A', $lastCol) as $colLetter) {
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+        }
+
+        // =========================
+        // FREEZE HEADER
+        // =========================
+        $sheet->freezePane('A2');
     }
 
     /*
@@ -146,13 +244,12 @@ class PayrollSummaryStaffSheet implements
             }
         }
 
-        // SUMMARY MODE → tidak output row
         return [];
     }
 
     /*
     =====================================================
-    HEADINGS (TEMPLATE DISAMAKAN)
+    HEADINGS (TEMPLATE SAMA)
     =====================================================
     */
     public function headings(): array
@@ -180,100 +277,11 @@ class PayrollSummaryStaffSheet implements
         return $rows;
     }
 
-    /*
-    =====================================================
-    AFTER SHEET — UNIVERSAL TEMPLATE
-    =====================================================
-    */
-    public function registerEvents(): array
+    private function getColumnIndex($group)
     {
         return [
-            AfterSheet::class => function ($event) {
-
-                // UNIVERSAL SHEET DETECTOR
-                $sheet = $event->sheet;
-
-                if (method_exists($sheet, 'getDelegate')) {
-                    $sheet = $sheet->getDelegate();
-                }
-
-                $rowStart = 2;
-
-                foreach ($this->components as $i => $component) {
-
-                    $row = $rowStart + $i;
-
-                    $active =
-                        $this->groups['active_staff'][$component->code] ?? 0;
-
-                    $resign =
-                        $this->groups['resign_staff'][$component->code] ?? 0;
-
-                    if ($component->type === 'deduction') {
-
-                        $active = -abs($active);
-                        $resign = -abs($resign);
-
-                        $this->deduction['active_staff'] += $active;
-                        $this->deduction['resign_staff'] += $resign;
-                    } else {
-
-                        $this->earning['active_staff'] += $active;
-                        $this->earning['resign_staff'] += $resign;
-                    }
-
-                    if (method_exists($sheet, 'setCellValue')) {
-                        $sheet->setCellValue("B{$row}", $active);
-                        $sheet->setCellValue("C{$row}", $resign);
-                    }
-                }
-
-                $base = count($this->components) + 3;
-
-                $sheet->setCellValue(
-                    'B' . $base,
-                    $this->earning['active_staff']
-                );
-
-                $sheet->setCellValue(
-                    'C' . $base,
-                    $this->earning['resign_staff']
-                );
-
-                $sheet->setCellValue(
-                    'B' . ($base + 1),
-                    $this->deduction['active_staff']
-                );
-
-                $sheet->setCellValue(
-                    'C' . ($base + 1),
-                    $this->deduction['resign_staff']
-                );
-
-                $sheet->setCellValue(
-                    'B' . ($base + 2),
-                    $this->earning['active_staff'] +
-                        $this->deduction['active_staff']
-                );
-
-                $sheet->setCellValue(
-                    'C' . ($base + 2),
-                    $this->earning['resign_staff'] +
-                        $this->deduction['resign_staff']
-                );
-            }
-        ];
-    }
-
-    /*
-    =====================================================
-    STYLE (SAMA DENGAN SUMMARY)
-    =====================================================
-    */
-    public function styles(Worksheet $sheet)
-    {
-        $sheet->getStyle('B2:Z500')
-            ->getNumberFormat()
-            ->setFormatCode('"Rp" #,##0');
+            'active_staff' => 'B',
+            'resign_staff' => 'C',
+        ][$group] ?? 'B';
     }
 }

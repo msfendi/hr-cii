@@ -34,7 +34,7 @@
                         </div>
                         <div class="form-group">
                            <label>Password (Tanggal Lahir)</label>
-                           <input type="password" class="form-control" name="password" required>
+                           <input type="password" class="form-control" name="password" placeholder="Contoh : 250513 (YYMMDD)" required>
                         </div>
                         <div class="form-group">
                            <label>Payroll Period</label>
@@ -79,7 +79,7 @@
                            <div class="form-group">
                               <label>Password (Tanggal Lahir)</label>
                               <input type="password" id="qr_password"
-                                 class="form-control" required>
+                                 class="form-control" placeholder="Contoh : 250513 (YYMMDD)" required>
                            </div>
                            <button class="btn btn-primary btn-block">
                            Login Payroll

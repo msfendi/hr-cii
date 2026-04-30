@@ -22,6 +22,10 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\View;
 use App\Services\FastExcelExport;
+use App\Helpers\PdfPassword;
+use App\Services\ExcelProtectService;
+use App\Services\PdfService;
+use App\Services\ExcelZipEncryptService;
 
 class GeneratePayrollExport implements ShouldQueue
 {
@@ -114,6 +118,7 @@ class GeneratePayrollExport implements ShouldQueue
             ->select(
                 'prd.*',
                 'd.DEPARTEMENT',
+                'pp.id as period_id',
                 'pp.name as period_name',
                 'pp.start_date',
                 'pp.end_date',
@@ -144,10 +149,16 @@ class GeneratePayrollExport implements ShouldQueue
         $folderSewing = "$folder/SEWING";
         $folderNonSewing = "$folder/NON_SEWING";
 
-        Storage::makeDirectory($folder, true);
-        Storage::makeDirectory($folderStaff, true);
-        Storage::makeDirectory($folderSewing, true);
-        Storage::makeDirectory($folderNonSewing, true);
+
+        $folderEncrypted = "payroll/$periodNameFormatted";
+        $folderEncryptedStaff = "$folderEncrypted/STAFF";
+        $folderEncryptedSewing = "$folderEncrypted/SEWING";
+        $folderEncryptedNonSewing = "$folderEncrypted/NON_SEWING";
+
+        Storage::makeDirectory($folder, 0777, true);
+        Storage::makeDirectory($folderStaff, 0777, true);
+        Storage::makeDirectory($folderSewing, 0777, true);
+        Storage::makeDirectory($folderNonSewing, 0777, true);
 
         /*
         |--------------------------------------------------------------------------
@@ -156,29 +167,19 @@ class GeneratePayrollExport implements ShouldQueue
         */
         if ($this->type === 'process') {
 
-            FastExcelExport::store(
-                new PayrollExportExcel($run_id),
-                "$folder/REKAP_$periodNameFormatted.xlsx"
-            );
+            $zipService = app(\App\Services\ExcelZipEncryptService::class);
 
-            FastExcelExport::store(
-                new PayrollExportStaffExcel($run_id),
-                "$folderStaff/REKAP_$periodNameFormatted.xlsx"
-            );
-
-            FastExcelExport::store(
-                new PayrollExportSewingExcel($run_id),
-                "$folderSewing/REKAP_$periodNameFormatted.xlsx"
-            );
-
-            FastExcelExport::store(
-                new PayrollExportNonSewingExcel($run_id),
-                "$folderNonSewing/REKAP_$periodNameFormatted.xlsx"
-            );
+            (new PayrollExportExcel($run_id))
+                ->export(storage_path("app/$folder/REKAP_$periodNameFormatted.xlsx"));
+            (new PayrollExportStaffExcel($run_id))
+                ->export(storage_path("app/$folderStaff/REKAP_$periodNameFormatted.xlsx"));
+            (new PayrollExportSewingExcel($run_id))
+                ->export(storage_path("app/$folderSewing/REKAP_$periodNameFormatted.xlsx"));
+            (new PayrollExportNonSewingExcel($run_id))
+                ->export(storage_path("app/$folderNonSewing/REKAP_$periodNameFormatted.xlsx"));
 
             $export->update([
-                'progress' => 30,
-                'file_excel' => "REKAP_$periodNameFormatted.xlsx"
+                'progress' => 30
             ]);
         }
 
@@ -314,6 +315,29 @@ class GeneratePayrollExport implements ShouldQueue
                 'NON_SEWING' => $folderNonSewing,
                 default => $folder
             };
+            $folderTargetEncrypted = match ($key) {
+                'STAFF' => $folderEncryptedStaff,
+                'SEWING' => $folderEncryptedSewing,
+                'NON_SEWING' => $folderEncryptedNonSewing,
+                default => $folderEncrypted
+            };
+
+            $password = match ($key) {
+                'STAFF' => PdfPassword::generate('staff', $data->first()->start_date),
+                'SEWING' => PdfPassword::generate('sewing', $data->first()->start_date),
+                'NON_SEWING' => PdfPassword::generate('nonsewing', $data->first()->start_date),
+                default => PdfPassword::generate('all', $data->first()->start_date)
+            };
+
+            $zipService->encrypt(
+                storage_path("app/$folderTarget/REKAP_$periodNameFormatted.xlsx"),
+                $password ?? $password
+            );
+
+            $export->update([
+                'progress' => 65,
+                'file_excel' => "REKAP_$periodNameFormatted.zip"
+            ]);
 
             $active = $activeEmployees->filter($filter);
             $resign = $resignEmployees->filter($filter);
@@ -341,6 +365,8 @@ class GeneratePayrollExport implements ShouldQueue
 
             $pdfPath = "$folderTarget/REKAP_{$periodNameFormatted}{$suffix}.pdf";
             $pdfPengPath = "$folderTarget/PENGELUARAN_{$periodNameFormatted}{$suffix}.pdf";
+            $pdfPathTemp = "$folderTarget/REKAP_{$periodNameFormatted}{$suffix}_temp.pdf";
+            $pdfPengPathTemp = "$folderTarget/PENGELUARAN_{$periodNameFormatted}{$suffix}_temp.pdf";
 
             /*
             |--------------------------------------------------------------------------
@@ -353,12 +379,14 @@ class GeneratePayrollExport implements ShouldQueue
                 ->setPaper('a4')
                 ->setOrientation('landscape')
                 ->setOption('enable-local-file-access', true)
-                ->setOption('encoding', 'UTF-8');
+                ->setOption('encoding', 'UTF-8')
+                ->setOption('password', $password);
 
             $pdfPeng = App::make('snappy.pdf.wrapper');
             $pdfPeng->loadHTML($htmlPeng)
                 ->setPaper('a4')
-                ->setOption('enable-local-file-access', true);
+                ->setOption('enable-local-file-access', true)
+                ->setOption('password', $password);
 
             /*
             |--------------------------------------------------------------------------
@@ -366,20 +394,33 @@ class GeneratePayrollExport implements ShouldQueue
             |--------------------------------------------------------------------------
             */
 
+            $fullPdfPathTemp = storage_path("app/$pdfPathTemp");
             $fullPdfPath = storage_path("app/$pdfPath");
+            $fullPdfPengPathTemp = storage_path("app/$pdfPengPathTemp");
             $fullPdfPengPath = storage_path("app/$pdfPengPath");
 
             if (File::exists($fullPdfPath)) File::delete($fullPdfPath);
             if (File::exists($fullPdfPengPath)) File::delete($fullPdfPengPath);
+            if (File::exists($fullPdfPathTemp)) File::delete($fullPdfPathTemp);
+            if (File::exists($fullPdfPengPathTemp)) File::delete($fullPdfPengPathTemp);
 
             /*
             |--------------------------------------------------------------------------
             | SAVE
             |--------------------------------------------------------------------------
             */
+            $pdf->save($fullPdfPathTemp);
+            $pdfPeng->save($fullPdfPengPathTemp);
 
-            $pdf->save($fullPdfPath);
-            $pdfPeng->save($fullPdfPengPath);
+            PdfService::protect($fullPdfPathTemp, $fullPdfPath, $password);
+            PdfService::protect($fullPdfPengPathTemp, $fullPdfPengPath, $password);
+
+
+            if (File::exists($fullPdfPathTemp)) File::delete($fullPdfPathTemp);
+            if (File::exists($fullPdfPengPathTemp)) File::delete($fullPdfPengPathTemp);
+
+            // $pdf->save($fullPdfPath);
+            // $pdfPeng->save($fullPdfPengPath);
 
             if ($key === 'ALL') {
                 $export->update([

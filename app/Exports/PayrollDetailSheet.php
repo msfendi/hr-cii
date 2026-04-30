@@ -3,17 +3,13 @@
 namespace App\Exports;
 
 use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Concerns\FromQuery;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading, WithTitle, ShouldAutoSize, WithStrictNullComparison, WithColumnFormatting
+class PayrollDetailSheet
 {
     protected $run_id;
     protected $componentTypes = [];
@@ -22,9 +18,8 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
     {
         $this->run_id = $run_id;
 
-        // Ambil tipe komponen: earning / deduction
         $this->componentTypes = DB::table('payroll_components')
-            ->pluck('type', 'code') // ['thr' => 'earning', 'pph_21' => 'deduction', ...]
+            ->pluck('type', 'code')
             ->toArray();
     }
 
@@ -33,11 +28,90 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
         return 'Payroll_Active';
     }
 
-    public function columnFormats(): array
+    public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex = 0)
     {
-        return [
-            'D:Z' => NumberFormat::FORMAT_NUMBER,
-        ];
+        $sheet = $sheetIndex === 0
+            ? $spreadsheet->getActiveSheet()
+            : $spreadsheet->createSheet($sheetIndex);
+
+        $sheet->setTitle($this->title());
+
+        // ======================
+        // HEADER
+        // ======================
+        $headings = $this->headings();
+
+        $col = 1;
+        foreach ($headings as $heading) {
+            $sheet->setCellValueByColumnAndRow($col, 1, $heading);
+            $col++;
+        }
+
+        // STYLE HEADER
+        $lastCol = chr(64 + count($headings));
+
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF'],
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '4F81BD']
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+
+        // ======================
+        // DATA
+        // ======================
+        $rows = $this->query()->get();
+
+        $rowNum = 2;
+
+        foreach ($rows as $row) {
+            $data = $this->map($row);
+
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
+                $col++;
+            }
+
+            $rowNum++;
+        }
+
+        // ======================
+        // BORDER TABLE
+        // ======================
+        $sheet->getStyle("A1:{$lastCol}" . ($rowNum - 1))
+            ->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+
+        // ======================
+        // NUMBER FORMAT
+        // ======================
+        foreach (range('D', 'Z') as $colLetter) {
+            $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
+                ->getNumberFormat()
+                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+        }
+
+        // ======================
+        // AUTO SIZE COLUMN
+        // ======================
+        foreach (range('A', $lastCol) as $colLetter) {
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+        }
     }
 
     private function baseBiodataQuery()
@@ -97,7 +171,6 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
         $values = [];
 
         foreach ($fields as $field) {
-            // Gunakan array_key_exists supaya 0 tetap muncul
             $value = array_key_exists($field, $components) ? (float)$components[$field] : 0;
             $type  = $this->componentTypes[$field] ?? 'earning';
 
@@ -141,10 +214,5 @@ class PayrollDetailSheet implements FromQuery, WithMapping, WithHeadings, WithCh
             'Late Deduction',
             'Total Salary'
         ];
-    }
-
-    public function chunkSize(): int
-    {
-        return 1000;
     }
 }

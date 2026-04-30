@@ -39,6 +39,12 @@ return [
         'timeout' => false,
     ],
 
+    // 'pdf' => [
+    //     'enabled' => true,
+    //     'binary' => '/usr/local/bin/wkhtmltopdf',
+    //     'timeout' => false,
+    // ],
+
     'image' => [
         'enabled' => true,
         'binary'  => env('WKHTML_IMG_BINARY', '/usr/local/bin/wkhtmltoimage'),

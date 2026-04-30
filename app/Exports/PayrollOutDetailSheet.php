@@ -3,17 +3,13 @@
 namespace App\Exports;
 
 use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Concerns\FromQuery;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading, WithTitle, ShouldAutoSize, WithStrictNullComparison, WithColumnFormatting
+class PayrollOutDetailSheet
 {
     protected $run_id;
     protected $componentTypes = [];
@@ -22,9 +18,8 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
     {
         $this->run_id = $run_id;
 
-        // Ambil tipe komponen dari payroll_components
         $this->componentTypes = DB::table('payroll_components')
-            ->pluck('type', 'code') // ['thr' => 'earning', 'pph_21' => 'deduction', ...]
+            ->pluck('type', 'code')
             ->toArray();
     }
 
@@ -32,32 +27,103 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
     {
         return 'Payroll_Out';
     }
-    public function columnFormats(): array
+
+    public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex)
     {
-        return [
-            'D:Z' => NumberFormat::FORMAT_NUMBER,
-        ];
+        $sheet = $sheetIndex === 0
+            ? $spreadsheet->getActiveSheet()
+            : $spreadsheet->createSheet($sheetIndex);
+
+        $sheet->setTitle($this->title());
+
+        // ======================
+        // HEADER
+        // ======================
+        $headings = $this->headings();
+
+        $col = 1;
+        foreach ($headings as $heading) {
+            $sheet->setCellValueByColumnAndRow($col, 1, $heading);
+            $col++;
+        }
+
+        $lastCol = chr(64 + count($headings));
+
+        // HEADER STYLE
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF'],
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '2F5597']
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+
+        // ======================
+        // DATA
+        // ======================
+        $query = $this->query();
+        $rows = $query->get();
+
+        $rowNum = 2;
+
+        foreach ($rows as $row) {
+            $data = $this->map($row);
+
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
+                $col++;
+            }
+
+            $rowNum++;
+        }
+
+        // ======================
+        // BORDER
+        // ======================
+        $sheet->getStyle("A1:{$lastCol}" . ($rowNum - 1))
+            ->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+
+        // ======================
+        // NUMBER FORMAT
+        // ======================
+        foreach (range('D', 'Z') as $colLetter) {
+            $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
+                ->getNumberFormat()
+                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+        }
+
+        // ======================
+        // AUTO SIZE COLUMN
+        // ======================
+        foreach (range('A', $lastCol) as $colLetter) {
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+        }
     }
 
     private function baseBiodataQuery()
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK'
-            );
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK'
-            );
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -95,7 +161,6 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
     {
         $components = json_decode($row->components, true);
 
-        // Daftar komponen yang akan tampil di Excel
         $fields = [
             'basic_salary',
             'overtime_pay',
@@ -122,7 +187,7 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
             $type  = $this->componentTypes[$field] ?? 'earning';
 
             if ($type === 'deduction') {
-                $value = -abs($value); // pastikan deduction negatif
+                $value = -abs($value);
             }
 
             $values[] = $value;
@@ -143,7 +208,6 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
             'NPK',
             'Employee Name',
             'Departement',
-
             'Basic Salary',
             'Overtime Weekday',
             'Overtime Weekend',
@@ -154,21 +218,13 @@ class PayrollOutDetailSheet implements FromQuery, WithMapping, WithHeadings, Wit
             'Pad Print Insentif',
             'Cutting Insentif',
             'Adjusment',
-
             'BPJS Kesehatan',
             'BPJS Ketenagakerjaan',
-
             'PPH21',
             'PPH21 Deduction',
             'Absence Deduction',
             'Late Deduction',
-
             'Total Salary'
         ];
-    }
-
-    public function chunkSize(): int
-    {
-        return 1000;
     }
 }

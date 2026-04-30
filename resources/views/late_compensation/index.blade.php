@@ -31,6 +31,8 @@
                                  <tr>
                                     <th>ID</th>
                                     <th>NPK</th>
+                                    <th>Name</th>
+                                    <th>Department</th>
                                     <th>Date</th>
                                     <th>Reason</th>
                                     <th width="120">Action</th>
@@ -41,6 +43,8 @@
                                  <tr>
                                     <td>{{ $row->id }}</td>
                                     <td>{{ $row->npk }}</td>
+                                    <td>{{ $row->NAMA_KARYAWAN }}</td>
+                                    <td>{{ $row->DEPARTEMENT }}</td>
                                     <td>{{ $row->date }}</td>
                                     <td>{{ $row->reason }}</td>
                                     <td class="text-center">

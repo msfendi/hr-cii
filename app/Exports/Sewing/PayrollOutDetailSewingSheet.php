@@ -3,17 +3,13 @@
 namespace App\Exports\Sewing;
 
 use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Concerns\FromQuery;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PayrollOutDetailSewingSheet implements FromQuery, WithMapping, WithHeadings, WithChunkReading, WithTitle, ShouldAutoSize, WithStrictNullComparison, WithColumnFormatting
+class PayrollOutDetailSewingSheet
 {
     protected $run_id;
     protected $componentTypes = [];
@@ -24,7 +20,7 @@ class PayrollOutDetailSewingSheet implements FromQuery, WithMapping, WithHeading
 
         // Ambil tipe komponen dari payroll_components
         $this->componentTypes = DB::table('payroll_components')
-            ->pluck('type', 'code') // ['thr' => 'earning', 'pph_21' => 'deduction', ...]
+            ->pluck('type', 'code')
             ->toArray();
     }
 
@@ -32,34 +28,102 @@ class PayrollOutDetailSewingSheet implements FromQuery, WithMapping, WithHeading
     {
         return 'Payroll_Sewing_Out';
     }
-    public function columnFormats(): array
+
+    public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex = 0)
     {
-        return [
-            'D:Z' => NumberFormat::FORMAT_NUMBER,
-        ];
+        $sheet = $sheetIndex === 0
+            ? $spreadsheet->getActiveSheet()
+            : $spreadsheet->createSheet($sheetIndex);
+
+        $sheet->setTitle($this->title());
+
+        // ======================
+        // HEADER
+        // ======================
+        $headings = $this->headings();
+
+        $col = 1;
+        foreach ($headings as $heading) {
+            $sheet->setCellValueByColumnAndRow($col, 1, $heading);
+            $col++;
+        }
+
+        // STYLE HEADER
+        $lastCol = chr(64 + count($headings));
+
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF'],
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '2F5597']
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+
+        // ======================
+        // DATA
+        // ======================
+        $rows = $this->query()->get();
+
+        $rowNum = 2;
+
+        foreach ($rows as $row) {
+            $data = $this->map($row);
+
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
+                $col++;
+            }
+
+            $rowNum++;
+        }
+
+        // ======================
+        // BORDER
+        // ======================
+        $sheet->getStyle("A1:{$lastCol}" . ($rowNum - 1))
+            ->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+
+        // ======================
+        // NUMBER FORMAT
+        // ======================
+        foreach (range('D', 'Z') as $colLetter) {
+            $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
+                ->getNumberFormat()
+                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+        }
+
+        // ======================
+        // AUTO SIZE COLUMN
+        // ======================
+        foreach (range('A', $lastCol) as $colLetter) {
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+        }
     }
 
     private function baseBiodataQuery()
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK',
-                'b.IS_STAFF'
-            );
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.id_dept',
-                'p.TKK',
-                'b.IS_STAFF'
-            );
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -99,7 +163,6 @@ class PayrollOutDetailSewingSheet implements FromQuery, WithMapping, WithHeading
     {
         $components = json_decode($row->components, true);
 
-        // Daftar komponen yang akan tampil di Excel
         $fields = [
             'basic_salary',
             'overtime_pay',
@@ -126,7 +189,7 @@ class PayrollOutDetailSewingSheet implements FromQuery, WithMapping, WithHeading
             $type  = $this->componentTypes[$field] ?? 'earning';
 
             if ($type === 'deduction') {
-                $value = -abs($value); // pastikan deduction negatif
+                $value = -abs($value);
             }
 
             $values[] = $value;
@@ -169,10 +232,5 @@ class PayrollOutDetailSewingSheet implements FromQuery, WithMapping, WithHeading
 
             'Total Salary'
         ];
-    }
-
-    public function chunkSize(): int
-    {
-        return 1000;
     }
 }

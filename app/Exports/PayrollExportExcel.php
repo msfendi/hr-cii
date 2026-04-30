@@ -2,16 +2,17 @@
 
 namespace App\Exports;
 
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
 use App\Exports\NonSewing\PayrollDetailNonSewingSheet;
 use App\Exports\NonSewing\PayrollOutDetailNonSewingSheet;
 use App\Exports\Sewing\PayrollDetailSewingSheet;
 use App\Exports\Sewing\PayrollOutDetailSewingSheet;
 use App\Exports\Staff\PayrollDetailStaffSheet;
 use App\Exports\Staff\PayrollOutDetailStaffSheet;
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-
-class PayrollExportExcel implements WithMultipleSheets
+class PayrollExportExcel
 {
     protected $run_id;
 
@@ -20,20 +21,32 @@ class PayrollExportExcel implements WithMultipleSheets
         $this->run_id = $run_id;
     }
 
-    public function sheets(): array
+    public function export($filePath)
     {
-        return [
+        $spreadsheet = new Spreadsheet();
 
-            new PayrollDetailSheet($this->run_id), // sheet 1
-            new PayrollDetailStaffSheet($this->run_id), // sheet 2
-            new PayrollDetailSewingSheet($this->run_id), // sheet 3
-            new PayrollDetailNonSewingSheet($this->run_id), // sheet 4
-            new PayrollOutDetailSheet($this->run_id), // sheet 5
-            new PayrollOutDetailStaffSheet($this->run_id), // sheet 6
-            new PayrollOutDetailSewingSheet($this->run_id), // sheet 7
-            new PayrollOutDetailNonSewingSheet($this->run_id), // sheet 8
-            new PayrollSummarySheet($this->run_id) // sheet 9
+        $this->addSheet($spreadsheet, 0, new PayrollDetailSheet($this->run_id));
+        $this->addSheet($spreadsheet, 1, new PayrollDetailStaffSheet($this->run_id));
+        $this->addSheet($spreadsheet, 2, new PayrollDetailSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 3, new PayrollDetailNonSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 4, new PayrollOutDetailSheet($this->run_id));
+        $this->addSheet($spreadsheet, 5, new PayrollOutDetailStaffSheet($this->run_id));
+        $this->addSheet($spreadsheet, 6, new PayrollOutDetailSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 7, new PayrollOutDetailNonSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 8, new PayrollSummarySheet($this->run_id));
 
-        ];
+        $dir = dirname($filePath);
+
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($filePath);
+    }
+
+    private function addSheet(Spreadsheet $spreadsheet, int $index, $sheetClass)
+    {
+        $sheetClass->exportToSheet($spreadsheet, $index);
     }
 }

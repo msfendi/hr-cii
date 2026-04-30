@@ -11,7 +11,11 @@ class LateCompensationController extends Controller
 
     public function index()
     {
-        $data = LateCompensation::orderByDesc('id')->get();
+        $data = LateCompensation::orderByDesc('id')
+            ->leftJoin('BIODATA', 'late_compensations.npk', '=', 'BIODATA.NPK')
+            ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select('late_compensations.*', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT')
+            ->get();
         return view('late_compensation.index', compact('data'));
     }
 

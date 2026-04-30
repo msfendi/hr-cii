@@ -1697,7 +1697,7 @@ class PayrollProcessController extends Controller
 
     public function export($run_id)
     {
-
+        // dd(function_exists('exec'));
         $export = PayrollExport::create([
             'run_id' => $run_id,
             'status' => 'processing',

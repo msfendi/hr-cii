@@ -2,9 +2,14 @@
 
 namespace App\Exports\Staff;
 
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-class PayrollExportStaffExcel implements WithMultipleSheets
+use App\Exports\Staff\PayrollDetailStaffSheet;
+use App\Exports\Staff\PayrollOutDetailStaffSheet;
+use App\Exports\Staff\PayrollSummaryStaffSheet;
+
+class PayrollExportStaffExcel
 {
     protected $run_id;
 
@@ -13,12 +18,26 @@ class PayrollExportStaffExcel implements WithMultipleSheets
         $this->run_id = $run_id;
     }
 
-    public function sheets(): array
+    public function export($filePath)
     {
-        return [
-            new PayrollDetailStaffSheet($this->run_id),
-            new PayrollOutDetailStaffSheet($this->run_id),
-            new PayrollSummaryStaffSheet($this->run_id)
-        ];
+        $spreadsheet = new Spreadsheet();
+
+        $this->addSheet($spreadsheet, 0, new PayrollDetailStaffSheet($this->run_id));
+        $this->addSheet($spreadsheet, 1, new PayrollOutDetailStaffSheet($this->run_id));
+        $this->addSheet($spreadsheet, 2, new PayrollSummaryStaffSheet($this->run_id));
+
+        $dir = dirname($filePath);
+
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($filePath);
+    }
+
+    private function addSheet(Spreadsheet $spreadsheet, int $index, $sheetClass)
+    {
+        $sheetClass->exportToSheet($spreadsheet, $index);
     }
 }

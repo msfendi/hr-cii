@@ -2,9 +2,14 @@
 
 namespace App\Exports\Sewing;
 
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-class PayrollExportSewingExcel implements WithMultipleSheets
+use App\Exports\Sewing\PayrollDetailSewingSheet;
+use App\Exports\Sewing\PayrollOutDetailSewingSheet;
+use App\Exports\Sewing\PayrollSummarySewingSheet;
+
+class PayrollExportSewingExcel
 {
     protected $run_id;
 
@@ -13,12 +18,26 @@ class PayrollExportSewingExcel implements WithMultipleSheets
         $this->run_id = $run_id;
     }
 
-    public function sheets(): array
+    public function export($filePath)
     {
-        return [
-            new PayrollDetailSewingSheet($this->run_id),
-            new PayrollOutDetailSewingSheet($this->run_id),
-            new PayrollSummarySewingSheet($this->run_id)
-        ];
+        $spreadsheet = new Spreadsheet();
+
+        $this->addSheet($spreadsheet, 0, new PayrollDetailSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 1, new PayrollOutDetailSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 2, new PayrollSummarySewingSheet($this->run_id));
+
+        $dir = dirname($filePath);
+
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($filePath);
+    }
+
+    private function addSheet(Spreadsheet $spreadsheet, int $index, $sheetClass)
+    {
+        $sheetClass->exportToSheet($spreadsheet, $index);
     }
 }
