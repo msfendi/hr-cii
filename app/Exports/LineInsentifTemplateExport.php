@@ -11,7 +11,7 @@ class LineInsentifTemplateExport implements WithMultipleSheets
         return [
             new Sheets\LineSheet(),
             new Sheets\LineEfficiencySheet(),
-            new Sheets\EmployeeLineAssignmentSheet(),
+            // new Sheets\EmployeeLineAssignmentSheet(),
         ];
     }
 }

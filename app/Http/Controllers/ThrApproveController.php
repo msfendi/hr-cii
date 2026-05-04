@@ -284,8 +284,9 @@ class ThrApproveController extends Controller
     |--------------------------------------------------------------------------
     */
         $cleanPeriod = str_replace(' ', '_', $period->name);
+        $fileName = "PERMATA_{$cleanPeriod}.csv";
 
-        $filePath = "thr/PERMATA_{$cleanPeriod}.csv";
+        $filePath = "thr/" . $cleanPeriod . "/" . $fileName;
 
         $this->createBankCSV($groupedData, $period->name, $filePath);
 
@@ -300,7 +301,7 @@ class ThrApproveController extends Controller
         DB::table('thr_exports')->updateOrInsert(
             ['run_id' => $runId],
             [
-                'file_bank' => $filePath
+                'file_bank' => $fileName
             ]
         );
 

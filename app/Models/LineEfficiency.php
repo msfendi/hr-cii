@@ -13,7 +13,8 @@ class LineEfficiency extends Model
         'line_number',
         'period_id',
         'efficiency',
-        'date'
+        'date',
+        'days'
     ];
 
     protected $casts = [

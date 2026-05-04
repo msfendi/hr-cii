@@ -323,10 +323,12 @@ class PayrollApproveController extends Controller
     | GENERATE CSV
     |--------------------------------------------------------------------------
     */
-        $cleanPeriod = str_replace(' ', '_', $period->name);
+        $cleanPeriod = str_replace(' ', '_', strtoupper($period->name));
+        $activeFileName = "PERMATA_{$cleanPeriod}_AKTIF.csv";
+        $resignFileName = "PERMATA_{$cleanPeriod}_RESIGN.csv";
 
-        $activePath = "payroll/PERMATA_{$cleanPeriod}_AKTIF.csv";
-        $resignPath = "payroll/PERMATA_{$cleanPeriod}_RESIGN.csv";
+        $activePath = "payroll/" . $cleanPeriod . "/" . $activeFileName;
+        $resignPath = "payroll/" . $cleanPeriod . "/" . $resignFileName;
 
         $this->createBankCSV($groupedActive, $period->name, $activePath);
         $this->createBankCSV($groupedResign, $period->name, $resignPath);
@@ -342,8 +344,8 @@ class PayrollApproveController extends Controller
         DB::table('payroll_exports')->updateOrInsert(
             ['run_id' => $runId],
             [
-                'file_bank_active' => $activePath,
-                'file_bank_resign' => $resignPath
+                'file_bank_active' => $activeFileName,
+                'file_bank_resign' => $resignFileName
             ]
         );
 

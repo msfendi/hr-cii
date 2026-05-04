@@ -11,7 +11,7 @@ class CuttingInsentifTemplateExport implements WithMultipleSheets
         return [
             new Sheets\CuttingSheet(),
             new Sheets\CuttingEfficiencySheet(),
-            new Sheets\EmployeeCuttingAssignmentSheet(),
+            // new Sheets\EmployeeCuttingAssignmentSheet(),
         ];
     }
 }

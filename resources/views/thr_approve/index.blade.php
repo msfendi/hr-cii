@@ -28,18 +28,23 @@
                               <th>Export Status</th>
                               <th>Progress</th>
                               <th>Approval Status</th>
+                              <th>Details</th>
                               <th>Action</th>
                            </tr>
                         </thead>
                         <tbody>
                            @foreach($data as $row)
+                    
+                            @php
+                            $folder = strtoupper(str_replace(' ', '_', $row->period_name));
+                            @endphp
                            <tr>
                               <td>{{ $row->id }}</td>
                               <td>{{ $row->thr_run_id }}</td>
                               <td>{{ $row->period_name }}</td>
                               
                                 <td class="text-center">
-                                    @if($row->is_exported && $row->export_status == 'processing')
+                                    @if($row->is_exported && $row->export_status != 'approved' && $row->export_status != 'finished')
                                         <span class="badge badge-warning">
                                             <i class="fas fa-spinner fa-spin"></i> Finalizing Document Approved
                                         </span>
@@ -47,7 +52,7 @@
                                         {{-- DOWNLOAD EXCEL --}}
                                         @if($row->is_exported && $row->file_excel)
                                             <a class="btn btn-success btn-sm"
-                                            href="{{ asset('storage/'.$row->file_excel) }}"
+                                            href="{{ Storage::url('thr/' .$folder.'/'. $row->file_excel) }}"
                                             target="_blank">
                                                 <i class="fas fa-file-excel mr-1"></i> Excel
                                             </a>
@@ -56,7 +61,7 @@
                                         {{-- DOWNLOAD PDF --}}
                                         @if($row->is_exported && $row->file_pdf)
                                             <a class="btn btn-danger btn-sm"
-                                                href="{{ asset('storage/'.$row->file_pdf) }}"
+                                                href="{{ Storage::url('thr/' .$folder.'/'. $row->file_pdf) }}"
                                             target="_blank">
                                                 <i class="fas fa-file-pdf mr-1"></i> PDF
                                             </a>
@@ -65,7 +70,7 @@
                                         {{-- DOWNLOAD PDF PENGELUARAN --}}
                                         @if($row->is_exported && $row->file_peng)
                                             <a class="btn btn-secondary btn-sm"
-                                                href="{{ asset('storage/'.$row->file_peng) }}"
+                                                href="{{ Storage::url('thr/' .$folder.'/'. $row->file_peng) }}"
                                             target="_blank">
                                                 <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
                                             </a>
@@ -127,6 +132,18 @@
                                  @else
                                  <span class="badge badge-warning">Pending</span>
                                  @endif
+                              </td>
+                              
+                              <td>
+                                 {{-- DETAIL BUTTON (NEW) --}}
+                                 <button
+                                    class="btn btn-info btn-sm btn-detail"
+                                    data-id="{{ $row->thr_run_id }}"
+                                    data-period="{{ $row->period_name }}"
+                                    data-toggle="modal"
+                                    data-target="#thrDetailModal">
+                                 <i class="fas fa-eye"></i>
+                                 </button>
                               </td>
                               {{-- =========================
                               ACTION BUTTON (SEQUENTIAL)
@@ -217,6 +234,51 @@
          </div>
       </div>
       @include('layout.footer')
+      {{-- ========================= MODAL DETAIL ========================= --}}
+      <div class="modal fade" id="thrDetailModal" tabindex="-1">
+         <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+               <div class="modal-header">
+                  <h5 id="detail-title" class="modal-title">
+                     Data Thr Details
+                  </h5>
+                  <button type="button" class="close" data-dismiss="modal">
+                  <span>&times;</span>
+                  </button>
+               </div>
+               <div class="modal-body">
+                  <div class="table-responsive">
+                     <table class="table table-bordered table-sm" id="table-details">
+                        <thead>
+                           <tr>
+                              <th>Run ID</th>
+                              <th>NPK</th>
+                              <th>Name</th>
+                              <th>Dept</th>
+                              <th>Basic Salary</th>
+                              <th>Allowance</th>
+                              <th>Working Months</th>
+                              <th>Total THR</th>
+                              <th>Slip</th>
+                           </tr>
+                        </thead>
+                        <tbody></tbody>
+                            <tfoot>
+                                <tr style="font-weight:bold;background:#f8f9fc">
+                                    <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+                     </table>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
       <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -232,6 +294,156 @@
 
         });
         </script>
+        {{-- FORMAT RUPIAH --}}
+      <script>
+         function formatRupiah(number){
+         if(number===null||number===undefined||number===''){number=0;}
+         if(typeof number==='string'){
+         number=number.replace(/[^0-9\-]/g,'');
+         }
+         number=Number(number);
+         if(isNaN(number)){number=0;}
+         return new Intl.NumberFormat('id-ID',{
+         style:'currency',
+         currency:'IDR',
+         minimumFractionDigits:0
+         }).format(number);
+         }
+      </script>
+      {{-- DETAIL MODAL DATATABLE --}}
+<script>
+
+let tableDetails = null;
+
+$('.btn-detail').click(function(){
+
+    let id     = $(this).data('id');
+    let period = $(this).data('period');
+
+    $('#detail-title').text(
+        'Data Thr Details ('+period+')'
+    );
+
+    let url = '/thr-process/details/' + id;
+
+    if(tableDetails){
+        tableDetails.destroy();
+    }
+
+    tableDetails = $('#table-details').DataTable({
+
+        processing:true,
+        responsive:true,
+        ajax:url,
+
+        createdRow:function(row,data){
+
+            // highlight TKK
+            if(data.tkk !== null && data.tkk !== '' && data.tkk !== 0){
+                $(row).addClass('table-danger');
+            }
+        },
+
+        columns:[
+            {data:'run_id'},
+            {data:'employee_npk'},
+            {data:'employee_name'},
+            {data:'dept'},
+            {data:'basic_salary',defaultContent:0,render:d=>formatRupiah(d??0)},
+            {data:'allowance',defaultContent:0,render:d=>formatRupiah(d??0)},
+            {data:'working_months',defaultContent:0,render:d=>d??0},
+            {data:'thr',defaultContent:0,render:d=>formatRupiah(d??0)},
+            {
+                data:null,
+                orderable:false,
+                searchable:false,
+                render:function(data,type,row){
+
+                    let viewUrl =
+                        "/employee-thr/show/"
+                        +row.run_id+"/"+row.employee_npk;
+
+                    return `
+                        <a href="${viewUrl}"
+                           class="btn btn-primary btn-circle btn-sm"
+                           title="View Slip">
+                           <i class="fa fa-eye"></i>
+                        </a>`;
+                }
+            }
+        ],
+
+        /*
+        =====================================================
+        AUTO TOTAL RECALCULATE (SEARCH / FILTER / PAGING)
+        =====================================================
+        */
+        footerCallback:function(row,data,start,end,display){
+
+            let api = this.api();
+
+            function intVal(i){
+
+            if(i === null || i === undefined || i === '') return 0;
+
+            if(typeof i === 'number') return i;
+
+            if(typeof i === 'string'){
+
+                // hapus Rp dan spasi
+                i = i.replace(/[Rp\s]/g,'');
+
+                // ubah format indonesia
+                // 1.500.000,50 → 1500000.50
+                i = i.replace(/\./g,'').replace(',', '.');
+
+                let num = parseFloat(i);
+
+                return isNaN(num) ? 0 : num;
+            }
+
+            return 0;
+        }
+
+            /*
+            ========================================
+            COLUMN TOTAL CONFIG
+            ========================================
+            */
+
+            let rupiahCols = [4,5,7];   // salary, allowance, thr
+            let numberCols = [6];       // working_months
+
+            // TOTAL RUPIAH
+            rupiahCols.forEach(function(colIndex){
+
+                let total = api
+                    .column(colIndex,{search:'applied'})
+                    .data()
+                    .reduce((a,b)=>intVal(a)+intVal(b),0);
+
+                $(api.column(colIndex).footer())
+                    .html(formatRupiah(total));
+            });
+
+            // TOTAL NUMBER
+            numberCols.forEach(function(colIndex){
+
+                let total = api
+                    .column(colIndex,{search:'applied'})
+                    .data()
+                    .reduce((a,b)=>intVal(a)+intVal(b),0);
+
+                $(api.column(colIndex).footer())
+                    .html(total);
+            });
+        }
+
+    });
+
+});
+
+</script>
       <script>
          $('.btn-approve').click(function() {
              let id = $(this).data('id');
@@ -245,7 +457,7 @@
              }).then((result) => {
                  if (result.isConfirmed) {
                     Swal.fire({
-                        title: "Finalizing Payroll Approval...",
+                        title: "Finalizing Thr Approval...",
                         text: "Mohon tunggu...",
                         allowOutsideClick: false,
                         showConfirmButton: false,

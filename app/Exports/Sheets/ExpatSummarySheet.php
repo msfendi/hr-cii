@@ -8,8 +8,20 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStyles;
 
-class ExpatSummarySheet implements FromCollection, WithTitle, WithHeadings, ShouldAutoSize, WithMapping
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+
+class ExpatSummarySheet implements
+    FromCollection,
+    WithTitle,
+    WithHeadings,
+    ShouldAutoSize,
+    WithMapping,
+    WithStyles
 {
     protected $start;
     protected $end;
@@ -25,6 +37,11 @@ class ExpatSummarySheet implements FromCollection, WithTitle, WithHeadings, Shou
         return 'expat_summary';
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | COLLECTION (LOGIC TIDAK DIUBAH)
+    |--------------------------------------------------------------------------
+    */
     public function collection()
     {
         $today = \Carbon\Carbon::today();
@@ -70,11 +87,8 @@ class ExpatSummarySheet implements FromCollection, WithTitle, WithHeadings, Shou
 
 
         /*
-    |--------------------------------------------------------------------------
-    | HITUNG TOTAL AMOUNT ONLEAVE (JSON ARRAY)
-    |--------------------------------------------------------------------------
-    */
-
+        | TOTAL AMOUNT ONLEAVE
+        */
         $onleaveAmounts = DB::table('expat_onleave')
             ->whereBetween('onleave_start', [$this->start, $this->end])
             ->get(['npk', 'amount']);
@@ -85,7 +99,6 @@ class ExpatSummarySheet implements FromCollection, WithTitle, WithHeadings, Shou
 
             $amountArray = json_decode($row->amount, true);
 
-            // handle double JSON
             if (is_string($amountArray)) {
                 $amountArray = json_decode($amountArray, true);
             }
@@ -100,25 +113,11 @@ class ExpatSummarySheet implements FromCollection, WithTitle, WithHeadings, Shou
                 ($totalAmountPerNpk[$row->npk] ?? 0) + $total;
         }
 
-
-        /*
-    |--------------------------------------------------------------------------
-    | MERGE DATA + HITUNG STATUS KITAS & RPTKA
-    |--------------------------------------------------------------------------
-    */
-
         foreach ($data as $row) {
 
-            // total amount onleave
             $row->total_onleave_amount =
                 $totalAmountPerNpk[$row->npk] ?? 0;
 
-
-            /*
-        |--------------------------------
-        | KITAS STATUS
-        |--------------------------------
-        */
             if ($row->kitas_expiry) {
 
                 $diff = $today->diffInDays(
@@ -132,12 +131,6 @@ class ExpatSummarySheet implements FromCollection, WithTitle, WithHeadings, Shou
                 $row->kitas_status = '-';
             }
 
-
-            /*
-        |--------------------------------
-        | RPTKA STATUS
-        |--------------------------------
-        */
             if ($row->rptka_expiry) {
 
                 $diff = $today->diffInDays(
@@ -195,5 +188,82 @@ class ExpatSummarySheet implements FromCollection, WithTitle, WithHeadings, Shou
             $row->total_onleave,
             $row->total_onleave_amount,
         ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STYLING EXCEL
+    |--------------------------------------------------------------------------
+    */
+    public function styles(Worksheet $sheet)
+    {
+        $highestRow = $sheet->getHighestRow();
+
+        /*
+        | HEADER
+        */
+        $sheet->getStyle('A1:O1')->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'size' => 11,
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical'   => Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => [
+                    'rgb' => 'D9E1F2',
+                ],
+            ],
+        ]);
+
+        /*
+        | FORMAT RUPIAH
+        | M = Total Living Cost
+        | O = On Leave Amount
+        */
+        $sheet->getStyle("M2:M{$highestRow}")
+            ->getNumberFormat()
+            ->setFormatCode('"Rp" #,##0');
+
+        $sheet->getStyle("O2:O{$highestRow}")
+            ->getNumberFormat()
+            ->setFormatCode('"Rp" #,##0');
+
+        /*
+        | ALIGNMENT
+        */
+        $sheet->getStyle("A2:A{$highestRow}")
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->getStyle("D2:E{$highestRow}")
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->getStyle("G2:L{$highestRow}")
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->getStyle("N2:N{$highestRow}")
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        /*
+        | BORDER TABLE
+        */
+        $sheet->getStyle("A1:O{$highestRow}")
+            ->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                    ],
+                ],
+            ]);
+
+        /*
+        | FREEZE HEADER
+        */
+        $sheet->freezePane('A2');
+
+        return [];
     }
 }

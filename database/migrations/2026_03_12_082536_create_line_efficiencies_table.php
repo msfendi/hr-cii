@@ -18,6 +18,7 @@ return new class extends Migration
             $table->unsignedBigInteger('line_number');
             $table->decimal('efficiency', 5, 2);
             $table->date('date');
+            $table->unsignedBigInteger('days');
 
             $table->timestamps();
 

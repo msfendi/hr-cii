@@ -173,6 +173,7 @@ class PayrollOutDetailNonSewingSheet
             'sewing_insentif',
             'pad_insentif',
             'cutting_insentif',
+            'heat_insentif',
             'adjusment',
             'bpjs_kesehatan',
             'bpjs_ketenagakerjaan',
@@ -220,6 +221,7 @@ class PayrollOutDetailNonSewingSheet
             'Sewing Insentif',
             'Pad Print Insentif',
             'Cutting Insentif',
+            'Heat Seal Insentif',
             'Adjusment',
 
             'BPJS Kesehatan',

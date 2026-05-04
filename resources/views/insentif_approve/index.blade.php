@@ -10,11 +10,10 @@
          @include('layout.navbar')
          <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
-               <h1 class="h3 mb-0 text-gray-800">Insentif Approval</h1>
+               <h1 class="h3 mb-0 text-gray-800">
+                  Insentif Approval
+               </h1>
             </div>
-            {{-- ===============================
-            TABLE APPROVAL
-            =============================== --}}
             <div class="card shadow mb-4">
                <div class="card-header py-3">
                   <h6 class="m-0 font-weight-bold text-primary">
@@ -84,49 +83,16 @@
                                  @endforeach
                               </td>
                               <td>
-                                 <button class="btn btn-info btn-sm btn-detail"
-                                    data-id="{{ $row->id }}"
-                                    data-period="{{ $row->period_name }}"
+                                 <button
+                                    class="btn btn-info btn-sm btn-detail"
+                                    data-period="{{ $row->period_id }}"
+                                    data-period-name="{{ $row->period_name }}"
                                     data-component="{{ $row->payroll_component }}">
                                  <i class="fas fa-search"></i>
                                  </button>
                               </td>
                               <td class="text-center">
-                                 @php
-                                 $progress=collect($row->progress);
-                                 $currentIndex=$progress->search(fn($i)=>$i['status']!=='approve');
-                                 $canApprove=false;
-                                 if($currentIndex!==false){
-                                 $current=$progress[$currentIndex];
-                                 $npkList=is_array($current['npk'])
-                                 ? $current['npk']
-                                 : json_decode($current['npk'],true);
-                                 $statusList=$current['status']=='pending'
-                                 ? array_fill(0,count($npkList),'waiting')
-                                 : (json_decode($current['status'],true)
-                                 ?? array_fill(0,count($npkList),'waiting'));
-                                 foreach($npkList as $idx=>$npk){
-                                 $beforeApproved=true;
-                                 for($i=0;$i<$idx;$i++){
-                                 if($statusList[$i]!=='approve')
-                                 $beforeApproved=false;
-                                 }
-                                 if(
-                                 $npk==auth()->user()->npk &&
-                                 $statusList[$idx]!='approve' &&
-                                 $beforeApproved
-                                 ){
-                                 $canApprove=true;
-                                 }
-                                 }
-                                 }
-                                 @endphp
-                                 @if($canApprove)
-                                 <button class="btn btn-success btn-sm btn-approve"
-                                    data-id="{{ $row->id }}">
-                                 <i class="fas fa-check"></i>
-                                 </button>
-                                 @elseif($row->status=='finish')
+                                 @if($row->status=='finish')
                                  <span class="badge badge-success">Done</span>
                                  @else
                                  <span class="badge badge-secondary">Waiting</span>
@@ -142,9 +108,7 @@
          </div>
       </div>
       @include('layout.footer')
-      {{-- =========================================
-      MODAL DETAIL
-      ========================================= --}}
+      <!-- ================= MODAL DETAIL ================= -->
       <div class="modal fade" id="detailModal" tabindex="-1">
          <div class="modal-dialog modal-xl">
             <div class="modal-content">
@@ -157,22 +121,30 @@
                   </button>
                </div>
                <div class="modal-body">
-                  <div id="loadingDetail" class="text-center p-4" style="display:none;">
-                     <i class="fas fa-spinner fa-spin fa-2x"></i>
-                  </div>
                   <div class="table-responsive">
-                     <table class="table table-bordered table-sm" id="detailTable">
+                     <table class="table table-bordered table-sm"
+                        id="insentifTable"
+                        width="100%">
                         <thead>
-                           <tr id="detailHead"></tr>
+                           <tr>
+                              <th>NPK</th>
+                              <th>Name</th>
+                              <th>
+                                 Department
+                                 <br>
+                                 <input type="text"
+                                    id="searchDept"
+                                    class="form-control form-control-sm mt-1"
+                                    placeholder="Search Dept">
+                              </th>
+                              <th>Insentif</th>
+                           </tr>
                         </thead>
                         <tbody></tbody>
-                        <tfoot id="detailFooter" style="display:none;">
-                           <tr>
-                              <th colspan="2" class="text-right font-weight-bold">
-                                 TOTAL INSENTIF
-                              </th>
-                              <th id="totalInsentif"
-                                 class="text-right font-weight-bold text-success"></th>
+                        <tfoot>
+                           <tr style="background:#f8f9fc;font-weight:bold">
+                              <th colspan="3" class="text-right">TOTAL</th>
+                              <th></th>
                            </tr>
                         </tfoot>
                      </table>
@@ -183,8 +155,21 @@
       </div>
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
-      <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
       <script>
+         let insentifTable;
+         
+         function formatRupiah(number){
+         
+         number = Number(number) || 0;
+         
+         return new Intl.NumberFormat('id-ID',{
+         style:'currency',
+         currency:'IDR',
+         minimumFractionDigits:0
+         }).format(number);
+         
+         }
+         
          $(document).ready(function(){
          
          $('#dataTable').DataTable({
@@ -194,188 +179,139 @@
          autoWidth:false
          });
          
+         
+         insentifTable = $('#insentifTable').DataTable({
+         
+         processing:true,
+         searching:true,
+         paging:true,
+         info:false,
+         autoWidth:true,
+         data:[],
+         
+         language:{
+         processing:
+         '<div class="text-center p-3">'+
+         '<i class="fas fa-spinner fa-spin fa-2x"></i>'+
+         '<div>Loading data...</div>'+
+         '</div>'
+         },
+         
+         columns:[
+         {data:'npk'},
+         {data:'name'},
+         {data:'dept'},
+         {
+         data:null,
+         render:function(row){
+         
+         let value =
+         row.sewing_insentif ??
+         row.pad_insentif ??
+         row.cutting_insentif ??
+         row.heat_insentif ??
+         0;
+         
+         return formatRupiah(value);
+         }
+         }
+         ],
+         
+         footerCallback:function(){
+         
+         let api=this.api();
+         
+         let total = api
+         .rows({search:'applied'})
+         .data()
+         .reduce(function(sum,row){
+         
+         let val =
+         row.sewing_insentif ??
+         row.pad_insentif ??
+         row.cutting_insentif ??
+         row.heat_insentif ??
+         0;
+         
+         return sum + Number(val);
+         
+         },0);
+         
+         $(api.column(3).footer())
+         .html(formatRupiah(total));
+         
+         }
+         
          });
          
-         let detailTable=null;
          
-         /* ======================================
-         SHOW DETAIL (NOW USING MODAL)
-         ====================================== */
+         /* ✅ SEARCH DEPT */
          
-         $('.btn-detail').on('click',function(){
+         $('#searchDept').on('keyup change', function () {
+
+            insentifTable
+                  .column(2) // kolom Department
+                  .search(this.value)
+                  .draw();
+
+         });
          
-         let id=$(this).data('id');
+         });
+         
+         
+         $(document).on('click','.btn-detail',function(){
+         
          let period=$(this).data('period');
+         let periodName=$(this).data('period-name');
          let component=$(this).data('component');
          
          $('#detailModal').modal('show');
          
-         $('#detail-title').text('Insentif Detail - '+period);
+         $('#detail-title')
+         .text('Insentif Detail - '+periodName);
          
-         if($.fn.DataTable.isDataTable('#detailTable')){
-         $('#detailTable').DataTable().clear().destroy();
-         }
+         let url='';
          
-         $('#detailHead').html('');
-         $('#detailTable tbody').html('');
-         $('#detailFooter').hide();
-         
-         $('#loadingDetail').show();
-         
-         $.get('/insentif-approve/'+id+'/detail',function(res){
-         
-         let head='';
-         let rows='';
-         let total=0;
-         
-         /* DATA KOSONG */
-         if(!res || res.length===0){
-         
-         head=`<th>NPK</th><th>Name</th><th>Insentif</th>`;
-         
-         rows=`
-         <tr>
-         <td colspan="3"
-         class="text-center text-muted font-weight-bold">
-         Tidak ada Insentif pada periode bulan ini
-         </td>
-         </tr>`;
-         
-         $('#detailHead').html(head);
-         $('#detailTable tbody').html(rows);
-         
-         $('#loadingDetail').hide();
-         return;
-         }
-         
-         /* SEWING */
          if(component==='sewing_insentif'){
-         
-         head=`<th>NPK</th><th>Name</th>
-         <th class="text-right">Sewing Insentif</th>`;
-         
-         res.forEach(r=>{
-         let val=parseFloat(r.sewing_insentif)||0;
-         total+=val;
-         
-         rows+=`
-         <tr>
-         <td>${r.npk}</td>
-         <td>${r.name}</td>
-         <td class="text-right">${val.toLocaleString()}</td>
-         </tr>`;
-         });
+         url='/line-insentif-master/'+period+'/check';
          }
-         
-         /* PAD */
          else if(component==='pad_insentif'){
-         
-         head=`<th>NPK</th><th>Name</th>
-         <th class="text-right">Pad Insentif</th>`;
-         
-         res.forEach(r=>{
-         let val=parseFloat(r.pad_insentif)||0;
-         total+=val;
-         
-         rows+=`
-         <tr>
-         <td>${r.npk}</td>
-         <td>${r.name}</td>
-         <td class="text-right">${val.toLocaleString()}</td>
-         </tr>`;
-         });
+         url='/pad-insentif-master/'+period+'/check';
          }
-         
-         /* CUTTING */
          else if(component==='cutting_insentif'){
-         
-         head=`<th>NPK</th><th>Name</th>
-         <th class="text-right">Cutting Insentif</th>`;
-         
-         res.forEach(r=>{
-         let val=parseFloat(r.cutting_insentif)||0;
-         total+=val;
-         
-         rows+=`
-         <tr>
-         <td>${r.npk}</td>
-         <td>${r.name}</td>
-         <td class="text-right">${val.toLocaleString()}</td>
-         </tr>`;
-         });
+         url='/cutting-insentif-master/'+period+'/check';
+         }
+         else if(component==='heat_insentif'){
+         url='/heat-insentif-master/'+period+'/check';
          }
          
-         $('#detailHead').html(head);
-         $('#detailTable tbody').html(rows);
-         
-         if(total>0){
-         $('#totalInsentif').text(total.toLocaleString());
-         $('#detailFooter').show();
-         }
-         
-         $('#loadingDetail').hide();
-         
-         detailTable=$('#detailTable').DataTable({
-         pageLength:25,
-         ordering:true,
-         responsive:true,
-         autoWidth:false,
-         destroy:true
-         });
-         
-         });
-         
-         });
-         
-         /* ======================================
-         APPROVE
-         ====================================== */
-         
-         $('.btn-approve').click(function(){
-         
-         let btn=$(this);
-         btn.prop('disabled',true);
-         
-         let id=$(this).data('id');
-         
-         Swal.fire({
-         title:'Approve Insentif?',
-         icon:'question',
-         showCancelButton:true
-         }).then((result)=>{
-         
-         if(result.isConfirmed){
+         $('#insentifTable_processing').show();
          
          $.ajax({
-         url:'/insentif-approve/'+id+'/approve',
-         type:'POST',
-         data:{
-         _token:'{{ csrf_token() }}',
-         npk:'{{ auth()->user()->npk }}'
-         },
+         
+         url:url,
+         type:'GET',
+         dataType:'json',
+         
          success:function(res){
          
-         Swal.fire({
-         icon:'success',
-         title:res.message,
-         timer:1200,
-         showConfirmButton:false
-         });
+         insentifTable.clear();
+         insentifTable.rows.add(res.data);
+         insentifTable.draw();
          
-         setTimeout(()=>location.reload(),1200);
+         $('#insentifTable_processing').hide();
+         
          },
-         error:function(err){
          
-         Swal.fire({
-         icon:'error',
-         title:err.responseJSON.message,
-         timer:2000,
-         showConfirmButton:false
-         });
+         error:function(xhr){
+         
+         console.log(xhr.responseText);
+         $('#insentifTable_processing').hide();
+         
          }
+         
          });
-         }
-         });
+         
          });
          
       </script>

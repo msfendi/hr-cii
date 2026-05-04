@@ -2,9 +2,13 @@
 
 namespace App\Jobs;
 
+use App\Models\PayrollComponent;
+use App\Models\PayrollSetting;
+use App\Models\ThrApprove;
 use App\Models\ThrPeriod;
 use App\Models\ThrRun;
 use App\Models\ThrRunDetail;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -17,49 +21,44 @@ class GenerateThrProcess implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $timeout = 0;
-    protected $period_id;
+    public $runId;
 
-    public function __construct($period_id)
+    public function __construct($runId)
     {
-        $this->period_id = $period_id;
+        $this->runId = $runId;
     }
 
     public function handle()
     {
         ini_set('memory_limit', '2048M');
 
-        $period = ThrPeriod::findOrFail($this->period_id);
+        $run = ThrRun::findOrFail($this->runId);
+        $period = ThrPeriod::findOrFail($run->period_id);
 
         /*
-        |--------------------------------------------------------------------------
-        | CREATE RUN
-        |--------------------------------------------------------------------------
-        */
+    ============================
+    CREATE RUN
+    ============================
+    */
 
-        $run = ThrRun::create([
-            'period_id' => $period->id,
-            'processed_at' => now(),
-            'progress' => 0,
-            'status' => 'processing'
+        $cutoff = Carbon::parse($period->cutoff_date);
+
+        /*
+    ============================
+    GET ACTIVE EMPLOYEES
+    ============================
+    */
+        $run->update([
+            'status' => 'Get Employee Biodata',
+            'progress' => 5,
         ]);
-
-        $cutoff = $period->cutoff_date;
-
-        /*
-        |--------------------------------------------------------------------------
-        | EMPLOYEE AKTIF ONLY
-        |--------------------------------------------------------------------------
-        */
-
         $employees = DB::connection('cii')
-            ->table('BIODATA as b')
-            ->join('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->join('payroll_masters as pm', 'pm.npk', '=', 'b.NPK')
-
-            ->whereNull('p.TKK') // ONLY ACTIVE
-
+            ->table('PKWT as p')
+            ->join('BIODATA as b', 'p.NPK', '=', 'b.NPK')
+            ->join('payroll_masters as pm', 'pm.npk', '=', 'p.NPK')
+            ->whereNull('p.TKK')
             ->select(
-                'b.NPK',
+                'p.NPK',
                 'b.NAMA_KARYAWAN',
                 'pm.salary',
                 'pm.allowance',
@@ -67,62 +66,142 @@ class GenerateThrProcess implements ShouldQueue
             )
             ->get();
 
+        /*
+    ============================
+    GET THR FORMULA FROM DB
+    ============================
+    */
+        $run->update([
+            'status' => 'Get THR Component',
+            'progress' => 10,
+        ]);
+        $thrComponent = PayrollComponent::where('code', 'thr')->first();
+        $formula = $thrComponent->formula;
+
         $totalTHR = 0;
 
-        foreach ($employees as $employee) {
+        /*
+    ============================
+    LOOP EMPLOYEES
+    ============================
+    */
+        foreach ($employees as $emp) {
 
-            /*
-            |--------------------------------------------------------------------------
-            | MASA KERJA
-            |--------------------------------------------------------------------------
-            */
-
-            $months = DB::selectOne("
-                SELECT DATEDIFF(MONTH, ?, ?) as masa_kerja
-            ", [$employee->TMK, $cutoff])->masa_kerja;
-
-            $masaKerja = max($months, 0) / 12;
-
-            /*
-            |--------------------------------------------------------------------------
-            | THR FORMULA
-            |--------------------------------------------------------------------------
-            */
-
-            $basic = (float)$employee->salary;
-            $allowance = (float)$employee->allowance;
-
-            $thr = (($basic + $allowance) / 12) * $masaKerja;
-
-            $components = [
-                "basic_salary" => $basic,
-                "allowance" => $allowance,
-                "masa_kerja" => round($masaKerja, 2),
-                "thr" => round($thr, 2)
-            ];
-
-            ThrRunDetail::create([
-                'run_id' => $run->id,
-                'employee_npk' => $employee->NPK,
-                'employee_name' => $employee->NAMA_KARYAWAN,
-                'components' => json_encode($components),
-                'total_salary' => $thr
+            $run->update([
+                'status' => 'Calculation for ' . $emp->NPK . ' - ' . $thrComponent->name,
+                'progress' => 50,
             ]);
 
-            $totalTHR += $thr;
+            $basic_salary = $emp->salary ?? 0;
+            $allowance    = $emp->allowance ?? 0;
+
+            /*
+        ============================
+        WORKING MONTHS
+        ============================
+        */
+            $working_months = Carbon::parse($emp->TMK)
+                ->diffInMonths($cutoff);
+
+            /*
+        ============================
+        THR CALCULATION USING FORMULA
+        ============================
+        */
+            $thr = 0;
+
+            try {
+                // Ganti variabel formula sesuai DB: working_months, basic_salary, allowance
+                $evalFormula = str_replace(
+                    ['basic_salary', 'allowance', 'working_months'],
+                    [$basic_salary, $allowance, $working_months],
+                    $formula
+                );
+                eval('$thr = ' . $evalFormula . ';');
+            } catch (\Throwable $e) {
+                $thr = 0;
+            }
+
+            /*
+        ============================
+        🔥 ROUND ONLY ONCE
+        ============================
+        */
+            $thrRounded = round($thr, 0);
+
+            /*
+        ============================
+        COMPONENT JSON
+        ============================
+        */
+            $components = [
+                'basic_salary'   => $basic_salary,
+                'allowance'      => $allowance,
+                'working_months' => $working_months,
+                'thr'            => $thrRounded
+            ];
+
+            /*
+        ============================
+        SAVE DETAIL
+        ============================
+        */
+            ThrRunDetail::create([
+                'run_id'        => $run->id,
+                'employee_npk'  => $emp->NPK,
+                'employee_name' => $emp->NAMA_KARYAWAN,
+                'components'    => json_encode($components),
+                'total_salary'  => $thrRounded
+            ]);
+
+            $totalTHR += $thrRounded;
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | UPDATE RUN
-        |--------------------------------------------------------------------------
-        */
-
+    ============================
+    UPDATE RUN SUMMARY
+    ============================
+    */
         $run->update([
             'employee_count' => $employees->count(),
-            'total_thr' => $totalTHR,
-            'progress' => 100,
-            'status' => 'finished'
+            'total_thr'      => $totalTHR,
+            'status'         => 'THR calculation completed',
+            'progress'       => 100
         ]);
+
+        /*
+    ============================
+    AUTO CREATE APPROVAL
+    ============================
+    */
+        $existsApprove = ThrApprove::where('thr_run_id', $run->id)->exists();
+
+        if (!$existsApprove) {
+
+            $settings = PayrollSetting::where('component', 'thr')->get();
+
+            if ($settings->count() > 0) {
+
+                $approvals = $settings->pluck('approval')->toArray();
+
+                $progress = collect($approvals)->map(function ($npk) {
+                    $npkList = is_array($npk) ? $npk : json_decode($npk, true);
+                    if (!is_array($npkList)) $npkList = [$npk];
+                    $statusList = array_fill(0, count($npkList), 'waiting');
+                    return [
+                        'npk' => json_encode($npkList),
+                        'status' => json_encode($statusList)
+                    ];
+                })->values();
+
+                ThrApprove::create([
+                    'thr_run_id'     => $run->id,
+                    'approval'       => $approvals,
+                    'progress'       => $progress,
+                    'approved_at'    => [],
+                    'status'         => 'pending'
+                ]);
+            }
+        }
     }
 }

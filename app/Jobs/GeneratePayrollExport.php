@@ -54,7 +54,7 @@ class GeneratePayrollExport implements ShouldQueue
         $run_id = $export->run_id;
 
         $export->update([
-            'status' => 'processing',
+            'status' => 'Start Processing',
             'progress' => 0,
         ]);
 
@@ -63,6 +63,12 @@ class GeneratePayrollExport implements ShouldQueue
         | EMPLOYEE UNION (LOAD ONCE)
         |--------------------------------------------------------------------------
         */
+
+        $export->update([
+            'progress' => 15,
+            'status' => 'Processing Employee Data'
+        ]);
+
         $employeeUnion = DB::table('BIODATA')
             ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
             ->unionAll(
@@ -132,9 +138,6 @@ class GeneratePayrollExport implements ShouldQueue
 
         if ($data->isEmpty()) return;
 
-        $export->update([
-            'progress' => 15,
-        ]);
 
         $periodName = $data->first()->period_name ?? 'UNKNOWN';
         $periodNameFormatted = strtoupper(str_replace(' ', '_', $periodName));
@@ -144,16 +147,16 @@ class GeneratePayrollExport implements ShouldQueue
         | FOLDER
         |--------------------------------------------------------------------------
         */
+
+        $export->update([
+            'progress' => 20,
+            'status' => 'Creating Export Folders'
+        ]);
+
         $folder = "public/payroll/$periodNameFormatted";
         $folderStaff = "$folder/STAFF";
         $folderSewing = "$folder/SEWING";
         $folderNonSewing = "$folder/NON_SEWING";
-
-
-        $folderEncrypted = "payroll/$periodNameFormatted";
-        $folderEncryptedStaff = "$folderEncrypted/STAFF";
-        $folderEncryptedSewing = "$folderEncrypted/SEWING";
-        $folderEncryptedNonSewing = "$folderEncrypted/NON_SEWING";
 
         Storage::makeDirectory($folder, 0777, true);
         Storage::makeDirectory($folderStaff, 0777, true);
@@ -169,18 +172,33 @@ class GeneratePayrollExport implements ShouldQueue
 
             $zipService = app(\App\Services\ExcelZipEncryptService::class);
 
+            $export->update([
+                'progress' => 30,
+                'status' => 'Processing Excel Files for ALL'
+            ]);
             (new PayrollExportExcel($run_id))
                 ->export(storage_path("app/$folder/REKAP_$periodNameFormatted.xlsx"));
-            (new PayrollExportStaffExcel($run_id))
-                ->export(storage_path("app/$folderStaff/REKAP_$periodNameFormatted.xlsx"));
-            (new PayrollExportSewingExcel($run_id))
-                ->export(storage_path("app/$folderSewing/REKAP_$periodNameFormatted.xlsx"));
-            (new PayrollExportNonSewingExcel($run_id))
-                ->export(storage_path("app/$folderNonSewing/REKAP_$periodNameFormatted.xlsx"));
 
             $export->update([
-                'progress' => 30
+                'progress' => 35,
+                'status' => 'Processing Excel Files for STAFF'
             ]);
+            (new PayrollExportStaffExcel($run_id))
+                ->export(storage_path("app/$folderStaff/REKAP_$periodNameFormatted.xlsx"));
+
+            $export->update([
+                'progress' => 40,
+                'status' => 'Processing Excel Files for SEWING'
+            ]);
+            (new PayrollExportSewingExcel($run_id))
+                ->export(storage_path("app/$folderSewing/REKAP_$periodNameFormatted.xlsx"));
+
+            $export->update([
+                'progress' => 45,
+                'status' => 'Processing Excel Files for NON_SEWING'
+            ]);
+            (new PayrollExportNonSewingExcel($run_id))
+                ->export(storage_path("app/$folderNonSewing/REKAP_$periodNameFormatted.xlsx"));
         }
 
         /*
@@ -188,6 +206,12 @@ class GeneratePayrollExport implements ShouldQueue
         | COMPONENT MASTER (UNCHANGED)
         |--------------------------------------------------------------------------
         */
+
+        $export->update([
+            'progress' => 50,
+            'status' => 'Collecting Payroll Data'
+        ]);
+
         $componentKeys = collect($data)
             ->flatMap(fn($r) => array_keys(json_decode($r->components, true) ?? []))
             ->unique()
@@ -261,11 +285,17 @@ class GeneratePayrollExport implements ShouldQueue
             return $totals;
         };
 
+
         /*
         |--------------------------------------------------------------------------
         | APPROVAL BUILDER (UNCHANGED)
         |--------------------------------------------------------------------------
         */
+
+        $export->update([
+            'progress' => 55,
+            'status' => 'Approval Checking'
+        ]);
         $approvals = [];
 
         $approve = DB::table('payroll_approve')
@@ -295,10 +325,6 @@ class GeneratePayrollExport implements ShouldQueue
             }
         }
 
-        $export->update([
-            'progress' => 50,
-        ]);
-
         /*
         |--------------------------------------------------------------------------
         | PDF GENERATION SPLIT (NEW)
@@ -309,17 +335,17 @@ class GeneratePayrollExport implements ShouldQueue
 
         foreach ($categories as $key => $filter) {
 
+            $export->update([
+                'progress' => 75,
+                'file_excel' => "REKAP_$periodNameFormatted.zip",
+                'status' => "Encrypting Excel Files for $key"
+            ]);
+
             $folderTarget = match ($key) {
                 'STAFF' => $folderStaff,
                 'SEWING' => $folderSewing,
                 'NON_SEWING' => $folderNonSewing,
                 default => $folder
-            };
-            $folderTargetEncrypted = match ($key) {
-                'STAFF' => $folderEncryptedStaff,
-                'SEWING' => $folderEncryptedSewing,
-                'NON_SEWING' => $folderEncryptedNonSewing,
-                default => $folderEncrypted
             };
 
             $password = match ($key) {
@@ -329,15 +355,12 @@ class GeneratePayrollExport implements ShouldQueue
                 default => PdfPassword::generate('all', $data->first()->start_date)
             };
 
-            $zipService->encrypt(
-                storage_path("app/$folderTarget/REKAP_$periodNameFormatted.xlsx"),
-                $password ?? $password
-            );
-
-            $export->update([
-                'progress' => 65,
-                'file_excel' => "REKAP_$periodNameFormatted.zip"
-            ]);
+            if ($this->type === 'process') {
+                $zipService->encrypt(
+                    storage_path("app/$folderTarget/REKAP_$periodNameFormatted.xlsx"),
+                    $password ?? $password
+                );
+            }
 
             $active = $activeEmployees->filter($filter);
             $resign = $resignEmployees->filter($filter);
@@ -374,19 +397,22 @@ class GeneratePayrollExport implements ShouldQueue
             |--------------------------------------------------------------------------
             */
 
+            $export->update([
+                'progress' => 75,
+                'status' => "Generating PDF Files for $key"
+            ]);
+
             $pdf = App::make('snappy.pdf.wrapper');
             $pdf->loadHTML($htmlRekap)
                 ->setPaper('a4')
                 ->setOrientation('landscape')
                 ->setOption('enable-local-file-access', true)
-                ->setOption('encoding', 'UTF-8')
-                ->setOption('password', $password);
+                ->setOption('encoding', 'UTF-8');
 
             $pdfPeng = App::make('snappy.pdf.wrapper');
             $pdfPeng->loadHTML($htmlPeng)
                 ->setPaper('a4')
-                ->setOption('enable-local-file-access', true)
-                ->setOption('password', $password);
+                ->setOption('enable-local-file-access', true);
 
             /*
             |--------------------------------------------------------------------------
@@ -412,9 +438,18 @@ class GeneratePayrollExport implements ShouldQueue
             $pdf->save($fullPdfPathTemp);
             $pdfPeng->save($fullPdfPengPathTemp);
 
+            $export->update([
+                'progress' => 75,
+                'status' => "Encrypting PDF Files for $key"
+            ]);
+
             PdfService::protect($fullPdfPathTemp, $fullPdfPath, $password);
             PdfService::protect($fullPdfPengPathTemp, $fullPdfPengPath, $password);
 
+            $export->update([
+                'progress' => 75,
+                'status' => "Deleting Temporary PDF Files for $key"
+            ]);
 
             if (File::exists($fullPdfPathTemp)) File::delete($fullPdfPathTemp);
             if (File::exists($fullPdfPengPathTemp)) File::delete($fullPdfPengPathTemp);

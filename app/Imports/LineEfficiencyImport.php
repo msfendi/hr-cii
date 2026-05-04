@@ -28,7 +28,8 @@ class LineEfficiencyImport implements ToModel, WithHeadingRow
                 'period_id'   => $this->periodId,
             ],
             [
-                'efficiency' => $row['efficiency']
+                'efficiency' => $row['efficiency'],
+                'days' => $row['days']
             ]
         );
     }

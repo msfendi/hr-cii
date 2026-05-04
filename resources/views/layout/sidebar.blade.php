@@ -58,13 +58,15 @@ $role = $roleusers[0]->rolename;
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#expat">
       <i class="fas fa-globe"></i>
-      <span>Expat</span>
+      <span>Expat & Foreign Guest</span>
       </a>
       <div id="expat" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
             <a class="collapse-item" href="{{ route('expat.master.index') }}">Master</a>
             <a class="collapse-item" href="{{ route('expat.onleave.index') }}">On Leave</a>
             <a class="collapse-item" href="{{ route('expat.cost.index') }}">Cost</a>
+            <hr>
+            <a class="collapse-item" href="{{ route('foreign-guest.index') }}">Foreign Guest</a>
          </div>
       </div>
    </li>
@@ -156,9 +158,13 @@ $role = $roleusers[0]->rolename;
       <div id="insentif" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
             <a class="collapse-item" href="{{ route('insentif.threshold.index') }}">Insentif Threshold</a>
+            <a class="collapse-item" href="{{ route('dept-insentif-role.index') }}">Insentif Mapping</a>
+            <a class="collapse-item" href="{{ route('insentif-role-formulas.index') }}">Insentif Formula</a>
+            <hr>
             <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif</a>
             <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif</a>
             <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif</a>
+            <a class="collapse-item" href="{{ route('heat-insentif-master.index') }}">Heat Seal Insentif</a>
          </div>
       </div>
    </li>

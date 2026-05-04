@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\GenerateThrExport;
+use App\Jobs\GenerateThrProcess;
 use App\Models\PayrollComponent;
 use App\Models\PayrollSetting;
 use App\Models\ThrApprove;
@@ -12,6 +13,7 @@ use App\Models\ThrRun;
 use App\Models\ThrRunDetail;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
 
@@ -41,6 +43,58 @@ class ThrProcessController extends Controller
         return view('thr.index', compact('periods'));
     }
 
+
+
+    public function progress($run_id)
+    {
+
+        $export = ThrExport::where('run_id', $run_id)->latest()->first();
+
+        return response()->json([
+            'progress' => $export->progress,
+            'status' => $export->status
+        ]);
+    }
+
+    public function progressRun($period_id)
+    {
+
+        $runs = ThrRun::where('period_id', $period_id)->latest()->first();
+
+        return response()->json([
+            'progress' => $runs->progress,
+            'status' => $runs->status
+        ]);
+    }
+
+    public function destroy($period_id)
+    {
+        DB::beginTransaction();
+
+        try {
+
+            // ambil semua run id dari period
+            $runIds = ThrRun::where('id', $period_id)->pluck('id');
+            if ($runIds->count() > 0) {
+
+                // hapus detail payroll
+                ThrRunDetail::whereIn('run_id', $runIds)->delete();
+
+                // hapus run payroll
+                ThrRun::whereIn('id', $runIds)->delete();
+            }
+
+            DB::commit();
+
+            return redirect()->back()->with('success', 'THR deleted successfully');
+        } catch (\Exception $e) {
+
+            DB::rollBack();
+
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
     public function process(Request $request)
     {
         $period = ThrPeriod::findOrFail($request->period_id);
@@ -55,165 +109,13 @@ class ThrProcessController extends Controller
             return back();
         }
 
-        /*
-    ============================
-    CREATE RUN
-    ============================
-    */
         $run = ThrRun::create([
             'period_id'    => $period->id,
             'processed_at' => now(),
-            'status'       => 'processing'
+            'status'       => 'Initializing'
         ]);
 
-        $cutoff = Carbon::parse($period->cutoff_date);
-
-        /*
-    ============================
-    GET ACTIVE EMPLOYEES
-    ============================
-    */
-        $employees = DB::connection('cii')
-            ->table('PKWT as p')
-            ->join('BIODATA as b', 'p.NPK', '=', 'b.NPK')
-            ->join('payroll_masters as pm', 'pm.npk', '=', 'p.NPK')
-            ->whereNull('p.TKK')
-            ->select(
-                'p.NPK',
-                'b.NAMA_KARYAWAN',
-                'pm.salary',
-                'pm.allowance',
-                'p.TMK'
-            )
-            ->get();
-
-        /*
-    ============================
-    GET THR FORMULA FROM DB
-    ============================
-    */
-        $thrComponent = PayrollComponent::where('code', 'thr')->first();
-        $formula = $thrComponent ? $thrComponent->formula : '(working_months >= 12 ? (basic_salary + allowance) : ((basic_salary + allowance) / 12 * working_months))';
-
-        $totalTHR = 0;
-
-        /*
-    ============================
-    LOOP EMPLOYEES
-    ============================
-    */
-        foreach ($employees as $emp) {
-
-            $basic_salary = $emp->salary ?? 0;
-            $allowance    = $emp->allowance ?? 0;
-
-            /*
-        ============================
-        WORKING MONTHS
-        ============================
-        */
-            $working_months = Carbon::parse($emp->TMK)
-                ->diffInMonths($cutoff);
-
-            /*
-        ============================
-        THR CALCULATION USING FORMULA
-        ============================
-        */
-            $thr = 0;
-
-            try {
-                // Ganti variabel formula sesuai DB: working_months, basic_salary, allowance
-                $evalFormula = str_replace(
-                    ['basic_salary', 'allowance', 'working_months'],
-                    [$basic_salary, $allowance, $working_months],
-                    $formula
-                );
-                eval('$thr = ' . $evalFormula . ';');
-            } catch (\Throwable $e) {
-                $thr = 0;
-            }
-
-            /*
-        ============================
-        🔥 ROUND ONLY ONCE
-        ============================
-        */
-            $thrRounded = round($thr, 0);
-
-            /*
-        ============================
-        COMPONENT JSON
-        ============================
-        */
-            $components = [
-                'basic_salary'   => $basic_salary,
-                'allowance'      => $allowance,
-                'working_months' => $working_months,
-                'thr'            => $thrRounded
-            ];
-
-            /*
-        ============================
-        SAVE DETAIL
-        ============================
-        */
-            ThrRunDetail::create([
-                'run_id'        => $run->id,
-                'employee_npk'  => $emp->NPK,
-                'employee_name' => $emp->NAMA_KARYAWAN,
-                'components'    => json_encode($components),
-                'total_salary'  => $thrRounded
-            ]);
-
-            $totalTHR += $thrRounded;
-        }
-
-        /*
-    ============================
-    UPDATE RUN SUMMARY
-    ============================
-    */
-        $run->update([
-            'employee_count' => $employees->count(),
-            'total_thr'      => $totalTHR,
-            'status'         => 'completed'
-        ]);
-
-        /*
-    ============================
-    AUTO CREATE APPROVAL
-    ============================
-    */
-        $existsApprove = ThrApprove::where('thr_run_id', $run->id)->exists();
-
-        if (!$existsApprove) {
-
-            $settings = PayrollSetting::where('component', 'thr')->get();
-
-            if ($settings->count() > 0) {
-
-                $approvals = $settings->pluck('approval')->toArray();
-
-                $progress = collect($approvals)->map(function ($npk) {
-                    $npkList = is_array($npk) ? $npk : json_decode($npk, true);
-                    if (!is_array($npkList)) $npkList = [$npk];
-                    $statusList = array_fill(0, count($npkList), 'waiting');
-                    return [
-                        'npk' => json_encode($npkList),
-                        'status' => json_encode($statusList)
-                    ];
-                })->values();
-
-                ThrApprove::create([
-                    'thr_run_id'     => $run->id,
-                    'approval'       => $approvals,
-                    'progress'       => $progress,
-                    'approved_at'    => [],
-                    'status'         => 'pending'
-                ]);
-            }
-        }
+        GenerateThrProcess::dispatch($run->id);
 
         Alert::success('THR Processed Successfully');
 
@@ -244,28 +146,120 @@ class ThrProcessController extends Controller
 
     public function details($id)
     {
-        $data = DB::table('thr_run_details')
-            ->where('run_id', $id)
-            ->select(
-                'run_id',
-                'employee_npk',
-                'employee_name',
-                'components',
-                'total_salary'
+        /*
+    |--------------------------------------------------------------------------
+    | CHECK USER ROLE
+    |--------------------------------------------------------------------------
+    */
+
+        $user = Auth::user();
+
+        $canSeeSalary = $user->hasRole([
+            'Admin',
+            'Payroll_STAFF',
+            'Payroll_SEWING',
+            'Payroll_NONSEWING'
+        ]);
+
+        /*
+    |--------------------------------------------------------------------------
+    | EMPLOYEE UNION
+    |--------------------------------------------------------------------------
+    */
+
+        $employeeUnion = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
+            );
+
+        /*
+    |--------------------------------------------------------------------------
+    | BASE QUERY
+    |--------------------------------------------------------------------------
+    */
+
+        $query = DB::table('thr_run_details as prd')
+            ->leftJoinSub(
+                $employeeUnion,
+                'emp',
+                fn($j) => $j->on('emp.NPK', '=', 'prd.employee_npk')
             )
-            ->orderBy('employee_npk')
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
+            ->leftJoin('PKWT as p', 'p.NPK', '=', 'emp.NPK')
+            ->where('prd.run_id', $id)
+            ->select(
+                'prd.run_id',
+                'prd.employee_npk',
+                'prd.employee_name',
+                'p.TKK as tkk',
+                'd.DEPARTEMENT as dept',
+                'prd.components',
+                'prd.total_salary',
+                'emp.IS_STAFF',
+                'd.IS_SEWING'
+            );
+
+        /*
+    |--------------------------------------------------------------------------
+    | ROLE FILTERING (NEW)
+    |--------------------------------------------------------------------------
+    */
+
+        if (!$user->hasRole('Admin')) {
+
+            if ($user->hasRole('Payroll_STAFF')) {
+                $query->where('emp.IS_STAFF', 1);
+            }
+
+            if ($user->hasRole('Payroll_SEWING')) {
+                $query->where('d.IS_SEWING', 0)->where('emp.IS_STAFF', 0);
+            }
+
+            if ($user->hasRole('Payroll_NONSEWING')) {
+                $query->where('d.IS_SEWING', 1)->where('emp.IS_STAFF', 0);
+            }
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | GET DATA
+    |--------------------------------------------------------------------------
+    */
+
+        $data = $query
+            ->orderBy('prd.employee_npk')
             ->get();
 
-        $data->transform(function ($item) {
+        /*
+    |--------------------------------------------------------------------------
+    | TRANSFORM COMPONENTS
+    |--------------------------------------------------------------------------
+    */
 
-            $components = json_decode($item->components, true);
+        $data->transform(function ($item) use ($canSeeSalary) {
+
+            $components = json_decode($item->components, true) ?? [];
 
             foreach ($components as $key => $value) {
-                $item->$key = $value;
+                $item->$key = $canSeeSalary
+                    ? (float) $value
+                    : '***';
             }
+
+            $item->total_salary = $canSeeSalary
+                ? (float) $item->total_salary
+                : '***';
 
             return $item;
         });
+
+        /*
+    |--------------------------------------------------------------------------
+    | RESPONSE
+    |--------------------------------------------------------------------------
+    */
 
         return response()->json([
             'data' => $data

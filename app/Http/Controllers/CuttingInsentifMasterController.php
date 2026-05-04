@@ -23,52 +23,19 @@ class CuttingInsentifMasterController extends Controller
 {
     public function index()
     {
-        $data = DB::table('cutting_efficiencies as ce')
-
-            /*
-        |--------------------------------------------------------------------------
-        | MATCH ASSIGNMENT BY DATE RANGE ONLY
-        |--------------------------------------------------------------------------
-        */
-            ->join('employee_cutting_assignments as e', function ($join) {
-                $join->on('ce.period_id', '=', 'e.period_id')
-                    ->whereRaw('ce.date >= e.start_date')
-                    ->whereRaw('(e.end_date IS NULL OR ce.date <= e.end_date)');
-            })
-
-            /*
-        |--------------------------------------------------------------------------
-        | BIODATA
-        |--------------------------------------------------------------------------
-        */
-            ->join('BIODATA as b', function ($join) {
-                $join->on('e.npk', '=', 'b.NPK');
-            })
-
-            /*
-        |--------------------------------------------------------------------------
-        | PERIOD
-        |--------------------------------------------------------------------------
-        */
+        $data = $data = DB::table('cutting_efficiencies as c')
             ->join('payroll_periods as pp', function ($join) {
-                $join->on('ce.period_id', '=', 'pp.id');
+                $join->on('c.period_id', '=', 'pp.id');
             })
-
             ->select(
-                'e.id',
-                'e.npk',
-                'b.NAMA_KARYAWAN as name',
+                'c.id',
                 'pp.name as period',
-                'e.role',
-                'ce.efficiency',
-                'ce.date'
+                'c.efficiency',
+                'c.date'
             )
             ->where('pp.is_closed', 0)
-
-            ->orderBy('e.npk')
-            ->orderBy('ce.date')
+            ->orderBy('c.date')
             ->get();
-
 
         $periods = PayrollPeriod::select('id', 'name')
             ->where('is_closed', 0)
@@ -224,15 +191,25 @@ class CuttingInsentifMasterController extends Controller
 
 
         /*
-    |--------------------------------------------------------------------------
-    | AMBIL NPK YANG BENAR-BENAR ADA ASSIGNMENT
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | AMBIL NPK YANG BENAR-BENAR ADA ASSIGNMENT
+        |--------------------------------------------------------------------------
+        */
 
-        $assignmentNpk = DB::table('employee_cutting_assignments')
-            ->where('period_id', $period_id)
+        $assignmentNpk = DB::table(DB::raw("
+    (
+        SELECT NPK, ID_DEPT FROM BIODATA
+        UNION ALL
+        SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
+    ) emp
+"))
+            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
+            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+            ->where('irf.dept', 'cutting')
             ->distinct()
-            ->pluck('npk');
+            ->pluck('emp.NPK');
+
+        // dd($assignmentNpk->toArray());
 
 
         /*
@@ -243,23 +220,43 @@ class CuttingInsentifMasterController extends Controller
 
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
-            ->leftJoin('BIODATA as b', 'p.NPK', '=', 'b.NPK')
-            ->leftJoin('BIODATA_KELUAR as bk', 'p.NPK', '=', 'bk.NPK')
-            ->whereIn('p.NPK', $assignmentNpk) // 🔥 FILTER CEPAT
+
+            ->join(DB::raw("
+        (
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
+            UNION ALL
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
+        ) emp
+    "), 'p.NPK', '=', 'emp.NPK')
+
+            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
+            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+
+            ->whereIn('p.NPK', $assignmentNpk)
+            // ->where('p.NPK', '=', 'C-00795')
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
             })
+
             ->select(
                 'p.NPK',
-                DB::raw('COALESCE(b.NAMA_KARYAWAN,bk.NAMA_KARYAWAN) as NAMA_KARYAWAN'),
-                'p.TMK'
+                'emp.NAMA_KARYAWAN',
+                'p.TMK',
+                'p.TKK as tkk',
+                'emp.ID_DEPT',
+                'd.DEPARTEMENT as DEPARTEMENT',
+                'irf.role as role',
+                'emp.SECTION as SECTION'
             );
 
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
             ->get();
+
+        // dd($employees);
 
 
         /*
@@ -288,7 +285,8 @@ class CuttingInsentifMasterController extends Controller
             $cutting = $this->calculateCutting(
                 $employee,
                 $period,
-                $cuttingInsentifFormula
+                $cuttingInsentifFormula,
+                $employee->role,
             );
 
             if ($cutting <= 0) continue;
@@ -297,6 +295,7 @@ class CuttingInsentifMasterController extends Controller
                 'npk' => $employee->NPK,
                 'name' => $employee->NAMA_KARYAWAN,
                 'cutting_insentif' => $cutting,
+                'dept' => $employee->DEPARTEMENT,
             ];
         }
 
@@ -330,9 +329,20 @@ class CuttingInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    private function calculateCutting($employee, $period, $formula)
+    private function calculateCutting($employee, $period, $formula, $role)
     {
         $amount = 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET MUTATIONS EMPLOYEE
+        |--------------------------------------------------------------------------
+        */
+        $mutations = DB::table('employee_mutations')
+            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
+            ->where('npk', $employee->NPK)
+            ->orderBy('date')
+            ->get();
 
         /*
     |--------------------------------------------------------------------------
@@ -380,17 +390,6 @@ class CuttingInsentifMasterController extends Controller
 
         /*
     |--------------------------------------------------------------------------
-    | LOAD ASSIGNMENTS (NO JOIN)
-    |--------------------------------------------------------------------------
-    */
-        $assignments = DB::table('employee_cutting_assignments')
-            ->where('npk', $employee->NPK)
-            ->where('period_id', $period->id)
-            ->get();
-
-
-        /*
-    |--------------------------------------------------------------------------
     | LOAD CUTTING EFFICIENCY
     |--------------------------------------------------------------------------
     */
@@ -401,6 +400,8 @@ class CuttingInsentifMasterController extends Controller
                 $period->end_date
             ])
             ->get();
+
+        // dd($cuttingEfficiencies);
 
 
         /*
@@ -421,29 +422,6 @@ class CuttingInsentifMasterController extends Controller
 
             /*
         |----------------------------------
-        | FIND ACTIVE ASSIGNMENT BY DATE
-        |----------------------------------
-        */
-            $assignment = $assignments->first(function ($a) use ($row) {
-
-                if ($row->date < $a->start_date) {
-                    return false;
-                }
-
-                if ($a->end_date && $row->date > $a->end_date) {
-                    return false;
-                }
-
-                return true;
-            });
-
-            // tidak ada role di tanggal tersebut
-            if (!$assignment) {
-                continue;
-            }
-
-            /*
-        |----------------------------------
         | GET INSENTIF BY EFFICIENCY
         |----------------------------------
         */
@@ -458,7 +436,7 @@ class CuttingInsentifMasterController extends Controller
         |----------------------------------
         */
             $amount += $this->calculateRoleCuttingInsentif(
-                $assignment->role,
+                $role,
                 'cutting',
                 $insentif
             );

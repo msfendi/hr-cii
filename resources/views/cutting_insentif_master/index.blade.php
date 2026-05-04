@@ -64,11 +64,25 @@ Detail Insentif Karyawan
 <tr>
     <th>NPK</th>
     <th>Name</th>
+    <th>
+    Department<br>
+    <input type="text"
+           id="searchDept"
+           class="form-control form-control-sm"
+           placeholder="Search Dept">
+    </th>
     <th>Insentif</th>
 </tr>
 </thead>
 
 <tbody></tbody>
+
+<tfoot>
+<tr style="background:#f8f9fc;font-weight:bold">
+    <th colspan="3" class="text-right">TOTAL</th>
+    <th></th>
+</tr>
+</tfoot>
 
 </table>
 
@@ -137,9 +151,6 @@ Detail Insentif Karyawan
                               <tr>
                                  <th>ID</th>
                                  <th>Period</th>
-                                 <th>NPK</th>
-                                 <th>Name</th>
-                                 <th>Role</th>
                                  <th>Efficiency</th>
                                  <th>Tanggal</th>
                                  <th>Action</th>
@@ -150,9 +161,6 @@ Detail Insentif Karyawan
                               <tr>
                                  <td>{{ $row->id }}</td>
                                  <td>{{ $row->period }}</td>
-                                 <td>{{ $row->npk }}</td>
-                                 <td>{{ $row->name }}</td>
-                                 <td>{{ $row->role }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
                                  <td>{{ $row->date }}</td>
                                  <td class="text-center">
@@ -162,7 +170,6 @@ Detail Insentif Karyawan
                                     </a>
                                     <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
                                        data-delete-link="{{ route('cutting-insentif-master.delete',$row->id) }}"
-                                       data-npk="{{ $row->npk }}"
                                        data-toggle="modal"
                                        data-target="#deleteModal">
                                     <i class="fas fa-trash"></i>
@@ -327,8 +334,7 @@ $('#insentifSelect').on('change', function(){
     $('#btn-confirm').attr('href', $(this).data('delete-link'));
     
     $("#modal-text-payroll_master").text(
-    'Apakah anda yakin ingin menghapus data payroll NPK ' +
-    $(this).data('npk') + '?'
+    'Apakah anda yakin ingin menghapus data insentif? '
     );
     
     });
@@ -423,6 +429,31 @@ $('#importForm').submit(function(e){
 });
 </script>
 <script>
+function formatRupiah(number){
+
+    if(number === null || number === undefined || number === ''){
+        number = 0;
+    }
+
+    if(typeof number === 'string'){
+        number = number.replace(/[^0-9\-]/g,'');
+    }
+
+    number = Number(number);
+
+    if(isNaN(number)){
+        number = 0;
+    }
+
+    return new Intl.NumberFormat('id-ID',{
+        style:'currency',
+        currency:'IDR',
+        minimumFractionDigits:0
+    }).format(number);
+}
+</script>
+
+<script>
 
 let insentifTable;
 
@@ -442,21 +473,91 @@ $(document).ready(function(){
         width:'100%'
     });
 
+    $('#searchDept').on('keyup change', function () {
+
+        insentifTable
+            .column(2) // kolom Department
+            .search(this.value)
+            .draw();
+
+    });
+
     /*
     | DATATABLE INIT (EMPTY FIRST)
     */
     insentifTable = $('#insentifTable').DataTable({
+
         processing:true,
-        searching:false,
+        searching:true,
         paging:true,
         info:false,
-        autoWidth:false,
+        autoWidth:true,
         data:[],
+
+        /* =========================
+        GLOBAL SEARCH ALL COLUMN
+        ==========================*/
+        search:{ smart:true },
+
         columns:[
             {data:'npk'},
             {data:'name'},
-            {data:'cutting_insentif'},
-        ]
+            {data:'dept'},
+
+            {
+                data:'cutting_insentif',
+                defaultContent:0,
+                render:function(data){
+                    return formatRupiah(data);
+                }
+            },
+        ],
+
+        /* =========================
+        ROW COLOR TKK
+        ==========================*/
+        createdRow:function(row,data){
+
+            if(data.tkk == null && data.tkk == '' && data.tkk == 0){
+                $(row).addClass('table-danger');
+            }
+
+        },
+
+        /* =========================
+        AUTO TOTAL (FOLLOW SEARCH)
+        ==========================*/
+        footerCallback:function(row,data,start,end,display){
+
+            let api = this.api();
+
+            function intVal(i){
+
+                if(i === null || i === undefined || i === '') return 0;
+
+                if(typeof i === 'number') return i;
+
+                if(typeof i === 'string'){
+                    i = i.replace(/[Rp\s]/g,'');
+                    i = i.replace(/\./g,'').replace(',', '.');
+                    let num = parseFloat(i);
+                    return isNaN(num) ? 0 : num;
+                }
+
+                return 0;
+            }
+
+            let total = api
+                .column(3,{search:'applied'})
+                .data()
+                .reduce(function(a,b){
+                    return intVal(a)+intVal(b);
+                },0);
+
+            $(api.column(3).footer())
+                .html(formatRupiah(total));
+        }
+
     });
 
 });

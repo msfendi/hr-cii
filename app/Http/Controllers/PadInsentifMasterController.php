@@ -18,30 +18,28 @@ class PadInsentifMasterController extends Controller
 {
     public function index()
     {
-        $data = DB::table('pad_efficiencies as l')
-            ->join('employee_pad_assignments as e', function ($join) {
-                $join->on('l.dept', '=', 'e.dept')
-                    ->on('l.npk', '=', 'e.npk')
-                    ->on('l.period_id', '=', 'e.period_id')
-                    ->whereRaw('l.date BETWEEN e.start_date AND COALESCE(e.end_date, l.date)');
-            })->join('BIODATA as b', function ($join) {
-                $join->on('e.npk', '=', 'b.NPK');
+        $data = DB::table('pad_efficiencies as p')
+            ->join('BIODATA as b', function ($join) {
+                $join->on('p.npk', '=', 'b.NPK');
+            })
+            ->join('DEPT as d', function ($join) {
+                $join->on('b.ID_DEPT', '=', 'd.ID_DEPT');
             })->join('payroll_periods as pp', function ($join) {
-                $join->on('e.period_id', '=', 'pp.id');
+                $join->on('p.period_id', '=', 'pp.id');
             })
             ->select(
-                'e.id',
-                'e.npk',
+                'p.id',
+                'b.npk',
                 'b.NAMA_KARYAWAN as name',
                 'pp.name as period',
-                'e.dept',
-                'e.role',
-                'l.efficiency',
-                'l.date'
+                'd.DEPARTEMENT as dept',
+                'p.efficiency',
+                'p.piece',
+                'p.date'
             )
             ->where('pp.is_closed', 0)
-            ->orderBy('e.npk')
-            ->orderBy('l.date')
+            ->orderBy('p.npk')
+            ->orderBy('p.date')
             ->get();
         $periods = PayrollPeriod::select('id', 'name')
             ->where('is_closed', 0)
@@ -197,15 +195,25 @@ class PadInsentifMasterController extends Controller
 
 
         /*
-    |--------------------------------------------------------------------------
-    | AMBIL NPK YANG BENAR-BENAR ADA ASSIGNMENT
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | AMBIL NPK YANG BENAR-BENAR ADA ASSIGNMENT
+        |--------------------------------------------------------------------------
+        */
 
-        $assignmentNpk = DB::table('employee_pad_assignments')
-            ->where('period_id', $period_id)
+        $assignmentNpk = DB::table(DB::raw("
+    (
+        SELECT NPK, ID_DEPT FROM BIODATA
+        UNION ALL
+        SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
+    ) emp
+"))
+            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
+            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+            ->where('irf.dept', 'pad')
             ->distinct()
-            ->pluck('npk');
+            ->pluck('emp.NPK');
+
+        // dd($assignmentNpk->toArray());
 
 
         /*
@@ -216,23 +224,43 @@ class PadInsentifMasterController extends Controller
 
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
-            ->leftJoin('BIODATA as b', 'p.NPK', '=', 'b.NPK')
-            ->leftJoin('BIODATA_KELUAR as bk', 'p.NPK', '=', 'bk.NPK')
-            ->whereIn('p.NPK', $assignmentNpk) // 🔥 FILTER CEPAT
+
+            ->join(DB::raw("
+        (
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
+            UNION ALL
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
+        ) emp
+    "), 'p.NPK', '=', 'emp.NPK')
+
+            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
+            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+
+            ->whereIn('p.NPK', $assignmentNpk)
+            // ->where('p.NPK', '=', 'C-00795')
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
             })
+
             ->select(
                 'p.NPK',
-                DB::raw('COALESCE(b.NAMA_KARYAWAN,bk.NAMA_KARYAWAN) as NAMA_KARYAWAN'),
-                'p.TMK'
+                'emp.NAMA_KARYAWAN',
+                'p.TMK',
+                'p.TKK as tkk',
+                'emp.ID_DEPT',
+                'd.DEPARTEMENT as DEPARTEMENT',
+                'irf.role as role',
+                'emp.SECTION as SECTION'
             );
 
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
             ->get();
+
+        // dd($employees);
 
 
         /*
@@ -261,7 +289,8 @@ class PadInsentifMasterController extends Controller
             $pad = $this->calculatePad(
                 $employee,
                 $period,
-                $padInsentifFormula
+                $padInsentifFormula,
+                $employee->role,
             );
 
             if ($pad <= 0) continue;
@@ -270,6 +299,7 @@ class PadInsentifMasterController extends Controller
                 'npk' => $employee->NPK,
                 'name' => $employee->NAMA_KARYAWAN,
                 'pad_insentif' => $pad,
+                'dept' => $employee->DEPARTEMENT,
             ];
         }
 
@@ -303,31 +333,62 @@ class PadInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    private function calculatePad($employee, $period, $formula)
+    private function calculatePad($employee, $period, $formula, $role)
     {
         $amount = 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET MUTATIONS EMPLOYEE
+        |--------------------------------------------------------------------------
+        */
+        $mutations = DB::table('employee_mutations')
+            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
+            ->where('npk', $employee->NPK)
+            ->orderBy('date')
+            ->get();
+
+        /*
+    |--------------------------------------------------------------------------
+    | LOAD OVERTIME (ONLY ONCE)
+    |--------------------------------------------------------------------------
+    */
+        $overtimes = DB::table('overtimes')
+            ->where('NPK', $employee->NPK)
+            ->whereBetween('OVERTIME_DATE', [
+                $period->start_date,
+                $period->end_date
+            ])
+            ->get()
+            ->keyBy(fn($o) => $o->OVERTIME_DATE);
+
 
         /*
     |--------------------------------------------------------------------------
     | VALIDATE OVERTIME
     |--------------------------------------------------------------------------
     */
-        $isValidOvertime = function ($npk, $date) {
+        $isValidOvertime = function ($date) use ($overtimes) {
 
-            $ot = DB::table('overtimes')
-                ->where('NPK', $npk)
-                ->where('OVERTIME_DATE', $date)
-                ->first();
+            // tidak ada record → tetap dihitung
+            if (!isset($overtimes[$date])) {
+                return true;
+            }
 
-            if (!$ot) return true;
+            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
 
-            $lembur = $ot->JUMLAH_JAM_LEMBUR;
+            // NULL / kosong → tetap dihitung
+            if ($lembur === null || $lembur === '') {
+                return true;
+            }
 
-            if ($lembur === null || $lembur === '') return true;
+            // angka → tetap dihitung
+            if (is_numeric($lembur)) {
+                return true;
+            }
 
-            if (is_numeric($lembur)) return true;
-
-            return false; // MA / CT / BR / S1
+            // MA / CT / BR / S1 dll → skip
+            return false;
         };
 
         /*
@@ -335,116 +396,98 @@ class PadInsentifMasterController extends Controller
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
     */
-        $assignments = DB::table('employee_pad_assignments')
+        $assignments = DB::table('pad_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
+            ->whereBetween('date', [$period->start_date, $period->end_date])
             ->get();
 
-        foreach ($assignments as $assignment) {
+        // dd($assignments);
 
-            $dept = $assignment->dept;
-            $role = $assignment->role;
 
-            $start = max($assignment->start_date, $period->start_date);
-            $end = $assignment->end_date
-                ? min($assignment->end_date, $period->end_date)
-                : $period->end_date;
+        /*
+            |--------------------------------------------------------------------------
+            | OPERATOR
+            |--------------------------------------------------------------------------
+            */
+        if ($role === 'operator') {
+            foreach ($assignments as $assignment) {
 
-            /*
-        |--------------------------------------------------------------------------
-        | OPERATOR
-        |--------------------------------------------------------------------------
-        */
-            if ($role === 'operator') {
+                // dd($rows);
 
-                $rows = DB::table('pad_efficiencies')
-                    ->where('npk', $employee->NPK)
-                    ->where('period_id', $period->id)
-                    ->whereBetween('date', [$start, $end])
-                    ->get();
-
-                foreach ($rows as $row) {
-
-                    if (!$isValidOvertime($employee->NPK, $row->date)) {
-                        continue;
-                    }
-
-                    $rate = $this->getInsentifByEfficiency(
-                        $row->efficiency,
-                        $formula
-                    );
-
-                    $amount += $rate * $row->piece;
+                if (!$isValidOvertime($assignment->npk, $assignment->date)) {
+                    continue;
                 }
-            }
 
-            /*
+                $rate = $this->getInsentifByEfficiency(
+                    $assignment->efficiency,
+                    $formula
+                );
+
+                $amount += $rate * $assignment->piece;
+            }
+        }
+
+        /*
         |--------------------------------------------------------------------------
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
         */ else {
 
-                /*
+            // dd($employee);
+
+            /*
             |----------------------------------
             | TOTAL DEPT INSENTIF
             | ONLY VALID OPERATOR
             |----------------------------------
             */
-                $rows = DB::table('pad_efficiencies as pe')
-                    ->join('employee_pad_assignments as epa', function ($join) {
-                        $join->on('pe.npk', '=', 'epa.npk')
-                            ->on('pe.dept', '=', 'epa.dept');
-                    })
-                    ->where('pe.period_id', $period->id)
-                    ->where('epa.period_id', $period->id)
-                    ->where('epa.role', 'operator')
-                    ->where('pe.dept', $dept)
-                    ->whereBetween('pe.date', [$start, $end])
-                    ->select('pe.npk', 'pe.efficiency', 'pe.piece', 'pe.date')
-                    ->get();
+            $totalDeptInsentif = 0;
 
-                $totalDeptInsentif = 0;
 
-                foreach ($rows as $row) {
+            $operators = DB::table('pad_efficiencies')
+                ->where('period_id', $period->id)
+                ->whereBetween('date', [$period->start_date, $period->end_date])
+                ->get();
 
-                    // FILTER HANYA NUMERATOR
-                    if (!$isValidOvertime($row->npk, $row->date)) {
-                        continue;
-                    }
+            // dd($operators);
 
-                    $rate = $this->getInsentifByEfficiency(
-                        $row->efficiency,
-                        $formula
-                    );
 
-                    $totalDeptInsentif += $rate * $row->piece;
-                }
-
-                /*
-            |----------------------------------
-            | DENOMINATOR (ALL OPERATOR)
-            |----------------------------------
-            */
-                $jumlahOperator = DB::table('employee_pad_assignments')
-                    ->where('dept', $dept)
-                    ->where('role', 'operator')
-                    ->where('period_id', $period->id)
-                    ->pluck('npk')
-                    ->unique()
-                    ->count();
-
-                if ($jumlahOperator == 0) {
+            foreach ($operators as $operator) {
+                // FILTER HANYA NUMERATOR
+                if (!$isValidOvertime($operator->npk, $operator->date)) {
                     continue;
                 }
 
-                $amount += $this->calculateRolePadInsentif(
-                    $role,
-                    'pad',
-                    $totalDeptInsentif,
-                    $jumlahOperator
+                $rate = $this->getInsentifByEfficiency(
+                    $operator->efficiency,
+                    $formula
                 );
+
+                $totalDeptInsentif += $rate * $operator->piece;
+
+                // dd($totalDeptInsentif);
             }
+
+            /*
+                |----------------------------------
+                | DENOMINATOR (ALL OPERATOR)
+                |----------------------------------
+                */
+            $jumlahOperator = DB::table('pad_efficiencies as pe')
+                ->where('pe.period_id', $period->id)
+                ->pluck('pe.npk')
+                ->unique()
+                ->count();
+
+            $amount += $this->calculateRolePadInsentif(
+                $role,
+                'pad',
+                $totalDeptInsentif,
+                $jumlahOperator
+            );
         }
+
 
         return $amount;
     }

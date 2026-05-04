@@ -7,8 +7,20 @@ use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithStyles;
 
-class ExpatCostSheet implements FromCollection, WithTitle, WithHeadings, ShouldAutoSize
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+
+class ExpatCostSheet implements
+    FromCollection,
+    WithTitle,
+    WithHeadings,
+    ShouldAutoSize,
+    WithStyles
 {
     protected $start;
     protected $end;
@@ -23,6 +35,12 @@ class ExpatCostSheet implements FromCollection, WithTitle, WithHeadings, ShouldA
     {
         return 'expat_cost';
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DATA (LOGIC TIDAK DIUBAH)
+    |--------------------------------------------------------------------------
+    */
 
     public function collection()
     {
@@ -50,5 +68,88 @@ class ExpatCostSheet implements FromCollection, WithTitle, WithHeadings, ShouldA
             'Transaction Date',
             'Remark'
         ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STYLING EXCEL
+    |--------------------------------------------------------------------------
+    */
+
+    public function styles(Worksheet $sheet)
+    {
+        $highestRow = $sheet->getHighestRow();
+
+        /*
+        |--------------------------------------------------------------------------
+        | HEADER STYLE
+        |--------------------------------------------------------------------------
+        */
+
+        $sheet->getStyle('A1:F1')->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'size' => 11,
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical'   => Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => [
+                    'rgb' => 'D9E1F2',
+                ],
+            ],
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | FORMAT RUPIAH (COLUMN D)
+        |--------------------------------------------------------------------------
+        */
+
+        $sheet->getStyle("D2:D{$highestRow}")
+            ->getNumberFormat()
+            ->setFormatCode(
+                '"Rp" #,##0'
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | ALIGNMENT
+        |--------------------------------------------------------------------------
+        */
+
+        $sheet->getStyle("A2:A{$highestRow}")
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->getStyle("E2:E{$highestRow}")
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        /*
+        |--------------------------------------------------------------------------
+        | BORDER TABLE
+        |--------------------------------------------------------------------------
+        */
+
+        $sheet->getStyle("A1:F{$highestRow}")
+            ->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                    ],
+                ],
+            ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | FREEZE HEADER
+        |--------------------------------------------------------------------------
+        */
+
+        $sheet->freezePane('A2');
+
+        return [];
     }
 }

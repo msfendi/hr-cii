@@ -64,11 +64,25 @@ Detail Insentif Karyawan
 <tr>
     <th>NPK</th>
     <th>Name</th>
+    <th>
+    Department<br>
+    <input type="text"
+           id="searchDept"
+           class="form-control form-control-sm"
+           placeholder="Search Dept">
+    </th>
     <th>Insentif</th>
 </tr>
 </thead>
 
 <tbody></tbody>
+
+<tfoot>
+<tr style="background:#f8f9fc;font-weight:bold">
+    <th colspan="3" class="text-right">TOTAL</th>
+    <th></th>
+</tr>
+</tfoot>
 
 </table>
 
@@ -139,8 +153,8 @@ Detail Insentif Karyawan
                                  <th>NPK</th>
                                  <th>Name</th>
                                  <th>Dept</th>
-                                 <th>Role</th>
                                  <th>Efficiency</th>
+                                 <th>Piece</th>
                                  <th>Tanggal</th>
                                  <th>Action</th>
                               </tr>
@@ -153,8 +167,8 @@ Detail Insentif Karyawan
                                  <td>{{ $row->npk }}</td>
                                  <td>{{ $row->name }}</td>
                                  <td>{{ $row->dept }}</td>
-                                 <td>{{ $row->role }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
+                                 <td>{{ number_format($row->piece,0,',','.') }}</td>
                                  <td>{{ $row->date }}</td>
                                  <td class="text-center">
                                     <a href="{{ route('pad-insentif-master.edit',$row->id) }}"
@@ -224,7 +238,7 @@ Detail Insentif Karyawan
 
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        Import Line Insentif
+                        Import Pad Print Insentif
                     </h5>
                     <button class="close" data-dismiss="modal">
                         <span>×</span>
@@ -329,6 +343,32 @@ Detail Insentif Karyawan
         });
         </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+function formatRupiah(number){
+
+    if(number === null || number === undefined || number === ''){
+        number = 0;
+    }
+
+    if(typeof number === 'string'){
+        number = number.replace(/[^0-9\-]/g,'');
+    }
+
+    number = Number(number);
+
+    if(isNaN(number)){
+        number = 0;
+    }
+
+    return new Intl.NumberFormat('id-ID',{
+        style:'currency',
+        currency:'IDR',
+        minimumFractionDigits:0
+    }).format(number);
+}
+</script>
+
 <script>
 
 let insentifTable;
@@ -349,21 +389,91 @@ $(document).ready(function(){
         width:'100%'
     });
 
+    $('#searchDept').on('keyup change', function () {
+
+        insentifTable
+            .column(2) // kolom Department
+            .search(this.value)
+            .draw();
+
+    });
+
     /*
     | DATATABLE INIT (EMPTY FIRST)
     */
     insentifTable = $('#insentifTable').DataTable({
+
         processing:true,
-        searching:false,
+        searching:true,
         paging:true,
         info:false,
-        autoWidth:false,
+        autoWidth:true,
         data:[],
+
+        /* =========================
+        GLOBAL SEARCH ALL COLUMN
+        ==========================*/
+        search:{ smart:true },
+
         columns:[
             {data:'npk'},
             {data:'name'},
-            {data:'pad_insentif'},
-        ]
+            {data:'dept'},
+
+            {
+                data:'pad_insentif',
+                defaultContent:0,
+                render:function(data){
+                    return formatRupiah(data);
+                }
+            },
+        ],
+
+        /* =========================
+        ROW COLOR TKK
+        ==========================*/
+        createdRow:function(row,data){
+
+            if(data.tkk == null && data.tkk == '' && data.tkk == 0){
+                $(row).addClass('table-danger');
+            }
+
+        },
+
+        /* =========================
+        AUTO TOTAL (FOLLOW SEARCH)
+        ==========================*/
+        footerCallback:function(row,data,start,end,display){
+
+            let api = this.api();
+
+            function intVal(i){
+
+                if(i === null || i === undefined || i === '') return 0;
+
+                if(typeof i === 'number') return i;
+
+                if(typeof i === 'string'){
+                    i = i.replace(/[Rp\s]/g,'');
+                    i = i.replace(/\./g,'').replace(',', '.');
+                    let num = parseFloat(i);
+                    return isNaN(num) ? 0 : num;
+                }
+
+                return 0;
+            }
+
+            let total = api
+                .column(3,{search:'applied'})
+                .data()
+                .reduce(function(a,b){
+                    return intVal(a)+intVal(b);
+                },0);
+
+            $(api.column(3).footer())
+                .html(formatRupiah(total));
+        }
+
     });
 
 });

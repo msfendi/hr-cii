@@ -107,7 +107,7 @@
                                             @endif
                                         </td>
                                         <td class="text-center">
-                                            @if($period->export_status == 'processing' && $period->file_excel && $period->file_pdf && $period->file_peng)
+                                            @if(($period->export_status != 'approved' && $period->export_status != 'finished') && $period->file_excel && $period->file_pdf && $period->file_peng)
                                                 <span class="badge badge-warning">
                                                     <i class="fas fa-spinner fa-spin"></i> Finalizing Document Approved
                                                 </span>
@@ -158,7 +158,7 @@
 
                                         <td class="text-center">
                                             {{-- DOWNLOAD BANK (HANYA JIKA APPROVAL FINISH) --}}
-                                            @if($period->approve_status == 'finish' && $period->export_status == 'approved' && auth()->user()->hasRole('Accounting'))
+                                            @if($period->approve_status == 'finish' && $period->export_status == 'approved' && (auth()->user()->hasRole('Accounting') || auth()->user()->hasRole('Admin')))
                                             
                                                 <a class="btn btn-primary btn-sm"
                                                     href="{{ Storage::url('payroll/'.$folder.'/'.$period->file_bank_active) }}"
@@ -236,34 +236,54 @@
                                         <th>Run ID</th>
                                         <th>NPK</th>
                                         <th>Name</th>
-
+                                        <th>Dept</th>
                                         <th>Basic Salary</th>
                                         <th>Overtime</th>
                                         <th>Special OT</th>
                                         <th>Monthly Premi</th>
                                         <th>Long Service</th>
                                         <th>Allowance</th>
-                                        
                                         <th>Sewing Insentif</th>
                                         <th>Pad Print Insentif</th>
                                         <th>Cutting Insentif</th>
-                                        
+                                        <th>Heat Insentif</th>
                                         <th>Adjusments</th>
-
                                         <th>BPJS Kes</th>
                                         <th>BPJS TK</th>
-
                                         <th>PPh21</th>
                                         <th>PPh21 Deduction</th>
                                         <th>Absence</th>
                                         <th>Late</th>
-
                                         <th>Total Salary</th>
                                         <th>Slip</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
-                            </table>
+                                <tfoot>
+                                    <tr style="font-weight:bold;background:#f8f9fc">
+                                        <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                    </tr>
+                                </tfoot>
+                                </table>
                         </div>
 
                     </div>
@@ -322,54 +342,150 @@
         </script>
 
 <script>
+function formatRupiah(number){
 
-    function formatRupiah(number){
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-        }).format(number);
+    /*
+    =====================================================
+    SAFE NUMBER CONVERSION (ANTI RpNaN)
+    =====================================================
+    */
+
+    if(
+        number === null ||
+        number === undefined ||
+        number === '' ||
+        number === false
+    ){
+        number = 0;
     }
-   $(document).on('click','.btn-export',function(e){
-   
-       e.preventDefault();
-   
-       let url = $(this).data('url');
-   
-       Swal.fire({
-           title: "Generate Export?",
-           text: "Proses export payroll akan dimulai.",
-           icon: "warning",
-           showCancelButton: true,
-           confirmButtonColor: "#3085d6",
-           cancelButtonColor: "#d33",
-           confirmButtonText: "Yes, generate!"
-       }).then((result) => {
-   
-           if (result.isConfirmed) {
-   
-               Swal.fire({
-                   title: "Export sedang diproses...",
-                   text: "Mohon tunggu...",
-                   allowOutsideClick: false,
-                   didOpen: () => {
-                       Swal.showLoading()
-   
-                       setTimeout(function(){
-   
-                           window.location.href = url + '?refresh=1';
-   
-                       },500)
-   
-                   }
-               });
-   
-           }
-   
-       });
-   
-   });
-   
+
+    // jika string currency / text
+    if(typeof number === 'string'){
+        number = number.replace(/[^0-9\-]/g,'');
+    }
+
+    number = Number(number);
+
+    if(isNaN(number)){
+        number = 0;
+    }
+
+    return new Intl.NumberFormat('id-ID',{
+        style:'currency',
+        currency:'IDR',
+        minimumFractionDigits:0
+    }).format(number);
+}
+</script>
+<script>
+
+$(document).on('click','.btn-export',function(e){
+
+    e.preventDefault();
+
+    let url = $(this).data('url');
+    let run_id = url.split('/').pop();
+
+    // route progress laravel (AMAN PREFIX)
+    let progressUrlTemplate = "{{ route('payroll.export.progress', ':id') }}";
+    let progressUrl = progressUrlTemplate.replace(':id', run_id);
+
+    Swal.fire({
+        title: "Generate Export?",
+        text: "The payroll export process will begin. This may take a few minutes depending on the amount of data. Do you want to proceed?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, generate!"
+    }).then((result)=>{
+
+        if(!result.isConfirmed) return;
+
+        Swal.fire({
+            title: "Export is being processed!",
+            html: `
+                <div class="w-100">
+
+                    <div id="progress-status"
+                        style="font-weight:600;margin-bottom:10px">
+                        Initializing...
+                    </div>
+
+                    <div class="progress" style="height:25px;">
+                        <div id="progress-bar"
+                            class="progress-bar progress-bar-striped progress-bar-animated"
+                            style="width:0%">
+                            0%
+                        </div>
+                    </div>
+
+                </div>
+            `,
+            allowOutsideClick:false,
+            showConfirmButton:false,
+            didOpen: ()=>{
+
+                Swal.showLoading();
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | START EXPORT (LOGIC TETAP)
+                 |--------------------------------------------------------------------------
+                 */
+
+                $.get(url + '?refresh=1');
+
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | POLLING PROGRESS
+                 |--------------------------------------------------------------------------
+                 */
+
+                let interval = setInterval(function(){
+
+                    $.ajax({
+                        url: progressUrl,
+                        type:'GET',
+                        success:function(res){
+
+                            let progress = res.progress ?? 0;
+                            let status   = res.status ?? 'Processing';
+
+                            $('#progress-bar')
+                                .css('width',progress+'%')
+                                .text(progress+'%');
+
+                            $('#progress-status')
+                                .text(status);
+
+                            if(progress >= 100){
+
+                                clearInterval(interval);
+
+                                Swal.fire({
+                                    icon:'success',
+                                    title:'Export Finished',
+                                    text:'Payroll Document Successfully Created!'
+                                }).then(()=>{
+                                    location.reload();
+                                });
+
+                            }
+                        },
+                        error:function(xhr){
+                            console.log('Polling error',xhr.status);
+                        }
+                    });
+
+                },2000);
+
+            }
+        });
+
+    });
+
+});
+
 </script>
 <script>
    const params = new URLSearchParams(window.location.search);
@@ -433,116 +549,122 @@
         processing: true,
         responsive: true,
         ajax: url,
+
+        createdRow:function(row,data,dataIndex){
+
+            // jika tkk tidak null / tidak kosong
+            if(data.tkk !== null && data.tkk !== '' && data.tkk !== 0){
+
+                $(row).addClass('table-danger'); // bootstrap merah
+            }
+        },
+
         columns: [
             { data: 'run_id' },
             { data: 'employee_npk' },
             { data: 'employee_name' },
+            { data: 'dept' },
 
-            { 
-                data: 'basic_salary',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'overtime_pay',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'special_overtime_pay',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'monthly_premi',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'long_service_allowance',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'allowance',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'sewing_insentif',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'pad_insentif',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'cutting_insentif',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'adjusment',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'bpjs_kesehatan',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'bpjs_ketenagakerjaan',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'pph_21',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'pph_21_deduction',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'absence_deduction',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'late_deduction',
-                render: data => formatRupiah(data)
-            },
-            { 
-                data: 'total_salary',
-                render: data => formatRupiah(data)
-            },
+            { data:'basic_salary',defaultContent:0,render:data=>formatRupiah(data ?? 0)},
+            { data:'overtime_pay', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'special_overtime_pay', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'monthly_premi', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'long_service_allowance', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'allowance', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+
+            { data:'sewing_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'pad_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'cutting_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'heat_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+
+            { data:'adjusment', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+
+            { data:'bpjs_kesehatan', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'bpjs_ketenagakerjaan', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+
+            { data:'pph_21', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'pph_21_deduction', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'absence_deduction', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'late_deduction', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+
+            { data:'total_salary', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
 
             {
-            data: null,
-            orderable: false,
-            searchable: false,
-            render: function(data, type, row){
+                data:null,
+                orderable:false,
+                searchable:false,
+                render:function(data,type,row){
 
-                let pdfUrl = slipUrl
-                    .replace(':run_id', row.run_id)
-                    .replace(':npk', row.employee_npk);
+                    let viewUrl =
+                        "/employee-payroll/show/"
+                        + row.run_id + "/" + row.employee_npk;
 
-                let viewUrl = "/employee-payroll/show/" + row.run_id + "/" + row.employee_npk;
-
-                return `
-                     <a href="${viewUrl}" 
-                     class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
-                     title="View Slip">
-                         <i class="fa fa-eye"></i>
-                     </a>
-                 `;
-
-                // return `
-                //     <a href="${pdfUrl}" 
-                //     class="btn btn-success btn-circle btn-sm d-flex align-items-center justify-content-center"
-                //     title="Download Slip">
-                //         <i class="fa fa-file-pdf"></i>
-                //     </a>
-
-                //     <a href="${viewUrl}" 
-                //     class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
-                //     title="View Slip">
-                //         <i class="fa fa-eye"></i>
-                //     </a>
-                // `;
+                    return `
+                        <a href="${viewUrl}" 
+                        class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
+                        title="View Slip">
+                            <i class="fa fa-eye"></i>
+                        </a>
+                    `;
+                }
             }
+        ],
+
+        /*
+        =====================================================
+        AUTO TOTAL RECALCULATE (SEARCH / FILTER / PAGING)
+        =====================================================
+        */
+        footerCallback:function(row,data,start,end,display){
+
+            let api = this.api();
+
+            function intVal(i){
+
+            if(i === null || i === undefined || i === '') return 0;
+
+            if(typeof i === 'number') return i;
+
+            if(typeof i === 'string'){
+
+                // hapus Rp dan spasi
+                i = i.replace(/[Rp\s]/g,'');
+
+                // ubah format indonesia
+                // 1.500.000,50 → 1500000.50
+                i = i.replace(/\./g,'').replace(',', '.');
+
+                let num = parseFloat(i);
+
+                return isNaN(num) ? 0 : num;
+            }
+
+            return 0;
         }
-        ]
+
+            // kolom numeric (index sesuai table)
+            let cols = [
+                4,5,6,7,8,
+                9,10,11,12,
+                13,
+                14,15,
+                16,17,18,19,
+                20,21
+            ];
+
+            cols.forEach(function(colIndex){
+
+                let total = api
+                    .column(colIndex,{search:'applied'})
+                    .data()
+                    .reduce(function(a,b){
+                        return intVal(a)+intVal(b);
+                    },0);
+
+                $(api.column(colIndex).footer())
+                    .html(formatRupiah(total));
+            });
+        }
     });
 
 });

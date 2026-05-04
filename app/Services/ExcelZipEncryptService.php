@@ -13,6 +13,8 @@ class ExcelZipEncryptService
     {
         // default Windows path (bisa kamu override via env nanti)
         $this->sevenZipPath = 'C:\\Program Files\\7-Zip\\7z.exe';
+
+        // $this->sevenZipPath = '/usr/bin/7z';
     }
 
     /**

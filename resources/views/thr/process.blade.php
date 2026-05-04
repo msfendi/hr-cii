@@ -20,7 +20,7 @@
                       </option> @endforeach
                     </select>
                   </div>
-                  <button type="submit" class="btn btn-primary"> Generate THR </button>
+                  <button id="btnProcess" type="submit" class="btn btn-primary"> Generate THR </button>
                 </form>
               </div>
             </div>
@@ -40,22 +40,146 @@
       });
     </script>
     <script>
-      /*
-========================================
-LOADING PROCESS THR
-========================================
-*/
-      $('#thrForm').on('submit', function() {
+    $(document).on('click','#btnProcess',function(e){
+
+    e.preventDefault();
+
+    let periodId = $('#period_id').val();
+
+    if(!periodId){
         Swal.fire({
-          title: 'Processing THR',
-          text: 'Mohon tunggu THR sedang diproses...',
-          allowOutsideClick: false,
-          allowEscapeKey: false,
-          didOpen: () => {
-            Swal.showLoading()
-          }
+            icon:'warning',
+            title:'Periode belum dipilih'
         });
-      });
-    </script>
+        return;
+    }
+
+    /*
+    ==========================================
+    ROUTES
+    ==========================================
+    */
+
+    let url = "{{ route('thr-process.process') }}";
+
+    let progressUrlTemplate =
+        "{{ route('thr.process.progress', ':period_id') }}";
+
+    let progressUrl =
+        progressUrlTemplate.replace(':period_id', periodId);
+
+    /*
+    ==========================================
+    CONFIRM
+    ==========================================
+    */
+
+    Swal.fire({
+        title: "Generate Thr?",
+        text: "The thr process will begin. This may take a few minutes depending on the amount of data. Do you want to proceed?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, generate!"
+    }).then((result)=>{
+
+        if(!result.isConfirmed) return;
+
+        Swal.fire({
+            title: "Thr is being processed!",
+            html: `
+                <div class="w-100">
+
+                    <div id="progress-status"
+                        style="font-weight:600;margin-bottom:10px">
+                        Initializing...
+                    </div>
+
+                    <div class="progress" style="height:25px;">
+                        <div id="progress-bar"
+                            class="progress-bar progress-bar-striped progress-bar-animated"
+                            style="width:0%">
+                            0%
+                        </div>
+                    </div>
+
+                </div>
+            `,
+            allowOutsideClick:false,
+            showConfirmButton:false,
+            didOpen: ()=>{
+
+                Swal.showLoading();
+
+                /*
+                ==========================================
+                START PROCESS (FIXED)
+                ==========================================
+                */
+
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    data: {
+                        _token: "{{ csrf_token() }}",
+                        period_id: periodId,
+                        refresh: 1
+                    },
+                    error:function(xhr){
+                        console.log('Start process error',xhr.responseText);
+                    }
+                });
+
+                /*
+                ==========================================
+                POLLING PROGRESS
+                ==========================================
+                */
+
+                let interval = setInterval(function(){
+
+                    $.ajax({
+                        url: progressUrl,
+                        type:'GET',
+                        success:function(res){
+
+                            let progress = res.progress ?? 0;
+                            let status   = res.status ?? 'Processing';
+
+                            $('#progress-bar')
+                                .css('width',progress+'%')
+                                .text(progress+'%');
+
+                            $('#progress-status')
+                                .text(status);
+
+                            if(progress >= 100){
+
+                                clearInterval(interval);
+
+                                Swal.fire({
+                                    icon:'success',
+                                    title:'Thr Finished',
+                                    text:'Thr Successfully Calculated!'
+                                }).then(()=>{
+                                    window.location.href = "{{ route('thr-process.index') }}";
+                                });
+
+                            }
+                        },
+                        error:function(xhr){
+                            console.log('Polling error',xhr.status);
+                        }
+                    });
+
+                },2000);
+
+            }
+        });
+
+    });
+
+});
+
+</script>
   </body>
 </html>
