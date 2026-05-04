@@ -5,9 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AttendanceFinger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Exports\AttendanceFingerExport;
-use App\Exports\AttendanceLateExport;
-use App\Exports\AttendanceNotFingerExport;
+use App\Exports\AttendanceExport;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -322,16 +320,7 @@ class AttendanceFingerController extends Controller
             'date' => 'required|date',
         ]);
 
-        return Excel::download(new AttendanceFingerExport($request->date), 'attendance_finger_' . $request->date . '.xlsx');
-    }
-
-    public function exportLate(Request $request)
-    {
-        $request->validate([
-            'date' => 'required|date',
-        ]);
-
-        return Excel::download(new AttendanceLateExport($request->date), 'attendance_late_' . $request->date . '.xlsx');
+        return Excel::download(new AttendanceExport($request->date), 'attendance_' . $request->date . '.xlsx');
     }
 
     /**
@@ -402,18 +391,4 @@ class AttendanceFingerController extends Controller
         return response()->json(['error' => 'Invalid request'], 400);
     }
 
-    /**
-     * Export: employees who did NOT finger on the given date.
-     */
-    public function exportNotFinger(Request $request)
-    {
-        $request->validate([
-            'date' => 'required|date',
-        ]);
-
-        return Excel::download(
-            new AttendanceNotFingerExport($request->date),
-            'not_finger_' . $request->date . '.xlsx'
-        );
-    }
 }
