@@ -24,9 +24,14 @@
                 <div class="card shadow mb-2">
                     <div class="card-header py-3 d-sm-flex align-items-center justify-content-between">
                         <h6 class="m-0 font-weight-bold text-primary">Pelamar</h6>
-                        <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#importModal">
-                            <i class="fas fa-file-import"></i> Import Excel
-                        </button>
+                        <div>
+                            <a href="{{ route('pelamar.template') }}" class="btn btn-info btn-sm mr-2">
+                                <i class="fas fa-file-download"></i> Template Excel
+                            </a>
+                            <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#importModal">
+                                <i class="fas fa-file-import"></i> Import Excel
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Import Modal -->

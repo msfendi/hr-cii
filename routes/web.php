@@ -114,6 +114,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Pelamar
     Route::get('/pelamar/index', [PelamarController::class, 'index'])->name('pelamar.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/pelamar/template', [PelamarController::class, 'exportTemplate'])->name('pelamar.template')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/pelamar/import', [PelamarController::class, 'import'])->name('pelamar.import')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/pelamar/assign', [PelamarController::class, 'assign'])->name('pelamar.assign')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/pelamar/detail/{id}', [PelamarController::class, 'detail'])->name('pelamar.detail')->middleware(['auth', 'role:Admin|HRD']);
@@ -315,6 +316,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export');
     Route::get('/attendance-finger/not-finger', [AttendanceFingerController::class, 'notFinger'])->name('attendance-finger.not-finger');
     Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger');
+    Route::post('/attendance-finger/export-late', [AttendanceFingerController::class, 'exportLate'])->name('attendance-finger.export-late');
 
     //Attendance
     Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index');

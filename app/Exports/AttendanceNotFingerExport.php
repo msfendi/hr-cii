@@ -25,8 +25,52 @@ class AttendanceNotFingerExport implements FromCollection, WithHeadings, WithMap
         $this->date = $date;
     }
 
+    // ─── OLD collection() ────────────────────────────────────────
+    // public function collection()
+    // {
+    //     $yesterday = \Carbon\Carbon::parse($this->date)->subDay()->format('Y-m-d');
+    //     $rows = DB::connection('cii')->select("
+    //         SELECT
+    //             b.BARCODE       AS pin,
+    //             b.NAMA_KARYAWAN AS nama,
+    //             b.NPK           AS npk,
+    //             b.SECTION       AS section,
+    //             d.DEPARTEMENT   AS departemen,
+    //             b.STATUS        AS status
+    //         FROM BIODATA b
+    //         LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
+    //         LEFT JOIN employee_shifts es ON es.npk = b.NPK AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
+    //         LEFT JOIN shifts s ON s.id = es.shift_id
+    //         LEFT JOIN employee_shifts prev_es ON prev_es.npk = b.NPK AND CAST(prev_es.shift_date AS DATE) = CAST(? AS DATE)
+    //         LEFT JOIN shifts prev_s ON prev_s.id = prev_es.shift_id
+    //         WHERE b.STATUS = 'A'
+    //           AND NOT EXISTS (
+    //               SELECT 1
+    //               FROM att_log a
+    //               WHERE CAST(a.pin AS VARCHAR) = CAST(b.BARCODE AS VARCHAR)
+    //                 AND a.scan_date >= DATEADD(hour, -4, CAST(? + ' ' + CONVERT(varchar, COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME))
+    //                 AND a.scan_date <= DATEADD(hour, 14, CAST(? + ' ' + CONVERT(varchar, COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME))
+    //                 AND a.scan_date > COALESCE(
+    //                     DATEADD(minute, 60,
+    //                         CASE
+    //                             WHEN prev_s.work_end < prev_s.work_start
+    //                             THEN CAST(? + ' ' + CONVERT(varchar, prev_s.work_end, 108) AS DATETIME)
+    //                             ELSE CAST(? + ' ' + CONVERT(varchar, prev_s.work_end, 108) AS DATETIME)
+    //                         END
+    //                     ),
+    //                     CAST('1900-01-01' AS DATETIME)
+    //                 )
+    //           )
+    //         ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
+    //     ", [$this->date, $yesterday, $this->date, $this->date, $this->date, $yesterday]);
+    //
+    //     ...
+    // }
+    // ─── END OLD ─────────────────────────────────────────────────
+
     public function collection()
     {
+        $yesterday = \Carbon\Carbon::parse($this->date)->subDay()->format('Y-m-d');
         $rows = DB::connection('cii')->select("
             SELECT
                 b.BARCODE       AS pin,
@@ -37,15 +81,52 @@ class AttendanceNotFingerExport implements FromCollection, WithHeadings, WithMap
                 b.STATUS        AS status
             FROM BIODATA b
             LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
+
+            -- Shift hari ini
+            LEFT JOIN employee_shifts es
+                ON es.npk = b.NPK
+                AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
+            LEFT JOIN shifts s ON s.id = es.shift_id
+
+            -- Shift kemarin (untuk filter overflow night shift)
+            LEFT JOIN employee_shifts prev_es
+                ON prev_es.npk = b.NPK
+                AND CAST(prev_es.shift_date AS DATE) = CAST(? AS DATE)
+            LEFT JOIN shifts prev_s ON prev_s.id = prev_es.shift_id
+
             WHERE b.STATUS = 'A'
               AND NOT EXISTS (
                   SELECT 1
                   FROM att_log a
                   WHERE CAST(a.pin AS VARCHAR) = CAST(b.BARCODE AS VARCHAR)
-                    AND a.scan_date >= ? AND a.scan_date <= ?
+                    AND a.scan_date >= DATEADD(
+                        hour, -4,
+                        CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                    )
+                    AND a.scan_date <= DATEADD(
+                        hour, 14,
+                        CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                    )
+                    AND a.scan_date > COALESCE(
+                        DATEADD(minute, 60,
+                            CASE
+                                WHEN prev_s.work_end < prev_s.work_start
+                                THEN CAST(? + ' ' + CONVERT(varchar(8), prev_s.work_end, 108) AS DATETIME)
+                                ELSE CAST(? + ' ' + CONVERT(varchar(8), prev_s.work_end, 108) AS DATETIME)
+                            END
+                        ),
+                        CAST('1900-01-01 00:00:00' AS DATETIME)
+                    )
               )
             ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
-        ", [$this->date . ' 00:00:00', $this->date . ' 23:59:59']);
+        ", [
+            $this->date,
+            $yesterday,
+            $this->date,
+            $this->date,
+            $this->date,
+            $yesterday,
+        ]);
 
         $data = [];
         $no   = 1;
@@ -91,7 +172,7 @@ class AttendanceNotFingerExport implements FromCollection, WithHeadings, WithMap
     {
         return [
             1 => [
-                'font'      => ['bold' => true],
+                'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
                 'alignment' => [
                     'horizontal' => Alignment::HORIZONTAL_CENTER,
                     'vertical'   => Alignment::VERTICAL_CENTER,
@@ -100,7 +181,6 @@ class AttendanceNotFingerExport implements FromCollection, WithHeadings, WithMap
                     'fillType'   => Fill::FILL_SOLID,
                     'startColor' => ['argb' => 'FFFF4444'],
                 ],
-                'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             ],
         ];
     }

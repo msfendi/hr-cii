@@ -6,6 +6,7 @@ use App\Models\Pelamar;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Imports\PelamarImport;
+use App\Exports\PelamarTemplateExport;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Facades\Storage;
@@ -49,6 +50,11 @@ class PelamarController extends Controller
         } else {
             return redirect()->back()->with('error', 'Failed to import data');
         }
+    }
+
+    public function exportTemplate()
+    {
+        return Excel::download(new PelamarTemplateExport(), 'Template_Import_Pelamar.xlsx');
     }
 
     public function assign(Request $request)

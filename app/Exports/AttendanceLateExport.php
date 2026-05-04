@@ -8,15 +8,12 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithEvents;
-use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use Carbon\Carbon;
 
-class AttendanceFingerExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithEvents
+class AttendanceLateExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles
 {
     protected $date;
 
@@ -31,11 +28,12 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
     //     $yesterday = \Carbon\Carbon::parse($this->date)->subDay()->format('Y-m-d');
     //     $data = DB::connection('cii')->select("
     //         SELECT
-    //             b.BARCODE AS pin, b.NAMA_KARYAWAN AS nama, b.NPK AS npk,
-    //             d.DEPARTEMENT AS bagian, b.SECTION AS section, b.BAG AS jabatan, b.STATUS AS status,
-    //             CONVERT(varchar(8), MIN(a.scan_date), 108) AS jam_masuk,
-    //             CASE WHEN COUNT(a.scan_date) > 1 THEN CONVERT(varchar(8), MAX(a.scan_date), 108)
-    //                  ELSE 'not scanned' END AS jam_pulang,
+    //             b.BARCODE AS pin,
+    //             b.NAMA_KARYAWAN AS nama,
+    //             b.NPK AS npk,
+    //             d.DEPARTEMENT AS bagian,
+    //             CONVERT(varchar, MIN(a.scan_date), 108) AS jam_masuk,
+    //             CONVERT(varchar, MAX(a.scan_date), 108) AS jam_pulang,
     //             COUNT(a.scan_date) AS total_scan,
     //             COALESCE(s.name, 'Normal Shift') AS shift_name,
     //             CONVERT(varchar, COALESCE(s.work_start, '08:00:00'), 108) AS shift_start
@@ -59,9 +57,9 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
     //                 CAST('1900-01-01' AS DATETIME)
     //             )
     //         GROUP BY
-    //             b.BARCODE, b.NAMA_KARYAWAN, b.NPK, d.DEPARTEMENT,
-    //             b.SECTION, b.BAG, b.STATUS, s.name, s.work_start
-    //         ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
+    //             b.BARCODE, b.NAMA_KARYAWAN, b.NPK, d.DEPARTEMENT, s.name, s.work_start
+    //         HAVING CONVERT(varchar, MIN(a.scan_date), 108) > CONVERT(varchar, COALESCE(s.work_start, '08:00:00'), 108)
+    //         ORDER BY MIN(a.scan_date) ASC
     //     ", [$this->date, $yesterday, $this->date, $this->date, $this->date, $yesterday]);
     //     return collect($data);
     // }
@@ -76,9 +74,6 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                 b.NAMA_KARYAWAN         AS nama,
                 b.NPK                   AS npk,
                 d.DEPARTEMENT           AS bagian,
-                b.SECTION               AS section,
-                b.BAG                   AS jabatan,
-                b.STATUS                AS status,
 
                 -- jam_masuk: scan pertama jika > 1, atau single scan di paruh awal shift
                 CASE
@@ -150,12 +145,23 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                 b.NAMA_KARYAWAN,
                 b.NPK,
                 d.DEPARTEMENT,
-                b.SECTION,
-                b.BAG,
-                b.STATUS,
                 s.name,
                 s.work_start
-            ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
+
+            -- Hanya yang terlambat: masuk > work_start + 10 menit, dan ada scan masuk
+            HAVING MIN(a.scan_date) > DATEADD(
+                    minute, 10,
+                    CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                )
+                AND (
+                    COUNT(a.scan_date) > 1
+                    OR MIN(a.scan_date) <= DATEADD(
+                        hour, 4,
+                        CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                    )
+                )
+
+            ORDER BY MIN(a.scan_date) ASC
         ", [
             $this->date,        // jam_masuk midpoint
             $this->date,        // jam_pulang midpoint
@@ -165,6 +171,8 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
             $this->date,        // scan_date upper bound
             $this->date,        // prev night shift work_end
             $yesterday,         // prev normal shift work_end
+            $this->date,        // HAVING late tolerance
+            $this->date,        // HAVING masuk check
         ]);
 
         return collect($data);
@@ -174,17 +182,13 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
     {
         return [
             'No',
-            'Tanggal',
-            'Nama Karyawan',
             'NPK',
-            'Nama Departemen',
-            'Departemen',
-            'Jabatan',
-            'Shift',
-            'Shift Masuk',
-            'Jam Masuk',
-            'Jam Pulang',
-            'Status'
+            'Nama Karyawan',
+            'Bagian',
+            'Shift Kerja',
+            'Jam Masuk (Shift)',
+            'Jam Finger Pagi',
+            'Jam Finger Pulang',
         ];
     }
 
@@ -193,17 +197,13 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
         static $no = 1;
         return [
             $no++,
-            Carbon::parse($this->date)->format('d/m/Y'),
-            $row->nama,
             $row->npk,
+            $row->nama,
             $row->bagian,
-            $row->section,
-            $row->jabatan,
             $row->shift_name,
             $row->shift_start,
             $row->jam_masuk,
             $row->jam_pulang,
-            $row->status == 'A' ? 'AKTIF' : $row->status,
         ];
     }
 
@@ -219,44 +219,6 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                     ],
                 ],
             ],
-        ];
-    }
-
-    public function registerEvents(): array
-    {
-        return [
-            AfterSheet::class => function (AfterSheet $event) {
-                $sheet = $event->sheet;
-                $highestRow = $sheet->getHighestRow();
-                $highestColumn = $sheet->getHighestColumn();
-
-                $range = 'A1:' . $highestColumn . $highestRow;
-                $sheet->getStyle($range)->applyFromArray([
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => Border::BORDER_THIN,
-                        ],
-                    ],
-                ]);
-
-                for ($row = 2; $row <= $highestRow; $row++) {
-                    $shiftStartVal = $sheet->getCell('I' . $row)->getValue();
-                    $masukVal = $sheet->getCell('J' . $row)->getValue();
-                    $pulangVal = $sheet->getCell('K' . $row)->getValue();
-
-                    // Highlight 'not scanned' masuk
-                    if ($masukVal === 'not scanned') {
-                        $sheet->getStyle('J' . $row)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFC0CB'); // Pink
-                    } elseif ($masukVal > $shiftStartVal) {
-                        $sheet->getStyle('J' . $row)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFF00'); // Yellow
-                    }
-
-                    // Highlight 'not scanned' pulang
-                    if ($pulangVal === 'not scanned') {
-                        $sheet->getStyle('K' . $row)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFC0CB'); // Pink
-                    }
-                }
-            },
         ];
     }
 }

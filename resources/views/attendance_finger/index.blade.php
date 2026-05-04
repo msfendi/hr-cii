@@ -40,6 +40,9 @@
                                 <button class="btn btn-primary" id="btnExport">
                                     <i class="fas fa-file-excel mr-1"></i> Export Absensi
                                 </button>
+                                <button class="btn btn-warning ml-1" id="btnExportLate">
+                                    <i class="fas fa-file-excel mr-1"></i> Export Telat
+                                </button>
                                 <button class="btn btn-success ml-1" id="btnSync">
                                     <i class="fas fa-sync-alt mr-1"></i> Sync
                                 </button>
@@ -134,7 +137,16 @@
                 {data: 'npk',         name: 'npk'},
                 {data: 'nama',        name: 'nama'},
                 {data: 'bagian',      name: 'bagian'},
-                {data: 'jam_masuk',   name: 'jam_masuk'},
+                {
+                    data: 'jam_masuk',
+                    name: 'jam_masuk',
+                    render: function(data, type, row) {
+                        if (row.is_late == 1) {
+                            return `<span class="text-danger font-weight-bold" title="Late (Shift start: ${row.shift_start})">${data} <i class="fas fa-exclamation-circle"></i></span>`;
+                        }
+                        return data;
+                    }
+                },
                 {data: 'jam_pulang',  name: 'jam_pulang'},
                 {data: 'total_scan',  name: 'total_scan'}
             ]
@@ -270,6 +282,40 @@
                 var url = window.URL.createObjectURL(blob);
                 var a = document.createElement('a');
                 a.href = url; a.download = 'not_finger_' + date + '.xlsx';
+                document.body.appendChild(a); a.click(); a.remove();
+            })
+            .catch(() => {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong during export!' });
+            });
+        });
+
+        // ─────────────────────────────────────────────
+        // EXPORT LATE button
+        // ─────────────────────────────────────────────
+        $('#btnExportLate').click(function(e) {
+            e.preventDefault();
+            var date = $('#fromdate').val();
+            if (date == '') {
+                Swal.fire({ icon: 'error', title: 'Oops...', text: 'Please select date first!' });
+                return;
+            }
+
+            Swal.fire({ title: 'Exporting...', text: 'Please wait', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            fetch("{{ route('attendance-finger.export-late') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': "{{ csrf_token() }}" },
+                body: JSON.stringify({ date: date })
+            })
+            .then(response => {
+                if (response.ok) return response.blob();
+                throw new Error('Network response was not ok.');
+            })
+            .then(blob => {
+                Swal.close();
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url; a.download = 'attendance_late_' + date + '.xlsx';
                 document.body.appendChild(a); a.click(); a.remove();
             })
             .catch(() => {
