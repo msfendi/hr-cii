@@ -11,10 +11,11 @@ class ExcelZipEncryptService
 
     public function __construct()
     {
-        // default Windows path (bisa kamu override via env nanti)
-        $this->sevenZipPath = 'C:\\Program Files\\7-Zip\\7z.exe';
+        $OSSevenzipPath = PHP_OS_FAMILY === 'Windows'
+            ? 'C:\\Program Files\\7-Zip\\7z.exe'
+            : '/usr/bin/7z';
 
-        // $this->sevenZipPath = '/usr/bin/7z';
+        $this->sevenZipPath = $OSSevenzipPath;
     }
 
     /**

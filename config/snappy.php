@@ -1,5 +1,9 @@
 <?php
 
+$wkhtmltopdfBinary = PHP_OS_FAMILY === 'Windows'
+    ? '"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"'
+    : '/usr/local/bin/wkhtmltopdf';
+
 return [
 
     /*
@@ -35,15 +39,9 @@ return [
 
     'pdf' => [
         'enabled' => true,
-        'binary' => '"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"',
+        'binary' => $wkhtmltopdfBinary,
         'timeout' => false,
     ],
-
-    // 'pdf' => [
-    //     'enabled' => true,
-    //     'binary' => '/usr/local/bin/wkhtmltopdf',
-    //     'timeout' => false,
-    // ],
 
     'image' => [
         'enabled' => true,

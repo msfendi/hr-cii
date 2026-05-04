@@ -8,8 +8,12 @@ class PdfService
 {
     public static function protect($input, $output, $password)
     {
+        $qpdfBinary = PHP_OS_FAMILY === 'Windows'
+            ? 'C:\\Program Files\\qpdf 12.3.2\\bin\\qpdf.exe'
+            : '/usr/bin/qpdf';
+
         $process = new Process([
-            'C:\\Program Files\\qpdf 12.3.2\\bin\\qpdf.exe',
+            $qpdfBinary,
             '--encrypt',
             $password,
             $password,
