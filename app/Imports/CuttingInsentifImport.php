@@ -17,7 +17,7 @@ class CuttingInsentifImport implements WithMultipleSheets
     {
         return [
             'cutting_efficiencies' => new CuttingEfficiencyImport($this->periodId),
-            'employee_cutting_assignments' => new EmployeeCuttingAssignmentImport($this->periodId),
+            // 'employee_cutting_assignments' => new EmployeeCuttingAssignmentImport($this->periodId),
         ];
     }
 }

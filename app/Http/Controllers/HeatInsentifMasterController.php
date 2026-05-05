@@ -2,17 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use Illuminate\Http\Request;
 use App\Models\InsentifMaster;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\HeatInsentifTemplateExport;
 use App\Imports\HeatInsentifImport;
+use App\Models\HeatEfficiency;
 use App\Models\InsentifApproval;
 use App\Models\InsentifRoleFormula;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class HeatInsentifMasterController extends Controller
 {
@@ -93,8 +97,17 @@ class HeatInsentifMasterController extends Controller
 
     public function destroy($id)
     {
-        $data = InsentifMaster::findOrFail($id);
+        $user = Auth::user();
+        $data = HeatEfficiency::findOrFail($id);
         $data->delete();
+
+        event(new NotificationEvent(
+            'Heat Seal Insentif!',
+            'User : ' . $user->name . ' has deleted Heat Seal Insentif!',
+            'danger'
+        ));
+
+        Alert::success('Deleted Successfully!', 'Heat Seal Insentif succesfully deleted!');
 
         return redirect()->route('heat-insentif-master.index')
             ->with('success', 'Data berhasil dihapus');
@@ -107,6 +120,8 @@ class HeatInsentifMasterController extends Controller
 
     public function import(Request $request)
     {
+        $user = Auth::user();
+        $period = PayrollPeriod::where('id', '=', $request->period_id)->first();
         $request->validate([
             'period_id'   => 'required|exists:payroll_periods,id',
             'is_insentif' => 'required|in:0,1',
@@ -120,6 +135,7 @@ class HeatInsentifMasterController extends Controller
     JIKA INSENTIF → IMPORT EXCEL
     =====================================
     */
+        HeatEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
             Excel::import(
@@ -182,6 +198,12 @@ class HeatInsentifMasterController extends Controller
                 ]
             );
         }
+
+        event(new NotificationEvent(
+            'Heat Seal Insentif!',
+            'User : ' . $user->name . ' has imported Heat Seal Insentif ' . $period->name . '!',
+            'success'
+        ));
 
         return back()->with('success', 'Process berhasil dijalankan');
     }

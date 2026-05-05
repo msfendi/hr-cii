@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use App\Jobs\GenerateThrExport;
 use App\Models\PayrollSetting;
 use App\Models\ThrApprove;
 use App\Models\ThrSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
@@ -105,10 +107,11 @@ class ThrApproveController extends Controller
     // 🔹 Approve by NPK
     public function approve(Request $request, $id)
     {
+        $user = Auth::user();
         $data = ThrApprove::findOrFail($id);
         $npkLogin = $request->npk;
 
-        $export = DB::table('thr_exports')->where('run_id', $data->thr_run_id)->first();
+        $export = DB::table('thr_exports')->select('thr_exports.id', 'thr_periods.name')->leftJoin('thr_runs', 'thr_runs.id', '=', 'thr_exports.run_id')->leftJoin('thr_periods', 'thr_periods.id', '=', 'thr_runs.period_id')->where('run_id', $data->thr_run_id)->first();
 
         $progress = collect($data->progress);
         $approvedAt = collect($data->approved_at ?? []);
@@ -175,10 +178,22 @@ class ThrApproveController extends Controller
             'status' => $finalApprove ? 'finish' : 'pending'
         ]);
 
+        event(new NotificationEvent(
+            'THR Approval!',
+            'Users : ' . $user->name . ' has been approve THR ' . $export->name . '!',
+            'success'
+        ));
+
         // =========================
         // 🔥 AUTO GENERATE BANK
         // =========================
         if ($finalApprove) {
+            event(new NotificationEvent(
+                'THR Approval!',
+                'THR ' . $export->name . ' has been approved!',
+                'success'
+            ));
+            GenerateThrExport::dispatch($export->id, 'approve');
             $this->generateBank($data->thr_run_id, $export->id); // 🔥 pakai run_id
         }
 
@@ -289,9 +304,6 @@ class ThrApproveController extends Controller
         $filePath = "thr/" . $cleanPeriod . "/" . $fileName;
 
         $this->createBankCSV($groupedData, $period->name, $filePath);
-
-
-        GenerateThrExport::dispatch($exportId, 'approve');
 
         /*
     |--------------------------------------------------------------------------

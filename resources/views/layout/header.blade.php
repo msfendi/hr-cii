@@ -22,6 +22,18 @@
     
     <!-- <link rel="stylesheet" type="text/css" href="http://keith-wood.name/css/jquery.signature.css"> -->
     <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+     <style>
+        @keyframes slideIn{
+            from{
+                transform:translateY(15px);
+                opacity:0;
+            }
+            to{
+                transform:translateY(0);
+                opacity:1;
+            }
+        }
+    </style>
     <style>
         #canvas-container {
             position: relative;
@@ -188,3 +200,6 @@
 
     </style>
 </head>
+<script>
+    window.reverbKey = "{{ config('broadcasting.connections.reverb.key') }}";
+</script>

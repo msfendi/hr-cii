@@ -19,8 +19,8 @@ class LineInsentifImport implements WithMultipleSheets
             'line_efficiencies' =>
             new LineEfficiencyImport($this->periodId),
 
-            'employee_line_assignments' =>
-            new EmployeeLineAssignmentImport($this->periodId),
+            // 'employee_line_assignments' =>
+            // new EmployeeLineAssignmentImport($this->periodId),
         ];
     }
 }

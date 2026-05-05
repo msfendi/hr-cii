@@ -1,5 +1,7 @@
 <?php
 
+use App\Events\NotificationEvent;
+use App\Events\TestEvent;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
 use App\Http\Controllers\BiodataController;
@@ -221,7 +223,6 @@ Route::group(['middleware' => 'auth'], function () {
     });
 
     // Payroll Approve
-    Route::post('/payroll-approve/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve')->middleware(['auth', 'role:Admin|Management']);
     Route::prefix('payroll-approve')->group(function () {
         Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index')->middleware(['auth', 'role:Admin|Management']);
         Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create')->middleware(['auth', 'role:Admin|Management']);
@@ -275,7 +276,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('line-insentif-master/index', [LineInsentifMasterController::class, 'index'])->name('line-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('line-insentif-master/create', [LineInsentifMasterController::class, 'create'])->name('line-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('line-insentif-master/store', [LineInsentifMasterController::class, 'store'])->name('line-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/line-insentif-master/edit/{id}', [LineInsentifMasterController::class, 'edit'])->name('line-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
@@ -287,7 +288,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('cutting-insentif-master/create', [CuttingInsentifMasterController::class, 'create'])->name('cutting-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('cutting-insentif-master/store', [CuttingInsentifMasterController::class, 'store'])->name('cutting-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/cutting-insentif-master/edit/{id}', [CuttingInsentifMasterController::class, 'edit'])->name('cutting-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
@@ -299,7 +300,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('pad-insentif-master/create', [PadInsentifMasterController::class, 'create'])->name('pad-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('pad-insentif-master/store', [PadInsentifMasterController::class, 'store'])->name('pad-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/pad-insentif-master/edit/{id}', [PadInsentifMasterController::class, 'edit'])->name('pad-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
@@ -312,7 +313,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('heat-insentif-master/index', [HeatInsentifMasterController::class, 'index'])->name('heat-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('heat-insentif-master/create', [HeatInsentifMasterController::class, 'create'])->name('heat-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('heat-insentif-master/store', [HeatInsentifMasterController::class, 'store'])->name('heat-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('heat-insentif-master/delete/{id}', [HeatInsentifMasterController::class, 'destroy'])->name('heat-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('heat-insentif-master/delete/{id}', [HeatInsentifMasterController::class, 'destroy'])->name('heat-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/heat-insentif-master/edit/{id}', [HeatInsentifMasterController::class, 'edit'])->name('heat-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('heat-insentif-master/import', [HeatInsentifMasterController::class, 'import'])->name('heat-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('heat-insentif-master/export', [HeatInsentifMasterController::class, 'export'])->name('heat-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
@@ -644,3 +645,12 @@ Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class,
 Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cbt'])->name('evaluation-employee.cbt');
 Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
 Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');
+
+Route::get('/test-reverb', function () {
+    event(new NotificationEvent(
+        'Test Reverb',
+        'Notifikasi realtime berhasil 🚀',
+        'danger'
+    ));
+    return 'Notification Event Sent!';
+});

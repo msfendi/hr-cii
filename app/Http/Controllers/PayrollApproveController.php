@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use App\Jobs\GeneratePayrollExport;
 use App\Models\PayrollApprove;
 use App\Models\PayrollSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
@@ -105,11 +107,12 @@ class PayrollApproveController extends Controller
     // 🔹 Approve by NPK
     public function approve(Request $request, $id)
     {
+        $user = Auth::user();
         $data = PayrollApprove::findOrFail($id);
         $npkLogin = $request->npk;
 
-        $export = DB::table('payroll_exports')->where('run_id', $data->payroll_run_id)->first();
-
+        $export = DB::table('payroll_exports')->select('payroll_exports.id', 'payroll_periods.name')->leftJoin('payroll_runs', 'payroll_runs.id', '=', 'payroll_exports.run_id')->leftJoin('payroll_periods', 'payroll_periods.id', '=', 'payroll_runs.period_id')->where('run_id', $data->payroll_run_id)->first();
+        // dd($export);
         $progress = collect($data->progress);
         $approvedAt = collect($data->approved_at ?? []);
 
@@ -175,10 +178,24 @@ class PayrollApproveController extends Controller
             'status' => $finalApprove ? 'finish' : 'pending'
         ]);
 
+
+        event(new NotificationEvent(
+            'Payroll Approval!',
+            'Users : ' . $user->name . ' has been approve Payroll ' . $export->name . '!',
+            'success'
+        ));
+
         // =========================
         // 🔥 AUTO GENERATE BANK
         // =========================
         if ($finalApprove) {
+            event(new NotificationEvent(
+                'Payroll Approval!',
+                'Payroll ' . $export->name . ' has been approved!',
+            'success'
+            ));
+
+            GeneratePayrollExport::dispatch($export->id, 'approve');
             $this->generateBank($data->payroll_run_id, $export->id); // 🔥 pakai run_id dan export_id
         }
 
@@ -332,9 +349,6 @@ class PayrollApproveController extends Controller
 
         $this->createBankCSV($groupedActive, $period->name, $activePath);
         $this->createBankCSV($groupedResign, $period->name, $resignPath);
-
-
-        GeneratePayrollExport::dispatch($exportId, 'approve');
 
         /*
     |--------------------------------------------------------------------------

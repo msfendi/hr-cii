@@ -203,3 +203,159 @@ $role = $roleusers[0]->rolename;
    @endif
    <hr class="sidebar-divider d-none d-md-block">
 </ul>
+
+
+
+    <div id="notif-container"
+        style="position:fixed;top:20px;right:20px;z-index:9999;">
+    </div>
+
+    <!-- Pusher -->
+    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+
+    <!-- Laravel Echo -->
+    <script src="https://cdn.jsdelivr.net/npm/laravel-echo/dist/echo.iife.js"></script>
+
+    <script>
+        window.Pusher = Pusher;
+
+        const EchoClass = window.Echo.default ?? window.Echo;
+        const wsHost = window.location.hostname;
+
+        window.Echo = new EchoClass({
+            broadcaster: 'pusher',
+
+            key: window.reverbKey,
+
+            wsHost: wsHost,
+            wsPort: 8800,
+
+            cluster: 'mt1',
+
+            forceTLS: window.location.protocol === 'https:',
+            disableStats: true,
+            enabledTransports: ['ws','wss'],
+        });
+
+        console.log('Echo Ready:', window.Echo);
+    </script>
+    <script>
+window.Echo.channel('notification-channel')
+.listen('NotificationEvent', (e) => {
+
+    /*
+    =====================================
+    TYPE CONFIG
+    =====================================
+    */
+
+    const types = {
+
+        success:{
+            border:'#28a745',
+            bg:'#e9f9ee',
+            color:'#28a745',
+            icon:'✔'
+        },
+
+        danger:{
+            border:'#dc3545',
+            bg:'#fdeaea',
+            color:'#dc3545',
+            icon:'✖'
+        },
+
+        warning:{
+            border:'#ffc107',
+            bg:'#fff8e1',
+            color:'#ffc107',
+            icon:'⚠'
+        }
+
+    };
+
+    const type = types[e.type] ?? types.success;
+
+    /*
+    =====================================
+    BUILD NOTIFICATION
+    =====================================
+    */
+
+    const notif = document.createElement('div');
+
+    notif.innerHTML = `
+    <div style="
+        display:flex;
+        align-items:center;
+        gap:14px;
+        background:rgba(255,255,255,.95);
+        backdrop-filter:blur(10px);
+        border-left:5px solid ${type.border};
+        padding:16px;
+        margin-bottom:12px;
+        border-radius:12px;
+        box-shadow:0 8px 18px rgba(0,0,0,.12);
+        font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+        animation:slideIn .35s ease;
+    ">
+
+        <!-- ICON -->
+        <div style="
+            width:42px;
+            height:42px;
+            border-radius:50%;
+            background:${type.bg};
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:18px;
+            color:${type.color};
+            font-weight:bold;
+            flex-shrink:0;
+        ">
+            ${type.icon}
+        </div>
+
+        <!-- CONTENT -->
+        <div style="flex:1">
+
+            <div style="
+                font-size:15px;
+                font-weight:600;
+                color:#222;
+                margin-bottom:3px;
+            ">
+                ${e.title}
+            </div>
+
+            <div style="
+                font-size:14px;
+                color:#555;
+                line-height:1.5;
+            ">
+                ${e.message}
+            </div>
+
+        </div>
+
+    </div>
+    `;
+
+    document.getElementById('notif-container')
+        .prepend(notif);
+
+    /*
+    =====================================
+    AUTO REMOVE
+    =====================================
+    */
+
+    setTimeout(() => {
+        notif.style.opacity = 0;
+        notif.style.transform = 'translateY(-10px)';
+        setTimeout(()=>notif.remove(),300);
+    },4000);
+
+});
+</script>

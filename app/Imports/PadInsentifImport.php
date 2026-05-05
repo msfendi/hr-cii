@@ -17,7 +17,7 @@ class PadInsentifImport implements WithMultipleSheets
     {
         return [
             'pad_efficiencies' => new PadEfficiencyImport($this->periodId),
-            'employee_pad_assignments' => new EmployeePadAssignmentImport($this->periodId),
+            // 'employee_pad_assignments' => new EmployeePadAssignmentImport($this->periodId),
         ];
     }
 }

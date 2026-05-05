@@ -171,10 +171,6 @@ Detail Insentif Karyawan
                                  <td>{{ number_format($row->piece,0,',','.') }}</td>
                                  <td>{{ $row->date }}</td>
                                  <td class="text-center">
-                                    <a href="{{ route('pad-insentif-master.edit',$row->id) }}"
-                                       class="btn btn-primary btn-circle btn-sm">
-                                    <i class="fas fa-edit"></i>
-                                    </a>
                                     <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
                                        data-delete-link="{{ route('pad-insentif-master.delete',$row->id) }}"
                                        data-npk="{{ $row->npk }}"

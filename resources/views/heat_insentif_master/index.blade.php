@@ -173,10 +173,6 @@ Detail Insentif Karyawan
                                  <td>{{ $row->piece }}</td>
                                  <td>{{ $row->date }}</td>
                                  <td class="text-center">
-                                    <a href="{{ route('heat-insentif-master.edit',$row->id) }}"
-                                       class="btn btn-primary btn-circle btn-sm">
-                                    <i class="fas fa-edit"></i>
-                                    </a>
                                     <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
                                        data-delete-link="{{ route('heat-insentif-master.delete',$row->id) }}"
                                        data-npk="{{ $row->npk }}"

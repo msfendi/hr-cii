@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use App\Jobs\GenerateThrExport;
 use App\Jobs\GenerateThrProcess;
 use App\Models\PayrollComponent;
@@ -73,8 +74,11 @@ class ThrProcessController extends Controller
 
         try {
 
-            // ambil semua run id dari period
-            $runIds = ThrRun::where('id', $period_id)->pluck('id');
+            $user = Auth::user();
+            $runPeriods = ThrPeriod::where('thr_runs.id', $period_id)->leftJoin('thr_runs', 'thr_runs.period_id', '=', 'thr_periods.id');
+
+            $periodName = $runPeriods->pluck('thr_periods.name');
+            $runIds = $runPeriods->pluck('thr_runs.id');
             if ($runIds->count() > 0) {
 
                 // hapus detail payroll
@@ -85,6 +89,12 @@ class ThrProcessController extends Controller
             }
 
             DB::commit();
+
+            event(new NotificationEvent(
+                'Deleted THR!',
+                'Users : ' . $user->name . ' has been deleted THR ' . $periodName . '!',
+                'danger'
+            ));
 
             return redirect()->back()->with('success', 'THR deleted successfully');
         } catch (\Exception $e) {
@@ -97,6 +107,7 @@ class ThrProcessController extends Controller
 
     public function process(Request $request)
     {
+        $user = Auth::user();
         $period = ThrPeriod::findOrFail($request->period_id);
 
         /*
@@ -116,8 +127,11 @@ class ThrProcessController extends Controller
         ]);
 
         GenerateThrProcess::dispatch($run->id);
-
-        Alert::success('THR Processed Successfully');
+        event(new NotificationEvent(
+            'Process THR!',
+            'Users : ' . $user->name . ' has been process THR ' . $period->name . '!',
+            'success'
+        ));
 
         return redirect('thr-process/index');
     }
@@ -130,17 +144,25 @@ class ThrProcessController extends Controller
 
     public function export($run_id)
     {
+        $user = Auth::user();
         $export = ThrExport::create([
             'run_id' => $run_id,
             'status' => 'processing',
             'progress' => 0
         ]);
 
+        $exportPeriod = ThrExport::leftJoin('thr_runs', 'thr_runs.id', '=', 'thr_exports.run_id')->leftJoin('thr_periods', 'thr_runs.period_id', '=', 'thr_periods.id')->where('thr_exports.run_id', '=', $run_id)->pluck('thr_periods.name');
         $type = 'process';
 
         GenerateThrExport::dispatch($export->id, $type);
 
         Alert::success('Export THR Finished');
+
+        event(new NotificationEvent(
+            'Export THR!',
+            'Users : ' . $user->name . ' has been export THR ' . $exportPeriod . '!',
+            'success'
+        ));
         return redirect('thr-process/index');
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use Illuminate\Http\Request;
 use App\Models\InsentifMaster;
 use Maatwebsite\Excel\Facades\Excel;
@@ -12,12 +13,15 @@ use App\Imports\InsentifImport;
 use App\Imports\InsentifMasterImport;
 use App\Imports\CuttingInsentifImport;
 use App\Imports\PadInsentifImport;
+use App\Models\CuttingEfficiency;
 use App\Models\InsentifApproval;
 use App\Models\InsentifRoleFormula;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class CuttingInsentifMasterController extends Controller
 {
@@ -89,8 +93,18 @@ class CuttingInsentifMasterController extends Controller
 
     public function destroy($id)
     {
-        $data = InsentifMaster::findOrFail($id);
+        $user = Auth::user();
+        $data = CuttingEfficiency::findOrFail($id);
         $data->delete();
+
+        event(new NotificationEvent(
+            'Cutting Insentif!',
+            'User : ' . $user->name . ' has deleted Cutting Insentif!',
+            'danger'
+        ));
+
+        Alert::success('Deleted Successfully!', 'Cutting Insentif succesfully deleted!');
+
 
         return redirect()->route('cutting-insentif-master.index')
             ->with('success', 'Data berhasil dihapus');
@@ -103,6 +117,8 @@ class CuttingInsentifMasterController extends Controller
 
     public function import(Request $request)
     {
+        $user = Auth::user();
+        $period = PayrollPeriod::where('id', '=', $request->period_id)->first();
         $request->validate([
             'period_id'   => 'required|exists:payroll_periods,id',
             'is_insentif' => 'required|in:0,1',
@@ -116,6 +132,7 @@ class CuttingInsentifMasterController extends Controller
     JIKA INSENTIF → IMPORT EXCEL
     =====================================
     */
+        CuttingEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
             Excel::import(
@@ -178,6 +195,12 @@ class CuttingInsentifMasterController extends Controller
                 ]
             );
         }
+
+        event(new NotificationEvent(
+            'Cutting Insentif!',
+            'User : ' . $user->name . ' has imported Cutting Insentif ' . $period->name . '!',
+            'success'
+        ));
 
         return back()->with('success', 'Process berhasil dijalankan');
     }

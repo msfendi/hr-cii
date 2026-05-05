@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use Illuminate\Http\Request;
 use App\Models\InsentifMaster;
 use Maatwebsite\Excel\Facades\Excel;
@@ -13,10 +14,13 @@ use App\Imports\InsentifMasterImport;
 use App\Imports\LineInsentifImport;
 use App\Models\InsentifApproval;
 use App\Models\InsentifRoleFormula;
+use App\Models\LineEfficiency;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class LineInsentifMasterController extends Controller
 {
@@ -89,8 +93,17 @@ class LineInsentifMasterController extends Controller
 
     public function destroy($id)
     {
-        $data = InsentifMaster::findOrFail($id);
+        $user = Auth::user();
+        $data = LineEfficiency::findOrFail($id);
         $data->delete();
+
+        event(new NotificationEvent(
+            'Line Insentif!',
+            'User : ' . $user->name . ' has deleted Line Insentif!',
+            'danger'
+        ));
+
+        Alert::success('Deleted Successfully!', 'Line Insentif succesfully deleted!');
 
         return redirect()->route('line-insentif-master.index')
             ->with('success', 'Data berhasil dihapus');
@@ -103,6 +116,9 @@ class LineInsentifMasterController extends Controller
 
     public function import(Request $request)
     {
+
+        $user = Auth::user();
+        $period = PayrollPeriod::where('id', '=', $request->period_id)->first();
         $request->validate([
             'period_id'   => 'required|exists:payroll_periods,id',
             'is_insentif' => 'required|in:0,1',
@@ -116,6 +132,7 @@ class LineInsentifMasterController extends Controller
     JIKA INSENTIF → IMPORT EXCEL
     =====================================
     */
+        LineEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
             Excel::import(
@@ -178,6 +195,13 @@ class LineInsentifMasterController extends Controller
                 ]
             );
         }
+
+
+        event(new NotificationEvent(
+            'Line Insentif!',
+            'User : ' . $user->name . ' has imported Line Insentif ' . $period->name . '!',
+            'success'
+        ));
 
         return back()->with('success', 'Process berhasil dijalankan');
     }

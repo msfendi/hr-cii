@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use App\Jobs\GeneratePayrollExport;
 use App\Jobs\GeneratePayrollProcess;
 use App\Jobs\GeneratePayrollRekap;
@@ -90,6 +91,7 @@ class PayrollProcessController extends Controller
     public function process(Request $request)
     {
         $payrollResults = [];
+        $user = Auth::user();
         $period = PayrollPeriod::findOrFail($request->period_id);
 
         // PROTEKSI: cek apakah payroll sudah pernah digenerate
@@ -106,8 +108,11 @@ class PayrollProcessController extends Controller
         ]);
 
         GeneratePayrollProcess::dispatch($run->id);
-
-        Alert::success('Payroll generated successfully!');
+        event(new NotificationEvent(
+            'Process Payroll!',
+            'Users : ' . $user->name . ' has been process Payroll ' . $period->name . '!',
+            'success'
+        ));
         return redirect('payroll-process/index');
     }
 
@@ -235,12 +240,17 @@ class PayrollProcessController extends Controller
 
     public function destroy($period_id)
     {
+
         DB::beginTransaction();
 
         try {
 
+            $user = Auth::user();
+            $runPeriods = PayrollPeriod::where('payroll_runs.id', $period_id)->leftJoin('payroll_runs', 'payroll_runs.period_id', '=', 'payroll_periods.id');
             // ambil semua run id dari period
-            $runIds = PayrollRun::where('id', $period_id)->pluck('id');
+            $periodName = $runPeriods->pluck('payroll_periods.name');
+            $runIds = $runPeriods->pluck('payroll_runs.id');
+
             if ($runIds->count() > 0) {
 
                 // hapus detail payroll
@@ -251,6 +261,12 @@ class PayrollProcessController extends Controller
             }
 
             DB::commit();
+
+            event(new NotificationEvent(
+                'Deleted Payroll!',
+                'Users : ' . $user->name . ' has been deleted Payroll ' . $periodName . '!',
+                'danger'
+            ));
 
             return redirect()->back()->with('success', 'Payroll deleted successfully');
         } catch (\Exception $e) {
@@ -303,18 +319,28 @@ class PayrollProcessController extends Controller
 
     public function export($run_id)
     {
-        // dd(function_exists('exec'));
+        $user = Auth::user();
+        // dd($exportPeriod);
         $export = PayrollExport::create([
             'run_id' => $run_id,
             'status' => 'processing',
             'progress' => 0
         ]);
 
+        $exportPeriod = PayrollExport::leftJoin('payroll_runs', 'payroll_runs.id', '=', 'payroll_exports.run_id')->leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')->where('payroll_exports.run_id', '=', $run_id)->pluck('payroll_periods.name');
         $type = 'process';
+
+        // dd($exportPeriod);
 
         GeneratePayrollExport::dispatch($export->id, $type);
 
         Alert::success('Sukses', 'Export payroll selesai diproses!');
+
+        event(new NotificationEvent(
+            'Export Payroll!',
+            'Users : ' . $user->name . ' has been export Payroll ' . $exportPeriod . '!',
+            'success'
+        ));
         return redirect('payroll-process/index');
         // return response()->json([
         //     'message' => 'Export started',

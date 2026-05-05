@@ -16,8 +16,8 @@ class HeatInsentifImport implements WithMultipleSheets
     public function sheets(): array
     {
         return [
-            'pad_efficiencies' => new HeatEfficiencyImport($this->periodId),
-            'employee_pad_assignments' => new EmployeeHeatAssignmentImport($this->periodId),
+            'heat_efficiencies' => new HeatEfficiencyImport($this->periodId),
+            // 'employee_heat_assignments' => new EmployeeHeatAssignmentImport($this->periodId),
         ];
     }
 }
