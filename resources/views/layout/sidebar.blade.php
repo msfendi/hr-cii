@@ -54,7 +54,7 @@ $role = $roleusers[0]->rolename;
    </li>
    @endif
    {{-- ================= EXPAT ================= --}}
-   @if(in_array($role,['Admin','HRD']))
+   @if(in_array($role,['Admin','Purchase']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#expat">
       <i class="fas fa-globe"></i>
@@ -62,6 +62,8 @@ $role = $roleusers[0]->rolename;
       </a>
       <div id="expat" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
+            <a class="collapse-item" href="{{ route('chu-family.index') }}">Chu Family</a>
+            <hr>
             <a class="collapse-item" href="{{ route('expat.master.index') }}">Master</a>
             <a class="collapse-item" href="{{ route('expat.onleave.index') }}">On Leave</a>
             <a class="collapse-item" href="{{ route('expat.cost.index') }}">Cost</a>
@@ -229,6 +231,7 @@ $role = $roleusers[0]->rolename;
 
             wsHost: wsHost,
             wsPort: 8800,
+            wssPort: 8015,
 
             cluster: 'mt1',
 

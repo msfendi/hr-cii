@@ -23,6 +23,7 @@ use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\ChuFamilyController;
 use App\Http\Controllers\DeptInsentifRoleController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
@@ -516,7 +517,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/applicant-contact/store', [ApplicantContactController::class, 'store'])->name('applicant-contact.store');
     Route::delete('/applicant-contact/{id}', [ApplicantContactController::class, 'destroy'])->name('applicant-contact.destroy');
 
-    Route::prefix('expat')->group(function () {
+    Route::prefix('expat')->middleware('role:Admin|Purchase')->group(function () {
 
         Route::get('master/index', [ExpatController::class, 'indexMaster'])->name('expat.master.index');
         Route::get('master/create', [ExpatController::class, 'createMaster'])->name('expat.master.create');
@@ -546,7 +547,19 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export');
     });
 
-    Route::prefix('foreign-guest')->group(function () {
+    Route::prefix('chu-family')->middleware('role:Admin|Purchase')->group(function () {
+        Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index');
+        Route::get('/create', [ChuFamilyController::class, 'create'])->name('chu-family.create');
+        Route::post('/store', [ChuFamilyController::class, 'store'])->name('chu-family.store');
+        Route::get('/edit/{id}', [ChuFamilyController::class, 'edit'])->name('chu-family.edit');
+        Route::put('/update/{id}', [ChuFamilyController::class, 'update'])->name('chu-family.update');
+        Route::get('/delete/{id}', [ChuFamilyController::class, 'delete'])->name('chu-family.delete');
+        Route::post('/import', [ChuFamilyController::class, 'import'])->name('chu-family.import');
+        Route::get('/template', [ChuFamilyController::class, 'template'])->name('chu-family.template');
+        Route::get('/export', [ChuFamilyController::class, 'export'])->name('chu-family.export');
+    });
+
+    Route::prefix('foreign-guest')->middleware('role:Admin|Purchase')->group(function () {
 
         Route::get('/', [ForeignGuestController::class, 'index'])->name('foreign-guest.index');
         Route::get('/create', [ForeignGuestController::class, 'create'])->name('foreign-guest.create');
