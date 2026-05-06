@@ -29,9 +29,9 @@ class PelamarImport implements ToModel, WithStartRow
         // Update NIK index to 19 after shifting
         $existingPelamar = Pelamar::where('NIK', $row[19])->first();
 
-        if ($existingPelamar != null && $existingPelamar->IS_KONTRAK == 'TRUE') {
-            dd('Pelamar sudah pernah diimport');
-        }
+        // if ($existingPelamar != null && $existingPelamar->IS_KONTRAK == 'TRUE') {
+        //     dd('Pelamar sudah pernah diimport');
+        // }
 
         // Safe Date Parsing
         try {

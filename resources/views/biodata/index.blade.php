@@ -831,7 +831,7 @@
                     $('#show_id_dept').val(response.BAGIAN ?? 'DEPT TIDAK DIISI');
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');
-                    $('#show_is_staff').prop('checked', response.IS_STAFF == 0).prop('disabled', true);
+                    $('#show_is_staff').prop('checked', response.IS_STAFF == 1).prop('disabled', true);
                     
                     // Set image with fallback
                     const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
@@ -1018,7 +1018,7 @@
 
                     $('#edit_tmk').val(response.TMK);
                     $('#edit_tanggungan').val(response.TANGGUNGAN);
-                    $('#edit_is_staff').prop('checked', response.IS_STAFF == 0);
+                    $('#edit_is_staff').prop('checked', response.IS_STAFF == 1);
                     
                     const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
                     $('#edit_previewImage').attr('src', imageUrl);

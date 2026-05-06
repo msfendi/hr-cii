@@ -523,6 +523,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/employee-shift/edit/{id}', [EmployeeShiftController::class, 'edit'])->name('employee-shift.edit');
     Route::post('/employee-shift/store', [EmployeeShiftController::class, 'store'])->name('employee-shift.store');
     Route::get('/employee-shift/delete/{id}', [EmployeeShiftController::class, 'delete'])->name('employee-shift.delete');
+    Route::get('/employee-shift/template', [EmployeeShiftController::class, 'exportTemplate'])->name('employee-shift.template');
+    Route::post('/employee-shift/import', [EmployeeShiftController::class, 'importTemplate'])->name('employee-shift.import');
 });
 
 Route::prefix('insentif-threshold')->group(function () {

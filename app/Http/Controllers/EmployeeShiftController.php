@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\EmployeeShiftTemplateExport;
+use App\Imports\EmployeeShiftImport;
 use App\Models\EmployeeShift;
 use App\Models\Shift;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class EmployeeShiftController extends Controller
 {
@@ -52,5 +56,21 @@ class EmployeeShiftController extends Controller
 
         return redirect()->route('employee-shift.index')
             ->with('success', 'Shift karyawan dihapus');
+    }
+    public function exportTemplate()
+    {
+        return Excel::download(new EmployeeShiftTemplateExport, 'employee_shifts_template.xlsx');
+    }
+
+    public function importTemplate(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx'
+        ]);
+
+        Excel::import(new EmployeeShiftImport, $request->file('file'));
+
+        Alert::success('Shift imported successfully!');
+        return redirect()->route('employee-shift.index');
     }
 }

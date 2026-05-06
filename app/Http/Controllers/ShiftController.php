@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Shift;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class ShiftController extends Controller

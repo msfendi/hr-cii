@@ -328,7 +328,7 @@ class OvertimeController extends Controller
                     }
 
                     // Lembur Khusus
-                    if ($jamLemburFloat > 4 && ($isWeekend || $isHoliday)) {
+                    if ( ($isWeekend || $isHoliday)) {
                         $lemburKhusus += $jamLemburFloat;
                     }
 

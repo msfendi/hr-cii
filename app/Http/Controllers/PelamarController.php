@@ -23,7 +23,7 @@ class PelamarController extends Controller
         $pelamars = DB::connection('cii')->table('PELAMAR')
             ->select('ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
             ->where('IS_KONTRAK', 'FALSE')
-            ->orderBy('NPK', 'DESC')
+            ->orderBy('NPK', 'ASC')
             ->get();
 
         $departments = DB::connection('cii')->table('DEPT')->select('ID_DEPT', 'DEPARTEMENT')->where('SECTION', 'CHUTEX')->get(); // Fetch departments
@@ -98,25 +98,25 @@ class PelamarController extends Controller
                 'NPK' => strtoupper($request->npk),
                 'NAMA' => strtoupper($request->nama),
                 'JENIS_KELAMIN' => strtoupper($request->jk),
-                'TMPT_LAHIR' => strtoupper($request->tempat_lahir),
+                'TMPT_LAHIR' => strtoupper($request->tempat_lahir) ?? '',
                 'TGL_LAHIR' => $request->tgl_lahir,
                 'TMK' => $request->tmk,
                 'UMUR' => $umur_string,
-                'ALAMAT_LENGKAP' => strtoupper($request->alamat),
-                'KABUPATEN' => strtoupper($request->kabupaten),
-                'PENDIDIKAN' => strtoupper($request->pendidikan),
-                'NAMA_SEKOLAH' => strtoupper($request->sekolah),
-                'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah),
-                'JURUSAN' => strtoupper($request->jurusan),
-                'TINGGI_BADAN' => $request->tb,
-                'BERAT_BADAN' => $request->bb,
-                'HP' => $request->hp,
-                'AGAMA' => strtoupper($request->agama),
+                'ALAMAT_LENGKAP' => strtoupper($request->alamat) ?? '',
+                'KABUPATEN' => strtoupper($request->kabupaten)  ?? '',
+                'PENDIDIKAN' => strtoupper($request->pendidikan) ?? '',
+                'NAMA_SEKOLAH' => strtoupper($request->sekolah) ?? '',
+                'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah) ?? '',
+                'JURUSAN' => strtoupper($request->jurusan) ?? '',
+                'TINGGI_BADAN' => $request->tb ?? 0,
+                'BERAT_BADAN' => $request->bb ?? 0,
+                'HP' => $request->hp ?? '',
+                'AGAMA' => strtoupper($request->agama) ?? '',
                 'NIK' => $request->nik,
-                'NO_KK' => $request->no_kk,
-                'IBU' => strtoupper($request->ibu),
-                'STATUS' => strtoupper($request->status),
-                'TANGGUNGAN' => $request->tanggungan,
+                'NO_KK' => $request->no_kk ?? '',
+                'IBU' => strtoupper($request->ibu) ?? '',
+                'STATUS' => strtoupper($request->status) ?? '',
+                'TANGGUNGAN' => $request->tanggungan ?? '',
                 'IS_KONTRAK' => 'TRUE',
             ]
         );
@@ -130,7 +130,7 @@ class PelamarController extends Controller
             'BARCODE' => $last_barcode,
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
-            'IS_STAFF' => $request->has('is_staff') ? 0 : 1,
+            'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
         ]);
 
         $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
@@ -238,7 +238,7 @@ class PelamarController extends Controller
             'BARCODE' => $last_barcode,
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
-            'IS_STAFF' => $request->has('is_staff') ? 0 : 1,
+            'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
         ]);
 
         $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();

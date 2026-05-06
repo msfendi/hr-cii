@@ -97,6 +97,9 @@ class AttendanceFingerController extends Controller
 
 
 
+
+                
+
                 $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
                 $data = DB::connection('cii')->select("
                     SELECT

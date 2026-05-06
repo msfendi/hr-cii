@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Audit extends Model
 {
     use HasFactory;
-    protected $connection = 'audit';
+    protected $connection = 'cii';
     protected $table = 'AUDIT';
     protected $fillable = [
         'NPK',

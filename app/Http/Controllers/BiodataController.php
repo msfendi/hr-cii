@@ -157,6 +157,7 @@ class BiodataController extends Controller
             'BARCODE' => strtoupper($barcode),
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
+            'IS_STAFF' => '0',
         ]);
 
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
