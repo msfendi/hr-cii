@@ -210,6 +210,7 @@ class BiodataController extends Controller
             $biodata = DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->first();
             $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->first();
 
+
             if (!$biodata) {
                 return response()->json([
                     'status' => 'error',
@@ -230,14 +231,29 @@ class BiodataController extends Controller
             DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();
 
             if ($pkwt) {
-                $pkwtModel = PKWT::where('NPK', $NPK)->first();
-                if ($pkwtModel) {
-                    $pkwtModel->update([
-                        'TKK' => $request->tkk,
-                    ]);
-                }
+                DB::connection('cii')->table('PKWT')
+                    ->where('NPK', $NPK)
+                    ->update(['TKK' => $request->tkk]);
             }
 
+            // Update employees_contract status berdasarkan TKK vs end_date
+            $tkkDate = $request->tkk ? \Carbon\Carbon::parse($request->tkk)->toDateString() : null;
+            if ($tkkDate) {
+                $activeContract = DB::connection('cii')->table('employees_contract')
+                    ->where('npk', $NPK)
+                    ->where('status_contract', 'AKTIF')
+                    ->orderBy('contract_ke', 'desc')
+                    ->first();
+
+                if ($activeContract) {
+                    $endDate = \Carbon\Carbon::parse($activeContract->end_date)->toDateString();
+                    $newStatus = ($tkkDate >= $endDate) ? 'HABIS' : 'DIAKHIRI';
+
+                    DB::connection('cii')->table('employees_contract')
+                        ->where('id', $activeContract->id)
+                        ->update(['status_contract' => $newStatus]);
+                }
+            }
 
             DB::connection('cii')->commit();
 

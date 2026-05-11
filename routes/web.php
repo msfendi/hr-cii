@@ -51,6 +51,7 @@ use App\Http\Controllers\ThrProcessController;
 use App\Http\Controllers\WhatsappDeviceController;
 use App\Http\Controllers\WhatsappSendController;
 use App\Http\Controllers\WhatsappTemplateController;
+use App\Http\Controllers\EmployeesContractController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 
@@ -97,16 +98,16 @@ Route::group(['middleware' => 'auth'], function () {
 
 
     // BIODATA
-    Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/biodata/update/{NPK}', [BiodataController::class, 'update'])->name('biodata.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/biodata/update/{NPK}', [BiodataController::class, 'update'])->name('biodata.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
 
     // PKWT
     Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin|HRD']);
@@ -212,6 +213,25 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import')->middleware(['auth', 'role:Admin|HRD']);
         Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template')->middleware(['auth', 'role:Admin|HRD']);
         Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete')->middleware(['auth', 'role:Admin|HRD']);
+    });
+
+    // ========================================
+    // EMPLOYEES CONTRACT
+    // ========================================
+    Route::prefix('employees-contract')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING'])->group(function () {
+        Route::get('/',                 [EmployeesContractController::class, 'index'])->name('employees-contract.index');
+        Route::get('/get-data',         [EmployeesContractController::class, 'getData'])->name('employees-contract.get-data');
+        Route::get('/by-npk/{npk}',     [EmployeesContractController::class, 'getByNpk'])->name('employees-contract.by-npk');
+        Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store');
+        Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop');
+        Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish');
+        Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend');
+        Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary');
+        Route::post('/delete/{id}',     [EmployeesContractController::class, 'destroy'])->name('employees-contract.destroy');
+        Route::get('/bagian',           [EmployeesContractController::class, 'getBagian'])->name('employees-contract.bagian');
+        Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template');
+        Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import');
+        Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export');
     });
 
     // Payroll Approve

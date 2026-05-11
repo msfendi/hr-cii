@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Pelamar;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Imports\PelamarImport;
 use App\Exports\PelamarTemplateExport;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Facades\Storage;
-use Psy\Util\Str;
+use Psy\Util\Str as PsyStr;
 use Carbon\Carbon;
 
 class PelamarController extends Controller
@@ -163,6 +164,28 @@ class PelamarController extends Controller
             'FASKES' => strtoupper($request->faskes),
         ]);
 
+        // Insert kontrak pertama ke employees_contract
+        $duration = (int) ($request->month_duration ?? 6);
+        $startDate = Carbon::parse($request->tmk);
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)
+            : $startDate->copy()->addMonths($duration)->subDay();
+
+        DB::table('employees_contract')->insert([
+            'id'              => (string) \Illuminate\Support\Str::uuid(),
+            'npk'             => strtoupper($request->npk),
+            'contract_ke'     => 1,
+            'start_date'      => $startDate->toDateString(),
+            'end_date'        => $endDate->toDateString(),
+            'month_duration'  => (string) $duration,
+            'status_contract' => 'AKTIF',
+            'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
+            'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
+            'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
+            'created_at'      => now(),
+            'updated_at'      => now(),
+        ]);
+
         DB::connection('cii')->commit();
     }
 
@@ -269,6 +292,33 @@ class PelamarController extends Controller
             'NOREK' => $request->norek,
             'JURUSAN' => strtoupper($request->jurusan),
             'FASKES' => strtoupper($request->faskes),
+        ]);
+
+        // Cek kontrak ke berapa (untuk karyawan lama yang kembali)
+        $existingContracts = DB::table('employees_contract')
+            ->where('npk', strtoupper($request->npk))
+            ->count();
+        $contractKe = $existingContracts + 1;
+
+        $duration = (int) ($request->month_duration ?? 6);
+        $startDate = Carbon::parse($request->tmk);
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)
+            : $startDate->copy()->addMonths($duration)->subDay();
+
+        DB::table('employees_contract')->insert([
+            'id'              => (string) Str::uuid(),
+            'npk'             => strtoupper($request->npk),
+            'contract_ke'     => $contractKe,
+            'start_date'      => $startDate->toDateString(),
+            'end_date'        => $endDate->toDateString(),
+            'month_duration'  => (string) $duration,
+            'status_contract' => 'AKTIF',
+            'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
+            'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
+            'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
+            'created_at'      => now(),
+            'updated_at'      => now(),
         ]);
 
         DB::connection('cii')->commit();
