@@ -114,7 +114,30 @@ class GenerateCompensation implements ShouldQueue
                     )
             );
 
+        /*
+|--------------------------------------------------------------------------
+| BASE CONTRACT (END DATE THIS MONTH)
+|--------------------------------------------------------------------------
+*/
+
+        $baseContracts = DB::table('employees_contract')
+            ->whereMonth('end_date', $today->month)
+            ->whereYear('end_date', $today->year)
+            // ->where('npk', '=', 'C-00827')
+            ->select('npk', 'contract_ke');
+
+        /*
+|--------------------------------------------------------------------------
+| LOAD EMPLOYEE (INCLUDING SAME CONTRACT_KE HISTORY)
+|--------------------------------------------------------------------------
+*/
+
         $employees = DB::table('employees_contract as ec')
+
+            ->joinSub($baseContracts, 'bc', function ($join) {
+                $join->on('bc.npk', '=', 'ec.npk')
+                    ->on('bc.contract_ke', '=', 'ec.contract_ke');
+            })
 
             ->join('payroll_masters as pm', 'pm.npk', '=', 'ec.npk')
 
@@ -125,9 +148,7 @@ class GenerateCompensation implements ShouldQueue
             })
 
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
-
-            ->whereMonth('ec.end_date', $today->month)
-            ->whereYear('ec.end_date', $today->year)
+            // ->where('bio.NPK', '=', 'C-00827')
 
             ->select(
                 'ec.*',
@@ -139,9 +160,10 @@ class GenerateCompensation implements ShouldQueue
                 'd.DEPARTEMENT as department'
             )
 
+            ->orderBy('ec.end_date', 'desc')
             ->get();
 
-        // dd($employees);
+        // dd($baseContracts->get(), $employees);
 
 
         /*
@@ -172,9 +194,24 @@ class GenerateCompensation implements ShouldQueue
                 'progress' => 35
             ]);
 
-            foreach ($employees as $emp) {
+            /*
+|--------------------------------------------------------------------------
+| DETECT LATEST CONTRACT PER CHAIN
+|--------------------------------------------------------------------------
+*/
 
-                // dd($emp);
+            $latestContracts = $employees
+                ->groupBy(fn($emp) => $emp->npk . '_' . $emp->contract_ke)
+                ->map(function ($contracts) {
+                    return $contracts
+                        ->sortByDesc('end_date')
+                        ->first()
+                        ->id;
+                });
+
+            $contractAccumulator = [];
+
+            foreach ($employees as $emp) {
 
                 $is_contract = $emp->type === 'Contract';
                 $is_daily    = $emp->type === 'Daily';
@@ -184,15 +221,50 @@ class GenerateCompensation implements ShouldQueue
                 $date7  = Carbon::create($today->year, $today->month, 7);
                 $date20 = Carbon::create($today->year, $today->month, 20);
 
-                $nearestDate =
+                /*
+    |--------------------------------------------------------------------------
+    | DETERMINE CUT OFF DATE (7 / 20)
+    |--------------------------------------------------------------------------
+    */
+
+                $cutoffDate =
                     abs($date7->diffInDays($endDate, false))
                     <=
                     abs($date20->diffInDays($endDate, false))
                     ? $date7
                     : $date20;
 
-                $difference_days =
-                    $nearestDate->diffInDays($endDate, false);
+                /*
+    |--------------------------------------------------------------------------
+    | DIFFERENCE DAYS ONLY FOR LATEST CONTRACT
+    |--------------------------------------------------------------------------
+    */
+
+                $key = $emp->npk . '_' . $emp->contract_ke;
+
+                $difference_days = 0;
+
+                //         if (($latestContracts[$key] ?? null) == $emp->id) {
+
+                //             /*
+                // |--------------------------------------------------------------------------
+                // | PAYROLL RULE
+                // | cutoff - end_date
+                // |
+                // | tarik sebelum habis  -> minus
+                // | tarik setelah habis  -> plus
+                // |--------------------------------------------------------------------------
+                // */
+
+                //             $difference_days =
+                //                 $endDate->diffInDays($cutoffDate, false);
+                //         }
+
+                /*
+    |--------------------------------------------------------------------------
+    | DAILY COUNT
+    |--------------------------------------------------------------------------
+    */
 
                 $count_days = 0;
 
@@ -203,10 +275,10 @@ class GenerateCompensation implements ShouldQueue
                 }
 
                 /*
-                |--------------------------------------------------------------------------
-                | FORMULA ENGINE
-                |--------------------------------------------------------------------------
-                */
+    |--------------------------------------------------------------------------
+    | FORMULA ENGINE
+    |--------------------------------------------------------------------------
+    */
 
                 $inputVariables = [
                     'is_contract' => $is_contract ? 1 : 0,
@@ -224,11 +296,34 @@ class GenerateCompensation implements ShouldQueue
                     [],
                     $inputVariables
                 );
+
                 /*
-                |--------------------------------------------------------------------------
-                | STATUS
-                |--------------------------------------------------------------------------
-                */
+    |--------------------------------------------------------------------------
+    | ACCUMULATE SAME CONTRACT_KE
+    |--------------------------------------------------------------------------
+    */
+
+                if (!isset($contractAccumulator[$key])) {
+
+                    $contractAccumulator[$key] = [
+                        'emp' => $emp,
+                        'amount' => 0
+                    ];
+                }
+
+                $contractAccumulator[$key]['amount'] += $amount;
+            }
+
+            /*
+|--------------------------------------------------------------------------
+| SAVE RESULT (ONLY 1x INSERT PER CONTRACT CHAIN)
+|--------------------------------------------------------------------------
+*/
+
+            foreach ($contractAccumulator as $row) {
+
+                $emp = $row['emp'];
+                $amount = $row['amount'];
 
                 $status = $emp->status_contract;
                 $is_active = 1;
@@ -237,7 +332,7 @@ class GenerateCompensation implements ShouldQueue
 
                     $tkkDate = Carbon::parse($emp->TKK);
 
-                    if ($tkkDate->lt($endDate)) {
+                    if ($tkkDate->lt(Carbon::parse($emp->end_date))) {
                         $status = 'Resigned Before Contract End';
                     }
 

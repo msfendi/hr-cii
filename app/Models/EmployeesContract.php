@@ -17,8 +17,18 @@ class EmployeesContract extends Model
     public    $incrementing = false;
 
     protected $fillable = [
-        'id', 'npk', 'contract_ke', 'start_date', 'end_date',
-        'month_duration', 'status_contract', 'salary', 'allowance', 'pph21',
+        'id',
+        'npk',
+        'contract_ke',
+        'start_date',
+        'end_date',
+        'month_duration',
+        'status_contract',
+        'salary',
+        'type',
+        'daily_salary',
+        'allowance',
+        'pph21',
     ];
 
     protected $casts = [
@@ -26,6 +36,7 @@ class EmployeesContract extends Model
         'end_date'   => 'date',
         'salary'     => 'decimal:2',
         'allowance'  => 'decimal:2',
+        'daily_salary'  => 'decimal:2',
         'pph21'      => 'decimal:2',
     ];
 
@@ -74,5 +85,57 @@ class EmployeesContract extends Model
     public function biodata()
     {
         return $this->belongsTo(Biodata::class, 'npk', 'NPK');
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(NotificationsContract::class);
+    }
+
+    // SCOPES - Untuk mencari kontrak yang akan habis
+    public function scopeActive($query)
+    {
+        return $query->whereNotIn('status_contract', ['habis', 'diakhiri']);
+    }
+
+    public function scopeExpiringInDays($query, $days = 5)
+    {
+        $startDate = now();
+        $endDate = now()->addDays($days);
+        
+        return $query->active()
+                     ->whereDate('end_date', '>=', $startDate)
+                     ->whereDate('end_date', '<=', $endDate);
+    }
+
+    public function scopeExpiringToday($query)
+    {
+        return $query->active()
+                     ->whereDate('end_date', today());
+    }
+
+    // METHODS
+    public function getDaysRemaining()
+    {
+        if ($this->status_contract === 'habis' || $this->status_contract === 'diakhiri') {
+            return 0;
+        }
+        
+        return $this->sisa_hari;
+    }
+
+    public function getIsExpiringAttribute()
+    {
+        return $this->getDaysRemaining() <= 5 && $this->getDaysRemaining() >= 0;
+    }
+
+    public function getIsExpiredAttribute()
+    {
+        return $this->end_date->isPast() && $this->status_contract !== 'habis';
+    }
+
+    public function getEmployeeName()
+    {
+        return $this->biodata?->NAMA_KARYAWAN ?? 'N/A';
     }
 }

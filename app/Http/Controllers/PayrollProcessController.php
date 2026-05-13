@@ -110,12 +110,12 @@ class PayrollProcessController extends Controller
         $period = PayrollPeriod::findOrFail($request->period_id);
 
         // PROTEKSI: cek apakah payroll sudah pernah digenerate
-        // $exists = PayrollRun::where('period_id', $period->id)->exists();
+        $exists = PayrollRun::where('period_id', $period->id)->exists();
 
-        // if ($exists) {
-        //     Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
-        //     return redirect()->back();
-        // }
+        if ($exists) {
+            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
+            return redirect()->back();
+        }
 
         $run = PayrollRun::create([
             'period_id' => $period->id,

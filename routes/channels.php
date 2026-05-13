@@ -16,3 +16,12 @@ use Illuminate\Support\Facades\Broadcast;
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
+
+// Private channel untuk HR Admin notifications
+Broadcast::channel('hr.contract-notifications', function ($user) {
+    if ($user && $user->hasAnyRole(['Admin', 'HRD', 'Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING'])) {
+        return true;
+    }
+    
+    return false;
+});

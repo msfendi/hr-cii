@@ -396,7 +396,7 @@
     MODAL: IMPORT
     ════════════════════════════════════════════════════ --}}
     <div class="modal fade" id="modalImport" tabindex="-1">
-        <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white py-3">
                     <h6 class="modal-title mb-0"><i class="fas fa-file-import mr-2"></i>Import Kontrak</h6>
@@ -405,7 +405,8 @@
                 <div class="modal-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="small text-muted">Gunakan template untuk format data.</span>
-                        <a href="{{ route('employees-contract.template') }}" class="btn btn-outline-success btn-sm font-weight-bold">
+                        <a href="{{ route('employees-contract.template') }}"
+                            class="btn btn-outline-success btn-sm font-weight-bold">
                             <i class="fas fa-download mr-1"></i>Download Template
                         </a>
                     </div>

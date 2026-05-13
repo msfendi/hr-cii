@@ -46,6 +46,9 @@ class EmployeesContractImport implements ToModel, WithHeadingRow
             'status_contract' => strtoupper(trim($row['status_contract'] ?? 'AKTIF')),
             'salary'          => (float) ($row['salary']    ?? 0),
             'allowance'       => (float) ($row['allowance'] ?? 0),
+            'type'            => (string) ($row['type'] ?? ''),
+            'daily_salary'    => (float) ($row['daily_salary'] ?? 0),
+            'pph21'           => (float) ($row['pph21'] ?? 0),
         ]);
     }
 

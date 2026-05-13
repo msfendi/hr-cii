@@ -38,21 +38,6 @@
                     <input type="text" class="form-control" name="bank_account" value="{{ $data->bank_account }}" required readonly>
                   </div>
                   <br>
-                  <div>
-                    <label>Salary :</label>
-                    <input type="number" class="form-control" name="salary" value="{{ $data->salary }}" required>
-                  </div>
-                  <br>
-                  <div>
-                    <label>Allowance :</label>
-                    <input type="number" class="form-control" name="allowance" value="{{ $data->allowance }}">
-                  </div>
-                  <br>
-                  <div>
-                    <label>PPH 21 :</label>
-                    <input type="number" class="form-control" name="pph21" value="{{ $data->pph21 }}">
-                  </div>
-                  <br>
                   <div class="row">
                     <div class="col-12">
                       <button type="submit" class="btn btn-primary btn-block"> Update Payroll Master </button>

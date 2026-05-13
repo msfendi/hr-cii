@@ -52,13 +52,9 @@
                         <th width="50">ID</th>
                         <th>NPK</th>
                         <th>Name</th>
-                        <th>Employee Type</th>
                         <th>Dept</th>
                         <th>Bank Name</th>
                         <th>Bank Account</th>
-                        <th>Salary</th>
-                        <th>Allowance</th>
-                        <th>PPH21</th>
                         <th width="120">Action</th>
                       </tr>
                     </thead>
@@ -66,18 +62,6 @@
                         <td>{{ $row->id }}</td>
                         <td>{{ $row->npk }}</td>
                         <td>{{ $row->NAMA_KARYAWAN }}</td>
-                        <td>
-                            @if($row->type == 'Contract')
-                                <span class="badge badge-primary">
-                                    {{ $row->type }}
-                                </span>
-                            @else 
-                              <span class="badge badge-secondary">
-                                    {{ $row->type }}
-                                </span>
-                            
-                            @endif
-                        </td>
                         <td>{{ $row->DEPARTEMENT }}</td>
                         <td>
                             @if($row->bank_name)
@@ -87,9 +71,6 @@
                             @endif
                         </td>
                         <td>{{ $row->bank_account }}</td>
-                        <td> @if($canViewSalary) Rp {{ number_format($row->salary,0,',','.') }} @else **** @endif </td>
-                        <td> @if($canViewSalary) Rp {{ number_format($row->allowance,0,',','.') }} @else **** @endif </td>
-                        <td> @if($canViewSalary) Rp {{ number_format($row->pph21,0,',','.') }} @else **** @endif </td>
                         <td class="text-center">
                           <a href="{{ route('payroll-master.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>

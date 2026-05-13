@@ -13,10 +13,6 @@ return new class extends Migration
             $table->string('npk')->unique();
             $table->string('bank_name')->nullable();
             $table->string('bank_account')->nullable();
-            $table->decimal('salary', 15, 2)->default(0);
-            $table->decimal('allowance', 15, 2)->default(0);
-            $table->decimal('pph21', 15, 2)->default(0);
-            $table->string('type')->nullable();
             $table->timestamps();
         });
     }

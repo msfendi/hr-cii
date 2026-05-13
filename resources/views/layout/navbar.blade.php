@@ -40,7 +40,35 @@
             </div>
         </li>
 
-       
+        <li class="nav-item dropdown no-arrow mx-1">
+            <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
+            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-bell fa-fw"></i>
+                <!-- Counter - Notifications -->
+                <span class="badge badge-danger badge-counter" id="unreadBadge" style="display: none;">
+                    <span id="unreadCount">0</span>
+                </span>
+            </a>
+            <!-- Dropdown - Alerts (Quick Preview) -->
+            <div class="dropdown-list dropdown-menu dropdown-menu-right shadow animated--grow-in"
+                aria-labelledby="alertsDropdown">
+                <h6 class="dropdown-header fw-bold">
+                    Notification Center
+                </h6>
+                <div id="quickNotificationPanel">
+                    <a class="dropdown-item d-flex align-items-center" href="#">
+                        <div class="me-3">
+                            <div class="bg-light rounded-circle p-3">
+                                <i class="fas fa-spinner fa-spin text-primary"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="small text-gray-500">Loading...</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </li>
 
         <div class="topbar-divider d-none d-sm-block"></div>
 

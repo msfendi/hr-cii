@@ -78,30 +78,6 @@
                                     <input type="text" class="form-control" name="bank_account" value="{{ old('bank_account') }}" required>
                                 </div>
                                 <br>
-                                <div>
-                                    <label>Salary :</label>
-                                    <input type="number" class="form-control" name="salary" value="{{ old('salary') }}" required>
-                                </div>
-                                <br>
-                                <div>
-                                    <label>Allowance :</label>
-                                    <input type="number" class="form-control" name="allowance" value="{{ old('allowance') }}">
-                                </div>
-                                <br>
-                                <div>
-                                    <label>PPH 21 :</label>
-                                    <input type="number" class="form-control" name="pph21" value="{{ old('pph21') }}">
-                                </div>
-                                <br>
-                                <div>
-                                    <label>Type :</label>
-                                    <select class="form-control" name="type" required>
-                                        <option value="">Select Type</option>
-                                        <option value="Contract" {{ old('type') == 'Contract' ? 'selected' : '' }}>Contract</option>
-                                        <option value="Daily" {{ old('type') == 'Daily' ? 'selected' : '' }}>Daily</option>
-                                    </select>
-                                </div>
-                                <br>
                                 <div class="row">
                                     <div class="col-12">
                                         <button type="submit" class="btn btn-primary btn-block">Create Payroll Master</button>

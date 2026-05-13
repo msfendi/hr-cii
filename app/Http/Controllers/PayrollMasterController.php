@@ -35,19 +35,23 @@ class PayrollMasterController extends Controller
             ->select(
                 'payroll_masters.*',
                 'biodata.NAMA_KARYAWAN',
-                'DEPT.DEPARTEMENT'
+                'DEPT.DEPARTEMENT',
             );
 
         if (!$canViewSalary) {
             $query->select(
                 'payroll_masters.id',
                 'payroll_masters.npk',
+                'payroll_masters.bank_name',
+                'payroll_masters.bank_account',
                 'biodata.NAMA_KARYAWAN',
                 'DEPT.DEPARTEMENT'
             );
         }
 
         $data = $query->get();
+
+        // dd($data[0]);
 
         return view('payroll_master.index', compact('data', 'canViewSalary'));
     }
@@ -75,21 +79,15 @@ class PayrollMasterController extends Controller
     {
 
         $request->validate([
-            'salary' => 'required|numeric',
-            'allowance' => 'nullable|numeric',
-            'pph21' => 'nullable|numeric',
-            'type' => 'required|in:Contract,Daily',
+            'bank_account' => 'required',
+            'bank_name' => 'nullable',
         ]);
 
         $data = PayrollMaster::findOrFail($id);
 
         $data->update([
-            'salary' => $request->salary,
             'bank_name' => $request->bank_name,
             'bank_account' => $request->bank_account,
-            'allowance' => $request->allowance,
-            'pph21' => $request->pph21,
-            'type' => $request->type
         ]);
 
         Alert::success('Update Successfully!', 'Payroll Master ' . $request->id . ' successfully updated!');
@@ -121,28 +119,25 @@ class PayrollMasterController extends Controller
 
     public function store(Request $request)
     {
-
-        $request->merge([
-            'allowance' => $request->allowance ?? 0,
-            'pph21'     => $request->pph21 ?? 0,
-        ]);
-
         $request->validate([
             'npk' => 'required',
             'bank_name' => 'required',
             'bank_account' => 'required',
-            'salary' => 'required|numeric',
-            'allowance' => 'numeric',
-            'pph21' => 'numeric',
-            'type' => 'required|in:Contract,Daily',
         ]);
 
-        PayrollMaster::create($request->all());
+        PayrollMaster::updateOrCreate(
+            ['npk' => $request->npk], // kondisi pencarian
+            [
+                'bank_name' => $request->bank_name,
+                'bank_account' => $request->bank_account,
+            ]
+        );
 
-        Alert::success('Create Successfully!', 'Payroll Master ' . $request->id . ' successfully created!');
+        Alert::success('Success!', 'Payroll Master successfully saved!');
+
         return redirect()
             ->route('payroll-master.index')
-            ->with('success', 'Payroll master berhasil dibuat');
+            ->with('success', 'Payroll master berhasil disimpan');
     }
 
     public function import(Request $request)

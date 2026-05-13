@@ -66,6 +66,7 @@ use App\Http\Controllers\WhatsappSendController;
 use App\Http\Controllers\WhatsappTemplateController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\NotificationsContractController;
 
 /*
 |--------------------------------------------------------------------------
@@ -177,7 +178,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'role:Admin']);
 
     // Payroll Component
-    Route::get('/payroll-components/index', [PayrollComponentController::class, 'index'])->name('payroll-components.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-components/index', [PayrollComponentController::class, 'index'])->name('payroll-components.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/payroll-components/create', [PayrollComponentController::class, 'create'])->name('payroll-components.create')->middleware(['auth', 'role:Admin']);
     Route::post('/payroll-components/store', [PayrollComponentController::class, 'store'])->name('payroll-components.store')->middleware(['auth', 'role:Admin']);
     Route::get('/payroll-components/detail/{id}', [PayrollComponentController::class, 'detail'])->name('payroll-components.detail')->middleware(['auth', 'role:Admin']);
@@ -252,6 +253,20 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import')->middleware(['auth', 'role:Admin|HRD']);
         Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template')->middleware(['auth', 'role:Admin|HRD']);
         Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete')->middleware(['auth', 'role:Admin|HRD']);
+    });
+
+    // ========================================
+    // NOTIFICATIONS CONTRACT
+    // ========================================
+    Route::prefix('api/notifications')->group(function () {
+        Route::get('/', [NotificationsContractController::class, 'index']);
+        Route::get('/unread', [NotificationsContractController::class, 'unread']);
+        Route::get('/statistics', [NotificationsContractController::class, 'statistics']);
+        Route::get('/{id}', [NotificationsContractController::class, 'show']);
+        Route::post('/{id}/read', [NotificationsContractController::class, 'markAsRead']);
+        Route::post('/read-all', [NotificationsContractController::class, 'markAllAsRead']);
+        Route::post('/{id}/archive', [NotificationsContractController::class, 'archive']);
+        Route::delete('/{id}', [NotificationsContractController::class, 'destroy']);
     });
 
     // Payroll Approve

@@ -21,4 +21,9 @@ class Biodata extends Model
         'STATUS',
         'IS_STAFF'
     ]; 
+
+    public function contract()
+    {
+        return $this->hasMany(EmployeesContract::class, 'npk', 'NPK');
+    }
 }

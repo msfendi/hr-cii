@@ -18,7 +18,7 @@ $role = $roleusers[0]->rolename;
       </a>
    </li>
    {{-- ================= MANAGEMENT ================= --}}
-   @if(in_array($role,['Admin','HRD']))
+   @if(in_array($role,['Admin','HRD', 'Payroll_STAFF','Payroll_SEWING','Payroll_NONSEWING']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#management">
       <i class="fas fa-users-cog"></i>
@@ -26,11 +26,13 @@ $role = $roleusers[0]->rolename;
       </a>
       <div id="management" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
+            @if(in_array($role,['Admin','HRD']))
             <a class="collapse-item" href="{{ route('devices.index') }}">Whatsapp Device</a>
             <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
             <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar</a>
-            <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
             <a class="collapse-item" href="{{ route('dept.index') }}">Departement</a>
+            @endif
+            <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
             <a class="collapse-item" href="{{ route('employees-contract.index') }}">Kontrak Karyawan</a>
          </div>
       </div>
@@ -95,7 +97,7 @@ $role = $roleusers[0]->rolename;
    </li>
    @endif
    {{-- ================= LEAVE & HOLIDAY ================= --}}
-   @if(in_array($role,['Admin','HRD']))
+   @if(in_array($role,['Admin','HRD', 'Payroll_STAFF','Payroll_SEWING','Payroll_NONSEWING']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#leave">
       <i class="fas fa-plane"></i>
@@ -147,7 +149,9 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
             <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
             <hr>
+            @if(in_array($role,['Admin']))
             <a class="collapse-item" href="{{ route('compensation.index') }}">Compensation</a>
+            @endif
          </div>
       </div>
    </li>
@@ -234,7 +238,7 @@ $role = $roleusers[0]->rolename;
 
             wsHost: wsHost,
             wsPort: 8800,
-            wssPort: 8015,
+            wssPort: 443,
 
             cluster: 'mt1',
 

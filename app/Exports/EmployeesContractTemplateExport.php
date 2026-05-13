@@ -18,7 +18,10 @@ class EmployeesContractTemplateExport implements FromArray, WithHeadings
                 '12',
                 'AKTIF',
                 '5000000',
-                '1000000'
+                '1000000',
+                'Contract',
+                '0',
+                '0'
             ]
         ];
     }
@@ -33,7 +36,10 @@ class EmployeesContractTemplateExport implements FromArray, WithHeadings
             'month_duration',
             'status_contract',
             'salary',
-            'allowance'
+            'allowance',
+            'type',
+            'daily_salary',
+            'pph21'
         ];
     }
 }
