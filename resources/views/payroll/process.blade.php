@@ -65,9 +65,8 @@
                         </div>
                      </div>
                      <br>
-                     <button id="btnProcess"
-                        class="btn btn-primary"
-                        disabled>
+                     <button
+                        class="btn btn-primary">
                      Process Payroll
                      </button>
                   </form>

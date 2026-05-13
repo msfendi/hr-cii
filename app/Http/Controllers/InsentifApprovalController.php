@@ -12,23 +12,36 @@ use Illuminate\Support\Facades\DB;
 
 class InsentifApprovalController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        // =========================
+        // FILTER STATUS PERIOD
+        // =========================
+        $filter = $request->get('status', 'open');
+
         // =========================
         // JOIN PERIOD
         // =========================
-        $data = InsentifApproval::query()
+        $query = InsentifApproval::query()
             ->join('payroll_periods', 'insentif_approvals.period_id', '=', 'payroll_periods.id')
             ->select(
                 'insentif_approvals.*',
                 'payroll_periods.name as period_name',
-                'payroll_periods.id as period_id'
-            )
-            ->where('payroll_periods.is_closed', false)
+                'payroll_periods.id as period_id',
+                'payroll_periods.is_closed'
+            );
+
+        if ($filter === 'open') {
+            $query->where('payroll_periods.is_closed', false);
+        }
+
+        if ($filter === 'closed') {
+            $query->where('payroll_periods.is_closed', true);
+        }
+
+        $data = $query
             ->latest('insentif_approvals.id')
             ->get();
-
-        // dd($data);
 
         // =========================
         // EMPLOYEE MASTER
@@ -70,9 +83,7 @@ class InsentifApprovalController extends Controller
                 return $row;
             });
 
-        // dd($data);
-
-        return view('insentif_approve.index', compact('data'));
+        return view('insentif_approve.index', compact('data', 'filter'));
     }
 
     public function approve(Request $request, $id)

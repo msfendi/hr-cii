@@ -33,3 +33,5 @@
 
 <!-- Page level plugins -->
 <script src="{{asset('vendor/chart.js/Chart.min.js')}}"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

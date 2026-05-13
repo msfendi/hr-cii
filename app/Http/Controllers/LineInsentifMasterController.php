@@ -17,6 +17,7 @@ use App\Models\InsentifRoleFormula;
 use App\Models\LineEfficiency;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -213,32 +214,28 @@ class LineInsentifMasterController extends Controller
         $periodStart = $period->start_date;
         $periodEnd   = $period->end_date;
 
-
         /*
-        |--------------------------------------------------------------------------
-        | AMBIL NPK YANG BENAR-BENAR ADA ASSIGNMENT
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | AMBIL NPK YANG ADA ASSIGNMENT
+    |--------------------------------------------------------------------------
+    */
 
         $assignmentNpk = DB::table(DB::raw("
-    (
-        SELECT NPK, ID_DEPT FROM BIODATA
-        UNION ALL
-        SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
-    ) emp
-"))
+        (
+            SELECT NPK, ID_DEPT FROM BIODATA
+            UNION ALL
+            SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
+        ) emp
+    "))
             ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
             ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
             ->where('irf.dept', 'sewing')
             ->distinct()
             ->pluck('emp.NPK');
 
-        // dd($assignmentNpk->toArray());
-
-
         /*
     |--------------------------------------------------------------------------
-    | EMPLOYEE SOURCE (TETAP SAMA LOGIC)
+    | EMPLOYEE SOURCE
     |--------------------------------------------------------------------------
     */
 
@@ -246,19 +243,19 @@ class LineInsentifMasterController extends Controller
             ->table('PKWT as p')
 
             ->join(DB::raw("
-        (
-            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
-            UNION ALL
-            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
-        ) emp
-    "), 'p.NPK', '=', 'emp.NPK')
+            (
+                SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
+                UNION ALL
+                SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
+            ) emp
+        "), 'p.NPK', '=', 'emp.NPK')
 
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
             ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
             ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
 
             ->whereIn('p.NPK', $assignmentNpk)
-            // ->where('p.NPK', '=', 'C-01803')
+
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
@@ -280,25 +277,20 @@ class LineInsentifMasterController extends Controller
             ->fromSub($employeeBase, 'emp')
             ->get();
 
-        // dd($employees);
-
-
         /*
     |--------------------------------------------------------------------------
-    | FORMULA (TETAP)
+    | FORMULA
     |--------------------------------------------------------------------------
     */
 
         $sewingInsentifFormula = json_decode(
-            PayrollComponent::where('code', 'sewing_insentif')
-                ->value('formula'),
+            PayrollComponent::where('code', 'sewing_insentif')->value('formula'),
             true
         );
 
-
         /*
     |--------------------------------------------------------------------------
-    | CALCULATION (LOGIC TIDAK DIUBAH)
+    | CALCULATION
     |--------------------------------------------------------------------------
     */
 
@@ -306,12 +298,13 @@ class LineInsentifMasterController extends Controller
 
         foreach ($employees as $employee) {
 
-            // dd($employee->SECTION);
+            $status = $employee->tkk ? 'Resign' : 'Active';
+
             $sewing = $this->calculateSewing(
                 $employee,
                 $period,
                 $sewingInsentifFormula,
-                $employee->role,
+                $employee->role
             );
 
             if ($sewing <= 0) continue;
@@ -319,8 +312,10 @@ class LineInsentifMasterController extends Controller
             $results[] = [
                 'npk' => $employee->NPK,
                 'name' => $employee->NAMA_KARYAWAN,
-                'sewing_insentif' => $sewing,
                 'dept' => $employee->DEPARTEMENT,
+                'sewing_insentif' => $sewing,
+                'tkk' => $employee->tkk,
+                'status' => $status
             ];
         }
 
@@ -341,11 +336,22 @@ class LineInsentifMasterController extends Controller
         $amount = 0;
 
         $collectionLinesTest = collect([]);
+
         /*
-    |--------------------------------------------------------------------------
-    | LOAD THRESHOLD
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | TKK (RESIGN DATE)
+        |--------------------------------------------------------------------------
+        */
+        $tkkDate = !empty($employee->tkk)
+            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+            : null;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD THRESHOLD
+        |--------------------------------------------------------------------------
+        */
         $thresholds = DB::table('insentif_thresholds')
             ->where('insentif_type', 'Sewing')
             ->where('type', 'Percentage')
@@ -455,6 +461,15 @@ class LineInsentifMasterController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
+                | CHECK RESIGN (NEW)
+                |--------------------------------------------------------------------------
+                */
+                if ($tkkDate && $row->date >= $tkkDate) {
+                    continue;
+                }
+
+                /*
+                |--------------------------------------------------------------------------
                 | CHECK OVERTIME
                 |--------------------------------------------------------------------------
                 */
@@ -556,6 +571,15 @@ class LineInsentifMasterController extends Controller
             $collectionDay = collect([]);
             $collectionLines = collect([]);
             foreach ($grouped as $day) {
+
+                /*
+                |--------------------------------------------------------------------------
+                | CHECK RESIGN (NEW)
+                |--------------------------------------------------------------------------
+                */
+                if ($tkkDate && $day->date >= $tkkDate) {
+                    continue;
+                }
                 /*
                 |----------------------------------
                 | CHECK OVERTIME

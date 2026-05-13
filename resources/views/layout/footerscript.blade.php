@@ -19,6 +19,7 @@
 <!-- Custom scripts for all pages-->
 <script src="{{asset('js/sb-admin-2.min.js')}}"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <!-- Page level plugins -->
 <!-- <script src="{{asset('vendor/chart.js/Chart.min.js')}}"></script> -->

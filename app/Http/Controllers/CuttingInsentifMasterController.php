@@ -18,6 +18,7 @@ use App\Models\InsentifApproval;
 use App\Models\InsentifRoleFormula;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -304,6 +305,7 @@ class CuttingInsentifMasterController extends Controller
         $results = [];
 
         foreach ($employees as $employee) {
+            $status = $employee->tkk ? 'Resign' : 'Active';
 
             $cutting = $this->calculateCutting(
                 $employee,
@@ -319,6 +321,8 @@ class CuttingInsentifMasterController extends Controller
                 'name' => $employee->NAMA_KARYAWAN,
                 'cutting_insentif' => $cutting,
                 'dept' => $employee->DEPARTEMENT,
+                'tkk' => $employee->tkk,
+                'status' => $status
             ];
         }
 
@@ -355,6 +359,15 @@ class CuttingInsentifMasterController extends Controller
     private function calculateCutting($employee, $period, $formula, $role)
     {
         $amount = 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | TKK (RESIGN DATE)
+        |--------------------------------------------------------------------------
+        */
+        $tkkDate = !empty($employee->tkk)
+            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+            : null;
 
         /*
         |--------------------------------------------------------------------------
@@ -433,6 +446,14 @@ class CuttingInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     */
         foreach ($cuttingEfficiencies as $row) {
+            /*
+            |--------------------------------------------------------------------------
+            | CHECK RESIGN (NEW)
+            |--------------------------------------------------------------------------
+            */
+            if ($tkkDate && $row->date >= $tkkDate) {
+                continue;
+            }
 
             /*
         |----------------------------------

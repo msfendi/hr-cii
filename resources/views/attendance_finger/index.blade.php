@@ -38,7 +38,7 @@
                             </div>
                             <div class="col-xl-auto col-md-auto mt-2 mt-md-0">
                                 <button class="btn btn-primary" id="btnExport">
-                                    <i class="fas fa-file-excel mr-1"></i> Export Absensi
+                                    <i class="fas fa-file-excel mr-1"></i> Export Excel
                                 </button>
                                 <button class="btn btn-success ml-1" id="btnSync">
                                     <i class="fas fa-sync-alt mr-1"></i> Sync
@@ -73,9 +73,6 @@
                         <h6 class="m-0 font-weight-bold text-danger">
                             <i class="fas fa-user-times mr-1"></i> Karyawan Belum Finger Hari Ini
                         </h6>
-                        <button class="btn btn-danger btn-sm" id="btnExportNotFinger">
-                            <i class="fas fa-file-excel mr-1"></i> Export Belum Finger
-                        </button>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -134,7 +131,16 @@
                 {data: 'npk',         name: 'npk'},
                 {data: 'nama',        name: 'nama'},
                 {data: 'bagian',      name: 'bagian'},
-                {data: 'jam_masuk',   name: 'jam_masuk'},
+                {
+                    data: 'jam_masuk',
+                    name: 'jam_masuk',
+                    render: function(data, type, row) {
+                        if (row.is_late == 1) {
+                            return `<span class="text-danger font-weight-bold" title="Late (Shift start: ${row.shift_start})">${data} <i class="fas fa-exclamation-circle"></i></span>`;
+                        }
+                        return data;
+                    }
+                },
                 {data: 'jam_pulang',  name: 'jam_pulang'},
                 {data: 'total_scan',  name: 'total_scan'}
             ]
@@ -243,38 +249,5 @@
             });
         });
 
-        // ─────────────────────────────────────────────
-        // EXPORT NOT-FINGER button
-        // ─────────────────────────────────────────────
-        $('#btnExportNotFinger').click(function(e) {
-            e.preventDefault();
-            var date = $('#fromdate').val();
-            if (date == '') {
-                Swal.fire({ icon: 'error', title: 'Oops...', text: 'Please select date first!' });
-                return;
-            }
-
-            Swal.fire({ title: 'Exporting...', text: 'Please wait', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-            fetch("{{ route('attendance-finger.export-not-finger') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': "{{ csrf_token() }}" },
-                body: JSON.stringify({ date: date })
-            })
-            .then(response => {
-                if (response.ok) return response.blob();
-                throw new Error('Network response was not ok.');
-            })
-            .then(blob => {
-                Swal.close();
-                var url = window.URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url; a.download = 'not_finger_' + date + '.xlsx';
-                document.body.appendChild(a); a.click(); a.remove();
-            })
-            .catch(() => {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong during export!' });
-            });
-        });
     });
 </script>

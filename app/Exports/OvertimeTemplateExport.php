@@ -49,13 +49,13 @@ class OvertimeTemplateExport implements FromCollection, WithHeadings, WithMappin
 
         switch ($this->type) {
             case 'sewing':
-                $query->where('DEPT.IS_SEWING', 0)->where('BIO.IS_STAFF', 1);
+                $query->where('DEPT.IS_SEWING', 0)->where('BIO.IS_STAFF', 0);
                 break;
             case 'non_sewing':
-                $query->where('DEPT.IS_SEWING', 1)->where('BIO.IS_STAFF', 1);
+                $query->where('DEPT.IS_SEWING', 1)->where('BIO.IS_STAFF', 0);
                 break;
             case 'staff':
-                $query->where('DEPT.IS_SEWING', 1)->where('BIO.IS_STAFF', 0);
+                $query->where('DEPT.IS_SEWING', 1)->where('BIO.IS_STAFF', 1);
                 break;
             case 'all':
             default:

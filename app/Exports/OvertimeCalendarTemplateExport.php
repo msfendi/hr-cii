@@ -40,18 +40,19 @@ class OvertimeCalendarTemplateExport implements FromCollection, WithHeadings, Wi
 
         $query = DB::connection('cii')->table('BIODATA')
             ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING', 'BIODATA.IS_STAFF', 'BIODATA.ID_DEPT')
+            ->leftJoin('PKWT', 'BIODATA.NPK', '=', 'PKWT.NPK')
+            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING', 'BIODATA.IS_STAFF', 'BIODATA.ID_DEPT', 'PKWT.TMK')
             ->where('BIODATA.STATUS', 'A');
 
         switch ($this->type) {
             case 'sewing':
-                $query->where('DEPT.IS_SEWING', 0)->where('BIODATA.IS_STAFF', 1);
+                $query->where('DEPT.IS_SEWING', 0)->where('BIODATA.IS_STAFF', 0);
                 break;
             case 'non_sewing':
-                $query->where('DEPT.IS_SEWING', 1)->where('BIODATA.IS_STAFF', 1);
+                $query->where('DEPT.IS_SEWING', 1)->where('BIODATA.IS_STAFF', 0);
                 break;
             case 'staff':
-                $query->where('BIODATA.IS_STAFF', 0);
+                $query->where('DEPT.IS_SEWING', 1)->where('BIODATA.IS_STAFF', 1);
                 break;
         }
 
@@ -64,7 +65,7 @@ class OvertimeCalendarTemplateExport implements FromCollection, WithHeadings, Wi
 
     public function headings(): array
     {
-        $headers = ['NPK', 'NAMA', 'BAGIAN'];
+        $headers = ['NPK', 'NAMA', 'TMK', 'BAGIAN'];
         $daysInMonth = Carbon::parse($this->month)->daysInMonth;
         for ($i = 1; $i <= $daysInMonth; $i++) {
             $headers[] = $i;
@@ -78,6 +79,7 @@ class OvertimeCalendarTemplateExport implements FromCollection, WithHeadings, Wi
         $mapped = [
             $row->NPK ?? '',
             $row->NAMA_KARYAWAN ?? '',
+            $row->TMK ? Carbon::parse($row->TMK)->format('Y-m-d') : '',
             $row->DEPARTEMENT ?? '',
         ];
 
@@ -94,7 +96,7 @@ class OvertimeCalendarTemplateExport implements FromCollection, WithHeadings, Wi
         $daysInMonth  = $startOfMonth->daysInMonth;
         $yearMonth    = $startOfMonth->format('Y-m');
 
-        $totalCols = 3 + $daysInMonth; // NPK, NAMA, BAGIAN + dates
+        $totalCols = 4 + $daysInMonth; // NPK, NAMA, TMK, BAGIAN + dates
         $lastCol   = Coordinate::stringFromColumnIndex($totalCols);
         $totalRows = $sheet->getHighestRow();
 
@@ -148,7 +150,7 @@ class OvertimeCalendarTemplateExport implements FromCollection, WithHeadings, Wi
             }
 
             if ($isWeekend || $isHoliday) {
-                $colLetter = Coordinate::stringFromColumnIndex(3 + $d);
+                $colLetter = Coordinate::stringFromColumnIndex(4 + $d);
 
                 // Header (Red background, White text)
                 $sheet->getStyle("{$colLetter}1")->applyFromArray([
@@ -159,7 +161,7 @@ class OvertimeCalendarTemplateExport implements FromCollection, WithHeadings, Wi
                 // Body (Light red background)
                 if ($totalRows >= 2) {
                     $sheet->getStyle("{$colLetter}2:{$colLetter}{$totalRows}")->applyFromArray([
-                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FCE4E4']]
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E74A3B']]
                     ]);
                 }
             }

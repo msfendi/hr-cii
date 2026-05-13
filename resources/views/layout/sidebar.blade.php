@@ -26,13 +26,12 @@ $role = $roleusers[0]->rolename;
       </a>
       <div id="management" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
-            @if($role=='Admin')
-            <a class="collapse-item" href="{{ route('user.index') }}">User</a>
-            <a class="collapse-item" href="{{ route('role.index') }}">Role</a>
-            @endif
+            <a class="collapse-item" href="{{ route('devices.index') }}">Whatsapp Device</a>
+            <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
             <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar</a>
             <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
             <a class="collapse-item" href="{{ route('dept.index') }}">Departement</a>
+            <a class="collapse-item" href="{{ route('employees-contract.index') }}">Kontrak Karyawan</a>
          </div>
       </div>
    </li>
@@ -49,12 +48,13 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('insentif-approve.index') }}">Insentif Approval</a>
             <a class="collapse-item" href="{{ route('payroll-approve.index') }}">Payroll Approval</a>
             <a class="collapse-item" href="{{ route('thr-approve.index') }}">THR Approval</a>
+            <a class="collapse-item" href="{{ route('compensation-approve.index') }}">Compensation Approval</a>
          </div>
       </div>
    </li>
    @endif
    {{-- ================= EXPAT ================= --}}
-   @if(in_array($role,['Admin','Purchase']))
+   @if(in_array($role,['Admin','GA']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#expat">
       <i class="fas fa-globe"></i>
@@ -146,6 +146,8 @@ $role = $roleusers[0]->rolename;
             <hr>
             <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
             <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
+            <hr>
+            <a class="collapse-item" href="{{ route('compensation.index') }}">Compensation</a>
          </div>
       </div>
    </li>
@@ -197,8 +199,9 @@ $role = $roleusers[0]->rolename;
       </a>
       <div id="system" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('devices.index') }}">Whatsapp Device</a>
-            <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
+            <a class="collapse-item" href="{{ route('user.index') }}">User</a>
+            <a class="collapse-item" href="{{ route('role.index') }}">Role</a>
+            <a class="collapse-item" href="{{ route('activity-logs.index') }}">Activity Logs</a>
          </div>
       </div>
    </li>

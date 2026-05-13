@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Shift;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class ShiftController extends Controller
@@ -26,9 +27,7 @@ class ShiftController extends Controller
             'name' => 'required',
             'work_start' => 'required',
             'work_end' => 'required',
-            'gender' => 'required',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            'gender' => 'required'
         ]);
 
 

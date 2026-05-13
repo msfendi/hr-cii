@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Pelamar;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Imports\PelamarImport;
+use App\Exports\PelamarTemplateExport;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Facades\Storage;
-use Psy\Util\Str;
+use Psy\Util\Str as PsyStr;
 use Carbon\Carbon;
 
 class PelamarController extends Controller
@@ -22,7 +24,7 @@ class PelamarController extends Controller
         $pelamars = DB::connection('cii')->table('PELAMAR')
             ->select('ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
             ->where('IS_KONTRAK', 'FALSE')
-            ->orderBy('NPK', 'DESC')
+            ->orderBy('NPK', 'ASC')
             ->get();
 
         $departments = DB::connection('cii')->table('DEPT')->select('ID_DEPT', 'DEPARTEMENT')->where('SECTION', 'CHUTEX')->get(); // Fetch departments
@@ -49,6 +51,11 @@ class PelamarController extends Controller
         } else {
             return redirect()->back()->with('error', 'Failed to import data');
         }
+    }
+
+    public function exportTemplate()
+    {
+        return Excel::download(new PelamarTemplateExport(), 'Template_Import_Pelamar.xlsx');
     }
 
     public function assign(Request $request)
@@ -92,25 +99,25 @@ class PelamarController extends Controller
                 'NPK' => strtoupper($request->npk),
                 'NAMA' => strtoupper($request->nama),
                 'JENIS_KELAMIN' => strtoupper($request->jk),
-                'TMPT_LAHIR' => strtoupper($request->tempat_lahir),
+                'TMPT_LAHIR' => strtoupper($request->tempat_lahir) ?? '',
                 'TGL_LAHIR' => $request->tgl_lahir,
                 'TMK' => $request->tmk,
                 'UMUR' => $umur_string,
-                'ALAMAT_LENGKAP' => strtoupper($request->alamat),
-                'KABUPATEN' => strtoupper($request->kabupaten),
-                'PENDIDIKAN' => strtoupper($request->pendidikan),
-                'NAMA_SEKOLAH' => strtoupper($request->sekolah),
-                'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah),
-                'JURUSAN' => strtoupper($request->jurusan),
-                'TINGGI_BADAN' => $request->tb,
-                'BERAT_BADAN' => $request->bb,
-                'HP' => $request->hp,
-                'AGAMA' => strtoupper($request->agama),
+                'ALAMAT_LENGKAP' => strtoupper($request->alamat) ?? '',
+                'KABUPATEN' => strtoupper($request->kabupaten)  ?? '',
+                'PENDIDIKAN' => strtoupper($request->pendidikan) ?? '',
+                'NAMA_SEKOLAH' => strtoupper($request->sekolah) ?? '',
+                'KABUPATEN_SEKOLAH' => strtoupper($request->kabupaten_sekolah) ?? '',
+                'JURUSAN' => strtoupper($request->jurusan) ?? '',
+                'TINGGI_BADAN' => $request->tb ?? 0,
+                'BERAT_BADAN' => $request->bb ?? 0,
+                'HP' => $request->hp ?? '',
+                'AGAMA' => strtoupper($request->agama) ?? '',
                 'NIK' => $request->nik,
-                'NO_KK' => $request->no_kk,
-                'IBU' => strtoupper($request->ibu),
-                'STATUS' => strtoupper($request->status),
-                'TANGGUNGAN' => $request->tanggungan,
+                'NO_KK' => $request->no_kk ?? '',
+                'IBU' => strtoupper($request->ibu) ?? '',
+                'STATUS' => strtoupper($request->status) ?? '',
+                'TANGGUNGAN' => $request->tanggungan ?? '',
                 'IS_KONTRAK' => 'TRUE',
             ]
         );
@@ -124,7 +131,7 @@ class PelamarController extends Controller
             'BARCODE' => $last_barcode,
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
-            'IS_STAFF' => $request->has('is_staff') ? 0 : 1,
+            'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
         ]);
 
         $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
@@ -155,6 +162,28 @@ class PelamarController extends Controller
             'NOREK' => $request->norek,
             'JURUSAN' => strtoupper($request->jurusan),
             'FASKES' => strtoupper($request->faskes),
+        ]);
+
+        // Insert kontrak pertama ke employees_contract
+        $duration = (int) ($request->month_duration ?? 6);
+        $startDate = Carbon::parse($request->tmk);
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)
+            : $startDate->copy()->addMonths($duration)->subDay();
+
+        DB::table('employees_contract')->insert([
+            'id'              => (string) \Illuminate\Support\Str::uuid(),
+            'npk'             => strtoupper($request->npk),
+            'contract_ke'     => 1,
+            'start_date'      => $startDate->toDateString(),
+            'end_date'        => $endDate->toDateString(),
+            'month_duration'  => (string) $duration,
+            'status_contract' => 'AKTIF',
+            'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
+            'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
+            'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
+            'created_at'      => now(),
+            'updated_at'      => now(),
         ]);
 
         DB::connection('cii')->commit();
@@ -232,7 +261,7 @@ class PelamarController extends Controller
             'BARCODE' => $last_barcode,
             'SECTION' => 'CHUTEX',
             'STATUS' => 'A',
-            'IS_STAFF' => $request->has('is_staff') ? 0 : 1,
+            'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
         ]);
 
         $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
@@ -263,6 +292,33 @@ class PelamarController extends Controller
             'NOREK' => $request->norek,
             'JURUSAN' => strtoupper($request->jurusan),
             'FASKES' => strtoupper($request->faskes),
+        ]);
+
+        // Cek kontrak ke berapa (untuk karyawan lama yang kembali)
+        $existingContracts = DB::table('employees_contract')
+            ->where('npk', strtoupper($request->npk))
+            ->count();
+        $contractKe = $existingContracts + 1;
+
+        $duration = (int) ($request->month_duration ?? 6);
+        $startDate = Carbon::parse($request->tmk);
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)
+            : $startDate->copy()->addMonths($duration)->subDay();
+
+        DB::table('employees_contract')->insert([
+            'id'              => (string) Str::uuid(),
+            'npk'             => strtoupper($request->npk),
+            'contract_ke'     => $contractKe,
+            'start_date'      => $startDate->toDateString(),
+            'end_date'        => $endDate->toDateString(),
+            'month_duration'  => (string) $duration,
+            'status_contract' => 'AKTIF',
+            'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
+            'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
+            'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
+            'created_at'      => now(),
+            'updated_at'      => now(),
         ]);
 
         DB::connection('cii')->commit();

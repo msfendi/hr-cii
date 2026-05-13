@@ -101,6 +101,24 @@ class GeneratePayrollProcess implements ShouldQueue
         // dd($employeeBase->get());
 
 
+
+        $latestContract = DB::table('employees_contract as ec1')
+            ->select(
+                'ec1.npk',
+                'ec1.salary',
+                'ec1.allowance',
+                'ec1.pph21',
+                'ec1.type',
+                'ec1.daily_salary'
+            )
+            ->whereRaw('ec1.id = (
+            SELECT TOP 1 ec2.id
+            FROM employees_contract ec2
+            WHERE ec2.npk = ec1.npk
+            ORDER BY ec2.contract_ke DESC, ec2.start_date DESC
+        )');
+
+
         $run->update([
             'status' => 'Getting Employee Overtime Data',
             'progress' => 20,
@@ -108,9 +126,12 @@ class GeneratePayrollProcess implements ShouldQueue
 
         $overtimeSummary = DB::connection('cii')
             ->table('overtimes')
+            ->leftJoinSub($latestContract, 'ec', function ($join) {
+                $join->on('overtimes.NPK', '=', 'ec.npk');
+            })
             ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
             ->select(
-                'NPK',
+                'overtimes.NPK',
                 DB::raw("
                 SUM(
                     CASE 
@@ -121,13 +142,55 @@ class GeneratePayrollProcess implements ShouldQueue
                     END
                 ) as overtime_hours
             "),
+                /*
+                |--------------------------------------------------------------------------
+                | SPECIAL OVERTIME
+                |--------------------------------------------------------------------------
+                | salary + allowance >= 3.800.000
+                | OR
+                | (daily_salary * count_days) + allowance >= 3.800.000
+                |--------------------------------------------------------------------------
+                */
+
                 DB::raw("
                 SUM(
                     CASE 
+
                         WHEN DAY IN ('Sabtu','Minggu')
                         AND TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT) IS NOT NULL
-                        THEN TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT)
+
+                        THEN
+
+                            CASE
+
+                                WHEN
+                                    (
+                                        COALESCE(ec.salary,0)
+                                        + COALESCE(ec.allowance,0)
+                                    ) >= 3800000
+
+                                    OR
+
+                                    (
+                                        (COALESCE(ec.daily_salary,0) * {$count_days})
+                                        + COALESCE(ec.allowance,0)
+                                    ) >= 3800000
+
+                                THEN
+
+                                    CASE
+                                        WHEN TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT) > 8
+                                        THEN 8
+                                        ELSE TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT)
+                                    END
+
+                                ELSE
+                                    TRY_CAST(JUMLAH_JAM_LEMBUR as FLOAT)
+
+                            END
+
                         ELSE 0
+
                     END
                 ) as special_overtime_hours
             "),
@@ -147,7 +210,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 ) as absence_days
             "),
             )
-            ->groupBy('NPK');
+            ->groupBy('overtimes.NPK');
 
         // CHECK PER DATE LATE
 
@@ -782,7 +845,10 @@ class GeneratePayrollProcess implements ShouldQueue
                 );
             })
 
-            ->leftJoin('payroll_masters as pm', 'emp.NPK', '=', 'pm.npk')
+            // ->leftJoin('payroll_masters as pm',   'emp.NPK', '=', 'pm.npk')
+            ->leftJoinSub($latestContract, 'ec', function ($join) {
+                $join->on('emp.NPK', '=', 'ec.npk');
+            })
 
             ->leftJoin('payroll_adjusments as pa', function ($join) use ($period) {
                 $join->on('emp.NPK', '=', 'pa.npk')
@@ -799,11 +865,11 @@ class GeneratePayrollProcess implements ShouldQueue
                 'd.DEPARTEMENT as DEPARTEMENT',
                 'emp.SECTION as SECTION',
 
-                'pm.salary',
-                'pm.allowance',
-                'pm.pph21',
-                'pm.type',
-                'pm.daily_salary',
+                'ec.salary',
+                'ec.allowance',
+                'ec.pph21',
+                'ec.type',
+                'ec.daily_salary',
 
                 DB::raw('COALESCE(pa.adjusment,0) as adjusment'),
                 DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
@@ -889,6 +955,8 @@ class GeneratePayrollProcess implements ShouldQueue
                 'is_contract' => $employee->type === 'Contract' ? 1 : 0,
                 'is_daily'    => $employee->type === 'Daily' ? 1 : 0,
                 'late_minutes'     => (float) $employee->late_minutes,
+                'overtime_hours' => (float) $employee->overtime_hours,
+                'special_overtime_hours' => (float) $employee->special_overtime_hours
             ];
 
             // dd($employee->late_minutes);
@@ -898,6 +966,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
             foreach ($components as $component) {
                 if ($component->code === 'thr') continue;
+                if ($component->code === 'compensation') continue;
 
                 if ($component->calculation_method === 'fixed') {
                     $amount = $component->value;
@@ -912,10 +981,7 @@ class GeneratePayrollProcess implements ShouldQueue
                         $amount = $this->evaluateFormula(
                             $overtimeFormula,
                             $results,
-                            [
-                                'basic_salary' => (float) $employee->salary,
-                                'overtime_hours' => (float) $employee->overtime_hours
-                            ]
+                            $inputVariables
                         );
                     } else if ($component->code === 'special_overtime_pay') {
 
@@ -927,10 +993,7 @@ class GeneratePayrollProcess implements ShouldQueue
                         $amount = $this->evaluateFormula(
                             $specialOvertimeFormula,
                             $results,
-                            [
-                                'basic_salary' => (float) $employee->salary,
-                                'special_overtime_hours' => (float) $employee->special_overtime_hours
-                            ]
+                            $inputVariables
                         );
                     } else if ($component->code === 'sewing_insentif') {
 

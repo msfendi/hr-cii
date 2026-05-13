@@ -15,11 +15,33 @@
                </h1>
             </div>
             <div class="card shadow mb-4">
-               <div class="card-header py-3">
-                  <h6 class="m-0 font-weight-bold text-primary">
-                     Data Approval Payroll
-                  </h6>
-               </div>
+               <div class="card-header py-3 d-flex justify-content-between align-items-center">
+
+               <h6 class="m-0 font-weight-bold text-primary">
+                  Data Approval Payroll
+               </h6>
+
+               <form method="GET" id="filterForm">
+                  <select name="status"
+                        class="form-control form-control-sm"
+                        onchange="document.getElementById('filterForm').submit()">
+
+                     <option value="all" {{ $filter=='all' ? 'selected':'' }}>
+                        All
+                     </option>
+
+                     <option value="open" {{ $filter=='open' ? 'selected':'' }}>
+                        Open
+                     </option>
+
+                     <option value="closed" {{ $filter=='closed' ? 'selected':'' }}>
+                        Closed
+                     </option>
+
+                  </select>
+               </form>
+
+            </div>
                <div class="card-body">
                   <div class="table-responsive">
                      <table class="table table-bordered table-sm" id="dataTable">
@@ -71,7 +93,7 @@
                                        <b>{{ $user['npk'] }}</b> - {{ $user['name'] }}
                                        </span>
                                        @if($statusList[$idx]=='approve')
-                                       <span class="badge badge-success">✔ Approved</span>
+                                       <span class="badge badge-success">Approved</span>
                                        @elseif(!$beforeApproved)
                                        <span class="badge badge-secondary">Waiting Previous</span>
                                        @else
@@ -138,12 +160,16 @@
                                     placeholder="Search Dept">
                               </th>
                               <th>Insentif</th>
+                              <th>TKK</th>
+                              <th>Status</th>
                            </tr>
                         </thead>
                         <tbody></tbody>
                         <tfoot>
                            <tr style="background:#f8f9fc;font-weight:bold">
                               <th colspan="3" class="text-right">TOTAL</th>
+                              <th></th>
+                              <th></th>
                               <th></th>
                            </tr>
                         </tfoot>
@@ -214,8 +240,41 @@
          
          return formatRupiah(value);
          }
+         },
+         
+         {
+         data:'tkk',
+         render:function(data){
+         return data ?? '-';
          }
+         },
+
+         {
+         data:'status',
+         render:function(data){
+
+         if(data==='Resign'){
+         return `
+         <span class="badge bg-danger text-white">
+         Resign
+         </span>`;
+         }
+
+         return `
+         <span class="badge bg-success text-white">
+         Active
+         </span>`;
+         }
+         },
          ],
+
+         createdRow:function(row,data){
+
+         if(data.status==='Resign'){
+         $(row).addClass('table-danger');
+         }
+
+         },
          
          footerCallback:function(){
          

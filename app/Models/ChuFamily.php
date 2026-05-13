@@ -14,6 +14,7 @@ class ChuFamily extends Model
         'place',
         'birth_date',
         'nationality',
+        'npwp',
         'passport_number',
         'passport_expiry',
         'visa_type',

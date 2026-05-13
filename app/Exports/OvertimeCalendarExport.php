@@ -54,6 +54,9 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         $headerRow1[] = 'Lembur Khusus';
         $headerRow1[] = 'CT';
         $headerRow1[] = 'MA';
+        $headerRow1[] = 'P1';
+        $headerRow1[] = 'PE';
+        $headerRow1[] = 'SD';
         $rows[] = $headerRow1;
 
         // Row 2: Date numbers
@@ -63,6 +66,9 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
                 $headerRow2[] = str_pad($day, 2, '0', STR_PAD_LEFT);
             }
         }
+        $headerRow2[] = '';
+        $headerRow2[] = '';
+        $headerRow2[] = '';
         $headerRow2[] = '';
         $headerRow2[] = '';
         $headerRow2[] = '';
@@ -89,12 +95,15 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             }
 
             $dataRow[] = $employee['total_kehadiran'] ?? '0';
-            $dataRow[] = $employee['1'] ?? '0';
-            $dataRow[] = $employee['2'] ?? '0';
-            $dataRow[] = $employee['total'] ?? '0';
-            $dataRow[] = $employee['lembur_khusus'] < 8 ? '0' : $employee['lembur_khusus'];
+            $dataRow[] = $employee['1'] == 0 ? '0' : $employee['1'];
+            $dataRow[] = $employee['2'] == 0 ? '0' : $employee['2'];
+            $dataRow[] = $employee['total'] == 0 ? '0' : $employee['total'];
+            $dataRow[] = $employee['lembur_khusus'] == 0 ? '0' : $employee['lembur_khusus'];
             $dataRow[] = $employee['CT'] ?? '0';
             $dataRow[] = $employee['MA'] ?? '0';
+            $dataRow[] = $employee['P1'] ?? '0';
+            $dataRow[] = $employee['PE'] ?? '0';
+            $dataRow[] = $employee['SD'] ?? '0';
 
             $rows[] = $dataRow;
         }
@@ -109,7 +118,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         foreach ($data['weeks'] as $week) {
             $totalDataCols += count($week['days']);
         }
-        $totalDataCols += 7; // summary columns
+        $totalDataCols += 10; // summary columns
         $lastCol = $this->colLetter($totalDataCols);
         $lastRow = count($data['pivotData']) + 2; // 2 header rows + data
 
@@ -132,7 +141,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         $sheet->mergeCells('C1:C2');
 
         // Merge summary sub-headers across rows 1-2
-        for ($i = 0; $i < 7; $i++) {
+        for ($i = 0; $i < 10; $i++) {
             $col = $this->colLetter($colIdx + $i);
             $sheet->mergeCells("{$col}1:{$col}2");
         }
@@ -258,15 +267,27 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             ];
         }
 
-        // Get overtime data
+         // Get overtime data
+        // ambil bagian dept dari join biodata dan dept
+        // $queryLembur = Overtime::leftJoin(
+        //     DB::raw('(SELECT NPK, ID_DEPT FROM BIODATA UNION SELECT NPK, ID_DEPT FROM BIODATA_KELUAR) AS BIO'),
+        //     'overtimes.NPK',
+        //     '=',
+        //     'BIO.NPK'
+        // )
+        //     ->leftJoin('DEPT', 'BIO.ID_DEPT', '=', 'DEPT.ID_DEPT')
+        //     ->select('overtimes.NPK', 'overtimes.NAMA_KARYAWAN', 'overtimes.OVERTIME_DATE', 'overtimes.JUMLAH_JAM_LEMBUR', 'overtimes.DAY', 'overtimes.DEPT_GROUP', 'DEPT.DEPARTEMENT')
+        //     ->whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir]);
+
+        // ambil dept bagian dari overtime langsung
         $queryLembur = Overtime::leftJoin(
             DB::raw('(SELECT NPK, ID_DEPT FROM BIODATA UNION SELECT NPK, ID_DEPT FROM BIODATA_KELUAR) AS BIO'),
             'overtimes.NPK',
             '=',
             'BIO.NPK'
         )
-            ->leftJoin('DEPT', 'BIO.ID_DEPT', '=', 'DEPT.ID_DEPT')
-            ->select('overtimes.NPK', 'overtimes.NAMA_KARYAWAN', 'overtimes.OVERTIME_DATE', 'overtimes.JUMLAH_JAM_LEMBUR', 'overtimes.DAY', 'overtimes.DEPT_GROUP', 'DEPT.DEPARTEMENT')
+            // ->leftJoin('DEPT', 'BIO.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select('overtimes.NPK', 'overtimes.NAMA_KARYAWAN', 'overtimes.OVERTIME_DATE', 'overtimes.JUMLAH_JAM_LEMBUR', 'overtimes.DAY', 'overtimes.DEPT_GROUP', 'overtimes.BAGIAN')
             ->whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir]);
 
         if ($this->type !== 'all') {
@@ -291,7 +312,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             $row = [
                 'NPK'           => $employee->NPK,
                 'NAMA_KARYAWAN' => $employee->NAMA_KARYAWAN,
-                'BAGIAN'        => $employee->DEPARTEMENT,
+                'BAGIAN'        => $employee->BAGIAN,
             ];
 
             foreach ($grupKaryawan as $record) {
@@ -327,7 +348,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
 
             $lemburKhusus = $grupKaryawan->filter(function ($record) use ($hariLibur) {
                 $nilai = $record->JUMLAH_JAM_LEMBUR;
-                if (!is_numeric($nilai) || $nilai <= 4) return false;
+                if (!is_numeric($nilai)) return false;
                 $tanggal   = Carbon::parse($record->OVERTIME_DATE);
                 $tglString = $tanggal->format('Y-m-d');
                 $isHoliday = isset($hariLibur[$tglString]) && $hariLibur[$tglString]['holiday'] === true;
@@ -357,11 +378,11 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
                 $row['week_' . ($idx + 1) . '_sum'] = $totalMinggu;
             }
 
-            $row['total_kehadiran'] = $totalKehadiran;
-            $row['1']               = $jumlahHariLembur;
-            $row['2']               = $jamEkstra;
-            $row['total']           = $jumlahHariLembur + $jamEkstra;
-            $row['lembur_khusus']   = $lemburKhusus;
+            $row['total_kehadiran'] = $totalKehadiran ?? '0';
+            $row['1']               = $jumlahHariLembur ?? '0';
+            $row['2']               = $jamEkstra ?? '0';
+            $row['total']           = ($jumlahHariLembur ?? '0') + ($jamEkstra ?? '0');
+            $row['lembur_khusus']   = $lemburKhusus ?? '0';
 
             return $row;
         })->sortBy('NPK')->sortBy('BAGIAN')->values()->toArray();

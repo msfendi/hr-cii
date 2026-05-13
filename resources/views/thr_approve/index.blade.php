@@ -115,7 +115,7 @@
                                         <b>{{ $user['npk'] }}</b> - {{ $user['name'] }}
                                         </span>
                                         @if($statusList[$idx] == 'approve')
-                                        <span class="badge badge-success">✔ Approved</span>
+                                        <span class="badge badge-success">Approved</span>
                                         @elseif(!$beforeApproved)
                                         <span class="badge badge-secondary">Waiting Previous</span>
                                         @else

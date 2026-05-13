@@ -2,6 +2,7 @@
 
 use App\Events\NotificationEvent;
 use App\Events\TestEvent;
+use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
 use App\Http\Controllers\BiodataController;
@@ -24,10 +25,13 @@ use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\ChuFamilyController;
+use App\Http\Controllers\CompensationApproveController;
+use App\Http\Controllers\CompensationsController;
 use App\Http\Controllers\DeptInsentifRoleController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\EmployeePayrollController;
+use App\Http\Controllers\EmployeesContractController;
 use App\Http\Controllers\EmployeeShiftController;
 use App\Http\Controllers\EmployeeThrController;
 use App\Http\Controllers\EvaluationEmployeeController;
@@ -106,19 +110,39 @@ Route::group(['middleware' => 'auth'], function () {
 
 
     // BIODATA
-    Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/biodata/update/{NPK}', [BiodataController::class, 'update'])->name('biodata.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::post('/biodata/update/{NPK}', [BiodataController::class, 'update'])->name('biodata.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+
 
     // PKWT
     Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin|HRD']);
+
+    // ========================================
+    // EMPLOYEES CONTRACT
+    // ========================================
+    Route::prefix('employees-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING'])->group(function () {
+        Route::get('/',                 [EmployeesContractController::class, 'index'])->name('employees-contract.index');
+        Route::get('/get-data',         [EmployeesContractController::class, 'getData'])->name('employees-contract.get-data');
+        Route::get('/by-npk/{npk}',     [EmployeesContractController::class, 'getByNpk'])->name('employees-contract.by-npk');
+        Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store');
+        Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop');
+        Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish');
+        Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend');
+        Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary');
+        Route::post('/delete/{id}',     [EmployeesContractController::class, 'destroy'])->name('employees-contract.destroy');
+        Route::get('/bagian',           [EmployeesContractController::class, 'getBagian'])->name('employees-contract.bagian');
+        Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template');
+        Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import');
+        Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export');
+    });
 
 
     // Pelamar
@@ -126,6 +150,13 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/pelamar/import', [PelamarController::class, 'import'])->name('pelamar.import')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/pelamar/assign', [PelamarController::class, 'assign'])->name('pelamar.assign')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/pelamar/detail/{id}', [PelamarController::class, 'detail'])->name('pelamar.detail')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/pelamar/template', [PelamarController::class, 'exportTemplate'])->name('pelamar.template')->middleware(['auth', 'role:Admin|HRD']);
+
+    // Activity Log
+    Route::prefix('activity-logs')->group(function () {
+        Route::get('/', [ActivityLogController::class, 'index'])->name('activity-logs.index');
+        Route::get('/data', [ActivityLogController::class, 'data'])->name('activity-logs.data');
+    });
 
 
     //Role
@@ -228,6 +259,13 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index')->middleware(['auth', 'role:Admin|Management']);
         Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create')->middleware(['auth', 'role:Admin|Management']);
         Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve')->middleware(['auth', 'role:Admin|Management']);
+    });
+
+    // Compensation Approve
+    Route::prefix('compensation-approve')->group(function () {
+        Route::get('/', [CompensationApproveController::class, 'index'])->name('compensation-approve.index')->middleware(['auth', 'role:Admin|Management']);
+        Route::post('/create/{run_id}', [CompensationApproveController::class, 'store'])->name('compensation-approve.create')->middleware(['auth', 'role:Admin|Management']);
+        Route::post('/{id}/approve', [CompensationApproveController::class, 'approve'])->name('compensation-approve.approve')->middleware(['auth', 'role:Admin|Management']);
     });
 
 
@@ -517,7 +555,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/applicant-contact/store', [ApplicantContactController::class, 'store'])->name('applicant-contact.store');
     Route::delete('/applicant-contact/{id}', [ApplicantContactController::class, 'destroy'])->name('applicant-contact.destroy');
 
-    Route::prefix('expat')->middleware('role:Admin|Purchase')->group(function () {
+    Route::prefix('expat')->middleware('role:Admin|GA')->group(function () {
 
         Route::get('master/index', [ExpatController::class, 'indexMaster'])->name('expat.master.index');
         Route::get('master/create', [ExpatController::class, 'createMaster'])->name('expat.master.create');
@@ -547,7 +585,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export');
     });
 
-    Route::prefix('chu-family')->middleware('role:Admin|Purchase')->group(function () {
+    Route::prefix('chu-family')->middleware('role:Admin|GA')->group(function () {
         Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index');
         Route::get('/create', [ChuFamilyController::class, 'create'])->name('chu-family.create');
         Route::post('/store', [ChuFamilyController::class, 'store'])->name('chu-family.store');
@@ -559,16 +597,22 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/export', [ChuFamilyController::class, 'export'])->name('chu-family.export');
     });
 
-    Route::prefix('foreign-guest')->middleware('role:Admin|Purchase')->group(function () {
+    Route::prefix('foreign-guest')->middleware('role:Admin|GA')->group(function () {
 
         Route::get('/', [ForeignGuestController::class, 'index'])->name('foreign-guest.index');
         Route::get('/create', [ForeignGuestController::class, 'create'])->name('foreign-guest.create');
         Route::post('/store', [ForeignGuestController::class, 'store'])->name('foreign-guest.store');
         Route::get('/{id}', [ForeignGuestController::class, 'show'])->name('foreign-guest.show');
         Route::get('/edit/{id}', [ForeignGuestController::class, 'edit'])->name('foreign-guest.edit');
-        Route::post('/update/{id}', [ForeignGuestController::class, 'update'])->name('foreign-guest.update');
+        Route::put('/update/{id}', [ForeignGuestController::class, 'update'])->name('foreign-guest.update');
         Route::get('/delete/{id}', [ForeignGuestController::class, 'destroy'])->name('foreign-guest.delete');
     });
+
+    // Compensation
+    Route::get('compensation', [CompensationsController::class, 'index'])->name('compensation.index');
+    Route::post('compensation/generate', [CompensationsController::class, 'generate'])->name('compensation.generate');
+    Route::post('compensation/recap', [CompensationApproveController::class, 'createCompensationCSV'])->name('compensation.recap');
+    Route::get('/compensation/details/{date}', [CompensationsController::class, 'details'])->name('compensation.details');
 
     /*
     |--------------------------------------------------------------------------
@@ -597,6 +641,8 @@ Route::group(['middleware' => 'auth'], function () {
     */
 
     Route::get('/employee-shift', [EmployeeShiftController::class, 'index'])->name('employee-shift.index');
+    Route::get('/employee-shift/template', [EmployeeShiftController::class, 'exportTemplate'])->name('employee-shift.template');
+    Route::post('/employee-shift/import', [EmployeeShiftController::class, 'importTemplate'])->name('employee-shift.import');
     Route::get('/employee-shift/create', [EmployeeShiftController::class, 'create'])->name('employee-shift.create');
     Route::get('/employee-shift/edit/{id}', [EmployeeShiftController::class, 'edit'])->name('employee-shift.edit');
     Route::post('/employee-shift/store', [EmployeeShiftController::class, 'store'])->name('employee-shift.store');

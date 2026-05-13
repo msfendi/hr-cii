@@ -28,8 +28,32 @@
                 
                 <!-- DataTales Example -->
                 <div class="card shadow mb-4">
-                    <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Data Payroll Process</h6>
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        Data Payroll
+                    </h6>
+
+                    <form method="GET" id="filterForm">
+                        <select name="status"
+                                class="form-control form-control-sm"
+                                onchange="document.getElementById('filterForm').submit()">
+
+                            <option value="all" {{ $filter=='all' ? 'selected':'' }}>
+                                All
+                            </option>
+
+                            <option value="open" {{ $filter=='open' ? 'selected':'' }}>
+                                Open
+                            </option>
+
+                            <option value="closed" {{ $filter=='closed' ? 'selected':'' }}>
+                                Closed
+                            </option>
+
+                        </select>
+                    </form>
+
                     </div>
                     <div class="card-body">
                         @if ($message = Session::get('success'))
@@ -255,6 +279,7 @@
                                         <th>Absence</th>
                                         <th>Late</th>
                                         <th>Total Salary</th>
+                                        <th>Status</th>
                                         <th>Slip</th>
                                     </tr>
                                 </thead>
@@ -262,6 +287,7 @@
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -565,29 +591,136 @@ $(document).on('click','.btn-export',function(e){
             { data: 'employee_name' },
             { data: 'dept' },
 
-            { data:'basic_salary',defaultContent:0,render:data=>formatRupiah(data ?? 0)},
-            { data:'overtime_pay', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'special_overtime_pay', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'monthly_premi', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'long_service_allowance', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'allowance', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'basic_salary',defaultContent:0,render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'overtime_pay', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'special_overtime_pay', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'monthly_premi', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'long_service_allowance', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'allowance', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
-            { data:'sewing_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'pad_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'cutting_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'heat_insentif', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'sewing_insentif', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'pad_insentif', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'cutting_insentif', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'heat_insentif', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
-            { data:'adjusment', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'adjusment', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
-            { data:'bpjs_kesehatan', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'bpjs_ketenagakerjaan', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'bpjs_kesehatan', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'bpjs_ketenagakerjaan', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
-            { data:'pph_21', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'pph_21_deduction', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'absence_deduction', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
-            { data:'late_deduction', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'pph_21', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'pph_21_deduction', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'absence_deduction', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            { data:'late_deduction', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
-            { data:'total_salary', defaultContent:0, render:data=>formatRupiah(data ?? 0)},
+            { data:'total_salary', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+            {
+                data: 'employment_status',
+                render: function(data, type){
+
+                    if(type !== 'display') return data;
+
+                    return `
+                        <span class="badge ${
+                            data === 'Resign'
+                                ? 'bg-danger text-white'
+                                : 'bg-success text-white'
+                        }">
+                            ${data}
+                        </span>
+                    `;
+                }
+            },
 
             {
                 data:null,

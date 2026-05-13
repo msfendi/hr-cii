@@ -89,6 +89,7 @@
                               <th>Birth Date</th>
                               <th>Age</th>
                               <th>Nationality</th>
+                              <th>NPWP</th>
                               <th>Passport</th>
                               <th>Passport Exp</th>
                               <th>Visa Type</th>
@@ -138,6 +139,7 @@
                               <td>{{ $row->birth_date }}</td>
                               <td><b>{{ $age }}</b></td>
                               <td>{{ $row->nationality }}</td>
+                              <td>{{ $row->npwp }}</td>
                               <td>{{ $row->passport_number }}</td>
                               <td>{{ $row->passport_expiry }}</td>
                               <td>{{ $row->visa_type }}</td>

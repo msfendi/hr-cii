@@ -15,12 +15,17 @@ use Illuminate\Support\Facades\Storage;
 class PayrollApproveController extends Controller
 {
 
-    public function index()
+    public function index(Request $request)
     {
+
+        // =========================
+        // FILTER STATUS PERIOD
+        // =========================
+        $filter = $request->get('status', 'open');
         // =========================
         // JOIN PAYROLL RUN + PERIOD + EXPORT
         // =========================
-        $data = PayrollApprove::query()
+        $query = PayrollApprove::query()
             ->join('payroll_runs', 'payroll_approve.payroll_run_id', '=', 'payroll_runs.id')
             ->join('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')
             ->leftJoin('payroll_exports', 'payroll_exports.run_id', '=', 'payroll_runs.id') // 🔥 tambahan
@@ -33,7 +38,17 @@ class PayrollApproveController extends Controller
                 'payroll_exports.file_pdf',
                 'payroll_exports.file_peng',
                 'payroll_exports.status as export_status'
-            )
+            );
+
+        if ($filter === 'open') {
+            $query->where('payroll_periods.is_closed', false);
+        }
+
+        if ($filter === 'closed') {
+            $query->where('payroll_periods.is_closed', true);
+        }
+
+        $data = $query
             ->latest('payroll_approve.id')
             ->get();
 
@@ -80,7 +95,7 @@ class PayrollApproveController extends Controller
             return $row;
         });
 
-        return view('payroll_approve.index', compact('data'));
+        return view('payroll_approve.index', compact('data', 'filter'));
     }
     // 🔹 Create approval dari setting
     public function store($payroll_run_id)
@@ -192,7 +207,7 @@ class PayrollApproveController extends Controller
             event(new NotificationEvent(
                 'Payroll Approval!',
                 'Payroll ' . $export->name . ' has been approved!',
-            'success'
+                'success'
             ));
 
             GeneratePayrollExport::dispatch($export->id, 'approve');

@@ -13,6 +13,7 @@ use App\Models\InsentifApproval;
 use App\Models\InsentifRoleFormula;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -307,6 +308,7 @@ class HeatInsentifMasterController extends Controller
         $results = [];
 
         foreach ($employees as $employee) {
+            $status = $employee->tkk ? 'Resign' : 'Active';
 
             $heat = $this->calculateHeat(
                 $employee,
@@ -322,6 +324,8 @@ class HeatInsentifMasterController extends Controller
                 'name' => $employee->NAMA_KARYAWAN,
                 'heat_insentif' => $heat,
                 'dept' => $employee->DEPARTEMENT,
+                'tkk' => $employee->tkk,
+                'status' => $status
             ];
         }
 
@@ -358,6 +362,15 @@ class HeatInsentifMasterController extends Controller
     private function calculateHeat($employee, $period, $formula, $role)
     {
         $amount = 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | TKK (RESIGN DATE)
+        |--------------------------------------------------------------------------
+        */
+        $tkkDate = !empty($employee->tkk)
+            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+            : null;
 
         /*
         |--------------------------------------------------------------------------
@@ -434,6 +447,15 @@ class HeatInsentifMasterController extends Controller
             */
         if ($role === 'operator') {
             foreach ($assignments as $assignment) {
+
+                /*
+                |--------------------------------------------------------------------------
+                | CHECK RESIGN (NEW)
+                |--------------------------------------------------------------------------
+                */
+                if ($tkkDate && $assignment->date >= $tkkDate) {
+                    continue;
+                }
 
                 // dd($rows);
 

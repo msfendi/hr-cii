@@ -62,7 +62,14 @@
                             <br>
                             <div>
                                 <label>Periode</label>
-                                <input type="month" name="periode" id="periode" required>
+                                
+                                <input type="text"
+                                    name="periode"
+                                    id="periode"
+                                    class="form-control form-control-sm mr-2"
+                                    placeholder="Select Periode"
+                                    required
+                                    readonly>
                             </div>
                             <br>
                             <div class="row">
@@ -104,6 +111,23 @@
         let namaPeriode = bulan[month-1] + " " + year;
         document.getElementById('name').value = namaPeriode;
     });
+
+</script>
+<script>
+
+flatpickr("#periode", {
+
+    plugins: [
+        new monthSelectPlugin({
+            shorthand: true,
+            dateFormat: "Y-m",
+            altFormat: "F Y"
+        })
+    ],
+
+    disableMobile: true
+
+});
 
 </script>
 </html>

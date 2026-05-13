@@ -13,6 +13,7 @@ use App\Models\InsentifRoleFormula;
 use App\Models\PadEfficiency;
 use App\Models\PayrollComponent;
 use App\Models\PayrollPeriod;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -308,6 +309,7 @@ class PadInsentifMasterController extends Controller
 
         foreach ($employees as $employee) {
 
+            $status = $employee->tkk ? 'Resign' : 'Active';
             $pad = $this->calculatePad(
                 $employee,
                 $period,
@@ -322,6 +324,8 @@ class PadInsentifMasterController extends Controller
                 'name' => $employee->NAMA_KARYAWAN,
                 'pad_insentif' => $pad,
                 'dept' => $employee->DEPARTEMENT,
+                'tkk' => $employee->tkk,
+                'status' => $status
             ];
         }
 
@@ -358,6 +362,16 @@ class PadInsentifMasterController extends Controller
     private function calculatePad($employee, $period, $formula, $role)
     {
         $amount = 0;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | TKK (RESIGN DATE)
+        |--------------------------------------------------------------------------
+        */
+        $tkkDate = !empty($employee->tkk)
+            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+            : null;
 
         /*
         |--------------------------------------------------------------------------
@@ -434,6 +448,14 @@ class PadInsentifMasterController extends Controller
             */
         if ($role === 'operator') {
             foreach ($assignments as $assignment) {
+                /*
+                |--------------------------------------------------------------------------
+                | CHECK RESIGN (NEW)
+                |--------------------------------------------------------------------------
+                */
+                if ($tkkDate && $assignment->date >= $tkkDate) {
+                    continue;
+                }
 
                 // dd($rows);
 
@@ -476,6 +498,14 @@ class PadInsentifMasterController extends Controller
 
 
             foreach ($operators as $operator) {
+                /*
+                |--------------------------------------------------------------------------
+                | CHECK RESIGN (NEW)
+                |--------------------------------------------------------------------------
+                */
+                if ($tkkDate && $operator->date >= $tkkDate) {
+                    continue;
+                }
                 // FILTER HANYA NUMERATOR
                 if (!$isValidOvertime($operator->npk, $operator->date)) {
                     continue;

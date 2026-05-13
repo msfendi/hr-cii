@@ -27,9 +27,14 @@ use Illuminate\Support\Facades\Cache;
 class PayrollProcessController extends Controller
 {
 
-    public function index()
+    public function index(Request $request)
     {
-        $periods = PayrollRun::query()
+        // =========================
+        // FILTER STATUS PERIOD
+        // =========================
+        $filter = $request->get('status', 'open');
+
+        $query = PayrollRun::query()
             ->leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')
             ->leftJoin('payroll_exports', 'payroll_exports.run_id', '=', 'payroll_runs.id')
             ->leftJoin('payroll_approve', 'payroll_approve.payroll_run_id', '=', 'payroll_runs.id')
@@ -43,13 +48,23 @@ class PayrollProcessController extends Controller
                 'payroll_exports.file_bank_resign',
                 'payroll_exports.file_peng',
                 'payroll_approve.status as approve_status' // 🔥 penting
-            )
-            ->orderByDesc('payroll_runs.processed_at')
+            );
+
+        if ($filter === 'open') {
+            $query->where('payroll_periods.is_closed', false);
+        }
+
+        if ($filter === 'closed') {
+            $query->where('payroll_periods.is_closed', true);
+        }
+
+        $periods = $query
+            ->latest('payroll_runs.id')
             ->get();
 
         // dd($periods);
 
-        return view('payroll.index', compact('periods'));
+        return view('payroll.index', compact('periods', 'filter'));
     }
 
     public function generate()
@@ -95,12 +110,12 @@ class PayrollProcessController extends Controller
         $period = PayrollPeriod::findOrFail($request->period_id);
 
         // PROTEKSI: cek apakah payroll sudah pernah digenerate
-        $exists = PayrollRun::where('period_id', $period->id)->exists();
+        // $exists = PayrollRun::where('period_id', $period->id)->exists();
 
-        if ($exists) {
-            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
-            return redirect()->back();
-        }
+        // if ($exists) {
+        //     Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
+        //     return redirect()->back();
+        // }
 
         $run = PayrollRun::create([
             'period_id' => $period->id,
@@ -108,6 +123,8 @@ class PayrollProcessController extends Controller
         ]);
 
         GeneratePayrollProcess::dispatch($run->id);
+
+        // return response()->json($payrollResults);
         event(new NotificationEvent(
             'Process Payroll!',
             'Users : ' . $user->name . ' has been process Payroll ' . $period->name . '!',
@@ -223,6 +240,16 @@ class PayrollProcessController extends Controller
             $item->total_salary = $canSeeSalary
                 ? (float) $item->total_salary
                 : '***';
+
+            /*
+    |--------------------------------------------------------------------------
+    | EMPLOYMENT STATUS (NEW)
+    |--------------------------------------------------------------------------
+    */
+
+            $item->employment_status = empty($item->tkk)
+                ? 'Active'
+                : 'Resign';
 
             return $item;
         });

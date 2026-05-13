@@ -216,6 +216,7 @@ class GeneratePayrollExport implements ShouldQueue
             ->flatMap(fn($r) => array_keys(json_decode($r->components, true) ?? []))
             ->unique()
             ->reject(fn($c) => strtolower($c) === 'thr')
+            ->reject(fn($c) => strtolower($c) === 'compensation')
             ->reject(fn($c) => strtolower($c) === 'late_minutes');
 
         $componentMasters = PayrollComponent::whereIn('code', $componentKeys)
