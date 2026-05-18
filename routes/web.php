@@ -34,11 +34,13 @@ use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
 use App\Http\Controllers\EmployeeShiftController;
 use App\Http\Controllers\EmployeeThrController;
+use App\Http\Controllers\EpoController;
 use App\Http\Controllers\EvaluationEmployeeController;
 use App\Http\Controllers\EvaluationJobscopeController;
 use App\Http\Controllers\EvaluationQuestionnaireController;
 use App\Http\Controllers\ExpatController;
 use App\Http\Controllers\ForeignGuestController;
+use App\Http\Controllers\HealthTestController;
 use App\Http\Controllers\HeatInsentifMasterController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\InsentifApprovalController;
@@ -67,6 +69,7 @@ use App\Http\Controllers\WhatsappTemplateController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotificationsContractController;
+use App\Http\Controllers\RecruitmentFormController;
 
 /*
 |--------------------------------------------------------------------------
@@ -612,6 +615,18 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/export', [ChuFamilyController::class, 'export'])->name('chu-family.export');
     });
 
+    Route::prefix('epo')->group(function () {
+        Route::get('/index', [EpoController::class, 'index'])->name('epo.index');
+        Route::get('/create', [EpoController::class, 'create'])->name('epo.create');
+        Route::get('/edit/{id}', [EpoController::class, 'edit'])->name('epo.edit');
+        Route::post('/store', [EpoController::class, 'store'])->name('epo.store');
+        Route::put('/{epo}', [EpoController::class, 'update'])->name('epo.update');
+        Route::delete('/{epo}', [EpoController::class, 'destroy'])->name('epo.delete');
+        Route::post('/import', [EpoController::class, 'import'])->name('epo.import');
+        Route::get('/template', [EpoController::class, 'template'])->name('epo.template');
+        Route::get('/export', [EpoController::class, 'export'])->name('epo.export');
+    });
+
     Route::prefix('foreign-guest')->middleware('role:Admin|GA')->group(function () {
 
         Route::get('/', [ForeignGuestController::class, 'index'])->name('foreign-guest.index');
@@ -628,6 +643,16 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('compensation/generate', [CompensationsController::class, 'generate'])->name('compensation.generate');
     Route::post('compensation/recap', [CompensationApproveController::class, 'createCompensationCSV'])->name('compensation.recap');
     Route::get('/compensation/details/{date}', [CompensationsController::class, 'details'])->name('compensation.details');
+
+    Route::prefix('health-test')->group(function () {
+        Route::get('/', [HealthTestController::class, 'index'])->name('health-test.index');
+        Route::get('/create', [HealthTestController::class, 'create'])->name('health-test.create');
+        Route::post('/store', [HealthTestController::class, 'store'])->name('health-test.store');
+        Route::get('/delete/{id}', [HealthTestController::class, 'delete'])->name('health-test.delete');
+        Route::get('/pdf/{nik}', [HealthTestController::class, 'downloadPdf'])->name('health-test.pdf');
+        Route::get('/{id}/edit', [HealthTestController::class, 'edit'])->name('health-test.edit');
+        Route::put('/{id}', [HealthTestController::class, 'update'])->name('health-test.update');
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -727,4 +752,18 @@ Route::get('/test-reverb', function () {
         'danger'
     ));
     return 'Notification Event Sent!';
+});
+
+Route::prefix('recruitments')->name('recruitments.')->group(function () {
+    Route::get('/', fn () => redirect()->route('recruitments.step', ['step' => 1]))
+        ->name('index');
+    Route::get('/step/{step}', [RecruitmentFormController::class, 'show'])
+        ->name('step')
+        ->where('step', '[1-8]');
+    Route::post('/step/{step}', [RecruitmentFormController::class, 'store'])
+        ->name('step.store')
+        ->where('step', '[1-8]');
+    Route::get('/success', fn () => view('recruitments_form.success'))
+        ->name('success');
+
 });

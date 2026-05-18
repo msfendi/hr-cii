@@ -254,13 +254,18 @@ class WhatsappDeviceController extends Controller
         }
 
         /*
-    |--------------------------------------------------------------------------
-    | DELETE LOCAL DATABASE
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | DELETE LOCAL DATABASE
+        |--------------------------------------------------------------------------
+        */
 
         $device->logs()->delete(); // optional jika ada relasi
         $device->delete();
+
+        Alert::success(
+            'Deleted!',
+            'Device successfully deleted.'
+        );
 
         return redirect()
             ->route('devices.index')

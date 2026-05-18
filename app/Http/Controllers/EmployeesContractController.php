@@ -72,7 +72,7 @@ class EmployeesContractController extends Controller
             // Redirect dari biodata: tampilkan semua kontrak karyawan (semua status)
             $query->where(function ($q) use ($npk) {
                 $q->where('c.npk', 'like', "%{$npk}%")
-                  ->orWhere('b.NAMA_KARYAWAN', 'like', "%{$npk}%");
+                    ->orWhere('b.NAMA_KARYAWAN', 'like', "%{$npk}%");
             });
         } elseif (!empty($month) && str_contains($month, '-')) {
             [$y, $m] = array_map('intval', explode('-', $month));
@@ -82,7 +82,7 @@ class EmployeesContractController extends Controller
             // $query->whereRaw('DATEDIFF(DAY, CAST(GETDATE() AS DATE), c.end_date) BETWEEN -7 AND 30');
             $query->where(function ($q) {
                 $q->whereRaw('DATEDIFF(DAY, CAST(GETDATE() AS DATE), c.end_date) BETWEEN -7 AND 30')
-                  ->orWhere('c.status_contract', 'AKTIF');
+                    ->orWhere('c.status_contract', 'AKTIF');
             });
         }
 
@@ -145,8 +145,8 @@ class EmployeesContractController extends Controller
                 return $row;
             });
 
-        
-        
+
+
 
         return response()->json(['data' => $rows]);
     }

@@ -54,7 +54,7 @@
         },
 
         setupEchoListener() {
-            console.log('Checking window.Echo:', window.Echo);
+            // console.log('Checking window.Echo:', window.Echo);
             if (!window.Echo) {
                 console.warn('Waiting for Laravel Echo to initialize...');
                 setTimeout(() => this.setupEchoListener(), 500);

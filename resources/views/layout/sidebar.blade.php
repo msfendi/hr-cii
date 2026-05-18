@@ -69,6 +69,7 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('expat.master.index') }}">Master</a>
             <a class="collapse-item" href="{{ route('expat.onleave.index') }}">On Leave</a>
             <a class="collapse-item" href="{{ route('expat.cost.index') }}">Cost</a>
+            <a class="collapse-item" href="{{ route('epo.index') }}">EPO</a>
             <hr>
             <a class="collapse-item" href="{{ route('foreign-guest.index') }}">Foreign Guest</a>
          </div>
@@ -125,6 +126,7 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('kunjungan.index') }}">Kunjungan</a>
             <a class="collapse-item" href="{{ route('dokter.antrian') }}">Antrian</a>
             <a class="collapse-item" href="{{ route('report.rekap') }}">Rekap</a>
+            <a class="collapse-item" href="{{ route('health-test.index') }}">Test Kesehatan</a>
          </div>
       </div>
    </li>
@@ -246,8 +248,6 @@ $role = $roleusers[0]->rolename;
             disableStats: true,
             enabledTransports: ['ws','wss'],
         });
-
-        console.log('Echo Ready:', window.Echo);
     </script>
     <script>
 window.Echo.channel('notification-channel')

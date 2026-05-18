@@ -22,6 +22,12 @@ class GlobalObserver
 
     public function updated($model)
     {
+        if ($this->shouldSkip()) {
+            return;
+        }
+        if (app()->runningInConsole()) {
+            return;
+        }
         if ($this->skip($model)) return;
         // dd(
         //     $this->oldData,
@@ -39,6 +45,15 @@ class GlobalObserver
         ]);
 
         unset($this->oldData[$model->getKey()]);
+    }
+
+    private function shouldSkip()
+    {
+        return
+            app()->runningInConsole() ||
+            request()->ajax() ||
+            request()->isMethod('GET') ||
+            request()->routeIs('kunjungan.get-data');
     }
 
     private function skip($model)

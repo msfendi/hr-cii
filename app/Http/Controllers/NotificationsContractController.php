@@ -24,7 +24,7 @@ class NotificationsContractController extends Controller
      */
     public function index(Request $request)
     {
-        $perPage = $request->input('per_page', 20);
+        $perPage = (int) $request->input('per_page', 20);
         $status = $request->input('status', 'unread');
         $type = $request->input('type');
 
@@ -59,7 +59,7 @@ class NotificationsContractController extends Controller
     public function unread()
     {
         $unreadCount = NotificationsContract::unread()->count();
-        
+
         $recentUnread = NotificationsContract::unread()
             ->recent()
             ->limit(5)

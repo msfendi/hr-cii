@@ -43,6 +43,7 @@ class EmployeesContractImport implements ToModel, WithHeadingRow
             'start_date'      => $startDate,
             'end_date'        => $endDate,
             'month_duration'  => (string) ($row['month_duration'] ?? ''),
+            'day_duration'  => (string) ($row['day_duration'] ?? ''),
             'status_contract' => strtoupper(trim($row['status_contract'] ?? 'AKTIF')),
             'salary'          => (float) ($row['salary']    ?? 0),
             'allowance'       => (float) ($row['allowance'] ?? 0),

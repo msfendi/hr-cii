@@ -23,6 +23,7 @@ class EmployeesContract extends Model
         'start_date',
         'end_date',
         'month_duration',
+        'day_duration',
         'status_contract',
         'salary',
         'type',
@@ -102,16 +103,16 @@ class EmployeesContract extends Model
     {
         $startDate = now();
         $endDate = now()->addDays($days);
-        
+
         return $query->active()
-                     ->whereDate('end_date', '>=', $startDate)
-                     ->whereDate('end_date', '<=', $endDate);
+            ->whereDate('end_date', '>=', $startDate)
+            ->whereDate('end_date', '<=', $endDate);
     }
 
     public function scopeExpiringToday($query)
     {
         return $query->active()
-                     ->whereDate('end_date', today());
+            ->whereDate('end_date', today());
     }
 
     // METHODS
@@ -120,7 +121,7 @@ class EmployeesContract extends Model
         if ($this->status_contract === 'habis' || $this->status_contract === 'diakhiri') {
             return 0;
         }
-        
+
         return $this->sisa_hari;
     }
 
