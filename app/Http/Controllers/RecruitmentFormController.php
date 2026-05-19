@@ -69,11 +69,11 @@ class RecruitmentFormController extends Controller
         // Jika user klik tombol "Sebelumnya" (back), simpan draft tanpa validasi ketat
         if ($request->input('action') === 'back') {
             $draftData = $request->except(['_token', 'action']);
-            
+
             // Gabungkan draft baru dengan data yang sudah ada di session agar tidak ada yang hilang
             $existingData = Session::get($this->steps[$step]['session'], []);
             $mergedData = array_merge($existingData, $draftData);
-            
+
             Session::put($this->steps[$step]['session'], $mergedData);
             return redirect()->route('recruitments.step', ['step' => $step - 1]);
         }
@@ -113,9 +113,15 @@ class RecruitmentFormController extends Controller
 
         // ── Upload file-file dokumen ─────────────────────────────────────────
         $fileFields    = [
-            'surat_lamaran', 'cv', 'scan_ktp', 'scan_kk',
-            'pas_foto', 'ijazah', 'scan_akta_kelahiran',
-            'scan_skck', 'scan_blanko_kesehatan',
+            'surat_lamaran',
+            'cv',
+            'scan_ktp',
+            'scan_kk',
+            'pas_foto',
+            'ijazah',
+            'scan_akta_kelahiran',
+            'scan_skck',
+            'scan_blanko_kesehatan',
         ];
         $namaPelamar   = Str::slug($step1['nama_lengkap'] ?? 'pelamar', '_');
         $timestamp     = Carbon::now()->format('Ymd-His');
@@ -148,7 +154,7 @@ class RecruitmentFormController extends Controller
         if (! empty($step5['education'])) {
             $urutan = ['SD', 'SMP', 'SMA/SMK', 'Akademi/D3', 'D3', 'S1', 'S2', 'S3'];
             $sorted = collect($step5['education'])
-                ->sortByDesc(fn ($e) => array_search($e['tingkat'] ?? '', $urutan))
+                ->sortByDesc(fn($e) => array_search($e['tingkat'] ?? '', $urutan))
                 ->first();
             if ($sorted) {
                 $pendidikanTerakhir = $sorted['tingkat']  ?? null;
@@ -187,7 +193,7 @@ class RecruitmentFormController extends Controller
                 'JURUSAN'          => strtoupper($jurusan      ?? '-'),
                 'NAMA_SEKOLAH'     => strtoupper(trim($namaSekolah ?? '') ?: '-'),
                 // KABUPATEN_SEKOLAH: kolom NOT NULL, selalu isi
-                'KABUPATEN_SEKOLAH'=> '-',
+                'KABUPATEN_SEKOLAH' => '-',
                 // Fisik — dari step7
                 'TINGGI_BADAN'     => $step7['tinggi_badan'] ?? null,
                 'BERAT_BADAN'      => $step7['berat_badan']  ?? null,
@@ -223,7 +229,7 @@ class RecruitmentFormController extends Controller
 
                 // Step 2
                 'alamat_skrg'        => $step2['alamat_sekarang']          ?? $step2['alamat_asal']      ?? null,
-                'kabupaten_kota_skrg'=> $step2['kab_kota_sekarang']        ?? $step2['kab_kota_asal']    ?? null,
+                'kabupaten_kota_skrg' => $step2['kab_kota_sekarang']        ?? $step2['kab_kota_asal']    ?? null,
                 'status_domisili'    => $step2['status_domisili_sekarang']  ?? $step2['status_domisili_asal'] ?? null,
                 'nama_ktk_darurat'   => $step2['nama_darurat']     ?? null,
                 'hubungan'           => $step2['hubungan_darurat']  ?? null,
@@ -231,32 +237,32 @@ class RecruitmentFormController extends Controller
 
                 // Step 3 — pengalaman kerja (JSON)
                 'pengalaman_kerja'   => ! empty($step3['experiences'])
-                                            ? json_encode($step3['experiences'])
-                                            : null,
+                    ? json_encode($step3['experiences'])
+                    : null,
 
                 // Step 4 — keluarga (JSON)
                 'data_ayah'          => ! empty($step4['ayah'])
-                                            ? json_encode($step4['ayah'])
-                                            : null,
+                    ? json_encode($step4['ayah'])
+                    : null,
                 'data_ibu'           => ! empty($step4['ibu'])
-                                            ? json_encode($step4['ibu'])
-                                            : null,
+                    ? json_encode($step4['ibu'])
+                    : null,
                 'saudara_kandung'    => ! empty($step4['saudara'])
-                                            ? json_encode($step4['saudara'])
-                                            : null,
+                    ? json_encode($step4['saudara'])
+                    : null,
                 'data_anak'          => ! empty($step4['anak'])
-                                            ? json_encode($step4['anak'])
-                                            : null,
+                    ? json_encode($step4['anak'])
+                    : null,
 
                 // Step 5 — riwayat pendidikan (JSON)
                 'riwayat_pendidikan' => ! empty($step5['education'])
-                                            ? json_encode($step5['education'])
-                                            : null,
+                    ? json_encode($step5['education'])
+                    : null,
 
                 // Step 6 — Motivasi & Kegiatan
                 'motivasi'           => $step6['motivasi'] ?? null,
                 'kegiatan_ekstra'    => $step6['kegiatan_ekstra'] ?? null,
-                
+
                 // Fisik dari step7 (tinggi/berat sudah di PELAMAR)
 
                 // Step 8 — file dokumen
@@ -266,7 +272,7 @@ class RecruitmentFormController extends Controller
                 'file_kk'            => $uploadedFiles['scan_kk']                ?? null,
                 'file_pas_foto'      => $uploadedFiles['pas_foto']               ?? null,
                 'file_ijasah'        => $uploadedFiles['ijazah']                 ?? null,
-                'file_akta_kelahiran'=> $uploadedFiles['scan_akta_kelahiran']    ?? null,
+                'file_akta_kelahiran' => $uploadedFiles['scan_akta_kelahiran']    ?? null,
                 'file_skck'          => $uploadedFiles['scan_skck']              ?? null,
                 'file_surat_sehat'   => $uploadedFiles['scan_blanko_kesehatan']  ?? null,
 
@@ -286,7 +292,8 @@ class RecruitmentFormController extends Controller
             // Rollback: hapus baris PELAMAR yang baru dibuat & file
             try {
                 DB::connection('cii')->table('PELAMAR')->where('id', $pelamarId)->delete();
-            } catch (\Exception) {}
+            } catch (\Exception) {
+            }
 
             foreach ($uploadedFiles as $path) {
                 Storage::disk('public')->delete($path);

@@ -37,20 +37,26 @@ class EmployeesContractImport implements ToModel, WithHeadingRow
 
         $this->inserted++;
 
-        return new EmployeesContract([
-            'npk'             => strtoupper(trim($row['npk'])),
-            'contract_ke'     => (int) ($row['contract_ke']    ?? 1),
-            'start_date'      => $startDate,
-            'end_date'        => $endDate,
-            'month_duration'  => (string) ($row['month_duration'] ?? ''),
-            'day_duration'  => (string) ($row['day_duration'] ?? ''),
-            'status_contract' => strtoupper(trim($row['status_contract'] ?? 'AKTIF')),
-            'salary'          => (float) ($row['salary']    ?? 0),
-            'allowance'       => (float) ($row['allowance'] ?? 0),
-            'type'            => (string) ($row['type'] ?? ''),
-            'daily_salary'    => (float) ($row['daily_salary'] ?? 0),
-            'pph21'           => (float) ($row['pph21'] ?? 0),
-        ]);
+        return EmployeesContract::updateOrCreate(
+            [
+                'npk'             => strtoupper(trim($row['npk'])),
+                'contract_ke'     => (int) ($row['contract_ke'] ?? 1)
+            ],
+            [
+                'npk'             => strtoupper(trim($row['npk'])),
+                'contract_ke'     => (int) ($row['contract_ke'] ?? 1),
+                'start_date'      => $startDate,
+                'end_date'        => $endDate,
+                'month_duration'  => (string) ($row['month_duration'] ?? ''),
+                'day_duration'    => (string) ($row['day_duration'] ?? ''),
+                'status_contract' => strtoupper(trim($row['status_contract'] ?? 'AKTIF')),
+                'salary'          => (float) ($row['salary']    ?? 0),
+                'allowance'       => (float) ($row['allowance'] ?? 0),
+                'type'            => (string) ($row['type'] ?? ''),
+                'daily_salary'    => (float) ($row['daily_salary'] ?? 0),
+                'pph21'           => (float) ($row['pph21'] ?? 0),
+            ]
+        );
     }
 
     private function parseDate($value): ?string

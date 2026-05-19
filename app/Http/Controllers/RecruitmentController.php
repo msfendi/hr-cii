@@ -42,7 +42,7 @@ class RecruitmentController extends Controller
         $devices = WhatsappDevice::where('is_active', true)->get();
 
         $request->validate([
-            'npk' => 'required',
+            'id' => 'required',
             'type' => 'required',
             'nama' => 'required',
             'nomor_hp' => 'required',
@@ -53,23 +53,23 @@ class RecruitmentController extends Controller
 
         if ($response['status'] ?? false) {
             $updates = [
-                'STATUS_APPLY' => strtoupper(str_replace('_', ' ', $request->type)),
+                'status_apply' => strtoupper(str_replace('_', ' ', $request->type)),
             ];
 
             if ($request->type === 'invitation') {
-                $updates['IS_TEST'] = 'TRUE';
-                $updates['STATUS_APPLY'] = 'INVITATION TEST';
+                $updates['is_test'] = 'TRUE';
+                $updates['status_apply'] = 'INVITATION TEST';
             } elseif ($request->type === 'interview') {
-                $updates['IS_INTERVIEW'] = 'TRUE';
-                $updates['STATUS_APPLY'] = 'CALLED TO INTERVIEW';
+                $updates['is_interview'] = 'TRUE';
+                $updates['status_apply'] = 'CALLED TO INTERVIEW';
             } elseif ($request->type === 'final') {
-                $updates['STATUS_APPLY'] = 'FINAL RESULT';
+                $updates['status_apply'] = 'FINAL RESULT';
             } elseif ($request->type === 'rejection') {
-                $updates['STATUS_APPLY'] = 'REJECTED';
+                $updates['status_apply'] = 'REJECTED';
             }
 
-            DB::connection('cii')->table('PELAMAR')
-                ->where('NPK', $request->npk)
+            DB::connection('cii')->table('pelamar_details')
+                ->where('id_pelamar', $request->id)
                 ->update($updates);
 
             return back()->with('success', 'WhatsApp message sent and status updated for ' . $request->nama);

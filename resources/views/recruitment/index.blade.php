@@ -78,9 +78,9 @@
                                 <tbody>
                                     @foreach($recruitments as $recruitment)
                                     <tr>
-                                        <td>{{ $loop->iteration }}</td>
+                                        <td>{{ $recruitment->ID }}</td>
                                         <td>{{ $recruitment->NAMA }}</td>
-                                        <td>{{ $recruitment->NPK }}</td>
+                                        <td>{{ $recruitment->NIK }}</td>
                                         <td>{{ $recruitment->HP }}</td>
                                         <td>{{ $recruitment->IS_KONTRAK }}</td>
                                         <td>
@@ -88,6 +88,7 @@
                                                     data-nama="{{ $recruitment->NAMA }}" 
                                                     data-phone="{{ $recruitment->HP }}" 
                                                     data-npk="{{ $recruitment->NPK }}" 
+                                                    data-id="{{ $recruitment->ID }}" 
                                                     data-toggle="modal" data-target="#whatsappModal">
                                                 <i class="fab fa-whatsapp"></i> WA
                                             </button>
@@ -130,8 +131,9 @@
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label>Phone Number</label>
+                                        <input type="hidden" name="id" id="wa_id" class="form-control" readonly>
                                         <input type="text" name="nomor_hp" id="wa_phone" class="form-control" readonly>
-                                        <input type="hidden" name="npk" id="wa_npk">
+                                        <input type="hidden" name="npk" id="wa_npk" class="form-control" readonly>
                                     </div>
                                 </div>
                             </div>
@@ -193,10 +195,12 @@
             const nama = $(this).data('nama');
             const phone = $(this).data('phone');
             const npk = $(this).data('npk');
+            const id = $(this).data('id');
 
             $('#wa_nama').val(nama);
             $('#wa_phone').val(phone);
             $('#wa_npk').val(npk);
+            $('#wa_id').val(id);
             $('#wa_type').val('');
             $('#wa_message').val('');
             $('#wa_datetime_container').hide();

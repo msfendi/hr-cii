@@ -61,10 +61,10 @@
                 </div>
 
                 {{-- Label --}}
-                <span class="step-label text-label-lg text-center transition-all duration-300
+                <!-- <span class="step-label text-label-lg text-center transition-all duration-300
                              {{ $isActive ? 'text-primary font-bold' : 'text-on-surface-variant' }}">
                     {{ $label }}
-                </span>
+                </span> -->
             </div>
         @endforeach
 
