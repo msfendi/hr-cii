@@ -6,6 +6,7 @@ use App\Models\WhatsappDevice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Services\FonnteService;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class RecruitmentController extends Controller
 {
@@ -88,6 +89,12 @@ class RecruitmentController extends Controller
     {
         $devices = WhatsappDevice::where('is_active', true)->get();
 
+        // dd(count($devices));
+        if (count($devices) == 0) {
+            Alert::warning('Whatsapp Failed!', 'Device Not Linked!');
+            return back()->with('error', 'Failed to send WhatsApp message: ' . ($response['reason'] ?? 'Unknown error'));
+        }
+
         $request->validate([
             'id' => 'required',
             'type' => 'required',
@@ -128,6 +135,7 @@ class RecruitmentController extends Controller
                 ->where('id_pelamar', $request->id)
                 ->update($updates);
 
+            Alert::success('Whatsapp Send!', 'Whatsapp message send succesfully!');
             return back()->with('success', 'WhatsApp message sent and status updated for ' . $request->nama);
         }
 
