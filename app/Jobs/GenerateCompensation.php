@@ -148,7 +148,7 @@ class GenerateCompensation implements ShouldQueue
             })
 
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
-            // ->where('bio.NPK', '=', 'C-00827')
+            ->where('bio.NPK', '=', 'C-10000')
 
             ->select(
                 'ec.*',
@@ -209,6 +209,8 @@ class GenerateCompensation implements ShouldQueue
                         ->id;
                 });
 
+            // dd($latestContracts);
+
             $contractAccumulator = [];
 
             foreach ($employees as $emp) {
@@ -244,21 +246,23 @@ class GenerateCompensation implements ShouldQueue
 
                 $difference_days = 0;
 
-                //         if (($latestContracts[$key] ?? null) == $emp->id) {
+                // dd($emp->day_duration, $latestContracts);
 
-                //             /*
-                // |--------------------------------------------------------------------------
-                // | PAYROLL RULE
-                // | cutoff - end_date
-                // |
-                // | tarik sebelum habis  -> minus
-                // | tarik setelah habis  -> plus
-                // |--------------------------------------------------------------------------
-                // */
+                if (($latestContracts[$key] ?? null) == $emp->id) {
 
-                //             $difference_days =
-                //                 $endDate->diffInDays($cutoffDate, false);
-                //         }
+                    /*
+                |--------------------------------------------------------------------------
+                | PAYROLL RULE
+                | cutoff - end_date
+                |
+                | tarik sebelum habis  -> minus
+                | tarik setelah habis  -> plus
+                |--------------------------------------------------------------------------
+                */
+
+                    // $difference_days = $endDate->diffInDays($cutoffDate, false);
+                    $difference_days = $emp->day_duration;
+                }
 
                 /*
     |--------------------------------------------------------------------------

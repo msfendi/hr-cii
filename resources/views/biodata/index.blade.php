@@ -192,13 +192,14 @@
                                                                     class="small font-weight-bold text-muted ml-2">Agama</label>
                                                                 <select class="form-control px-3" name="agama"
                                                                     id="edit_agama" style="height: 38px;">
-                                                                    <option value="" disabled>Select</option>
-                                                                    <option value="ISLAM">Islam</option>
-                                                                    <option value="KRISTEN">Kristen</option>
-                                                                    <option value="KATOLIK">Katolik</option>
-                                                                    <option value="HINDU">Hindu</option>
-                                                                    <option value="BUDDHA">Buddha</option>
-                                                                    <option value="LAINNYA">Others</option>
+                                                                    <option value="" selected disabled>Select</option>
+                                                                    <option value="ISLAM">ISLAM</option>
+                                                                    <option value="KRISTEN">KRISTEN</option>
+                                                                    <option value="KATOLIK">KATOLIK</option>
+                                                                    <option value="HINDU">HINDU</option>
+                                                                    <option value="BUDDHA">BUDDHA</option>
+                                                                    <option value="KHONGHUCU">KHONGHUCU</option>
+                                                                    <option value="LAINNYA">LAINNYA</option>
                                                                 </select>
                                                             </div>
                                                         </div>
@@ -301,6 +302,11 @@
                                                                         for="edit_is_staff" style="cursor: pointer;">Is
                                                                         Staff Personel</label>
                                                                 </div>
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
+                                                                <input type="text" class="form-control px-3"
+                                                                    name="bank_account" id="edit_bank_account" placeholder="Cth: 1234567890">
                                                             </div>
                                                         </div>
                                                     </div>
@@ -548,6 +554,11 @@
                                                                 <input type="number" class="form-control px-3"
                                                                     name="tanggungan" placeholder="0">
                                                             </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
+                                                                <input type="text" class="form-control px-3"
+                                                                    name="bank_account" placeholder="Cth: 1234567890">
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -755,6 +766,10 @@
                                                                     class="custom-control-label font-weight-bold text-muted pointer"
                                                                     for="show_is_staff">Is Staff</label>
                                                             </div>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
+                                                            <input type="text" class="form-control px-3" id="show_bank_account" readonly>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1113,6 +1128,7 @@
             $('#show_id_dept').text('');
             $('#show_tmk').text('');
             $('#show_tanggungan').text('');
+            $('#show_bank_account').val('');
 
             $.ajax({
                 url: '/biodata/show/' + npk,
@@ -1139,6 +1155,7 @@
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');
                     $('#show_is_staff').prop('checked', response.IS_STAFF == 1).prop('disabled', true);
+                    $('#show_bank_account').val(response.bank_account ?? '-');
 
                     // Set image with fallback
                     const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
@@ -1374,7 +1391,10 @@
                     $('#edit_jk').val(response.JK);
                     $('#edit_tempat_lahir').val(response.TMPTLAHIR);
                     $('#edit_tgl_lahir').val(response.TGLLAHIR);
-                    $('#edit_agama').val(response.AGAMA);
+                    $("#edit_agama option").filter(function () {
+                        return $.trim($(this).text()) === $.trim(response.AGAMA);
+                    }).prop('selected', true);
+
                     $('#edit_status').val(response.STATUS);
                     $('#edit_hp').val(response.HP);
                     $('#edit_alamat').val(response.ALAMAT);
@@ -1384,12 +1404,13 @@
                     $('#edit_jurusan').val(response.JURUSAN);
 
                     $("#edit_id_dept option").filter(function () {
-                        return $(this).text() === response.BAGIAN;
+                        return $.trim($(this).text()) === $.trim(response.BAGIAN);
                     }).prop('selected', true);
 
                     $('#edit_tmk').val(response.TMK);
                     $('#edit_tanggungan').val(response.TANGGUNGAN);
                     $('#edit_is_staff').prop('checked', response.IS_STAFF == 1);
+                    $('#edit_bank_account').val(response.bank_account ?? '');
 
                     const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
                     $('#edit_previewImage').attr('src', imageUrl);

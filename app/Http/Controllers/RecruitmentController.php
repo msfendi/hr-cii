@@ -19,21 +19,68 @@ class RecruitmentController extends Controller
     public function index(Request $request)
     {
         $status = $request->query('status');
-        $query = DB::connection('cii')->table('PELAMAR')->where('IS_KONTRAK', 'FALSE');
+        $query = DB::connection('cii')->table('PELAMAR')
+            ->where('PELAMAR.IS_KONTRAK', 'FALSE')
+            ->leftJoin('pelamar_details as pd', 'pd.id_pelamar', '=', 'PELAMAR.ID')
+            ->select(
+                'PELAMAR.*',
+                'pd.id as detail_id',
+                'pd.nomor_sim',
+                'pd.warga_negara',
+                'pd.ikut_kb',
+                'pd.bakat_hobby',
+                'pd.mode_transportasi',
+                'pd.jabatan',
+                'pd.department',
+                'pd.bpjs_tk',
+                'pd.bpjs_kes',
+                'pd.alamat_skrg',
+                'pd.kabupaten_kota_skrg',
+                'pd.status_domisili',
+                'pd.nama_ktk_darurat',
+                'pd.hubungan',
+                'pd.no_telp_darurat',
+                'pd.pengalaman_kerja',
+                'pd.data_ayah',
+                'pd.data_ibu',
+                'pd.saudara_kandung',
+                'pd.data_anak',
+                'pd.riwayat_pendidikan',
+                'pd.motivasi',
+                'pd.kegiatan_ekstra',
+                'pd.file_surat_lamaran',
+                'pd.file_cv',
+                'pd.file_ktp',
+                'pd.file_kk',
+                'pd.file_ijasah',
+                'pd.file_akta_kelahiran',
+                'pd.file_skck',
+                'pd.file_surat_sehat',
+                'pd.file_pas_foto',
+                'pd.tgl_test',
+                'pd.tgl_interview',
+                'pd.tgl_kesehatan',
+                'pd.tgl_diterima',
+                'pd.status_apply',
+                'pd.is_test',
+                'pd.is_interview',
+                'pd.is_kesehatan',
+            );
 
         if ($status === 'never_confirm') {
-            $query->whereNull('STATUS_APPLY');
+            $query->where('pd.status_apply', 'APPLIED');
         } elseif ($status === 'ready_test') {
-            $query->where('STATUS_APPLY', 'INVITATION TEST');
+            $query->where('pd.status_apply', 'INVITATION TEST');
         } elseif ($status === 'ready_interview') {
-            $query->where('STATUS_APPLY', 'CALLED TO INTERVIEW');
+            $query->where('pd.status_apply', 'CALLED TO INTERVIEW');
         } elseif ($status === 'decline') {
-            $query->where('STATUS_APPLY', 'REJECTED');
-        } elseif ($status === 'joining') {
-            $query->where('STATUS_APPLY', 'FINAL RESULT');
+            $query->where('pd.status_apply', 'REJECTED');
+        } elseif ($status === 'onboarding') {
+            $query->where('pd.status_apply', 'ONBOARDING');
         }
 
-        $recruitments = $query->get();
+        $recruitments = $query->orderByDesc('PELAMAR.id')->get();
+        // dd($recruitments);
         return view('recruitment.index', compact('recruitments', 'status'));
     }
 
@@ -59,11 +106,20 @@ class RecruitmentController extends Controller
             if ($request->type === 'invitation') {
                 $updates['is_test'] = 'TRUE';
                 $updates['status_apply'] = 'INVITATION TEST';
+                if ($request->filled('tgl_schedule')) {
+                    $updates['tgl_test'] = $request->tgl_schedule;
+                }
             } elseif ($request->type === 'interview') {
                 $updates['is_interview'] = 'TRUE';
                 $updates['status_apply'] = 'CALLED TO INTERVIEW';
+                if ($request->filled('tgl_schedule')) {
+                    $updates['tgl_interview'] = $request->tgl_schedule;
+                }
             } elseif ($request->type === 'final') {
-                $updates['status_apply'] = 'FINAL RESULT';
+                $updates['status_apply'] = 'ONBOARDING';
+                if ($request->filled('tgl_schedule')) {
+                    $updates['tgl_diterima'] = $request->tgl_schedule;
+                }
             } elseif ($request->type === 'rejection') {
                 $updates['status_apply'] = 'REJECTED';
             }

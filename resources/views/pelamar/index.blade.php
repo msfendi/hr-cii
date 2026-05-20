@@ -167,10 +167,8 @@
                                                 <div class="form-group row mb-1">
                                                     <label class="col-sm-4 col-form-label py-0">Jenis Kelamin</label>
                                                     <div class="col-sm-8">
-                                                        <select class="form-control py-0" id="assign_jk" name="jk">
-                                                            <option value="L">Laki-laki</option>
-                                                            <option value="P">Perempuan</option>
-                                                        </select>
+                                                        <input type="text" class="form-control py-0" id="assign_jk"
+                                                            name="jk">
                                                     </div>
                                                 </div>
                                                 <div class="form-group row mb-1">
@@ -337,9 +335,16 @@
                                                             <select class="form-control py-0" id="assign_duration"
                                                                 name="month_duration">
                                                                 <option value="1">1 Bulan</option>
+                                                                <option value="2">2 Bulan</option>
                                                                 <option value="3">3 Bulan</option>
-                                                                <option value="6" selected>6 Bulan</option>
+                                                                <option value="4">4 Bulan</option>
+                                                                <option value="5">5 Bulan</option>
+                                                                <option value="6">6 Bulan</option>
+                                                                <option value="7">7 Bulan</option>
+                                                                <option value="8">8 Bulan</option>
                                                                 <option value="9">9 Bulan</option>
+                                                                <option value="10">10 Bulan</option>
+                                                                <option value="11">11 Bulan</option>
                                                                 <option value="12">12 Bulan</option>
                                                             </select>
                                                         </div>
@@ -474,14 +479,42 @@
     // ── Auto calc end date ───────────────────────────────────────
     function recalcEndDate() {
         const tmk = $('#assign_tmk').val();
-        const dur = parseInt($('#assign_duration').val()) || 6;
+        const dur = parseInt($('#assign_duration').val());
         if (!tmk) { $('#assign_end_date_display').val(''); $('#assign_end_date').val(''); return; }
-        const d = new Date(tmk);
+        
+        const parts = tmk.split('-');
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
         d.setMonth(d.getMonth() + dur);
         d.setDate(d.getDate() - 1);
-        const iso = d.toISOString().slice(0, 10);
+        
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        
+        const options = [
+            new Date(y, m - 1, 20),
+            new Date(y, m, 7),
+            new Date(y, m, 20),
+            new Date(y, m + 1, 7)
+        ];
+        
+        let closestDate = options[0];
+        let minDiff = Math.abs(d - closestDate);
+        
+        for (let i = 1; i < options.length; i++) {
+            const diff = Math.abs(d - options[i]);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closestDate = options[i];
+            }
+        }
+        
+        const dd = String(closestDate.getDate()).padStart(2, '0');
+        const mm = String(closestDate.getMonth() + 1).padStart(2, '0');
+        const yyyy = closestDate.getFullYear();
+        const iso = `${yyyy}-${mm}-${dd}`;
+        
         $('#assign_end_date').val(iso);
-        $('#assign_end_date_display').val(d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }));
+        $('#assign_end_date_display').val(closestDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }));
     }
 
     $(document).ready(function () {
@@ -529,7 +562,6 @@
             $('#assign_allowance_raw').val(0);
             $('#assign_pph21').val(formatIdr(0));
             $('#assign_pph21_raw').val(0);
-            $('#assign_duration').val('6');
 
             $.ajax({
                 url: '/pelamar/detail/' + id,

@@ -9,44 +9,91 @@ class SectionsSeeder extends Seeder
 {
     public function run()
     {
-        $sections = [
 
-            ['name' => 'A',  'line_start' => 1,  'line_end' => 12],
-            ['name' => 'A1', 'line_start' => 1,  'line_end' => 6],
-            ['name' => 'A2', 'line_start' => 7,  'line_end' => 12],
+        Section::updateOrCreate(
+            ['name' => 'FA'],
+            [
+                'line_start' => 1,
+                'line_end'   => 48,
+            ]
+        );
 
-            ['name' => 'B',  'line_start' => 13, 'line_end' => 24],
-            ['name' => 'B1', 'line_start' => 13, 'line_end' => 18],
-            ['name' => 'B2', 'line_start' => 19, 'line_end' => 24],
+        Section::updateOrCreate(
+            ['name' => 'FB'],
+            [
+                'line_start' => 49,
+                'line_end'   => 96,
+            ]
+        );
+        $letters = range('A', 'Z');
 
-            ['name' => 'C',  'line_start' => 25, 'line_end' => 36],
-            ['name' => 'C1', 'line_start' => 25, 'line_end' => 30],
-            ['name' => 'C2', 'line_start' => 31, 'line_end' => 36],
+        $line = 1;
+        $index = 0;
 
-            ['name' => 'D',  'line_start' => 37, 'line_end' => 48],
-            ['name' => 'D1', 'line_start' => 37, 'line_end' => 42],
-            ['name' => 'D2', 'line_start' => 43, 'line_end' => 48],
+        while ($line <= 96) {
 
-            ['name' => 'E',  'line_start' => 49, 'line_end' => 60],
-            ['name' => 'E1', 'line_start' => 49, 'line_end' => 54],
-            ['name' => 'E2', 'line_start' => 55, 'line_end' => 60],
+            $parentStart = $line;
+            $parentEnd   = $line + 11;
 
-            ['name' => 'F',  'line_start' => 61, 'line_end' => 72],
-            ['name' => 'F1', 'line_start' => 61, 'line_end' => 66],
-            ['name' => 'F2', 'line_start' => 67, 'line_end' => 72],
+            $letter = $letters[$index];
 
-            ['name' => 'G',  'line_start' => 73, 'line_end' => 84],
-            ['name' => 'G1', 'line_start' => 73, 'line_end' => 78],
-            ['name' => 'G2', 'line_start' => 79, 'line_end' => 84],
+            /*
+            |--------------------------------------------------------------------------
+            | KELIPATAN 12
+            |--------------------------------------------------------------------------
+            */
+            Section::updateOrCreate(
+                ['name' => $letter],
+                [
+                    'line_start' => $parentStart,
+                    'line_end'   => $parentEnd,
+                ]
+            );
 
-            ['name' => 'H',  'line_start' => 85, 'line_end' => 96],
-            ['name' => 'H1', 'line_start' => 85, 'line_end' => 90],
-            ['name' => 'H2', 'line_start' => 91, 'line_end' => 96],
+            /*
+            |--------------------------------------------------------------------------
+            | KELIPATAN 6 → A6a, A6b
+            |--------------------------------------------------------------------------
+            */
+            $sixLetters = ['a', 'b'];
 
-        ];
+            for ($i = 0; $i < 2; $i++) {
 
-        foreach ($sections as $section) {
-            Section::create($section);
+                $start = $parentStart + ($i * 6);
+                $end   = $start + 5;
+
+                Section::updateOrCreate(
+                    ['name' => $letter . '6' . $sixLetters[$i]],
+                    [
+                        'line_start' => $start,
+                        'line_end'   => $end,
+                    ]
+                );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | KELIPATAN 4 → A4a,A4b,A4c
+            |--------------------------------------------------------------------------
+            */
+            $fourLetters = ['a', 'b', 'c'];
+
+            for ($i = 0; $i < 3; $i++) {
+
+                $start = $parentStart + ($i * 4);
+                $end   = $start + 3;
+
+                Section::updateOrCreate(
+                    ['name' => $letter . '4' . $fourLetters[$i]],
+                    [
+                        'line_start' => $start,
+                        'line_end'   => $end,
+                    ]
+                );
+            }
+
+            $line += 12;
+            $index++;
         }
     }
 }

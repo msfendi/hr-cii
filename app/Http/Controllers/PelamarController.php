@@ -24,6 +24,7 @@ class PelamarController extends Controller
         $pelamars = DB::connection('cii')->table('PELAMAR')
             ->select('ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
             ->where('IS_KONTRAK', 'FALSE')
+            // ->where('STATUS_APPLY', 'ONBOARDING')
             ->orderBy('NPK', 'ASC')
             ->get();
 
@@ -79,6 +80,18 @@ class PelamarController extends Controller
     public function detail($id)
     {
         $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id)->first();
+        if ($pelamar) {
+            $last_npk_record = DB::connection('cii')->table('BIODATA')->orderBy('NPK', 'DESC')->first();
+            if ($last_npk_record && !empty($last_npk_record->NPK)) {
+                $last_npk_str = $last_npk_record->NPK;
+                if (preg_match('/^(.*?)(\d+)$/', $last_npk_str, $matches)) {
+                    $prefix = $matches[1];
+                    $number = $matches[2];
+                    $next_number = str_pad((int)$number + 1, strlen($number), '0', STR_PAD_LEFT);
+                    $pelamar->NPK = $prefix . $next_number;
+                }
+            }
+        }
         return response()->json($pelamar);
     }
 
@@ -165,11 +178,9 @@ class PelamarController extends Controller
         ]);
 
         // Insert kontrak pertama ke employees_contract
-        $duration = (int) ($request->month_duration ?? 6);
+        $duration = (int) ($request->month_duration);
         $startDate = Carbon::parse($request->tmk);
-        $endDate = $request->end_date
-            ? Carbon::parse($request->end_date)
-            : $startDate->copy()->addMonths($duration)->subDay();
+        [$endDate, $dayDuration] = $this->calculateEndDateAndDayDuration($request, $startDate, $duration);
 
         DB::table('employees_contract')->insert([
             'id'              => (string) \Illuminate\Support\Str::uuid(),
@@ -178,6 +189,7 @@ class PelamarController extends Controller
             'start_date'      => $startDate->toDateString(),
             'end_date'        => $endDate->toDateString(),
             'month_duration'  => (string) $duration,
+            'day_duration'    => $dayDuration,
             'status_contract' => 'AKTIF',
             'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
             'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
@@ -194,7 +206,7 @@ class PelamarController extends Controller
         DB::connection('cii')->beginTransaction();
         $check_nama = DB::connection('cii')->table('PKWT')->where('KTP', $request->nik)->where('NAMA', $request->nama)->where('TKK', null)->first();
         // jika ada nik dan nama yang sama dan pernah exist di pkwt
-        
+
         DB::connection('cii')->table('PKWT_OUT')->insert([
             'NPK' => $check_nama->NPK,
             'NAMA' => $check_nama->NAMA,
@@ -302,9 +314,7 @@ class PelamarController extends Controller
 
         $duration = (int) ($request->month_duration ?? 6);
         $startDate = Carbon::parse($request->tmk);
-        $endDate = $request->end_date
-            ? Carbon::parse($request->end_date)
-            : $startDate->copy()->addMonths($duration)->subDay();
+        [$endDate, $dayDuration] = $this->calculateEndDateAndDayDuration($request, $startDate, $duration);
 
         DB::table('employees_contract')->insert([
             'id'              => (string) Str::uuid(),
@@ -313,12 +323,19 @@ class PelamarController extends Controller
             'start_date'      => $startDate->toDateString(),
             'end_date'        => $endDate->toDateString(),
             'month_duration'  => (string) $duration,
+            'day_duration'    => $dayDuration,
             'status_contract' => 'AKTIF',
             'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
             'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
             'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
             'created_at'      => now(),
             'updated_at'      => now(),
+        ]);
+
+        DB::table('payroll_masters')->insert([
+            'npk' => strtoupper($request->npk),
+            'bank_name' => 'PERMATA BANK',
+            'bank_account' => $request->bank_account,
         ]);
 
         DB::connection('cii')->commit();
@@ -373,5 +390,33 @@ class PelamarController extends Controller
     public function destroy(Pelamar $pelamar)
     {
         //
+    }
+
+    private function calculateEndDateAndDayDuration($request, $startDate, $duration)
+    {
+        $regularEndDate = $startDate->copy()->addMonths($duration)->subDay();
+
+        $options = [
+            $regularEndDate->copy()->startOfMonth()->subMonth()->day(20),
+            $regularEndDate->copy()->startOfMonth()->day(7),
+            $regularEndDate->copy()->startOfMonth()->day(20),
+            $regularEndDate->copy()->startOfMonth()->addMonth()->day(7),
+        ];
+
+        $closestDate = $options[0];
+        $minDiff = abs($regularEndDate->diffInDays($closestDate, false));
+
+        foreach ($options as $opt) {
+            $diff = abs($regularEndDate->diffInDays($opt, false));
+            if ($diff < $minDiff) {
+                $minDiff = $diff;
+                $closestDate = $opt;
+            }
+        }
+
+        $endDate = $request->end_date ? Carbon::parse($request->end_date) : $closestDate;
+        $dayDuration = $regularEndDate->diffInDays($endDate, false);
+
+        return [$endDate, (int) $dayDuration];
     }
 }

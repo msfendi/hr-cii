@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
 use App\Exports\PKWTExport;
+use App\Models\PayrollMaster;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
 
@@ -140,6 +141,15 @@ class BiodataController extends Controller
             'JURUSAN' => strtoupper($request->jurusan)
         ]);
 
+        // Insert bank_account ke payroll_masters jika diisi
+        if ($request->filled('bank_account')) {
+            PayrollMaster::updateOrCreate(
+                ['npk' => strtoupper($request->npk)],
+                ['bank_name' => 'PERMATA BANK',
+                'bank_account' => $request->bank_account],
+            );
+        }
+
         DB::connection('cii')->commit();
     }
 
@@ -187,6 +197,15 @@ class BiodataController extends Controller
             'TANGGUNGAN' => $request->tanggungan,
             'JURUSAN' => strtoupper($request->jurusan)
         ]);
+
+        // Insert bank_account ke payroll_masters jika diisi
+        if ($request->filled('bank_account')) {
+            PayrollMaster::updateOrCreate(
+                ['npk' => strtoupper($request->npk)],
+                ['bank_name' => 'PERMATA BANK',
+                'bank_account' => $request->bank_account],
+            );
+        }
 
         DB::connection('cii')->commit();
     }
@@ -282,6 +301,13 @@ class BiodataController extends Controller
             $pkwt->IS_STAFF = $biodata->IS_STAFF ?? 0;
         }
 
+
+        // Ambil bank_account dari payroll_masters
+        $payroll = PayrollMaster::where('npk', $NPK)->first();
+        if ($pkwt) {
+            $pkwt->bank_account = $payroll->bank_account ?? null;
+        }
+
         return response()->json($pkwt);
     }
 
@@ -351,6 +377,17 @@ class BiodataController extends Controller
                 'TANGGUNGAN' => $request->tanggungan,
                 'JURUSAN' => strtoupper($request->jurusan)
             ]);
+
+            // Update bank_account di payroll_masters
+            if ($request->filled('bank_account')) {
+                PayrollMaster::updateOrCreate(
+                    ['npk' => $NPK],
+                    [
+                        'bank_name' => 'PERMATA BANK',
+                        'bank_account' => $request->bank_account
+                    ]
+                );
+            }
 
             DB::connection('cii')->commit();
             Alert::success('Success', 'Data berhasil diperbarui');

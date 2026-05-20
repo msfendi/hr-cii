@@ -16,6 +16,7 @@
                <h1 class="h3 mb-0 text-gray-800">Compensation</h1>
                <form method="POST"
                   action="{{ route('compensation.generate') }}"
+                  id="generateForm"
                   class="form-inline">
                   @csrf
                   <input type="text"
@@ -24,7 +25,9 @@
                      class="form-control form-control-sm mr-2"
                      placeholder="Select Date"
                      required readonly>
-                  <button class="btn btn-primary btn-sm shadow-sm">
+                  <button type="submit"
+                     id="btnGenerate"
+                     class="btn btn-primary btn-sm shadow-sm">
                   <i class="fas fa-cogs"></i> Generate Compensation
                   </button>
                </form>
@@ -34,32 +37,25 @@
             {{-- ===================================================== --}}
             <div class="card shadow mb-4">
                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        Data Compensations
-                    </h6>
-
-                    <form method="GET" id="filterForm">
-                        <select name="status"
-                                class="form-control form-control-sm"
-                                onchange="document.getElementById('filterForm').submit()">
-
-                            <option value="all" {{ $filter=='all' ? 'selected':'' }}>
-                                All
-                            </option>
-
-                            <option value="open" {{ $filter=='open' ? 'selected':'' }}>
-                                Open
-                            </option>
-
-                            <option value="closed" {{ $filter=='closed' ? 'selected':'' }}>
-                                Closed
-                            </option>
-
-                        </select>
-                    </form>
-
-                    </div>
+                  <h6 class="m-0 font-weight-bold text-primary">
+                     Data Compensations
+                  </h6>
+                  <form method="GET" id="filterForm">
+                     <select name="status"
+                        class="form-control form-control-sm"
+                        onchange="document.getElementById('filterForm').submit()">
+                     <option value="all" {{ $filter=='all' ? 'selected':'' }}>
+                     All
+                     </option>
+                     <option value="open" {{ $filter=='open' ? 'selected':'' }}>
+                     Open
+                     </option>
+                     <option value="closed" {{ $filter=='closed' ? 'selected':'' }}>
+                     Closed
+                     </option>
+                     </select>
+                  </form>
+               </div>
                <div class="card-body">
                   <div class="table-responsive">
                      <table class="table table-bordered table-sm"
@@ -148,8 +144,7 @@
                   </div>
                   <div class="card-body">
                      <div class="table-responsive">
-                        <table class="table table-bordered table-sm"
-                           id="table-details">
+                        <table class="table table-bordered table-sm" id="table-details">
                            <thead>
                               <tr>
                                  <th>ID</th>
@@ -161,7 +156,6 @@
                               </tr>
                            </thead>
                            <tbody></tbody>
-                           {{-- ✅ ADDED TFOOT (LIKE PAYROLL TEMPLATE) --}}
                            <tfoot>
                               <tr style="font-weight:bold;background:#f8f9fc">
                                  <th colspan="3" class="text-right">TOTAL</th>
@@ -183,6 +177,7 @@
       {{-- ===================================================== --}}
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
+      <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
       <script>
          $('#dataTable').DataTable({
          order:[[0,'desc']],
@@ -195,116 +190,131 @@
       {{-- ===================================================== --}}
       <script>
          flatpickr("#generate_date",{
-         
          dateFormat:"Y-m-d",
          disableMobile:true,
-         
          enable:[
          function(date){
          return date.getDate()===7 || date.getDate()===20;
          }
          ]
-         
          });
       </script>
       {{-- ===================================================== --}}
-      {{-- DETAIL AJAX (LOGIC TIDAK DIUBAH) --}}
+      {{-- ✅ SWEETALERT LOADING GENERATE --}}
+      {{-- ===================================================== --}}
+      <!-- <script>
+      $(document).ready(function(){
+
+         $('#generateForm').on('submit', function(e){
+
+            e.preventDefault(); // stop submit dulu
+
+            Swal.fire({
+                  title: 'Generating Compensation...',
+                  html: 'Please wait, system is processing data',
+                  allowOutsideClick: false,
+                  allowEscapeKey: false,
+                  didOpen: () => {
+                     Swal.showLoading();
+                  }
+            });
+
+            // submit setelah swal tampil
+            this.submit();
+         });
+
+      });
+      </script> -->
+      {{-- ===================================================== --}}
+      {{-- DETAIL AJAX --}}
       {{-- ===================================================== --}}
       <script>
          let tableDetails=null;
-
-            $('.btn-detail').on('click',function(){
-
-            let date=$(this).data('date');
-            let period=$(this).data('period');
-
-            $('#detail-title').text('Compensation Details ('+period+')');
-
-            $('#comp-detail-container').show();
-
-            if(tableDetails){
-            tableDetails.destroy();
-            }
-
-            tableDetails=$('#table-details').DataTable({
-
-            processing:true,
-            responsive:true,
-
-            ajax:'/compensation/details/'+date,
-
-            columns:[
-            {data:'id'},
-            {data:'npk'},
-            {data:'dept'},
-            {
-            data:'amount',
-            render:data=>new Intl.NumberFormat('id-ID',{
-            style:'currency',
-            currency:'IDR',
-            minimumFractionDigits:0
-            }).format(data ?? 0)
-            },
-            {data:'status'},
-            {
-            data:'is_active',
-            render:data=>{
-            return data==1
-            ?'<span class="badge badge-success">Active</span>'
-            :'<span class="badge badge-danger">Out</span>';
-            }
-            }
-            ],
-
-            /*
-            =====================================================
-            FOOTER TOTAL CALCULATION
-            =====================================================
-            */
-            footerCallback:function(row,data,start,end,display){
-
-            let api=this.api();
-
-            function intVal(i){
-
-            if(i===null||i===undefined||i==='') return 0;
-
-            if(typeof i==='number') return i;
-
-            if(typeof i==='string'){
-
-            i=i.replace(/[Rp\s]/g,'');
-            i=i.replace(/\./g,'').replace(',','.');
-
-            let num=parseFloat(i);
-
-            return isNaN(num)?0:num;
-            }
-
-            return 0;
-            }
-
-            // kolom amount = index 3
-            let total=api
-            .column(3,{search:'applied'})
-            .data()
-            .reduce(function(a,b){
-            return intVal(a)+intVal(b);
-            },0);
-
-            $(api.column(3).footer()).html(
-            new Intl.NumberFormat('id-ID',{
-            style:'currency',
-            currency:'IDR',
-            minimumFractionDigits:0
-            }).format(total)
-            );
-
-            }
-
-            });
-
-            });
+         
+         $('.btn-detail').on('click',function(){
+         
+         let date=$(this).data('date');
+         let period=$(this).data('period');
+         
+         $('#detail-title').text('Compensation Details ('+period+')');
+         
+         $('#comp-detail-container').show();
+         
+         if(tableDetails){
+         tableDetails.destroy();
+         }
+         
+         tableDetails=$('#table-details').DataTable({
+         
+         processing:true,
+         responsive:true,
+         
+         ajax:'/compensation/details/'+date,
+         
+         columns:[
+         {data:'id'},
+         {data:'npk'},
+         {data:'dept'},
+         {
+         data:'amount',
+         render:data=>new Intl.NumberFormat('id-ID',{
+         style:'currency',
+         currency:'IDR',
+         minimumFractionDigits:0
+         }).format(data ?? 0)
+         },
+         {data:'status'},
+         {
+         data:'is_active',
+         render:data=>{
+         return data==1
+         ?'<span class="badge badge-success">Active</span>'
+         :'<span class="badge badge-danger">Out</span>';
+         }
+         }
+         ],
+         
+         footerCallback:function(row,data,start,end,display){
+         
+         let api=this.api();
+         
+         function intVal(i){
+         
+         if(i===null||i===undefined||i==='') return 0;
+         
+         if(typeof i==='number') return i;
+         
+         if(typeof i==='string'){
+         i=i.replace(/[Rp\s]/g,'');
+         i=i.replace(/\./g,'').replace(',','.');
+         let num=parseFloat(i);
+         return isNaN(num)?0:num;
+         }
+         
+         return 0;
+         }
+         
+         let total=api
+         .column(3,{search:'applied'})
+         .data()
+         .reduce(function(a,b){
+         return intVal(a)+intVal(b);
+         },0);
+         
+         $(api.column(3).footer()).html(
+         new Intl.NumberFormat('id-ID',{
+         style:'currency',
+         currency:'IDR',
+         minimumFractionDigits:0
+         }).format(total)
+         );
+         
+         }
+         
+         });
+         
+         });
+         
       </script>
    </body>
 </html>

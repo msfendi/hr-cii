@@ -81,15 +81,16 @@ class CompensationsController extends Controller
 
         $exists = Compensations::where('cutoff_date', $today)->exists();
 
-        if ($exists) {
-            Alert::error('Gagal', 'Compensation for this period has been generated previously.');
-            return redirect()->back();
-        }
+        // if ($exists) {
+        //     Alert::error('Gagal', 'Compensation for this period has been generated previously.');
+        //     return redirect()->back();
+        // }
 
         $master = Compensations::create([
             'cutoff_date' => $today,
             'status' => 'Waiting Queue',
-            'progress' => 0
+            'progress' => 0,
+            'is_closed' => 0
         ]);
 
         GenerateCompensation::dispatch(

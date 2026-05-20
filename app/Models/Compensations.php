@@ -16,6 +16,7 @@ class Compensations extends Model
         'file_csv',
         'progress',
         'status',
+        'is_closed',
     ];
 
     protected $casts = [
