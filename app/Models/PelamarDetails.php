@@ -51,6 +51,15 @@ class PelamarDetails extends Model
         'is_interview',
         'tgl_interview',
         'tgl_diterima',
+        'result_test',
+        'comment_test',
+        'result_kesehatan',
+        'comment_kesehatan',
+        'result_interview',
+        'comment_interview',
+        'result_user',
+        'comment_user',
+        'file_test'
     ];
 
     public function pelamar()

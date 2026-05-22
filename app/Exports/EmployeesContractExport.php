@@ -24,7 +24,7 @@ class EmployeesContractExport implements FromCollection, WithHeadings, WithMappi
             ->select([
                 'c.npk', 'b.NAMA_KARYAWAN as nama', 'b.BAG as bagian',
                 'c.contract_ke', 'c.start_date', 'c.end_date',
-                'c.month_duration', 'c.status_contract', 'c.salary', 'c.allowance',
+                'c.month_duration', 'c.status_contract', 'c.salary', 'c.allowance', 'c.type', 'c.daily_salary', 'c.pph21', 'c.day_duration',
                 DB::raw("DATEDIFF(DAY, CAST(GETDATE() AS DATE), c.end_date) as sisa_hari"),
                 DB::raw("DAY(c.end_date) - 7  as selisih_cutoff7"),
                 DB::raw("DAY(c.end_date) - 20 as selisih_cutoff20"),
@@ -39,7 +39,7 @@ class EmployeesContractExport implements FromCollection, WithHeadings, WithMappi
         return [
             'NPK', 'Nama', 'Bagian', 'Kontrak Ke-',
             'Tgl Mulai', 'Tgl Berakhir', 'Durasi (bln)',
-            'Status', 'Gaji Pokok', 'Tunjangan',
+            'Status', 'Gaji Pokok', 'Tunjangan', 'Type', 'Gaji Harian', 'PPH21', 'Durasi (hari)',
             'Sisa Hari', 'Selisih Cut-off Tgl 7', 'Selisih Cut-off Tgl 20',
         ];
     }
@@ -60,6 +60,10 @@ class EmployeesContractExport implements FromCollection, WithHeadings, WithMappi
             $row->status_contract,
             $row->salary,
             $row->allowance,
+            $row->type,
+            $row->daily_salary,
+            $row->pph21,
+            $row->day_duration,
             $row->sisa_hari,
             ($selisih7 >= 0 ? '+' : '') . $selisih7 . ' hari',
             ($selisih20 >= 0 ? '+' : '') . $selisih20 . ' hari',

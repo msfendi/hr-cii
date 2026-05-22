@@ -189,10 +189,18 @@
                             <div class="form-group">
                                 <label class="small font-weight-bold">Durasi</label>
                                 <select id="inp_duration" class="form-control form-control-sm">
+                                    <option value="" selected disabled>Pilih Durasi</option>
                                     <option value="1">1 bulan</option>
+                                    <option value="2">2 bulan</option>
                                     <option value="3">3 bulan</option>
-                                    <option value="6" selected>6 bulan</option>
+                                    <option value="4">4 bulan</option>
+                                    <option value="5">5 bulan</option>
+                                    <option value="6">6 bulan</option>
+                                    <option value="7">7 bulan</option>
+                                    <option value="8">8 bulan</option>
                                     <option value="9">9 bulan</option>
+                                    <option value="10">10 bulan</option>
+                                    <option value="11">11 bulan</option>
                                     <option value="12">12 bulan</option>
                                 </select>
                             </div>
@@ -273,10 +281,18 @@
                             <div class="form-group">
                                 <label class="small font-weight-bold">Durasi Baru</label>
                                 <select id="ext_duration" class="form-control form-control-sm">
+                                    <option value="" selected disabled>Pilih Durasi</option>
                                     <option value="1">1 bulan</option>
+                                    <option value="2">2 bulan</option>
                                     <option value="3">3 bulan</option>
-                                    <option value="6" selected>6 bulan</option>
+                                    <option value="4">4 bulan</option>
+                                    <option value="5">5 bulan</option>
+                                    <option value="6">6 bulan</option>
+                                    <option value="7">7 bulan</option>
+                                    <option value="8">8 bulan</option>
                                     <option value="9">9 bulan</option>
+                                    <option value="10">10 bulan</option>
+                                    <option value="11">11 bulan</option>
                                     <option value="12">12 bulan</option>
                                 </select>
                             </div>
@@ -288,9 +304,23 @@
                             </div>
                         </div>
                     </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group mb-3">
+                                <label class="small font-weight-bold">Tunjangan Baru</label>
+                                <input type="number" id="ext_allowance" class="form-control form-control-sm" min="0">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group mb-3">
+                                <label class="small font-weight-bold">PPH21 Baru</label>
+                                <input type="number" id="ext_pph21" class="form-control form-control-sm" min="0">
+                            </div>
+                        </div>
+                    </div>
                     <div class="form-group mb-0">
-                        <label class="small font-weight-bold">Tunjangan Baru</label>
-                        <input type="number" id="ext_allowance" class="form-control form-control-sm" min="0">
+                        <label class="small font-weight-bold">Gaji Harian Baru</label>
+                        <input type="number" id="ext_daily_salary" class="form-control form-control-sm" min="0">
                     </div>
                 </div>
                 <div class="modal-footer py-2">
@@ -373,12 +403,87 @@
                             </div>
                         </div>
                     </div>
-                    <div class="form-group mb-0">
-                        <label class="font-weight-bold">PPH21</label>
-                        <div class="input-group">
-                            <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
-                            <input type="text" id="uf_pph21" class="form-control text-right rupiah-input"
-                                placeholder="0">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="font-weight-bold">PPH21</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
+                                    <input type="text" id="uf_pph21" class="form-control text-right rupiah-input"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="font-weight-bold">Gaji Harian</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
+                                    <input type="text" id="uf_daily_salary" class="form-control text-right rupiah-input"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="custom-control custom-checkbox mb-3 mt-2">
+                        <input type="checkbox" class="custom-control-input" id="uf_is_split">
+                        <label class="custom-control-label font-weight-bold" for="uf_is_split">Lakukan Split
+                            Kontrak</label>
+                    </div>
+
+                    <div id="split_fields" class="d-none alert alert-secondary p-3 mb-0 mt-3">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group mb-3">
+                                    <label class="small font-weight-bold">Bulan Split</label>
+                                    <input type="month" id="uf_split_date" class="form-control form-control-sm">
+                                </div>
+                            </div>
+
+                        </div>
+                        <hr class="mt-0 mb-3 border-secondary">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label class="small font-weight-bold">Gaji Pokok Baru</label>
+                                    <div class="input-group input-group-sm">
+                                        <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
+                                        <input type="text" id="uf_split_salary"
+                                            class="form-control text-right rupiah-input" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label class="small font-weight-bold">Tunjangan Baru</label>
+                                    <div class="input-group input-group-sm">
+                                        <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
+                                        <input type="text" id="uf_split_allowance"
+                                            class="form-control text-right rupiah-input" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-0">
+                                    <label class="small font-weight-bold">PPH21 Baru</label>
+                                    <div class="input-group input-group-sm">
+                                        <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
+                                        <input type="text" id="uf_split_pph21"
+                                            class="form-control text-right rupiah-input" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-0">
+                                    <label class="small font-weight-bold">Gaji Harian Baru</label>
+                                    <div class="input-group input-group-sm">
+                                        <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
+                                        <input type="text" id="uf_split_daily"
+                                            class="form-control text-right rupiah-input" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -446,6 +551,7 @@
             importUrl: "{{ route('employees-contract.import') }}",
             exportUrl: "{{ route('employees-contract.export') }}",
             salaryUrl: "{{ url('employees-contract/update-salary') }}",
+            splitUrl: "{{ url('employees-contract/split') }}",
         };
         const CSRF = "{{ csrf_token() }}";
 
@@ -617,7 +723,7 @@
                             return `
                         <div class="btn-group btn-group-sm">
                             <button class="btn btn-success btn-xs"
-                                onclick="openPerpanjang('${r.id}','${r.nama}','${r.npk}',${r.contract_ke},'${r.salary || 0}','${r.allowance || 0}')"
+                                onclick="openPerpanjang('${r.id}','${r.nama}','${r.npk}',${r.contract_ke},'${r.salary || 0}','${r.allowance || 0}','${r.pph21 || 0}','${r.daily_salary || 0}')"
                                 title="Perpanjang">
                                 <i class="fas fa-redo"></i>
                             </button>
@@ -722,6 +828,8 @@
                     month_duration: $('#ext_duration').val(),
                     salary: $('#ext_salary').val() || 0,
                     allowance: $('#ext_allowance').val() || 0,
+                    pph21: $('#ext_pph21').val() || 0,
+                    daily_salary: $('#ext_daily_salary').val() || 0,
                 }).then(res => {
                     btn.prop('disabled', false).html('<i class="fas fa-check mr-1"></i>Perpanjang');
                     showToast(res.message, res.success ? 'success' : 'danger');
@@ -729,15 +837,44 @@
                 });
             });
 
-            // ── Update finansial ──────────────────────────────────────────────────────
+            // ── Tampilkan/Sembunyikan Field Split ─────────────────────────────────────
+            $('#uf_is_split').on('change', function () {
+                if ($(this).is(':checked')) {
+                    $('#split_fields').removeClass('d-none');
+                } else {
+                    $('#split_fields').addClass('d-none');
+                }
+            });
+
+            // ── Update finansial atau Split ───────────────────────────────────────────
             $('#btnSimpanFinansial').on('click', function () {
+                const isSplit = $('#uf_is_split').is(':checked');
                 const btn = $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Menyimpan…');
 
-                apiPost(ROUTES.salaryUrl + '/' + $('#uf_id').val(), {
+                let url = ROUTES.salaryUrl + '/' + $('#uf_id').val();
+                let payload = {
                     salary: parseRupiah($('#uf_salary').val()),
                     allowance: parseRupiah($('#uf_allowance').val()),
                     pph21: parseRupiah($('#uf_pph21').val()),
-                }).then(res => {
+                    daily_salary: parseRupiah($('#uf_daily_salary').val()),
+                };
+
+                if (isSplit) {
+                    url = ROUTES.splitUrl + '/' + $('#uf_id').val();
+                    payload.split_date = $('#uf_split_date').val();
+                    payload.salary = parseRupiah($('#uf_split_salary').val());
+                    payload.allowance = parseRupiah($('#uf_split_allowance').val());
+                    payload.pph21 = parseRupiah($('#uf_split_pph21').val());
+                    payload.daily_salary = parseRupiah($('#uf_split_daily').val());
+
+                    if (!payload.split_date) {
+                        btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i>Simpan');
+                        showToast('Tanggal split wajib diisi!', 'danger');
+                        return;
+                    }
+                }
+
+                apiPost(url, payload).then(res => {
                     btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i>Simpan');
                     showToast(res.message, res.success ? 'success' : 'danger');
                     if (res.success) { $('#modalFinansial').modal('hide'); reloadTable(); }
@@ -779,13 +916,15 @@
         // Action handlers (dipanggil dari render kolom)
         // ─────────────────────────────────────────────────────────────────────────────
 
-        function openPerpanjang(id, nama, npk, contractKe, salary, allowance) {
+        function openPerpanjang(id, nama, npk, contractKe, salary, allowance, pph21, daily_salary) {
             $('#ext_id').val(id);
             $('#ext_nama').text(nama);
             $('#ext_npk').text(npk);
             $('#ext_ke_baru').text(contractKe + 1);
             $('#ext_salary').val(String(salary).includes('*') ? '' : salary);
             $('#ext_allowance').val(String(allowance).includes('*') ? '' : allowance);
+            $('#ext_pph21').val(String(pph21).includes('*') ? '' : pph21);
+            $('#ext_daily_salary').val(String(daily_salary).includes('*') ? '' : daily_salary);
             $('#modalPerpanjang').modal('show');
         }
 
@@ -854,6 +993,17 @@
             $('#uf_salary').val(toRupiah(row.salary || 0));
             $('#uf_allowance').val(toRupiah(row.allowance || 0));
             $('#uf_pph21').val(toRupiah(row.pph21 || 0));
+            $('#uf_daily_salary').val(toRupiah(row.daily_salary || 0));
+
+            // Reset state split
+            $('#uf_is_split').prop('checked', false);
+            $('#split_fields').addClass('d-none');
+            $('#uf_split_date').val('');
+            $('#uf_split_salary').val(toRupiah(row.salary || 0));
+            $('#uf_split_allowance').val(toRupiah(row.allowance || 0));
+            $('#uf_split_pph21').val(toRupiah(row.pph21 || 0));
+            $('#uf_split_daily').val(toRupiah(row.daily_salary || 0));
+
             $('#modalFinansial').modal('show');
         }
 
