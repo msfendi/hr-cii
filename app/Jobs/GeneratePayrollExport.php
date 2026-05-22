@@ -168,38 +168,38 @@ class GeneratePayrollExport implements ShouldQueue
         | EXCEL (UNCHANGED)
         |--------------------------------------------------------------------------
         */
-        if ($this->type === 'process') {
+        // if ($this->type === 'process') {
 
-            $zipService = app(\App\Services\ExcelZipEncryptService::class);
+        $zipService = app(\App\Services\ExcelZipEncryptService::class);
 
-            $export->update([
-                'progress' => 30,
-                'status' => 'Processing Excel Files for ALL'
-            ]);
-            (new PayrollExportExcel($run_id))
-                ->export(storage_path("app/$folder/REKAP_$periodNameFormatted.xlsx"));
+        $export->update([
+            'progress' => 30,
+            'status' => 'Processing Excel Files for ALL'
+        ]);
+        (new PayrollExportExcel($run_id))
+            ->export(storage_path("app/$folder/REKAP_$periodNameFormatted.xlsx"));
 
-            $export->update([
-                'progress' => 35,
-                'status' => 'Processing Excel Files for STAFF'
-            ]);
-            (new PayrollExportStaffExcel($run_id))
-                ->export(storage_path("app/$folderStaff/REKAP_$periodNameFormatted.xlsx"));
+        $export->update([
+            'progress' => 35,
+            'status' => 'Processing Excel Files for STAFF'
+        ]);
+        (new PayrollExportStaffExcel($run_id))
+            ->export(storage_path("app/$folderStaff/REKAP_$periodNameFormatted.xlsx"));
 
-            $export->update([
-                'progress' => 40,
-                'status' => 'Processing Excel Files for SEWING'
-            ]);
-            (new PayrollExportSewingExcel($run_id))
-                ->export(storage_path("app/$folderSewing/REKAP_$periodNameFormatted.xlsx"));
+        $export->update([
+            'progress' => 40,
+            'status' => 'Processing Excel Files for SEWING'
+        ]);
+        (new PayrollExportSewingExcel($run_id))
+            ->export(storage_path("app/$folderSewing/REKAP_$periodNameFormatted.xlsx"));
 
-            $export->update([
-                'progress' => 45,
-                'status' => 'Processing Excel Files for NON_SEWING'
-            ]);
-            (new PayrollExportNonSewingExcel($run_id))
-                ->export(storage_path("app/$folderNonSewing/REKAP_$periodNameFormatted.xlsx"));
-        }
+        $export->update([
+            'progress' => 45,
+            'status' => 'Processing Excel Files for NON_SEWING'
+        ]);
+        (new PayrollExportNonSewingExcel($run_id))
+            ->export(storage_path("app/$folderNonSewing/REKAP_$periodNameFormatted.xlsx"));
+        // }
 
         /*
         |--------------------------------------------------------------------------

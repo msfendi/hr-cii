@@ -246,9 +246,11 @@ class EmployeesContractController extends Controller
     public function extend(Request $request, string $id)
     {
         $data = $request->validate([
-            'month_duration' => 'required|in:1,3,6,9,12',
+            'month_duration' => 'required|numeric',
             'salary'         => 'nullable|numeric|min:0',
             'allowance'      => 'nullable|numeric|min:0',
+            'pph21'          => 'nullable|numeric|min:0',
+            'daily_salary'   => 'nullable|numeric|min:0',
         ]);
 
         $old = EmployeesContract::findOrFail($id);
@@ -265,23 +267,131 @@ class EmployeesContractController extends Controller
         try {
             $old->update(['status_contract' => 'DIPERPANJANG']);
 
+            $newContractKe = (int) $old->contract_ke + 1;
             $newStart = $old->end_date->copy()->addDay();
-            $newEnd   = $newStart->copy()->addMonths((int) $data['month_duration'])->subDay();
+
+            // Mulai periode kontrak 2, start_date dan end_date mengikuti tgl cutoff (tanggal 8)
+            if ($newContractKe >= 2) {
+                if ($newStart->day <= 7) {
+                    $newStart->subMonth()->day(8);
+                } else {
+                    $newStart->day(8);
+                }
+            }
+
+            $newEnd = $newStart->copy()->addMonths((int) $data['month_duration'])->subDay();
 
             EmployeesContract::create([
                 'npk'             => $old->npk,
-                'contract_ke'     => (int) $old->contract_ke + 1,
+                'contract_ke'     => $newContractKe,
                 'start_date'      => $newStart,
                 'end_date'        => $newEnd,
                 'month_duration'  => $data['month_duration'],
+                'day_duration'    => '0', // Otomatis 0 karena mengikuti tgl cutoff
                 'status_contract' => 'AKTIF',
-                'salary'          => $data['salary']    ?? $old->salary,
-                'allowance'       => $data['allowance'] ?? $old->allowance,
+                'salary'          => $data['salary']       ?? $old->salary,
+                'allowance'       => $data['allowance']    ?? $old->allowance,
+                'pph21'           => $data['pph21']        ?? $old->pph21,
+                'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
             ]);
 
             DB::commit();
 
             return response()->json(['success' => true, 'message' => 'Kontrak berhasil diperpanjang.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * POST — Split kontrak (ubah gaji/tunjangan/pph21/daily_salary di tengah kontrak).
+     * Kontrak lama → end_date diset ke tanggal split form, status DIPERPANJANG.
+     * Kontrak baru → start_date diset dari form, contract_ke tetap sama, status AKTIF.
+     */
+    public function split(Request $request, string $id)
+    {
+        $data = $request->validate([
+            'split_date'     => 'required|date_format:Y-m',
+            'month_duration' => 'nullable|numeric',
+            'salary'         => 'nullable|numeric|min:0',
+            'allowance'      => 'nullable|numeric|min:0',
+            'pph21'          => 'nullable|numeric|min:0',
+            'daily_salary'   => 'nullable|numeric|min:0',
+            'day_duration'   => 'nullable|numeric|min:0',
+        ]);
+
+        $old = EmployeesContract::findOrFail($id);
+
+        if ($old->status_contract !== 'AKTIF') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya kontrak AKTIF yang bisa displit.',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // split_date berupa YYYY-MM, set ke tanggal 7 bulan tersebut
+            $splitMonth = \Carbon\Carbon::createFromFormat('Y-m', $data['split_date'])->day(7);
+
+            // Simpan end_date asli untuk dilanjutkan oleh kontrak baru
+            $originalEnd = \Carbon\Carbon::parse($old->end_date);
+
+            // Hitung ulang durasi untuk adjustment lama
+            $oldStart = \Carbon\Carbon::parse($old->start_date);
+            
+            // Normalisasi start_date ke awal siklus (tanggal 8) agar penghitungan bulan genap
+            // Contoh: 14 Mei dihitung dari 8 Mei. 5 Mei dihitung dari 8 April.
+            $normalizedStart = $oldStart->day <= 7 
+                ? $oldStart->copy()->subMonth()->day(8) 
+                : $oldStart->copy()->day(8);
+
+            $oldEnd = $splitMonth->copy();
+            
+            // Tambahkan 1 hari ke end_date saat menghitung bulan agar 8 s/d 7 terhitung pas 1 bulan penuh
+            $oldMonthDuration = $normalizedStart->diffInMonths($oldEnd->copy()->addDay());
+            $oldExactEndForDuration = $normalizedStart->copy()->addMonths($oldMonthDuration)->subDay();
+            $oldDayDuration = $oldExactEndForDuration->diffInDays($oldEnd, false);
+
+            // Update adjustment lama: end_date di tgl 7, durasi diperbarui
+            $old->update([
+                'end_date'        => $oldEnd,
+                'month_duration'  => (string) $oldMonthDuration,
+                'day_duration'    => (string) $oldDayDuration,
+                'status_contract' => 'ADJUSTMENT'
+            ]);
+
+            // Start date adjustment baru: esok harinya dari tgl 7, yaitu tgl 8
+            $newStart = $splitMonth->copy()->addDay();
+
+            // End date adjustment baru meneruskan sisa dari kontrak lama
+            $newEnd = $originalEnd;
+            
+            // Hitung durasi sisa untuk adjustment baru
+            $newMonthDuration = $newStart->diffInMonths($newEnd->copy()->addDay());
+            $newExactEnd = $newStart->copy()->addMonths($newMonthDuration)->subDay();
+            $newDayDuration = $newExactEnd->diffInDays($newEnd, false);
+
+            // Buat adjustment baru
+            EmployeesContract::create([
+                'npk'             => $old->npk,
+                'contract_ke'     => $old->contract_ke,
+                'start_date'      => $newStart,
+                'end_date'        => $newEnd,
+                'month_duration'  => (string) $newMonthDuration,
+                'day_duration'    => (string) $newDayDuration,
+                'status_contract' => 'AKTIF',
+                'salary'          => $data['salary'] ?? $old->salary,
+                'allowance'       => $data['allowance'] ?? $old->allowance,
+                'pph21'           => $data['pph21'] ?? $old->pph21,
+                'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
+            ]);
+
+            DB::commit();
+
+            return response()->json(['success' => true, 'message' => 'Kontrak berhasil displit.']);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
@@ -295,9 +405,10 @@ class EmployeesContractController extends Controller
     public function updateSalary(Request $request, string $id)
     {
         $data = $request->validate([
-            'salary'    => 'nullable|numeric|min:0',
-            'allowance' => 'nullable|numeric|min:0',
-            'pph21'     => 'nullable|numeric|min:0',
+            'salary'       => 'nullable|numeric|min:0',
+            'allowance'    => 'nullable|numeric|min:0',
+            'pph21'        => 'nullable|numeric|min:0',
+            'daily_salary' => 'nullable|numeric|min:0',
         ]);
 
         $contract = EmployeesContract::findOrFail($id);

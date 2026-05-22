@@ -39,11 +39,15 @@
                            <th>Name</th>
                            <th>Bank</th>
                            <th>Visa Type</th>
+                           <th>Visa Invoice</th>
                            <th>Visa Status</th>
+                           <th>Flight ETA</th>
+                           <th>Rent Invoice</th>
                            <th>ETA</th>
                            <th>Return</th>
                            <th>Hotel</th>
-                           <th>Attachment</th>
+                           <th>Hotel Invoice</th>
+                           <th>Document</th>
                            <th>Status</th>
                            <th width="120">Action</th>
                         </tr>
@@ -65,6 +69,7 @@
                               </span>
                               @endif
                            </td>
+                           <td>{{ $row->visa_invoice }}</td>
                            <td>
                               @if($row->visa_status)
                               <span class="badge badge-info">
@@ -72,6 +77,14 @@
                               </span>
                               @endif
                            </td>
+                           <td>
+                              @if($row->flight_eta)
+                              <span class="badge badge-secondary">
+                              {{ $row->flight_eta }}
+                              </span>
+                              @endif
+                           </td>
+                           <td>{{ $row->rent_invoice }}</td>
                            <td>
                               @if($row->eta)
                               <span class="badge badge-secondary">
@@ -87,6 +100,7 @@
                               @endif
                            </td>
                            <td>{{ $row->hotel }}</td>
+                           <td>{{ $row->hotel_invoice }}</td>
                            {{-- ================= ATTACHMENT ================= --}}
                            <td>
                               {{-- PHOTO --}}

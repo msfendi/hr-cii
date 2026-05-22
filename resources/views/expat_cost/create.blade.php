@@ -15,13 +15,17 @@
                   </div> @endif <div class="row">
                     <div class="col-md-6">
                       <div class="form-group">
-                        <label>NPK</label>
-                        <input type="text" name="npk" class="form-control" value="{{ old('npk') }}" required>
+                        <label>Expat Name</label>
+                        <select id="npk" name="npk" class="form-control select2" required>
+                          <option value="">-- Select Expat Name --</option> @foreach($employees as $employee) <option value="{{ $employee->NPK }}">
+                            {{ $employee->NPK }} - {{ $employee->NAMA_KARYAWAN }}
+                          </option> @endforeach
+                        </select>
                       </div>
                       <div class="form-group">
                         <label>Component</label>
-                        <select name="component" class="form-control select2" required>
-                          <option value="">-- Select Component --</option> @foreach($components as $item) <option value="{{ $item->component }}">
+                        <select id="component" name="component" class="form-control select2" required>
+                          <option value="">-- Select Component --</option> @foreach($components as $item) <option value="{{ $item->id }}">
                             {{ $item->component }}
                           </option> @endforeach
                         </select>
@@ -55,9 +59,13 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
     <script>
       $(document).ready(function() {
-        $('.select2').select2({
+        $('#component').select2({
           width: '100%',
           placeholder: 'Select Component'
+        });
+        $('#npk').select2({
+          width: '100%',
+          placeholder: 'Select Expat Name'
         });
       });
     </script>

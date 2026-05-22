@@ -80,6 +80,13 @@
                               <!-- RIGHT SIDE -->
                               <div class="col-md-6">
                                  <div class="form-group">
+                                    <label>NPWP</label>
+                                    <input type="text"
+                                       name="npwp"
+                                       class="form-control"
+                                       value="{{ old('npwp',$data->npwp) }}">
+                                 </div>
+                                 <div class="form-group">
                                     <label>Visa Type</label>
                                     <input type="text"
                                        name="visa_type"

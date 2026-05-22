@@ -140,6 +140,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop');
         Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish');
         Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend');
+        Route::post('/split/{id}',      [EmployeesContractController::class, 'split'])->name('employees-contract.split');
         Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary');
         Route::post('/delete/{id}',     [EmployeesContractController::class, 'destroy'])->name('employees-contract.destroy');
         Route::get('/bagian',           [EmployeesContractController::class, 'getBagian'])->name('employees-contract.bagian');
@@ -213,6 +214,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll/process-progress/{period_id}', [PayrollProcessController::class, 'progressRun'])->name('payroll.process.progress');
     Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
@@ -588,7 +592,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('onleave/create', [ExpatController::class, 'createOnLeave'])->name('expat.onleave.create');
         Route::post('onleave/store', [ExpatController::class, 'storeOnleave'])->name('expat.onleave.store');
         Route::get('onleave/edit/{id}', [ExpatController::class, 'editOnleave'])->name('expat.onleave.edit');
-        Route::post('onleave/delete/{id}', [ExpatController::class, 'deleteOnleave'])->name('expat.onleave.delete');
+        Route::post('onleave/update/{id}', [ExpatController::class, 'updateOnleave'])->name('expat.onleave.update');
+        Route::get('onleave/delete/{id}', [ExpatController::class, 'deleteOnleave'])->name('expat.onleave.delete');
         Route::post('import/onleave', [ExpatController::class, 'importOnleave'])->name('expat.import.onleave');
         Route::get('template/onleave', [ExpatController::class, 'templateOnleave'])->name('expat.template.onleave');
 
@@ -596,7 +601,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('cost/create', [ExpatController::class, 'createCost'])->name('expat.cost.create');
         Route::post('cost/store', [ExpatController::class, 'storeCost'])->name('expat.cost.store');
         Route::get('cost/edit/{id}', [ExpatController::class, 'editCost'])->name('expat.cost.edit');
-        Route::post('cost/delete/{id}', [ExpatController::class, 'deleteCost'])->name('expat.cost.delete');
+        Route::post('cost/update/{id}', [ExpatController::class, 'updateCost'])->name('expat.cost.update');
+        Route::get('cost/delete/{id}', [ExpatController::class, 'deleteCost'])->name('expat.cost.delete');
         Route::post('import/cost', [ExpatController::class, 'importCost'])->name('expat.import.cost');
         Route::get('template/cost', [ExpatController::class, 'templateCost'])->name('expat.template.cost');
 
@@ -621,7 +627,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/edit/{id}', [EpoController::class, 'edit'])->name('epo.edit');
         Route::post('/store', [EpoController::class, 'store'])->name('epo.store');
         Route::put('/{epo}', [EpoController::class, 'update'])->name('epo.update');
-        Route::delete('/{epo}', [EpoController::class, 'destroy'])->name('epo.delete');
+        Route::get('/{epo}', [EpoController::class, 'destroy'])->name('epo.delete');
         Route::post('/import', [EpoController::class, 'import'])->name('epo.import');
         Route::get('/template', [EpoController::class, 'template'])->name('epo.template');
         Route::get('/export', [EpoController::class, 'export'])->name('epo.export');
@@ -755,7 +761,7 @@ Route::get('/test-reverb', function () {
 });
 
 Route::prefix('recruitments')->name('recruitments.')->group(function () {
-    Route::get('/', fn () => redirect()->route('recruitments.step', ['step' => 1]))
+    Route::get('/', fn() => redirect()->route('recruitments.step', ['step' => 1]))
         ->name('index');
     Route::get('/step/{step}', [RecruitmentFormController::class, 'show'])
         ->name('step')
@@ -763,7 +769,6 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
     Route::post('/step/{step}', [RecruitmentFormController::class, 'store'])
         ->name('step.store')
         ->where('step', '[1-8]');
-    Route::get('/success', fn () => view('recruitments_form.success'))
+    Route::get('/success', fn() => view('recruitments_form.success'))
         ->name('success');
-
 });

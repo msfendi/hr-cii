@@ -40,7 +40,7 @@
                     <thead class="thead-light">
                       <tr>
                         <th width="50">ID</th>
-                        <th>NPK</th>
+                        <th>Nama Karyawan</th>
                         <th>On Leave Period</th>
                         <th>Leave Type</th>
                         <th>Component</th>
@@ -54,9 +54,9 @@
                     <tbody> @foreach($data as $row) <tr>
                         <td>{{ $row->id }}</td>
                         <td>
-                          <span class="badge badge-dark">
-                            {{ $row->npk }}
-                          </span>
+                          <strong>{{ $row->NAMA_KARYAWAN ?? '-' }}</strong>
+                          <br>
+                          <small class="text-muted">NPK: {{ $row->npk }}</small>
                         </td>
                         <td>
                           {{ $row->onleave_start }}

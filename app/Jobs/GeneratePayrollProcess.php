@@ -36,6 +36,7 @@ class GeneratePayrollProcess implements ShouldQueue
         $run = PayrollRun::findOrFail($this->runId);
         $period = PayrollPeriod::findOrFail($run->period_id);
 
+        //pindah ke controller copy dari sini
         $periodStart = $period->start_date;
         $periodEnd   = $period->end_date;
         $count_days  = Carbon::parse($periodStart)->diffInDays(Carbon::parse($periodEnd)) + 1;
@@ -85,7 +86,7 @@ class GeneratePayrollProcess implements ShouldQueue
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
             })
 
-            // ->where('p.NPK', '=', 'C-00817')
+            // ->where('p.NPK', '=', 'C-00827')
 
             ->select(
                 'p.NPK',
@@ -111,12 +112,26 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.type',
                 'ec1.daily_salary'
             )
-            ->whereRaw('ec1.id = (
+            // ->where('ec1.npk', 'C-00827')
+
+            // ✅ contract harus masuk range periode
+            ->whereDate('ec1.start_date', '<=', $periodEnd)
+            ->whereDate('ec1.end_date', '>=', $periodStart)
+
+            // ✅ ambil contract terbaru
+            ->whereRaw("
+        ec1.id = (
             SELECT TOP 1 ec2.id
             FROM employees_contract ec2
             WHERE ec2.npk = ec1.npk
-            ORDER BY ec2.contract_ke DESC, ec2.start_date DESC
-        )');
+              AND ec2.start_date <= ?
+              AND ec2.end_date >= ?
+            ORDER BY ec2.contract_ke DESC,
+                     ec2.start_date DESC
+        )
+    ", [$periodEnd, $periodStart]);
+
+        // dd($employeeBase->get(), $latestContract);
 
 
         $run->update([
@@ -921,6 +936,8 @@ class GeneratePayrollProcess implements ShouldQueue
         ]);
         foreach ($employees as $employee) {
 
+            // dd($employee->salary, $employee->type);
+
             $roleData = DB::table('dept_insentif_role as lir')
                 ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
                 ->where('lir.id_dept', $employee->ID_DEPT)
@@ -1158,7 +1175,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                                 /*
                 |--------------------------------------------------------------------------
-                | CALCULATE INSENTIF
+                | CALCULATE INSENTIF  
                 |--------------------------------------------------------------------------
                 */
                                 $lineInsentif =

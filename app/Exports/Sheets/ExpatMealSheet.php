@@ -15,7 +15,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class ExpatCostSheet implements
+class ExpatMealSheet implements
     FromCollection,
     WithTitle,
     WithHeadings,
@@ -33,7 +33,7 @@ class ExpatCostSheet implements
 
     public function title(): string
     {
-        return 'expat_cost';
+        return 'expat_meal';
     }
 
     /*
@@ -48,7 +48,7 @@ class ExpatCostSheet implements
         return DB::table('expat_cost as c')
             ->join('expat_master as m', 'm.npk', '=', 'c.npk')
             ->join('expat_cost_components as cc', 'cc.id', '=', 'c.component')
-            ->where('cc.component_type', '!=', 'meal')
+            ->where('cc.component_type', '=', 'meal')
             ->whereBetween('c.transactions_date', [$this->start, $this->end])
             ->select(
                 'c.npk',

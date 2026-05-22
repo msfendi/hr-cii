@@ -29,11 +29,11 @@
                                     <select name="gender" class="form-control" required>
                                        <option value="">-- Select Gender --</option>
                                        <option value="Male"
-                                       {{ old('gender',$data->gender)=='Male'?'selected':'' }}>
+                                       {{ old('gender','Male')=='Male'?'selected':'' }}>
                                        Male
                                        </option>
                                        <option value="Female"
-                                       {{ old('gender',$data->gender)=='Female'?'selected':'' }}>
+                                       {{ old('gender','Female')=='Female'?'selected':'' }}>
                                        Female
                                        </option>
                                     </select>
@@ -71,6 +71,12 @@
                               </div>
                               <!-- RIGHT -->
                               <div class="col-md-6">
+                                 <div class="form-group">
+                                    <label>NPWP</label>
+                                    <input type="text" name="npwp"
+                                       class="form-control"
+                                       value="{{ old('npwp') }}">
+                                 </div>
                                  <div class="form-group">
                                     <label>Visa Type</label>
                                     <input type="text" name="visa_type"

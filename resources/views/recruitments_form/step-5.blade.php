@@ -234,7 +234,7 @@
                 {{-- ================================================
                      Editable Table
                      ================================================ --}}
-                <div class="rounded-xl border border-outline-variant overflow-hidden mb-5 edu-table-wrapper">
+                <div class="rounded-xl border border-outline-variant overflow-x-auto mb-5 edu-table-wrapper">
                     <table class="edu-table" id="edu-table">
                         <thead>
                             <tr>

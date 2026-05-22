@@ -217,6 +217,26 @@
                                                 <i class="fas fa-eye"></i>
                                             </button>
 
+                                            
+                                            @if($period->export_status == 'finished' || $period->export_status == 'approved')
+
+                                            <button
+                                                class="btn btn-warning btn-circle btn-sm btn-update-pph"
+                                                data-id="{{ $period->id }}"
+                                                title="Update PPH21"
+                                            >
+                                                <i class="fas fa-percent"></i>
+                                            </button>
+                                            <button
+                                                class="btn btn-secondary btn-circle btn-sm btn-recreate"
+                                                data-id="{{ $period->id }}"
+                                                title="Recreate Document"
+                                            >
+                                                <i class="fas fa-sync"></i>
+                                            </button>
+
+                                            @endif
+
                                             @if(!$period->export_status)
                                                 <a class="btn btn-warning btn-circle btn-sm btn-export"
                                                     href="#"
@@ -354,18 +374,232 @@
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-      <script>
-        $(document).ready(function(){
+<script>
+$(document).ready(function(){
 
-            $('#dataTable').DataTable({
-                order: [[0,'desc']], // pakai urutan ID dari Laravel
-                pageLength: 10,
-                responsive: true,
-                autoWidth:false
+    $('#dataTable').DataTable({
+        order: [[0,'desc']], // pakai urutan ID dari Laravel
+        pageLength: 10,
+        responsive: true,
+        autoWidth:false
+    });
+
+});
+</script>
+
+<!-- <script>
+
+$(document).on('change','.input-pph21',function(){
+
+    let id = $(this).data('id');
+    let pph21 = $(this).val();
+
+    $.ajax({
+        url: "{{ route('payroll-process.update-pph21') }}",
+        type: "POST",
+        data: {
+            _token: "{{ csrf_token() }}",
+            id: id,
+            pph21: pph21
+        },
+
+        success:function(res){
+
+            if(res.success){
+
+                Swal.fire({
+                    icon:'success',
+                    title:'Success',
+                    text:'PPh21 updated successfully',
+                    timer:1200,
+                    showConfirmButton:false
+                });
+
+                tableDetails.ajax.reload(null,false);
+
+            }else{
+
+                Swal.fire({
+                    icon:'error',
+                    title:'Error',
+                    text:res.message
+                });
+
+            }
+
+        },
+
+        error:function(xhr){
+
+            Swal.fire({
+                icon:'error',
+                title:'Error',
+                text:'Failed update PPh21'
             });
 
+        }
+
+    });
+
+});
+
+</script> -->
+
+<script>
+
+$(document).on('click','.btn-update-pph',function(){
+
+    let id = $(this).data('id');
+
+    Swal.fire({
+        title:'Update PPH21?',
+        text:'PPH21 akan diambil dari employee contract sesuai payroll period',
+        icon:'warning',
+        showCancelButton:true,
+        confirmButtonText:'Yes Update'
+    }).then((result)=>{
+
+        if(!result.isConfirmed){
+            return;
+        }
+
+        Swal.fire({
+            title:'Processing...',
+            text:'Updating PPH21 payroll',
+            allowOutsideClick:false,
+            didOpen:()=>{
+                Swal.showLoading();
+            }
         });
-        </script>
+
+        $.ajax({
+
+            url:'/payroll-process/update-pph-by-contract/' + id,
+            type:'POST',
+
+            data:{
+                _token:"{{ csrf_token() }}"
+            },
+
+            success:function(res){
+
+                if(res.success){
+
+                    Swal.fire({
+                        icon:'success',
+                        title:'Success',
+                        text:res.message
+                    }).then(()=>{
+                        location.reload();
+                    });
+
+                }else{
+
+                    Swal.fire({
+                        icon:'error',
+                        title:'Error',
+                        text:res.message
+                    });
+
+                }
+
+            },
+
+            error:function(){
+
+                Swal.fire({
+                    icon:'error',
+                    title:'Error',
+                    text:'Failed update PPH21'
+                });
+
+            }
+
+        });
+
+    });
+
+});
+
+</script>
+
+<script>
+
+$(document).on('click','.btn-recreate',function(){
+
+    let id = $(this).data('id');
+
+    Swal.fire({
+        title:'Recreate Payroll Document?',
+        text:'Document payroll akan dibuat ulang',
+        icon:'warning',
+        showCancelButton:true,
+        confirmButtonText:'Yes Recreate'
+    }).then((result)=>{
+
+        if(!result.isConfirmed){
+            return;
+        }
+
+        Swal.fire({
+            title:'Processing...',
+            text:'Please wait, recreating the document is in progress',
+            allowOutsideClick:false,
+            didOpen:()=>{
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+
+            url:'/payroll-process/recreate-document/' + id,
+            type:'POST',
+
+            data:{
+                _token:"{{ csrf_token() }}"
+            },
+
+            success:function(res){
+
+                if(res.success){
+
+                    Swal.fire({
+                        icon:'success',
+                        title:'Success',
+                        text:res.message
+                    }).then(()=>{
+                        location.reload();
+                    });
+
+                }else{
+
+                    Swal.fire({
+                        icon:'error',
+                        title:'Error',
+                        text:res.message
+                    });
+
+                }
+
+            },
+
+            error:function(){
+
+                Swal.fire({
+                    icon:'error',
+                    title:'Error',
+                    text:'Failed recreate document'
+                });
+
+            }
+
+        });
+
+    });
+
+});
+
+</script>
 
 <script>
 function formatRupiah(number){
@@ -672,7 +906,6 @@ $(document).on('click','.btn-export',function(e){
                         : data ?? 0;
                 }
             },
-
             { data:'pph_21', defaultContent:0, render:function(data,type){
                     return type === 'display'
                         ? formatRupiah(data ?? 0)

@@ -179,6 +179,7 @@ class PayrollProcessController extends Controller
             ->leftJoin('PKWT as p', 'p.NPK', '=', 'emp.NPK')
             ->where('prd.run_id', $id)
             ->select(
+                'prd.id',
                 'prd.run_id',
                 'prd.employee_npk',
                 'prd.employee_name',
@@ -373,6 +374,336 @@ class PayrollProcessController extends Controller
         //     'message' => 'Export started',
         //     'export_id' => $export->id
         // ]);
+    }
+
+    // public function updatePph21(Request $request)
+    // {
+    //     try {
+
+    //         $request->validate([
+    //             'id' => 'required',
+    //             'pph21' => 'required'
+    //         ]);
+
+    //         $payroll = DB::table('payroll_run_details')
+    //             ->where('id', $request->id)
+    //             ->first();
+
+    //         if (!$payroll) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Data payroll tidak ditemukan'
+    //             ]);
+    //         }
+
+    //         $components = json_decode($payroll->components, true);
+
+    //         if (!$components) {
+    //             $components = [];
+    //         }
+
+    //         /*
+    //     |--------------------------------------------------------------------------
+    //     | UPDATE PPH21
+    //     |--------------------------------------------------------------------------
+    //     */
+    //         $components['pph_21'] = (float)$request->pph21;
+    //         $components['pph_21_deduction'] = (float)$request->pph21;
+
+    //         /*
+    //     |--------------------------------------------------------------------------
+    //     | RECALCULATE TOTAL SALARY
+    //     |--------------------------------------------------------------------------
+    //     */
+
+    //         $income =
+    //             ($components['basic_salary'] ?? 0) +
+    //             ($components['overtime_pay'] ?? 0) +
+    //             ($components['special_overtime_pay'] ?? 0) +
+    //             ($components['monthly_premi'] ?? 0) +
+    //             ($components['long_service_allowance'] ?? 0) +
+    //             ($components['allowance'] ?? 0) +
+    //             ($components['sewing_insentif'] ?? 0) +
+    //             ($components['pad_insentif'] ?? 0) +
+    //             ($components['cutting_insentif'] ?? 0) +
+    //             ($components['heat_insentif'] ?? 0) +
+    //             ($components['adjusment'] ?? 0);
+
+    //         $deduction =
+    //             ($components['bpjs_kesehatan'] ?? 0) +
+    //             ($components['bpjs_ketenagakerjaan'] ?? 0) +
+    //             ($components['pph_21'] ?? 0) +
+    //             ($components['pph_21_deduction'] ?? 0) +
+    //             ($components['absence_deduction'] ?? 0) +
+    //             ($components['late_deduction'] ?? 0);
+
+    //         $totalSalary = $income - $deduction;
+
+    //         /*
+    //     |--------------------------------------------------------------------------
+    //     | UPDATE DATABASE
+    //     |--------------------------------------------------------------------------
+    //     */
+
+    //         DB::table('payroll_run_details')
+    //             ->where('id', $request->id)
+    //             ->update([
+    //                 'total_salary' => $totalSalary,
+    //                 'components' => json_encode($components),
+    //                 'updated_at' => now()
+    //             ]);
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'PPh21 berhasil diupdate',
+    //             'total_salary' => $totalSalary
+    //         ]);
+    //     } catch (\Exception $e) {
+
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => $e->getMessage()
+    //         ]);
+    //     }
+    // }
+
+    public function updatePphByContract($run_id)
+    {
+        DB::beginTransaction();
+
+        try {
+
+            /*
+        |--------------------------------------------------------------------------
+        | GET PAYROLL RUN
+        |--------------------------------------------------------------------------
+        */
+
+            $payrollRun = DB::table('payroll_runs')
+                ->leftJoin(
+                    'payroll_periods',
+                    'payroll_runs.period_id',
+                    '=',
+                    'payroll_periods.id'
+                )
+                ->select(
+                    'payroll_runs.*',
+                    'payroll_periods.start_date',
+                    'payroll_periods.end_date'
+                )
+                ->where('payroll_runs.id', $run_id)
+                ->first();
+
+            if (!$payrollRun) {
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payroll run tidak ditemukan'
+                ]);
+            }
+
+            $periodStart = $payrollRun->start_date;
+            $periodEnd   = $payrollRun->end_date;
+
+            /*
+        |--------------------------------------------------------------------------
+        | GET PAYROLL DETAILS
+        |--------------------------------------------------------------------------
+        */
+
+            $details = DB::table('payroll_run_details')
+                ->where('run_id', $run_id)
+                ->get();
+
+            foreach ($details as $detail) {
+
+                /*
+            |--------------------------------------------------------------------------
+            | GET LATEST CONTRACT
+            |--------------------------------------------------------------------------
+            */
+
+                $latestContract = DB::table('employees_contract as ec1')
+                    ->select(
+                        'ec1.npk',
+                        'ec1.salary',
+                        'ec1.allowance',
+                        'ec1.pph21',
+                        'ec1.type',
+                        'ec1.daily_salary'
+                    )
+
+                    ->where('ec1.npk', $detail->employee_npk)
+
+                    // CONTRACT RANGE
+                    ->whereDate('ec1.start_date', '<=', $periodEnd)
+                    ->whereDate('ec1.end_date', '>=', $periodStart)
+
+                    // LATEST CONTRACT
+                    ->whereRaw("
+                    ec1.id = (
+                        SELECT TOP 1 ec2.id
+                        FROM employees_contract ec2
+                        WHERE ec2.npk = ec1.npk
+                        AND ec2.start_date <= ?
+                        AND ec2.end_date >= ?
+                        ORDER BY ec2.contract_ke DESC,
+                                 ec2.start_date DESC
+                    )
+                ", [$periodEnd, $periodStart])
+
+                    ->first();
+
+                if (!$latestContract) {
+                    continue;
+                }
+
+                /*
+            |--------------------------------------------------------------------------
+            | COMPONENTS
+            |--------------------------------------------------------------------------
+            */
+
+                $components = json_decode($detail->components, true);
+
+                if (!$components) {
+                    $components = [];
+                }
+
+                /*
+            |--------------------------------------------------------------------------
+            | UPDATE PPH21
+            |--------------------------------------------------------------------------
+            */
+
+                $pph21 = (float)($latestContract->pph21 ?? 0);
+
+                $components['pph_21'] = $pph21;
+                $components['pph_21_deduction'] = $pph21;
+
+                /*
+            |--------------------------------------------------------------------------
+            | RECALCULATE TOTAL SALARY
+            |--------------------------------------------------------------------------
+            */
+
+                $income =
+                    ($components['basic_salary'] ?? 0) +
+                    ($components['overtime_pay'] ?? 0) +
+                    ($components['special_overtime_pay'] ?? 0) +
+                    ($components['monthly_premi'] ?? 0) +
+                    ($components['long_service_allowance'] ?? 0) +
+                    ($components['allowance'] ?? 0) +
+                    ($components['sewing_insentif'] ?? 0) +
+                    ($components['pad_insentif'] ?? 0) +
+                    ($components['cutting_insentif'] ?? 0) +
+                    ($components['heat_insentif'] ?? 0) +
+                    ($components['adjusment'] ?? 0);
+
+                $deduction =
+                    ($components['bpjs_kesehatan'] ?? 0) +
+                    ($components['bpjs_ketenagakerjaan'] ?? 0) +
+                    ($components['pph_21'] ?? 0) +
+                    ($components['pph_21_deduction'] ?? 0) +
+                    ($components['absence_deduction'] ?? 0) +
+                    ($components['late_deduction'] ?? 0);
+
+                $totalSalary = $income - $deduction;
+
+                /*
+            |--------------------------------------------------------------------------
+            | UPDATE DATABASE
+            |--------------------------------------------------------------------------
+            */
+
+                DB::table('payroll_run_details')
+                    ->where('id', $detail->id)
+                    ->update([
+                        'total_salary' => $totalSalary,
+                        'components'   => json_encode($components),
+                        'updated_at'   => now()
+                    ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'PPH21 berhasil diupdate dari employee contract'
+            ]);
+        } catch (\Exception $e) {
+
+            DB::rollback();
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function recreateDocument($run_id)
+    {
+        try {
+
+            $user = Auth::user();
+
+            $getType = PayrollExport::where('run_id', $run_id)->latest()->first();
+
+            /*
+        |--------------------------------------------------------------------------
+        | CREATE NEW EXPORT
+        |--------------------------------------------------------------------------
+        */
+
+            $export = PayrollExport::updateOrCreate([
+                'run_id' => $run_id,
+            ], [
+                'status' => 'recreating',
+                'progress' => 0
+            ]);
+
+            $exportPeriod = PayrollExport::leftJoin(
+                'payroll_runs',
+                'payroll_runs.id',
+                '=',
+                'payroll_exports.run_id'
+            )
+                ->leftJoin(
+                    'payroll_periods',
+                    'payroll_runs.period_id',
+                    '=',
+                    'payroll_periods.id'
+                )
+                ->where('payroll_exports.run_id', '=', $run_id)
+                ->pluck('payroll_periods.name');
+
+            if ($getType->status == 'finished') {
+                $type = 'process';
+            } else if ($getType->status == 'approved') {
+                $type = 'approved';
+            }
+
+            GeneratePayrollExport::dispatch($export->id, $type);
+
+            event(new NotificationEvent(
+                'Recreate Payroll Document!',
+                'Users : ' . $user->name .
+                    ' has recreate Payroll ' . $exportPeriod . '!',
+                'success'
+            ));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document recreate process started'
+            ]);
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
     }
 
     public function progress($run_id)

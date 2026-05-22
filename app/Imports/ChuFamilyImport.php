@@ -22,6 +22,7 @@ class ChuFamilyImport implements ToModel, WithHeadingRow
                     ? Date::excelToDateTimeObject($row['birth_date'])
                     : null,
                 'nationality' => $row['nationality'],
+                'npwp' => $row['npwp'],
                 'passport_number' => $row['passport_number'],
                 'passport_expiry' =>
                 !empty($row['passport_expiry'])
