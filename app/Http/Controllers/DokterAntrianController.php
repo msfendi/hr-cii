@@ -18,11 +18,11 @@ class DokterAntrianController extends Controller
         $today = today();
 
         $antrians = Kunjungan::whereDate('tanggal_kunjungan', $today)
-            ->orderBy('no_antrian', 'asc')
+            ->orderBy('no_antrian', 'desc')
             ->get();
 
         // Bulk-fetch karyawan info
-        $npks = $antrians->pluck('NPK')->unique()->toArray();
+        $npks = $antrians->pluck('NPK')->filter()->unique()->toArray();
         $karyawanMap = [];
         if (!empty($npks)) {
             $karyawanMap = DB::connection('cii')->table('BIODATA')
@@ -85,11 +85,19 @@ class DokterAntrianController extends Controller
         }
 
         // Get karyawan info
-        $karyawan = DB::connection('cii')->table('BIODATA')
-            ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-            ->where('BIODATA.NPK', $kunjungan->NPK)
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT')
-            ->first();
+        if ($kunjungan->NPK) {
+            $karyawan = DB::connection('cii')->table('BIODATA')
+                ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+                ->where('BIODATA.NPK', $kunjungan->NPK)
+                ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT')
+                ->first();
+        } else {
+            $karyawan = (object) [
+                'NPK' => '-',
+                'NAMA_KARYAWAN' => $kunjungan->nama,
+                'DEPARTEMENT' => $kunjungan->dept,
+            ];
+        }
 
         return view('dokter.periksa', compact('kunjungan', 'karyawan'));
     }
@@ -130,11 +138,47 @@ class DokterAntrianController extends Controller
         }
 
         // Get karyawan name for flash message
-        $namaKaryawan = DB::connection('cii')->table('BIODATA')
-            ->where('NPK', $kunjungan->NPK)
-            ->value('NAMA_KARYAWAN') ?? '';
+        if ($kunjungan->NPK) {
+            $namaKaryawan = DB::connection('cii')->table('BIODATA')
+                ->where('NPK', $kunjungan->NPK)
+                ->value('NAMA_KARYAWAN') ?? '';
+        } else {
+            $namaKaryawan = $kunjungan->nama ?? '';
+        }
 
         return redirect()->route('dokter.antrian')
             ->with('success', 'Pemeriksaan selesai. Pasien: ' . $namaKaryawan);
+    }
+
+    /**
+     * Get prescriptions for dispensing
+     */
+    public function getResep($id)
+    {
+        $kunjungan = Kunjungan::with('resepObats')->findOrFail($id);
+        return response()->json($kunjungan->resepObats);
+    }
+
+    /**
+     * Save dispensed quantities
+     */
+    public function simpanQtyObat(Request $request, $id)
+    {
+        $request->validate([
+            'qty' => 'required|array',
+            'qty.*' => 'nullable|string',
+        ]);
+
+        $kunjungan = Kunjungan::findOrFail($id);
+
+        foreach ($request->qty as $resepId => $qty) {
+            if ($qty !== null) {
+                ResepObat::where('id', $resepId)
+                    ->where('kunjungan_id', $kunjungan->id)
+                    ->update(['qty' => $qty]);
+            }
+        }
+
+        return redirect()->back()->with('success', 'Berhasil menyimpan qty obat');
     }
 }

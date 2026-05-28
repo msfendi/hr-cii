@@ -124,9 +124,9 @@
                                     @endphp
                                     <tr class="{{ $rowClass }}">
                                         <td class="text-center font-weight-bold" style="font-size: 1.2rem;">{{ $antrian->no_antrian }}</td>
-                                        <td>{{ $antrian->NPK }}</td>
-                                        <td>{{ $bio->NAMA_KARYAWAN ?? '-' }}</td>
-                                        <td>{{ $bio->DEPARTEMENT ?? '-' }}</td>
+                                        <td>{{ $antrian->NPK ?? '-' }}</td>
+                                        <td>{{ $bio->NAMA_KARYAWAN ?? ($antrian->nama ?? '-') }}</td>
+                                        <td>{{ $bio->DEPARTEMENT ?? ($antrian->dept ?? '-') }}</td>
                                         <td>{{ Str::limit($antrian->keluhan, 60) }}</td>
                                         <td class="text-center">{{ $antrian->jam_masuk ?? '-' }}</td>
                                         <td class="text-center">{{ $antrian->jam_selesai ?? '-' }}</td>

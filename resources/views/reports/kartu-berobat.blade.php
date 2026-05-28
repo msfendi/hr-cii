@@ -146,7 +146,7 @@
                 <td>
                     @if($k->resepObats->count())
                         @foreach($k->resepObats as $resep)
-                            • {{ $resep->keterangan_obat }}<br>
+                            • {{ $resep->keterangan_obat }}{{ $resep->qty ? ' (Qty: ' . $resep->qty . ')' : '' }}<br>
                         @endforeach
                     @else
                         -

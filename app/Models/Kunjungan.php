@@ -23,6 +23,8 @@ class Kunjungan extends Model
         'status',
         'dokter_id',
         'no_antrian',
+        'nama',
+        'dept'
     ];
 
     protected $casts = [

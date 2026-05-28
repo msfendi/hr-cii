@@ -26,4 +26,10 @@ class Biodata extends Model
     {
         return $this->hasMany(EmployeesContract::class, 'npk', 'NPK');
     }
+
+    /** Parent Department dari karyawan ini (via BAG = id parent_dept) */
+    public function parentDept()
+    {
+        return $this->belongsTo(ParentDept::class, 'BAG', 'id');
+    }
 }

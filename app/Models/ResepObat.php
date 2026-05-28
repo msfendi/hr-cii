@@ -14,5 +14,6 @@ class ResepObat extends Model
     protected $fillable = [
         'kunjungan_id',
         'keterangan_obat',
+        'qty',
     ];
 }

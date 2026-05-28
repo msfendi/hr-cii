@@ -135,10 +135,12 @@ class PelamarController extends Controller
             ]
         );
 
+        $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
+
         DB::connection('cii')->table('BIODATA')->insert([
             'NPK' => strtoupper($request->npk),
             'NAMA_KARYAWAN' => strtoupper($request->nama),
-            'BAG' => strtoupper($request->bag),
+            'BAG' => $dept->id_parent_dept,
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => $last_barcode,
@@ -147,7 +149,6 @@ class PelamarController extends Controller
             'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
         ]);
 
-        $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
         $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->first();
 
         DB::connection('cii')->table('PKWT')->insert([
@@ -191,6 +192,7 @@ class PelamarController extends Controller
             'month_duration'  => (string) $duration,
             'day_duration'    => $dayDuration,
             'status_contract' => 'AKTIF',
+            'type'            => 'CONTRACT',    
             'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
             'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
             'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
@@ -264,10 +266,12 @@ class PelamarController extends Controller
             ]
         );
 
+        $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
+
         DB::connection('cii')->table('BIODATA')->insert([
             'NPK' => strtoupper($request->npk),
             'NAMA_KARYAWAN' => strtoupper($request->nama),
-            'BAG' => strtoupper($request->bag),
+            'BAG' => $dept->id_parent_dept, // Set BAG from id_parent_dept of DEPT
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => $last_barcode,
@@ -276,8 +280,7 @@ class PelamarController extends Controller
             'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
         ]);
 
-        $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
-
+        // Dept already queried above
 
         DB::connection('cii')->table('PKWT')->insert([
             'NPK' => $request->npk,
@@ -325,6 +328,7 @@ class PelamarController extends Controller
             'month_duration'  => (string) $duration,
             'day_duration'    => $dayDuration,
             'status_contract' => 'AKTIF',
+            'type'            => 'CONTRACT',
             'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
             'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
             'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
