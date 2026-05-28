@@ -50,6 +50,7 @@
                         <th>NPK</th>
                         <th>Name</th>
                         <th>Position</th>
+                        <th>Date of Birth</th>
                         <th>Place</th>
                         <th>Nationality</th>
                         <th>Direct Report</th>
@@ -78,6 +79,7 @@
                         <td> @if($row->position) <span class="badge badge-primary">
                             {{ $row->position }}
                           </span> @endif </td>
+                        <td>{{ $row->TGLLAHIR }}</td>
                         <td>{{ $row->place }}</td>
                         <td>{{ $row->nationality }}</td>
                         <td>{{ $row->direct_report }}</td>
