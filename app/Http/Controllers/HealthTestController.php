@@ -22,6 +22,8 @@ class HealthTestController extends Controller
             ->latest('health_tests.created_at')
             ->get();
 
+        // dd($data[0]);
+
         return view('health_test.index', compact('data'));
     }
 
