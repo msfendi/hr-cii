@@ -72,15 +72,16 @@
                                           <div class="border rounded p-2 text-center"> {!! $row->buta_warna ? '✅ YA' : '❌ TIDAK' !!} </div>
                                         </div>
                                         <div class="col-md-3">
-                                          <b>Visus Mata</b>
+                                          <b>Visus Mata OD</b>
                                           <div class="border rounded p-2 text-center">
-                                            {{ $row->visus_mata }}
+                                            {{ $row->visus_mata_od }}
                                           </div>
                                         </div>
+                                        
                                         <div class="col-md-3">
-                                          <b>Tekanan Darah</b>
+                                          <b>Visus Mata OS</b>
                                           <div class="border rounded p-2 text-center">
-                                            {{ $row->tekanan_darah }}
+                                            {{ $row->visus_mata_os }}
                                           </div>
                                         </div>
                                       </div>
@@ -98,21 +99,7 @@
                                             {{ $row->berat }} kg
                                           </div>
                                         </div>
-                                        <div class="col-md-3">
-                                          <b>Respirasi</b>
-                                          <div class="border rounded p-2 text-center">
-                                            {{ $row->respirasi }}
-                                          </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                          <b>Denyut</b>
-                                          <div class="border rounded p-2 text-center">
-                                            {{ $row->denyut }}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <hr>
-                                      <div class="row">
+                                        
                                         <div class="col-md-3">
                                           <b>Suhu</b>
                                           <div class="border rounded p-2 text-center">
@@ -123,6 +110,27 @@
                                           <b>Gigi</b>
                                           <div class="border rounded p-2 text-center">
                                             {{ $row->gigi }}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <hr>
+                                      <div class="row">
+                                        <div class="col-md-3">
+                                          <b>Tekanan Darah</b>
+                                          <div class="border rounded p-2 text-center">
+                                            {{ $row->tekanan_darah }}
+                                          </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                          <b>Respirasi</b>
+                                          <div class="border rounded p-2 text-center">
+                                            {{ $row->respirasi }}
+                                          </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                          <b>Denyut</b>
+                                          <div class="border rounded p-2 text-center">
+                                            {{ $row->denyut }}
                                           </div>
                                         </div>
                                       </div>

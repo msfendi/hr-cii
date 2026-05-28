@@ -503,43 +503,144 @@
         }
 
         .tl-date {
-            font-size: 12.5px; color: rgba(255,255,255,.45); }
-.tl-line { flex: 0 0 20px; height: 2px; background: rgba(255,255,255,.2); margin-bottom: 14px; transition: background .2s; }
-.tl-line.done { background: #1cc88a; }
+            font-size: 12.5px;
+            color: rgba(255, 255, 255, .45);
+        }
 
-/* Doc pills */
-.doc-pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 12px; border-radius: 6px;
-    background: #f8f9fc; border: 1.5px solid #e3e6f0;
-    color: #4a5568; font-size: 12.5px; font-weight: 600;
-    text-decoration: none; transition: all .15s; margin: 3px;
-}
-.doc-pill:hover { background: #4e73df; color: #fff; border-color: #4e73df; text-decoration: none; }
-.doc-pill i { font-size: 15px; }
+        .tl-line {
+            flex: 0 0 20px;
+            height: 2px;
+            background: rgba(255, 255, 255, .2);
+            margin-bottom: 14px;
+            transition: background .2s;
+        }
 
-/* WA Modal */
-#whatsappModal .modal-content { border: none; border-radius: 12px; overflow: hidden; box-shadow: 0 16px 50px rgba(0,0,0,.18); }
+        .tl-line.done {
+            background: #1cc88a;
+        }
 
-/* Filter active button */
-.btn-group .btn.active { box-shadow: inset 0 2px 4px rgba(0,0,0,.15); }
+        .tl-dot.failed {
+            background: #e74a3b;
+            border-color: #e74a3b;
+            color: #fff;
+        }
 
-/* DataTables tweaks */
-.dataTables_wrapper .dataTables_length select,
-.dataTables_wrapper .dataTables_filter input {
-    font-size: 13px;
-    border-radius: 5px;
-    border: 1px solid #d1d5db;
-    padding: 4px 8px;
-}
-.dataTables_wrapper .dataTables_info { font-size: 13px; color: #6b7280; }
-.dataTables_wrapper .dataTables_paginate .paginate_button {
-    font-size: 13px !important; border-radius: 5px !important; padding: 4px 10px !important;
-}
-.dataTables_wrapper .dataTables_paginate .paginate_button.current {
-    background: #4e73df !important; color: #fff !important; border-color: #4e73df !important;
-}
-</style>
+        .tl-line.failed {
+            background: #e74a3b;
+        }
+
+        /* Doc pills */
+        .doc-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: #f8f9fc;
+            border: 1.5px solid #e3e6f0;
+            color: #4a5568;
+            font-size: 12.5px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all .15s;
+            margin: 3px;
+        }
+
+        .doc-pill:hover {
+            background: #4e73df;
+            color: #fff;
+            border-color: #4e73df;
+            text-decoration: none;
+        }
+
+        .doc-pill i {
+            font-size: 15px;
+        }
+
+        /* WA Modal */
+        #whatsappModal .modal-content {
+            border: none;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 16px 50px rgba(0, 0, 0, .18);
+        }
+
+        /* Filter active button */
+        .btn-group .btn.active {
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, .15);
+        }
+
+        /* DataTables tweaks */
+        .dataTables_wrapper .dataTables_length select,
+        .dataTables_wrapper .dataTables_filter input {
+            font-size: 13px;
+            border-radius: 5px;
+            border: 1px solid #d1d5db;
+            padding: 4px 8px;
+        }
+
+        .dataTables_wrapper .dataTables_info {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            font-size: 13px !important;
+            border-radius: 5px !important;
+            padding: 4px 10px !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            background: #4e73df !important;
+            color: #fff !important;
+            border-color: #4e73df !important;
+        }
+
+        /* Penilaian step lock */
+        .penilaian-step {
+            position: relative;
+            transition: opacity .2s;
+        }
+
+        .penilaian-step.locked {
+            opacity: .55;
+            pointer-events: none;
+        }
+
+        .step-lock-badge {
+            display: none;
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            background: #6c757d;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            letter-spacing: .4px;
+            text-transform: uppercase;
+            z-index: 2;
+        }
+
+        .penilaian-step.locked .step-lock-badge {
+            display: inline-block;
+        }
+
+        .step-number {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            margin-right: 5px;
+            background: rgba(255, 255, 255, .25);
+            color: #fff;
+        }
+    </style>
 </head>
 
 <body id="page-top">
@@ -563,31 +664,37 @@
                             </h1>
                             <p class="mb-0 text-muted small">Kelola pipeline pelamar &amp; status rekrutmen</p>
                         </div>
-                        <div class="btn-group shadow-sm" role="group">
-                            <a href="{{ route('recruitment.index') }}"
-                                class="btn btn-sm {{ is_null($status) ? 'btn-primary active' : 'btn-outline-primary' }}">
-                                <i class="fas fa-th-list mr-1"></i>Semua
-                            </a>
-                            <a href="{{ route('recruitment.index', ['status' => 'never_confirm']) }}"
-                                class="btn btn-sm {{ $status === 'never_confirm' ? 'btn-secondary active' : 'btn-outline-secondary' }}">
-                                <i class="fas fa-inbox mr-1"></i>Applied
-                            </a>
-                            <a href="{{ route('recruitment.index', ['status' => 'ready_test']) }}"
-                                class="btn btn-sm {{ $status === 'ready_test' ? 'btn-info active' : 'btn-outline-info' }}">
-                                <i class="fas fa-clipboard-list mr-1"></i>Test
-                            </a>
-                            <a href="{{ route('recruitment.index', ['status' => 'ready_interview']) }}"
-                                class="btn btn-sm {{ $status === 'ready_interview' ? 'btn-warning active' : 'btn-outline-warning' }}">
-                                <i class="fas fa-comments mr-1"></i>Interview
-                            </a>
-                            <a href="{{ route('recruitment.index', ['status' => 'onboarding']) }}"
-                                class="btn btn-sm {{ $status === 'onboarding' ? 'btn-success active' : 'btn-outline-success' }}">
-                                <i class="fas fa-check-circle mr-1"></i>Onboarding
-                            </a>
-                            <a href="{{ route('recruitment.index', ['status' => 'decline']) }}"
-                                class="btn btn-sm {{ $status === 'decline' ? 'btn-danger active' : 'btn-outline-danger' }}">
-                                <i class="fas fa-times-circle mr-1"></i>Decline
-                            </a>
+                        <div class="d-flex align-items-center" style="gap:10px;">
+                            {{-- Pipeline Filter --}}
+                            <div>
+                                <label class="d-block mb-1" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#6b7280;">
+                                    <i class="fas fa-filter mr-1"></i>Pipeline
+                                </label>
+                                <select class="form-control form-control-sm" id="filter_pipeline"
+                                    style="min-width:160px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
+                                    onchange="if(this.value) window.location.href=this.value;">
+                                    <option value="{{ route('recruitment.index') }}" {{ is_null($status) ? 'selected' : '' }}>Semua Pelamar</option>
+                                    <option value="{{ route('recruitment.index', ['status' => 'never_confirm']) }}" {{ $status === 'never_confirm' ? 'selected' : '' }}>Applied</option>
+                                    <option value="{{ route('recruitment.index', ['status' => 'onboarding']) }}" {{ $status === 'onboarding' ? 'selected' : '' }}>Onboarding</option>
+                                    <option value="{{ route('recruitment.index', ['status' => 'decline']) }}" {{ $status === 'decline' ? 'selected' : '' }}>Decline</option>
+                                </select>
+                            </div>
+
+                            {{-- Penilaian Step Filter --}}
+                            <div>
+                                <label class="d-block mb-1" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#6b7280;">
+                                    <i class="fas fa-tasks mr-1"></i>Tahap Penilaian
+                                </label>
+                                <select class="form-control form-control-sm" id="filter_penilaian"
+                                    style="min-width:180px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
+                                    onchange="if(this.value) window.location.href=this.value;">
+                                    <option value="" {{ !in_array($status, ['step_interview','step_kesehatan','step_teknis','step_user']) ? 'selected' : '' }}>— Semua Tahap —</option>
+                                    <option value="{{ route('recruitment.index', ['status' => 'step_interview']) }}" {{ $status === 'step_interview' ? 'selected' : '' }}>Tes Interview</option>
+                                    <option value="{{ route('recruitment.index', ['status' => 'step_kesehatan']) }}" {{ $status === 'step_kesehatan' ? 'selected' : '' }}>Tes Kesehatan</option>
+                                    <option value="{{ route('recruitment.index', ['status' => 'step_teknis']) }}" {{ $status === 'step_teknis' ? 'selected' : '' }}>Tes Teknis</option>
+                                    <option value="{{ route('recruitment.index', ['status' => 'step_user']) }}" {{ $status === 'step_user' ? 'selected' : '' }}>Tes User</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -816,19 +923,20 @@
                             <div class="tl-bar">
                                 @foreach([
                                         ['tl_apply', 'fa-inbox', 'Applied'],
-                                        ['tl_test', 'fa-vial', 'Test'],
                                         ['tl_interview', 'fa-comments', 'Interview'],
                                         ['tl_health', 'fa-heartbeat', 'Kesehatan'],
+                                        ['tl_test', 'fa-vial', 'Tes Teknis'],
+                                        ['tl_user', 'fa-user-check', 'Tes User'],
                                         ['tl_onboard', 'fa-check-circle', 'Onboarding'],
                                     ] as $i => [$tid, $tic, $tlb])
-                                                                    @if($i > 0)
-                                                                        <div class="tl-line" id="{{ $tid }}_line"></div>
-                                                                    @endif
-                                                                    <div class="tl-step">
-                                                                        <div class="tl-dot" id="{{ $tid }}_dot"><i class="fas {{ $tic }}" style="font-size:10px;"></i></div>
-                                                                        <div class="tl-lbl">{{ $tlb }}</div>
-                                                                        <div class="tl-date" id="{{ $tid }}_date">–</div>
-                                                                    </div>
+                                    @if($i > 0)
+                                        <div class="tl-line" id="{{ $tid }}_line"></div>
+                                    @endif
+                                    <div class="tl-step">
+                                        <div class="tl-dot" id="{{ $tid }}_dot"><i class="fas {{ $tic }}" style="font-size:10px;"></i></div>
+                                        <div class="tl-lbl">{{ $tlb }}</div>
+                                        <div class="tl-date" id="{{ $tid }}_date">–</div>
+                                    </div>
                                 @endforeach
                             </div>
 
@@ -851,6 +959,9 @@
                                 </div>
                                 <div class="det-tab" data-tab="dokumen">
                                     <i class="fas fa-folder-open"></i> Dokumen
+                                </div>
+                                <div class="det-tab" data-tab="penilaian">
+                                    <i class="fas fa-tasks"></i> Penilaian
                                 </div>
                             </div>
                         </div>{{-- /det-hero --}}
@@ -1048,6 +1159,160 @@
                                 </div>
                             </div>
 
+                            {{-- ── TAB: PENILAIAN ── --}}
+                            <div class="det-pane" id="pane-penilaian">
+                                <form action="{{ route('recruitment.updatePenilaian') }}" method="POST" enctype="multipart/form-data">
+                                    @csrf
+                                    <input type="hidden" name="id" id="penilaian_id">
+
+                                    {{-- Step indicator --}}
+                                    <div class="d-flex align-items-center mb-3 px-1" style="gap:6px;">
+                                        <div class="step-indicator" id="step_ind_1" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;">
+                                            <div style="width:22px;height:22px;border-radius:50%;background:#fef3c7;color:#92400e;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;">1</div>
+                                            <span style="color:#92400e;">Interview</span>
+                                        </div>
+                                        <div style="flex:1;height:2px;background:#e3e6f0;"></div>
+                                        <div class="step-indicator" id="step_ind_2" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;">
+                                            <div style="width:22px;height:22px;border-radius:50%;background:#f1f3f5;color:#adb5bd;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;">2</div>
+                                            <span style="color:#adb5bd;">Kesehatan</span>
+                                        </div>
+                                        <div style="flex:1;height:2px;background:#e3e6f0;"></div>
+                                        <div class="step-indicator" id="step_ind_3" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;">
+                                            <div style="width:22px;height:22px;border-radius:50%;background:#f1f3f5;color:#adb5bd;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;">3</div>
+                                            <span style="color:#adb5bd;">Tes Teknis</span>
+                                        </div>
+                                        <div style="flex:1;height:2px;background:#e3e6f0;"></div>
+                                        <div class="step-indicator" id="step_ind_4" style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;">
+                                            <div style="width:22px;height:22px;border-radius:50%;background:#f1f3f5;color:#adb5bd;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;">4</div>
+                                            <span style="color:#adb5bd;">Tes User</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="row" style="row-gap:0;">
+                                        {{-- Step 1: Interview --}}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="penilaian-step" id="step_interview">
+                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                                <div class="sec-card h-100">
+                                                    <div class="sec-card-hd hd-yellow">
+                                                        <span class="step-number">1</span>
+                                                        <i class="fas fa-comments"></i> Tes Interview
+                                                    </div>
+                                                    <div class="sec-card-body">
+                                                        <div class="form-group mb-2">
+                                                            <label class="fl">Status Kelulusan</label>
+                                                            <select class="form-control form-control-sm penilaian-select" name="result_interview" id="penilaian_result_interview" data-next="step_kesehatan">
+                                                                <option value="">Belum Dinilai</option>
+                                                                <option value="LOLOS">✅ Lolos</option>
+                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group mb-0">
+                                                            <label class="fl">Catatan</label>
+                                                            <textarea class="form-control form-control-sm" name="comment_interview" id="penilaian_comment_interview" rows="2" placeholder="Opsional..."></textarea>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {{-- Step 2: Kesehatan --}}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="penilaian-step locked" id="step_kesehatan">
+                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                                <div class="sec-card h-100">
+                                                    <div class="sec-card-hd hd-green">
+                                                        <span class="step-number">2</span>
+                                                        <i class="fas fa-heartbeat"></i> Tes Kesehatan
+                                                    </div>
+                                                    <div class="sec-card-body">
+                                                        <div class="form-group mb-2">
+                                                            <label class="fl">Status Kelulusan</label>
+                                                            <select class="form-control form-control-sm penilaian-select" name="result_kesehatan" id="penilaian_result_kesehatan" data-next="step_teknis">
+                                                                <option value="">Belum Dinilai</option>
+                                                                <option value="LOLOS">✅ Lolos</option>
+                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group mb-0">
+                                                            <label class="fl">Catatan</label>
+                                                            <textarea class="form-control form-control-sm" name="comment_kesehatan" id="penilaian_comment_kesehatan" rows="2" placeholder="Opsional..."></textarea>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {{-- Step 3: Tes Teknis --}}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="penilaian-step locked" id="step_teknis">
+                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                                <div class="sec-card h-100">
+                                                    <div class="sec-card-hd hd-blue">
+                                                        <span class="step-number">3</span>
+                                                        <i class="fas fa-vial"></i> Tes Teknis
+                                                    </div>
+                                                    <div class="sec-card-body">
+                                                        <div class="form-group mb-2">
+                                                            <label class="fl">Status Kelulusan</label>
+                                                            <select class="form-control form-control-sm penilaian-select" name="result_test" id="penilaian_result_test" data-next="step_user">
+                                                                <option value="">Belum Dinilai</option>
+                                                                <option value="LOLOS">✅ Lolos</option>
+                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group mb-2">
+                                                            <label class="fl">Catatan</label>
+                                                            <textarea class="form-control form-control-sm" name="comment_test" id="penilaian_comment_test" rows="2" placeholder="Opsional..."></textarea>
+                                                        </div>
+                                                        <div class="form-group mb-0">
+                                                            <label class="fl">Upload File Hasil</label>
+                                                            <input type="file" name="file_test" id="penilaian_file_test" class="form-control-file" style="font-size: 12px;">
+                                                            <div id="penilaian_file_link" class="mt-1" style="display:none; font-size:12px;">
+                                                                <a href="#" target="_blank"><i class="fas fa-file-download mr-1"></i>Lihat File Tersimpan</a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {{-- Step 4: Tes User --}}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="penilaian-step locked" id="step_user">
+                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                                <div class="sec-card h-100">
+                                                    <div class="sec-card-hd hd-purple">
+                                                        <span class="step-number">4</span>
+                                                        <i class="fas fa-user-check"></i> Tes User
+                                                    </div>
+                                                    <div class="sec-card-body">
+                                                        <div class="form-group mb-2">
+                                                            <label class="fl">Status Kelulusan</label>
+                                                            <select class="form-control form-control-sm penilaian-select" name="result_user" id="penilaian_result_user" data-next="">
+                                                                <option value="">Belum Dinilai</option>
+                                                                <option value="LOLOS">✅ Lolos</option>
+                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group mb-0">
+                                                            <label class="fl">Catatan</label>
+                                                            <textarea class="form-control form-control-sm" name="comment_user" id="penilaian_comment_user" rows="2" placeholder="Opsional..."></textarea>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="text-right mt-1">
+                                        <button type="submit" class="btn btn-primary btn-sm font-weight-bold px-4">
+                                            <i class="fas fa-save mr-1"></i> Simpan Penilaian
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
                         </div>{{-- /det-body --}}
 
                         <div class="modal-footer bg-white border-top py-2">
@@ -1175,9 +1440,9 @@
 
         /* ── WA Templates ── */
         const WA = {
-            invitation: "Haloo, [NAMA]\nSelamat! Anda terpilih untuk melanjutkan ke tahap berikutnya dalam Rekrutmen untuk Posisi [JABATAN] PT Chutex International Indonesia.\n\nSebagai langkah selanjutnya, kami mengundang Anda untuk interview pada:\n\nHari, Tanggal: [DATE]\nWaktu: [TIME] WIB-Selesai\nAlamat: https://maps.app.goo.gl/MfkgQPUbuFhtRHf96\n\nHarap konfirmasi kehadiran:\nNama_HADIR/TIDAK HADIR\n\nDatang 30 menit sebelum jadwal dengan:\n1. Membawa pulpen hitam\n2. Membawa KTP asli\n3. Menggunakan pakaian hitam putih\n\nWASPADA PENIPUAN! PT Chutex International Indonesia TIDAK PERNAH memungut biaya apapun.\n\nSalam,\nRecruitment PT Chutex International Indonesia",
-            interview:  "Semangat Pagi, [NAMA]\nSelamat! Anda terpilih untuk melanjutkan ke tahap Interview HRD.\n\nHari, Tanggal: [DATE]\nWaktu: [TIME] WIB-Selesai\nAlamat: https://maps.app.goo.gl/MfkgQPUbuFhtRHf96\n\nKonfirmasi: Nama_HADIR/TIDAK HADIR\n\nHarap membawa:\n* Surat lamaran kerja & CV\n* FC KTP 8 lbr, FC KK 3 lbr, FC Ijazah 5 lbr\n* FC Akta Kelahiran 1 lbr, SKCK berlaku\n* Surat Sehat, Pas foto 3x4 merah 7 lbr\n\nWASPADA PENIPUAN!\n\nSalam,\nRecruitment PT Chutex International Indonesia",
-            onboarding: "Semangat Pagi, [NAMA]\n\nSelamat! Anda dinyatakan LOLOS. Efektif per [DATE] Anda resmi bergabung sebagai [JABATAN] ([DEPARTMEN]).\n\nHadir sebelum pukul 08.00:\nhttps://maps.app.goo.gl/MfkgQPUbuFhtRHf96\nBertemu Mbak Lala HRD. Pakaian hitam putih & lengkapi berkas.\n\nWASPADA PENIPUAN!\n\nSalam,\nRecruitment PT Chutex International Indonesia",
+            invitation: "[PANGGILAN PERTAMA] Haloo, [NAMA] \nSemangat pagi! HRD PT Chutex International Indonesia telah menerima lamaran Anda dan kami mengundang Anda untuk mengikuti Tes Seleksi Calon Karyawan pada: \n\nKami HRD PT Chutex International Indonesia telah menerima lamaran anda. Kami Mengundang anda untuk tes seleksi pada : \n\nHari : [DATE] \nPukul : [TIME] WIB-Selesai \nTempat : PT Chutex International Indonesia \nBerikut alamat perusahaan kami: \nhttps://maps.app.goo.gl/2ecG1uupdf3F4rSt8 \n\nDiharap untuk datang tepat waktu untuk mengikuti Tes seleksi Calon Karyawan dan segera konfirmasi kehadiran dengan membalas WA ini. \n\nPada saat datang interview segera Lapor ke satpam untuk menemui Mbak Fitri HRD Bukan yang lain. \n\nAnda wajib membawa berkas saat interview (meskipun sudah menitipkan lamaran). Adapun rincian berkas lamaran yg harus ada : \n* Surat lamaran kerja \n* Daftar riwayat hidup \n* FC KTP 2 lembar \n* FC KK 1 lembar \n* FC Ijazah 1 lembar \n* FC Akta kelahiran 1 lembar \n* FC SKCK yang tanggalnya masih berlaku 1 lembar \n* Pas foto ukuran 3x4 background merah 2 lembar \n\nNB : \n1. Datang memakai kemeja putih sopan \n2. Bagi yang berhijab, jilbab instan warna putih/hitam \n3. Membawa bolpoin hitam \n4. WAJIB Membawa KTP dan SIM asli \n5. WAJIB bersepatu dan menggunakan kaos kaki \n\nSebagai perhatian, KTP ASLI wajib dibawa saat interview. Apabila security meminta tanda pengenal, harap siapkan SIM atau FC KTP (Jika tidak memiliki SIM bisa diganti dengan FC KTP)",
+            interview:  "[PANGGILAN KEDUA] \n\nSemangat pagi. \n\nSelamat Anda telah lolos dari tahap 1! Kami Mengundang anda untuk Seleksi Tahap 2 pada : \n\nHari : [DATE] \nPukul : [TIME] WIB-Selesai \nTempat : PT Chutex International Indonesia \nBerikut alamat perusahaan kami: \nhttps://maps.app.goo.gl/2ecG1uupdf3F4rSt8 \n\nDiharap untuk datang tepat waktu untuk mengikuti Tes seleksi Calon Karyawan dan segera konfirmasi kehadiran dengan membalas WA ini. \n\nPada saat datang interview segera Lapor ke satpam untuk menemui Mbak Lala HRD Bukan yang lain. \n\nDimohon mengkonfirmasi kehadiran dengan membalas pesan WhatsApp kami dengan format: Nama_Hadir \n\nBersiaplah, langkah Anda untuk bergabung dengan PT Chutex International Indonesia semakin dekat. Semoga berhasil! \n\nWASPADA PENIPUAN! Dalam proses rekrutmen, PT Chutex International Indonesia TIDAK PERNAH memungut biaya apapun dan TIDAK bekerja sama dengan agen perjalanan manapun. \n\nSalam, Recruitment PT Chutex International Indonesia",
+            onboarding: "[PANGGILAN LOLOS] \n\nSemangat Pagi \n\nSelamat! Setelah mengikuti rangkaian proses rekrutmen, Saudara dinyatakan LOLOS. Efektif per [DATE] Anda resmi bergabung menjadi karyawan di PT Chutex International Indonesia. Diharapkan untuk hadir, sebelum pukul 08.00 ke kantor (Alamat: https://maps.app.goo.gl/2ecG1uupdf3F4rSt8) dan bertemu Mbak Lala HRD. \n\nMohon mengirimkan FOTO FORMAL (untuk foto ID Card) ke WhatsApp grup berikut https://chat.whatsapp.com/LY3nxvStAUp2xXzcRSWMSP dan konfirmasi kehadiran dengan format: Nama_Bersedia Hadir \n\nJika TIDAK mengirimkan foto formal dan konfirmasi kehadiran akan kami anggap gugur. \n\nCATATAN: Sebelum masuk menjadi karyawan, wajib membuat rekening BANK PERMATA (pembuatan rekening akan diarahkan di WAG). \n\nHarap datang dengan pakaian hitam putih (untuk yang berjilbab wajib menggunakan jilbab instan/bergo) dan melengkapi berkas yang belum ada saja. Adapun kelengkapan berkas sebagai berikut : \n* surat lamaran kerja \n* daftar riwayat hidup \n* fc ktp 1 lembar \n* fc kk 1 lembar \n* fc ijazah 1 lembar \n* fc akta kelahiran 1 lembar \n* fc skck yg tglnya masih berlaku 1 lembar \n* pas foto ukuran 3x4 background merah 2 lembar \n\nSalam, Tim Recruitment PT Chutex International Indonesia",
             rejection:  "Halo [NAMA],\n\nTerima kasih telah melamar dan mengikuti proses rekrutmen di PT Chutex International Indonesia.\n\nSetelah melalui proses seleksi, saat ini kami belum dapat melanjutkan proses Anda. Tetap semangat!\n\nSalam,\nRecruitment PT Chutex International Indonesia"
         };
 
@@ -1222,11 +1487,17 @@
 
         function setTl(id, lineId, status, date) {
             const dot = $('#' + id + '_dot');
-            if (lineId) { const line = $('#' + lineId + '_line'); line.removeClass('done'); if (status === 'done') line.addClass('done'); }
+            if (lineId) { 
+                const line = $('#' + lineId + '_line'); 
+                line.removeClass('done failed'); 
+                if (status === 'done') line.addClass('done'); 
+                if (status === 'failed') line.addClass('failed');
+            }
             $('#' + id + '_date').text(date ? fmtD(date) : '–');
-            dot.removeClass('done active');
+            dot.removeClass('done active failed');
             if (status === 'done')   dot.addClass('done');
             if (status === 'active') dot.addClass('active');
+            if (status === 'failed') dot.addClass('failed');
         }
 
         /* ── Detail modal ── */
@@ -1247,16 +1518,82 @@
             );
             $('#det_status_hero').text(d.STATUS_APPLY || '–');
 
-            // Timeline
             const isTest  = d.is_test === 'TRUE' || d.is_test === true;
             const isIntvw = d.is_interview === 'TRUE' || d.is_interview === true;
             const isHlth  = d.is_kesehatan === 'TRUE' || d.is_kesehatan === true;
             const isOnb   = d.STATUS_APPLY === 'ONBOARDING';
-            setTl('tl_apply',    null,           'done',             null);
-            setTl('tl_test',     'tl_test',      isTest  ? 'done':'' , d.tgl_test);
-            setTl('tl_interview','tl_interview', isIntvw ? 'done':'',  d.tgl_interview);
-            setTl('tl_health',   'tl_health',   isHlth  ? 'done':'',  d.tgl_kesehatan);
-            setTl('tl_onboard',  'tl_onboard',  isOnb   ? 'done':'',  d.tgl_diterima);
+            const intvStatus = d.result_interview === 'LOLOS' ? 'done' : (d.result_interview === 'TIDAK LOLOS' ? 'failed' : 'active');
+            
+            const hlthStatus = d.result_kesehatan === 'LOLOS' ? 'done' : 
+                               (d.result_kesehatan === 'TIDAK LOLOS' ? 'failed' : 
+                               (d.result_interview === 'LOLOS' ? 'active' : ''));
+
+            const testStatus = d.result_test === 'LOLOS' ? 'done' : 
+                               (d.result_test === 'TIDAK LOLOS' ? 'failed' : 
+                               (d.result_kesehatan === 'LOLOS' ? 'active' : ''));
+
+            const userStatus = d.result_user === 'LOLOS' ? 'done' : 
+                               (d.result_user === 'TIDAK LOLOS' ? 'failed' : 
+                               (d.result_test === 'LOLOS' ? 'active' : ''));
+
+            const onboardStatus = isOnb ? 'done' : (d.result_user === 'LOLOS' ? 'active' : '');
+
+            setTl('tl_apply',     null,            'done',              null);
+            setTl('tl_interview', 'tl_interview',  intvStatus,          d.tgl_interview);
+            setTl('tl_health',    'tl_health',     hlthStatus,          d.tgl_kesehatan);
+            setTl('tl_test',      'tl_test',       testStatus,          d.tgl_test);
+            setTl('tl_user',      'tl_user',       userStatus,          null);
+            setTl('tl_onboard',   'tl_onboard',    onboardStatus,       d.tgl_diterima);
+            
+            // Penilaian form — populate values
+            $('#penilaian_id').val(d.ID);
+            $('#penilaian_result_interview').val(d.result_interview || '');
+            $('#penilaian_comment_interview').val(d.comment_interview || '');
+            $('#penilaian_result_kesehatan').val(d.result_kesehatan || '');
+            $('#penilaian_comment_kesehatan').val(d.comment_kesehatan || '');
+            $('#penilaian_result_test').val(d.result_test || '');
+            $('#penilaian_comment_test').val(d.comment_test || '');
+            $('#penilaian_result_user').val(d.result_user || '');
+            $('#penilaian_comment_user').val(d.comment_user || '');
+            $('#penilaian_file_test').val('');
+
+            if (d.file_test) {
+                $('#penilaian_file_link').show().find('a').attr('href', '/storage/' + d.file_test);
+            } else {
+                $('#penilaian_file_link').hide().find('a').attr('href', '#');
+            }
+
+            // Sequential lock logic
+            // Rule: step unlocks only if previous step has a result of 'LOLOS' in database
+            function applyLock(stepId, prevResult) {
+                const $step = $('#' + stepId);
+                const unlocked = prevResult === 'LOLOS';
+                $step.toggleClass('locked', !unlocked);
+            }
+            applyLock('step_kesehatan', d.result_interview);
+            applyLock('step_teknis',    d.result_kesehatan);
+            applyLock('step_user',      d.result_test);
+
+            // Update step indicators
+            function updateStepInd(indId, result) {
+                const $ind = $('#' + indId);
+                const $dot = $ind.find('div');
+                const $lbl = $ind.find('span');
+                if (result === 'LOLOS') {
+                    $dot.css({'background':'#d1fae5','color':'#065f46'});
+                    $lbl.css('color','#065f46');
+                } else if (result === 'TIDAK LOLOS') {
+                    $dot.css({'background':'#fee2e2','color':'#991b1b'});
+                    $lbl.css('color','#991b1b');
+                } else {
+                    $dot.css({'background':'#f1f3f5','color':'#adb5bd'});
+                    $lbl.css('color','#adb5bd');
+                }
+            }
+            updateStepInd('step_ind_1', d.result_interview);
+            updateStepInd('step_ind_2', d.result_kesehatan);
+            updateStepInd('step_ind_3', d.result_test);
+            updateStepInd('step_ind_4', d.result_user);
 
             // Pribadi
             $('#dp_nik').text(v(d.NIK)); $('#dp_kk').text(v(d.NO_KK));

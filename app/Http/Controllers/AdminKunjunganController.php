@@ -34,6 +34,8 @@ class AdminKunjunganController extends Controller
             ->select([
                 'kunjungans.id',
                 'kunjungans.NPK',
+                'kunjungans.nama',
+                'kunjungans.dept',
                 'kunjungans.tanggal_kunjungan',
                 'kunjungans.keluhan',
                 'kunjungans.status',
@@ -55,19 +57,25 @@ class AdminKunjunganController extends Controller
 
         return DataTables::of($query)
             ->order(function ($query) {
-                $query->orderBy('no_antrian', 'asc');
+                $query->orderBy('no_antrian', 'desc');
             })
             ->addColumn('nama_karyawan', function ($row) {
-                $bio = DB::connection('cii')->table('BIODATA')->where('NPK', $row->NPK)->first();
-                return $bio->NAMA_KARYAWAN ?? '-';
+                if ($row->NPK) {
+                    $bio = DB::connection('cii')->table('BIODATA')->where('NPK', $row->NPK)->first();
+                    return $bio->NAMA_KARYAWAN ?? '-';
+                }
+                return $row->nama ?? '-';
             })
             ->addColumn('departemen', function ($row) {
-                $bio = DB::connection('cii')->table('BIODATA')
-                    ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-                    ->where('BIODATA.NPK', $row->NPK)
-                    ->select('DEPT.DEPARTEMENT')
-                    ->first();
-                return $bio->DEPARTEMENT ?? '-';
+                if ($row->NPK) {
+                    $bio = DB::connection('cii')->table('BIODATA')
+                        ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+                        ->where('BIODATA.NPK', $row->NPK)
+                        ->select('DEPT.DEPARTEMENT')
+                        ->first();
+                    return $bio->DEPARTEMENT ?? '-';
+                }
+                return $row->dept ?? '-';
             })
             ->addColumn('tanggal', function ($row) {
                 return Carbon::parse($row->tanggal_kunjungan)->format('d/m/Y');
@@ -90,11 +98,22 @@ class AdminKunjunganController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'NPK' => 'required|string',
-            'keluhan' => 'required|string',
-            'tanggal_kunjungan' => 'nullable|date',
-        ]);
+        $isNonEmployee = $request->has('is_non_employee');
+
+        if ($isNonEmployee) {
+            $request->validate([
+                'nama' => 'required|string',
+                'dept' => 'required|string',
+                'keluhan' => 'required|string',
+                'tanggal_kunjungan' => 'nullable|date',
+            ]);
+        } else {
+            $request->validate([
+                'NPK' => 'required|string',
+                'keluhan' => 'required|string',
+                'tanggal_kunjungan' => 'nullable|date',
+            ]);
+        }
 
         $tanggal = $request->tanggal_kunjungan ?? today()->toDateString();
 
@@ -102,7 +121,9 @@ class AdminKunjunganController extends Controller
         $noAntrian = Kunjungan::whereDate('tanggal_kunjungan', $tanggal)->count() + 1;
 
         Kunjungan::create([
-            'NPK' => $request->NPK,
+            'NPK' => $isNonEmployee ? null : $request->NPK,
+            'nama' => $isNonEmployee ? strtoupper($request->nama) : null,
+            'dept' => $isNonEmployee ? strtoupper($request->dept) : null,
             'tanggal_kunjungan' => $tanggal,
             'keluhan' => $request->keluhan,
             'no_antrian' => $noAntrian,
@@ -148,12 +169,20 @@ class AdminKunjunganController extends Controller
     {
         $kunjungan = Kunjungan::with('resepObats')->findOrFail($id);
 
-        // Get karyawan info via DB query
-        $karyawan = DB::connection('cii')->table('BIODATA')
-            ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-            ->where('BIODATA.NPK', $kunjungan->NPK)
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT')
-            ->first();
+        // Get karyawan info via DB query or use nama/dept for non-employees
+        if ($kunjungan->NPK) {
+            $karyawan = DB::connection('cii')->table('BIODATA')
+                ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+                ->where('BIODATA.NPK', $kunjungan->NPK)
+                ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT')
+                ->first();
+        } else {
+            $karyawan = (object) [
+                'NPK' => '-',
+                'NAMA_KARYAWAN' => $kunjungan->nama,
+                'DEPARTEMENT' => $kunjungan->dept,
+            ];
+        }
 
         // Get dokter name
         $dokter = $kunjungan->dokter_id

@@ -17,41 +17,39 @@
 
                 <!-- Page Heading -->
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                    <h1 class="h3 mb-0 text-gray-800">Departement List</h1>
+                    <h1 class="h3 mb-0 text-gray-800">Parent Department Management</h1>
                     <button type="button" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"
-                        id="btnTambahDept" data-toggle="modal" data-target="#modalDept">
-                        <i class="fas fa-plus fa-sm text-white-50"></i> Tambah Departemen
+                        id="btnTambahParent" data-toggle="modal" data-target="#modalParent">
+                        <i class="fas fa-plus fa-sm text-white-50"></i> Tambah Parent Dept
                     </button>
                 </div>
 
                 <!-- DataTable Card -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-sm-flex align-items-center justify-content-between">
-                        <h6 class="m-0 font-weight-bold text-primary">Departement List</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Parent Department List</h6>
                         <div>
-                            <a href="{{ route('dept.export') }}" class="btn btn-warning btn-sm mr-2">
+                            <a href="{{ route('parent-dept.export') }}" class="btn btn-warning btn-sm mr-2">
                                 <i class="fas fa-file-export"></i> Export Data
                             </a>
-                            <a href="{{ route('dept.template') }}" class="btn btn-info btn-sm mr-2">
+                            <a href="{{ route('parent-dept.template') }}" class="btn btn-info btn-sm mr-2">
                                 <i class="fas fa-file-download"></i> Template Excel
                             </a>
-                            <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#importModalDept">
+                            <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#importModalParent">
                                 <i class="fas fa-file-import"></i> Import Excel
                             </button>
                         </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-bordered table-sm" id="deptTable" width="100%" cellspacing="0">
+                            <table class="table table-bordered table-sm" id="parentTable" width="100%" cellspacing="0">
                                 <thead>
                                     <tr>
-                                        <th>No</th>
-                                        <th>ID</th>
-                                        <th>Departemen</th>
-                                        <th>Parent Departemen</th>
-                                        <th>Is Sewing</th>
-                                        <th>Section</th>
-                                        <th>Aksi</th>
+                                        <th width="5%">No</th>
+                                        <th width="10%">ID</th>
+                                        <th>Nama Parent Dept</th>
+                                        <th width="20%">Jumlah Dept Terhubung</th>
+                                        <th width="15%">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
@@ -73,16 +71,16 @@
 <!-- End of Page Wrapper -->
 
 <!-- ===================== IMPORT MODAL ===================== -->
-<div class="modal fade" id="importModalDept" tabindex="-1" role="dialog" aria-labelledby="importModalDeptLabel" aria-hidden="true">
+<div class="modal fade" id="importModalParent" tabindex="-1" role="dialog" aria-labelledby="importModalParentLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="importModalDeptLabel">Import Dept Data</h5>
+                <h5 class="modal-title" id="importModalParentLabel">Import Parent Dept Data</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form action="{{ route('dept.import') }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ route('parent-dept.import') }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 <div class="modal-body">
                     <div class="form-group">
@@ -101,54 +99,28 @@
 <!-- ===================== END IMPORT MODAL ===================== -->
 
 <!-- ===================== ADD / EDIT MODAL ===================== -->
-<div class="modal fade" id="modalDept" tabindex="-1" role="dialog" aria-labelledby="modalDeptLabel" aria-hidden="true">
+<div class="modal fade" id="modalParent" tabindex="-1" role="dialog" aria-labelledby="modalParentLabel" aria-hidden="true">
     <div class="modal-dialog modal-md" role="document">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="modalDeptLabel">Tambah Departemen</h5>
+                <h5 class="modal-title" id="modalParentLabel">Tambah Parent Dept</h5>
                 <button class="close text-white" type="button" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form id="formDept">
+            <form id="formParent">
                 @csrf
-                <input type="hidden" id="dept_id" name="dept_id">
+                <input type="hidden" id="parent_id" name="parent_id">
                 <div class="modal-body">
-
                     <div class="form-group">
-                        <label for="departement">Nama Departemen <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="departement" name="departement"
-                            placeholder="Nama Departemen" required>
+                        <label for="parent_dept_name">Nama Parent Departemen <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="parent_dept_name" name="parent_dept_name"
+                            placeholder="Contoh: HRD, PRODUKSI, FINANCE" required maxlength="100">
                     </div>
-
-                    <div class="form-group">
-                        <label for="id_parent_dept">Parent Departemen</label>
-                        <select class="form-control" id="id_parent_dept" name="id_parent_dept">
-                            <option value="">-- Tidak Ada --</option>
-                            @foreach($parentDepts as $pd)
-                                <option value="{{ $pd->id }}">{{ $pd->parent_dept_name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="custom-control custom-checkbox">
-                            <input type="checkbox" class="custom-control-input" id="is_sewing" name="is_sewing" value="1">
-                            <label class="custom-control-label" for="is_sewing">Is Sewing</label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="section">Section</label>
-                        <input type="text" class="form-control" id="section" name="section"
-                            placeholder="CHUTEX" value="CHUTEX">
-                        <small class="form-text text-muted">Default: CHUTEX</small>
-                    </div>
-
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-primary" id="btnSimpanDept">
+                    <button type="submit" class="btn btn-primary" id="btnSimpanParent">
                         <i class="fas fa-save mr-1"></i> Simpan
                     </button>
                 </div>
@@ -159,17 +131,17 @@
 <!-- ===================== END MODAL ===================== -->
 
 <!-- ===================== DELETE CONFIRM MODAL ===================== -->
-<div class="modal fade" id="modalDeleteDept" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade" id="modalDeleteParent" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-sm" role="document">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title">Hapus Departemen</h5>
+                <h5 class="modal-title">Hapus Parent Dept</h5>
                 <button class="close text-white" type="button" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
-                <p>Apakah anda yakin ingin menghapus departemen <strong id="deleteDeptName"></strong>?</p>
+                <p>Apakah anda yakin ingin menghapus <strong id="deleteParentName"></strong>?</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
@@ -194,36 +166,27 @@
 $(document).ready(function () {
 
     // ── DataTable ──────────────────────────────────────────────────
-    var table = $('#deptTable').DataTable({
+    var table = $('#parentTable').DataTable({
         processing: true,
+        serverSide: true,
         ajax: {
-            url: '{{ route("dept.get-data") }}',
-            dataSrc: 'data'
+            url: '{{ route("parent-dept.get-data") }}',
         },
         columns: [
             {
                 data: null,
-                render: function (data, type, row, meta) { return meta.row + 1; },
+                render: function (data, type, row, meta) { return meta.row + meta.settings._iDisplayStart + 1; },
                 orderable: false,
                 searchable: false
             },
-            { data: 'ID_DEPT' },
-            { data: 'DEPARTEMENT' },
+            { data: 'id' },
+            { data: 'parent_dept_name' },
             { 
-                data: 'parent_dept_name',
+                data: 'depts_count',
                 render: function(data) {
-                    return data ? `<span class="badge badge-info">${data}</span>` : '<span class="text-muted">-</span>';
+                    return data > 0 ? `<span class="badge badge-info">${data} Depts</span>` : `<span class="badge badge-secondary">0 Depts</span>`;
                 }
             },
-            {
-                data: 'IS_SEWING',
-                render: function (val) {
-                    return val == 0
-                        ? '<span class="badge badge-success">Ya</span>'
-                        : '<span class="badge badge-secondary">Tidak</span>';
-                }
-            },
-            { data: 'SECTION' },
             {
                 data: null,
                 orderable: false,
@@ -231,17 +194,14 @@ $(document).ready(function () {
                 render: function (data) {
                     return `
                         <button class="btn btn-warning btn-circle btn-sm btn-edit mr-1"
-                            data-id="${data.ID_DEPT}"
-                            data-departement="${data.DEPARTEMENT}"
-                            data-parent="${data.id_parent_dept || ''}"
-                            data-issewing="${data.IS_SEWING}"
-                            data-section="${data.SECTION}"
+                            data-id="${data.id}"
+                            data-name="${data.parent_dept_name}"
                             title="Edit">
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="btn btn-danger btn-circle btn-sm btn-delete"
-                            data-id="${data.ID_DEPT}"
-                            data-name="${data.DEPARTEMENT}"
+                            data-id="${data.id}"
+                            data-name="${data.parent_dept_name}"
                             title="Hapus">
                             <i class="fas fa-trash"></i>
                         </button>`;
@@ -251,34 +211,28 @@ $(document).ready(function () {
     });
 
     // ── Reset modal saat buka utk tambah ───────────────────────────
-    $('#btnTambahDept').on('click', function () {
-        $('#modalDeptLabel').text('Tambah Departemen');
-        $('#formDept')[0].reset();
-        $('#dept_id').val('');
-        $('#section').val('CHUTEX');
-        $('#is_sewing').prop('checked', false);
-        $('#id_parent_dept').val('');
+    $('#btnTambahParent').on('click', function () {
+        $('#modalParentLabel').text('Tambah Parent Dept');
+        $('#formParent')[0].reset();
+        $('#parent_id').val('');
     });
 
     // ── Edit ───────────────────────────────────────────────────────
-    $('#deptTable').on('click', '.btn-edit', function () {
-        $('#modalDeptLabel').text('Edit Departemen');
-        $('#dept_id').val($(this).data('id'));
-        $('#departement').val($(this).data('departement'));
-        $('#id_parent_dept').val($(this).data('parent'));
-        $('#is_sewing').prop('checked', $(this).data('issewing') == 0);
-        $('#section').val($(this).data('section') || 'CHUTEX');
-        $('#modalDept').modal('show');
+    $('#parentTable').on('click', '.btn-edit', function () {
+        $('#modalParentLabel').text('Edit Parent Dept');
+        $('#parent_id').val($(this).data('id'));
+        $('#parent_dept_name').val($(this).data('name'));
+        $('#modalParent').modal('show');
     });
 
     // ── Store / Update ─────────────────────────────────────────────
-    $('#formDept').on('submit', function (e) {
+    $('#formParent').on('submit', function (e) {
         e.preventDefault();
 
-        var id  = $('#dept_id').val();
+        var id  = $('#parent_id').val();
         var url = id
-            ? '{{ url("/dept/update") }}/' + id
-            : '{{ route("dept.store") }}';
+            ? '{{ url("/parent-dept/update") }}/' + id
+            : '{{ route("parent-dept.store") }}';
 
         $.ajax({
             url: url,
@@ -286,7 +240,7 @@ $(document).ready(function () {
             data: $(this).serialize(),
             success: function (res) {
                 if (res.status === 'success') {
-                    $('#modalDept').modal('hide');
+                    $('#modalParent').modal('hide');
                     table.ajax.reload(null, false);
                     Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message });
                 } else {
@@ -303,21 +257,21 @@ $(document).ready(function () {
     // ── Delete confirm ─────────────────────────────────────────────
     var deleteId = null;
 
-    $('#deptTable').on('click', '.btn-delete', function () {
+    $('#parentTable').on('click', '.btn-delete', function () {
         deleteId = $(this).data('id');
-        $('#deleteDeptName').text($(this).data('name'));
-        $('#modalDeleteDept').modal('show');
+        $('#deleteParentName').text($(this).data('name'));
+        $('#modalDeleteParent').modal('show');
     });
 
     $('#btnConfirmDelete').on('click', function () {
         if (!deleteId) return;
 
         $.ajax({
-            url: '{{ url("/dept/destroy") }}/' + deleteId,
+            url: '{{ url("/parent-dept/destroy") }}/' + deleteId,
             type: 'POST',
             data: { _token: '{{ csrf_token() }}' },
             success: function (res) {
-                $('#modalDeleteDept').modal('hide');
+                $('#modalDeleteParent').modal('hide');
                 deleteId = null;
                 if (res.status === 'success') {
                     table.ajax.reload(null, false);
@@ -327,7 +281,7 @@ $(document).ready(function () {
                 }
             },
             error: function (xhr) {
-                $('#modalDeleteDept').modal('hide');
+                $('#modalDeleteParent').modal('hide');
                 deleteId = null;
                 var msg = xhr.responseJSON ? xhr.responseJSON.message : 'Terjadi kesalahan.';
                 Swal.fire({ icon: 'error', title: 'Gagal!', text: msg });

@@ -333,14 +333,14 @@ class EmployeesContractController extends Controller
         DB::beginTransaction();
 
         try {
-            // split_date berupa YYYY-MM, set ke tanggal 7 bulan tersebut
-            $splitMonth = \Carbon\Carbon::createFromFormat('Y-m', $data['split_date'])->day(7);
+            // split_date berupa YYYY-MM, set ke tanggal 7 bulan tersebut, reset waktu agar komparasi akurat
+            $splitMonth = \Carbon\Carbon::createFromFormat('Y-m', $data['split_date'])->day(7)->startOfDay();
 
             // Simpan end_date asli untuk dilanjutkan oleh kontrak baru
-            $originalEnd = \Carbon\Carbon::parse($old->end_date);
+            $originalEnd = \Carbon\Carbon::parse($old->end_date)->startOfDay();
 
             // Hitung ulang durasi untuk adjustment lama
-            $oldStart = \Carbon\Carbon::parse($old->start_date);
+            $oldStart = \Carbon\Carbon::parse($old->start_date)->startOfDay();
             
             // Normalisasi start_date ke awal siklus (tanggal 8) agar penghitungan bulan genap
             // Contoh: 14 Mei dihitung dari 8 Mei. 5 Mei dihitung dari 8 April.

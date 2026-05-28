@@ -66,10 +66,38 @@ class RecruitmentController extends Controller
                 'pd.is_test',
                 'pd.is_interview',
                 'pd.is_kesehatan',
+                'pd.result_test',
+                'pd.comment_test',
+                'pd.result_kesehatan',
+                'pd.comment_kesehatan',
+                'pd.result_interview',
+                'pd.comment_interview',
+                'pd.result_user',
+                'pd.comment_user',
+                'pd.file_test'
             );
 
         if ($status === 'never_confirm') {
             $query->where('pd.status_apply', 'APPLIED');
+        } elseif ($status === 'step_interview') {
+            $query->where(function($q) {
+                $q->whereNull('pd.result_interview')->orWhere('pd.result_interview', '');
+            })->where('pd.status_apply', '!=', 'REJECTED');
+        } elseif ($status === 'step_kesehatan') {
+            $query->where('pd.result_interview', 'LOLOS')
+                  ->where(function($q) {
+                      $q->whereNull('pd.result_kesehatan')->orWhere('pd.result_kesehatan', '');
+                  })->where('pd.status_apply', '!=', 'REJECTED');
+        } elseif ($status === 'step_teknis') {
+            $query->where('pd.result_kesehatan', 'LOLOS')
+                  ->where(function($q) {
+                      $q->whereNull('pd.result_test')->orWhere('pd.result_test', '');
+                  })->where('pd.status_apply', '!=', 'REJECTED');
+        } elseif ($status === 'step_user') {
+            $query->where('pd.result_test', 'LOLOS')
+                  ->where(function($q) {
+                      $q->whereNull('pd.result_user')->orWhere('pd.result_user', '');
+                  })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'ready_test') {
             $query->where('pd.status_apply', 'INVITATION TEST');
         } elseif ($status === 'ready_interview') {
@@ -83,6 +111,38 @@ class RecruitmentController extends Controller
         $recruitments = $query->orderByDesc('PELAMAR.id')->get();
         // dd($recruitments);
         return view('recruitment.index', compact('recruitments', 'status'));
+    }
+
+    public function updatePenilaian(Request $request)
+    {
+        $request->validate([
+            'id' => 'required'
+        ]);
+
+        $updates = [
+            'result_interview' => $request->result_interview,
+            'comment_interview' => $request->comment_interview,
+            'result_kesehatan' => $request->result_kesehatan,
+            'comment_kesehatan' => $request->comment_kesehatan,
+            'result_test' => $request->result_test,
+            'comment_test' => $request->comment_test,
+            'result_user' => $request->result_user,
+            'comment_user' => $request->comment_user,
+        ];
+
+        if ($request->hasFile('file_test')) {
+            $file = $request->file('file_test');
+            $filename = time() . '_teknis_' . $file->getClientOriginalName();
+            $path = $file->storeAs('recruitment/teknis', $filename, 'public');
+            $updates['file_test'] = $path;
+        }
+
+        DB::connection('cii')->table('pelamar_details')
+            ->where('id_pelamar', $request->id)
+            ->update($updates);
+
+        Alert::success('Berhasil', 'Penilaian pelamar berhasil diperbarui!');
+        return back()->with('success', 'Penilaian pelamar berhasil diperbarui!');
     }
 
     public function sendWhatsApp(Request $request)

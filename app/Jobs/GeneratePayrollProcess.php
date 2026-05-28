@@ -907,6 +907,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
         $components = PayrollComponent::where('is_active', 1)
             ->where('code', '!=', 'thr')
+            ->where('code', '!=', 'compensation')
             ->orderByDesc('priority')
             ->get();
 

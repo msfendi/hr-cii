@@ -18,5 +18,12 @@ class Dept extends Model
         'DEPARTEMENT',
         'IS_SEWING',
         'SECTION',
+        'id_parent_dept',
     ];
+
+    /** Parent Department yang menaungi dept ini */
+    public function parentDept()
+    {
+        return $this->belongsTo(ParentDept::class, 'id_parent_dept', 'id');
+    }
 }

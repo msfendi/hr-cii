@@ -40,7 +40,8 @@ class HealthTestController extends Controller
 
             'cacat' => $request->cacat ?? 0,
             'buta_warna' => $request->buta_warna ?? 0,
-            'visus_mata' => $request->visus_mata,
+            'visus_mata_od' => $request->visus_mata_od,
+            'visus_mata_os' => $request->visus_mata_os,
 
             'abdoment' => $request->abdoment,
             'gigi' => $request->gigi,

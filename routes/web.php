@@ -69,6 +69,7 @@ use App\Http\Controllers\WhatsappTemplateController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotificationsContractController;
+use App\Http\Controllers\ParentDeptController;
 use App\Http\Controllers\RecruitmentFormController;
 
 /*
@@ -428,8 +429,21 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance')->middleware(['auth', 'role:Admin|HRD']);
 
+    // PARENT DEPT
+    Route::get('/parent-dept/index', [ParentDeptController::class, 'index'])->name('parent-dept.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/parent-dept/template', [ParentDeptController::class, 'exportTemplate'])->name('parent-dept.template')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/parent-dept/export', [ParentDeptController::class, 'exportData'])->name('parent-dept.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/import', [ParentDeptController::class, 'import'])->name('parent-dept.import')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/parent-dept/get-data', [ParentDeptController::class, 'getData'])->name('parent-dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/store', [ParentDeptController::class, 'store'])->name('parent-dept.store')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/update/{id}', [ParentDeptController::class, 'update'])->name('parent-dept.update')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/destroy/{id}', [ParentDeptController::class, 'destroy'])->name('parent-dept.destroy')->middleware(['auth', 'role:Admin|HRD']);
+
     // DEPT
     Route::get('/dept/index', [DeptController::class, 'index'])->name('dept.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/dept/template', [DeptController::class, 'exportTemplate'])->name('dept.template')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/dept/export', [DeptController::class, 'exportData'])->name('dept.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/import', [DeptController::class, 'import'])->name('dept.import')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/dept/get-data', [DeptController::class, 'getData'])->name('dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/dept/store', [DeptController::class, 'store'])->name('dept.store')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/dept/update/{id}', [DeptController::class, 'update'])->name('dept.update')->middleware(['auth', 'role:Admin|HRD']);
@@ -515,6 +529,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::prefix('report-poliklinik')->middleware('role:Admin|Dokter')->group(function () {
         Route::get('/kartu-berobat/{npk}', [AdminReportController::class, 'kartuBerobat'])->name('report.kartu-berobat');
         Route::get('/rekap', [AdminReportController::class, 'rekap'])->name('report.rekap');
+        Route::get('/export-excel', [AdminReportController::class, 'exportExcel'])->name('report.export-excel');
     });
 
     // ========================================
@@ -525,11 +540,14 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/mulai-periksa/{id}', [DokterAntrianController::class, 'mulaiPeriksa'])->name('dokter.mulai-periksa');
         Route::get('/periksa/{id}', [DokterAntrianController::class, 'formPeriksa'])->name('dokter.periksa');
         Route::post('/selesai-periksa/{id}', [DokterAntrianController::class, 'selesaiPeriksa'])->name('dokter.selesai-periksa');
+        Route::get('/resep/{id}', [DokterAntrianController::class, 'getResep'])->name('dokter.get-resep');
+        Route::post('/simpan-qty-obat/{id}', [DokterAntrianController::class, 'simpanQtyObat'])->name('dokter.simpan-qty-obat');
     });
 
     // Recruitment
     Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'role:Admin|HRD']);
+Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'role:Admin|HRD']);
 
     /*
     |--------------------------------------------------------------------------

@@ -28,8 +28,12 @@ class BiodataController extends Controller
     {
         $query = DB::connection('cii')
             ->table('BIODATA')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'DEPT.DEPARTEMENT')
-            ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT');
+            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'employees_contract.end_date')
+            ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
+            ->leftJoin('employees_contract', function($join) {
+                $join->on('BIODATA.NPK', '=', 'employees_contract.npk')
+                     ->where('employees_contract.status_contract', 'AKTIF');
+            });
 
         if ($request->has('department_id') && $request->department_id != '') {
             $query->where('BIODATA.ID_DEPT', $request->department_id);
@@ -76,9 +80,12 @@ class BiodataController extends Controller
         $last_barcode = DB::connection('cii')->table('BIODATA')->whereBetween('BARCODE', [100000000, 999999999])->orderBy('BARCODE', 'desc')->first()->BARCODE;
         $barcode = $last_barcode + 1;
 
+        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT', 'id_parent_dept')->where('ID_DEPT', $request->id_dept)->first();
+
         DB::connection('cii')->table('BIODATA')->insert([
             'NPK' => strtoupper($request->npk),
             'NAMA_KARYAWAN' => strtoupper($request->nama),
+            'BAG' => $dept->id_parent_dept,
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
@@ -115,7 +122,7 @@ class BiodataController extends Controller
         $diff = $tgl_lahir->diff($request->tmk);
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
 
-        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT')->where('ID_DEPT', $request->id_dept)->first();
+        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT', 'id_parent_dept')->where('ID_DEPT', $request->id_dept)->first();
 
         // insert into PKWT
         // insert into PKWT using Eloquent to trigger Observer
@@ -159,9 +166,12 @@ class BiodataController extends Controller
         $last_barcode = DB::connection('cii')->table('BIODATA')->where('BARCODE', '>=', '111000000')->where('BARCODE', '<=', '113000000')->orderBy('BARCODE', 'desc')->first()->BARCODE;
         $barcode = $last_barcode + 1;
 
+        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT', 'id_parent_dept')->where('ID_DEPT', $request->id_dept)->first();
+
         DB::connection('cii')->table('BIODATA')->insert([
             'NPK' => strtoupper($request->npk),
             'NAMA_KARYAWAN' => strtoupper($request->nama),
+            'BAG' => $dept->id_parent_dept,
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
@@ -173,8 +183,6 @@ class BiodataController extends Controller
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
         $diff = $tgl_lahir->diff($request->tmk);
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
-
-        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT')->where('ID_DEPT', $request->id_dept)->first();
 
         PKWT::create([
             'NPK' => strtoupper($request->npk),

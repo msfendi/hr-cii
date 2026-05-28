@@ -115,11 +115,27 @@
             <form id="daftarForm">
                 @csrf
                 <div class="modal-body">
-                    <div class="form-group">
+                    <div class="form-group mb-2">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="is_non_employee" name="is_non_employee">
+                            <label class="custom-control-label" for="is_non_employee">Bukan Karyawan</label>
+                        </div>
+                    </div>
+                    <div class="form-group" id="employee_select_group">
                         <label for="NPK">Karyawan (NPK / Nama)</label>
                         <select class="form-control" id="NPK" name="NPK" style="width: 100%;" required>
                             <option value="">-- Cari Karyawan --</option>
                         </select>
+                    </div>
+                    <div id="non_employee_group" style="display: none;">
+                        <div class="form-group">
+                            <label for="nama">Nama Pasien</label>
+                            <input type="text" class="form-control" id="nama" name="nama" placeholder="Masukkan nama pasien">
+                        </div>
+                        <div class="form-group">
+                            <label for="dept">Departemen / Asal</label>
+                            <input type="text" class="form-control" id="dept" name="dept" placeholder="Masukkan departemen / asal pasien">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="keluhan">Keluhan</label>
@@ -189,8 +205,8 @@ $(document).ready(function() {
         columns: [
             { data: 'no_antrian', name: 'no_antrian' },
             { data: 'NPK', name: 'NPK', orderable: false },
-            { data: 'nama_karyawan', name: 'nama_karyawan', orderable: false, searchable: false },
-            { data: 'departemen', name: 'departemen', orderable: false, searchable: false },
+            { data: null, name: 'nama_karyawan', orderable: false, searchable: false, render: function(data, type, row) { return row.NPK ? row.nama_karyawan : (row.nama ?? '-'); } },
+            { data: null, name: 'departemen', orderable: false, searchable: false, render: function(data, type, row) { return row.NPK ? row.departemen : (row.dept ?? '-'); } },
             { data: 'tanggal', name: 'tanggal_kunjungan', searchable: false },
             { data: 'keluhan', name: 'keluhan', render: function(data) {
                 return data && data.length > 50 ? data.substring(0, 50) + '...' : data;
@@ -198,9 +214,18 @@ $(document).ready(function() {
             { data: 'status_badge', name: 'status', orderable: false, searchable: false },
             { data: 'id', name: 'id', orderable: false, searchable: false, render: function(data, type, row) {
                 var cetakUrl = '{{ route("kunjungan.cetak-kartu", ":id") }}'.replace(':id', data);
-                var kartuUrl = '{{ route("report.kartu-berobat", ":npk") }}'.replace(':npk', row.NPK);
-                return '<a href="' + cetakUrl + '" class="btn btn-sm btn-info mr-1" target="_blank" title="Cetak Kartu Kunjungan"><i class="fas fa-print"></i></a>' +
-                       '<a href="' + kartuUrl + '" class="btn btn-sm btn-primary" target="_blank" title="Kartu Berobat"><i class="fas fa-id-card"></i></a>';
+                var buttons = '<a href="' + cetakUrl + '" class="btn btn-sm btn-info mr-1" target="_blank" title="Cetak Kartu Kunjungan"><i class="fas fa-print"></i></a>';
+                
+                if (row.NPK) {
+                    var kartuUrl = '{{ route("report.kartu-berobat", ":npk") }}'.replace(':npk', row.NPK);
+                    buttons += '<a href="' + kartuUrl + '" class="btn btn-sm btn-primary" target="_blank" title="Kartu Berobat"><i class="fas fa-id-card"></i></a>';
+                }
+                if (row.status === 'selesai') {
+                    var periksaUrl = '{{ route("dokter.periksa", ":id") }}'.replace(':id', data);
+                    buttons += '<a href="' + periksaUrl + '" class="btn btn-sm btn-warning" title="Input Qty Obat"><i class="fas fa-pills"></i></a>';
+                }
+                
+                return buttons;
             }}
         ],
         order: [[0, 'asc']],
@@ -210,6 +235,24 @@ $(document).ready(function() {
     // Filter change → reload table
     $('#filter_tanggal, #filter_status, #filter_departemen').on('change', function() {
         table.ajax.reload();
+    });
+
+    $('#is_non_employee').on('change', function() {
+        if ($(this).is(':checked')) {
+            $('#employee_select_group').hide();
+            $('#NPK').prop('required', false);
+            
+            $('#non_employee_group').show();
+            $('#nama').prop('required', true);
+            $('#dept').prop('required', true);
+        } else {
+            $('#employee_select_group').show();
+            $('#NPK').prop('required', true);
+            
+            $('#non_employee_group').hide();
+            $('#nama').prop('required', false);
+            $('#dept').prop('required', false);
+        }
     });
 
     // Submit Daftar Form
@@ -224,6 +267,7 @@ $(document).ready(function() {
                 $('#daftarModal').modal('hide');
                 $('#daftarForm')[0].reset();
                 $('#NPK').val(null).trigger('change');
+                $('#is_non_employee').prop('checked', false).trigger('change');
                 table.ajax.reload();
                 Swal.fire({
                     icon: 'success',

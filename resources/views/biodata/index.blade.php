@@ -53,6 +53,7 @@
                                             <th>NAMA_KARYAWAN</th>
                                             <th>BARCODE</th>
                                             <th>DEPARTMENT</th>
+                                            <th>STATUS CONTRACT</th>
                                             <th>ACTION</th>
                                         </tr>
                                     </thead>
@@ -1084,6 +1085,24 @@
                 { data: 'NAMA_KARYAWAN' },
                 { data: 'BARCODE' },
                 { data: 'DEPARTEMENT' },
+                {
+                    data: null,
+                    render: function (data, type, row) {
+                        if (!row.end_date) {
+                            return '<span class="badge badge-secondary px-2 py-1">BELUM ADA KONTRAK</span>';
+                        }
+                        
+                        var today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        var endDate = new Date(row.end_date);
+                        
+                        if (endDate >= today) {
+                            return '<span class="badge badge-success px-2 py-1">AKTIF</span>';
+                        } else {
+                            return '<span class="badge badge-danger px-2 py-1">BELUM DIPERPANJANG</span>';
+                        }
+                    }
+                },
                 {
                     data: null,
                     render: function (data, type, row) {

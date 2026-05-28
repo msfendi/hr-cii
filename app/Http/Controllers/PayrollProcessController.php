@@ -75,6 +75,12 @@ class PayrollProcessController extends Controller
 
     public function approvalStatus($periodId)
     {
+        /*
+        ============================================
+        GET APPROVAL DATA
+        ============================================
+        */
+
         $data = InsentifApproval::where('period_id', $periodId)
             ->orderBy('payroll_component')
             ->get([
@@ -100,7 +106,69 @@ class PayrollProcessController extends Controller
                 return $item;
             });
 
-        return response()->json($data);
+        /*
+        ============================================
+        GET PERIOD
+        ============================================
+        */
+
+        $period = DB::table('payroll_periods')
+            ->where('id', $periodId)
+            ->first();
+
+        /*
+        ============================================
+        VALIDATE CONTRACT
+        ============================================
+        */
+
+        $invalidContracts = [];
+
+        if ($period) {
+
+            $periodStart = $period->start_date;
+            $periodEnd   = $period->end_date;
+
+            /*
+            ============================================================
+            CEK BIODATA YANG TIDAK MEMILIKI CONTRACT VALID
+            ============================================================
+
+            CONTRACT VALID JIKA:
+            payroll_period.start_date dan end_date
+            masih dalam range employees_contract.start_date dan end_date
+            */
+
+            $invalidContracts = DB::table('BIODATA as b')
+                ->leftJoin('employees_contract as ec', function ($join) use ($periodStart, $periodEnd) {
+
+                    $join->on('b.NPK', '=', 'ec.npk')
+                        // ->whereDate('ec.start_date', '<=', $periodStart)
+                        ->whereDate('ec.end_date', '>=', $periodEnd);
+
+                })
+                ->whereNull('ec.id')
+                ->select(
+                    'b.NPK',
+                    'b.NAMA_KARYAWAN',
+                    'ec.contract_ke',
+                    'ec.start_date',
+                    'ec.end_date'
+                )
+                ->orderBy('b.NPK')
+                ->get();
+        }
+
+        /*
+        ============================================
+        RETURN JSON
+        ============================================
+        */
+
+        return response()->json([
+            'approval' => $data,
+            'invalid_contracts' => $invalidContracts
+        ]);
     }
 
     public function process(Request $request)

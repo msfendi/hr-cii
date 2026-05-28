@@ -2,9 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ParentDept;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
+use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Storage;
+use App\Imports\DeptImport;
+use App\Exports\DeptTemplateExport;
+use App\Exports\DeptExport;
 
 class DeptController extends Controller
 {
@@ -13,7 +19,39 @@ class DeptController extends Controller
      */
     public function index()
     {
-        return view('dept.index');
+        $parentDepts = ParentDept::all();
+        return view('dept.index', compact('parentDepts'));
+    }
+
+    public function import(Request $request)
+    {
+        $this->validate($request, [
+            'file' => 'required|mimes:xls,xlsx'
+        ]);
+
+        $file = $request->file('file');
+        $nama_file = $file->hashName();
+        $path = $file->storeAs('public/excel/', $nama_file);
+
+        $import = Excel::import(new DeptImport(), storage_path('app/public/excel/' . $nama_file));
+        Storage::delete($path);
+
+        if ($import) {
+            Alert::success('Import Successfully!', 'Dept data successfully imported!');
+            return redirect()->route('dept.index');
+        } else {
+            return redirect()->back()->with('error', 'Failed to import data');
+        }
+    }
+
+    public function exportTemplate()
+    {
+        return Excel::download(new DeptTemplateExport(), 'Template_Import_Dept.xlsx');
+    }
+
+    public function exportData()
+    {
+        return Excel::download(new DeptExport(), 'Data_Dept.xlsx');
     }
 
     /**
@@ -23,8 +61,9 @@ class DeptController extends Controller
     {
         $depts = DB::connection('cii')
             ->table('DEPT')
-            ->select('ID_DEPT', 'DEPARTEMENT', 'IS_SEWING', 'SECTION')
-            ->orderBy('ID_DEPT')
+            ->leftJoin('parent_dept', 'DEPT.id_parent_dept', '=', 'parent_dept.id')
+            ->select('DEPT.ID_DEPT', 'DEPT.DEPARTEMENT', 'DEPT.IS_SEWING', 'DEPT.SECTION', 'DEPT.id_parent_dept', 'parent_dept.parent_dept_name')
+            ->orderBy('DEPT.ID_DEPT')
             ->get();
 
         return response()->json(['data' => $depts]);
@@ -37,6 +76,7 @@ class DeptController extends Controller
     {
         $request->validate([
             'departement' => 'required|string|max:255',
+            'id_parent_dept' => 'nullable|integer',
         ]);
 
         try {
@@ -46,6 +86,7 @@ class DeptController extends Controller
                 'DEPARTEMENT' => strtoupper($request->departement),
                 'IS_SEWING'   => $request->has('is_sewing') ? 0 : 1,
                 'SECTION'     => strtoupper($request->section ?? 'CHUTEX'),
+                'id_parent_dept' => $request->id_parent_dept,
             ]);
 
             return response()->json(['status' => 'success', 'message' => 'Departemen berhasil ditambahkan']);
@@ -78,6 +119,7 @@ class DeptController extends Controller
     {
         $request->validate([
             'departement' => 'required|string|max:255',
+            'id_parent_dept' => 'nullable|integer|exists:cii.parent_dept,id',
         ]);
 
         try {
@@ -85,6 +127,7 @@ class DeptController extends Controller
                 'DEPARTEMENT' => strtoupper($request->departement),
                 'IS_SEWING'   => $request->has('is_sewing') ? 0 : 1,
                 'SECTION'     => strtoupper($request->section ?? 'CHUTEX'),
+                'id_parent_dept' => $request->id_parent_dept,
             ]);
 
             return response()->json(['status' => 'success', 'message' => 'Departemen berhasil diperbarui']);

@@ -65,8 +65,8 @@
                         </div>
                      </div>
                      <br>
-                     <button
-                        class="btn btn-primary">
+                     <button id="btnProcess"
+                        class="btn btn-primary" disabled>
                      Process Payroll
                      </button>
                   </form>
@@ -86,87 +86,171 @@
          });
       </script>
       <script>
-         /*
-         ================================================
-         LOAD APPROVAL WHEN PERIOD SELECTED
-         ================================================
-         */
-         
-         $('#period_id').on('change', function(){
-         
-         let periodId = $(this).val();
-         
-         $('#approvalBox').hide();
-         $('#btnProcess').prop('disabled', true);
-         
-         if(!periodId) return;
-         
-         $('#approvalBox').show();
-         $('#approvalLoading').show();
-         $('#approvalTable').html('');
-         
-         $.get('/payroll-process/approval/'+periodId,function(res){
-         
-         let html='';
-         let allFinish=true;
-         
-         if(res.length===0){
-         html=`<tr>
-         <td colspan="3" class="text-center text-danger">
-         Approval belum tersedia
-         </td>
-         </tr>`;
-         allFinish=false;
-         }
-         
-         res.forEach(row=>{
-         
-         let badge='';
-         let approved='-';
-         
-         if(row.status==='finish'){
-         badge=`<span class="badge badge-success">Finish</span>`;
-         approved=row.approved_at ?? '-';
-         }else{
-         badge=`<span class="badge badge-warning">Pending</span>`;
-         allFinish=false;
-         }
-         
-         html+=`
-         <tr>
-         <td>${row.payroll_component.toUpperCase()}</td>
-         <td>${badge}</td>
-         <td>${approved}</td>
-         </tr>
-         `;
-         
-         });
-         
-         $('#approvalTable').html(html);
-         $('#approvalLoading').hide();
-         
-         /*
-         ====================================
-         ENABLE BUTTON ONLY IF ALL FINISH
-         ====================================
-         */
-         
-         if(allFinish){
-         $('#btnProcess')
-         .prop('disabled',false)
-         .removeClass('btn-secondary')
-         .addClass('btn-primary');
-         }else{
-         $('#btnProcess')
-         .prop('disabled',true)
-         .removeClass('btn-primary')
-         .addClass('btn-secondary');
-         }
-         
-         });
-         
-         });
-      </script>
+/*
+================================================
+LOAD APPROVAL WHEN PERIOD SELECTED
+================================================
+*/
+
+$('#period_id').on('change', function(){
+
+    let periodId = $(this).val();
+
+    $('#approvalBox').hide();
+    $('#btnProcess').prop('disabled', true);
+
+    if(!periodId) return;
+
+    $('#approvalBox').show();
+    $('#approvalLoading').show();
+    $('#approvalTable').html('');
+
+    $.get('/payroll-process/approval/'+periodId,function(res){
+
+        let html='';
+        let allFinish=true;
+
+        /*
+        =========================================
+        APPROVAL DATA
+        =========================================
+        */
+
+        let approvals = res.approval ?? [];
+        let invalidContracts = res.invalid_contracts ?? [];
+
+        /*
+        =========================================
+        APPROVAL EMPTY
+        =========================================
+        */
+
+        if(approvals.length===0){
+
+            html=`<tr>
+                    <td colspan="3" class="text-center text-danger">
+                        Approval belum tersedia
+                    </td>
+                  </tr>`;
+
+            allFinish=false;
+        }
+
+        /*
+        =========================================
+        LOOP APPROVAL
+        =========================================
+        */
+
+        approvals.forEach(row=>{
+
+            let badge='';
+            let approved='-';
+
+            if(row.status==='finish'){
+
+                badge=`<span class="badge badge-success">Finish</span>`;
+                approved=row.approved_at ?? '-';
+
+            }else{
+
+                badge=`<span class="badge badge-warning">Pending</span>`;
+                allFinish=false;
+            }
+
+            html+=`
+                <tr>
+                    <td>${row.payroll_component.toUpperCase()}</td>
+                    <td>${badge}</td>
+                    <td>${approved}</td>
+                </tr>
+            `;
+        });
+
+        /*
+        =========================================
+        INVALID CONTRACT CHECK
+        =========================================
+        */
+
+        if(invalidContracts.length > 0){
+
+            allFinish = false;
+
+            let employeeList = '';
+
+            invalidContracts.forEach(emp=>{
+
+                let empName = emp.NAMA_KARYAWAN ?? 'Kontrak tidak valid';
+
+                employeeList += `
+                    <li>
+                        ${emp.NPK} - ${empName}
+                    </li>
+                `;
+            });
+
+            html += `
+                <tr>
+                    <td colspan="3">
+
+                        <div class="alert alert-danger mb-0">
+
+                            <b>Kontrak Karyawan Tidak Valid :</b>
+                            <br>
+                            <b>Total Karyawan : ${invalidContracts.length}</b>
+
+                            <br><br>
+
+                            <div style="
+                                max-height:250px;
+                                overflow-y:auto;
+                                border:1px solid #ddd;
+                                padding:10px;
+                                background:#fff;
+                            ">
+
+                                <ul style="margin-bottom:0;padding-left:20px">
+                                    ${employeeList}
+                                </ul>
+
+                            </div>
+
+                        </div>
+
+                    </td>
+                </tr>
+            `;
+        }
+
+        $('#approvalTable').html(html);
+        $('#approvalLoading').hide();
+
+        /*
+        ====================================
+        ENABLE BUTTON ONLY IF ALL FINISH
+        ====================================
+        */
+
+        if(allFinish){
+
+            $('#btnProcess')
+                .prop('disabled',false)
+                .removeClass('btn-secondary')
+                .addClass('btn-primary');
+
+        }else{
+
+            $('#btnProcess')
+                .prop('disabled',true)
+                .removeClass('btn-primary')
+                .addClass('btn-secondary');
+        }
+
+    });
+
+});
+</script>
       <script>
 
 $(document).on('click','#btnProcess',function(e){

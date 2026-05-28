@@ -68,11 +68,16 @@
                                  </div>
                                  @endforeach
                                  <div class="form-group">
-                                    <label>Visus Mata</label>
-                                    <select name="visus_mata" class="form-control">
-                                       <option value="OD">OD</option>
-                                       <option value="OS">OS</option>
-                                    </select>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Visus Mata OD</label>
+                                    <input type="text" name="visus_mata_od" class="form-control mb-2" placeholder="Visus Mata OD">
+                                       </div>
+                                       <div class="col-md-6">
+                                    <label>Visus Mata OS</label>
+                                    <input type="text" name="visus_mata_os" class="form-control mb-2" placeholder="Visus Mata OS">
+                                       </div>
+                                    </div>
                                  </div>
                               </div>
                            </div>

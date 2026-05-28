@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\RekapPoliklinikExport;
 use App\Models\Kunjungan;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AdminReportController extends Controller
 {
@@ -157,5 +159,63 @@ class AdminReportController extends Controller
             'departemens',
             'selectedKaryawan'
         ));
+    }
+
+    /**
+     * Export rekap to Excel
+     */
+    public function exportExcel(Request $request)
+    {
+        $query = Kunjungan::with('resepObats')->where('status', 'selesai');
+
+        // Filter by date range
+        if ($request->filled('dari_tanggal') && $request->filled('sampai_tanggal')) {
+            $query->whereBetween('tanggal_kunjungan', [
+                $request->dari_tanggal,
+                $request->sampai_tanggal,
+            ]);
+        } else {
+            // Default: current month
+            $query->whereMonth('tanggal_kunjungan', now()->month)
+                ->whereYear('tanggal_kunjungan', now()->year);
+        }
+
+        $kunjungans = $query->orderBy('tanggal_kunjungan', 'asc')->get();
+
+        // Bulk-fetch karyawan info for all NPKs
+        $npks = $kunjungans->pluck('NPK')->unique()->toArray();
+        $karyawanMap = [];
+        if (!empty($npks)) {
+            $karyawanMap = DB::connection('cii')->table('BIODATA')
+                ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+                ->whereIn('BIODATA.NPK', $npks)
+                ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT', 'DEPT.ID_DEPT')
+                ->get()
+                ->keyBy('NPK')
+                ->toArray();
+        }
+
+        // Filter by departemen (after fetch, since cross-DB)
+        if ($request->filled('departemen')) {
+            $kunjungans = $kunjungans->filter(function ($k) use ($karyawanMap, $request) {
+                $bio = $karyawanMap[$k->NPK] ?? null;
+                return $bio && ($bio->ID_DEPT ?? '') == $request->departemen;
+            })->values();
+        }
+
+        // Filter by Nama/NPK
+        if ($request->filled('nama')) {
+            $nama = $request->nama;
+            $kunjungans = $kunjungans->filter(function ($k) use ($karyawanMap, $nama) {
+                $bio = $karyawanMap[$k->NPK] ?? null;
+                return (stripos($k->NPK, $nama) !== false) ||
+                    ($bio && stripos($bio->NAMA_KARYAWAN ?? '', $nama) !== false);
+            })->values();
+        }
+
+        return Excel::download(
+            new RekapPoliklinikExport($kunjungans, $karyawanMap), 
+            'Rekap_Pemeriksaan_Poliklinik_' . date('Ymd_His') . '.xlsx'
+        );
     }
 }
