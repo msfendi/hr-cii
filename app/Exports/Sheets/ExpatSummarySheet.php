@@ -73,12 +73,19 @@ class ExpatSummarySheet implements
             ->leftJoin(DB::raw("
             (
                 SELECT npk,
-                       COUNT(id) total_onleave
+                    COUNT(id) total_onleave,
+                    SUM(
+                        DATEDIFF(
+                            DAY,
+                            onleave_start,
+                            onleave_end
+                        ) + 1
+                    ) total_onleave_days
                 FROM expat_onleave
                 WHERE onleave_start BETWEEN '{$this->start}' AND '{$this->end}'
                 GROUP BY npk
             ) l
-        "), 'm.npk', '=', 'l.npk')
+            "), 'm.npk', '=', 'l.npk')
 
             ->select(
                 'm.npk',
@@ -94,10 +101,10 @@ class ExpatSummarySheet implements
 
                 DB::raw('ISNULL(c.total_living_cost,0) total_living_cost'),
                 DB::raw('ISNULL(ml.total_meal_cost,0) total_meal_cost'),
-                DB::raw('ISNULL(l.total_onleave,0) total_onleave')
+                DB::raw('ISNULL(l.total_onleave,0) total_onleave'),
+                DB::raw('ISNULL(l.total_onleave_days,0) total_onleave_days')
             )
             ->get();
-
 
         /*
         | TOTAL AMOUNT ONLEAVE
@@ -179,7 +186,9 @@ class ExpatSummarySheet implements
             'Total Living Cost',
             'Total Meal Cost',
             'On Leave Count',
-            'On Leave Amount'
+            'Total On Leave Days',
+            'On Leave Amount',
+            'Total Amount'
         ];
     }
 
@@ -201,7 +210,9 @@ class ExpatSummarySheet implements
             $row->total_living_cost,
             $row->total_meal_cost,
             $row->total_onleave,
+            $row->total_onleave_days,
             $row->total_onleave_amount,
+            $row->total_living_cost + $row->total_meal_cost + $row->total_onleave_amount,
         ];
     }
 
@@ -217,7 +228,7 @@ class ExpatSummarySheet implements
         /*
         | HEADER
         */
-        $sheet->getStyle('A1:P1')->applyFromArray([
+        $sheet->getStyle('A1:R1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 11,
@@ -238,7 +249,8 @@ class ExpatSummarySheet implements
         | FORMAT RUPIAH
         | M = Total Living Cost
         | N = Total Meal
-        | P = On Leave Amount
+        | Q = On Leave Amount
+        | R = Total Amount
         */
         $sheet->getStyle("M2:M{$highestRow}")
             ->getNumberFormat()
@@ -247,8 +259,12 @@ class ExpatSummarySheet implements
         $sheet->getStyle("N2:N{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
-            
-        $sheet->getStyle("P2:P{$highestRow}")
+
+        $sheet->getStyle("Q2:Q{$highestRow}")
+            ->getNumberFormat()
+            ->setFormatCode('"Rp" #,##0');
+
+        $sheet->getStyle("R2:R{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
@@ -264,13 +280,13 @@ class ExpatSummarySheet implements
         $sheet->getStyle("G2:L{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $sheet->getStyle("O2:O{$highestRow}")
+        $sheet->getStyle("O2:P{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         /*
         | BORDER TABLE
         */
-        $sheet->getStyle("A1:P{$highestRow}")
+        $sheet->getStyle("A1:R{$highestRow}")
             ->applyFromArray([
                 'borders' => [
                     'allBorders' => [

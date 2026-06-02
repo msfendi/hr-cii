@@ -15,7 +15,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class ExpatOnleaveSheet implements
+class ExpatOnLeaveSheet implements
     FromCollection,
     WithTitle,
     WithHeadings,
