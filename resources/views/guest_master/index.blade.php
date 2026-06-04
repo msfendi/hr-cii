@@ -67,7 +67,27 @@
                            <td>{{ $row->gender }}</td>
                            <td>{{ $row->place }}</td>
                            <td>{{ $row->date_of_birth }}</td>
-                           <td>age</td>
+                           <td>
+                              @php
+                                 $ageStatus = '-';
+                                 $ageClass = 'success';
+
+                                 if ($row->date_of_birth) {
+                                       $birthDate = \Carbon\Carbon::parse($row->date_of_birth);
+                                       $today = \Carbon\Carbon::today();
+
+                                       $age = $birthDate->diff($today);
+
+                                       $ageStatus = $age->y . ' Tahun '
+                                                . $age->m . ' Bulan '
+                                                . $age->d . ' Hari';
+                                 }
+                              @endphp
+
+                              <span class="badge badge-{{ $ageClass }}">
+                                 {{ $ageStatus }}
+                              </span>
+                           </td>
                            <td>{{ $row->nationality }}</td>
                            <td>{{ $row->passport_no }}</td>
                            <td>{{ $row->visa_type }}</td>
@@ -140,7 +160,13 @@
    </body>
    <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
    <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
-   <script src="{{asset('js/demo/datatables-demo.js')}}"></script>
+
+   <link href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap4.min.css" rel="stylesheet">
+
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
    <script>
       $('.btn-delete').click(function(){
       
@@ -154,5 +180,24 @@
           );
       
       });
+
+      $(document).ready(function () {
+
+    $('#dataTable').DataTable({
+        dom: '<"row mb-3"<"col-md-6"B><"col-md-6"f>>rtip',
+
+        buttons: [
+            {
+                text: '<i class="fas fa-file-excel"></i> Export Guest Master',
+                className: 'btn btn-success',
+                action: function () {
+                    window.location.href =
+                        "{{ route('guest-master.export') }}";
+                }
+            }
+        ]
+    });
+
+});
    </script>
 </html>

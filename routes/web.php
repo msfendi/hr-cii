@@ -681,6 +681,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/edit/{id}', [GuestMasterController::class, 'edit'])->name('guest-master.edit');
         Route::post('/update/', [GuestMasterController::class, 'update'])->name('guest-master.update');
         Route::get('/delete/{id}', [GuestMasterController::class, 'destroy'])->name('guest-master.delete');
+        Route::get('/guest-master/export', [GuestMasterController::class, 'export'])->name('guest-master.export');
     });
 
     // Compensation

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\GuestMasterExport;
 use App\Models\ForeignGuest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class GuestMasterController extends Controller
@@ -87,5 +89,13 @@ class GuestMasterController extends Controller
         return redirect()
             ->route('guest-master.index')
             ->with('success', 'Guest Master deleted successfully');
+    }
+
+    public function export()
+    {
+        return Excel::download(
+            new GuestMasterExport(),
+            'guest_master_' . date('Ymd_His') . '.xlsx'
+        );
     }
 }

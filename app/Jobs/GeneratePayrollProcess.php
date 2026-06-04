@@ -301,6 +301,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
         //                 DB::connection('cii')
         //                     ->table('att_log')
+        //                     ->where('sn', '!=', '66208026030047') // EXCLUDE SN REGISTER
         //                     ->whereBetween(
         //                         DB::raw('CAST(scan_date AS DATE)'),
         //                         [$periodStart, $periodEnd]
@@ -572,6 +573,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                         DB::connection('cii')
                             ->table('att_log')
+                            ->where('sn', '!=', '66208026030047') // EXCLUDE SN REGISTER
                             ->whereBetween(
                                 DB::raw('CAST(scan_date AS DATE)'),
                                 [$periodStart, $periodEnd]

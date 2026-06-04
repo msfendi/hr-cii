@@ -178,6 +178,7 @@ class EmployeePayrollController extends Controller
 
         $logs = DB::table('att_log')
             ->where('pin', $employee->BARCODE)
+            ->where('sn', '!=', '66208026030047') // EXCLUDE SN REGISTER
             ->whereBetween('scan_date', [$startDate, $endDate])
             ->orderBy('scan_date')
             ->get();

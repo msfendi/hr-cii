@@ -30,7 +30,11 @@ class HealthTestController extends Controller
 
     public function create()
     {
-        $pelamar = Pelamar::select('PELAMAR.ID', 'NIK', 'NAMA', 'TINGGI_BADAN', 'BERAT_BADAN')->leftJoin('pelamar_details', 'pelamar_details.id_pelamar', '=', 'PELAMAR.ID')->where('pelamar_details.status_apply', '=', 'APPLIED')->get();
+        $pelamar = Pelamar::select('PELAMAR.ID', 'NIK', 'NAMA', 'TINGGI_BADAN', 'BERAT_BADAN')
+            ->leftJoin('pelamar_details', 'pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
+            ->where('pelamar_details.status_apply', '!=', 'ONBOARDING')
+            ->where('pelamar_details.status_apply', '!=', 'REJECTED')
+            ->get();
         // dd($pelamar[0]);
 
         return view('health_test.create', compact('pelamar'));

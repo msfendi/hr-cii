@@ -22,9 +22,10 @@ class PelamarController extends Controller
     public function index()
     {
         $pelamars = DB::connection('cii')->table('PELAMAR')
-            ->select('ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
+            ->select('PELAMAR.ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
+            ->leftJoin('pelamar_details', 'pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
             ->where('IS_KONTRAK', 'FALSE')
-            // ->where('STATUS_APPLY', 'ONBOARDING')
+            ->where('pelamar_details.status_apply', 'ONBOARDING')
             ->orderBy('NPK', 'ASC')
             ->get();
 

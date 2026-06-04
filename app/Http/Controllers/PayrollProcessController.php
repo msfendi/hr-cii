@@ -145,7 +145,6 @@ class PayrollProcessController extends Controller
                     $join->on('b.NPK', '=', 'ec.npk')
                         // ->whereDate('ec.start_date', '<=', $periodStart)
                         ->whereDate('ec.end_date', '>=', $periodEnd);
-
                 })
                 ->whereNull('ec.id')
                 ->select(
@@ -155,6 +154,15 @@ class PayrollProcessController extends Controller
                     'ec.start_date',
                     'ec.end_date'
                 )
+                ->orderBy('b.NPK')
+                ->get();
+
+
+
+            $invalidBankAccounts = DB::table('BIODATA as b')
+                ->leftJoin('payroll_masters', 'payroll_masters.npk', '=', 'b.NPK')
+                ->select('b.NPK', 'b.NAMA_KARYAWAN')
+                ->whereNull('payroll_masters.bank_account')
                 ->orderBy('b.NPK')
                 ->get();
         }
@@ -167,7 +175,8 @@ class PayrollProcessController extends Controller
 
         return response()->json([
             'approval' => $data,
-            'invalid_contracts' => $invalidContracts
+            'invalid_contracts' => $invalidContracts,
+            'invalid_bank_accounts' => $invalidBankAccounts
         ]);
     }
 

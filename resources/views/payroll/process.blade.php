@@ -118,6 +118,7 @@ $('#period_id').on('change', function(){
 
         let approvals = res.approval ?? [];
         let invalidContracts = res.invalid_contracts ?? [];
+        let invalidBankAccounts = res.invalid_bank_accounts ?? [];
 
         /*
         =========================================
@@ -212,6 +213,62 @@ $('#period_id').on('change', function(){
 
                                 <ul style="margin-bottom:0;padding-left:20px">
                                     ${employeeList}
+                                </ul>
+
+                            </div>
+
+                        </div>
+
+                    </td>
+                </tr>
+            `;
+        }
+
+        /*
+        =========================================
+        INVALID BANK ACCOUNT CHECK
+        =========================================
+        */
+
+        if(invalidBankAccounts.length > 0){
+
+            allFinish = false;
+
+            let employeeListBankAccount = '';
+
+            invalidBankAccounts.forEach(emp=>{
+
+                let empNameBankAccount = emp.NAMA_KARYAWAN ?? 'Nomor Rekening Belum Ada';
+
+                employeeListBankAccount += `
+                    <li>
+                        ${emp.NPK} - ${empNameBankAccount}
+                    </li>
+                `;
+            });
+
+            html += `
+                <tr>
+                    <td colspan="3">
+
+                        <div class="alert alert-danger mb-0">
+
+                            <b>Nomor Rekening Karyawan Belum Ada :</b>
+                            <br>
+                            <b>Total Karyawan : ${invalidBankAccounts.length}</b>
+
+                            <br><br>
+
+                            <div style="
+                                max-height:250px;
+                                overflow-y:auto;
+                                border:1px solid #ddd;
+                                padding:10px;
+                                background:#fff;
+                            ">
+
+                                <ul style="margin-bottom:0;padding-left:20px">
+                                    ${employeeListBankAccount}
                                 </ul>
 
                             </div>

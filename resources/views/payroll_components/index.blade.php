@@ -93,7 +93,13 @@
                                                 <td>{{ $component->category }}</td>
                                                 <td>{{ $component->priority }}</td>
                                                 <td>{{ $component->is_taxable ? 'Yes' : 'No' }}</td>
-                                                <td>{{ $component->is_active ? 'Yes' : 'No' }}</td>
+                                                <td>              
+                                                    @if($component->is_active)
+                                                    <span class="badge badge-success">Yes</span>
+                                                    @else
+                                                    <span class="badge badge-danger">No</span>
+                                                    @endif
+                                                </td>
                                                 <td class="text-center">
                                                     <a href="{{ route('payroll-components.edit', ['id' => $component->id]) }}"
                                                         class="btn btn-primary btn-circle btn-sm">
