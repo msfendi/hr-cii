@@ -94,10 +94,26 @@
                                                 </button>
 
                                                 {{-- PDF --}}
-                                                <a href="{{ route('health-test.pdf',$row->id) }}"
-                                                    class="btn btn-danger btn-circle btn-sm">
+                                                @if($row->file_surat_sehat)
+
+                                                <a href="{{ asset('storage/'.$row->file_surat_sehat) }}"
+                                                    target="_blank"
+                                                    class="btn btn-danger btn-circle btn-sm"
+                                                    title="Lihat PDF">
                                                     <i class="fa fa-file-pdf"></i>
                                                 </a>
+
+                                                @else
+
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-secondary btn-circle btn-sm"
+                                                    disabled
+                                                    title="PDF belum tersedia">
+                                                    <i class="fa fa-file-pdf"></i>
+                                                </button>
+
+                                                @endif
 
                                                 {{-- EDIT --}}
                                                 <a href="{{ route('health-test.edit',$row->id) }}"
@@ -106,9 +122,9 @@
                                                 </a>
 
                                                 {{-- DELETE --}}
-                                                <a href="{{ route('health-test.delete',$row->id) }}"
-                                                    onclick="return confirm('Delete data?')"
-                                                    class="btn btn-danger btn-circle btn-sm">
+                                                <a href="javascript:void(0)"
+                                                    data-url="{{ route('health-test.delete',$row->id) }}"
+                                                    class="btn btn-danger btn-circle btn-sm btn-delete">
                                                     <i class="fas fa-trash"></i>
                                                 </a>
 
@@ -352,6 +368,31 @@
 {{-- DATATABLE --}}
 <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
 <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    $(document).on('click', '.btn-delete', function() {
+
+        let url = $(this).data('url');
+
+        Swal.fire({
+            title: 'Delete Data?',
+            text: 'Data yang sudah dihapus tidak dapat dikembalikan.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, Hapus',
+            cancelButtonText: 'Batal',
+            reverseButtons: true
+        }).then((result) => {
+
+            if (result.isConfirmed) {
+                window.location.href = url;
+            }
+
+        });
+
+    });
+</script>
 
 <script>
     $(document).ready(function() {

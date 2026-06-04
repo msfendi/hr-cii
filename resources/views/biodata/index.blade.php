@@ -37,6 +37,9 @@
                                 <a href="{{ route('biodata.export') }}" class="btn btn-success btn-sm">
                                     <i class="fas fa-file-excel"></i> Export Excel
                                 </a>
+                                <a href="{{ route('biodata.gender') }}" class="btn btn-info btn-sm text-white">
+                                    <i class="fas fa-chart-pie"></i> Rekap Gender
+                                </a>
                                 <button type="button" class="btn btn-primary btn-sm btn-add">
                                     <i class="fas fa-plus"></i> Add Employee
                                 </button>

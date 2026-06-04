@@ -770,7 +770,9 @@
                                                     'SKCK' => $recruitment->file_skck,
                                                     'Surat Sehat' => $recruitment->file_surat_sehat,
                                                 ];
-                                                $docCount = collect($docs)->filter()->count();
+                                                $docCount = collect($docs)->filter()->count()
+                                                    + (isset($healthTestMap[$recruitment->NIK]) ? 1 : 0);
+
                                             @endphp
                                             <tr>
                                                 {{-- # --}}

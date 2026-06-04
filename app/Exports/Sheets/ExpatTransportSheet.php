@@ -2,7 +2,6 @@
 
 namespace App\Exports\Sheets;
 
-use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
@@ -16,7 +15,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class ExpatOnLeaveSheet implements
+class ExpatTransportSheet implements
     FromCollection,
     WithTitle,
     WithHeadings,
@@ -25,7 +24,7 @@ class ExpatOnLeaveSheet implements
 {
     public function title(): string
     {
-        return 'expat_onleave';
+        return 'expat_transport';
     }
 
     protected $start;
@@ -79,7 +78,6 @@ class ExpatOnLeaveSheet implements
                 'm.name',
                 'l.onleave_start',
                 'l.onleave_end',
-                'l.leave_type',
                 'l.component',
                 'l.amount',
                 'l.transactions_date',
@@ -103,8 +101,9 @@ class ExpatOnLeaveSheet implements
                     'name' => $row->name,
                     'leave_start' => $row->onleave_start,
                     'leave_end' => $row->onleave_end,
-                    'leave_type' => $row->leave_type,
-                    'leave_days' => Carbon::parse($row->onleave_end)->diffInDays(Carbon::parse($row->onleave_start)) + 1,
+                    'component' => $components[$componentId] ?? $componentId,
+                    'amount' => $amountArray[$i] ?? 0,
+                    'transactions_date' => $dateArray[$i] ?? null,
                     'remark' => $row->remark,
                 ]);
             }
@@ -120,8 +119,9 @@ class ExpatOnLeaveSheet implements
             'Name',
             'Leave Start',
             'Leave End',
-            'Leave Type',
-            'Leave Days',
+            'Component',
+            'Amount',
+            'Transaction Date',
             'Remark'
         ];
     }
@@ -138,7 +138,7 @@ class ExpatOnLeaveSheet implements
         /*
         | HEADER STYLE
         */
-        $sheet->getStyle('A1:G1')->applyFromArray([
+        $sheet->getStyle('A1:H1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 11,
@@ -177,7 +177,7 @@ class ExpatOnLeaveSheet implements
         /*
         | BORDER TABLE
         */
-        $sheet->getStyle("A1:G{$highestRow}")
+        $sheet->getStyle("A1:H{$highestRow}")
             ->applyFromArray([
                 'borders' => [
                     'allBorders' => [

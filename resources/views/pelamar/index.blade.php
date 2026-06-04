@@ -315,7 +315,25 @@
                                                                 <option value="">-- Pilih --</option>
                                                                 @foreach($departments as $dept)
                                                                     <option value="{{ $dept->ID_DEPT }}">
-                                                                        {{ $dept->DEPARTEMENT }}</option>
+                                                                        {{ $dept->DEPARTEMENT }}
+                                                                    </option>
+                                                                @endforeach
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group row mb-1">
+                                                        <label class="col-sm-4 col-form-label py-0">Section <span
+                                                                class="text-danger">*</span></label>
+                                                        <div class="col-sm-8">
+                                                            <select class="form-control py-0" id="assign_section"
+                                                                name="section" required>
+                                                                <option value="">-- Pilih --</option>
+                                                                <option value="CHUTEX">CHUTEX</option>
+                                                                @foreach($sections as $section)
+                                                                    <option value="{{ $section->name }}">
+                                                                        {{ $section->name }} - ( {{ $section->line_start }}
+                                                                        - {{ $section->line_end }} )
+                                                                    </option>
                                                                 @endforeach
                                                             </select>
                                                         </div>
@@ -408,9 +426,14 @@
                                                     <div class="form-group row mb-2 align-items-center">
                                                         <label class="col-sm-4 col-form-label">Status Staff</label>
                                                         <div class="col-sm-8">
-                                                            <div class="custom-control custom-switch mt-1" style="transform: scale(1.25); transform-origin: left center;">
-                                                                <input type="checkbox" class="custom-control-input" id="assign_is_staff" name="is_staff">
-                                                                <label class="custom-control-label font-weight-bold text-primary" for="assign_is_staff" style="cursor: pointer; user-select: none;">
+                                                            <div class="custom-control custom-switch mt-1"
+                                                                style="transform: scale(1.25); transform-origin: left center;">
+                                                                <input type="checkbox" class="custom-control-input"
+                                                                    id="assign_is_staff" name="is_staff">
+                                                                <label
+                                                                    class="custom-control-label font-weight-bold text-primary"
+                                                                    for="assign_is_staff"
+                                                                    style="cursor: pointer; user-select: none;">
                                                                     Tandai sebagai Staff
                                                                 </label>
                                                             </div>
@@ -481,25 +504,25 @@
         const tmk = $('#assign_tmk').val();
         const dur = parseInt($('#assign_duration').val());
         if (!tmk) { $('#assign_end_date_display').val(''); $('#assign_end_date').val(''); return; }
-        
+
         const parts = tmk.split('-');
         const d = new Date(parts[0], parts[1] - 1, parts[2]);
         d.setMonth(d.getMonth() + dur);
         d.setDate(d.getDate() - 1);
-        
+
         const y = d.getFullYear();
         const m = d.getMonth();
-        
+
         const options = [
             new Date(y, m - 1, 20),
             new Date(y, m, 7),
             new Date(y, m, 20),
             new Date(y, m + 1, 7)
         ];
-        
+
         let closestDate = options[0];
         let minDiff = Math.abs(d - closestDate);
-        
+
         for (let i = 1; i < options.length; i++) {
             const diff = Math.abs(d - options[i]);
             if (diff < minDiff) {
@@ -507,12 +530,12 @@
                 closestDate = options[i];
             }
         }
-        
+
         const dd = String(closestDate.getDate()).padStart(2, '0');
         const mm = String(closestDate.getMonth() + 1).padStart(2, '0');
         const yyyy = closestDate.getFullYear();
         const iso = `${yyyy}-${mm}-${dd}`;
-        
+
         $('#assign_end_date').val(iso);
         $('#assign_end_date_display').val(closestDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }));
     }

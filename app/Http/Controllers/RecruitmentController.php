@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\WhatsappDevice;
+use App\Models\HealthTest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Services\FonnteService;
@@ -109,8 +110,14 @@ class RecruitmentController extends Controller
         }
 
         $recruitments = $query->orderByDesc('PELAMAR.id')->get();
-        // dd($recruitments);
-        return view('recruitment.index', compact('recruitments', 'status'));
+
+        // // Map health test IDs by NIK for quick lookup in the blade
+        // $healthTestMap = HealthTest::select('id', 'nik')
+        //     ->get()
+        //     ->keyBy('nik')
+        //     ->map(fn($h) => $h->id);
+
+        return view('recruitment.index', compact('recruitments', 'status',));
     }
 
     public function updatePenilaian(Request $request)

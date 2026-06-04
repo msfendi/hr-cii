@@ -24,6 +24,7 @@ use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\BiodataKeluarController;
 use App\Http\Controllers\ChuFamilyController;
 use App\Http\Controllers\CompensationApproveController;
 use App\Http\Controllers\CompensationsController;
@@ -40,6 +41,7 @@ use App\Http\Controllers\EvaluationJobscopeController;
 use App\Http\Controllers\EvaluationQuestionnaireController;
 use App\Http\Controllers\ExpatController;
 use App\Http\Controllers\ForeignGuestController;
+use App\Http\Controllers\GuestMasterController;
 use App\Http\Controllers\HealthTestController;
 use App\Http\Controllers\HeatInsentifMasterController;
 use App\Http\Controllers\HolidayController;
@@ -116,6 +118,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // BIODATA
     Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/gender', [BiodataController::class, 'viewGender'])->name('biodata.gender')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
@@ -129,6 +132,12 @@ Route::group(['middleware' => 'auth'], function () {
 
     // PKWT
     Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin|HRD']);
+
+    // ========================================
+    // BIODATA KELUAR
+    Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+
 
     // ========================================
     // EMPLOYEES CONTRACT
@@ -414,6 +423,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/attendance-finger/not-finger', [AttendanceFingerController::class, 'notFinger'])->name('attendance-finger.not-finger')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'role:Admin|HRD']);
 
     //Attendance
     Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'role:Admin|HRD']);
@@ -547,7 +557,7 @@ Route::group(['middleware' => 'auth'], function () {
     // Recruitment
     Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'role:Admin|HRD']);
-Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'role:Admin|HRD']);
 
     /*
     |--------------------------------------------------------------------------
@@ -660,6 +670,17 @@ Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'upd
         Route::get('/edit/{id}', [ForeignGuestController::class, 'edit'])->name('foreign-guest.edit');
         Route::put('/update/{id}', [ForeignGuestController::class, 'update'])->name('foreign-guest.update');
         Route::get('/delete/{id}', [ForeignGuestController::class, 'destroy'])->name('foreign-guest.delete');
+    });
+
+    Route::prefix('guest-master')->middleware('role:Admin|GA')->group(function () {
+
+        Route::get('/', [GuestMasterController::class, 'index'])->name('guest-master.index');
+        Route::get('/create', [GuestMasterController::class, 'create'])->name('guest-master.create');
+        Route::post('/store', [GuestMasterController::class, 'store'])->name('guest-master.store');
+        Route::get('/{id}', [GuestMasterController::class, 'show'])->name('guest-master.show');
+        Route::get('/edit/{id}', [GuestMasterController::class, 'edit'])->name('guest-master.edit');
+        Route::post('/update/', [GuestMasterController::class, 'update'])->name('guest-master.update');
+        Route::get('/delete/{id}', [GuestMasterController::class, 'destroy'])->name('guest-master.delete');
     });
 
     // Compensation

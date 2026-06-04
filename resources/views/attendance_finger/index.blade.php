@@ -73,12 +73,24 @@
                         <h6 class="m-0 font-weight-bold text-danger">
                             <i class="fas fa-user-times mr-1"></i> Karyawan Belum Finger Hari Ini
                         </h6>
+                        <div class="d-flex align-items-center gap-2">
+                            <span id="selectedCount" class="badge badge-secondary mr-2" style="display:none;">0 dipilih</span>
+                            <button class="btn btn-warning btn-sm" id="btnAssignAttendance" style="display:none;">
+                                <i class="fas fa-user-check mr-1"></i> Assign Absensi Terpilih
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm ml-1" id="btnAssignAll">
+                                <i class="fas fa-users mr-1"></i> Assign Semua
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered table-sm table-hover" id="dataTableNotFinger" width="100%" cellspacing="0">
                                 <thead class="thead-light">
                                     <tr>
+                                        <th style="width:40px;">
+                                            <input type="checkbox" id="checkAll" title="Pilih semua">
+                                        </th>
                                         <th>#</th>
                                         <th>PIN/Barcode</th>
                                         <th>NPK</th>
@@ -147,7 +159,7 @@
         });
 
         // ─────────────────────────────────────────────
-        // TABLE 2 — Not Finger
+        // TABLE 2 — Not Finger (with bulk checkbox)
         // ─────────────────────────────────────────────
         var tableNotFinger = $('#dataTableNotFinger').DataTable({
             destroy: true,
@@ -159,6 +171,15 @@
                 }
             },
             columns: [
+                {
+                    // Checkbox column
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    render: function(data, type, row) {
+                        return `<input type="checkbox" class="row-check" value="${row.pin}" data-nama="${row.nama}">`;
+                    }
+                },
                 {data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false},
                 {data: 'pin',         name: 'pin'},
                 {data: 'npk',         name: 'npk'},
@@ -166,6 +187,106 @@
                 {data: 'bagian',      name: 'bagian'},
             ]
         });
+
+        // Re-bind checkboxes after every DataTable draw (pagination/search)
+        $('#dataTableNotFinger').on('draw.dt', function() {
+            $('#checkAll').prop('checked', false);
+            updateSelectionUI();
+        });
+
+        // ─── Select All checkbox ───
+        $('#checkAll').on('change', function() {
+            var checked = $(this).is(':checked');
+            $('#dataTableNotFinger tbody .row-check').prop('checked', checked);
+            updateSelectionUI();
+        });
+
+        // ─── Individual checkbox ───
+        $('#dataTableNotFinger').on('change', '.row-check', function() {
+            var total   = $('#dataTableNotFinger tbody .row-check').length;
+            var checked = $('#dataTableNotFinger tbody .row-check:checked').length;
+            $('#checkAll').prop('indeterminate', checked > 0 && checked < total);
+            $('#checkAll').prop('checked', checked === total && total > 0);
+            updateSelectionUI();
+        });
+
+        function updateSelectionUI() {
+            var count = $('#dataTableNotFinger tbody .row-check:checked').length;
+            if (count > 0) {
+                $('#selectedCount').text(count + ' dipilih').show();
+                $('#btnAssignAttendance').show();
+            } else {
+                $('#selectedCount').hide();
+                $('#btnAssignAttendance').hide();
+            }
+        }
+
+        // ─── Assign selected ───
+        $('#btnAssignAttendance').on('click', function() {
+            var pins = [];
+            $('#dataTableNotFinger tbody .row-check:checked').each(function() {
+                pins.push($(this).val());
+            });
+            if (pins.length === 0) return;
+            doAssign(pins);
+        });
+
+        // ─── Assign ALL (all pages) ───
+        $('#btnAssignAll').on('click', function() {
+            var pins = [];
+            tableNotFinger.rows().data().each(function(row) {
+                pins.push(row.pin);
+            });
+            if (pins.length === 0) {
+                Swal.fire({ icon: 'info', title: 'Tidak ada data', text: 'Semua karyawan sudah absen.' });
+                return;
+            }
+            doAssign(pins);
+        });
+
+        function doAssign(pins) {
+            var date = $('#fromdate').val();
+            if (!date) {
+                Swal.fire({ icon: 'error', title: 'Oops!', text: 'Pilih tanggal terlebih dahulu.' });
+                return;
+            }
+
+            Swal.fire({
+                title: 'Konfirmasi',
+                html: `Assign absensi <b>${pins.length} karyawan</b> pada tanggal <b>${date}</b> jam <b>08:00</b>?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#e74a3b',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Assign!',
+                cancelButtonText: 'Batal'
+            }).then(function(result) {
+                if (!result.isConfirmed) return;
+
+                Swal.fire({ title: 'Memproses...', text: 'Mohon tunggu', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+                $.ajax({
+                    url: "{{ route('attendance-finger.assign-attendance') }}",
+                    type: 'POST',
+                    data: { _token: "{{ csrf_token() }}", date: date, pins: pins },
+                    success: function(response) {
+                        Swal.fire({ icon: 'success', title: 'Berhasil!', text: response.message })
+                            .then(function() {
+                                table.ajax.reload();
+                                tableNotFinger.ajax.reload();
+                                $('#checkAll').prop('checked', false);
+                                updateSelectionUI();
+                            });
+                    },
+                    error: function(xhr) {
+                        Swal.fire({
+                            icon: 'error', title: 'Error',
+                            text: xhr.responseJSON ? xhr.responseJSON.message : 'Terjadi kesalahan!'
+                        });
+                    }
+                });
+            });
+        }
 
         // ─────────────────────────────────────────────
         // Date change — reload both tables

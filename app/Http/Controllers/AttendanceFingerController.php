@@ -394,4 +394,45 @@ class AttendanceFingerController extends Controller
         return response()->json(['error' => 'Invalid request'], 400);
     }
 
+    /**
+     * Bulk-assign manual attendance records into att_log for employees who did not finger.
+     */
+    public function assignAttendance(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'pins' => 'required|array|min:1',
+            'pins.*' => 'required|string',
+        ]);
+
+        $date        = $request->date;
+        $pins        = $request->pins;
+        $count       = 0;
+
+        foreach ($pins as $pin) {
+            // Generate random time between 07:50:00 and 07:55:00 (range of 300 seconds)
+            $randomSeconds = rand(0, 500);
+            $timeString = sprintf('07:%02d:%02d', 50 + floor($randomSeconds / 60), $randomSeconds % 60);
+            $scanDatetime = $date . ' ' . $timeString;
+
+            DB::connection('cii')->table('att_log')->updateOrInsert(
+                [
+                    'pin'       => $pin,
+                    'scan_date' => $scanDatetime,
+                    'sn'        => 'MANUAL',
+                ],
+                [
+                    'verifymode' => 1,
+                    'inoutmode'  => DB::connection('cii')->table('att_log')->where('pin', $pin)->whereDate('scan_date', $date)->count() + 1,
+                    'reserved'   => 0,
+                    'work_code'  => 0,
+                    'att_id'     => str_replace(['-', ' ', ':'], '', $scanDatetime . 'MANUAL' . $pin),
+                ]
+            );
+            $count++;
+        }
+
+        return response()->json(['message' => "Berhasil assign absensi untuk {$count} karyawan."]);
+    }
+
 }

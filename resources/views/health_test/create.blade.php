@@ -20,12 +20,14 @@
                               </div>
                               <div class="card-body">
                                  <!-- NIK SELECT2 -->
+                                 <input type="hidden" id="id" class="form-control" readonly>
                                  <div class="form-group">
                                     <label>NIK</label>
                                     <select name="nik" id="nik" class="form-control select2" required>
                                        <option value="">Pilih Pelamar</option>
                                        @foreach($pelamar as $p)
                                        <option value="{{$p->NIK}}"
+                                          data-id="{{$p->ID}}"
                                           data-tinggi="{{$p->TINGGI_BADAN}}"
                                           data-berat="{{$p->BERAT_BADAN}}">
                                           {{$p->NAMA}} ({{$p->NIK}})
@@ -162,6 +164,7 @@
                      Save Data
                      </button>
                   </form>
+                  <br>
                </div>
                @include('layout.footer')
                <!-- SELECT2 -->
@@ -180,6 +183,7 @@
                   
                   $('#tinggi').val(opt.data('tinggi') ?? '');
                   $('#berat').val(opt.data('berat') ?? '');
+                  $('#id').val(opt.data('id') ?? '');
                   
                   });
                   

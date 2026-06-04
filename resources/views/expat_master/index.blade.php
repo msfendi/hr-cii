@@ -53,6 +53,7 @@
                         <th>Date of Birth</th>
                         <th>Place</th>
                         <th>Nationality</th>
+                        <th>House Address</th>
                         <th>Direct Report</th>
                         <th>NPWP</th>
                         <th>Joining</th>
@@ -63,7 +64,6 @@
                         <th>KITAS Status</th>
                         <th>RPTKA Exp</th>
                         <th>RPTKA Status</th>
-                        <th>MERP Exp</th>
                         <th>Lease End</th>
                         <th width="120">Action</th>
                       </tr>
@@ -82,6 +82,7 @@
                         <td>{{ $row->TGLLAHIR }}</td>
                         <td>{{ $row->place }}</td>
                         <td>{{ $row->nationality }}</td>
+                        <td>{{ $row->house_address }}</td>
                         <td>{{ $row->direct_report }}</td>
                         <td>{{ $row->npwp }}</td>
                         <td> @if($row->joining_date) <span class="badge badge-secondary">
@@ -159,9 +160,6 @@
                             <span class="badge badge-{{ $rptkaClass }}">
                                 {{ $rptkaStatus }}
                           </td>
-                        <td> @if($row->merp_expiry) <span class="badge badge-secondary">
-                            {{ $row->merp_expiry }}
-                          </span> @endif </td>
                         <td>@if($row->lease_enddate) <span class="badge badge-secondary">
                             {{ $row->lease_enddate }}
                           </span> @endif</td>

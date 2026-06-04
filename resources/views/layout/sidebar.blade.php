@@ -33,6 +33,7 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('parent-dept.index') }}">Parent Departement</a>
             <a class="collapse-item" href="{{ route('dept.index') }}">Departement</a>
             <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
+            <a class="collapse-item" href="{{ route('biodata_keluar.index') }}">Biodata Keluar</a>
             <a class="collapse-item" href="{{ route('employees-contract.index') }}">Kontrak Karyawan</a>
             @endif
          </div>
@@ -61,7 +62,7 @@ $role = $roleusers[0]->rolename;
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#expat">
       <i class="fas fa-globe"></i>
-      <span>Expat & Foreign Guest</span>
+      <span>Expat Master</span>
       </a>
       <div id="expat" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
@@ -71,7 +72,20 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('expat.onleave.index') }}">On Leave</a>
             <a class="collapse-item" href="{{ route('expat.cost.index') }}">Cost</a>
             <a class="collapse-item" href="{{ route('epo.index') }}">EPO</a>
-            <hr>
+         </div>
+      </div>
+   </li>
+   @endif
+   {{-- ================= GUEST MASTER ================= --}}
+   @if(in_array($role,['Admin','GA']))
+   <li class="nav-item">
+      <a class="nav-link collapsed" data-toggle="collapse" data-target="#guest-master">
+      <i class="fas fa-globe"></i>
+      <span>Guest Master</span>
+      </a>
+      <div id="guest-master" class="collapse" data-parent="#accordionSidebar">
+         <div class="collapse-inner bg-white rounded">
+            <a class="collapse-item" href="{{ route('guest-master.index') }}">Guest Master</a>
             <a class="collapse-item" href="{{ route('foreign-guest.index') }}">Foreign Guest</a>
          </div>
       </div>
