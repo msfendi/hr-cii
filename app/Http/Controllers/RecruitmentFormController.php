@@ -195,8 +195,8 @@ class RecruitmentFormController extends Controller
                 // KABUPATEN_SEKOLAH: kolom NOT NULL, selalu isi
                 'KABUPATEN_SEKOLAH' => '-',
                 // Fisik — dari step7
-                'TINGGI_BADAN'     => $step7['tinggi_badan'] ?? null,
-                'BERAT_BADAN'      => $step7['berat_badan']  ?? null,
+                'TINGGI_BADAN'     => $step7['tinggi_badan'] ?? 0,
+                'BERAT_BADAN'      => $step7['berat_badan']  ?? 0,
                 // Status default
                 'IS_KONTRAK'       => 'FALSE',
             ]);
@@ -333,15 +333,15 @@ class RecruitmentFormController extends Controller
                 'no_kk'             => ['required', 'digits:16'],
                 'sim'               => ['nullable', 'string', 'max:30'],
                 'tempat_lahir'      => ['required', 'string', 'max:100'],
-                'tanggal_lahir'     => ['required', 'date', 'before:today'],
-                'warga_negara'      => ['required', 'in:WNI,WNA'],
-                'golongan_darah'    => ['required', 'in:A,B,AB,O'],
-                'jenis_kelamin'     => ['required', 'in:Laki-laki,Perempuan'],
-                'status_pernikahan' => ['required', 'in:Belum Kawin,Kawin,Cerai Hidup,Cerai Mati'],
-                'kb'                => ['required', 'in:Ya,Tidak'],
+                'tanggal_lahir'     => ['nullable', 'date', 'before:today'],
+                'warga_negara'      => ['nullable', 'in:WNI,WNA'],
+                'golongan_darah'    => ['nullable', 'in:A,B,AB,O'],
+                'jenis_kelamin'     => ['required', 'in:L,P'],
+                'status_pernikahan' => ['nullable', 'in:Belum Kawin,Kawin,Cerai Hidup,Cerai Mati'],
+                'kb'                => ['nullable', 'in:Ya,Tidak'],
                 'tanggungan'        => ['nullable', 'integer', 'min:0', 'max:20'],
                 'nomor_hp'          => ['required', 'string', 'max:20'],
-                'agama'             => ['required', 'in:Islam,Kristen,Katolik,Hindu,Buddha,Khonghucu'],
+                'agama'             => ['nullable', 'in:Islam,Kristen,Katolik,Hindu,Buddha,Khonghucu'],
                 'hobby'             => ['nullable', 'string', 'max:255'],
                 'transportasi'      => ['nullable', 'string', 'max:100'],
                 'pendidikan'        => ['nullable', 'in:SMA/SMK,D3,S1,S2,S3'],
@@ -426,16 +426,16 @@ class RecruitmentFormController extends Controller
             // Step 6 — Motivasi & Kegiatan Ekstra
             // ----------------------------------------------------------------
             6 => [
-                'motivasi'        => ['required', 'string', 'min:50', 'max:1000'],
-                'kegiatan_ekstra' => ['required', 'string', 'max:800'],
+                'motivasi'        => ['nullable', 'string', 'min:50', 'max:1000'],
+                'kegiatan_ekstra' => ['nullable', 'string', 'max:800'],
             ],
 
             // ----------------------------------------------------------------
             // Step 7 — Data Fisik
             // ----------------------------------------------------------------
             7 => [
-                'tinggi_badan' => ['required', 'integer', 'min:100', 'max:250'],
-                'berat_badan'  => ['required', 'integer', 'min:20',  'max:200'],
+                'tinggi_badan' => ['nullable', 'integer', 'min:100', 'max:250'],
+                'berat_badan'  => ['nullable', 'integer', 'min:20',  'max:200'],
             ],
 
             // ----------------------------------------------------------------

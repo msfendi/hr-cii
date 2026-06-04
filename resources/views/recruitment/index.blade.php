@@ -770,7 +770,9 @@
                                                     'SKCK' => $recruitment->file_skck,
                                                     'Surat Sehat' => $recruitment->file_surat_sehat,
                                                 ];
-                                                $docCount = collect($docs)->filter()->count();
+                                                $docCount = collect($docs)->filter()->count()
+                                                    + (isset($healthTestMap[$recruitment->NIK]) ? 1 : 0);
+
                                             @endphp
                                             <tr>
                                                 {{-- # --}}
@@ -862,7 +864,7 @@
                                                                             {{ $label }}
                                                                         </a>
                                                                     @endif
-                                                                @endforeach
+                                                                @endforeach        
                                                             </div>
                                                         </div>
                                                     @else
@@ -1665,6 +1667,19 @@
                         <i class="fas ${doc.icon}" style="color:${doc.color}"></i>${doc.label}
                     </a>`;
                 }
+
+
+                // TODO:: BUTTON TEST KESEHATAN BELUM RUNNING DENGAN BENAR
+                if(isset($healthTestMap[$recruitment->NIK])) {
+                    <a class="dropdown-item d-flex align-items-center"
+                        style="font-size:12.5px; gap:8px;"
+                        href="{{ route('health-test.pdf','1') }}"
+                        target="_blank">
+                        <i class="fas fa-heartbeat text-danger"></i>
+                        Test Kesehatan
+                    </a>
+                }
+
             });
             $('#doc_grid_modal').html(dh || '<span class="text-muted"><i class="fas fa-folder-open mr-1"></i>Tidak ada dokumen tersedia</span>');
         });

@@ -28,8 +28,12 @@ class BiodataController extends Controller
     {
         $query = DB::connection('cii')
             ->table('BIODATA')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'DEPT.DEPARTEMENT')
-            ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT');
+            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'employees_contract.end_date')
+            ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
+            ->leftJoin('employees_contract', function($join) {
+                $join->on('BIODATA.NPK', '=', 'employees_contract.npk')
+                     ->where('employees_contract.status_contract', 'AKTIF');
+            });
 
         if ($request->has('department_id') && $request->department_id != '') {
             $query->where('BIODATA.ID_DEPT', $request->department_id);
@@ -46,16 +50,25 @@ class BiodataController extends Controller
     public function store(Request $request)
     {
         try {
-            $check_nama = DB::connection('cii')->select("SELECT * FROM PKWT WHERE NAMA = '" . $request->nama . "' AND KTP = '" . $request->nik . "'");
+            // Menggunakan Query Builder untuk mencegah SQL Injection
+            $check_active = DB::connection('cii')->table('PKWT')
+                ->where('KTP', $request->nik)
+                ->whereNull('TKK')
+                ->first();
 
-            if (!empty($check_nama) && $check_nama[0]->TKK == null) {
-                Alert::error('Error', 'Karyawan ' . $check_nama[0]->NAMA . ' dengan NIK ' . $check_nama[0]->KTP . ' masih aktif.');
+            if ($check_active) {
+                Alert::error('Error', 'Karyawan dengan NIK ' . $request->nik . ' masih aktif. Silahkan out kan dulu karyawan tersebut.');
                 return redirect()->back();
             }
 
-            // Ketika karyawan pernah ada di PKWT dan TKK isi
-            if (!empty($check_nama) && $check_nama[0]->TKK != null) {
-                $this->storeExistingEmployee($request, $check_nama);
+            // Ketika karyawan pernah ada di PKWT dan TKK isi (mantan karyawan)
+            $check_mantan = DB::connection('cii')->table('PKWT')
+                ->where('KTP', $request->nik)
+                ->whereNotNull('TKK')
+                ->first();
+
+            if ($check_mantan) {
+                $this->storeExistingEmployee($request);
                 Alert::success('Success', 'Data berhasil ditambahkan');
                 return redirect()->route('biodata.index');
             } else {
@@ -70,15 +83,18 @@ class BiodataController extends Controller
         }
     }
 
-    private function storeExistingEmployee($request, $check_nama)
+    private function storeExistingEmployee($request)
     {
         DB::connection('cii')->beginTransaction();
         $last_barcode = DB::connection('cii')->table('BIODATA')->whereBetween('BARCODE', [100000000, 999999999])->orderBy('BARCODE', 'desc')->first()->BARCODE;
         $barcode = $last_barcode + 1;
 
+        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT', 'id_parent_dept')->where('ID_DEPT', $request->id_dept)->first();
+
         DB::connection('cii')->table('BIODATA')->insert([
             'NPK' => strtoupper($request->npk),
             'NAMA_KARYAWAN' => strtoupper($request->nama),
+            'BAG' => $dept->id_parent_dept,
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
@@ -86,36 +102,13 @@ class BiodataController extends Controller
             'STATUS' => 'A',
         ]);
 
-        DB::connection('cii')->table('PKWT_OUT')->insert([
-            'NPK' => strtoupper($check_nama[0]->NPK),
-            'NAMA' => strtoupper($check_nama[0]->NAMA),
-            'JK' => strtoupper($check_nama[0]->JK),
-            'TGLLAHIR' => $check_nama[0]->TGLLAHIR,
-            'TMPTLAHIR' => strtoupper($check_nama[0]->TMPTLAHIR),
-            'PDDK' => strtoupper($check_nama[0]->PDDK),
-            'AGAMA' => strtoupper($check_nama[0]->AGAMA),
-            'TMK' => $check_nama[0]->TMK,
-            'USIA' => $check_nama[0]->USIA,
-            'BAGIAN' => strtoupper($check_nama[0]->BAGIAN),
-            'ALAMAT' => strtoupper($check_nama[0]->ALAMAT),
-            'KABUPATEN' => strtoupper($check_nama[0]->KABUPATEN),
-            'KTP' => $check_nama[0]->KTP,
-            'NO_KK' => $check_nama[0]->NO_KK,
-            'IBU' => strtoupper($check_nama[0]->IBU),
-            'HP' => $check_nama[0]->HP,
-            'STATUS' => $check_nama[0]->STATUS,
-            'TANGGUNGAN' => $check_nama[0]->TANGGUNGAN,
-            'JURUSAN' => strtoupper($check_nama[0]->JURUSAN)
-        ]);
-
-        // delete from PKWT
-        DB::connection('cii')->table('PKWT')->where('NPK', strtoupper($check_nama[0]->NPK))->delete();
-
+        // insert to BIODATA completed above.
+        
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
         $diff = $tgl_lahir->diff($request->tmk);
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
 
-        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT')->where('ID_DEPT', $request->id_dept)->first();
+        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT', 'id_parent_dept')->where('ID_DEPT', $request->id_dept)->first();
 
         // insert into PKWT
         // insert into PKWT using Eloquent to trigger Observer
@@ -159,9 +152,12 @@ class BiodataController extends Controller
         $last_barcode = DB::connection('cii')->table('BIODATA')->where('BARCODE', '>=', '111000000')->where('BARCODE', '<=', '113000000')->orderBy('BARCODE', 'desc')->first()->BARCODE;
         $barcode = $last_barcode + 1;
 
+        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT', 'id_parent_dept')->where('ID_DEPT', $request->id_dept)->first();
+
         DB::connection('cii')->table('BIODATA')->insert([
             'NPK' => strtoupper($request->npk),
             'NAMA_KARYAWAN' => strtoupper($request->nama),
+            'BAG' => $dept->id_parent_dept,
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
@@ -173,8 +169,6 @@ class BiodataController extends Controller
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
         $diff = $tgl_lahir->diff($request->tmk);
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
-
-        $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT')->where('ID_DEPT', $request->id_dept)->first();
 
         PKWT::create([
             'NPK' => strtoupper($request->npk),
@@ -442,5 +436,22 @@ class BiodataController extends Controller
     public function export()
     {
         return Excel::download(new PKWTExport, 'data_karyawan_pkwt_' . date('Y-m-d_H-i-s') . '.xlsx');
+    }
+
+    public function viewGender() {
+        $data = DB::connection('cii')->table('dept as d')
+            ->leftJoin('biodata as b', 'b.ID_DEPT', '=', 'd.ID_DEPT')
+            ->select(
+                'd.DEPARTEMENT',
+                DB::raw('COUNT(b.NPK) as total'),
+                DB::raw("SUM(CASE WHEN b.JENIS_KEL = 'L' THEN 1 ELSE 0 END) as laki_laki"),
+                DB::raw("SUM(CASE WHEN b.JENIS_KEL = 'P' THEN 1 ELSE 0 END) as perempuan")
+            )
+            ->where('d.DEPARTEMENT', 'not like', '%HOD%')
+            ->where('d.DEPARTEMENT', 'not like', '%MANAGER%')
+            ->groupBy('d.DEPARTEMENT')
+            ->orderBy('d.DEPARTEMENT', 'ASC')
+            ->get();
+        return view('biodata.gender', compact('data'));
     }
 }

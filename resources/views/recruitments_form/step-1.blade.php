@@ -286,21 +286,27 @@
 
                         <div>
                             <label class="rf-label" for="tempat_lahir">Tempat Lahir <span class="text-error">*</span></label>
-                            <input class="rf-input" id="tempat_lahir" name="tempat_lahir"
+                            <input class="rf-input @error('tempat_lahir') error @enderror" id="tempat_lahir" name="tempat_lahir"
                                    value="{{ old('tempat_lahir', $savedData['tempat_lahir'] ?? '') }}"
                                    placeholder="Kota / Kabupaten" type="text">
+                            @error('tempat_lahir')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         <div>
                             <label class="rf-label" for="tanggal_lahir">Tanggal Lahir <span class="text-error">*</span></label>
-                            <input class="rf-input" id="tanggal_lahir" name="tanggal_lahir"
+                            <input class="rf-input @error('tanggal_lahir') error @enderror" id="tanggal_lahir" name="tanggal_lahir"
                                    value="{{ old('tanggal_lahir', $savedData['tanggal_lahir'] ?? '') }}" type="date">
+                            @error('tanggal_lahir')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         <div>
                             <label class="rf-label" for="warga_negara">Warga Negara <span class="text-error">*</span></label>
                             <div class="relative">
-                                <select class="rf-select" id="warga_negara" name="warga_negara">
+                                <select class="rf-select @error('warga_negara') error @enderror" id="warga_negara" name="warga_negara">
                                     <option value="" disabled {{ old('warga_negara', $savedData['warga_negara'] ?? '') === '' ? 'selected' : '' }}>Pilih WN</option>
                                     <option value="WNI" {{ old('warga_negara', $savedData['warga_negara'] ?? '') === 'WNI' ? 'selected' : '' }}>WNI (Warga Negara Indonesia)</option>
                                     <option value="WNA" {{ old('warga_negara', $savedData['warga_negara'] ?? '') === 'WNA' ? 'selected' : '' }}>WNA (Warga Negara Asing)</option>
@@ -309,6 +315,9 @@
                                     <span class="material-symbols-outlined" style="font-size:1rem;">expand_more</span>
                                 </div>
                             </div>
+                            @error('warga_negara')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         {{-- Umur (readonly, auto-calc) --}}
@@ -325,7 +334,7 @@
                         <div>
                             <label class="rf-label" for="golongan_darah">Golongan Darah <span class="text-error">*</span></label>
                             <div class="relative">
-                                <select class="rf-select" id="golongan_darah" name="golongan_darah">
+                                <select class="rf-select @error('golongan_darah') error @enderror" id="golongan_darah" name="golongan_darah">
                                     <option value="" disabled {{ old('golongan_darah', $savedData['golongan_darah'] ?? '') === '' ? 'selected' : '' }}>Pilih</option>
                                     @foreach(['A','B','AB','O'] as $gd)
                                         <option value="{{ $gd }}" {{ old('golongan_darah', $savedData['golongan_darah'] ?? '') === $gd ? 'selected' : '' }}>{{ $gd }}</option>
@@ -335,6 +344,9 @@
                                     <span class="material-symbols-outlined" style="font-size:1rem;">expand_more</span>
                                 </div>
                             </div>
+                            @error('golongan_darah')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                     </div>
@@ -356,26 +368,29 @@
                         <div>
                             <label class="rf-label">Jenis Kelamin <span class="text-error">*</span></label>
                             <div class="flex flex-wrap gap-3 mt-1">
-                                <label class="rf-radio-label">
-                                    <input type="radio" name="jenis_kelamin" value="Laki-laki"
-                                           {{ old('jenis_kelamin', $savedData['jenis_kelamin'] ?? '') === 'Laki-laki' ? 'checked' : '' }}>
+                                <label class="rf-radio-label @error('jenis_kelamin') border-[#ba1a1a] @enderror">
+                                    <input type="radio" name="jenis_kelamin" value="L"
+                                           {{ old('jenis_kelamin', $savedData['jenis_kelamin'] ?? '') === 'L' ? 'checked' : '' }}>
                                     <span class="material-symbols-outlined" style="font-size:1rem;">man</span>
                                     Laki-laki
                                 </label>
-                                <label class="rf-radio-label">
-                                    <input type="radio" name="jenis_kelamin" value="Perempuan"
-                                           {{ old('jenis_kelamin', $savedData['jenis_kelamin'] ?? '') === 'Perempuan' ? 'checked' : '' }}>
+                                <label class="rf-radio-label @error('jenis_kelamin') border-[#ba1a1a] @enderror">
+                                    <input type="radio" name="jenis_kelamin" value="P"
+                                           {{ old('jenis_kelamin', $savedData['jenis_kelamin'] ?? '') === 'P' ? 'checked' : '' }}>
                                     <span class="material-symbols-outlined" style="font-size:1rem;">woman</span>
                                     Perempuan
                                 </label>
                             </div>
+                            @error('jenis_kelamin')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         {{-- Status Pernikahan --}}
                         <div>
                             <label class="rf-label" for="status_pernikahan">Status Pernikahan <span class="text-error">*</span></label>
                             <div class="relative">
-                                <select class="rf-select" id="status_pernikahan" name="status_pernikahan">
+                                <select class="rf-select @error('status_pernikahan') error @enderror" id="status_pernikahan" name="status_pernikahan">
                                     <option value="" disabled {{ old('status_pernikahan', $savedData['status_pernikahan'] ?? '') === '' ? 'selected' : '' }}>Pilih Status</option>
                                     @foreach(['Belum Kawin','Kawin','Cerai Hidup','Cerai Mati'] as $sp)
                                         <option value="{{ $sp }}" {{ old('status_pernikahan', $savedData['status_pernikahan'] ?? '') === $sp ? 'selected' : '' }}>{{ $sp }}</option>
@@ -385,6 +400,9 @@
                                     <span class="material-symbols-outlined" style="font-size:1rem;">expand_more</span>
                                 </div>
                             </div>
+                            @error('status_pernikahan')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         {{-- KB --}}
@@ -432,18 +450,21 @@
                                 <div class="rf-icon-prefix">
                                     <span class="material-symbols-outlined" style="font-size:1rem;">phone_iphone</span>
                                 </div>
-                                <input class="rf-input rf-input-icon"
+                                <input class="rf-input rf-input-icon @error('nomor_hp') error @enderror"
                                        id="nomor_hp" name="nomor_hp"
                                        value="{{ old('nomor_hp', $savedData['nomor_hp'] ?? '') }}"
                                        placeholder="08xxxxxxxxxx" type="tel">
                             </div>
+                            @error('nomor_hp')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         {{-- Agama --}}
                         <div>
                             <label class="rf-label" for="agama">Agama <span class="text-error">*</span></label>
                             <div class="relative">
-                                <select class="rf-select" id="agama" name="agama">
+                                <select class="rf-select @error('agama') error @enderror" id="agama" name="agama">
                                     <option value="" disabled {{ old('agama', $savedData['agama'] ?? '') === '' ? 'selected' : '' }}>Pilih Agama</option>
                                     @foreach(['Islam','Kristen','Katolik','Hindu','Buddha','Khonghucu'] as $ag)
                                         <option value="{{ $ag }}" {{ old('agama', $savedData['agama'] ?? '') === $ag ? 'selected' : '' }}>{{ $ag }}</option>
@@ -453,6 +474,9 @@
                                     <span class="material-symbols-outlined" style="font-size:1rem;">expand_more</span>
                                 </div>
                             </div>
+                            @error('agama')
+                                <p class="rf-error">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         {{-- Hobby --}}

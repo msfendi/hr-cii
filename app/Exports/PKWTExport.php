@@ -12,6 +12,7 @@ class PKWTExport implements WithMultipleSheets
     public function sheets(): array
     {
         return [
+            new PKWTCountGenderExport(),
             new PKWTActiveExport(),
             new PKWTNonActiveExport(),
         ];

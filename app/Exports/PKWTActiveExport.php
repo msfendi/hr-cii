@@ -22,29 +22,41 @@ class PKWTActiveExport implements FromCollection, WithHeadings, WithTitle, Shoul
     {
         return DB::connection('cii')->table('PKWT')
             ->select(
-                'NPK',
-                'NAMA',
-                'JK',
-                'TGLLAHIR',
-                'TMPTLAHIR',
-                'PDDK',
-                'AGAMA',
-                'TMK',
-                'USIA',
-                'BAGIAN',
-                'ALAMAT',
-                'KABUPATEN',
-                'KTP',
-                'NO_KK',
-                'IBU',
-                'HP',
-                'STATUS',
-                'TANGGUNGAN',
-                'JURUSAN'
+                'PKWT.NPK',
+                'PKWT.NAMA',
+                'PKWT.JK',
+                'PKWT.TGLLAHIR',
+                'PKWT.TMPTLAHIR',
+                'PKWT.PDDK',
+                'PKWT.AGAMA',
+                'PKWT.TMK',
+                'PKWT.USIA',
+                'PKWT.BAGIAN',
+                'PKWT.ALAMAT',
+                'PKWT.KABUPATEN',
+                'PKWT.KTP',
+                'PKWT.NO_KK',
+                'PKWT.IBU',
+                'PKWT.HP',
+                'PKWT.STATUS',
+                'PKWT.TANGGUNGAN',
+                'PKWT.JURUSAN',
+                'employees_contract.status_contract as STATUS_KONTRAK',
+                'employees_contract.end_date as AKHIR_KONTRAK'
             )
-            ->whereNull('TKK')
+            ->leftJoin('employees_contract', function($join) {
+                $join->on('PKWT.NPK', '=', 'employees_contract.npk')
+                     ->where('employees_contract.status_contract', 'AKTIF');
+            })
+            ->whereNull('PKWT.TKK')
             ->get()
             ->map(function ($row) {
+                // Simpan dan hapus properti agar urutannya di akhir sesuai headings
+                $statusKontrak = $row->STATUS_KONTRAK;
+                $akhirKontrak = $row->AKHIR_KONTRAK;
+                unset($row->STATUS_KONTRAK);
+                unset($row->AKHIR_KONTRAK);
+
                 // Parse tanggal untuk kalkulasi (sebelum format)
                 $born = Carbon::parse($row->TGLLAHIR);
                 $tmk = Carbon::parse($row->TMK);
@@ -65,6 +77,22 @@ class PKWTActiveExport implements FromCollection, WithHeadings, WithTitle, Shoul
                 // Tambahkan prefix ' untuk KTP dan NO_KK agar dibaca sebagai text di Excel
                 $row->KTP = "'" . $row->KTP;
                 $row->NO_KK = "'" . $row->NO_KK;
+
+                // Tambahkan kembali status dan akhir kontrak agar posisinya di paling akhir (sesuai headings)
+                if (empty($akhirKontrak)) {
+                    $row->STATUS_KONTRAK = 'BELUM ADA KONTRAK';
+                } else {
+                    $today = Carbon::today();
+                    $endDate = Carbon::parse($akhirKontrak)->startOfDay();
+                    
+                    if ($endDate->greaterThanOrEqualTo($today)) {
+                        $row->STATUS_KONTRAK = 'AKTIF';
+                    } else {
+                        $row->STATUS_KONTRAK = 'BELUM DIPERPANJANG';
+                    }
+                }
+
+                $row->AKHIR_KONTRAK = !empty($akhirKontrak) ? Carbon::parse($akhirKontrak)->format('d-m-Y') : null;
 
                 return $row;
             });
@@ -93,7 +121,9 @@ class PKWTActiveExport implements FromCollection, WithHeadings, WithTitle, Shoul
             'TANGGUNGAN',
             'JURUSAN',
             'USIA_SAAT_INI',
-            'DURASI_KERJA'
+            'DURASI_KERJA',
+            'STATUS_KONTRAK',
+            'AKHIR_KONTRAK'
         ];
     }
 

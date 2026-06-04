@@ -33,6 +33,7 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('parent-dept.index') }}">Parent Departement</a>
             <a class="collapse-item" href="{{ route('dept.index') }}">Departement</a>
             <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
+            <a class="collapse-item" href="{{ route('biodata_keluar.index') }}">Biodata Keluar</a>
             <a class="collapse-item" href="{{ route('employees-contract.index') }}">Kontrak Karyawan</a>
             @endif
          </div>

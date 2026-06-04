@@ -14,6 +14,7 @@ use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ParentDeptController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\DeptController;
 use App\Http\Controllers\AdminKunjunganController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\BiodataKeluarController;
 use App\Http\Controllers\ChuFamilyController;
 use App\Http\Controllers\CompensationApproveController;
 use App\Http\Controllers\CompensationsController;
@@ -115,6 +117,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // BIODATA
     Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/gender', [BiodataController::class, 'viewGender'])->name('biodata.gender')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
@@ -130,6 +133,10 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin|HRD']);
 
     // ========================================
+    // BIODATA KELUAR
+    Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+
     // EMPLOYEES CONTRACT
     // ========================================
     Route::prefix('employees-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING'])->group(function () {
@@ -410,6 +417,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/attendance-finger/not-finger', [AttendanceFingerController::class, 'notFinger'])->name('attendance-finger.not-finger')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'role:Admin|HRD']);
 
     //Attendance
     Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'role:Admin|HRD']);
@@ -426,7 +434,19 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance')->middleware(['auth', 'role:Admin|HRD']);
 
     // DEPT
+    Route::get('/parent-dept/index', [ParentDeptController::class, 'index'])->name('parent-dept.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/parent-dept/template', [ParentDeptController::class, 'exportTemplate'])->name('parent-dept.template')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/parent-dept/export', [ParentDeptController::class, 'exportData'])->name('parent-dept.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/import', [ParentDeptController::class, 'import'])->name('parent-dept.import')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/parent-dept/get-data', [ParentDeptController::class, 'getData'])->name('parent-dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/store', [ParentDeptController::class, 'store'])->name('parent-dept.store')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/update/{id}', [ParentDeptController::class, 'update'])->name('parent-dept.update')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/parent-dept/destroy/{id}', [ParentDeptController::class, 'destroy'])->name('parent-dept.destroy')->middleware(['auth', 'role:Admin|HRD']);
+
     Route::get('/dept/index', [DeptController::class, 'index'])->name('dept.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/dept/template', [DeptController::class, 'exportTemplate'])->name('dept.template')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/dept/export', [DeptController::class, 'exportData'])->name('dept.export')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/dept/import', [DeptController::class, 'import'])->name('dept.import')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/dept/get-data', [DeptController::class, 'getData'])->name('dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/dept/store', [DeptController::class, 'store'])->name('dept.store')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/dept/update/{id}', [DeptController::class, 'update'])->name('dept.update')->middleware(['auth', 'role:Admin|HRD']);
@@ -512,6 +532,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::prefix('report-poliklinik')->middleware('role:Admin|Dokter')->group(function () {
         Route::get('/kartu-berobat/{npk}', [AdminReportController::class, 'kartuBerobat'])->name('report.kartu-berobat');
         Route::get('/rekap', [AdminReportController::class, 'rekap'])->name('report.rekap');
+        Route::get('/export-excel', [AdminReportController::class, 'exportExcel'])->name('report.export-excel');
     });
 
     // ========================================
@@ -522,6 +543,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/mulai-periksa/{id}', [DokterAntrianController::class, 'mulaiPeriksa'])->name('dokter.mulai-periksa');
         Route::get('/periksa/{id}', [DokterAntrianController::class, 'formPeriksa'])->name('dokter.periksa');
         Route::post('/selesai-periksa/{id}', [DokterAntrianController::class, 'selesaiPeriksa'])->name('dokter.selesai-periksa');
+        Route::get('/resep/{id}', [DokterAntrianController::class, 'getResep'])->name('dokter.get-resep');
+        Route::post('/simpan-qty-obat/{id}', [DokterAntrianController::class, 'simpanQtyObat'])->name('dokter.simpan-qty-obat');
     });
 
     // Recruitment
