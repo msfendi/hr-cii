@@ -26,7 +26,7 @@ $role = $roleusers[0]->rolename;
       </a>
       <div id="management" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
-            @if(in_array($role,['Admin','HRD']))
+            @if(in_array($role,['Admin','HRD','Payroll_STAFF','Payroll_SEWING','Payroll_NONSEWING']))
             <a class="collapse-item" href="{{ route('devices.index') }}">Whatsapp Device</a>
             <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
             <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar</a>
