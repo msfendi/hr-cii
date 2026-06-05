@@ -73,6 +73,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotificationsContractController;
 use App\Http\Controllers\ParentDeptController;
 use App\Http\Controllers\RecruitmentFormController;
+use App\Http\Controllers\SewingViolationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -142,7 +143,7 @@ Route::group(['middleware' => 'auth'], function () {
     // ========================================
     // EMPLOYEES CONTRACT
     // ========================================
-    Route::prefix('employees-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING'])->group(function () {
+    Route::prefix('employees-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD'])->group(function () {
         Route::get('/',                 [EmployeesContractController::class, 'index'])->name('employees-contract.index');
         Route::get('/get-data',         [EmployeesContractController::class, 'getData'])->name('employees-contract.get-data');
         Route::get('/by-npk/{npk}',     [EmployeesContractController::class, 'getByNpk'])->name('employees-contract.by-npk');
@@ -742,6 +743,15 @@ Route::prefix('insentif-threshold')->group(function () {
     Route::get('/edit/{id}', [InsentifThresholdController::class, 'edit'])->name('insentif.threshold.edit')->middleware(['auth', 'role:Admin']);
     Route::post('/update/{id}', [InsentifThresholdController::class, 'update'])->name('insentif.threshold.update')->middleware(['auth', 'role:Admin']);
     Route::get('/delete/{id}', [InsentifThresholdController::class, 'delete'])->name('insentif.threshold.delete')->middleware(['auth', 'role:Admin']);
+});
+
+Route::prefix('sewing-violations')->group(function () {
+    Route::get('/', [SewingViolationController::class, 'index'])->name('sewing-violations.index');
+    Route::get('/create', [SewingViolationController::class, 'create'])->name('sewing-violations.create');
+    Route::post('/store', [SewingViolationController::class, 'store'])->name('sewing-violations.store');
+    Route::get('/edit/{id}', [SewingViolationController::class, 'edit'])->name('sewing-violations.edit');
+    Route::post('/update', [SewingViolationController::class, 'update'])->name('sewing-violations.update');
+    Route::get('/delete/{id}', [SewingViolationController::class, 'delete'])->name('sewing-violations.delete');
 });
 
 // ========================================
