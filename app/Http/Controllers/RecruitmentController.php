@@ -81,24 +81,24 @@ class RecruitmentController extends Controller
         if ($status === 'never_confirm') {
             $query->where('pd.status_apply', 'APPLIED');
         } elseif ($status === 'step_interview') {
-            $query->where(function($q) {
-                $q->whereNull('pd.result_interview')->orWhere('pd.result_interview', '');
+            $query->where(function ($q) {
+                $q->whereNull('pd.result_interview')->orWhereIn('pd.result_interview', ['', 'FALSE']);
             })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'step_kesehatan') {
-            $query->where('pd.result_interview', 'LOLOS')
-                  ->where(function($q) {
-                      $q->whereNull('pd.result_kesehatan')->orWhere('pd.result_kesehatan', '');
-                  })->where('pd.status_apply', '!=', 'REJECTED');
+            $query->where('pd.result_interview', 'TRUE')
+                ->where(function ($q) {
+                    $q->whereNull('pd.result_kesehatan')->orWhereIn('pd.result_kesehatan', ['', 'FALSE']);
+                })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'step_teknis') {
-            $query->where('pd.result_kesehatan', 'LOLOS')
-                  ->where(function($q) {
-                      $q->whereNull('pd.result_test')->orWhere('pd.result_test', '');
-                  })->where('pd.status_apply', '!=', 'REJECTED');
+            $query->where('pd.result_kesehatan', 'TRUE')
+                ->where(function ($q) {
+                    $q->whereNull('pd.result_test')->orWhereIn('pd.result_test', ['', 'FALSE']);
+                })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'step_user') {
-            $query->where('pd.result_test', 'LOLOS')
-                  ->where(function($q) {
-                      $q->whereNull('pd.result_user')->orWhere('pd.result_user', '');
-                  })->where('pd.status_apply', '!=', 'REJECTED');
+            $query->where('pd.result_test', 'TRUE')
+                ->where(function ($q) {
+                    $q->whereNull('pd.result_user')->orWhereIn('pd.result_user', ['', 'FALSE']);
+                })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'ready_test') {
             $query->where('pd.status_apply', 'INVITATION TEST');
         } elseif ($status === 'ready_interview') {
@@ -111,13 +111,14 @@ class RecruitmentController extends Controller
 
         $recruitments = $query->orderByDesc('PELAMAR.id')->get();
 
-        // // Map health test IDs by NIK for quick lookup in the blade
-        // $healthTestMap = HealthTest::select('id', 'nik')
-        //     ->get()
-        //     ->keyBy('nik')
-        //     ->map(fn($h) => $h->id);
+        // Map health test IDs by NIK for quick lookup in the blade
+        $healthTestMap = HealthTest::select('id', 'nik')
+            ->get()
+            ->keyBy('nik')
+            ->map(fn($h) => $h->id);
 
-        return view('recruitment.index', compact('recruitments', 'status',));
+        return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap'));
+
     }
 
     public function updatePenilaian(Request $request)
@@ -142,6 +143,14 @@ class RecruitmentController extends Controller
             $filename = time() . '_teknis_' . $file->getClientOriginalName();
             $path = $file->storeAs('recruitment/teknis', $filename, 'public');
             $updates['file_test'] = $path;
+        }
+
+         // Auto status_apply: FALSE di mana saja -> REJECTED, semua TRUE -> ONBOARDING
+        $results = array_filter($updates, fn($v, $k) => str_starts_with($k, 'result_'), ARRAY_FILTER_USE_BOTH);
+        if (in_array('FALSE', $results)) {
+            $updates['status_apply'] = 'REJECTED';
+        } elseif (count($results) === 4 && !in_array(null, $results) && !in_array('', $results) && count(array_unique($results)) === 1 && reset($results) === 'TRUE') {
+            $updates['status_apply'] = 'ONBOARDING';
         }
 
         DB::connection('cii')->table('pelamar_details')
