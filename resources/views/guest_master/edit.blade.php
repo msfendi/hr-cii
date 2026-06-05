@@ -115,7 +115,7 @@
 
                                         <div class="form-group">
                                             <label>Passport No</label>
-                                            <input type="number"
+                                            <input type="text"
                                                 name="passport_no"
                                                 class="form-control"
                                                 value="{{ $data->passport_no }}">
