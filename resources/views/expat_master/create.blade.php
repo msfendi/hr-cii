@@ -67,10 +67,10 @@
                         <label>RPTKA Expiry</label>
                         <input type="date" name="rptka_expiry" class="form-control" value="{{ old('rptka_expiry') }}">
                       </div>
-                      <div class="form-group">
+                      <!-- <div class="form-group">
                         <label>MERP Expiry</label>
                         <input type="date" name="merp_expiry" class="form-control" value="{{ old('merp_expiry') }}">
-                      </div>
+                      </div> -->
                       <div class="form-group">
                         <label>House Address</label>
                         <textarea name="house_address" class="form-control" rows="3">{{ old('house_address') }}</textarea>
