@@ -185,6 +185,7 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('insentif.threshold.index') }}">Insentif Threshold</a>
             <a class="collapse-item" href="{{ route('dept-insentif-role.index') }}">Insentif Mapping</a>
             <a class="collapse-item" href="{{ route('insentif-role-formulas.index') }}">Insentif Formula</a>
+            <a class="collapse-item" href="{{ route('sewing-violations.index') }}">Sewing Violations</a>
             <hr>
             <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif</a>
             <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif</a>

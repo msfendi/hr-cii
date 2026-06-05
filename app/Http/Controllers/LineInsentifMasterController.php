@@ -251,6 +251,13 @@ class LineInsentifMasterController extends Controller
         "), 'p.NPK', '=', 'emp.NPK')
 
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            ->leftJoin('sections as s', function ($join) {
+                $join->on(
+                    DB::raw('TRY_CAST(emp.SECTION AS BIGINT)'),
+                    '=',
+                    's.id'
+                );
+            })
             ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
             ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
 
@@ -269,7 +276,9 @@ class LineInsentifMasterController extends Controller
                 'emp.ID_DEPT',
                 'd.DEPARTEMENT as DEPARTEMENT',
                 'irf.role as role',
-                'emp.SECTION as SECTION'
+                'emp.SECTION as SECTION',
+                's.line_start',
+                's.line_end'
             );
 
         $employees = DB::connection('cii')
@@ -309,10 +318,16 @@ class LineInsentifMasterController extends Controller
 
             if ($sewing <= 0) continue;
 
+            $dept = $employee->DEPARTEMENT;
+
+            if ($employee->line_start !== null && $employee->line_end !== null) {
+                $dept .= " ({$employee->line_start}-{$employee->line_end})";
+            }
+
             $results[] = [
                 'npk' => $employee->NPK,
                 'name' => $employee->NAMA_KARYAWAN,
-                'dept' => $employee->DEPARTEMENT,
+                'dept' => $dept,
                 'sewing_insentif' => $sewing,
                 'tkk' => $employee->tkk,
                 'status' => $status
@@ -430,7 +445,7 @@ class LineInsentifMasterController extends Controller
         | OPERATOR
         |--------------------------------------------------------------------------
         */
-
+        $lineViolations = 0;
         if ($role == 'operator' || $role == 'supervisor') {
 
             /*
@@ -456,6 +471,47 @@ class LineInsentifMasterController extends Controller
                 )
                 ->orderBy('le.date')
                 ->get();
+
+            if (strtolower($role) == 'operator') {
+
+                $lineViolations = DB::table('sewing_violations')
+                    ->whereBetween('tanggal', [
+                        $period->start_date,
+                        $period->end_date
+                    ])
+                    ->where('id_dept', $employee->ID_DEPT)
+                    ->count();
+            } elseif (strtolower($role) == 'supervisor') {
+
+                $leaderDept = DB::table('DEPT')
+                    ->where('ID_DEPT', $employee->ID_DEPT)
+                    ->value('DEPARTEMENT');
+
+                $lineNumber = null;
+
+                if (
+                    preg_match('/LINE\s+(\d+)/i', $leaderDept, $matches)
+                ) {
+                    $lineNumber = $matches[1];
+                }
+
+                $lineDeptId = DB::table('DEPT')
+                    ->where('DEPARTEMENT', 'LINE ' . $lineNumber)
+                    ->value('ID_DEPT');
+
+                $lineViolations = DB::table('sewing_violations')
+                    ->whereBetween('tanggal', [
+                        $period->start_date,
+                        $period->end_date
+                    ])
+                    ->where('id_dept', $lineDeptId)
+                    ->count();
+            } else {
+
+                $lineViolations = 0;
+            }
+
+            // dd($employee, $lineViolations);
 
             foreach ($lineefficiencies as $row) {
 
@@ -516,7 +572,8 @@ class LineInsentifMasterController extends Controller
                     $role,
                     'sewing',
                     $lineInsentif,
-                    1 //karena hanya 1 line
+                    1, //karena hanya 1 line
+                    $lineViolations
                 );
             }
         } else {
@@ -558,6 +615,22 @@ class LineInsentifMasterController extends Controller
                 ->get();
 
             // dd($grouped);
+
+
+            $lineViolations = DB::table('sewing_violations')
+                ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
+                ->whereBetween('sewing_violations.tanggal', [
+                    $period->start_date,
+                    $period->end_date
+                ])
+                ->where('d.DEPARTEMENT', 'like', 'LINE %')
+                ->whereRaw("
+                        CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)
+                        BETWEEN ? AND ?
+                    ", [$lineStart, $lineEnd])
+                ->count();
+
+            // dd($lineViolations);
 
             $jumlahLine = DB::table('line_efficiencies')
                 ->where('period_id', $period->id)
@@ -616,7 +689,8 @@ class LineInsentifMasterController extends Controller
                     $role,
                     'sewing',
                     $totalLineInsentif,
-                    $jumlahLine->first()->jumlah_line
+                    $jumlahLine->first()->jumlah_line,
+                    $lineViolations
                 );
 
                 $collectionDay->push($amount);
@@ -651,10 +725,12 @@ class LineInsentifMasterController extends Controller
         $role,
         $dept,
         $totalLineInsentif,
-        $jumlahLine
+        $jumlahLine,
+        $violationsCount
     ) {
 
         $jumlahLine = max($jumlahLine, 1);
+        // dd($violationsCount);
 
         /*
     |--------------------------------------------------------------------------
@@ -692,6 +768,7 @@ class LineInsentifMasterController extends Controller
         $variables = [
             'totalLineInsentif' => $totalLineInsentif,
             'jumlahLine'        => $jumlahLine,
+            'violationsCount'   => $violationsCount ?? 0
         ];
 
         foreach ($variables as $key => $value) {

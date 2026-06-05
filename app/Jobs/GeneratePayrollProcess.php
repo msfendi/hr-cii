@@ -1112,6 +1112,7 @@ class GeneratePayrollProcess implements ShouldQueue
         | OPERATOR
         |--------------------------------------------------------------------------
         */
+                        $lineViolations = 0;
                         if ($employee->role == 'operator' || $employee->role == 'supervisor') {
 
                             /*
@@ -1137,6 +1138,47 @@ class GeneratePayrollProcess implements ShouldQueue
                                 )
                                 ->orderBy('le.date')
                                 ->get();
+
+                            if (strtolower($role) == 'operator') {
+
+                                $lineViolations = DB::table('sewing_violations')
+                                    ->whereBetween('tanggal', [
+                                        $period->start_date,
+                                        $period->end_date
+                                    ])
+                                    ->where('id_dept', $employee->ID_DEPT)
+                                    ->count();
+                            } elseif (strtolower($role) == 'supervisor') {
+
+                                $leaderDept = DB::table('DEPT')
+                                    ->where('ID_DEPT', $employee->ID_DEPT)
+                                    ->value('DEPARTEMENT');
+
+                                $lineNumber = null;
+
+                                if (
+                                    preg_match('/LINE\s+(\d+)/i', $leaderDept, $matches)
+                                ) {
+                                    $lineNumber = $matches[1];
+                                }
+
+                                $lineDeptId = DB::table('DEPT')
+                                    ->where('DEPARTEMENT', 'LINE ' . $lineNumber)
+                                    ->value('ID_DEPT');
+
+                                $lineViolations = DB::table('sewing_violations')
+                                    ->whereBetween('tanggal', [
+                                        $period->start_date,
+                                        $period->end_date
+                                    ])
+                                    ->where('id_dept', $lineDeptId)
+                                    ->count();
+                            } else {
+
+                                $lineViolations = 0;
+                            }
+
+                            // dd($employee, $lineViolations);
 
                             foreach ($lineefficiencies as $row) {
 
@@ -1188,7 +1230,8 @@ class GeneratePayrollProcess implements ShouldQueue
                                     $employee->role,
                                     'sewing',
                                     $lineInsentif,
-                                    1 //karena hanya 1 line
+                                    1, //karena hanya 1 line
+                                    $lineViolations
                                 );
                             }
                         } else {
@@ -1230,6 +1273,21 @@ class GeneratePayrollProcess implements ShouldQueue
                                 ->get();
 
                             // dd($grouped);
+
+                            $lineViolations = DB::table('sewing_violations')
+                                ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
+                                ->whereBetween('sewing_violations.tanggal', [
+                                    $period->start_date,
+                                    $period->end_date
+                                ])
+                                ->where('d.DEPARTEMENT', 'like', 'LINE %')
+                                ->whereRaw("
+                                    CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)
+                                    BETWEEN ? AND ?
+                                ", [$lineStart, $lineEnd])
+                                ->count();
+
+                            // dd($lineViolations);
 
                             $jumlahLine = DB::table('line_efficiencies')
                                 ->where('period_id', $period->id)
@@ -1279,7 +1337,8 @@ class GeneratePayrollProcess implements ShouldQueue
                                     $employee->role,
                                     'sewing',
                                     $totalLineInsentif,
-                                    $jumlahLine->first()->jumlah_line
+                                    $jumlahLine->first()->jumlah_line,
+                                    $lineViolations
                                 );
 
                                 $collectionDay->push($amount);
@@ -1849,7 +1908,8 @@ class GeneratePayrollProcess implements ShouldQueue
         $role,
         $dept,
         $totalLineInsentif,
-        $jumlahLine
+        $jumlahLine,
+        $violationsCount
     ) {
 
         $jumlahLine = max($jumlahLine, 1);
@@ -1890,6 +1950,7 @@ class GeneratePayrollProcess implements ShouldQueue
         $variables = [
             'totalLineInsentif' => $totalLineInsentif,
             'jumlahLine'        => $jumlahLine,
+            'violationsCount'   => $violationsCount ?? 0
         ];
 
         foreach ($variables as $key => $value) {

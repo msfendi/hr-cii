@@ -194,6 +194,8 @@ class AttendanceFingerController extends Controller
                             CAST('1900-01-01 00:00:00' AS DATETIME)
                         )
 
+                    
+
                     GROUP BY
                         b.BARCODE,
                         b.NAMA_KARYAWAN,
