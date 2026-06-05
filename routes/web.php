@@ -461,17 +461,17 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/dept/destroy/{id}', [DeptController::class, 'destroy'])->name('dept.destroy')->middleware(['auth', 'role:Admin|HRD']);
 
     // Overtime
-    Route::get('/overtime', [OvertimeController::class, 'index'])->name('overtime.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/overtime/download-template', [OvertimeController::class, 'downloadTemplateOvertime'])->name('overtime.downloadTemplate')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/overtime/import', [OvertimeController::class, 'importOvertime'])->name('overtime.import')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/overtime/get-data', [OvertimeController::class, 'getData'])->name('overtime.get-data')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/overtime/calendar', [OvertimeController::class, 'calendarOvertime'])->name('overtime.calendar')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/overtime/export', [OvertimeController::class, 'exportCalendar'])->name('overtime.export')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/overtime/export-template', [OvertimeController::class, 'exportCalendarTemplate'])->name('overtime.export-template')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/overtime', [OvertimeController::class, 'index'])->name('overtime.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/overtime/download-template', [OvertimeController::class, 'downloadTemplateOvertime'])->name('overtime.downloadTemplate')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/overtime/import', [OvertimeController::class, 'importOvertime'])->name('overtime.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/overtime/get-data', [OvertimeController::class, 'getData'])->name('overtime.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/overtime/calendar', [OvertimeController::class, 'calendarOvertime'])->name('overtime.calendar')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/overtime/export', [OvertimeController::class, 'exportCalendar'])->name('overtime.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/overtime/export-template', [OvertimeController::class, 'exportCalendarTemplate'])->name('overtime.export-template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
 
     // Late Compensation
     Route::prefix('late-compensation')->name('late-compensation.')->group(function () {

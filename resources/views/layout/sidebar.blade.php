@@ -92,7 +92,7 @@ $role = $roleusers[0]->rolename;
    </li>
    @endif
    {{-- ================= ATTENDANCE ================= --}}
-   @if(in_array($role,['Admin','HRD']))
+   @if(in_array($role,['Admin','HRD', 'Payroll_STAFF','Payroll_SEWING','Payroll_NONSEWING']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#attendance">
       <i class="fas fa-clock"></i>
