@@ -161,8 +161,10 @@ class PayrollProcessController extends Controller
 
             $invalidBankAccounts = DB::table('BIODATA as b')
                 ->leftJoin('payroll_masters', 'payroll_masters.npk', '=', 'b.NPK')
+                ->leftJoin('PKWT as p', 'p.NPK', '=', 'b.NPK')
                 ->select('b.NPK', 'b.NAMA_KARYAWAN')
                 ->whereNull('payroll_masters.bank_account')
+                ->where('p.TMK', '<=', $periodEnd)
                 ->orderBy('b.NPK')
                 ->get();
         }
