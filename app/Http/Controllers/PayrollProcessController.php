@@ -144,8 +144,8 @@ class PayrollProcessController extends Controller
                 ->leftJoin('employees_contract as ec', function ($join) use ($periodStart, $periodEnd) {
 
                     $join->on('b.NPK', '=', 'ec.npk')
-                        ->whereDate('ec.start_date', '<=', $periodEnd)
-                        ->whereDate('ec.end_date', '<=', $periodEnd);
+                        // ->whereDate('ec.start_date', '<=', $periodStart)
+                        ->whereDate('ec.end_date', '>=', $periodEnd);
                 })
                 ->whereNull('ec.id')
                 ->select(
