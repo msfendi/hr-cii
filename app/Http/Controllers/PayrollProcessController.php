@@ -218,6 +218,32 @@ class PayrollProcessController extends Controller
         $period = PayrollPeriod::findOrFail($period_id);
 
         $payrollResults = GeneratePayrollCheck::dispatchSync($period->id);
+        $user = Auth::user();
+
+        $role = $user->role;
+
+        if ($role === 'Payroll_STAFF') {
+
+            $payrollResults = collect($payrollResults)
+                ->where('IS_STAFF', 1)
+                ->values();
+        } elseif ($role === 'Payroll_SEWING') {
+
+            $payrollResults = collect($payrollResults)
+                ->filter(function ($row) {
+                    return $row['IS_STAFF'] == 0
+                        && $row['IS_SEWING'] == 0;
+                })
+                ->values();
+        } elseif ($role === 'Payroll_NONSEWING') {
+
+            $payrollResults = collect($payrollResults)
+                ->filter(function ($row) {
+                    return $row['IS_STAFF'] == 1
+                        && $row['IS_SEWING'] == 1;
+                })
+                ->values();
+        }
 
         return response()->json([
             'data' => $payrollResults

@@ -202,6 +202,7 @@
                                     <th>Total Salary</th>
                                     <th>Absence Days</th>
                                     <th>Late Minutes</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
 
@@ -214,6 +215,7 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -686,9 +688,38 @@ $(document).on('click','#btnCheckPayroll',function(){
         responsive:true,
 
         ajax:{
-            url:url,
-            dataSrc:'data'
-        },
+        url:url,
+        dataSrc:function(json){
+
+            let role = userRole;
+
+            let rows = json.data ?? [];
+
+            if(role === 'Payroll_STAFF'){
+
+                rows = rows.filter(x =>
+                    Number(x.IS_STAFF) === 1
+                );
+
+            }else if(role === 'Payroll_SEWING'){
+
+                rows = rows.filter(x =>
+                    Number(x.IS_STAFF) === 0 &&
+                    Number(x.IS_SEWING) === 0
+                );
+
+            }else if(role === 'Payroll_NONSEWING'){
+
+                rows = rows.filter(x =>
+                    Number(x.IS_STAFF) === 0 &&
+                    Number(x.IS_SEWING) === 1
+                );
+
+            }
+
+            return rows;
+        }
+    },
 
         columns:[
 
@@ -716,9 +747,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.basic_salary',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -726,9 +760,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.overtime_pay',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -736,9 +773,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.special_overtime_pay',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -746,9 +786,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.monthly_premi',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -756,9 +799,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.long_service_allowance',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -766,9 +812,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.allowance',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -776,9 +825,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.sewing_insentif',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -786,9 +838,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.pad_insentif',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -796,9 +851,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.cutting_insentif',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -806,9 +864,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.heat_insentif',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -816,9 +877,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.adjusment',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -826,9 +890,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.bpjs_kesehatan',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -836,9 +903,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.bpjs_ketenagakerjaan',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -846,9 +916,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.pph_21',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -856,9 +929,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.pph_21_deduction',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -866,9 +942,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.absence_deduction',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -876,9 +955,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'components.late_deduction',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -886,9 +968,12 @@ $(document).on('click','#btnCheckPayroll',function(){
                 data:'total_salary',
                 defaultContent:0,
                 render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -900,8 +985,42 @@ $(document).on('click','#btnCheckPayroll',function(){
             {
                 data:'components.late_minutes',
                 defaultContent:0
+            },
+
+            {
+                data:'tkk',
+                defaultContent:null,
+                render:function(data){
+
+                    if(data === null || data === ''){
+
+                        return `
+                            <span class="badge badge-success">
+                                Active
+                            </span>
+                        `;
+                    }
+
+                    return `
+                        <span class="badge badge-danger">
+                            Resign
+                        </span>
+                    `;
+                }
             }
         ],
+
+        createdRow:function(row,data){
+
+            if(
+                data.tkk !== null &&
+                data.tkk !== ''
+            ){
+
+                $(row).addClass('table-danger');
+            }
+
+        },
 
         footerCallback:function(row,data,start,end,display){
 
@@ -1002,13 +1121,42 @@ $(document).on('click','#btnCheckPayroll',function(){
             $(api.column(23).footer())
                 .html(lateTotal.toLocaleString('id-ID'));
 
+            $(api.column(24).footer())
+                .html('-');
+
         }
 
     });
 
 });
 </script>
+<script>
+
+const userRole = @json(optional(Auth::user()->roles->first())->name);
+
+console.log('USER ROLE =', userRole);
+
+const canSeeSalary =
+    userRole === 'Admin' ||
+    userRole === 'Payroll_STAFF' ||
+    userRole === 'Payroll_SEWING' ||
+    userRole === 'Payroll_NONSEWING';
+
+function salaryMask(value){
+
+    if(canSeeSalary){
+        return formatRupiah(value ?? 0);
+    }
+
+    return '****';
+}
+
+</script>
 <style>
+#table-details tbody tr.table-danger td{
+    background-color:#f8d7da !important;
+    color:#721c24 !important;
+}
 
 .card {
     border-radius: 12px;
