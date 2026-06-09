@@ -429,18 +429,18 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'role:Admin|HRD']);
 
     //Attendance
-    Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance/import', [AttendanceController::class, 'import'])->name('attendance.import')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance/export', [AttendanceController::class, 'export'])->name('attendance.export')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/attendance/export_view', [AttendanceController::class, 'export_view'])->name('attendance.export_view')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance/deleteAll', [AttendanceController::class, 'deleteAll'])->name('attendance.deleteAll')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance/auditsewing', [AttendanceController::class, 'auditsewing'])->name('attendance.auditsewing')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance/auditnonsewing', [AttendanceController::class, 'auditnonsewing'])->name('attendance.auditnonsewing')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/attendance/report', [AttendanceController::class, 'report'])->name('attendance.report')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/attendance/check-master-data', [AttendanceController::class, 'checkMasterData'])->name('attendance.checkMasterData')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/attendance/edit/{id}', [AttendanceController::class, 'edit'])->name('attendance.edit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/attendance/import', [AttendanceController::class, 'import'])->name('attendance.import')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/attendance/export', [AttendanceController::class, 'export'])->name('attendance.export')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/attendance/export_view', [AttendanceController::class, 'export_view'])->name('attendance.export_view')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/attendance/deleteAll', [AttendanceController::class, 'deleteAll'])->name('attendance.deleteAll')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/attendance/auditsewing', [AttendanceController::class, 'auditsewing'])->name('attendance.auditsewing')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/attendance/auditnonsewing', [AttendanceController::class, 'auditnonsewing'])->name('attendance.auditnonsewing')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/attendance/report', [AttendanceController::class, 'report'])->name('attendance.report')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/attendance/check-master-data', [AttendanceController::class, 'checkMasterData'])->name('attendance.checkMasterData')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/attendance/edit/{id}', [AttendanceController::class, 'edit'])->name('attendance.edit')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
 
     // PARENT DEPT
     Route::get('/parent-dept/index', [ParentDeptController::class, 'index'])->name('parent-dept.index')->middleware(['auth', 'role:Admin|HRD']);
@@ -709,12 +709,12 @@ Route::group(['middleware' => 'auth'], function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/shift', [ShiftController::class, 'index'])->name('shift.index');
-    Route::get('/shift/create', [ShiftController::class, 'create'])->name('shift.create');
-    Route::post('/shift/store', [ShiftController::class, 'store'])->name('shift.store');
-    Route::get('/shift/edit/{id}', [ShiftController::class, 'edit'])->name('shift.edit');
-    Route::post('/shift/update/{id}', [ShiftController::class, 'update'])->name('shift.update');
-    Route::get('/shift/delete/{id}', [ShiftController::class, 'delete'])->name('shift.delete');
+    Route::get('/shift', [ShiftController::class, 'index'])->name('shift.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/shift/create', [ShiftController::class, 'create'])->name('shift.create')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/shift/store', [ShiftController::class, 'store'])->name('shift.store')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/shift/edit/{id}', [ShiftController::class, 'edit'])->name('shift.edit')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/shift/update/{id}', [ShiftController::class, 'update'])->name('shift.update')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/shift/delete/{id}', [ShiftController::class, 'delete'])->name('shift.delete')->middleware(['auth', 'role:Admin|HRD']);
 
     Route::get('/employee-mutations', [EmployeeMutationController::class, 'index'])->name('employee-mutations.index');
     Route::post('/employee-mutations', [EmployeeMutationController::class, 'store'])->name('employee-mutations.store');
