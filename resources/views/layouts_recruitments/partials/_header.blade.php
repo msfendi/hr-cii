@@ -27,9 +27,11 @@
 
     {{-- Right-side Actions --}}
     <div class="flex items-center gap-2 sm:gap-3">
-        <div class="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-surface-container-low rounded-full border border-outline-variant">
-            <span class="material-symbols-outlined text-primary text-[0.9rem] sm:text-[1rem]">assignment</span>
-            <span class="text-[0.7rem] sm:text-label-lg text-on-surface-variant font-bold">Step {{ $currentStep ?? 1 }} / 8</span>
-        </div>
+        @if(!isset($hideStep))
+            <div class="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-surface-container-low rounded-full border border-outline-variant">
+                <span class="material-symbols-outlined text-primary text-[0.9rem] sm:text-[1rem]">assignment</span>
+                <span class="text-[0.7rem] sm:text-label-lg text-on-surface-variant font-bold">Step {{ $currentStep ?? 1 }} / 8</span>
+            </div>
+        @endif
     </div>
 </header>

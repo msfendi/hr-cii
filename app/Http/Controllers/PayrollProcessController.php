@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\NotificationEvent;
+use App\Jobs\GeneratePayrollCheck;
 use App\Jobs\GeneratePayrollExport;
 use App\Jobs\GeneratePayrollProcess;
 use App\Jobs\GeneratePayrollRekap;
@@ -210,6 +211,17 @@ class PayrollProcessController extends Controller
             'success'
         ));
         return redirect('payroll-process/index');
+    }
+
+    public function checkPayroll($period_id)
+    {
+        $period = PayrollPeriod::findOrFail($period_id);
+
+        $payrollResults = GeneratePayrollCheck::dispatchSync($period->id);
+
+        return response()->json([
+            'data' => $payrollResults
+        ]);
     }
 
     public function details($id)

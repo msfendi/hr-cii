@@ -340,7 +340,9 @@ class EmployeePayrollController extends Controller
                 $first = Carbon::parse($dailyLogs->first()->scan_date);
                 $last  = Carbon::parse($dailyLogs->last()->scan_date);
 
-                $isLate = $first->gt($shiftStartDT);
+                $isLate = $first->gt(
+                    $shiftStartDT->copy()->addMinutes(5)
+                );
 
                 /*
         ======================================================
@@ -364,7 +366,9 @@ class EmployeePayrollController extends Controller
                         // ✅ lebih dekat ke masuk
                         $jamMasuk = $scan->format('H:i');
 
-                        $status = $scan->gt($shiftStartDT)
+                        $status = $scan->gt(
+                            $shiftStartDT->copy()->addMinutes(5)
+                        )
                             ? 'Terlambat'
                             : 'Scan Masuk';
                     }

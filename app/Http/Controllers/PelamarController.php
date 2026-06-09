@@ -191,7 +191,7 @@ class PelamarController extends Controller
 
         $duration = (int) ($request->month_duration ?? 6);
         $startDate = Carbon::parse($request->tmk);
-        [$endDate, $dayDuration] = $this->calculateEndDateAndDayDuration($request, $startDate, $duration);
+        [$endDate, $dayDuration, $actualMonthDuration] = $this->calculateEndDateAndDayDuration($request, $startDate, $duration);
 
         DB::table('employees_contract')->insert([
             'id'              => (string) \Illuminate\Support\Str::uuid(),
@@ -199,7 +199,7 @@ class PelamarController extends Controller
             'contract_ke'     => $contractKe,
             'start_date'      => $startDate->toDateString(),
             'end_date'        => $endDate->toDateString(),
-            'month_duration'  => (string) $duration,
+            'month_duration'  => (string) $actualMonthDuration,
             'day_duration'    => $dayDuration,
             'status_contract' => 'AKTIF',
             'type'            => 'CONTRACT',
@@ -293,8 +293,32 @@ class PelamarController extends Controller
         }
 
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : $closestDate;
-        $dayDuration = $regularEndDate->diffInDays($endDate, false);
 
-        return [$endDate, (int) $dayDuration];
+        // Hitung hari kerja (Senin–Jumat) antara start_date dan end_date
+        $dayDuration = $this->countWorkingDays($startDate, $endDate);
+
+        // Hitung durasi bulan aktual (bukan dari input user, tapi dari tanggal nyata)
+        $actualMonthDuration = (int) $startDate->copy()->diffInMonths($endDate);
+
+        return [$endDate, $dayDuration, $actualMonthDuration];
+    }
+
+    /**
+     * Hitung jumlah hari kerja (Senin–Jumat) antara dua tanggal (inklusif kedua ujung).
+     */
+    private function countWorkingDays(Carbon $start, Carbon $end): int
+    {
+        $count   = 0;
+        $current = $start->copy()->startOfDay();
+        $endDay  = $end->copy()->startOfDay();
+
+        while ($current->lte($endDay)) {
+            if ($current->isWeekday()) {
+                $count++;
+            }
+            $current->addDay();
+        }
+
+        return $count;
     }
 }

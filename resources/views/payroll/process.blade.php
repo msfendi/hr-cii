@@ -10,21 +10,54 @@
          @include('layout.navbar')
          <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
-               <h1 class="h3 mb-0 text-gray-800">Payroll Process</h1>
+
+                <div>
+                    <h1 class="h3 mb-0 text-gray-800 font-weight-bold">
+                        Payroll Processing Center
+                    </h1>
+
+                    <small class="text-muted">
+                        Validate payroll approval, check payroll simulation and generate payroll process.
+                    </small>
+                </div>
+
             </div>
-            <div class="card shadow mb-4">
-               <div class="card-header py-3">
-                  <h6 class="m-0 font-weight-bold text-primary">
-                     Payroll Process
-                  </h6>
-               </div>
+            <div class="card border-left-primary shadow-lg mb-4">
+               <div class="card-header py-3 bg-white">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <div>
+
+                            <h5 class="m-0 font-weight-bold text-primary">
+                                Payroll Processing
+                            </h5>
+
+                            <small class="text-muted">
+                                Select payroll period and validate all required approvals.
+                            </small>
+
+                        </div>
+
+                        <i class="fas fa-money-check-alt fa-2x text-primary"></i>
+
+                    </div>
+
+                </div>
                <div class="card-body">
                   <form method="POST"
                      action="{{ route('payroll-process.process') }}"
                      id="payrollForm">
                      @csrf
                      <div class="form-group">
-                        <label>Payroll Period :</label>
+
+                        <label class="font-weight-bold text-dark">
+                            Payroll Period
+                        </label>
+
+                        <small class="d-block text-muted mb-2">
+                            Select payroll period before checking approval or processing payroll.
+                        </small>
                         <select class="form-control"
                            id="period_id"
                            name="period_id"
@@ -41,10 +74,23 @@
                      <div id="approvalBox"
                         class="mt-4"
                         style="display:none">
-                        <div class="card border-left-info shadow">
-                           <div class="card-header">
-                              <b>Approval Validation</b>
-                           </div>
+                        <div class="card border-left-info shadow-sm">
+                           <div class="card-header bg-info text-white">
+
+                                <div class="d-flex justify-content-between">
+
+                                    <span>
+                                        <i class="fas fa-check-circle mr-2"></i>
+                                        Approval Validation
+                                    </span>
+
+                                    <span>
+                                        Payroll Requirement Check
+                                    </span>
+
+                                </div>
+
+                            </div>
                            <div class="card-body">
                               <div id="approvalLoading"
                                  class="text-center p-3"
@@ -65,13 +111,144 @@
                         </div>
                      </div>
                      <br>
-                     <button id="btnProcess"
-                        class="btn btn-primary" disabled>
-                     Process Payroll
-                     </button>
+                    <div class="d-flex flex-wrap mt-4">
+
+                        <button id="btnProcess"
+                            class="btn btn-success btn-sm shadow-sm"
+                            >
+
+                            <i class="fas fa-cogs mr-2"></i>
+                            Process Payroll
+                            disabled
+                        </button>
+
+                        <button type="button"
+                            id="btnCheckPayroll"
+                            class="btn btn-outline-primary btn-sm ml-2 shadow-sm">
+
+                            <i class="fas fa-search mr-2"></i>
+                            Check Payroll
+
+                        </button>
+
+                    </div>
                   </form>
                </div>
             </div>
+            
+
+            <div id="payroll-detail-container"
+            style="display:none;"
+            class="mt-4">
+
+            <div class="card shadow-lg border-left-success">
+
+    <div class="card-header bg-white">
+
+        <div class="d-flex justify-content-between align-items-center">
+
+            <div>
+
+                <h5 id="detail-title"
+                    class="m-0 font-weight-bold text-primary">
+
+                    Data Payroll Details
+
+                </h5>
+
+                <small class="text-muted">
+                    Payroll simulation result for selected payroll period.
+                </small>
+
+            </div>
+
+            <i class="fas fa-file-invoice-dollar fa-2x text-success"></i>
+
+        </div>
+
+    </div>
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+                        <table class="table table-bordered table-hover table-striped table-sm"
+                            id="table-details"
+                            width="100%">
+
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>Run ID</th>
+                                    <th>NPK</th>
+                                    <th>Name</th>
+                                    <th>Dept</th>
+                                    <th>Basic Salary</th>
+                                    <th>Overtime</th>
+                                    <th>Special OT</th>
+                                    <th>Monthly Premi</th>
+                                    <th>Long Service</th>
+                                    <th>Allowance</th>
+                                    <th>Sewing Insentif</th>
+                                    <th>Pad Print Insentif</th>
+                                    <th>Cutting Insentif</th>
+                                    <th>Heat Insentif</th>
+                                    <th>Adjusments</th>
+                                    <th>BPJS Kes</th>
+                                    <th>BPJS TK</th>
+                                    <th>PPh21</th>
+                                    <th>PPh21 Deduction</th>
+                                    <th>Absence</th>
+                                    <th>Late</th>
+                                    <th>Total Salary</th>
+                                    <th>Absence Days</th>
+                                    <th>Late Minutes</th>
+                                </tr>
+                            </thead>
+
+                            <tbody></tbody>
+
+                            <tfoot>
+                                <tr style="
+                                        font-weight:bold;
+                                        background:#eaf4ff;
+                                        color:#003366;
+                                    ">
+                                    <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+
+                        </table>
+
+                           </div>
+
+    </div>
+
+
+            </div>
+
+        </div>
+
          </div>
       </div>
       @include('layout.footer')
@@ -451,5 +628,422 @@ $(document).on('click','#btnProcess',function(e){
 });
 
 </script>
+<script>
+    function formatRupiah(number){
+
+    if(
+        number === null ||
+        number === undefined ||
+        number === '' ||
+        number === false
+    ){
+        number = 0;
+    }
+
+    if(typeof number === 'string'){
+        number = number.replace(/[^0-9\-]/g,'');
+    }
+
+    number = Number(number);
+
+    if(isNaN(number)){
+        number = 0;
+    }
+
+    return new Intl.NumberFormat('id-ID',{
+        style:'currency',
+        currency:'IDR',
+        minimumFractionDigits:0
+    }).format(number);
+}
+</script>
+<script>
+    let tableDetails = null;
+
+$(document).on('click','#btnCheckPayroll',function(){
+
+    let periodId = $('#period_id').val();
+
+    if(!periodId){
+        return;
+    }
+
+    let url = '/payroll-process/check/' + periodId;
+
+    $('#detail-title').text(
+        'Payroll Check Result'
+    );
+
+    $('#payroll-detail-container').show();
+
+    if(tableDetails){
+        tableDetails.destroy();
+    }
+
+    tableDetails = $('#table-details').DataTable({
+
+        processing:true,
+        responsive:true,
+
+        ajax:{
+            url:url,
+            dataSrc:'data'
+        },
+
+        columns:[
+
+            {
+                data:null,
+                render:function(data,type,row,meta){
+                    return meta.row + 1;
+                }
+            },
+
+            {
+                data:'employee_npk'
+            },
+
+            {
+                data:'employee_name'
+            },
+
+            {
+                data:'dept',
+                defaultContent:'-'
+            },
+
+            {
+                data:'components.basic_salary',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.overtime_pay',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.special_overtime_pay',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.monthly_premi',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.long_service_allowance',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.allowance',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.sewing_insentif',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.pad_insentif',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.cutting_insentif',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.heat_insentif',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.adjusment',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.bpjs_kesehatan',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.bpjs_ketenagakerjaan',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.pph_21',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.pph_21_deduction',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.absence_deduction',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'components.late_deduction',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'total_salary',
+                defaultContent:0,
+                render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
+
+            {
+                data:'absence_days',
+                defaultContent:0
+            },
+
+            {
+                data:'components.late_minutes',
+                defaultContent:0
+            }
+        ],
+
+        footerCallback:function(row,data,start,end,display){
+
+            let api = this.api();
+
+            function intVal(i){
+
+                if(i === null || i === undefined || i === ''){
+                    return 0;
+                }
+
+                if(typeof i === 'number'){
+                    return i;
+                }
+
+                if(typeof i === 'string'){
+
+                    i = i.replace(/[Rp\s]/g,'');
+
+                    i = i.replace(/\./g,'')
+                        .replace(',', '.');
+
+                    let num = parseFloat(i);
+
+                    return isNaN(num)
+                        ? 0
+                        : num;
+                }
+
+                return 0;
+            }
+
+            /*
+            ==========================================
+            KOLOM CURRENCY
+            ==========================================
+            */
+
+            let currencyCols = [
+                4,5,6,7,8,
+                9,10,11,12,
+                13,14,15,16,
+                17,18,19,20,21
+            ];
+
+            currencyCols.forEach(function(colIndex){
+
+                let total = api
+                    .column(colIndex,{search:'applied'})
+                    .data()
+                    .reduce(function(a,b){
+
+                        return intVal(a)
+                            + intVal(b);
+
+                    },0);
+
+                $(api.column(colIndex).footer())
+                    .html(formatRupiah(total));
+
+            });
+
+            /*
+            ==========================================
+            ABSENCE DAYS
+            ==========================================
+            */
+
+            let absenceTotal = api
+                .column(22,{search:'applied'})
+                .data()
+                .reduce(function(a,b){
+
+                    return intVal(a)
+                        + intVal(b);
+
+                },0);
+
+            $(api.column(22).footer())
+                .html(absenceTotal.toLocaleString('id-ID'));
+
+            /*
+            ==========================================
+            LATE MINUTES
+            ==========================================
+            */
+
+            let lateTotal = api
+                .column(23,{search:'applied'})
+                .data()
+                .reduce(function(a,b){
+
+                    return intVal(a)
+                        + intVal(b);
+
+                },0);
+
+            $(api.column(23).footer())
+                .html(lateTotal.toLocaleString('id-ID'));
+
+        }
+
+    });
+
+});
+</script>
+<style>
+
+.card {
+    border-radius: 12px;
+}
+
+.card-header {
+    border-top-left-radius: 12px !important;
+    border-top-right-radius: 12px !important;
+}
+
+.table th {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+    border-radius: 8px;
+}
+
+.btn {
+    border-radius: 8px;
+}
+
+#approvalBox .alert {
+    border-radius: 10px;
+}
+
+#table-details tbody tr:hover {
+    background-color: #f5f9ff !important;
+}
+
+</style>
    </body>
 </html>

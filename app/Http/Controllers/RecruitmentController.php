@@ -138,6 +138,22 @@ class RecruitmentController extends Controller
             'comment_user' => $request->comment_user,
         ];
 
+                
+        $now = date('Y-m-d');
+
+        if ($request->filled('result_interview')) {
+            $updates['is_interview'] = 'TRUE';
+            $updates['tgl_interview'] = DB::raw("COALESCE(tgl_interview, '$now')");
+        }
+        if ($request->filled('result_kesehatan')) {
+            $updates['is_kesehatan'] = 'TRUE';
+            $updates['tgl_kesehatan'] = DB::raw("COALESCE(tgl_kesehatan, '$now')");
+        }
+        if ($request->filled('result_test')) {
+            $updates['is_test'] = 'TRUE';
+            $updates['tgl_test'] = DB::raw("COALESCE(tgl_test, '$now')");
+        }
+
         if ($request->hasFile('file_test')) {
             $file = $request->file('file_test');
             $filename = time() . '_teknis_' . $file->getClientOriginalName();
@@ -145,7 +161,7 @@ class RecruitmentController extends Controller
             $updates['file_test'] = $path;
         }
 
-         // Auto status_apply: FALSE di mana saja -> REJECTED, semua TRUE -> ONBOARDING
+        // Auto status_apply: FALSE di mana saja -> REJECTED, semua TRUE -> ONBOARDING
         $results = array_filter($updates, fn($v, $k) => str_starts_with($k, 'result_'), ARRAY_FILTER_USE_BOTH);
         if (in_array('FALSE', $results)) {
             $updates['status_apply'] = 'REJECTED';

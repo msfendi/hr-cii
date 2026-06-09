@@ -166,7 +166,7 @@
                                                     target="_blank">
                                                         <i class="fas fa-file-pdf mr-1"></i> PDF
                                                     </a>
-                                                @endif
+                                                @endif  
 
 
                                                 {{-- DOWNLOAD PDF PENGELUARAN --}}

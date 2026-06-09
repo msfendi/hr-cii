@@ -72,6 +72,7 @@ use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotificationsContractController;
 use App\Http\Controllers\ParentDeptController;
+use App\Http\Controllers\PortalRecruitmentStatusController;
 use App\Http\Controllers\RecruitmentFormController;
 use App\Http\Controllers\SewingViolationController;
 
@@ -143,21 +144,21 @@ Route::group(['middleware' => 'auth'], function () {
     // ========================================
     // EMPLOYEES CONTRACT
     // ========================================
-    Route::prefix('employees-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD'])->group(function () {
-        Route::get('/',                 [EmployeesContractController::class, 'index'])->name('employees-contract.index');
-        Route::get('/get-data',         [EmployeesContractController::class, 'getData'])->name('employees-contract.get-data');
-        Route::get('/by-npk/{npk}',     [EmployeesContractController::class, 'getByNpk'])->name('employees-contract.by-npk');
-        Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store');
-        Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop');
-        Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish');
-        Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend');
-        Route::post('/split/{id}',      [EmployeesContractController::class, 'split'])->name('employees-contract.split');
-        Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary');
-        Route::post('/delete/{id}',     [EmployeesContractController::class, 'destroy'])->name('employees-contract.destroy');
-        Route::get('/bagian',           [EmployeesContractController::class, 'getBagian'])->name('employees-contract.bagian');
-        Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template');
-        Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import');
-        Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export');
+    Route::prefix('employees-contract')->group(function () {
+        Route::get('/',                 [EmployeesContractController::class, 'index'])->name('employees-contract.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::get('/get-data',         [EmployeesContractController::class, 'getData'])->name('employees-contract.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::get('/by-npk/{npk}',     [EmployeesContractController::class, 'getByNpk'])->name('employees-contract.by-npk')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/split/{id}',      [EmployeesContractController::class, 'split'])->name('employees-contract.split')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/delete/{id}',     [EmployeesContractController::class, 'destroy'])->name('employees-contract.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::get('/bagian',           [EmployeesContractController::class, 'getBagian'])->name('employees-contract.bagian')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import')->middleware(['auth', 'role:Admin']);
+        Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     });
 
 
@@ -212,7 +213,8 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Payroll Process
     Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
@@ -822,3 +824,7 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
     Route::get('/success', fn() => view('recruitments_form.success'))
         ->name('success');
 });
+
+
+Route::get('/portal-recruitment-status', [PortalRecruitmentStatusController::class, 'index'])->name('portal.recruitment-status.index');
+Route::post('/portal-recruitment-status/check', [PortalRecruitmentStatusController::class, 'check'])->name('portal.recruitment-status.check');
