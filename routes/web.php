@@ -232,12 +232,12 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 
     //Payroll Master
-    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete')->middleware(['auth', 'role:Admin']);
-    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 
