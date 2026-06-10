@@ -84,13 +84,13 @@ class GeneratePayrollCheck
                 $join->on('p.NPK', '=', 'bio.NPK');
             })
             ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
-
+            ->where('p.TMK', '<=', $periodEnd)
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
             })
 
-            // ->where('p.NPK', '=', 'C-00827')
+            ->where('p.NPK', '!=', 'C-00017')
 
             ->select(
                 'p.NPK',
@@ -118,7 +118,7 @@ class GeneratePayrollCheck
                 'ec1.type',
                 'ec1.daily_salary'
             )
-            // ->where('ec1.npk', 'C-00827')
+            ->where('ec1.npk', '!=', 'C-00017')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -900,6 +900,7 @@ class GeneratePayrollCheck
                 'emp.ID_DEPT',
                 'd.DEPARTEMENT as DEPARTEMENT',
                 'emp.SECTION as SECTION',
+                'emp.TMK',
                 'emp.TKK',
                 'emp.IS_STAFF',
                 'emp.IS_SEWING',
@@ -1877,6 +1878,7 @@ class GeneratePayrollCheck
                 'count_days'    => $count_days,
                 'type' => $employee->type,
                 'dept' => $employee->DEPARTEMENT,
+                'tmk' => $employee->TMK,
                 'tkk' => $employee->TKK,
                 'IS_STAFF' => $employee->IS_STAFF,
                 'IS_SEWING' => $employee->IS_SEWING,

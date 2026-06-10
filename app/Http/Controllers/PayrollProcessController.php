@@ -140,33 +140,76 @@ class PayrollProcessController extends Controller
             masih dalam range employees_contract.start_date dan end_date
             */
 
-            $invalidContracts = DB::table('BIODATA as b')
-                ->leftJoin('employees_contract as ec', function ($join) use ($periodStart, $periodEnd) {
-
-                    $join->on('b.NPK', '=', 'ec.npk')
-                        // ->whereDate('ec.start_date', '<=', $periodStart)
-                        ->whereDate('ec.end_date', '>=', $periodEnd);
-                })
-                ->whereNull('ec.id')
+            $biodataUnion = DB::table('BIODATA')
                 ->select(
-                    'b.NPK',
+                    'NPK',
+                    'NAMA_KARYAWAN'
+                )
+                ->union(
+                    DB::table('BIODATA_KELUAR')
+                        ->select(
+                            'NPK',
+                            'NAMA_KARYAWAN'
+                        )
+                );
+
+            $invalidContracts = DB::table('PKWT as p')
+                ->leftJoinSub($biodataUnion, 'b', function ($join) {
+                    $join->on('p.NPK', '=', 'b.NPK');
+                })
+                ->leftJoin('employees_contract as ec', 'p.NPK', '=', 'ec.npk')
+                ->whereDate('p.TMK', '<=', $periodEnd)
+                ->where(function ($q) use ($periodStart) {
+                    $q->whereDate('p.TKK', '>=', $periodStart)
+                        ->orWhereNull('p.TKK');
+                })
+                ->where(function ($q) use ($periodStart, $periodEnd) {
+                    $q->whereNull('ec.id')
+                        ->orWhere(function ($sub) use ($periodStart, $periodEnd) {
+                            $sub->where('ec.status_contract', 'AKTIF')
+                                ->whereBetween('ec.end_date', [
+                                    $periodStart,
+                                    $periodEnd
+                                ]);
+                        });
+                })
+                ->select(
+                    'p.NPK',
+                    'p.TMK',
+                    'p.TKK',
+                    'ec.id',
                     'b.NAMA_KARYAWAN',
                     'ec.contract_ke',
                     'ec.start_date',
-                    'ec.end_date'
+                    'ec.end_date',
+                    'ec.status_contract'
                 )
-                ->orderBy('b.NPK')
+                ->orderBy('p.NPK')
                 ->get();
 
 
 
-            $invalidBankAccounts = DB::table('BIODATA as b')
-                ->leftJoin('payroll_masters', 'payroll_masters.npk', '=', 'b.NPK')
-                ->leftJoin('PKWT as p', 'p.NPK', '=', 'b.NPK')
-                ->select('b.NPK', 'b.NAMA_KARYAWAN')
-                ->whereNull('payroll_masters.bank_account')
+            $invalidBankAccounts = DB::table('PKWT as p')
+                ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'p.NPK')
+                ->where('p.NPK', '!=', 'C-00017') // IGNORE C-00017
                 ->where('p.TMK', '<=', $periodEnd)
-                ->orderBy('b.NPK')
+                ->where(function ($q) use ($periodStart, $periodEnd) {
+                    $q->whereBetween('p.TKK', [$periodStart, $periodEnd])
+                        ->orWhereNull('p.TKK');
+                })
+                ->where(function ($q) {
+                    $q->whereNull('pm.bank_account')
+                        ->orWhereRaw("LTRIM(RTRIM(pm.bank_account)) = ''");
+                })
+                ->select(
+                    'p.NPK',
+                    'p.NAMA',
+                    'p.TMK',
+                    'p.TKK',
+                    'pm.bank_account'
+                )
+                ->distinct()
+                ->orderBy('p.NPK')
                 ->get();
         }
 

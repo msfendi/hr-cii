@@ -36,7 +36,7 @@ class PayrollMasterController extends Controller
                 'payroll_masters.*',
                 'biodata.NAMA_KARYAWAN',
                 'DEPT.DEPARTEMENT',
-            );
+            )->orderBy('payroll_masters.npk', 'asc');
 
         if (!$canViewSalary) {
             $query->select(

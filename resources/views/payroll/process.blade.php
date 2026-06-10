@@ -416,11 +416,11 @@ $('#period_id').on('change', function(){
 
             invalidBankAccounts.forEach(emp=>{
 
-                let empNameBankAccount = emp.NAMA_KARYAWAN ?? 'Nomor Rekening Belum Ada';
+                let empNameBankAccount = emp.bank_account ?? 'Nomor Rekening Belum Ada';
 
                 employeeListBankAccount += `
                     <li>
-                        ${emp.NPK} - ${empNameBankAccount}
+                        ${emp.NPK} - ${emp.NAMA} - ${empNameBankAccount}
                     </li>
                 `;
             });
