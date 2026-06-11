@@ -74,6 +74,84 @@ class PayrollProcessController extends Controller
         return view('payroll.process', compact('periods'));
     }
 
+    public function overtimeDetail($periodId, $npk)
+    {
+        $period = DB::table('payroll_periods')
+            ->where('id', $periodId)
+            ->first();
+
+        if (!$period) {
+            return response()->json([
+                'data' => []
+            ]);
+        }
+
+        $periodStart = $period->start_date;
+        $periodEnd   = $period->end_date;
+
+        $count_days = \Carbon\Carbon::parse($periodStart)
+            ->diffInDays(
+                \Carbon\Carbon::parse($periodEnd)
+            ) + 1;
+
+        $overtimeDetails = DB::connection('cii')
+            ->table('overtimes')
+
+            ->leftJoin('PKWT as p', 'overtimes.NPK', '=', 'p.NPK')
+
+            ->where('overtimes.NPK', $npk)
+
+            ->whereBetween(
+                'OVERTIME_DATE',
+                [$periodStart, $periodEnd]
+            )
+
+            ->select(
+                'overtimes.NPK',
+                'overtimes.OVERTIME_DATE',
+                'overtimes.DAY',
+                'overtimes.JUMLAH_JAM_LEMBUR',
+
+                DB::raw("
+                CASE
+                    WHEN DAY NOT IN ('Sabtu','Minggu')
+                    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+                    THEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+                    ELSE 0
+                END AS overtime_hours
+            "),
+
+                DB::raw("
+                CASE
+                    WHEN DAY IN ('Sabtu','Minggu')
+                    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+                    THEN
+                        CASE
+                            WHEN
+                            (
+                                COALESCE(p.GAJI,0)
+                            ) >= 3800000
+                            THEN
+                                CASE
+                                    WHEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) > 8
+                                    THEN 8
+                                    ELSE TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+                                END
+                            ELSE
+                                TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+                        END
+                    ELSE 0
+                END AS special_overtime_hours
+            ")
+            )
+            ->orderBy('OVERTIME_DATE')
+            ->get();
+
+        return response()->json([
+            'data' => $overtimeDetails
+        ]);
+    }
+
     public function approvalStatus($periodId)
     {
         /*

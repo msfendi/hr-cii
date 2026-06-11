@@ -197,7 +197,7 @@
                                     <th>PPh21</th>
                                     <th>PPh21 Deduction</th>
                                     <th>Absence</th>
-                                    <th>Late</th>
+                                    <th>Late Deduction</th>
                                     <th>Total Salary</th>
                                     <th>Absence Days</th>
                                     <th>Late Minutes</th>
@@ -758,26 +758,52 @@ $(document).on('click','#btnCheckPayroll',function(){
             {
                 data:'components.overtime_pay',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    let overtimeData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.overtime_details || []
+                            )
+                        );
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-overtime-detail"
+                        data-overtime="${overtimeData}">
+                            ${salaryMask(data ?? 0)}
+                        </a>
+                    `;
                 }
             },
 
             {
                 data:'components.special_overtime_pay',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    let specialOvertimeData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.overtime_details || []
+                            )
+                        );
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-special-overtime-detail"
+                        data-special-overtime="${specialOvertimeData}">
+                            ${salaryMask(data ?? 0)}
+                        </a>
+                    `;
                 }
             },
 
@@ -953,13 +979,26 @@ $(document).on('click','#btnCheckPayroll',function(){
             {
                 data:'components.late_deduction',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    let lateData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.late_details || []
+                            )
+                        );
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-late-detail"
+                        data-late="${lateData}">
+                            ${salaryMask(data ?? 0)}
+                        </a>
+                    `;
                 }
             },
 
@@ -1152,6 +1191,134 @@ function salaryMask(value){
 
 </script>
 <style>
+    .btn-late-detail{
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+.btn-late-detail:hover{
+    text-decoration:none;
+    color:#dc3545 !important;
+}
+
+#lateDetailModal .modal-dialog{
+    max-width:95%;
+}
+
+#lateDetailModal .modal-content{
+    border-radius:15px;
+    overflow:hidden;
+}
+
+#lateDetailModal .modal-header{
+    background:linear-gradient(
+        135deg,
+        #dc3545,
+        #b02a37
+    );
+}
+
+#table-late-detail{
+    font-size:13px;
+}
+
+#table-late-detail tbody tr:hover{
+    background:#fff5f5;
+}
+
+.late-row{
+    background:#ffe5e5 !important;
+    color:#a30000;
+    font-weight:bold;
+}
+
+    .btn-overtime-detail{
+    text-decoration:none;
+    transition:.2s;
+}
+
+.btn-overtime-detail:hover{
+    color:#0056b3 !important;
+    text-decoration:none;
+}
+
+#overtimeDetailModal .modal-content{
+    border-radius:15px;
+    overflow:hidden;
+}
+
+#overtimeDetailModal .modal-header{
+    background:linear-gradient(
+        135deg,
+        #4e73df,
+        #224abe
+    );
+}
+
+#overtimeDetailModal .modal-dialog,
+#specialOvertimeDetailModal .modal-dialog{
+    max-width:90%;
+}
+
+#table-overtime-detail,
+#table-special-overtime-detail{
+    font-size:13px;
+}
+
+#table-overtime-detail tbody tr:hover,
+#table-special-overtime-detail tbody tr:hover{
+    background:#f5f9ff;
+}
+
+#table-overtime-detail_wrapper .dataTables_filter,
+#table-special-overtime-detail_wrapper .dataTables_filter{
+    margin-bottom:10px;
+}
+
+#table-overtime-detail tfoot,
+#table-special-overtime-detail tfoot{
+    background:#eef7ff;
+}
+
+#overtimeDetailModal table tbody tr:hover{
+    background:#f8fbff;
+}
+
+#overtimeDetailModal .table-primary{
+    font-size:14px;
+}
+
+    .btn-special-overtime-detail{
+    text-decoration:none;
+    transition:.2s;
+}
+
+.btn-special-overtime-detail:hover{
+    color:#0056b3 !important;
+    text-decoration:none;
+}
+
+#specialOvertimeDetailModal .modal-content{
+    border-radius:15px;
+    overflow:hidden;
+}
+
+#specialOvertimeDetailModal .modal-header{
+    background:linear-gradient(
+        135deg,
+        #4e73df,
+        #224abe
+    );
+}
+
+#specialOvertimeDetailModal table tbody tr:hover{
+    background:#f8fbff;
+}
+
+#specialOvertimeDetailModal .table-primary{
+    font-size:14px;
+}
 #table-details tbody tr.table-danger td{
     background-color:#f8d7da !important;
     color:#721c24 !important;
@@ -1192,5 +1359,549 @@ function salaryMask(value){
 }
 
 </style>
+<div class="modal fade"
+     id="lateDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-user-clock mr-2"></i>
+                    Late Attendance Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+
+                    <span>&times;</span>
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-late-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead class="thead-light">
+
+                        <tr>
+                            <th>NPK</th>
+                            <th>NAMA KARYAWAN</th>
+                            <th>DEPARTEMENT</th>
+                            <th>Date</th>
+                            <th>Work Start</th>
+                            <th>Work End</th>
+                            <th>First Scan</th>
+                            <th>Late Minute</th>
+                        </tr>
+
+                    </thead>
+
+                    <tfoot>
+
+                        <tr style="
+                            font-weight:bold;
+                            background:#fff0f0">
+
+                            <th colspan="7"
+                                class="text-right">
+
+                                TOTAL LATE MINUTES
+
+                            </th>
+
+                            <th id="total-late-minute">
+                                0
+                            </th>
+
+                        </tr>
+
+                    </tfoot>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="modal fade"
+     id="overtimeDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-primary text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-clock mr-2"></i>
+                    Overtime Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+
+                    <span>&times;</span>
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-overtime-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead class="thead-light">
+
+                        <tr>
+                            <th>NPK</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Date</th>
+                            <th>Normal OT Hours</th>
+                        </tr>
+
+                    </thead>
+
+                    <tfoot>
+
+                        <tr style="font-weight:bold;background:#eef7ff">
+                            <th colspan="4" class="text-right">
+                                TOTAL
+                            </th>
+
+                            <th id="total-normal-ot">
+                                0
+                            </th>
+
+                        </tr>
+
+                    </tfoot>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="modal fade"
+     id="specialOvertimeDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-success text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-business-time mr-2"></i>
+                    Special Overtime Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+
+                    <span>&times;</span>
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-special-overtime-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead class="thead-light">
+
+                        <tr>
+                            <th>NPK</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Date</th>
+                            <th>Special OT Hours</th>
+                        </tr>
+
+                    </thead>
+
+                    <tfoot>
+
+                        <tr style="font-weight:bold;background:#eef7ff">
+
+                            <th colspan="4"
+                                class="text-right">
+
+                                TOTAL
+
+                            </th>
+
+                            <th id="total-special-ot">
+                                0
+                            </th>
+
+                        </tr>
+
+                    </tfoot>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<script>
+    let lateDetailTable = null;
+
+$(document).on(
+    'click',
+    '.btn-late-detail',
+    function(){
+
+        let details = JSON.parse(
+            decodeURIComponent(
+                $(this).data('late')
+            )
+        );
+
+        let totalLate = 0;
+
+        details.forEach(function(row){
+
+            totalLate += Number(
+                row.late_minute || 0
+            );
+
+        });
+
+        $('#total-late-minute')
+            .html(
+                totalLate.toLocaleString('id-ID')
+            );
+
+        if(lateDetailTable){
+
+            lateDetailTable.destroy();
+
+            $('#table-late-detail tbody')
+                .remove();
+        }
+
+        $('#table-late-detail')
+            .append('<tbody></tbody>');
+
+        lateDetailTable =
+            $('#table-late-detail')
+            .DataTable({
+
+                data: details,
+
+                pageLength: 10,
+
+                responsive: true,
+
+                ordering: true,
+
+                searching: true,
+
+                order:[[0,'asc']],
+
+                createdRow:function(row,data){
+
+                    if(
+                        Number(data.late_minute) > 0
+                    ){
+                        $(row).addClass(
+                            'late-row'
+                        );
+                    }
+
+                },
+
+                columns:[
+                    {
+                        data:'NPK'
+                    },
+                    {
+                        data:'NAMA_KARYAWAN'
+                    },
+                    {
+                        data:'DEPARTEMENT'
+                    },
+                    {
+                        data:'scan_day'
+                    },
+
+                    {
+                        data:'work_start',
+                        render:function(data){
+
+                            return data
+                                ? data.substring(0,5)
+                                : '-';
+                        }
+                    },
+
+                    {
+                        data:'work_end',
+                        render:function(data){
+
+                            return data
+                                ? data.substring(0,5)
+                                : '-';
+                        }
+                    },
+
+                    {
+                        data:'first_scan',
+                        render:function(data){
+
+                            if(
+                                data === null ||
+                                data === ''
+                            ){
+                                return `
+                                    <span class="badge badge-secondary">
+                                        No Scan
+                                    </span>
+                                `;
+                            }
+
+                            return data;
+                        }
+                    },
+
+                    {
+                        data:null,
+                        className:'text-center',
+                        render:function(data,type,row){
+
+                            if(
+                                row.first_scan === null ||
+                                row.first_scan === ''
+                            ){
+                                return `
+                                    <span class="badge badge-warning">
+                                        No Scan
+                                    </span>
+                                `;
+                            }
+
+                            let minute = Number(row.late_minute || 0);
+
+                            if(minute > 0){
+                                return `
+                                    <span class="badge badge-danger">
+                                        ${minute} Min
+                                    </span>
+                                `;
+                            }
+
+                            return `
+                                <span class="badge badge-success">
+                                    On Time
+                                </span>
+                            `;
+                        }
+                    }
+
+                ]
+
+            });
+
+        $('#lateDetailModal')
+            .modal('show');
+
+    }
+);
+</script>
+<script>
+    let specialOvertimeDetailTable = null;
+    $(document).on(
+    'click',
+    '.btn-special-overtime-detail',
+    function(){
+
+        let details = JSON.parse(
+            decodeURIComponent(
+                $(this).data('special-overtime')
+            )
+        );
+
+        let totalSpecial = 0;
+
+        details.forEach(function(row){
+
+            totalSpecial += Number(
+                row.special_overtime_hours || 0
+            );
+
+        });
+
+        $('#total-special-ot')
+            .html(totalSpecial);
+
+        if(specialOvertimeDetailTable){
+
+            specialOvertimeDetailTable.destroy();
+
+            $('#table-special-overtime-detail tbody')
+                .remove();
+        }
+
+        $('#table-special-overtime-detail')
+            .append('<tbody></tbody>');
+
+        specialOvertimeDetailTable =
+            $('#table-special-overtime-detail')
+            .DataTable({
+
+                data: details,
+
+                pageLength: 10,
+
+                responsive: true,
+
+                ordering: true,
+
+                searching: true,
+
+                columns:[
+
+                    {
+                        data:'NPK'
+                    },
+
+                    {
+                        data:'NAMA_KARYAWAN'
+                    },
+
+                    {
+                        data:'DEPARTEMENT'
+                    },
+
+                    {
+                        data:'OVERTIME_DATE'
+                    },
+
+                    {
+                        data:'special_overtime_hours',
+                        className:'text-center'
+                    }
+
+                ]
+
+            });
+
+        $('#specialOvertimeDetailModal')
+            .modal('show');
+
+    }
+);
+</script>
+<script>
+    let overtimeDetailTable = null;
+    $(document).on(
+    'click',
+    '.btn-overtime-detail',
+    function(){
+
+        let details = JSON.parse(
+            decodeURIComponent(
+                $(this).data('overtime')
+            )
+        );
+
+        let totalNormal = 0;
+
+        details.forEach(function(row){
+
+            totalNormal += Number(
+                row.overtime_hours || 0
+            );
+
+        });
+
+        $('#total-normal-ot')
+            .html(totalNormal);
+
+        if(overtimeDetailTable){
+
+            overtimeDetailTable.destroy();
+
+            $('#table-overtime-detail tbody')
+                .remove();
+        }
+
+        $('#table-overtime-detail').append(
+            '<tbody></tbody>'
+        );
+
+        overtimeDetailTable =
+            $('#table-overtime-detail').DataTable({
+
+                data: details,
+
+                pageLength: 10,
+
+                responsive: true,
+
+                ordering: true,
+
+                searching: true,
+
+                columns: [
+
+                    {
+                        data:'NPK'
+                    },
+
+                    {
+                        data:'NAMA_KARYAWAN'
+                    },
+
+                    {
+                        data:'DEPARTEMENT'
+                    },
+
+                    {
+                        data:'OVERTIME_DATE'
+                    },
+
+                    {
+                        data:'overtime_hours',
+                        className:'text-center'
+                    }
+
+                ]
+
+            });
+
+        $('#overtimeDetailModal')
+            .modal('show');
+
+    }
+);
+</script>
    </body>
 </html>
