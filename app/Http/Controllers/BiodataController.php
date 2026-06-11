@@ -21,7 +21,8 @@ class BiodataController extends Controller
     public function index()
     {
         $departments = DB::connection('cii')->table('DEPT')->select('ID_DEPT', 'DEPARTEMENT')->where('SECTION', 'CHUTEX')->get();
-        return view('biodata.index', compact('departments'));
+        $sections = DB::table('sections')->orderBy('name', 'asc')->get();
+        return view('biodata.index', compact('departments', 'sections'));
     }
 
     public function getData(Request $request)
@@ -30,9 +31,9 @@ class BiodataController extends Controller
             ->table('BIODATA')
             ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'employees_contract.end_date')
             ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
-            ->leftJoin('employees_contract', function($join) {
+            ->leftJoin('employees_contract', function ($join) {
                 $join->on('BIODATA.NPK', '=', 'employees_contract.npk')
-                     ->where('employees_contract.status_contract', 'AKTIF');
+                    ->where('employees_contract.status_contract', 'AKTIF');
             });
 
         if ($request->has('department_id') && $request->department_id != '') {
@@ -98,12 +99,12 @@ class BiodataController extends Controller
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
-            'SECTION' => 'CHUTEX',
+            'SECTION' => strtoupper($request->section),
             'STATUS' => 'A',
         ]);
 
         // insert to BIODATA completed above.
-        
+
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
         $diff = $tgl_lahir->diff($request->tmk);
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
@@ -138,8 +139,10 @@ class BiodataController extends Controller
         if ($request->filled('bank_account')) {
             PayrollMaster::updateOrCreate(
                 ['npk' => strtoupper($request->npk)],
-                ['bank_name' => 'PERMATA BANK',
-                'bank_account' => $request->bank_account],
+                [
+                    'bank_name' => 'PERMATA BANK',
+                    'bank_account' => $request->bank_account
+                ],
             );
         }
 
@@ -161,7 +164,7 @@ class BiodataController extends Controller
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
-            'SECTION' => 'CHUTEX',
+            'SECTION' => strtoupper($request->section),            'SECTION' => strtoupper($request->section),'SECTION' => strtoupper($request->section),
             'STATUS' => 'A',
             'IS_STAFF' => '0',
         ]);
@@ -196,8 +199,10 @@ class BiodataController extends Controller
         if ($request->filled('bank_account')) {
             PayrollMaster::updateOrCreate(
                 ['npk' => strtoupper($request->npk)],
-                ['bank_name' => 'PERMATA BANK',
-                'bank_account' => $request->bank_account],
+                [
+                    'bank_name' => 'PERMATA BANK',
+                    'bank_account' => $request->bank_account
+                ],
             );
         }
 
@@ -289,10 +294,11 @@ class BiodataController extends Controller
     public function show($NPK)
     {
         $pkwt    = DB::connection('cii')->table('PKWT')->select('*')->where('NPK', $NPK)->first();
-        $biodata = DB::connection('cii')->table('BIODATA')->select('IS_STAFF')->where('NPK', $NPK)->first();
+        $biodata = DB::connection('cii')->table('BIODATA')->select('IS_STAFF', 'SECTION')->where('NPK', $NPK)->first();
 
         if ($pkwt && $biodata) {
             $pkwt->IS_STAFF = $biodata->IS_STAFF ?? 0;
+            $pkwt->section = $biodata->SECTION;
         }
 
 
@@ -345,6 +351,7 @@ class BiodataController extends Controller
                 'ID_DEPT' => $request->id_dept,
                 'JENIS_KEL' => strtoupper($request->jk),
                 'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
+                'SECTION' => strtoupper($request->section),
             ]);
 
             $tgl_lahir = Carbon::parse($request->tgl_lahir);
@@ -438,7 +445,8 @@ class BiodataController extends Controller
         return Excel::download(new PKWTExport, 'data_karyawan_pkwt_' . date('Y-m-d_H-i-s') . '.xlsx');
     }
 
-    public function viewGender() {
+    public function viewGender()
+    {
         $data = DB::connection('cii')->table('dept as d')
             ->leftJoin('biodata as b', 'b.ID_DEPT', '=', 'd.ID_DEPT')
             ->select(

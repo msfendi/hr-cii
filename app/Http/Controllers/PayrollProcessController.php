@@ -167,10 +167,7 @@ class PayrollProcessController extends Controller
                     $q->whereNull('ec.id')
                         ->orWhere(function ($sub) use ($periodStart, $periodEnd) {
                             $sub->where('ec.status_contract', 'AKTIF')
-                                ->whereBetween('ec.end_date', [
-                                    $periodStart,
-                                    $periodEnd
-                                ]);
+                                ->where('ec.end_date', '<', $periodStart);
                         });
                 })
                 ->select(

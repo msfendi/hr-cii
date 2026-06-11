@@ -42,7 +42,6 @@ class EmployeesContractImport implements ToModel, WithHeadingRow
                 'npk'             => strtoupper(trim($row['npk'])),
                 'contract_ke'     => (int) ($row['contract_ke'] ?? 1),
                 'start_date'      => $startDate,
-                'end_date'        => $endDate,
             ],
             [
                 'npk'             => strtoupper(trim($row['npk'])),
