@@ -21,7 +21,8 @@ class BiodataController extends Controller
     public function index()
     {
         $departments = DB::connection('cii')->table('DEPT')->select('ID_DEPT', 'DEPARTEMENT')->where('SECTION', 'CHUTEX')->get();
-        return view('biodata.index', compact('departments'));
+        $sections = DB::table('sections')->orderBy('name', 'asc')->get();
+        return view('biodata.index', compact('departments', 'sections'));
     }
 
     public function getData(Request $request)
@@ -98,7 +99,7 @@ class BiodataController extends Controller
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
-            'SECTION' => 'CHUTEX',
+            'SECTION' => strtoupper($request->section),
             'STATUS' => 'A',
         ]);
 
@@ -161,7 +162,7 @@ class BiodataController extends Controller
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
-            'SECTION' => 'CHUTEX',
+            'SECTION' => strtoupper($request->section),
             'STATUS' => 'A',
             'IS_STAFF' => '0',
         ]);
@@ -289,10 +290,11 @@ class BiodataController extends Controller
     public function show($NPK)
     {
         $pkwt    = DB::connection('cii')->table('PKWT')->select('*')->where('NPK', $NPK)->first();
-        $biodata = DB::connection('cii')->table('BIODATA')->select('IS_STAFF')->where('NPK', $NPK)->first();
+        $biodata = DB::connection('cii')->table('BIODATA')->select('IS_STAFF', 'SECTION')->where('NPK', $NPK)->first();
 
         if ($pkwt && $biodata) {
             $pkwt->IS_STAFF = $biodata->IS_STAFF ?? 0;
+            $pkwt->section = $biodata->SECTION;
         }
 
 
@@ -345,6 +347,7 @@ class BiodataController extends Controller
                 'ID_DEPT' => $request->id_dept,
                 'JENIS_KEL' => strtoupper($request->jk),
                 'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
+                'SECTION' => strtoupper($request->section),
             ]);
 
             $tgl_lahir = Carbon::parse($request->tgl_lahir);

@@ -71,6 +71,7 @@ use App\Http\Controllers\WhatsappTemplateController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotificationsContractController;
+use App\Http\Controllers\PortalRecruitmentStatusController;
 use App\Http\Controllers\RecruitmentFormController;
 
 /*
@@ -790,5 +791,7 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
         ->where('step', '[1-8]');
     Route::get('/success', fn () => view('recruitments_form.success'))
         ->name('success');
-
 });
+
+Route::get('/portal-recruitment-status', [PortalRecruitmentStatusController::class, 'index'])->name('portal.recruitment-status.index');
+Route::post('/portal-recruitment-status/check', [PortalRecruitmentStatusController::class, 'check'])->name('portal.recruitment-status.check');

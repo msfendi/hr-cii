@@ -270,16 +270,14 @@ class EmployeesContractController extends Controller
             $newContractKe = (int) $old->contract_ke + 1;
             $newStart = $old->end_date->copy()->addDay();
 
-            // Mulai periode kontrak 2, start_date dan end_date mengikuti tgl cutoff (tanggal 8)
-            if ($newContractKe >= 2) {
-                if ($newStart->day <= 7) {
-                    $newStart->subMonth()->day(8);
-                } else {
-                    $newStart->day(8);
-                }
-            }
-
             $newEnd = $newStart->copy()->addMonths((int) $data['month_duration'])->subDay();
+
+            // Di bulan tersebut, cek apakah tanggalnya lebih dekat ke 7 atau 20
+            if ($newEnd->day <= 13) {
+                $newEnd->day(7);
+            } else {
+                $newEnd->day(20);
+            }
 
             EmployeesContract::create([
                 'npk'             => $old->npk,

@@ -739,7 +739,7 @@
                                         @foreach ($recruitments as $recruitment)
                                             @php
                                                 $initial = strtoupper(mb_substr($recruitment->NAMA ?? 'X', 0, 1));
-                                                $isMale = strtoupper($recruitment->JENIS_KELAMIN ?? '') === 'LAKI-LAKI';
+                                                $isMale = strtoupper($recruitment->JENIS_KELAMIN ?? '') === 'L';
                                                 $sa = $recruitment->STATUS_APPLY ?? null;
 
                                                 $sClass = match ($sa) {
@@ -864,7 +864,7 @@
                                                                             {{ $label }}
                                                                         </a>
                                                                     @endif
-                                                                @endforeach        
+                                                                @endforeach
                                                             </div>
                                                         </div>
                                                     @else
@@ -1205,8 +1205,8 @@
                                                             <label class="fl">Status Kelulusan</label>
                                                             <select class="form-control form-control-sm penilaian-select" name="result_interview" id="penilaian_result_interview" data-next="step_kesehatan">
                                                                 <option value="">Belum Dinilai</option>
-                                                                <option value="LOLOS">✅ Lolos</option>
-                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                                <option value="TRUE">✅ Lolos</option>
+                                                                <option value="FALSE">❌ Tidak Lolos</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1232,8 +1232,8 @@
                                                             <label class="fl">Status Kelulusan</label>
                                                             <select class="form-control form-control-sm penilaian-select" name="result_kesehatan" id="penilaian_result_kesehatan" data-next="step_teknis">
                                                                 <option value="">Belum Dinilai</option>
-                                                                <option value="LOLOS">✅ Lolos</option>
-                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                                <option value="TRUE">✅ Lolos</option>
+                                                                <option value="FALSE">❌ Tidak Lolos</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1259,8 +1259,8 @@
                                                             <label class="fl">Status Kelulusan</label>
                                                             <select class="form-control form-control-sm penilaian-select" name="result_test" id="penilaian_result_test" data-next="step_user">
                                                                 <option value="">Belum Dinilai</option>
-                                                                <option value="LOLOS">✅ Lolos</option>
-                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                                <option value="TRUE">✅ Lolos</option>
+                                                                <option value="FALSE">❌ Tidak Lolos</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-2">
@@ -1293,8 +1293,8 @@
                                                             <label class="fl">Status Kelulusan</label>
                                                             <select class="form-control form-control-sm penilaian-select" name="result_user" id="penilaian_result_user" data-next="">
                                                                 <option value="">Belum Dinilai</option>
-                                                                <option value="LOLOS">✅ Lolos</option>
-                                                                <option value="TIDAK LOLOS">❌ Tidak Lolos</option>
+                                                                <option value="TRUE">✅ Lolos</option>
+                                                                <option value="FALSE">❌ Tidak Lolos</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1514,7 +1514,7 @@
             $('#det_av').text((d.NAMA || 'X').charAt(0).toUpperCase());
             $('#det_nama').text(v(d.NAMA));
             $('#det_sub').text(
-                (d.JENIS_KELAMIN === 'LAKI-LAKI' ? '♂ Laki-laki' : '♀ Perempuan') +
+                (d.JENIS_KELAMIN === 'L' ? '♂ Laki-laki' : '♀ Perempuan') +
                 ' · ' + v(d.AGAMA) + ' · ' + v(d.UMUR) +
                 (d.jabatan ? ' · ' + d.jabatan : '')
             );
@@ -1524,21 +1524,21 @@
             const isIntvw = d.is_interview === 'TRUE' || d.is_interview === true;
             const isHlth  = d.is_kesehatan === 'TRUE' || d.is_kesehatan === true;
             const isOnb   = d.STATUS_APPLY === 'ONBOARDING';
-            const intvStatus = d.result_interview === 'LOLOS' ? 'done' : (d.result_interview === 'TIDAK LOLOS' ? 'failed' : 'active');
+            const intvStatus = d.result_interview === 'TRUE' ? 'done' : (d.result_interview === 'FALSE' ? 'failed' : 'active');
             
-            const hlthStatus = d.result_kesehatan === 'LOLOS' ? 'done' : 
-                               (d.result_kesehatan === 'TIDAK LOLOS' ? 'failed' : 
-                               (d.result_interview === 'LOLOS' ? 'active' : ''));
+            const hlthStatus = d.result_kesehatan === 'TRUE' ? 'done' : 
+                               (d.result_kesehatan === 'FALSE' ? 'failed' : 
+                               (d.result_interview === 'TRUE' ? 'active' : ''));
 
-            const testStatus = d.result_test === 'LOLOS' ? 'done' : 
-                               (d.result_test === 'TIDAK LOLOS' ? 'failed' : 
-                               (d.result_kesehatan === 'LOLOS' ? 'active' : ''));
+            const testStatus = d.result_test === 'TRUE' ? 'done' : 
+                               (d.result_test === 'FALSE' ? 'failed' : 
+                               (d.result_kesehatan === 'TRUE' ? 'active' : ''));
 
-            const userStatus = d.result_user === 'LOLOS' ? 'done' : 
-                               (d.result_user === 'TIDAK LOLOS' ? 'failed' : 
-                               (d.result_test === 'LOLOS' ? 'active' : ''));
+            const userStatus = d.result_user === 'TRUE' ? 'done' : 
+                               (d.result_user === 'FALSE' ? 'failed' : 
+                               (d.result_test === 'TRUE' ? 'active' : ''));
 
-            const onboardStatus = isOnb ? 'done' : (d.result_user === 'LOLOS' ? 'active' : '');
+            const onboardStatus = isOnb ? 'done' : (d.result_user === 'TRUE' ? 'active' : '');
 
             setTl('tl_apply',     null,            'done',              null);
             setTl('tl_interview', 'tl_interview',  intvStatus,          d.tgl_interview);
@@ -1569,7 +1569,7 @@
             // Rule: step unlocks only if previous step has a result of 'LOLOS' in database
             function applyLock(stepId, prevResult) {
                 const $step = $('#' + stepId);
-                const unlocked = prevResult === 'LOLOS';
+                const unlocked = prevResult === 'TRUE';
                 $step.toggleClass('locked', !unlocked);
             }
             applyLock('step_kesehatan', d.result_interview);
@@ -1581,10 +1581,10 @@
                 const $ind = $('#' + indId);
                 const $dot = $ind.find('div');
                 const $lbl = $ind.find('span');
-                if (result === 'LOLOS') {
+                if (result === 'TRUE') {
                     $dot.css({'background':'#d1fae5','color':'#065f46'});
                     $lbl.css('color','#065f46');
-                } else if (result === 'TIDAK LOLOS') {
+                } else if (result === 'FALSE') {
                     $dot.css({'background':'#fee2e2','color':'#991b1b'});
                     $lbl.css('color','#991b1b');
                 } else {
@@ -1599,7 +1599,7 @@
 
             // Pribadi
             $('#dp_nik').text(v(d.NIK)); $('#dp_kk').text(v(d.NO_KK));
-            $('#dp_jk').text(d.JENIS_KELAMIN === 'LAKI-LAKI' ? '♂ Laki-laki' : '♀ Perempuan');
+            $('#dp_jk').text(d.JENIS_KELAMIN === 'L' ? '♂ Laki-laki' : '♀ Perempuan');
             $('#dp_agama').text(v(d.AGAMA)); $('#dp_tmpt').text(v(d.TMPT_LAHIR));
             $('#dp_tgl').text(fmtD(d.TGL_LAHIR)); $('#dp_umur').text(v(d.UMUR));
             $('#dp_wn').text(v(d.warga_negara)); $('#dp_status').text(v(d.STATUS));
@@ -1669,16 +1669,16 @@
                 }
 
 
-                // TODO:: BUTTON TEST KESEHATAN BELUM RUNNING DENGAN BENAR
-                if(isset($healthTestMap[$recruitment->NIK])) {
-                    <a class="dropdown-item d-flex align-items-center"
-                        style="font-size:12.5px; gap:8px;"
-                        href="{{ route('health-test.pdf','1') }}"
-                        target="_blank">
-                        <i class="fas fa-heartbeat text-danger"></i>
-                        Test Kesehatan
-                    </a>
-                }
+            //     // TODO:: BUTTON TEST KESEHATAN BELUM RUNNING DENGAN BENAR
+            //     if(isset($healthTestMap[$recruitment->NIK])) {
+            //         <a class="dropdown-item d-flex align-items-center"
+            //             style="font-size:12.5px; gap:8px;"
+            //             href="{{ route('health-test.pdf','1') }}"
+            //             target="_blank">
+            //             <i class="fas fa-heartbeat text-danger"></i>
+            //             Test Kesehatan
+            //         </a>
+            // }
 
             });
             $('#doc_grid_modal').html(dh || '<span class="text-muted"><i class="fas fa-folder-open mr-1"></i>Tidak ada dokumen tersedia</span>');

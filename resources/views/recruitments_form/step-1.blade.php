@@ -497,7 +497,6 @@
                                         'Kendaraan Pribadi (Mobil)',
                                         'Kendaraan Pribadi (Motor)',
                                         'Kendaraan Umum',
-                                        'Jemputan Perusahaan',
                                         'Jalan Kaki',
                                     ] as $tr)
                                         <option value="{{ $tr }}" {{ old('transportasi', $savedData['transportasi'] ?? '') === $tr ? 'selected' : '' }}>{{ $tr }}</option>
@@ -532,7 +531,7 @@
                                 <div class="relative">
                                     <select class="rf-select" id="pendidikan" name="pendidikan">
                                         <option value="" disabled {{ old('pendidikan', $savedData['pendidikan'] ?? '') === '' ? 'selected' : '' }}>Pilih Pendidikan</option>
-                                        @foreach(['SMA/SMK','D3','S1','S2','S3'] as $p)
+                                        @foreach(['SD','SMP','SMA/SMK','D3','S1','S2','S3'] as $p)
                                             <option value="{{ $p }}" {{ old('pendidikan', $savedData['pendidikan'] ?? '') === $p ? 'selected' : '' }}>{{ $p }}</option>
                                         @endforeach
                                     </select>

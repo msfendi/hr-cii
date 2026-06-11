@@ -239,6 +239,7 @@
                                                     </div>
 
                                                     <!-- Employment & Education -->
+                                                    
                                                     <div class="col-md-6 mb-3">
                                                         <h6
                                                             class="font-weight-bold text-success mb-3 pl-2 border-left-success ml-1">
@@ -257,12 +258,18 @@
                                                                 </select>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
-                                                                <label
-                                                                    class="small font-weight-bold text-muted ml-2">TMK
-                                                                    <span class="text-danger">*</span></label>
-                                                                <input type="date" class="form-control px-3" name="tmk"
-                                                                    id="edit_tmk" required>
+                                                                <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
+                                                                <select class="form-control px-3" id="edit_section" name="section" required>
+                                                                    <option value="">-- Pilih --</option>
+                                                                    <option value="CHUTEX">CHUTEX</option>
+                                                                    @foreach($sections as $section)
+                                                                        <option value="{{ $section->name }}">
+                                                                            {{ $section->name }} - ( {{ $section->line_start }} - {{ $section->line_end }} )
+                                                                        </option>
+                                                                    @endforeach
+                                                                </select>
                                                             </div>
+                                                            
                                                             <div class="col-md-6 mb-3">
                                                                 <label
                                                                     class="small font-weight-bold text-muted ml-2">Jenjang
@@ -311,6 +318,13 @@
                                                                 <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
                                                                 <input type="text" class="form-control px-3"
                                                                     name="bank_account" id="edit_bank_account" placeholder="Cth: 1234567890">
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">TMK
+                                                                    <span class="text-danger">*</span></label>
+                                                                <input type="date" class="form-control px-3" name="tmk"
+                                                                    id="edit_tmk" required>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -520,11 +534,16 @@
                                                                 </select>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
-                                                                <label
-                                                                    class="small font-weight-bold text-muted ml-2">TMK
-                                                                    <span class="text-danger">*</span></label>
-                                                                <input type="date" class="form-control px-3" name="tmk"
-                                                                    required>
+                                                                <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
+                                                                <select class="form-control px-3" name="section" required>
+                                                                    <option value="">-- Pilih --</option>
+                                                                    <option value="CHUTEX">CHUTEX</option>
+                                                                    @foreach($sections as $section)
+                                                                        <option value="{{ $section->name }}">
+                                                                            {{ $section->name }} - ( {{ $section->line_start }} - {{ $section->line_end }} )
+                                                                        </option>
+                                                                    @endforeach
+                                                                </select>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
                                                                 <label
@@ -562,6 +581,13 @@
                                                                 <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
                                                                 <input type="text" class="form-control px-3"
                                                                     name="bank_account" placeholder="Cth: 1234567890">
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">TMK
+                                                                    <span class="text-danger">*</span></label>
+                                                                <input type="date" class="form-control px-3" name="tmk"
+                                                                    required>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -739,10 +765,8 @@
                                                                 id="show_id_dept" readonly>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
-                                                            <label
-                                                                class="small font-weight-bold text-muted ml-2">TMK</label>
-                                                            <input type="text" class="form-control px-3" id="show_tmk"
-                                                                readonly>
+                                                            <label class="small font-weight-bold text-muted ml-2">Section</label>
+                                                            <input type="text" class="form-control px-3" id="show_section" readonly>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
                                                             <label
@@ -774,6 +798,12 @@
                                                         <div class="col-md-6 mb-3">
                                                             <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
                                                             <input type="text" class="form-control px-3" id="show_bank_account" readonly>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <label
+                                                                class="small font-weight-bold text-muted ml-2">TMK</label>
+                                                            <input type="text" class="form-control px-3" id="show_tmk"
+                                                                readonly>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1147,6 +1177,7 @@
             $('#show_pendidikan').val('');
             $('#show_sekolah').val('');
             $('#show_jurusan').val('');
+            $('#show_section').val('');
             $('#show_id_dept').text('');
             $('#show_tmk').text('');
             $('#show_tanggungan').text('');
@@ -1173,6 +1204,7 @@
                     $('#show_pendidikan').val(response.PDDK ?? 'PENDIDIKAN TIDAK DIISI');
                     $('#show_sekolah').val(response.NAMA_SEKOLAH ?? 'SEKOLAH TIDAK DIISI');
                     $('#show_jurusan').val(response.JURUSAN ?? 'JURUSAN TIDAK DIISI');
+                    $('#show_section').val(response.section ?? 'SECTION TIDAK DIISI');
                     $('#show_id_dept').val(response.BAGIAN ?? 'DEPT TIDAK DIISI');
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');
@@ -1424,6 +1456,7 @@
                     $('#edit_pendidikan').val(response.PDDK);
                     $('#edit_sekolah').val(response.NAMA_SEKOLAH ?? '');
                     $('#edit_jurusan').val(response.JURUSAN);
+                    $('#edit_section').val(response.section);
 
                     $("#edit_id_dept option").filter(function () {
                         return $.trim($(this).text()) === $.trim(response.BAGIAN);

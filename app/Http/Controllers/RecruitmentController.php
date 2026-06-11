@@ -82,22 +82,22 @@ class RecruitmentController extends Controller
             $query->where('pd.status_apply', 'APPLIED');
         } elseif ($status === 'step_interview') {
             $query->where(function($q) {
-                $q->whereNull('pd.result_interview')->orWhere('pd.result_interview', '');
+                $q->whereNull('pd.result_interview')->orWhereIn('pd.result_interview', ['', 'FALSE']);
             })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'step_kesehatan') {
-            $query->where('pd.result_interview', 'LOLOS')
+            $query->where('pd.result_interview', 'TRUE')
                   ->where(function($q) {
-                      $q->whereNull('pd.result_kesehatan')->orWhere('pd.result_kesehatan', '');
+                      $q->whereNull('pd.result_kesehatan')->orWhereIn('pd.result_kesehatan', ['', 'FALSE']);
                   })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'step_teknis') {
-            $query->where('pd.result_kesehatan', 'LOLOS')
+            $query->where('pd.result_kesehatan', 'TRUE')
                   ->where(function($q) {
-                      $q->whereNull('pd.result_test')->orWhere('pd.result_test', '');
+                      $q->whereNull('pd.result_test')->orWhereIn('pd.result_test', ['', 'FALSE']);
                   })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'step_user') {
-            $query->where('pd.result_test', 'LOLOS')
+            $query->where('pd.result_test', 'TRUE')
                   ->where(function($q) {
-                      $q->whereNull('pd.result_user')->orWhere('pd.result_user', '');
+                      $q->whereNull('pd.result_user')->orWhereIn('pd.result_user', ['', 'FALSE']);
                   })->where('pd.status_apply', '!=', 'REJECTED');
         } elseif ($status === 'ready_test') {
             $query->where('pd.status_apply', 'INVITATION TEST');
@@ -111,13 +111,13 @@ class RecruitmentController extends Controller
 
         $recruitments = $query->orderByDesc('PELAMAR.id')->get();
 
-        // // Map health test IDs by NIK for quick lookup in the blade
-        // $healthTestMap = HealthTest::select('id', 'nik')
-        //     ->get()
-        //     ->keyBy('nik')
-        //     ->map(fn($h) => $h->id);
+        // Map health test IDs by NIK for quick lookup in the blade
+        $healthTestMap = HealthTest::select('id', 'nik')
+            ->get()
+            ->keyBy('nik')
+            ->map(fn($h) => $h->id);
 
-        return view('recruitment.index', compact('recruitments', 'status',));
+        return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap'));
     }
 
     public function updatePenilaian(Request $request)
@@ -136,12 +136,35 @@ class RecruitmentController extends Controller
             'result_user' => $request->result_user,
             'comment_user' => $request->comment_user,
         ];
+        
+        $now = date('Y-m-d');
+
+        if ($request->filled('result_interview')) {
+            $updates['is_interview'] = 'TRUE';
+            $updates['tgl_interview'] = DB::raw("COALESCE(tgl_interview, '$now')");
+        }
+        if ($request->filled('result_kesehatan')) {
+            $updates['is_kesehatan'] = 'TRUE';
+            $updates['tgl_kesehatan'] = DB::raw("COALESCE(tgl_kesehatan, '$now')");
+        }
+        if ($request->filled('result_test')) {
+            $updates['is_test'] = 'TRUE';
+            $updates['tgl_test'] = DB::raw("COALESCE(tgl_test, '$now')");
+        }
 
         if ($request->hasFile('file_test')) {
             $file = $request->file('file_test');
             $filename = time() . '_teknis_' . $file->getClientOriginalName();
             $path = $file->storeAs('recruitment/teknis', $filename, 'public');
             $updates['file_test'] = $path;
+        }
+
+        // Auto status_apply: FALSE di mana saja -> REJECTED, semua TRUE -> ONBOARDING
+        $results = array_filter($updates, fn($v, $k) => str_starts_with($k, 'result_'), ARRAY_FILTER_USE_BOTH);
+        if (in_array('FALSE', $results)) {
+            $updates['status_apply'] = 'REJECTED';
+        } elseif (count($results) === 4 && !in_array(null, $results) && !in_array('', $results) && count(array_unique($results)) === 1 && reset($results) === 'TRUE') {
+            $updates['status_apply'] = 'ONBOARDING';
         }
 
         DB::connection('cii')->table('pelamar_details')

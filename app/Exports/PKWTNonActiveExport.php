@@ -44,6 +44,7 @@ class PKWTNonActiveExport implements FromCollection, WithHeadings, WithTitle, Sh
                 'JURUSAN'
             )
             ->whereNotNull('TKK')
+            ->orderBy('TKK', 'asc')
             ->get()
             ->map(function ($row) {
                 // Parse tanggal untuk kalkulasi (sebelum format)
