@@ -39,7 +39,6 @@ class AttendanceController extends Controller
         $query = DB::connection('cii')->table('AUDIT')
             ->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS')
             ->orderBy('NPK', 'ASC')
-            ->take(50)
             ->get();
 
         return DataTables::of($query)

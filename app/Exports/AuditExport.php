@@ -14,13 +14,14 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class AuditExport implements WithHeadings, WithStrictNullComparison, FromView
+class AuditExport implements WithHeadings, WithStrictNullComparison, FromView, ShouldAutoSize, WithStyles
 {
     /**
-    * @return \Illuminate\Support\Collection
-    */
+     * @return \Illuminate\Support\Collection
+     */
 
     use Exportable;
     protected $fromdate;
@@ -28,32 +29,24 @@ class AuditExport implements WithHeadings, WithStrictNullComparison, FromView
     protected $department;
     protected $days;
 
-    function __construct($fromdate, $todate, $department, $days) {
+    function __construct($fromdate, $todate, $department, $days)
+    {
         $this->fromdate = $fromdate;
         $this->todate = $todate;
         $this->department = $department;
         $this->days = $days;
     }
 
-    // public function collection()
-    // {
-    //     $employeesChutex = DB::connection('sqlsrv')->table('AUDIT')->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS AS KETERANGAN')->whereIn('KODE_BAGIAN', $this->department)->whereBetween('TANGGAL', [$this->fromdate, $this->todate]);
-    //     $employees = $employeesChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->orderBy('TANGGAL', 'ASC')->get();
-
-    //     $days = $this->days;
-    //     return $employees;
-    // }
-
     public function view(): View
     {
-        $employeeGroupChutex = DB::connection('sqlsrv')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->whereIn('KODE_BAGIAN', $this->department);
+        $employeeGroupChutex = DB::connection('cii')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->whereIn('KODE_BAGIAN', $this->department);
         $employeeGroup = $employeeGroupChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->get();
 
-        $employeesChutex = DB::connection('sqlsrv')->table('AUDIT')->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS AS KETERANGAN')->whereIn('KODE_BAGIAN', $this->department)->whereBetween('TANGGAL', [$this->fromdate, $this->todate]);
+        $employeesChutex = DB::connection('cii')->table('AUDIT')->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS AS KETERANGAN')->whereIn('KODE_BAGIAN', $this->department)->whereBetween('TANGGAL', [$this->fromdate, $this->todate]);
         $employees = $employeesChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->orderBy('TANGGAL', 'ASC')->get();
 
         $days = $this->days;
-        return view('template.report-final', [
+        return view('template.report-final-excel', [
             'employees' => $employees,
             'employeeGroup' => $employeeGroup,
             'days' => $days,
@@ -80,9 +73,29 @@ class AuditExport implements WithHeadings, WithStrictNullComparison, FromView
 
     public function styles(Worksheet $sheet)
     {
-        // Example: set wrap text for all columns
-        $sheet->getStyle('A1:Z1000')->getAlignment()->setWrapText(true);
-        $sheet->getStyle('A1:Z1000')->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
+        // Get the dynamic highest row and column
+        $highestRow = $sheet->getHighestRow();
+        $highestColumn = $sheet->getHighestColumn();
+        $cellRange = 'A1:' . $highestColumn . $highestRow;
 
+        // Apply borders and alignment to the entire used range
+        $sheet->getStyle($cellRange)->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF000000'],
+                ],
+            ],
+            'alignment' => [
+                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+            ]
+        ]);
+
+        // Make header row bold
+        $sheet->getStyle('A1:' . $highestColumn . '1')->getFont()->setBold(true);
+
+        // Align 'Nama Karyawan' column to left
+        $sheet->getStyle('C1:C' . $highestRow)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
     }
 }
