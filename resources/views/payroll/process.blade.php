@@ -671,8 +671,10 @@ $(document).on('click','#btnCheckPayroll',function(){
 
     let url = '/payroll-process/check/' + periodId;
 
+    let periodName = $('#period_id option:selected').text();
+
     $('#detail-title').text(
-        'Payroll Check Result'
+        'Payroll Check Result - ' + periodName
     );
 
     $('#payroll-detail-container').show();
