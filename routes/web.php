@@ -370,6 +370,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/cutting-insentif-master/{period}/check', [CuttingInsentifMasterController::class, 'check'])->name('cutting-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('/cutting-insentif-master/{period}/data', [CuttingInsentifMasterController::class, 'getData'])->name('cutting-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
 
     // Pad Print Insentif Master
     Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);

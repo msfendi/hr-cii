@@ -23,13 +23,28 @@ class PadInsentifMasterController extends Controller
 {
     public function index()
     {
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+
         $data = DB::table('pad_efficiencies as p')
             ->join('payroll_periods as pp', 'p.period_id', '=', 'pp.id')
-            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'p.npk')
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('p.NPK', '=', 'bio.NPK');
+            })
+
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
             ->select(
                 'p.id',
                 'p.npk',
-                'b.NAMA_KARYAWAN as name',
+                'bio.NAMA_KARYAWAN as name',
+                'd.DEPARTEMENT as dept',
                 'p.role',
                 'pp.name as period',
                 'p.efficiency',
@@ -49,13 +64,28 @@ class PadInsentifMasterController extends Controller
 
     public function getData($period)
     {
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+
         $data = DB::table('pad_efficiencies as p')
             ->join('payroll_periods as pp', 'p.period_id', '=', 'pp.id')
-            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'p.npk')
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('p.NPK', '=', 'bio.NPK');
+            })
+
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
             ->select(
                 'p.id',
                 'p.npk',
-                'b.NAMA_KARYAWAN as name',
+                'bio.NAMA_KARYAWAN as name',
+                'd.DEPARTEMENT as dept',
                 'p.role',
                 'pp.name as period',
                 'p.efficiency',

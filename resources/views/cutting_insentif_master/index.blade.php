@@ -149,19 +149,27 @@ Detail Insentif Karyawan
                            cellspacing="0">
                            <thead>
                               <tr>
-                                 <th>ID</th>
-                                 <th>Period</th>
-                                 <th>Efficiency</th>
-                                 <th>Tanggal</th>
+                                <th>ID</th>
+                                <th>Period</th>
+                                <th>NPK</th>
+                                <th>Nama Karyawan</th>
+                                <th>Dept</th>
+                                <th>Role</th>
+                                <th>Efficiency</th>
+                                <th>Tanggal</th>
                               </tr>
                            </thead>
                            <tbody>
                               @foreach($data as $row)
                               <tr>
-                                 <td>{{ $row->id }}</td>
-                                 <td>{{ $row->period }}</td>
-                                 <td>{{ number_format($row->efficiency,0,',','.') }}</td>
-                                 <td>{{ $row->date }}</td>
+                                <td>{{ $row->id }}</td>
+                                <td>{{ $row->period }}</td>
+                                <td>{{ $row->npk }}</td>
+                                <td>{{ $row->nama }}</td>
+                                <td>{{ $row->dept }}</td>
+                                <td>{{ $row->role }}</td>
+                                <td>{{ number_format($row->efficiency,0,',','.') }}</td>
+                                <td>{{ $row->date }}</td>
                               </tr>
                               @endforeach
                            </tbody>
@@ -628,7 +636,10 @@ $('#checkPeriod').on('change',function(){
                 masterTable.row.add([
                     row.id,
                     row.period,
-                    row.line_number,
+                    row.npk,
+                    row.nama,
+                    row.dept,
+                    row.role,
                     Number(row.efficiency).toLocaleString('id-ID'),
                     row.date,
                 ]);

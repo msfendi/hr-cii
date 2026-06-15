@@ -146,10 +146,12 @@ Import Excel Insentif
 <tr>
     <th>ID</th>
     <th>Period</th>
-    <th>Line Number</th>
+    <th>NPK</th>
+    <th>Nama Karyawan</th>
+    <th>Dept</th>
+    <th>Insentif Line</th>
     <th>Efficiency</th>
     <th>Tanggal</th>
-    <th>Action</th>
 </tr>
 </thead>
 
@@ -159,20 +161,12 @@ Import Excel Insentif
 <tr>
 <td>{{ $row->id }}</td>
 <td>{{ $row->period }}</td>
+<td>{{ $row->npk }}</td>
+<td>{{ $row->nama }}</td>
+<td>{{ $row->dept }}</td>
 <td>{{ $row->line_number }}</td>
 <td>{{ number_format($row->efficiency,0,',','.') }}</td>
 <td>{{ $row->date }}</td>
-
-<td class="text-center">
-
-<a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
-   data-delete-link="{{ route('line-insentif-master.delete',$row->id) }}"
-   data-toggle="modal"
-   data-target="#deleteModal">
-<i class="fas fa-trash"></i>
-</a>
-
-</td>
 
 </tr>
 @endforeach
@@ -660,15 +654,12 @@ $('#checkPeriod').on('change',function(){
                 masterTable.row.add([
                     row.id,
                     row.period,
+                    row.npk,
+                    row.nama,
+                    row.dept,
                     row.line_number,
                     Number(row.efficiency).toLocaleString('id-ID'),
                     row.date,
-                    `
-                    <a href="/line-insentif-master/${row.id}/edit"
-                       class="btn btn-primary btn-circle btn-sm">
-                        <i class="fas fa-edit"></i>
-                    </a>
-                    `
                 ]);
 
             });

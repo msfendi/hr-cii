@@ -152,6 +152,7 @@ Detail Insentif Karyawan
                                  <th>Period</th>
                                  <th>NPK</th>
                                  <th>Name</th>
+                                 <th>Dept</th>
                                  <th>Role</th>
                                  <th>Efficiency</th>
                                  <th>Piece</th>
@@ -165,6 +166,7 @@ Detail Insentif Karyawan
                                  <td>{{ $row->period }}</td>
                                  <td>{{ $row->npk }}</td>
                                  <td>{{ $row->name }}</td>
+                                 <td>{{ $row->dept }}</td>
                                  <td>{{ $row->role }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
                                  <td>{{ number_format($row->piece,0,',','.') }}</td>
@@ -553,6 +555,7 @@ $('#checkPeriod').on('change',function(){
                     row.period,
                     row.npk,
                     row.name,
+                    row.dept,
                     row.role,
                     Number(row.efficiency).toLocaleString('id-ID'),
                     Number(row.piece).toLocaleString('id-ID'),

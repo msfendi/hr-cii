@@ -27,11 +27,37 @@ class LineInsentifMasterController extends Controller
 {
     public function index()
     {
-        $data = DB::table('line_efficiencies as l')
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+
+        $data = DB::table('employee_line_assignments as ela')
+
+            ->leftJoin('line_efficiencies as l', function ($join) {
+                $join->on('ela.period_id', '=', 'l.period_id')
+                    ->on('ela.line_number', '=', 'l.line_number')
+                    ->whereNotNull('ela.line_number')
+                    ->whereColumn('ela.start_date', 'l.date');
+            })
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('ela.NPK', '=', 'bio.NPK');
+            })
+
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
+
             ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
             ->select(
-                'l.id',
+                'ela.id',
                 'pp.name as period',
+                'ela.npk',
+                'bio.NAMA_KARYAWAN as nama',
+                'd.DEPARTEMENT as dept',
                 'l.efficiency',
                 'l.line_number',
                 'l.date'
@@ -39,6 +65,8 @@ class LineInsentifMasterController extends Controller
             ->where('pp.is_closed', 0)
             ->orderBy('l.date')
             ->get();
+
+        // dd($data);
 
         $periods = PayrollPeriod::select('id', 'name')
             ->where('is_closed', 0)
@@ -50,11 +78,37 @@ class LineInsentifMasterController extends Controller
 
     public function getData($period)
     {
-        $data = DB::table('line_efficiencies as l')
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+
+        $data = DB::table('employee_line_assignments as ela')
+
+            ->leftJoin('line_efficiencies as l', function ($join) {
+                $join->on('ela.period_id', '=', 'l.period_id')
+                    ->on('ela.line_number', '=', 'l.line_number')
+                    ->whereNotNull('ela.line_number')
+                    ->whereColumn('ela.start_date', 'l.date');
+            })
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('ela.NPK', '=', 'bio.NPK');
+            })
+
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
+
             ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
             ->select(
-                'l.id',
+                'ela.id',
                 'pp.name as period',
+                'ela.npk',
+                'bio.NAMA_KARYAWAN as nama',
+                'd.DEPARTEMENT as dept',
                 'l.efficiency',
                 'l.line_number',
                 'l.date'
