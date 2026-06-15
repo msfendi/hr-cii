@@ -1084,6 +1084,9 @@ class GeneratePayrollProcess implements ShouldQueue
                             ->distinct()
                             ->get();
 
+                        $tkkDate = !empty($employee->tkk)
+                            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+                            : null;
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
                         //     'progress' => 60
