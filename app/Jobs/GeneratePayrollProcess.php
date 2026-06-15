@@ -18,6 +18,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class GeneratePayrollProcess implements ShouldQueue
 {
@@ -1002,8 +1003,8 @@ class GeneratePayrollProcess implements ShouldQueue
                 'pph_21'         => (float) $employee->pph21,
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
-                'is_contract' => $employee->type === 'Contract' ? 1 : 0,
-                'is_daily'    => $employee->type === 'Daily' ? 1 : 0,
+                'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
+                'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => (float) $employee->late_minutes,
                 // 'overtime_hours' => (float) $employee->overtime_hours,
                 // 'special_overtime_hours' => (float) $employee->special_overtime_hours
@@ -1989,7 +1990,7 @@ class GeneratePayrollProcess implements ShouldQueue
             //     // 'run_id'        => $run->id,
             //     'absence_days'  => $employee->absence_days,
             //     'count_days'    => $count_days,
-            //     'type' => $employee->type,
+            //     'type' => Str::ucfirst(Str::lower($employee->type)),
             //     'dept' => $employee->DEPARTEMENT,
             //     'tmk' => $employee->TMK,
             //     'tkk' => $employee->TKK,

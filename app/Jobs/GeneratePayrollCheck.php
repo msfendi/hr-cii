@@ -18,6 +18,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class GeneratePayrollCheck
 {
@@ -91,7 +92,7 @@ class GeneratePayrollCheck
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00827')
+            // ->where('p.NPK', '=', 'C-04262')
 
             ->select(
                 'p.NPK',
@@ -121,7 +122,7 @@ class GeneratePayrollCheck
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00827')
+            // ->where('ec1.npk', '=', 'C-04262')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -141,7 +142,7 @@ class GeneratePayrollCheck
         )
     ", [$periodEnd, $periodStart]);
 
-        // dd($employeeBase->get(), $latestContract);
+        // dd($employeeBase->get(), $latestContract->get());
 
 
         // $run->update([
@@ -990,8 +991,8 @@ class GeneratePayrollCheck
                 'pph_21'         => (float) $employee->pph21,
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
-                'is_contract' => $employee->type === 'Contract' ? 1 : 0,
-                'is_daily'    => $employee->type === 'Daily' ? 1 : 0,
+                'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
+                'is_daily'    => Str::ucfirst(Str::lower($employee->type)) ? 1 : 0,
                 'late_minutes'     => (float) $employee->late_minutes,
                 // 'overtime_hours' => (float) $employee->overtime_hours,
                 // 'special_overtime_hours' => (float) $employee->special_overtime_hours
@@ -1981,7 +1982,7 @@ class GeneratePayrollCheck
                 // 'run_id'        => $run->id,
                 'absence_days'  => $employee->absence_days,
                 'count_days'    => $count_days,
-                'type' => $employee->type,
+                'type' => Str::ucfirst(Str::lower($employee->type)),
                 'dept' => $employee->DEPARTEMENT,
                 'tmk' => $employee->TMK,
                 'tkk' => $employee->TKK,
