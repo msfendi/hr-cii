@@ -31,7 +31,7 @@
                         <div class="card-body">
 
                             <form method="POST"
-                                action="{{ route('guest-master.update') }}">
+                                action="{{ route('guest-master.store') }}">
 
                                 @csrf
 
@@ -104,17 +104,17 @@
                                                 class="form-control">
                                         </div>
 
-                                    </div>
-
-                                    {{-- RIGHT --}}
-                                    <div class="col-md-6">
-
                                         <div class="form-group">
                                             <label>Issue Date</label>
                                             <input type="date"
                                                 name="issue_date"
                                                 class="form-control">
                                         </div>
+
+                                    </div>
+
+                                    {{-- RIGHT --}}
+                                    <div class="col-md-6">
 
                                         <div class="form-group">
                                             <label>Must Used Date</label>
@@ -138,9 +138,19 @@
                                         </div>
 
                                         <div class="form-group">
+                                            <label>Status</label>
+                                            <select name="status" class="form-control">
+                                                <option value="">Select Status</option>
+                                                <option value="At Chutex">At Chutex</option>
+                                                <option value="Return">Return</option>
+                                                <option value="TBA">TBA</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="form-group">
                                             <label>Remark</label>
                                             <textarea name="remark"
-                                                rows="4"
+                                                rows="1"
                                                 class="form-control"></textarea>
                                         </div>
 
@@ -150,7 +160,7 @@
 
                                 <button type="submit"
                                     class="btn btn-primary btn-block">
-                                    Update Guest Master
+                                    Create Guest Master
                                 </button>
 
                             </form>

@@ -81,6 +81,17 @@ class ExpatSummarySheet implements
                 GROUP BY npk
             ) c
         "), 'm.npk', '=', 'c.npk')
+            ->leftJoin(DB::raw("
+            (
+                SELECT npk,
+                       SUM(amount) total_legal_cost
+                FROM expat_cost LEFT JOIN expat_cost_components ON expat_cost.component = expat_cost_components.id
+                WHERE transactions_date BETWEEN '{$this->start}' AND '{$this->end}'
+                AND expat_cost_components.component_type = 'legal'
+                AND expat_cost_components.id not IN (7,15)
+                GROUP BY npk
+            ) lglc
+        "), 'm.npk', '=', 'lglc.npk')
 
             ->leftJoin(DB::raw("
             (
@@ -125,6 +136,7 @@ class ExpatSummarySheet implements
                 DB::raw('ISNULL(ac.total_apartment_cost,0) total_apartment_cost'),
                 DB::raw('ISNULL(dac.total_depo_apartment_cost,0) total_depo_apartment_cost'),
                 DB::raw('ISNULL(c.total_living_cost,0) total_living_cost'),
+                DB::raw('ISNULL(lglc.total_legal_cost,0) total_legal_cost'),
                 DB::raw('ISNULL(ml.total_meal_cost,0) total_meal_cost'),
                 DB::raw('ISNULL(l.total_onleave,0) total_onleave'),
                 DB::raw('ISNULL(l.total_onleave_days,0) total_onleave_days')
@@ -211,6 +223,7 @@ class ExpatSummarySheet implements
             'Total Apartment Cost',
             'Total Depo Apartment Cost',
             'Total Living Cost',
+            'Total Legal Cost',
             'Total Meal Cost',
             'On Leave Count',
             'Total On Leave Days',
@@ -237,11 +250,12 @@ class ExpatSummarySheet implements
             $row->total_apartment_cost,
             $row->total_depo_apartment_cost,
             $row->total_living_cost,
+            $row->total_legal_cost,
             $row->total_meal_cost,
             $row->total_onleave,
             $row->total_onleave_days,
             $row->total_onleave_amount,
-            $row->total_living_cost + $row->total_meal_cost + $row->total_onleave_amount,
+            $row->total_living_cost + $row->total_meal_cost + $row->total_onleave_amount + $row->total_legal_cost,
         ];
     }
 
@@ -257,7 +271,7 @@ class ExpatSummarySheet implements
         /*
         | HEADER
         */
-        $sheet->getStyle('A1:T1')->applyFromArray([
+        $sheet->getStyle('A1:U1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 11,
@@ -279,9 +293,10 @@ class ExpatSummarySheet implements
         | M = Total Apartment Cost
         | N = Total Depo Apartment Cost
         | O = Total Living Cost
-        | P = Total Meal
-        | S = On Leave Amount
-        | T = Total Amount
+        | P = Total Legal Cost
+        | Q = Total Meal
+        | T = On Leave Amount
+        | U = Total Amount
         */
         $sheet->getStyle("M2:M{$highestRow}")
             ->getNumberFormat()
@@ -299,11 +314,15 @@ class ExpatSummarySheet implements
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
-        $sheet->getStyle("S2:S{$highestRow}")
+        $sheet->getStyle("Q2:Q{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
         $sheet->getStyle("T2:T{$highestRow}")
+            ->getNumberFormat()
+            ->setFormatCode('"Rp" #,##0');
+
+        $sheet->getStyle("U2:U{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
@@ -319,13 +338,13 @@ class ExpatSummarySheet implements
         $sheet->getStyle("G2:L{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $sheet->getStyle("Q2:R{$highestRow}")
+        $sheet->getStyle("R2:S{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         /*
         | BORDER TABLE
         */
-        $sheet->getStyle("A1:T{$highestRow}")
+        $sheet->getStyle("A1:U{$highestRow}")
             ->applyFromArray([
                 'borders' => [
                     'allBorders' => [

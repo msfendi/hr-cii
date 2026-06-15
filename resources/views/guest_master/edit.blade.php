@@ -102,7 +102,7 @@
                                             <input type="date"
                                                 name="date_of_birth"
                                                 class="form-control"
-                                                value="{{ $data->date_of_birth }}">
+                                                value="{{ \Carbon\Carbon::parse($data->date_of_birth)->format('Y-m-d') }}">
                                         </div>
 
                                         <div class="form-group">
@@ -131,7 +131,7 @@
                                             <input type="date"
                                                 name="issue_date"
                                                 class="form-control"
-                                                value="{{ $data->issue_date }}">
+                                                value="{{ \Carbon\Carbon::parse($data->issue_date)->format('Y-m-d') }}">
                                         </div>
 
                                         <div class="form-group">
@@ -139,7 +139,7 @@
                                             <input type="date"
                                                 name="must_used_date"
                                                 class="form-control"
-                                                value="{{ $data->must_used_date }}">
+                                                value="{{ \Carbon\Carbon::parse($data->must_used_date)->format('Y-m-d') }}">
                                         </div>
 
                                         <div class="form-group">
@@ -147,7 +147,7 @@
                                             <input type="date"
                                                 name="arrival_date"
                                                 class="form-control"
-                                                value="{{ $data->arrival_date }}">
+                                                value="{{ \Carbon\Carbon::parse($data->arrival_date)->format('Y-m-d') }}">
                                         </div>
 
                                         <div class="form-group">
@@ -155,13 +155,28 @@
                                             <input type="date"
                                                 name="visa_expiry"
                                                 class="form-control"
-                                                value="{{ $data->visa_expiry }}">
+                                                value="{{ \Carbon\Carbon::parse($data->visa_expiry)->format('Y-m-d') }}">
+                                        </div>
+                                        
+                                        
+
+                                        <div class="form-group">
+                                            <label>Status</label>
+                                            <select name="status" class="form-control">
+                                                <option value="">Select Status</option>
+                                                <option value="At Chutex"
+                                                    {{ $data->status == 'At Chutex' ? 'selected' : '' }}>At Chutex</option>
+                                                <option value="Return"
+                                                    {{ $data->status == 'Return' ? 'selected' : '' }}>Return</option>
+                                                <option value="TBA"
+                                                    {{ $data->status == 'TBA' ? 'selected' : '' }}>TBA</option>
+                                            </select>
                                         </div>
 
                                         <div class="form-group">
                                             <label>Remark</label>
                                             <textarea name="remark"
-                                                rows="5"
+                                                rows="1"
                                                 class="form-control">{{ $data->remark }}</textarea>
                                         </div>
 

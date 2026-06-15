@@ -97,16 +97,10 @@
                            <td>{{ $row->arrival_date }}</td>
                            <td>{{ $row->visa_expiry }}</td>
                            <td>{{ $row->return }}</td>
-                           <td>{{ $row->remark }}</td>
                            
                            {{-- ================================================= --}}
-                           <td>
-                              @if($row->status)
-                              <span class="badge badge-success">
-                              {{ $row->status }}
-                              </span>
-                              @endif
-                           </td>
+                           <td> {{ $row->status }}</td>
+                           <td>{{ $row->remark }}</td>
                            <td class="text-center">
                               <a href="{{ route('guest-master.edit',$row->id) }}"
                                  class="btn btn-primary btn-circle btn-sm">

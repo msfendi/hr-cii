@@ -18,27 +18,15 @@ class GuestMasterExport implements FromCollection, WithHeadings, ShouldAutoSize,
 {
     public function collection()
     {
-        return DB::table('foreign_guests')
+        return DB::table('guest_masters')
             ->select(
-                'id',
-                'guest_name',
-                'gender',
-                'place',
-                'date_of_birth',
-                'nationality',
-                'passport_no',
-                'visa_type',
-                'issue_date',
-                'must_used_date',
-                'visa_status',
-                'arrival_date',
-                'visa_expiry',
-                'return',
-                'status',
-                'remark',
-                'created_at'
-            )
-            ->orderBy('guest_name')
+                'guest_masters.*',
+                'foreign_guests.guest_name',
+                'foreign_guests.return as return_date',
+                'foreign_guests.visa_type',
+                'foreign_guests.visa_status',
+            )->leftJoin('foreign_guests', 'guest_masters.foreign_guest_id', '=', 'foreign_guests.id')
+            ->orderBy('foreign_guests.guest_name')
             ->get();
     }
 
@@ -96,7 +84,7 @@ class GuestMasterExport implements FromCollection, WithHeadings, ShouldAutoSize,
             $row->visa_status,
             $row->arrival_date,
             $row->visa_expiry,
-            $row->return,
+            $row->return_date,
             $row->status,
             $row->remark,
             $row->created_at,
