@@ -1071,6 +1071,11 @@ class GeneratePayrollCheck
                             ->distinct()
                             ->get();
 
+
+                        $tkkDate = !empty($employee->tkk)
+                            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+                            : null;
+
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
                         //     'progress' => 60
@@ -1319,7 +1324,8 @@ class GeneratePayrollCheck
                                 $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
 
                                 if (!in_array($assignment->role, $validRoles)) {
-                                    return $amount;
+                                    // return $amount;
+                                    continue;
                                 }
 
 
@@ -1331,7 +1337,7 @@ class GeneratePayrollCheck
                                 // dd($employee->SECTION, $section);
 
                                 if (!$section) {
-                                    return $amount;
+                                    continue;
                                 }
 
                                 $lineStart = $section->line_start;

@@ -1172,7 +1172,7 @@ $(document).on('click','#btnCheckPayroll',function(){
 
 const userRole = @json(optional(Auth::user()->roles->first())->name);
 
-console.log('USER ROLE =', userRole);
+// console.log('USER ROLE =', userRole);
 
 const canSeeSalary =
     userRole === 'Admin' ||

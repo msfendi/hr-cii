@@ -1331,7 +1331,8 @@ class GeneratePayrollProcess implements ShouldQueue
                                 $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
 
                                 if (!in_array($assignment->role, $validRoles)) {
-                                    return $amount;
+                                    // return $amount;
+                                    continue;
                                 }
 
 
@@ -1343,7 +1344,8 @@ class GeneratePayrollProcess implements ShouldQueue
                                 // dd($employee->SECTION, $section);
 
                                 if (!$section) {
-                                    return $amount;
+                                    // return $amount;
+                                    continue;
                                 }
 
                                 $lineStart = $section->line_start;

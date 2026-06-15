@@ -165,11 +165,6 @@ Import Excel Insentif
 
 <td class="text-center">
 
-<a href="{{ route('line-insentif-master.edit',$row->id) }}"
-   class="btn btn-primary btn-circle btn-sm">
-<i class="fas fa-edit"></i>
-</a>
-
 <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
    data-delete-link="{{ route('line-insentif-master.delete',$row->id) }}"
    data-toggle="modal"
