@@ -9,7 +9,7 @@ class HeatInsentifTemplateExport implements WithMultipleSheets
     public function sheets(): array
     {
         return [
-            new Sheets\HeatSheet(),
+            // new Sheets\HeatSheet(),
             new Sheets\HeatEfficiencySheet(),
             // new Sheets\EmployeeHeatAssignmentSheet(),
         ];

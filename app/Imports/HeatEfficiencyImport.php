@@ -21,7 +21,7 @@ class HeatEfficiencyImport implements ToModel, WithHeadingRow
         return HeatEfficiency::updateOrCreate(
             [
                 'npk' => $row['npk'],
-                'dept' => $row['dept'],
+                'role' => $row['role'],
                 'date' =>
                 !empty($row['date'])
                     ? Date::excelToDateTimeObject($row['date'])

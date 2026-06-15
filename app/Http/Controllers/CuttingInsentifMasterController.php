@@ -28,18 +28,16 @@ class CuttingInsentifMasterController extends Controller
 {
     public function index()
     {
-        $data = $data = DB::table('cutting_efficiencies as c')
-            ->join('payroll_periods as pp', function ($join) {
-                $join->on('c.period_id', '=', 'pp.id');
-            })
+        $data = DB::table('cutting_efficiencies as l')
+            ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
             ->select(
-                'c.id',
+                'l.id',
                 'pp.name as period',
-                'c.efficiency',
-                'c.date'
+                'l.efficiency',
+                'l.date'
             )
             ->where('pp.is_closed', 0)
-            ->orderBy('c.date')
+            ->orderBy('l.date')
             ->get();
 
         $periods = PayrollPeriod::select('id', 'name')
@@ -48,6 +46,22 @@ class CuttingInsentifMasterController extends Controller
             ->get();
 
         return view('cutting_insentif_master.index', compact('data', 'periods'));
+    }
+    public function getData($period)
+    {
+        $data = DB::table('cutting_efficiencies as l')
+            ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
+            ->select(
+                'l.id',
+                'pp.name as period',
+                'l.efficiency',
+                'l.date'
+            )
+            ->where('l.period_id', $period)
+            ->orderBy('l.date')
+            ->get();
+
+        return response()->json($data);
     }
 
     public function create()
@@ -221,17 +235,10 @@ class CuttingInsentifMasterController extends Controller
         */
 
         $assignmentNpk = DB::table(DB::raw("
-    (
-        SELECT NPK, ID_DEPT FROM BIODATA
-        UNION ALL
-        SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
-    ) emp
-"))
-            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
-            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
-            ->where('irf.dept', 'cutting')
-            ->distinct()
-            ->pluck('emp.NPK');
+        (
+            SELECT * FROM employee_cutting_assignments
+        ) eca
+    "))->where('eca.period_id', $period->id);
 
         // dd($assignmentNpk->toArray());
 
@@ -252,12 +259,23 @@ class CuttingInsentifMasterController extends Controller
             SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
         ) emp
     "), 'p.NPK', '=', 'emp.NPK')
-
+            ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
+                $join->on('p.NPK', '=', 'anpk.npk');
+            })
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
-            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
-            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
-
-            ->whereIn('p.NPK', $assignmentNpk)
+            ->joinSub(
+                DB::table('insentif_role_formulas')
+                    ->select('role')
+                    ->distinct(),
+                'irf',
+                function ($join) {
+                    $join->on('anpk.role', '=', 'irf.role');
+                }
+            )
+            ->leftJoin('cutting_efficiencies as ce', function ($join) {
+                $join->on('ce.period_id', '=', 'anpk.period_id')
+                    ->on('ce.date', '=', 'anpk.start_date');
+            })
             // ->where('p.NPK', '=', 'C-00795')
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
@@ -278,6 +296,7 @@ class CuttingInsentifMasterController extends Controller
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
+            ->distinct()
             ->get();
 
         // dd($employees);
@@ -429,12 +448,20 @@ class CuttingInsentifMasterController extends Controller
     | LOAD CUTTING EFFICIENCY
     |--------------------------------------------------------------------------
     */
+        $employeeDates = DB::table('employee_cutting_assignments')
+            ->where('period_id', $period->id)
+            ->where('npk', $employee->NPK)
+            ->pluck('start_date')
+            ->unique()
+            ->toArray();
+
         $cuttingEfficiencies = DB::table('cutting_efficiencies')
             ->where('period_id', $period->id)
             ->whereBetween('date', [
                 $period->start_date,
                 $period->end_date
             ])
+            ->whereIn('date', $employeeDates)
             ->get();
 
         // dd($cuttingEfficiencies);

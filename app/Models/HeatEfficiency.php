@@ -12,7 +12,7 @@ class HeatEfficiency extends Model
     protected $fillable = [
         'npk',
         'period_id',
-        'dept',
+        'role',
         'efficiency',
         'piece',
         'date'

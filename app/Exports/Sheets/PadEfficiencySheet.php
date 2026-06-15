@@ -20,7 +20,8 @@ class PadEfficiencySheet implements WithTitle, WithHeadings, WithEvents
     {
         return [
             'npk',
-            'dept',
+            'name',
+            'role',
             'efficiency',
             'piece',
             'date'
@@ -31,37 +32,32 @@ class PadEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet = $event->sheet->getDelegate();
 
         // bold header
-        $sheet->getStyle('A1:E1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:F1')->getFont()->setBold(true);
 
         // auto width
-        foreach (range('A', 'E') as $column) {
+        foreach (range('A', 'F') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
-        $sheet->getStyle('E:E')
+        $sheet->getStyle('F:F')
             ->getNumberFormat()
             ->setFormatCode(NumberFormat::FORMAT_DATE_DDMMYYYY);
 
         // contoh data
         $sheet->setCellValue('A2', 'C-00827');
-        $sheet->setCellValue('B2', 'padprint');
-        $sheet->setCellValue('C2', '85');
-        $sheet->setCellValue('D2', '3517');
+        $sheet->setCellValue('B2', 'DIMAS GALANG RAMADHAN');
+        $sheet->setCellValue('C2', 'operator');
+        $sheet->setCellValue('D2', '85');
+        $sheet->setCellValue('E2', '3517');
         $date = Date::stringToExcel('2026-01-12');
-        $sheet->setCellValue('E2', $date);
+        $sheet->setCellValue('F2', $date);
 
         $sheet->setCellValue('A3', 'C-00827');
-        $sheet->setCellValue('B3', 'padprint');
-        $sheet->setCellValue('C3', '90');
-        $sheet->setCellValue('D3', '3724');
+        $sheet->setCellValue('B3', 'DIMAS GALANG RAMADHAN');
+        $sheet->setCellValue('C3', 'operator');
+        $sheet->setCellValue('D3', '90');
+        $sheet->setCellValue('E3', '3724');
         $date = Date::stringToExcel('2026-01-13');
-        $sheet->setCellValue('E3', $date);
-
-        $sheet->setCellValue('A4', 'C-00827');
-        $sheet->setCellValue('B4', 'padprint');
-        $sheet->setCellValue('C4', '90');
-        $sheet->setCellValue('D4', '3724');
-        $date = Date::stringToExcel('2026-01-14');
-        $sheet->setCellValue('E4', $date);
+        $sheet->setCellValue('F3', $date);
     }
 
     public function registerEvents(): array

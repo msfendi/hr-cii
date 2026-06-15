@@ -22,16 +22,16 @@ class EmployeeCuttingAssignmentImport implements ToModel, WithHeadingRow
             [
                 'npk' => $row['npk'],
                 'start_date' =>
-                !empty($row['start_date'])
-                    ? Date::excelToDateTimeObject($row['start_date'])
+                !empty($row['date'])
+                    ? Date::excelToDateTimeObject($row['date'])
                     : null,
                 'period_id'   => $this->periodId,
             ],
             [
                 'role' => $row['role'],
                 'end_date' =>
-                !empty($row['end_date'])
-                    ? Date::excelToDateTimeObject($row['end_date'])
+                !empty($row['date'])
+                    ? Date::excelToDateTimeObject($row['date'])
                     : null,
             ]
         );

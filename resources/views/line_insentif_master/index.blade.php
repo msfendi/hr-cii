@@ -29,12 +29,6 @@
     <h1 class="h3 mb-0 text-gray-800">
         Line Insentif Master
     </h1>
-
-    <a href="{{ route('line-insentif-master.create') }}"
-       class="btn btn-sm btn-primary shadow-sm">
-        <i class="fas fa-plus"></i>
-        Create Line Insentif Master
-    </a>
 </div>
 
 
@@ -349,12 +343,13 @@ Import Excel Insentif
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
       <script>
+let masterTable;
         $(document).ready(function(){
 
-            $('#dataTable').DataTable({
-                order: [[0,'desc']], // pakai urutan ID dari Laravel
-                pageLength: 10,
-                responsive: true,
+            masterTable = $('#dataTable').DataTable({
+                order:[[0,'desc']],
+                pageLength:10,
+                responsive:true,
                 autoWidth:false
             });
 
@@ -622,18 +617,12 @@ $('#checkPeriod').on('change',function(){
 
     let period = $(this).val();
 
-    /*
-    | CLEAR TABLE IF EMPTY
-    */
     if(!period){
         insentifTable.clear().draw();
+
+        masterTable.clear().draw();
         return;
     }
-
-    /*
-    | LOADING STATE
-    */
-    insentifTable.clear().draw();
 
     Swal.fire({
         title:'Loading insentif...',
@@ -642,36 +631,55 @@ $('#checkPeriod').on('change',function(){
         didOpen:()=>Swal.showLoading()
     });
 
-    /*
-    | AJAX LOAD
-    */
+    // AJAX INSENTIF (existing)
     $.ajax({
-
         url:'/line-insentif-master/'+period+'/check',
         type:'GET',
-        dataType:'json',
-
         success:function(res){
-
-            console.log('DATA:',res);
 
             insentifTable.clear();
             insentifTable.rows.add(res.data);
             insentifTable.draw();
-
             Swal.close();
         },
 
         error:function(xhr){
-
-            console.log(xhr.responseText);
 
             Swal.fire({
                 icon:'error',
                 title:'Gagal load data'
             });
         }
+    });
 
+    // AJAX MASTER TABLE
+    $.ajax({
+        url:'/line-insentif-master/'+period+'/data',
+        type:'GET',
+        success:function(res){
+
+            masterTable.clear();
+
+            res.forEach(function(row){
+
+                masterTable.row.add([
+                    row.id,
+                    row.period,
+                    row.line_number,
+                    Number(row.efficiency).toLocaleString('id-ID'),
+                    row.date,
+                    `
+                    <a href="/line-insentif-master/${row.id}/edit"
+                       class="btn btn-primary btn-circle btn-sm">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    `
+                ]);
+
+            });
+
+            masterTable.draw();
+        }
     });
 
 });

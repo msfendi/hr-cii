@@ -91,7 +91,7 @@ class GeneratePayrollCheck
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00827')
+            // ->where('p.NPK', '=', 'C-00825')
 
             ->select(
                 'p.NPK',
@@ -121,7 +121,7 @@ class GeneratePayrollCheck
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00827')
+            // ->where('ec1.npk', '=', 'C-00825')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -979,6 +979,28 @@ class GeneratePayrollCheck
         // ]);
         foreach ($employees as $employee) {
 
+            // dd($employee->salary, $employee->type);
+
+            $roleData = DB::table('dept_insentif_role as lir')
+                ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+                ->where('lir.id_dept', $employee->ID_DEPT)
+                ->where('irf.is_active', 1)
+                ->select(
+                    'irf.id',
+                    'irf.role',
+                    'irf.dept',
+                    'irf.formula'
+                )
+                ->first();
+
+            /*
+    |--------------------------------------------------------------------------
+    | SET ROLE KE EMPLOYEE OBJECT
+    |--------------------------------------------------------------------------
+    */
+
+            $employee->role = $roleData->role ?? null;
+
             // dd($employee->role);
 
             $inputVariables = [
@@ -1064,12 +1086,10 @@ class GeneratePayrollCheck
 
                         $amount = $totalSpecialOvertimePay;
                     } else if ($component->code === 'sewing_insentif') {
-                        $assignmentNpk = DB::table('employee_line_assignments as ela')
-                            ->select('ela.npk', 'ela.role')
-                            ->where('ela.period_id', $period->id)
-                            ->where('ela.npk', $employee->NPK)
-                            ->distinct()
-                            ->get();
+
+                        if (empty($employee->role)) {
+                            continue;
+                        }
 
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
@@ -1163,310 +1183,242 @@ class GeneratePayrollCheck
         |--------------------------------------------------------------------------
         */
                         $lineViolations = 0;
-                        foreach ($assignmentNpk as $assignment) {
-                            if (empty($assignment->role)) {
-                                continue;
-                            }
-                            if ($assignment->role == 'operator' || $assignment->role == 'supervisor') {
+                        if ($employee->role == 'operator' || $employee->role == 'supervisor') {
 
-                                /*
+                            /*
             |--------------------------------------------------------------------------
             | GET INITIAL LINE
             |--------------------------------------------------------------------------
             */
-                                preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
-                                $defaultLine = $matches[0] ?? null;
+                            preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
+                            $defaultLine = $matches[0] ?? null;
 
-                                /*
+                            /*
             |--------------------------------------------------------------------------
             | GET ALL LINE EFFICIENCIES
             |--------------------------------------------------------------------------
             */
-                                $lineefficiencies = DB::table('employee_line_assignments as ela')
-                                    ->leftJoin('line_efficiencies as le', function ($join) {
-                                        $join->on('le.period_id', '=', 'ela.period_id')
-                                            ->on('le.line_number', '=', 'ela.line_number')
-                                            ->on('le.date', '=', 'ela.start_date');
-                                    })
+                            $lineefficiencies = DB::table('line_efficiencies as le')
+                                ->where('le.period_id', $period->id)
+                                ->whereBetween('le.date', [$period->start_date, $period->end_date])
+                                ->select(
+                                    'le.line_number',
+                                    'le.efficiency',
+                                    'le.date'
+                                )
+                                ->orderBy('le.date')
+                                ->get();
 
-                                    ->leftJoinSub(
-                                        DB::table('employee_line_assignments')
-                                            ->select(
-                                                'period_id',
-                                                'line_number',
-                                                'start_date',
-                                                DB::raw('MAX(work_hours) as max_work_hours')
-                                            )
-                                            ->groupBy(
-                                                'period_id',
-                                                'line_number',
-                                                'start_date'
-                                            ),
-                                        'max_wh',
-                                        function ($join) {
-                                            $join->on('max_wh.period_id', '=', 'ela.period_id')
-                                                ->on('max_wh.line_number', '=', 'ela.line_number')
-                                                ->on('max_wh.start_date', '=', 'ela.start_date');
-                                        }
-                                    )
+                            if (strtolower($employee->role) == 'operator') {
 
-                                    ->where('ela.period_id', $period->id)
-                                    ->where('ela.npk', $employee->NPK)
-                                    ->whereBetween('le.date', [$period->start_date, $period->end_date])
+                                $lineViolations = DB::table('sewing_violations')
+                                    ->whereBetween('tanggal', [
+                                        $period->start_date,
+                                        $period->end_date
+                                    ])
+                                    ->where('id_dept', $employee->ID_DEPT)
+                                    ->count();
+                            } elseif (strtolower($employee->role) == 'supervisor') {
 
-                                    ->select(
-                                        'ela.npk',
-                                        'le.line_number',
-                                        'le.efficiency',
-                                        'le.date',
+                                $leaderDept = DB::table('DEPT')
+                                    ->where('ID_DEPT', $employee->ID_DEPT)
+                                    ->value('DEPARTEMENT');
 
-                                        // work hours employee
-                                        'ela.work_hours',
+                                $lineNumber = null;
 
-                                        // max work hours pada line & tanggal yang sama
-                                        'max_wh.max_work_hours'
-                                    )
-
-                                    ->orderBy('le.date')
-                                    ->get();
-
-                                // dd($lineefficiencies);
-
-                                if (strtolower($assignment->role) == 'operator') {
-
-                                    $lineViolations = DB::table('sewing_violations')
-                                        ->whereBetween('tanggal', [
-                                            $period->start_date,
-                                            $period->end_date
-                                        ])
-                                        ->where('id_dept', $employee->ID_DEPT)
-                                        ->count();
-                                } elseif (strtolower($assignment->role) == 'supervisor') {
-
-                                    $leaderDept = DB::table('DEPT')
-                                        ->where('ID_DEPT', $employee->ID_DEPT)
-                                        ->value('DEPARTEMENT');
-
-                                    $lineNumber = null;
-
-                                    if (
-                                        preg_match('/LINE\s+(\d+)/i', $leaderDept, $matches)
-                                    ) {
-                                        $lineNumber = $matches[1];
-                                    }
-
-                                    $lineDeptId = DB::table('DEPT')
-                                        ->where('DEPARTEMENT', 'LINE ' . $lineNumber)
-                                        ->value('ID_DEPT');
-
-                                    $lineViolations = DB::table('sewing_violations')
-                                        ->whereBetween('tanggal', [
-                                            $period->start_date,
-                                            $period->end_date
-                                        ])
-                                        ->where('id_dept', $lineDeptId)
-                                        ->count();
-                                } else {
-
-                                    $lineViolations = 0;
+                                if (
+                                    preg_match('/LINE\s+(\d+)/i', $leaderDept, $matches)
+                                ) {
+                                    $lineNumber = $matches[1];
                                 }
 
-                                // dd($employee, $lineViolations);
+                                $lineDeptId = DB::table('DEPT')
+                                    ->where('DEPARTEMENT', 'LINE ' . $lineNumber)
+                                    ->value('ID_DEPT');
 
-                                foreach ($lineefficiencies as $row) {
-
-                                    /*
-                |--------------------------------------------------------------------------
-                | CHECK RESIGN (NEW)
-                |--------------------------------------------------------------------------
-                */
-                                    if ($tkkDate && $row->date >= $tkkDate) {
-                                        continue;
-                                    }
-
-                                    /*
-                |--------------------------------------------------------------------------
-                | CHECK OVERTIME
-                |--------------------------------------------------------------------------
-                */
-                                    if (!$isValidOvertime($row->date)) {
-                                        continue;
-                                    }
-
-                                    /*
-                |--------------------------------------------------------------------------
-                | CALCULATE INSENTIF
-                |--------------------------------------------------------------------------
-                */
-                                    $lineInsentif =
-                                        $this->getInsentifByEfficiency($row->efficiency, $sewingInsentifFormula) * $row->work_hours / $row->max_work_hours;
-
-                                    $amount += $this->calculateRoleSewingInsentif(
-                                        $assignment->role,
-                                        'sewing',
-                                        $lineInsentif,
-                                        1, //karena hanya 1 line
-                                        $lineViolations
-                                    );
-                                }
+                                $lineViolations = DB::table('sewing_violations')
+                                    ->whereBetween('tanggal', [
+                                        $period->start_date,
+                                        $period->end_date
+                                    ])
+                                    ->where('id_dept', $lineDeptId)
+                                    ->count();
                             } else {
 
+                                $lineViolations = 0;
+                            }
+
+                            // dd($employee, $lineViolations);
+
+                            foreach ($lineefficiencies as $row) {
+
                                 /*
+                                |--------------------------------------------------------------------------
+                                | CHECK OVERTIME
+                                |--------------------------------------------------------------------------
+                                */
+                                if (!$isValidOvertime($row->date)) {
+                                    continue;
+                                }
+
+                                /*
+                |--------------------------------------------------------------------------
+                | DETERMINE EMPLOYEE LINE BY DATE
+                |--------------------------------------------------------------------------
+                */
+                                $employeeLine = $defaultLine;
+
+                                foreach ($mutations as $mutation) {
+                                    if ($mutation->date <= $row->date) {
+                                        preg_match('/\d+/', $mutation->DEPARTEMENT, $m);
+                                        // dd($employeeLine, $m[0]);
+                                        $employeeLine = $m[0] ?? $employeeLine;
+                                    }
+                                }
+
+                                /*
+                |--------------------------------------------------------------------------
+                | SKIP IF NOT EMPLOYEE LINE
+                |--------------------------------------------------------------------------
+                */
+
+                                $collectionLinesTest->push($row->date . '-' . $row->line_number . '-' . $employeeLine);
+                                // dd($row->line_number, $employeeLine);
+                                if ($row->line_number != $employeeLine) {
+                                    continue;
+                                }
+
+                                /*
+                |--------------------------------------------------------------------------
+                | CALCULATE INSENTIF  
+                |--------------------------------------------------------------------------
+                */
+                                $lineInsentif =
+                                    $this->getInsentifByEfficiency($row->efficiency, $sewingInsentifFormula);
+
+                                $amount += $this->calculateRoleSewingInsentif(
+                                    $employee->role,
+                                    'sewing',
+                                    $lineInsentif,
+                                    1, //karena hanya 1 line
+                                    $lineViolations
+                                );
+                            }
+                        } else {
+
+                            /*
             |--------------------------------------------------------------------------
             | CHIEF / MEKANIK / MEKANIK LEADER
             |--------------------------------------------------------------------------
             */
-                                $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
+                            $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
 
-                                if (!in_array($assignment->role, $validRoles)) {
-                                    return $amount;
-                                }
-
-
-                                $section = DB::table('sections')
-                                    ->whereRaw('id = ?', [(int) $employee->SECTION])
-                                    ->select('line_start', 'line_end')
-                                    ->first();
-
-                                // dd($employee->SECTION, $section);
-
-                                if (!$section) {
-                                    return $amount;
-                                }
-
-                                $lineStart = $section->line_start;
-                                $lineEnd   = $section->line_end;
-
-                                $grouped = DB::table('employee_line_assignments as ela')
-                                    ->join('line_efficiencies as le', function ($join) {
-                                        $join->on('le.period_id', '=', 'ela.period_id')
-                                            ->on('le.date', '=', 'ela.start_date');
-                                    })
-
-                                    ->where('ela.npk', $employee->NPK)
-                                    ->where('ela.period_id', $period->id)
-
-                                    ->whereBetween('ela.start_date', [
-                                        $period->start_date,
-                                        $period->end_date
-                                    ])
-
-                                    ->whereBetween('le.line_number', [
-                                        $lineStart,
-                                        $lineEnd
-                                    ])
-
-                                    ->select(
-                                        // 'le.line_number',
-                                        'le.date'
-                                    )
-
-                                    ->groupBy(
-                                        'le.date',
-                                        // 'le.line_number'
-                                    )
-
-                                    ->orderBy('le.date')
-                                    ->get();
-
-                                // dd($grouped);
+                            if (!in_array($employee->role, $validRoles)) {
+                                // return $amount;
+                                continue;
+                            }
 
 
-                                $lineViolations = DB::table('sewing_violations')
-                                    ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
-                                    ->whereBetween('sewing_violations.tanggal', [
-                                        $period->start_date,
-                                        $period->end_date
-                                    ])
-                                    ->where('d.DEPARTEMENT', 'like', 'LINE %')
-                                    ->whereRaw("
-                        CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)
-                        BETWEEN ? AND ?
-                    ", [$lineStart, $lineEnd])
-                                    ->count();
+                            $section = DB::table('sections')
+                                ->whereRaw('id = ?', [(int) $employee->SECTION])
+                                ->select('line_start', 'line_end')
+                                ->first();
 
-                                // dd($lineViolations);
+                            if (!$section) {
+                                // return $amount;
+                                continue;
+                            }
 
-                                $collectionDay = collect([]);
-                                $collectionLines = collect([]);
-                                foreach ($grouped as $day) {
+                            $lineStart = $section->line_start;
+                            $lineEnd   = $section->line_end;
 
-                                    $jumlahLine = DB::table('line_efficiencies')
-                                        ->where('period_id', $period->id)
-                                        ->where('date', $day->date)
-                                        ->whereBetween('date', [$period->start_date, $period->end_date])
-                                        ->whereBetween('line_number', [$lineStart, $lineEnd])
-                                        ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
-                                        ->get();
+                            $grouped = DB::table('line_efficiencies')
+                                ->where('period_id', $period->id)
+                                ->whereBetween('date', [$period->start_date, $period->end_date])
+                                ->whereBetween('line_number', [$lineStart, $lineEnd]) // ✅ FILTER SECTION
+                                ->select(
+                                    'date',
+                                )
+                                ->groupBy('date')
+                                ->get();
 
-                                    // dd($jumlahLine);
+                            // dd($grouped);
 
-                                    /*
-                |--------------------------------------------------------------------------
-                | CHECK RESIGN (NEW)
-                |--------------------------------------------------------------------------
-                */
-                                    if ($tkkDate && $day->date >= $tkkDate) {
-                                        continue;
-                                    }
-                                    /*
+                            $lineViolations = DB::table('sewing_violations')
+                                ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
+                                ->whereBetween('sewing_violations.tanggal', [
+                                    $period->start_date,
+                                    $period->end_date
+                                ])
+                                ->where('d.DEPARTEMENT', 'like', 'LINE %')
+                                ->whereRaw("
+                                    CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)
+                                    BETWEEN ? AND ?
+                                ", [$lineStart, $lineEnd])
+                                ->count();
+
+                            // dd($lineViolations);
+
+                            $jumlahLine = DB::table('line_efficiencies')
+                                ->where('period_id', $period->id)
+                                ->whereBetween('date', [$period->start_date, $period->end_date])
+                                ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
+                                ->get();
+
+                            // dd($jumlahLine);
+
+                            $collectionDay = collect([]);
+                            $collectionLines = collect([]);
+                            foreach ($grouped as $day) {
+                                /*
                 |----------------------------------
                 | CHECK OVERTIME
                 |----------------------------------
                 */
-                                    if (!$isValidOvertime($day->date)) {
+                                if (!$isValidOvertime($day->date)) {
+                                    continue;
+                                }
+
+                                $lines = DB::table('line_efficiencies')
+                                    ->where('period_id', $period->id)
+                                    ->where('date', $day->date)
+                                    ->get();
+
+                                $totalLineInsentif = 0;
+
+                                foreach ($lines as $line) {
+
+                                    $totalLineInsentif +=
+                                        $this->getInsentifByEfficiency($line->efficiency, $sewingInsentifFormula);
+
+                                    if ($totalLineInsentif <= 0) {
                                         continue;
                                     }
 
-                                    $lines = DB::table('line_efficiencies')
-                                        ->where('period_id', $period->id)
-                                        ->where('date', $day->date)
-                                        ->get();
+                                    $collectionLines->push($totalLineInsentif);
 
-                                    $totalLineInsentif = 0;
-
-                                    foreach ($lines as $line) {
-
-                                        $totalLineInsentif +=
-                                            $this->getInsentifByEfficiency($line->efficiency, $sewingInsentifFormula);
-
-                                        if ($totalLineInsentif <= 0) {
-                                            continue;
-                                        }
-
-                                        $collectionLines->push($totalLineInsentif);
-
-                                        // dd($grouped, $lines, $totalLineInsentif, $amount);
-                                    }
-
-                                    // dd($grouped, $collectionLines);
-
-                                    $amount += $this->calculateRoleSewingInsentif(
-                                        $assignment->role,
-                                        'sewing',
-                                        $totalLineInsentif,
-                                        $jumlahLine->first()->jumlah_line,
-                                        $lineViolations
-                                    );
-
-                                    $collectionDay->push($amount);
+                                    // dd($grouped, $line, $totalLineInsentif, $day->jumlah_line, $amount);
                                 }
-                                // dd($collectionDay->values()->toJson(), $collectionLines->values()->toJson());
+
+                                // dd($collectionDay, $collectionLines);
+
+                                $amount += $this->calculateRoleSewingInsentif(
+                                    $employee->role,
+                                    'sewing',
+                                    $totalLineInsentif,
+                                    $jumlahLine->first()->jumlah_line,
+                                    $lineViolations
+                                );
+
+                                $collectionDay->push($amount);
                             }
+                            // dd($collectionDay->values()->toJson());
                         }
                     } else if ($component->code === 'pad_insentif') {
-
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD ASSIGNMENT
-    |--------------------------------------------------------------------------
-    */
-                        $assignments = DB::table('pad_efficiencies')
-                            ->where('npk', $employee->NPK)
-                            ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date])
-                            ->get();
-
+                        if (empty($employee->role)) {
+                            continue;
+                        }
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
                         //     'progress' => 60
@@ -1528,6 +1480,16 @@ class GeneratePayrollCheck
                             return false;
                         };
 
+                        /*
+    |--------------------------------------------------------------------------
+    | LOAD ASSIGNMENT
+    |--------------------------------------------------------------------------
+    */
+                        $assignments = DB::table('pad_efficiencies')
+                            ->where('npk', $employee->NPK)
+                            ->where('period_id', $period->id)
+                            ->whereBetween('date', [$period->start_date, $period->end_date])
+                            ->get();
 
                         // dd($assignments);
 
@@ -1537,12 +1499,8 @@ class GeneratePayrollCheck
             | OPERATOR
             |--------------------------------------------------------------------------
             */
-                        foreach ($assignments as $assignment) {
-
-                            if (empty($assignment->role)) {
-                                continue;
-                            }
-                            if ($assignment->role === 'operator') {
+                        if ($employee->role === 'operator') {
+                            foreach ($assignments as $assignment) {
 
                                 // dd($rows);
 
@@ -1556,86 +1514,73 @@ class GeneratePayrollCheck
                                 );
 
                                 $amount += $rate * $assignment->piece;
-                            }/*
+                            }
+                        }
+
+                        /*
         |--------------------------------------------------------------------------
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
         */ else {
 
-                                $employeeDates = DB::table('pad_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('npk', $employee->NPK)
-                                    ->pluck('date')
-                                    ->unique()
-                                    ->toArray();
-                                // dd($employee);
+                            // dd($employee);
 
-                                /*
+                            /*
             |----------------------------------
             | TOTAL DEPT INSENTIF
             | ONLY VALID OPERATOR
             |----------------------------------
             */
-                                $totalDeptInsentif = 0;
+                            $totalDeptInsentif = 0;
 
 
-                                $operators = DB::table('pad_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('role', '=', 'operator')
-                                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereIn('date', $employeeDates)
-                                    ->get();
+                            $operators = DB::table('pad_efficiencies')
+                                ->where('period_id', $period->id)
+                                ->whereBetween('date', [$period->start_date, $period->end_date])
+                                ->get();
 
-                                // dd($operators);
+                            // dd($operators);
 
 
-                                foreach ($operators as $operator) {
-                                    // FILTER HANYA NUMERATOR
-                                    if (!$isValidOvertime($operator->npk, $operator->date)) {
-                                        continue;
-                                    }
-
-                                    $rate = $this->getInsentifByEfficiency(
-                                        $operator->efficiency,
-                                        $padInsentifFormula
-                                    );
-
-                                    $totalDeptInsentif += $rate * $operator->piece;
-
-                                    // dd($totalDeptInsentif);
+                            foreach ($operators as $operator) {
+                                // FILTER HANYA NUMERATOR
+                                if (!$isValidOvertime($operator->npk, $operator->date)) {
+                                    continue;
                                 }
 
-                                /*
+                                $rate = $this->getInsentifByEfficiency(
+                                    $operator->efficiency,
+                                    $padInsentifFormula
+                                );
+
+                                $totalDeptInsentif += $rate * $operator->piece;
+
+                                // dd($totalDeptInsentif);
+                            }
+
+                            /*
                 |----------------------------------
                 | DENOMINATOR (ALL OPERATOR)
                 |----------------------------------
                 */
-                                $jumlahOperator = DB::table('pad_efficiencies as pe')
-                                    ->where('pe.period_id', $period->id)
-                                    ->whereIn('pe.date', $employeeDates)
-                                    ->where('pe.role', '=', 'operator')
-                                    ->pluck('pe.npk')
-                                    ->unique()
-                                    ->count();
+                            $jumlahOperator = DB::table('pad_efficiencies as pe')
+                                ->where('pe.period_id', $period->id)
+                                ->pluck('pe.npk')
+                                ->unique()
+                                ->count();
 
-                                $amount += $this->calculateRolePadInsentif(
-                                    $assignment->role,
-                                    'pad',
-                                    $totalDeptInsentif,
-                                    $jumlahOperator
-                                );
-                            }
+                            $amount += $this->calculateRolePadInsentif(
+                                $employee->role,
+                                'pad',
+                                $totalDeptInsentif,
+                                $jumlahOperator
+                            );
                         }
                     } else if ($component->code === 'cutting_insentif') {
-                        $assignmentNpk = DB::table('employee_cutting_assignments as eca')
-                            ->select('eca.npk', 'eca.role')
-                            ->where('eca.period_id', $period->id)
-                            ->where('eca.npk', $employee->NPK)
-                            ->distinct()
-                            ->get();
-                        $tkkDate = !empty($employee->tkk)
-                            ? Carbon::parse($employee->tkk)->format('Y-m-d')
-                            : null;
+
+                        if (empty($employee->role)) {
+                            continue;
+                        }
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
                         //     'progress' => 60
@@ -1704,20 +1649,12 @@ class GeneratePayrollCheck
     | LOAD CUTTING EFFICIENCY
     |--------------------------------------------------------------------------
     */
-                        $employeeDates = DB::table('employee_cutting_assignments')
-                            ->where('period_id', $period->id)
-                            ->where('npk', $employee->NPK)
-                            ->pluck('start_date')
-                            ->unique()
-                            ->toArray();
-                        // dd($employeeDates);
                         $cuttingEfficiencies = DB::table('cutting_efficiencies')
                             ->where('period_id', $period->id)
                             ->whereBetween('date', [
                                 $period->start_date,
                                 $period->end_date
                             ])
-                            ->whereIn('date', $employeeDates)
                             ->get();
 
                         // dd($cuttingEfficiencies);
@@ -1728,60 +1665,43 @@ class GeneratePayrollCheck
     | CALCULATE INSENTIF
     |--------------------------------------------------------------------------
     */
-                        foreach ($assignmentNpk as $assignment) {
-                            // dd($assignmentNpk, $assignment->role);
-                            if (empty($assignment->role)) {
-                                continue;
-                            }
-                            foreach ($cuttingEfficiencies as $row) {
-                                if ($tkkDate && $row->date >= $tkkDate) {
-                                    continue;
-                                }
-                                /*
+                        foreach ($cuttingEfficiencies as $row) {
+
+                            /*
         |----------------------------------
         | CHECK OVERTIME
         |----------------------------------
         */
-                                if (!$isValidOvertime($row->date)) {
-                                    continue;
-                                }
+                            if (!$isValidOvertime($row->date)) {
+                                continue;
+                            }
 
-                                /*
+                            /*
         |----------------------------------
         | GET INSENTIF BY EFFICIENCY
         |----------------------------------
         */
-                                $insentif = $this->getInsentifByEfficiency(
-                                    $row->efficiency,
-                                    $cuttingInsentifFormula
-                                );
+                            $insentif = $this->getInsentifByEfficiency(
+                                $row->efficiency,
+                                $cuttingInsentifFormula
+                            );
 
-                                /*
+                            /*
         |----------------------------------
         | ADD AMOUNT BASED ROLE
         |----------------------------------
         */
-                                $amount += $this->calculateRoleCuttingInsentif(
-                                    $assignment->role,
-                                    'cutting',
-                                    $insentif
-                                );
-                            }
+                            $amount += $this->calculateRoleCuttingInsentif(
+                                $employee->role,
+                                'cutting',
+                                $insentif
+                            );
                         }
                     } else if ($component->code === 'heat_insentif') {
 
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD ASSIGNMENT
-    |--------------------------------------------------------------------------
-    */
-                        $assignments = DB::table('heat_efficiencies')
-                            ->where('npk', $employee->NPK)
-                            ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date])
-                            ->get();
-
-                        // dd($assignments);
+                        if (empty($employee->role)) {
+                            continue;
+                        }
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
                         //     'progress' => 60
@@ -1842,6 +1762,17 @@ class GeneratePayrollCheck
                             return false;
                         };
 
+                        /*
+    |--------------------------------------------------------------------------
+    | LOAD ASSIGNMENT
+    |--------------------------------------------------------------------------
+    */
+                        $assignments = DB::table('heat_efficiencies')
+                            ->where('npk', $employee->NPK)
+                            ->where('period_id', $period->id)
+                            ->whereBetween('date', [$period->start_date, $period->end_date])
+                            ->get();
+
                         // dd($assignments);
 
 
@@ -1850,12 +1781,8 @@ class GeneratePayrollCheck
             | OPERATOR
             |--------------------------------------------------------------------------
             */
-                        foreach ($assignments as $assignment) {
-
-                            if (empty($assignment->role)) {
-                                continue;
-                            }
-                            if ($assignment->role === 'operator') {
+                        if ($employee->role === 'operator') {
+                            foreach ($assignments as $assignment) {
 
                                 // dd($rows);
 
@@ -1870,75 +1797,66 @@ class GeneratePayrollCheck
 
                                 $amount += $rate * $assignment->piece;
                             }
+                        }
+
+                        /*
+        |--------------------------------------------------------------------------
+        | NON OPERATOR (SPV / LEADER / HELPER)
+        |--------------------------------------------------------------------------
+        */ else {
+
+                            // dd($employee);
 
                             /*
-                            |--------------------------------------------------------------------------
-                            | NON OPERATOR (SPV / LEADER / HELPER)
-                            |--------------------------------------------------------------------------
-                            */ else {
-                                $employeeDates = DB::table('pad_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('npk', $employee->NPK)
-                                    ->pluck('date')
-                                    ->unique()
-                                    ->toArray();
-                                // dd($employee);
-
-                                /*
-                                |----------------------------------
-                                | TOTAL DEPT INSENTIF
-                                | ONLY VALID OPERATOR
-                                |----------------------------------
-                                */
-                                $totalDeptInsentif = 0;
+            |----------------------------------
+            | TOTAL DEPT INSENTIF
+            | ONLY VALID OPERATOR
+            |----------------------------------
+            */
+                            $totalDeptInsentif = 0;
 
 
-                                $operators = DB::table('heat_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('role', '=', 'operator')
-                                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereIn('date', $employeeDates)
-                                    ->get();
+                            $operators = DB::table('heat_efficiencies')
+                                ->where('period_id', $period->id)
+                                ->whereBetween('date', [$period->start_date, $period->end_date])
+                                ->get();
 
-                                // dd($operators);
+                            // dd($operators);
 
 
-                                foreach ($operators as $operator) {
-                                    // FILTER HANYA NUMERATOR
-                                    if (!$isValidOvertime($operator->npk, $operator->date)) {
-                                        continue;
-                                    }
-
-                                    $rate = $this->getInsentifByEfficiency(
-                                        $operator->efficiency,
-                                        $heatInsentifFormula
-                                    );
-
-                                    $totalDeptInsentif += $rate * $operator->piece;
-
-                                    // dd($totalDeptInsentif);
+                            foreach ($operators as $operator) {
+                                // FILTER HANYA NUMERATOR
+                                if (!$isValidOvertime($operator->npk, $operator->date)) {
+                                    continue;
                                 }
 
-                                /*
-                                |----------------------------------
-                                | DENOMINATOR (ALL OPERATOR)
-                                |----------------------------------
-                                */
-                                $jumlahOperator = DB::table('pad_efficiencies as pe')
-                                    ->where('pe.period_id', $period->id)
-                                    ->whereIn('pe.date', $employeeDates)
-                                    ->where('pe.role', '=', 'operator')
-                                    ->pluck('pe.npk')
-                                    ->unique()
-                                    ->count();
-
-                                $amount += $this->calculateRoleHeatInsentif(
-                                    $assignment->role,
-                                    'heat',
-                                    $totalDeptInsentif,
-                                    $jumlahOperator
+                                $rate = $this->getInsentifByEfficiency(
+                                    $operator->efficiency,
+                                    $heatInsentifFormula
                                 );
+
+                                $totalDeptInsentif += $rate * $operator->piece;
+
+                                // dd($totalDeptInsentif);
                             }
+
+                            /*
+                |----------------------------------
+                | DENOMINATOR (ALL OPERATOR)
+                |----------------------------------
+                */
+                            $jumlahOperator = DB::table('heat_efficiencies as pe')
+                                ->where('pe.period_id', $period->id)
+                                ->pluck('pe.npk')
+                                ->unique()
+                                ->count();
+
+                            $amount += $this->calculateRoleHeatInsentif(
+                                $employee->role,
+                                'heat',
+                                $totalDeptInsentif,
+                                $jumlahOperator
+                            );
                         }
                     } else {
                         $amount = $this->evaluateFormula($component->formula, $results, $inputVariables);

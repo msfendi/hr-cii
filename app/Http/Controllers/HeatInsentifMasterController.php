@@ -23,28 +23,21 @@ class HeatInsentifMasterController extends Controller
 {
     public function index()
     {
-        $data = DB::table('heat_efficiencies as l')
-            ->join('BIODATA as b', function ($join) {
-                $join->on('l.npk', '=', 'b.NPK');
-            })
-            ->join('DEPT as d', function ($join) {
-                $join->on('b.ID_DEPT', '=', 'd.ID_DEPT');
-            })->join('payroll_periods as pp', function ($join) {
-                $join->on('l.period_id', '=', 'pp.id');
-            })
+        $data = DB::table('heat_efficiencies as h')
+            ->join('payroll_periods as pp', 'h.period_id', '=', 'pp.id')
+            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'h.npk')
             ->select(
-                'l.id',
-                'b.npk',
+                'h.id',
+                'h.npk',
                 'b.NAMA_KARYAWAN as name',
+                'h.role',
                 'pp.name as period',
-                'd.DEPARTEMENT as dept',
-                'l.efficiency',
-                'l.piece',
-                'l.date'
+                'h.efficiency',
+                'h.piece',
+                'h.date'
             )
             ->where('pp.is_closed', 0)
-            ->orderBy('l.npk')
-            ->orderBy('l.date')
+            ->orderBy('h.date')
             ->get();
         $periods = PayrollPeriod::select('id', 'name')
             ->where('is_closed', 0)
@@ -52,6 +45,28 @@ class HeatInsentifMasterController extends Controller
             ->get();
         // dd($data);
         return view('heat_insentif_master.index', compact('data', 'periods'));
+    }
+
+    public function getData($period)
+    {
+        $data = DB::table('heat_efficiencies as h')
+            ->join('payroll_periods as pp', 'h.period_id', '=', 'pp.id')
+            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'h.npk')
+            ->select(
+                'h.id',
+                'h.npk',
+                'b.NAMA_KARYAWAN as name',
+                'h.role',
+                'pp.name as period',
+                'h.efficiency',
+                'h.piece',
+                'h.date'
+            )
+            ->where('h.period_id', $period)
+            ->orderBy('h.date')
+            ->get();
+
+        return response()->json($data);
     }
 
     public function create()
@@ -224,17 +239,10 @@ class HeatInsentifMasterController extends Controller
         */
 
         $assignmentNpk = DB::table(DB::raw("
-    (
-        SELECT NPK, ID_DEPT FROM BIODATA
-        UNION ALL
-        SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
-    ) emp
-"))
-            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
-            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
-            ->where('irf.dept', 'heat')
-            ->distinct()
-            ->pluck('emp.NPK');
+        (
+            SELECT * FROM heat_efficiencies
+        ) he
+    "))->where('he.period_id', $period->id);
 
         // dd($assignmentNpk->toArray());
 
@@ -256,11 +264,19 @@ class HeatInsentifMasterController extends Controller
         ) emp
     "), 'p.NPK', '=', 'emp.NPK')
 
+            ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
+                $join->on('p.NPK', '=', 'anpk.npk');
+            })
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
-            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
-            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
-
-            ->whereIn('p.NPK', $assignmentNpk)
+            ->joinSub(
+                DB::table('insentif_role_formulas')
+                    ->select('role')
+                    ->distinct(),
+                'irf',
+                function ($join) {
+                    $join->on('anpk.role', '=', 'irf.role');
+                }
+            )
             // ->where('p.NPK', '=', 'C-00795')
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
@@ -281,6 +297,7 @@ class HeatInsentifMasterController extends Controller
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
+            ->distinct()
             ->get();
 
         // dd($employees);
@@ -477,7 +494,12 @@ class HeatInsentifMasterController extends Controller
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
         */ else {
-
+            $employeeDates = DB::table('pad_efficiencies')
+                ->where('period_id', $period->id)
+                ->where('npk', $employee->NPK)
+                ->pluck('date')
+                ->unique()
+                ->toArray();
             // dd($employee);
 
             /*
@@ -491,13 +513,18 @@ class HeatInsentifMasterController extends Controller
 
             $operators = DB::table('heat_efficiencies')
                 ->where('period_id', $period->id)
+                ->where('role', '=', 'operator')
                 ->whereBetween('date', [$period->start_date, $period->end_date])
+                ->whereIn('date', $employeeDates)
                 ->get();
 
             // dd($operators);
 
 
             foreach ($operators as $operator) {
+                if ($tkkDate && $operator->date >= $tkkDate) {
+                    continue;
+                }
                 // FILTER HANYA NUMERATOR
                 if (!$isValidOvertime($operator->npk, $operator->date)) {
                     continue;
@@ -518,8 +545,10 @@ class HeatInsentifMasterController extends Controller
                 | DENOMINATOR (ALL OPERATOR)
                 |----------------------------------
                 */
-            $jumlahOperator = DB::table('heat_efficiencies as pe')
+            $jumlahOperator = DB::table('pad_efficiencies as pe')
                 ->where('pe.period_id', $period->id)
+                ->whereIn('pe.date', $employeeDates)
+                ->where('pe.role', '=', 'operator')
                 ->pluck('pe.npk')
                 ->unique()
                 ->count();

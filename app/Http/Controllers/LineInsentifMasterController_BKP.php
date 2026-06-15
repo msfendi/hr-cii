@@ -28,7 +28,9 @@ class LineInsentifMasterController extends Controller
     public function index()
     {
         $data = DB::table('line_efficiencies as l')
-            ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
+            ->join('payroll_periods as pp', function ($join) {
+                $join->on('l.period_id', '=', 'pp.id');
+            })
             ->select(
                 'l.id',
                 'pp.name as period',
@@ -46,24 +48,6 @@ class LineInsentifMasterController extends Controller
             ->get();
         // dd($data);
         return view('line_insentif_master.index', compact('data', 'periods'));
-    }
-
-    public function getData($period)
-    {
-        $data = DB::table('line_efficiencies as l')
-            ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
-            ->select(
-                'l.id',
-                'pp.name as period',
-                'l.efficiency',
-                'l.line_number',
-                'l.date'
-            )
-            ->where('l.period_id', $period)
-            ->orderBy('l.date')
-            ->get();
-
-        return response()->json($data);
     }
 
     public function create()
@@ -238,11 +222,16 @@ class LineInsentifMasterController extends Controller
 
         $assignmentNpk = DB::table(DB::raw("
         (
-            SELECT * FROM employee_line_assignments
-        ) ela
-    "))->where('ela.period_id', $period->id);
-
-        // dd($assignmentNpk->get());
+            SELECT NPK, ID_DEPT FROM BIODATA
+            UNION ALL
+            SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
+        ) emp
+    "))
+            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
+            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+            ->where('irf.dept', 'sewing')
+            ->distinct()
+            ->pluck('emp.NPK');
 
         /*
     |--------------------------------------------------------------------------
@@ -261,9 +250,6 @@ class LineInsentifMasterController extends Controller
             ) emp
         "), 'p.NPK', '=', 'emp.NPK')
 
-            ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
-                $join->on('p.NPK', '=', 'anpk.npk');
-            })
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
             ->leftJoin('sections as s', function ($join) {
                 $join->on(
@@ -272,20 +258,11 @@ class LineInsentifMasterController extends Controller
                     's.id'
                 );
             })
-            ->joinSub(
-                DB::table('insentif_role_formulas')
-                    ->select('role')
-                    ->distinct(),
-                'irf',
-                function ($join) {
-                    $join->on('anpk.role', '=', 'irf.role');
-                }
-            )
-            ->leftJoin('line_efficiencies as le', function ($join) {
-                $join->on('le.period_id', '=', 'anpk.period_id')
-                    ->on('le.line_number', '=', 'anpk.line_number')
-                    ->on('le.date', '=', 'anpk.start_date');
-            })
+            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
+            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+
+            ->whereIn('p.NPK', $assignmentNpk)
+
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
@@ -294,11 +271,11 @@ class LineInsentifMasterController extends Controller
             ->select(
                 'p.NPK',
                 'emp.NAMA_KARYAWAN',
-                'anpk.role',
                 'p.TMK',
                 'p.TKK as tkk',
                 'emp.ID_DEPT',
                 'd.DEPARTEMENT as DEPARTEMENT',
+                'irf.role as role',
                 'emp.SECTION as SECTION',
                 's.line_start',
                 's.line_end'
@@ -307,10 +284,7 @@ class LineInsentifMasterController extends Controller
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
-            ->distinct()
             ->get();
-
-        // dd($employees);
 
         /*
     |--------------------------------------------------------------------------
@@ -330,11 +304,7 @@ class LineInsentifMasterController extends Controller
     */
 
         $results = [];
-        // dd(
-        //     $employees->groupBy('NPK')
-        //         ->map(fn($x) => $x->count())
-        //         ->filter(fn($x) => $x > 1)
-        // );
+
         foreach ($employees as $employee) {
 
             $status = $employee->tkk ? 'Resign' : 'Active';
@@ -345,15 +315,6 @@ class LineInsentifMasterController extends Controller
                 $sewingInsentifFormula,
                 $employee->role
             );
-
-            // dd(
-            //     $employee,
-            //     $period,
-            //     $sewingInsentifFormula,
-            //     $employee->role
-            // );
-
-            // dd($sewing);
 
             if ($sewing <= 0) continue;
 
@@ -420,6 +381,22 @@ class LineInsentifMasterController extends Controller
             return $thresholds->max();
         };
 
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET MUTATIONS EMPLOYEE
+        |--------------------------------------------------------------------------
+        */
+        $mutations = DB::table('employee_mutations')
+            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
+            ->where('npk', $employee->NPK)
+            ->orderBy('date')
+            ->get();
+
+        // dd($mutations);
+
+
         /*
     |--------------------------------------------------------------------------
     | LOAD OVERTIME (ONCE)
@@ -484,55 +461,16 @@ class LineInsentifMasterController extends Controller
             | GET ALL LINE EFFICIENCIES
             |--------------------------------------------------------------------------
             */
-            $lineefficiencies = DB::table('employee_line_assignments as ela')
-                ->leftJoin('line_efficiencies as le', function ($join) {
-                    $join->on('le.period_id', '=', 'ela.period_id')
-                        ->on('le.line_number', '=', 'ela.line_number')
-                        ->on('le.date', '=', 'ela.start_date');
-                })
-
-                ->leftJoinSub(
-                    DB::table('employee_line_assignments')
-                        ->select(
-                            'period_id',
-                            'line_number',
-                            'start_date',
-                            DB::raw('MAX(work_hours) as max_work_hours')
-                        )
-                        ->groupBy(
-                            'period_id',
-                            'line_number',
-                            'start_date'
-                        ),
-                    'max_wh',
-                    function ($join) {
-                        $join->on('max_wh.period_id', '=', 'ela.period_id')
-                            ->on('max_wh.line_number', '=', 'ela.line_number')
-                            ->on('max_wh.start_date', '=', 'ela.start_date');
-                    }
-                )
-
-                ->where('ela.period_id', $period->id)
-                ->where('ela.npk', $employee->NPK)
+            $lineefficiencies = DB::table('line_efficiencies as le')
+                ->where('le.period_id', $period->id)
                 ->whereBetween('le.date', [$period->start_date, $period->end_date])
-
                 ->select(
-                    'ela.npk',
                     'le.line_number',
                     'le.efficiency',
-                    'le.date',
-
-                    // work hours employee
-                    'ela.work_hours',
-
-                    // max work hours pada line & tanggal yang sama
-                    'max_wh.max_work_hours'
+                    'le.date'
                 )
-
                 ->orderBy('le.date')
                 ->get();
-
-            // dd($lineefficiencies);
 
             if (strtolower($role) == 'operator') {
 
@@ -597,11 +535,38 @@ class LineInsentifMasterController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
+                | DETERMINE EMPLOYEE LINE BY DATE
+                |--------------------------------------------------------------------------
+                */
+                $employeeLine = $defaultLine;
+
+                foreach ($mutations as $mutation) {
+                    if ($mutation->date <= $row->date) {
+                        preg_match('/\d+/', $mutation->DEPARTEMENT, $m);
+                        // dd($employeeLine, $m[0]);
+                        $employeeLine = $m[0] ?? $employeeLine;
+                    }
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | SKIP IF NOT EMPLOYEE LINE
+                |--------------------------------------------------------------------------
+                */
+
+                $collectionLinesTest->push($row->date . '-' . $row->line_number . '-' . $employeeLine);
+                // dd($row->line_number, $employeeLine);
+                if ($row->line_number != $employeeLine) {
+                    continue;
+                }
+
+                /*
+                |--------------------------------------------------------------------------
                 | CALCULATE INSENTIF
                 |--------------------------------------------------------------------------
                 */
                 $lineInsentif =
-                    $this->getInsentifByEfficiency($row->efficiency, $formula) * $row->work_hours / $row->max_work_hours;
+                    $this->getInsentifByEfficiency($row->efficiency, $formula);
 
                 $amount += $this->calculateRoleSewingInsentif(
                     $role,
@@ -639,36 +604,14 @@ class LineInsentifMasterController extends Controller
             $lineStart = $section->line_start;
             $lineEnd   = $section->line_end;
 
-            $grouped = DB::table('employee_line_assignments as ela')
-                ->join('line_efficiencies as le', function ($join) {
-                    $join->on('le.period_id', '=', 'ela.period_id')
-                        ->on('le.date', '=', 'ela.start_date');
-                })
-
-                ->where('ela.npk', $employee->NPK)
-                ->where('ela.period_id', $period->id)
-
-                ->whereBetween('ela.start_date', [
-                    $period->start_date,
-                    $period->end_date
-                ])
-
-                ->whereBetween('le.line_number', [
-                    $lineStart,
-                    $lineEnd
-                ])
-
+            $grouped = DB::table('line_efficiencies')
+                ->where('period_id', $period->id)
+                ->whereBetween('date', [$period->start_date, $period->end_date])
+                ->whereBetween('line_number', [$lineStart, $lineEnd]) // ✅ FILTER SECTION
                 ->select(
-                    // 'le.line_number',
-                    'le.date'
+                    'date',
                 )
-
-                ->groupBy(
-                    'le.date',
-                    // 'le.line_number'
-                )
-
-                ->orderBy('le.date')
+                ->groupBy('date')
                 ->get();
 
             // dd($grouped);
@@ -689,19 +632,18 @@ class LineInsentifMasterController extends Controller
 
             // dd($lineViolations);
 
+            $jumlahLine = DB::table('line_efficiencies')
+                ->where('period_id', $period->id)
+                ->whereBetween('date', [$period->start_date, $period->end_date])
+                ->whereBetween('line_number', [$lineStart, $lineEnd])
+                ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
+                ->get();
+
+            // dd($jumlahLine);
+
             $collectionDay = collect([]);
             $collectionLines = collect([]);
             foreach ($grouped as $day) {
-
-                $jumlahLine = DB::table('line_efficiencies')
-                    ->where('period_id', $period->id)
-                    ->where('date', $day->date)
-                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                    ->whereBetween('line_number', [$lineStart, $lineEnd])
-                    ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
-                    ->get();
-
-                // dd($jumlahLine);
 
                 /*
                 |--------------------------------------------------------------------------
@@ -738,10 +680,10 @@ class LineInsentifMasterController extends Controller
 
                     $collectionLines->push($totalLineInsentif);
 
-                    // dd($grouped, $lines, $totalLineInsentif, $amount);
+                    // dd($grouped, $line, $totalLineInsentif, $day->jumlah_line, $amount);
                 }
 
-                // dd($grouped, $collectionLines);
+                // dd($collectionDay, $collectionLines);
 
                 $amount += $this->calculateRoleSewingInsentif(
                     $role,
@@ -753,7 +695,7 @@ class LineInsentifMasterController extends Controller
 
                 $collectionDay->push($amount);
             }
-            // dd($collectionDay->values()->toJson(), $collectionLines->values()->toJson());
+            // dd($collectionDay->values()->toJson());
         }
         // dd($collectionLinesTest->values()->toJson());
         return $amount;

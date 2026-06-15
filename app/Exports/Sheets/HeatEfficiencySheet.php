@@ -20,7 +20,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
     {
         return [
             'npk',
-            'dept',
+            'role',
             'efficiency',
             'piece',
             'date'
@@ -44,21 +44,21 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
 
         // contoh data
         $sheet->setCellValue('A2', 'C-00827');
-        $sheet->setCellValue('B2', 'heat');
+        $sheet->setCellValue('B2', 'operator');
         $sheet->setCellValue('C2', '85');
         $sheet->setCellValue('D2', '3517');
         $date = Date::stringToExcel('2026-01-12');
         $sheet->setCellValue('E2', $date);
 
         $sheet->setCellValue('A3', 'C-00827');
-        $sheet->setCellValue('B3', 'heat');
+        $sheet->setCellValue('B3', 'operator');
         $sheet->setCellValue('C3', '90');
         $sheet->setCellValue('D3', '3724');
         $date = Date::stringToExcel('2026-01-13');
         $sheet->setCellValue('E3', $date);
 
         $sheet->setCellValue('A4', 'C-00827');
-        $sheet->setCellValue('B4', 'heat');
+        $sheet->setCellValue('B4', 'operator');
         $sheet->setCellValue('C4', '90');
         $sheet->setCellValue('D4', '3724');
         $date = Date::stringToExcel('2026-01-14');

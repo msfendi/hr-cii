@@ -153,7 +153,6 @@ Detail Insentif Karyawan
                                  <th>Period</th>
                                  <th>Efficiency</th>
                                  <th>Tanggal</th>
-                                 <th>Action</th>
                               </tr>
                            </thead>
                            <tbody>
@@ -163,14 +162,6 @@ Detail Insentif Karyawan
                                  <td>{{ $row->period }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
                                  <td>{{ $row->date }}</td>
-                                 <td class="text-center">
-                                    <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
-                                       data-delete-link="{{ route('cutting-insentif-master.delete',$row->id) }}"
-                                       data-toggle="modal"
-                                       data-target="#deleteModal">
-                                    <i class="fas fa-trash"></i>
-                                    </a>
-                                 </td>
                               </tr>
                               @endforeach
                            </tbody>
@@ -304,8 +295,21 @@ Detail Insentif Karyawan
    </body>
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
-<script src="{{asset('js/demo/datatables-demo.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+      <script>
+let masterTable;
+        $(document).ready(function(){
+
+            masterTable = $('#dataTable').DataTable({
+                order:[[0,'desc']],
+                pageLength:10,
+                responsive:true,
+                autoWidth:false
+            });
+
+        });
+        </script>
 <script>
 
 $('#insentifSelect').on('change', function(){
@@ -573,13 +577,9 @@ $('#checkPeriod').on('change',function(){
     */
     if(!period){
         insentifTable.clear().draw();
+        masterTable.clear().draw();
         return;
     }
-
-    /*
-    | LOADING STATE
-    */
-    insentifTable.clear().draw();
 
     Swal.fire({
         title:'Loading insentif...',
@@ -599,8 +599,6 @@ $('#checkPeriod').on('change',function(){
 
         success:function(res){
 
-            console.log('DATA:',res);
-
             insentifTable.clear();
             insentifTable.rows.add(res.data);
             insentifTable.draw();
@@ -610,14 +608,35 @@ $('#checkPeriod').on('change',function(){
 
         error:function(xhr){
 
-            console.log(xhr.responseText);
-
             Swal.fire({
                 icon:'error',
                 title:'Gagal load data'
             });
         }
 
+    });
+    // AJAX MASTER TABLE
+    $.ajax({
+        url:'/cutting-insentif-master/'+period+'/data',
+        type:'GET',
+        success:function(res){
+
+            masterTable.clear();
+
+            res.forEach(function(row){
+
+                masterTable.row.add([
+                    row.id,
+                    row.period,
+                    row.line_number,
+                    Number(row.efficiency).toLocaleString('id-ID'),
+                    row.date,
+                ]);
+
+            });
+
+            masterTable.draw();
+        }
     });
 
 });

@@ -149,14 +149,13 @@ Detail Insentif Karyawan
                            <thead>
                               <tr>
                                  <th>ID</th>
-                                <th>Period</th>
+                                 <th>Period</th>
                                  <th>NPK</th>
                                  <th>Name</th>
-                                 <th>Dept</th>
+                                 <th>Role</th>
                                  <th>Efficiency</th>
                                  <th>Piece</th>
                                  <th>Tanggal</th>
-                                 <th>Action</th>
                               </tr>
                            </thead>
                            <tbody>
@@ -166,11 +165,11 @@ Detail Insentif Karyawan
                                  <td>{{ $row->period }}</td>
                                  <td>{{ $row->npk }}</td>
                                  <td>{{ $row->name }}</td>
-                                 <td>{{ $row->dept }}</td>
+                                 <td>{{ $row->role }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
                                  <td>{{ number_format($row->piece,0,',','.') }}</td>
                                  <td>{{ $row->date }}</td>
-                                 <td class="text-center">
+                                 <!-- <td class="text-center">
                                     <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
                                        data-delete-link="{{ route('pad-insentif-master.delete',$row->id) }}"
                                        data-npk="{{ $row->npk }}"
@@ -178,7 +177,7 @@ Detail Insentif Karyawan
                                        data-target="#deleteModal">
                                     <i class="fas fa-trash"></i>
                                     </a>
-                                 </td>
+                                 </td> -->
                               </tr>
                               @endforeach
                            </tbody>
@@ -326,13 +325,15 @@ Detail Insentif Karyawan
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 
+      
       <script>
+let masterTable;
         $(document).ready(function(){
 
-            $('#dataTable').DataTable({
-                order: [[0,'desc']], // pakai urutan ID dari Laravel
-                pageLength: 10,
-                responsive: true,
+            masterTable = $('#dataTable').DataTable({
+                order:[[0,'desc']],
+                pageLength:10,
+                responsive:true,
                 autoWidth:false
             });
 
@@ -489,6 +490,7 @@ $('#checkPeriod').on('change',function(){
     */
     if(!period){
         insentifTable.clear().draw();
+        masterTable.clear().draw();
         return;
     }
 
@@ -534,6 +536,33 @@ $('#checkPeriod').on('change',function(){
             });
         }
 
+    });
+
+    // AJAX MASTER TABLE
+    $.ajax({
+        url:'/pad-insentif-master/'+period+'/data',
+        type:'GET',
+        success:function(res){
+
+            masterTable.clear();
+
+            res.forEach(function(row){
+
+                masterTable.row.add([
+                    row.id,
+                    row.period,
+                    row.npk,
+                    row.name,
+                    row.role,
+                    Number(row.efficiency).toLocaleString('id-ID'),
+                    Number(row.piece).toLocaleString('id-ID'),
+                    row.date,
+                ]);
+
+            });
+
+            masterTable.draw();
+        }
     });
 
 });

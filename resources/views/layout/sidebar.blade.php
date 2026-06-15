@@ -174,7 +174,7 @@ $role = $roleusers[0]->rolename;
    </li>
    @endif
    {{-- ================= INSENTIF ================= --}}
-   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
+   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING', 'IE']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#insentif">
       <i class="fas fa-hand-holding-usd"></i>
@@ -182,15 +182,19 @@ $role = $roleusers[0]->rolename;
       </a>
       <div id="insentif" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
+            @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
             <a class="collapse-item" href="{{ route('insentif.threshold.index') }}">Insentif Threshold</a>
             <a class="collapse-item" href="{{ route('dept-insentif-role.index') }}">Insentif Mapping</a>
             <a class="collapse-item" href="{{ route('insentif-role-formulas.index') }}">Insentif Formula</a>
             <a class="collapse-item" href="{{ route('sewing-violations.index') }}">Sewing Violations</a>
             <hr>
+            @endif
+            @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING', 'IE']))
             <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif</a>
             <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif</a>
             <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif</a>
             <a class="collapse-item" href="{{ route('heat-insentif-master.index') }}">Heat Seal Insentif</a>
+            @endif
          </div>
       </div>
    </li>
