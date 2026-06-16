@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\NotificationEvent;
 use App\Jobs\GenerateCompensation;
+use App\Jobs\GenerateCompensationCheck;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -81,10 +82,10 @@ class CompensationsController extends Controller
 
         $exists = Compensations::where('cutoff_date', $today)->exists();
 
-        // if ($exists) {
-        //     Alert::error('Gagal', 'Compensation for this period has been generated previously.');
-        //     return redirect()->back();
-        // }
+        if ($exists) {
+            Alert::error('Gagal', 'Compensation for this period has been generated previously.');
+            return redirect()->back();
+        }
 
         $master = Compensations::create([
             'cutoff_date' => $today,
@@ -108,4 +109,32 @@ class CompensationsController extends Controller
 
         return back();
     }
+
+    public function check(Request $request)
+    {
+        $today = Carbon::parse($request->generate_date);
+
+        $service = new GenerateCompensation(
+            $today,
+            0,
+            'check'
+        );
+
+        $data = $service->simulation();
+
+        return $data;
+    }
+
+    // public function check($date)
+    // {
+    //     $today = Carbon::parse($date);
+
+    //     $job = new GenerateCompensationCheck(
+    //         $today,
+    //         0,
+    //         'check'
+    //     );
+
+    //     return $job->simulation();
+    // }
 }

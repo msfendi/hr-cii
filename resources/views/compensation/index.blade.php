@@ -13,25 +13,43 @@
             {{-- PAGE HEADING --}}
             {{-- ===================================================== --}}
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
-               <h1 class="h3 mb-0 text-gray-800">Compensation</h1>
-               <form method="POST"
-                  action="{{ route('compensation.generate') }}"
-                  id="generateForm"
-                  class="form-inline">
-                  @csrf
-                  <input type="text"
-                     name="generate_date"
-                     id="generate_date"
-                     class="form-control form-control-sm mr-2"
-                     placeholder="Select Date"
-                     required readonly>
-                  <button type="submit"
-                     id="btnGenerate"
-                     class="btn btn-primary btn-sm shadow-sm">
-                  <i class="fas fa-cogs"></i> Generate Compensation
-                  </button>
-               </form>
-            </div>
+
+    <h1 class="h3 mb-0 text-gray-800">Compensation</h1>
+
+    <form method="POST"
+        action="{{ route('compensation.generate') }}"
+        id="generateForm"
+        class="form-inline">
+
+        @csrf
+
+        <input type="text"
+            name="generate_date"
+            id="generate_date"
+            class="form-control form-control-sm mr-2"
+            placeholder="Select Date"
+            required
+            readonly>
+
+        <button type="button"
+            id="btnCheck"
+            class="btn btn-info btn-sm shadow-sm mr-2"
+            disabled>
+            <i class="fas fa-search"></i>
+            Check Compensation
+        </button>
+
+        <button type="submit"
+            id="btnGenerate"
+            class="btn btn-primary btn-sm shadow-sm"
+            disabled>
+            <i class="fas fa-cogs"></i>
+            Generate Compensation
+        </button>
+
+    </form>
+
+</div>
             {{-- ===================================================== --}}
             {{-- DATA TABLE --}}
             {{-- ===================================================== --}}
@@ -190,14 +208,128 @@
       {{-- ===================================================== --}}
       <script>
          flatpickr("#generate_date",{
-         dateFormat:"Y-m-d",
-         disableMobile:true,
-         enable:[
-         function(date){
-         return date.getDate()===7 || date.getDate()===20;
-         }
-         ]
-         });
+
+    dateFormat:"Y-m-d",
+
+    disableMobile:true,
+
+    enable:[
+        function(date){
+            return date.getDate()===7 || date.getDate()===20;
+        }
+    ],
+
+    onChange:function(selectedDates,dateStr){
+
+        if(dateStr){
+            $('#btnGenerate').prop('disabled',false);
+            $('#btnCheck').prop('disabled',false);
+        }
+
+    }
+
+});
+      </script>
+      <script>
+         let checkTable = null;
+
+$('#btnCheck').on('click', function(){
+
+    let date = $('#generate_date').val();
+
+    if(!date){
+        Swal.fire(
+            'Warning',
+            'Please select date first',
+            'warning'
+        );
+        return;
+    }
+
+    Swal.fire({
+        title: 'Checking Compensation',
+        html: 'Please wait...',
+        allowOutsideClick:false,
+        didOpen:()=>{
+            Swal.showLoading();
+        }
+    });
+
+    $.ajax({
+
+        url: '/compensation/check',
+
+        type: 'POST',
+
+        data:{
+            _token:'{{ csrf_token() }}',
+            generate_date:date
+        },
+
+        success:function(res){
+
+            Swal.close();
+
+            if(checkTable){
+                checkTable.destroy();
+            }
+
+            $('#tableCheckResult tbody').empty();
+
+            checkTable = $('#tableCheckResult').DataTable({
+
+                data:res.data,
+
+                columns:[
+                    {data:'npk'},
+                    {data:'employee_name'},
+                    {data:'department'},
+                    {data:'end_date'},
+                    {data:'status'},
+                    {
+                        data:'amount',
+                        render:function(data){
+
+                            return new Intl.NumberFormat(
+                                'id-ID',
+                                {
+                                    style:'currency',
+                                    currency:'IDR',
+                                    minimumFractionDigits:0
+                                }
+                            ).format(data);
+
+                        }
+                    }
+                ]
+
+            });
+
+            $('#checkModal').modal('show');
+
+        }
+
+    });
+
+});
+      </script>
+      <script>
+         const btnGenerate = $('#btnGenerate');
+const btnCheck = $('#btnCheck');
+
+$('#generate_date').on('change', function(){
+
+    let value = $(this).val();
+
+    if(value){
+        btnGenerate.prop('disabled', false);
+        btnCheck.prop('disabled', false);
+    }else{
+        btnGenerate.prop('disabled', true);
+        btnCheck.prop('disabled', true);
+    }
+
+});
       </script>
       {{-- ===================================================== --}}
       {{-- ✅ SWEETALERT LOADING GENERATE --}}
@@ -316,5 +448,50 @@
          });
          
       </script>
+      <div class="modal fade" id="checkModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    Compensation Checking Result
+                </h5>
+
+                <button type="button"
+                    class="close"
+                    data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+
+            <div class="modal-body">
+
+                <div class="table-responsive">
+
+                    <table class="table table-bordered table-sm w-100"
+                        id="tableCheckResult">
+
+                        <thead>
+                            <tr>
+                                <th>NPK</th>
+                                <th>Name</th>
+                                <th>Department</th>
+                                <th>End Date</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+
+                        <tbody></tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+</div>
    </body>
 </html>
