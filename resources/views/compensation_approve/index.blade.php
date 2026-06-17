@@ -233,6 +233,9 @@
                                     <th>ID</th>
                                     <th>NPK</th>
                                     <th>Department</th>
+                                    <th>Month Duration</th>
+                                    <th>Day Duration</th>
+                                    <th>End Date</th>
                                     <th>Amount</th>
                                     <th>Status</th>
                                     <th>Active</th>
@@ -243,7 +246,7 @@
 
                               <tfoot>
                                  <tr style="font-weight:bold;background:#f8f9fc">
-                                    <th colspan="3" class="text-right">
+                                    <th colspan="6" class="text-right">
                                           TOTAL
                                     </th>
 
@@ -366,13 +369,9 @@ $('.btn-detail').click(function(){
     type:'GET',
     dataSrc:function(json){
 
-        console.log(json);
-
         return json.data;
     },
     error:function(xhr){
-
-        console.log(xhr.responseText);
 
         Swal.fire(
             'Error',
@@ -381,6 +380,11 @@ $('.btn-detail').click(function(){
         );
     }
 },
+              createdRow: function(row, data) {
+                if (data.is_active == 0) {
+                  $(row).addClass('table-danger');
+                }
+              },
 
         columns:[
 
@@ -396,6 +400,19 @@ $('.btn-detail').click(function(){
 
             {
                 data:'dept',
+                defaultContent:'-'
+            },
+
+            {
+                data: 'month_duration',
+                defaultContent:'-'
+            },
+            {
+                data: 'day_duration',
+                defaultContent:'-'
+            },
+            {
+                data: 'end_date',
                 defaultContent:'-'
             },
 
@@ -497,7 +514,7 @@ $('.btn-detail').click(function(){
             */
 
             let total = api
-                .column(3,{search:'applied'})
+                .column(6,{search:'applied'})
                 .data()
                 .reduce(function(a,b){
 
@@ -505,7 +522,7 @@ $('.btn-detail').click(function(){
 
                 },0);
 
-            $(api.column(3).footer())
+            $(api.column(6).footer())
                 .html(formatRupiah(total));
 
         }

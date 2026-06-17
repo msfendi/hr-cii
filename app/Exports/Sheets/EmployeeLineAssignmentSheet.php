@@ -8,6 +8,8 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
+use Illuminate\Support\Facades\DB;
 
 class EmployeeLineAssignmentSheet implements WithTitle, WithHeadings, WithEvents
 {
@@ -31,6 +33,7 @@ class EmployeeLineAssignmentSheet implements WithTitle, WithHeadings, WithEvents
     public static function afterSheet(AfterSheet $event)
     {
         $sheet = $event->sheet->getDelegate();
+        $spreadsheet = $sheet->getParent();
 
         // bold header
         $sheet->getStyle('A1:F1')->getFont()->setBold(true);
@@ -92,6 +95,46 @@ class EmployeeLineAssignmentSheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D7', 'operator');
         $sheet->setCellValue('E7', $date);
         $sheet->setCellValue('F7', '10');
+
+        $roles = DB::table('insentif_role_formulas')
+            ->where('dept', 'sewing')
+            ->orderBy('role')
+            ->pluck('role')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        // Hidden Sheet
+        $hiddenSheet = $spreadsheet->createSheet();
+        $hiddenSheet->setTitle('role_master');
+
+        foreach ($roles as $index => $role) {
+            $hiddenSheet->setCellValue(
+                'A' . ($index + 1),
+                $role
+            );
+        }
+
+        $hiddenSheet->setSheetState(
+            \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN
+        );
+
+        $lastRow = count($roles);
+
+        // Apply dropdown to C2:C5000
+        for ($row = 2; $row <= 5000; $row++) {
+            $validation = $sheet->getCell('D' . $row)->getDataValidation();
+
+            $validation->setType(DataValidation::TYPE_LIST);
+            $validation->setErrorStyle(DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(true);
+            $validation->setShowDropDown(true);
+            $validation->setShowInputMessage(true);
+            $validation->setShowErrorMessage(true);
+            $validation->setErrorTitle('Input Salah');
+            $validation->setError('Pilih role dari daftar.');
+            $validation->setFormula1("=role_master!\$A\$1:\$A\${$lastRow}");
+        }
     }
 
     public function registerEvents(): array

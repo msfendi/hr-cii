@@ -87,7 +87,7 @@
                <td>{{ $item->npk }}</td>
                <td>{{ $item->employee_name ?? '-' }}</td>
                <td align="center">
-                  {{ $item->month_duration ?? '-' }}
+                  {{ $item->month_duration ?? '-' }} bulan {{ $item->day_duration ?? '-' }} hari
                </td>
                <td>
                   {{ \Carbon\Carbon::parse($item->start_date)->format('d-m-Y') }}

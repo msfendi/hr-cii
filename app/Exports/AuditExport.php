@@ -78,7 +78,7 @@ class AuditExport implements WithHeadings, WithStrictNullComparison, FromView, S
         $highestColumn = $sheet->getHighestColumn();
         $cellRange = 'A1:' . $highestColumn . $highestRow;
 
-        // Apply borders and alignment to the entire used range
+        // Apply basic borders and alignment to the entire used range
         $sheet->getStyle($cellRange)->applyFromArray([
             'borders' => [
                 'allBorders' => [
@@ -92,10 +92,64 @@ class AuditExport implements WithHeadings, WithStrictNullComparison, FromView, S
             ]
         ]);
 
-        // Make header row bold
-        $sheet->getStyle('A1:' . $highestColumn . '1')->getFont()->setBold(true);
+        // Style the Title (A1 usually contains the <h2> text)
+        if (str_contains($sheet->getCell('A1')->getValue() ?? '', 'Data Kehadiran')) {
+            $sheet->mergeCells('A1:' . $highestColumn . '1');
+            $sheet->getStyle('A1')->applyFromArray([
+                'font' => [
+                    'bold' => true,
+                    'size' => 16,
+                ],
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                ]
+            ]);
+        }
 
-        // Align 'Nama Karyawan' column to left
+        // Align 'Nama Karyawan' column (C) to left for better readability
         $sheet->getStyle('C1:C' . $highestRow)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+
+        // Add a thicker left border to Column D to separate dates from employee info
+        $sheet->getStyle('D1:D' . $highestRow)->getBorders()->getLeft()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM);
+
+        // Make the final Legend column (#) slightly distinct (light grey fill, bold)
+        $sheet->getStyle($highestColumn . '1:' . $highestColumn . $highestRow)->applyFromArray([
+            'font' => [
+                'bold' => true,
+            ],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FFF2F2F2'], // Light Grey
+            ],
+        ]);
+
+        // Dynamically find all "Dept" header rows and style them beautifully
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $cellValue = $sheet->getCell('A' . $row)->getValue();
+            if ($cellValue === 'Dept') {
+                $sheet->getStyle('A' . $row . ':' . $highestColumn . $row)->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['argb' => 'FFFFFFFF'], // White text
+                    ],
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FF4F81BD'], // Excel Header Blue
+                    ],
+                ]);
+            }
+        }
+
+        // Page setup for printing on A4 Landscape
+        $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
+        $sheet->getPageSetup()->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
+        $sheet->getPageSetup()->setFitToWidth(1);
+        $sheet->getPageSetup()->setFitToHeight(0); // Auto height to span multiple pages
+
+        // Set narrow print margins to maximize space
+        $sheet->getPageMargins()->setTop(0.4);
+        $sheet->getPageMargins()->setRight(0.2);
+        $sheet->getPageMargins()->setLeft(0.2);
+        $sheet->getPageMargins()->setBottom(0.4);
     }
 }

@@ -33,9 +33,23 @@ class GeneratePayrollProcess implements ShouldQueue
 
     public function handle()
     {
+        $this->processPayroll(false);
+    }
 
-        $run = PayrollRun::findOrFail($this->runId);
-        $period = PayrollPeriod::findOrFail($run->period_id);
+    public function simulation()
+    {
+        return $this->processPayroll(true);
+    }
+
+    private function processPayroll($isCheck = false)
+    {
+        $payrollResults = [];
+        if (!$isCheck) {
+            $run = PayrollRun::findOrFail($this->runId);
+            $period = PayrollPeriod::findOrFail($run->period_id);
+        } else {
+            $period = PayrollPeriod::findOrFail($this->runId);
+        }
 
         //pindah ke controller copy dari sini
         $periodStart = $period->start_date;
@@ -48,10 +62,12 @@ class GeneratePayrollProcess implements ShouldQueue
         |--------------------------------------------------------------------------
         */
 
-        $run->update([
-            'status' => 'Unioning Biodata',
-            'progress' => 5,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Unioning Biodata',
+                'progress' => 5,
+            ]);
+        }
 
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
@@ -70,10 +86,12 @@ class GeneratePayrollProcess implements ShouldQueue
         */
 
 
-        $run->update([
-            'status' => 'Getting Employee Biodata',
-            'progress' => 15,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Getting Employee Biodata',
+                'progress' => 15,
+            ]);
+        }
 
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
@@ -89,6 +107,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
+            // ->where('p.NPK', '=', 'C-00827')
 
             ->select(
                 'p.NPK',
@@ -118,6 +137,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
+            // ->where('ec1.npk', '=', 'C-00827')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -140,10 +160,12 @@ class GeneratePayrollProcess implements ShouldQueue
         // dd($employeeBase->get(), $latestContract);
 
 
-        $run->update([
-            'status' => 'Getting Employee Overtime Data',
-            'progress' => 20,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Getting Employee Overtime Data',
+                'progress' => 20,
+            ]);
+        }
 
         $overtimeSummary = DB::connection('cii')
             ->table('overtimes')
@@ -520,10 +542,12 @@ class GeneratePayrollProcess implements ShouldQueue
 
         // SUMMARY LATE
 
-        $run->update([
-            'status' => 'Calculating Late Minutes',
-            'progress' => 25,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Calculating Late Minutes',
+                'progress' => 25,
+            ]);
+        }
 
         $lateSummary =
             DB::connection('cii')
@@ -868,10 +892,12 @@ class GeneratePayrollProcess implements ShouldQueue
         */
 
 
-        $run->update([
-            'status' => 'Combining Employee Data',
-            'progress' => 30,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Combining Employee Data',
+                'progress' => 30,
+            ]);
+        }
 
         $employees = DB::connection('cii')
             ->query()
@@ -933,10 +959,12 @@ class GeneratePayrollProcess implements ShouldQueue
         // dd($employees);
 
 
-        $run->update([
-            'status' => 'Getting Payroll Components',
-            'progress' => 35,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Getting Payroll Components',
+                'progress' => 35,
+            ]);
+        }
 
         $components = PayrollComponent::where('is_active', 1)
             ->where('code', '!=', 'thr')
@@ -964,35 +992,13 @@ class GeneratePayrollProcess implements ShouldQueue
 
         $totalPayroll = 0;
 
-        $run->update([
-            'status' => 'Starting Payroll Calculation',
-            'progress' => 40,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Starting Payroll Calculation',
+                'progress' => 40,
+            ]);
+        }
         foreach ($employees as $employee) {
-
-            // dd($employee->salary, $employee->type);
-
-            $roleData = DB::table('dept_insentif_role as lir')
-                ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
-                ->where('lir.id_dept', $employee->ID_DEPT)
-                ->where('irf.is_active', 1)
-                ->select(
-                    'irf.id',
-                    'irf.role',
-                    'irf.dept',
-                    'irf.formula'
-                )
-                ->first();
-
-            /*
-    |--------------------------------------------------------------------------
-    | SET ROLE KE EMPLOYEE OBJECT
-    |--------------------------------------------------------------------------
-    */
-
-            $employee->role = $roleData->role ?? null;
-
-            // dd($employee->role);
 
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
@@ -1023,10 +1029,12 @@ class GeneratePayrollProcess implements ShouldQueue
                     $amount = $component->value;
                 } else {
 
-                    $run->update([
-                        'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                        'progress' => 60
-                    ]);
+                    if (!$isCheck) {
+                        $run->update([
+                            'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
+                            'progress' => 60
+                        ]);
+                    }
 
                     if ($component->code === 'overtime_pay') {
                         $employeeOvertimes = $overtimeDetails[$employee->NPK] ?? collect();
@@ -1050,12 +1058,12 @@ class GeneratePayrollProcess implements ShouldQueue
 
                         $amount = $totalOvertimePay;
                     } else if ($component->code === 'special_overtime_pay') {
-
-
-                        $run->update([
-                            'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                            'progress' => 60
-                        ]);
+                        if (!$isCheck) {
+                            $run->update([
+                                'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
+                                'progress' => 60
+                            ]);
+                        }
                         $employeeOvertimes = $overtimeDetails[$employee->NPK] ?? collect();
 
                         $totalSpecialOvertimePay = 0;
@@ -1087,10 +1095,6 @@ class GeneratePayrollProcess implements ShouldQueue
                         $tkkDate = !empty($employee->tkk)
                             ? Carbon::parse($employee->tkk)->format('Y-m-d')
                             : null;
-                        // $run->update([
-                        //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                        //     'progress' => 60
-                        // ]);
 
                         $amount = 0;
 
@@ -1979,44 +1983,50 @@ class GeneratePayrollProcess implements ShouldQueue
 
             $grandTotal = round($grandTotal, 0);
 
-            PayrollRunDetail::create([
-                'run_id'        => $run->id,
-                'employee_npk'  => $employee->NPK,
-                'employee_name' => $employee->NAMA_KARYAWAN,
-                'components'    => $results,
-                'total_salary'  => $grandTotal
-            ]);
+            if (!$isCheck) {
+                PayrollRunDetail::create([
+                    'run_id'        => $run->id,
+                    'employee_npk'  => $employee->NPK,
+                    'employee_name' => $employee->NAMA_KARYAWAN,
+                    'components'    => $results,
+                    'total_salary'  => $grandTotal
+                ]);
+            }
 
             $totalPayroll += $grandTotal;
 
-            // $payrollResults[] = [
-            //     // 'run_id'        => $run->id,
-            //     'absence_days'  => $employee->absence_days,
-            //     'count_days'    => $count_days,
-            //     'type' => Str::ucfirst(Str::lower($employee->type)),
-            //     'dept' => $employee->DEPARTEMENT,
-            //     'tmk' => $employee->TMK,
-            //     'tkk' => $employee->TKK,
-            //     'IS_STAFF' => $employee->IS_STAFF,
-            //     'IS_SEWING' => $employee->IS_SEWING,
-            //     'tkk' => $employee->TKK,
-            //     'employee_npk'  => $employee->NPK,
-            //     'employee_name' => $employee->NAMA_KARYAWAN,
-            //     'components'    => $results,
-            //     'overtime_details' => ($overtimeDetails[$employee->NPK] ?? collect())
-            //     ->values(),
-            // 'late_details' => ($lateDetails[$employee->NPK] ?? collect())
-            //     ->values(),
-            //     'total_salary'  => $grandTotal
-            // ];
+            if ($isCheck) {
+                $payrollResults[] = [
+                    // 'run_id'        => $run->id,
+                    'absence_days'  => $employee->absence_days,
+                    'count_days'    => $count_days,
+                    'type' => Str::ucfirst(Str::lower($employee->type)),
+                    'dept' => $employee->DEPARTEMENT,
+                    'tmk' => $employee->TMK,
+                    'tkk' => $employee->TKK,
+                    'IS_STAFF' => $employee->IS_STAFF,
+                    'IS_SEWING' => $employee->IS_SEWING,
+                    // 'overtime_hours' => $employee->overtime_hours,
+                    'employee_npk'  => $employee->NPK,
+                    'employee_name' => $employee->NAMA_KARYAWAN,
+                    'components'    => $results,
+                    'overtime_details' => ($overtimeDetails[$employee->NPK] ?? collect())
+                        ->values(),
+                    'late_details' => ($lateDetails[$employee->NPK] ?? collect())
+                        ->values(),
+                    'total_salary'  => $grandTotal
+                ];
+            }
         }
 
-        $run->update([
-            'employee_count' => $employees->count(),
-            'total_payroll'  => round($totalPayroll, 0),
-            'progress'       => 100,
-            'status'         => 'Payroll calculation completed'
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'employee_count' => $employees->count(),
+                'total_payroll'  => round($totalPayroll, 0),
+                'progress'       => 100,
+                'status'         => 'Payroll calculation completed'
+            ]);
+        }
 
 
         /*
@@ -2025,34 +2035,38 @@ class GeneratePayrollProcess implements ShouldQueue
         |--------------------------------------------------------------------------
         */
 
-        $existsApprove = PayrollApprove::where('payroll_run_id', $run->id)->exists();
+        if (!$isCheck) {
+            $existsApprove = PayrollApprove::where('payroll_run_id', $run->id)->exists();
 
-        if (!$existsApprove) {
-            $settings = PayrollSetting::where('component', 'payroll')->get();
+            if (!$existsApprove) {
+                $settings = PayrollSetting::where('component', 'payroll')->get();
 
-            if ($settings->count() > 0) {
-                $approvals = $settings->pluck('approval')->toArray();
+                if ($settings->count() > 0) {
+                    $approvals = $settings->pluck('approval')->toArray();
 
-                $progress = collect($approvals)->map(function ($npk) {
-                    $npkList = is_array($npk) ? $npk : json_decode($npk, true);
-                    if (!is_array($npkList)) $npkList = [$npk];
-                    $statusList = array_fill(0, count($npkList), 'waiting');
-                    return [
-                        'npk' => json_encode($npkList),
-                        'status' => json_encode($statusList)
-                    ];
-                })->values();
+                    $progress = collect($approvals)->map(function ($npk) {
+                        $npkList = is_array($npk) ? $npk : json_decode($npk, true);
+                        if (!is_array($npkList)) $npkList = [$npk];
+                        $statusList = array_fill(0, count($npkList), 'waiting');
+                        return [
+                            'npk' => json_encode($npkList),
+                            'status' => json_encode($statusList)
+                        ];
+                    })->values();
 
-                PayrollApprove::create([
-                    'payroll_run_id' => $run->id,
-                    'approval'       => $approvals,
-                    'progress'       => $progress,
-                    'approved_at'    => [],
-                    'status'         => 'pending'
-                ]);
+                    PayrollApprove::create([
+                        'payroll_run_id' => $run->id,
+                        'approval'       => $approvals,
+                        'progress'       => $progress,
+                        'approved_at'    => [],
+                        'status'         => 'pending'
+                    ]);
+                }
             }
         }
-        // return response()->json($payrollResults);
+        if ($isCheck) {
+            return $payrollResults;
+        }
     }
 
 

@@ -44,8 +44,6 @@ class GenerateCompensation implements ShouldQueue
         $this->processCompensation(false);
     }
 
-
-
     public function simulation()
     {
         return $this->processCompensation(true);
@@ -382,9 +380,12 @@ class GenerateCompensation implements ShouldQueue
                             'cutoff_date' => $today
                         ],
                         [
-                            'amount' => $amount,
-                            'status' => $status,
-                            'is_active' => $is_active
+                            'amount'            => $amount,
+                            'status'            => $status,
+                            'is_active'         => $is_active,
+                            'end_date'          => $emp->end_date,
+                            'month_duration'    => $emp->month_duration,
+                            'day_duration'      => $emp->day_duration,
                         ]
                     );
                 } else {
@@ -398,6 +399,8 @@ class GenerateCompensation implements ShouldQueue
                         'amount'        => $amount,
                         'status'        => $status,
                         'end_date'      => $emp->end_date,
+                        'month_duration'      => $emp->month_duration,
+                        'day_duration'      => $emp->day_duration,
                         'is_active'     => $is_active,
                         'cutoff_date'   => $today->format('Y-m-d')
                     ];

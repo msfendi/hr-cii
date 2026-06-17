@@ -335,7 +335,14 @@ class PayrollProcessController extends Controller
     {
         $period = PayrollPeriod::findOrFail($period_id);
 
-        $payrollResults = GeneratePayrollCheck::dispatchSync($period->id);
+        $service = new GeneratePayrollProcess(
+            $period->id,
+            'check'
+        );
+
+        $payrollResults = $service->simulation();
+
+        // $payrollResults = GeneratePayrollCheck::dispatchSync($period->id);
         $user = Auth::user();
 
         $role = $user->role;

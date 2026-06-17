@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Events\NotificationEvent;
 use App\Jobs\GenerateCompensation;
-use App\Jobs\GenerateCompensationCheck;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -56,6 +55,9 @@ class CompensationsController extends Controller
                 'cd.id',
                 'cd.npk',
                 'd.DEPARTEMENT as dept',
+                'cd.month_duration',
+                'cd.day_duration',
+                'cd.end_date',
                 'cd.amount',
                 'cd.status',
                 'cd.is_active'
@@ -129,7 +131,7 @@ class CompensationsController extends Controller
     // {
     //     $today = Carbon::parse($date);
 
-    //     $job = new GenerateCompensationCheck(
+    //     $job = new GenerateCompensation(
     //         $today,
     //         0,
     //         'check'

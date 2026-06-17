@@ -105,6 +105,21 @@ class ThrProcessController extends Controller
         }
     }
 
+    public function check(Request $request)
+    {
+        $service = new GenerateThrProcess(
+            $request->period_id,
+            'check'
+        );
+
+        $data = $service->simulation();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
+    }
+
     public function process(Request $request)
     {
         $user = Auth::user();

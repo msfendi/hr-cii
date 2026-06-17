@@ -266,6 +266,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/thr/process-progress/{period_id}', [ThrProcessController::class, 'progressRun'])->name('thr.process.progress');
     Route::get('/thr-slip/view/{run_id}/{npk}', [ThrProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/thr-process/approval/{period}', [ThrProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::post('/thr-process/check', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    // Route::get('/thr-process/check/{period_id}', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 
     // Evaluation Questionnaire
     Route::prefix('evaluation-questionnaire')->group(function () {
@@ -431,6 +433,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/attendance-finger/not-finger', [AttendanceFingerController::class, 'notFinger'])->name('attendance-finger.not-finger')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'role:Admin|HRD']);
+    Route::post('/attendance-finger/download-template-manual', [AttendanceFingerController::class, 'downloadTemplateManual'])->name('attendance-finger.download-template-manual')->middleware(['auth', 'role:Admin|HRD']);
 
     //Attendance
     Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);

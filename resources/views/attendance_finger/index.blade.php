@@ -43,6 +43,9 @@
                                 <button class="btn btn-success ml-1" id="btnSync">
                                     <i class="fas fa-sync-alt mr-1"></i> Sync
                                 </button>
+                                <button class="btn btn-info ml-1" data-toggle="modal" data-target="#modalDownloadTemplate">
+                                    <i class="fas fa-download mr-1"></i> Template Manual
+                                </button>
                             </div>
                         </div>
                         <div class="table-responsive">
@@ -109,6 +112,41 @@
 
         </div>
         <!-- End of Main Content -->
+        <!-- Modal Download Template -->
+        <div class="modal fade" id="modalDownloadTemplate" tabindex="-1" role="dialog" aria-labelledby="modalDownloadTemplateLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <form id="formDownloadTemplate" method="POST" action="{{ route('attendance-finger.download-template-manual') }}">
+                        @csrf
+                        <div class="modal-header">
+                            <h5 class="modal-alert-title" id="modalDownloadTemplateLabel">Download Template Manual</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label for="template_date">Bulan & Tahun</label>
+                                <input type="month" class="form-control" name="date" id="template_date" value="{{ date('Y-m') }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="template_is_sewing">Kategori Dept</label>
+                                <select name="is_sewing" id="template_is_sewing" class="form-control" required>
+                                    <option value="0">Sewing</option>
+                                    <option value="1">Non-Sewing</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                            <button type="submit" class="btn btn-info" id="btnSubmitDownloadTemplate">
+                                <i class="fas fa-download mr-1"></i> Download
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 @include('layout.footer')
 </body>
 <!-- Page level plugins -->

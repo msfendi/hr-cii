@@ -437,4 +437,23 @@ class AttendanceFingerController extends Controller
         return response()->json(['message' => "Berhasil assign absensi untuk {$count} karyawan."]);
     }
 
+    // function for download template export attendance manually
+    public function downloadTemplateManual(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date_format:Y-m',
+            'is_sewing' => 'required|in:0,1',
+        ]);
+
+        $dateParts = explode('-', $request->date);
+        $year = $dateParts[0];
+        $month = $dateParts[1];
+        $is_sewing = $request->is_sewing;
+        
+        $sewingLabel = $is_sewing == '0' ? 'Sewing' : 'Non_Sewing';
+        $fileName = "Template_Manual_Attendance_{$sewingLabel}_{$year}_{$month}.xlsx";
+
+        return Excel::download(new \App\Exports\AttendanceManualTemplateExport($month, $year, $is_sewing), $fileName);
+    }
+
 }
