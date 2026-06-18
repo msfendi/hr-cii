@@ -294,8 +294,18 @@ class PelamarController extends Controller
 
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : $closestDate;
 
-        // Hitung hari kerja (Senin–Jumat) antara start_date dan end_date
-        $dayDuration = $this->countWorkingDays($startDate, $endDate);
+        // Hitung durasi bulan penuh aktual (floor) dari startDate ke endDate
+        // Misal: startDate=25/09, endDate=20/12 → 2 bulan (25/09→25/11)
+        $actualMonthDuration = (int) $startDate->copy()->diffInMonths($endDate);
+
+        // Batas akhir bulan penuh terakhir
+        $fullMonthEnd = $startDate->copy()->addMonths($actualMonthDuration);
+
+        // Hitung sisa hari kerja (Senin–Jumat) setelah bulan penuh tersebut hingga endDate
+        // Misal: startDate=25/09, endDate=20/12 → dayDuration = hari kerja 26/11 s.d. 20/12
+        $dayDuration = $fullMonthEnd->lt($endDate)
+            ? $this->countWorkingDays($fullMonthEnd->copy()->addDay(), $endDate)
+            : 0;
 
         // Hitung durasi bulan aktual (bukan dari input user, tapi dari tanggal nyata)
         $actualMonthDuration = (int) $startDate->copy()->diffInMonths($endDate);
