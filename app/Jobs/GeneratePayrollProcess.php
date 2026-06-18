@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Employee6sAssignment;
 use App\Models\InsentifRoleFormula;
 use App\Models\PayrollApprove;
 use App\Models\PayrollComponent;
@@ -119,7 +120,9 @@ class GeneratePayrollProcess implements ShouldQueue
                 'd.DEPARTEMENT',
                 'bio.SECTION',
                 'bio.IS_STAFF',
-                'd.IS_SEWING'
+                'd.IS_SEWING',
+                'p.KETERANGAN',
+                'p.TANGGUNGAN',
             )
             ->distinct();
 
@@ -183,7 +186,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                         WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                             AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) NOT IN ('IN','CT','H')
+                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE')
                             THEN 1
 
                         ELSE 0
@@ -259,11 +262,22 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) NOT IN ('IN','CT','H')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE')
                     THEN 1
 
                 ELSE 0
             END AS absence_days
+        "),
+                DB::raw("
+            CASE
+                WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
+                    THEN JUMLAH_JAM_LEMBUR
+
+                WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
+                    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE','H')
+                    THEN JUMLAH_JAM_LEMBUR
+            END AS absence_status
         ")
             )
             ->orderBy('overtimes.NPK')
@@ -879,6 +893,8 @@ class GeneratePayrollProcess implements ShouldQueue
         $lateSummary->get();
 
 
+
+
         // dd(DB::query()
         //     ->fromSub($employeeBase, 'emp')
         //     ->select('NPK', 'BARCODE')
@@ -898,6 +914,8 @@ class GeneratePayrollProcess implements ShouldQueue
                 'progress' => 30,
             ]);
         }
+
+        $assignment6s = Employee6sAssignment::where('period_id', $period->id);
 
         $employees = DB::connection('cii')
             ->query()
@@ -925,7 +943,13 @@ class GeneratePayrollProcess implements ShouldQueue
                     ->where('pa.period_id', '=', $period->id);
             })
 
+            ->leftJoinSub($assignment6s, 'a6s', function ($join) use ($period) {
+                $join->on('emp.NPK', '=', 'a6s.npk')
+                    ->where('a6s.period_id', '=', $period->id);
+            })
+
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            // ->where('emp.NPK', '=', 'C-00827')
 
             ->select(
                 'emp.NPK',
@@ -938,6 +962,9 @@ class GeneratePayrollProcess implements ShouldQueue
                 'emp.TKK',
                 'emp.IS_STAFF',
                 'emp.IS_SEWING',
+                'emp.KETERANGAN',
+                'emp.TANGGUNGAN',
+                'a6s.percentage',
 
                 'ec.salary',
                 'ec.allowance',
@@ -953,6 +980,8 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
+            ->orderBy('emp.NPK', 'asc')
+            ->orderBy('emp.ID_DEPT', 'asc')
             ->get();
 
 
@@ -990,6 +1019,9 @@ class GeneratePayrollProcess implements ShouldQueue
         $heatInsentifComponent = PayrollComponent::where('code', 'heat_insentif')->first();
         $heatInsentifFormula = json_decode($heatInsentifComponent->formula, true);
 
+        $sixsInsentifComponent = PayrollComponent::where('code', 'sixs_insentif')->first();
+        $sixsInsentifFormula = $sixsInsentifComponent->formula;
+
         $totalPayroll = 0;
 
         if (!$isCheck) {
@@ -1009,9 +1041,10 @@ class GeneratePayrollProcess implements ShouldQueue
                 'pph_21'         => (float) $employee->pph21,
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
+                'percentage'     => (float) $employee->percentage,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
-                'late_minutes'     => (float) $employee->late_minutes,
+                'late_minutes'     => $employee->IS_STAFF === '1' ? (float) $employee->late_minutes : 0,
                 // 'overtime_hours' => (float) $employee->overtime_hours,
                 // 'special_overtime_hours' => (float) $employee->special_overtime_hours
             ];
@@ -1035,8 +1068,28 @@ class GeneratePayrollProcess implements ShouldQueue
                             'progress' => 60
                         ]);
                     }
+                    if ($component->code === 'bpjs_kesehatan') {
+                        if ($employee->TKK !== null) {
+                            if (Carbon::parse($employee->TKK)->day <= 20) {
+                                continue;
+                            }
+                        }
+                    } else if ($component->code === 'bpjs_ketenagakerjaan') {
+                        if ($employee->TKK !== null) {
+                            continue;
+                        }
+                    } else if ($component->code === 'sixs_insentif') {
+                        $total6sInsentif = 0;
 
-                    if ($component->code === 'overtime_pay') {
+                        $total6sInsentif += $this->evaluateFormula(
+                            $sixsInsentifFormula,
+                            $results,
+                            $inputVariables
+                        );
+
+                        $amount = $total6sInsentif;
+                        // dd($employee->percentage, $sixsInsentifFormula, $results, $inputVariables, $amount);
+                    } else if ($component->code === 'overtime_pay') {
                         $employeeOvertimes = $overtimeDetails[$employee->NPK] ?? collect();
 
                         $totalOvertimePay = 0;
@@ -1092,8 +1145,8 @@ class GeneratePayrollProcess implements ShouldQueue
                             ->distinct()
                             ->get();
 
-                        $tkkDate = !empty($employee->tkk)
-                            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+                        $tkkDate = !empty($employee->TKK)
+                            ? Carbon::parse($employee->TKK)->format('Y-m-d')
                             : null;
 
                         $amount = 0;
@@ -1655,8 +1708,8 @@ class GeneratePayrollProcess implements ShouldQueue
                             ->where('eca.npk', $employee->NPK)
                             ->distinct()
                             ->get();
-                        $tkkDate = !empty($employee->tkk)
-                            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+                        $tkkDate = !empty($employee->TKK)
+                            ? Carbon::parse($employee->TKK)->format('Y-m-d')
                             : null;
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
@@ -2009,6 +2062,8 @@ class GeneratePayrollProcess implements ShouldQueue
                     // 'overtime_hours' => $employee->overtime_hours,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
+                    'tanggungan' => $employee->TANGGUNGAN,
+                    'keterangan' => $employee->KETERANGAN,
                     'components'    => $results,
                     'overtime_details' => ($overtimeDetails[$employee->NPK] ?? collect())
                         ->values(),

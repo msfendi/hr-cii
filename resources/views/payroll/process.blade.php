@@ -146,31 +146,38 @@
 
         <div class="d-flex justify-content-between align-items-center">
 
-            <div>
+    <div>
 
-                <h5 id="detail-title"
-                    class="m-0 font-weight-bold text-primary">
+        <h5 id="detail-title"
+            class="m-0 font-weight-bold text-primary">
 
-                    Data Payroll Details
+            Data Payroll Details
 
-                </h5>
+        </h5>
 
-                <small class="text-muted">
-                    Payroll simulation result for selected payroll period.
-                </small>
+        <small class="text-muted">
+            Payroll simulation result for selected payroll period.
+        </small>
 
-            </div>
+    </div>
 
-            <i class="fas fa-file-invoice-dollar fa-2x text-success"></i>
+    <div class="d-flex align-items-center">
 
+        <div id="export-button-container"
+             class="mr-3">
         </div>
+
+        <i class="fas fa-file-invoice-dollar fa-2x text-success"></i>
+
+    </div>
+
+</div>
 
     </div>
 
     <div class="card-body">
 
         <div class="table-responsive">
-
                         <table class="table table-bordered table-hover table-striped table-sm"
                             id="table-details"
                             width="100%">
@@ -191,6 +198,7 @@
                                     <th>Pad Print Insentif</th>
                                     <th>Cutting Insentif</th>
                                     <th>Heat Insentif</th>
+                                    <th>6S Insentif</th>
                                     <th>Adjusments</th>
                                     <th>BPJS Kes</th>
                                     <th>BPJS TK</th>
@@ -199,8 +207,6 @@
                                     <th>Absence</th>
                                     <th>Late Deduction</th>
                                     <th>Total Salary</th>
-                                    <th>Absence Days</th>
-                                    <th>Late Minutes</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -214,7 +220,6 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
-                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -257,6 +262,12 @@
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
       <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
       <script src="{{asset('vendor/jquery/select2.min.js')}}"></script>
+      <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap4.min.css">
+
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
       <script>
          $("#period_id").select2({
          allowClear:true,
@@ -687,6 +698,48 @@ $(document).on('click','#btnCheckPayroll',function(){
 
         processing:true,
         responsive:true,
+        dom: 'Bfrtip',
+
+buttons: [
+    {
+        extend: 'excelHtml5',
+
+        text: '<i class="fas fa-file-excel"></i> Export Excel',
+
+        className: 'btn btn-success btn-sm',
+
+        title: function(){
+
+            return $('#detail-title').text();
+        },
+
+        exportOptions: {
+
+            columns: [
+                1,2,3,4,5,6,7,8,9,10,
+                11,12,13,14,15,16,17,
+                18,19,20,21,22,23
+            ],
+
+            format: {
+
+                body: function(data,row,column){
+
+                    if(typeof data === 'string'){
+
+                        return data
+                            .replace(/<[^>]*>/g,'')
+                            .replace(/Rp/g,'')
+                            .replace(/\./g,'')
+                            .trim();
+                    }
+
+                    return data;
+                }
+            }
+        }
+    }
+],
 
         ajax:{
         url:url,
@@ -901,6 +954,19 @@ $(document).on('click','#btnCheckPayroll',function(){
             },
 
             {
+                data:'components.sixs_insentif',
+                defaultContent:0,
+                render:function(data,type){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
+                }
+            },
+
+            {
                 data:'components.adjusment',
                 defaultContent:0,
                 render:function(data,type){
@@ -968,13 +1034,26 @@ $(document).on('click','#btnCheckPayroll',function(){
             {
                 data:'components.absence_deduction',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    let absenceData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.overtime_details || []
+                            )
+                        );
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-absence-detail"
+                        data-absence="${absenceData}">
+                            ${salaryMask(data ?? 0)}
+                        </a>
+                    `;
                 }
             },
 
@@ -1018,19 +1097,9 @@ $(document).on('click','#btnCheckPayroll',function(){
             },
 
             {
-                data:'absence_days',
-                defaultContent:0
-            },
-
-            {
-                data:'components.late_minutes',
-                defaultContent:0
-            },
-
-            {
                 data:'tkk',
                 defaultContent:null,
-                render:function(data){
+                render:function(data, type, row){
 
                     if(data === null || data === ''){
 
@@ -1041,8 +1110,17 @@ $(document).on('click','#btnCheckPayroll',function(){
                         `;
                     }
 
+                    if((row.keterangan || '').toLowerCase() === 'mangkir'){
+
+                        return `
+                            <span class="badge badge-danger">
+                                Mangkir
+                            </span>
+                        `;
+                    }
+
                     return `
-                        <span class="badge badge-danger">
+                        <span class="badge badge-warning">
                             Resign
                         </span>
                     `;
@@ -1103,7 +1181,7 @@ $(document).on('click','#btnCheckPayroll',function(){
                 4,5,6,7,8,
                 9,10,11,12,
                 13,14,15,16,
-                17,18,19,20,21
+                17,18,19,20,21,22
             ];
 
             currencyCols.forEach(function(colIndex){
@@ -1123,50 +1201,12 @@ $(document).on('click','#btnCheckPayroll',function(){
 
             });
 
-            /*
-            ==========================================
-            ABSENCE DAYS
-            ==========================================
-            */
-
-            let absenceTotal = api
-                .column(22,{search:'applied'})
-                .data()
-                .reduce(function(a,b){
-
-                    return intVal(a)
-                        + intVal(b);
-
-                },0);
-
-            $(api.column(22).footer())
-                .html(absenceTotal.toLocaleString('id-ID'));
-
-            /*
-            ==========================================
-            LATE MINUTES
-            ==========================================
-            */
-
-            let lateTotal = api
-                .column(23,{search:'applied'})
-                .data()
-                .reduce(function(a,b){
-
-                    return intVal(a)
-                        + intVal(b);
-
-                },0);
-
-            $(api.column(23).footer())
-                .html(lateTotal.toLocaleString('id-ID'));
-
-            $(api.column(24).footer())
-                .html('-');
-
         }
 
     });
+    tableDetails.buttons()
+    .container()
+    .appendTo('#export-button-container');
 
 });
 </script>
@@ -1360,6 +1400,34 @@ function salaryMask(value){
     background-color: #f5f9ff !important;
 }
 
+.btn-absence-detail{
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+.btn-absence-detail:hover{
+    text-decoration:none;
+    color:#dc3545 !important;
+}
+
+#absenceDetailModal .modal-dialog{
+    max-width:90%;
+}
+
+#absenceDetailModal .modal-content{
+    border-radius:15px;
+    overflow:hidden;
+}
+
+#absenceDetailModal .modal-header{
+    background:linear-gradient(
+        135deg,
+        #dc3545,
+        #b02a37
+    );
+}
+
 </style>
 <div class="modal fade"
      id="lateDetailModal"
@@ -1503,6 +1571,68 @@ function salaryMask(value){
 
 </div>
 <div class="modal fade"
+     id="absenceDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-danger text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-user-times mr-2"></i>
+                    Absence Deduction Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-absence-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead>
+                        <tr>
+                            <th>NPK</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Absence Days</th>
+                        </tr>
+                    </thead>
+                    <tfoot>
+                    <tr style="
+                        font-weight:bold;
+                        background:#fff0f0;
+                    ">
+                        <th colspan="5" class="text-right">
+                            TOTAL ABSENCE DAYS
+                        </th>
+
+                        <th id="total-absence-days">
+                            0
+                        </th>
+                    </tr>
+                </tfoot>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="modal fade"
      id="specialOvertimeDetailModal"
      tabindex="-1">
 
@@ -1572,6 +1702,114 @@ function salaryMask(value){
     </div>
 
 </div>
+<script>
+let absenceDetailTable = null;
+
+$(document).on(
+    'click',
+    '.btn-absence-detail',
+    function(){
+
+        let details = JSON.parse(
+            decodeURIComponent(
+                $(this).data('absence')
+            )
+        );
+
+        details = details.filter(row =>
+            ['MA','PE','H'].includes(
+                row.absence_status
+            )
+        );
+
+        let totalAbsence = 0;
+
+        details.forEach(function(row){
+
+            totalAbsence += Number(
+                row.absence_days || 0
+            );
+
+        });
+
+$('#total-absence-days')
+    .html(
+        totalAbsence.toLocaleString('id-ID')
+    );
+
+        if(absenceDetailTable){
+
+            absenceDetailTable.destroy();
+
+            $('#table-absence-detail tbody')
+                .remove();
+        }
+
+        $('#table-absence-detail')
+            .append('<tbody></tbody>');
+
+        absenceDetailTable =
+            $('#table-absence-detail')
+            .DataTable({
+
+                data: details,
+
+                pageLength:10,
+                responsive:true,
+
+                columns:[
+
+                    {
+                        data:'NPK'
+                    },
+
+                    {
+                        data:'NAMA_KARYAWAN'
+                    },
+
+                    {
+                        data:'DEPARTEMENT'
+                    },
+
+                    {
+                        data:'OVERTIME_DATE'
+                    },
+
+                    {
+                        data:'absence_status',
+                        className:'text-center',
+                        render:function(data){
+
+                            if(data === 'MA'){
+                                return `
+                                    <span class="badge badge-danger">
+                                        MA
+                                    </span>
+                                `;
+                            }
+
+                            return `
+                                <span class="badge badge-warning">
+                                    PE
+                                </span>
+                            `;
+                        }
+                    },
+
+                    {
+                        data:'absence_days',
+                        className:'text-center'
+                    }
+
+                ]
+
+            });
+
+        $('#absenceDetailModal').modal('show');
+
+    }
+);
+</script>
 <script>
     let lateDetailTable = null;
 

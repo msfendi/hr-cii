@@ -291,6 +291,7 @@
                                         <th>Pad Print Insentif</th>
                                         <th>Cutting Insentif</th>
                                         <th>Heat Insentif</th>
+                                        <th>6S Insentif</th>
                                         <th>Adjusments</th>
                                         <th>BPJS Kes</th>
                                         <th>BPJS TK</th>
@@ -307,6 +308,7 @@
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -886,6 +888,12 @@ $(document).on('click','.btn-export',function(e){
                         : data ?? 0;
                 }
             },
+            { data:'sixs_insentif', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
             { data:'adjusment', defaultContent:0, render:function(data,type){
                     return type === 'display'
@@ -1015,7 +1023,7 @@ $(document).on('click','.btn-export',function(e){
                 13,
                 14,15,
                 16,17,18,19,
-                20,21
+                20,21,22
             ];
 
             cols.forEach(function(colIndex){

@@ -29,6 +29,7 @@ use App\Http\Controllers\ChuFamilyController;
 use App\Http\Controllers\CompensationApproveController;
 use App\Http\Controllers\CompensationsController;
 use App\Http\Controllers\DeptInsentifRoleController;
+use App\Http\Controllers\Employee6sAssignmentController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\EmployeePayrollController;
@@ -784,6 +785,15 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve');
     Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject');
 });
+
+// Insentif 6S
+Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::class, 'create'])->name('employee6s.create')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::class, 'store'])->name('employee6s.store')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::delete('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+
 // Payroll 
 Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
 // Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');

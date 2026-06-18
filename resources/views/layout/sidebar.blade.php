@@ -194,6 +194,7 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif</a>
             <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif</a>
             <a class="collapse-item" href="{{ route('heat-insentif-master.index') }}">Heat Seal Insentif</a>
+            <a class="collapse-item" href="{{ route('employee6s.index') }}">6S Insentif</a>
             @endif
          </div>
       </div>
