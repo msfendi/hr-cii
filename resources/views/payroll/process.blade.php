@@ -1132,7 +1132,16 @@ buttons: [
 
             if(
                 data.tkk !== null &&
-                data.tkk !== ''
+                data.tkk !== '' &&
+                (data.keterangan || '').toLowerCase() !== 'mangkir'
+            ){
+
+                $(row).addClass('table-warning');
+
+            } else if(
+                data.tkk !== null &&
+                data.tkk !== '' &&
+                (data.keterangan || '').toLowerCase() === 'mangkir'
             ){
 
                 $(row).addClass('table-danger');

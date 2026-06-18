@@ -108,7 +108,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00827')
+            ->where('p.NPK', '=', 'C-00827')
 
             ->select(
                 'p.NPK',
@@ -140,7 +140,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00827')
+            ->where('ec1.npk', '=', 'C-00827')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -949,7 +949,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
-            // ->where('emp.NPK', '=', 'C-00827')
+            ->where('emp.NPK', '=', 'C-00827')
 
             ->select(
                 'emp.NPK',
@@ -1022,6 +1022,12 @@ class GeneratePayrollProcess implements ShouldQueue
         $sixsInsentifComponent = PayrollComponent::where('code', 'sixs_insentif')->first();
         $sixsInsentifFormula = $sixsInsentifComponent->formula;
 
+        $BPJSKesehatanComponent = PayrollComponent::where('code', 'bpjs_kesehatan')->first();
+        $BPJSKesehatanFormula = $BPJSKesehatanComponent->formula;
+
+        $BPJSKetenagakerjaanComponent = PayrollComponent::where('code', 'bpjs_ketenagakerjaan')->first();
+        $BPJSKetenagakerjaanFormula = $BPJSKetenagakerjaanComponent->formula;
+
         $totalPayroll = 0;
 
         if (!$isCheck) {
@@ -1042,6 +1048,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
                 'percentage'     => (float) $employee->percentage,
+                'tanggungan'     => (float) $employee->TANGGUNGAN,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => $employee->IS_STAFF === '1' ? (float) $employee->late_minutes : 0,
@@ -1073,10 +1080,30 @@ class GeneratePayrollProcess implements ShouldQueue
                             if (Carbon::parse($employee->TKK)->day <= 20) {
                                 continue;
                             }
+                        } else {
+                            $totalBPJSKesehatan = 0;
+
+                            $totalBPJSKesehatan += $this->evaluateFormula(
+                                $BPJSKesehatanFormula,
+                                $results,
+                                $inputVariables
+                            );
+
+                            $amount = $totalBPJSKesehatan;
                         }
                     } else if ($component->code === 'bpjs_ketenagakerjaan') {
                         if ($employee->TKK !== null) {
                             continue;
+                        } else {
+                            $totalBPJSKetenagakerjaan = 0;
+
+                            $totalBPJSKetenagakerjaan += $this->evaluateFormula(
+                                $BPJSKetenagakerjaanFormula,
+                                $results,
+                                $inputVariables
+                            );
+
+                            $amount = $totalBPJSKetenagakerjaan;
                         }
                     } else if ($component->code === 'sixs_insentif') {
                         $total6sInsentif = 0;

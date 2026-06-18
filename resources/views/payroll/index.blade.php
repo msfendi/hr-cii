@@ -814,10 +814,21 @@ $(document).on('click','.btn-export',function(e){
 
         createdRow:function(row,data,dataIndex){
 
-            // jika tkk tidak null / tidak kosong
-            if(data.tkk !== null && data.tkk !== '' && data.tkk !== 0){
+            if(
+                data.tkk !== null &&
+                data.tkk !== '' &&
+                (data.keterangan || '').toLowerCase() !== 'mangkir'
+            ){
 
-                $(row).addClass('table-danger'); // bootstrap merah
+                $(row).addClass('table-warning');
+
+            } else if(
+                data.tkk !== null &&
+                data.tkk !== '' &&
+                (data.keterangan || '').toLowerCase() === 'mangkir'
+            ){
+
+                $(row).addClass('table-danger');
             }
         },
 
@@ -946,18 +957,31 @@ $(document).on('click','.btn-export',function(e){
                 }
             },
             {
-                data: 'employment_status',
-                render: function(data, type){
+                data:'tkk',
+                defaultContent:null,
+                render:function(data, type, row){
 
-                    if(type !== 'display') return data;
+                    if(data === null || data === ''){
+
+                        return `
+                            <span class="badge badge-success">
+                                Active
+                            </span>
+                        `;
+                    }
+
+                    if((row.keterangan || '').toLowerCase() === 'mangkir'){
+
+                        return `
+                            <span class="badge badge-danger">
+                                Mangkir
+                            </span>
+                        `;
+                    }
 
                     return `
-                        <span class="badge ${
-                            data === 'Resign'
-                                ? 'bg-danger text-white'
-                                : 'bg-success text-white'
-                        }">
-                            ${data}
+                        <span class="badge badge-warning">
+                            Resign
                         </span>
                     `;
                 }
