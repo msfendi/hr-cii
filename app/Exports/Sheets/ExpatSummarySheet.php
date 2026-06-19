@@ -76,7 +76,7 @@ class ExpatSummarySheet implements
                        SUM(amount) total_living_cost
                 FROM expat_cost LEFT JOIN expat_cost_components ON expat_cost.component = expat_cost_components.id
                 WHERE transactions_date BETWEEN '{$this->start}' AND '{$this->end}'
-                AND expat_cost_components.component_type != 'meal'
+                AND expat_cost_components.component_type = 'living'
                 AND expat_cost_components.id not IN (7,15)
                 GROUP BY npk
             ) c
