@@ -108,7 +108,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            ->where('p.NPK', '=', 'C-02630')
+            // ->where('p.NPK', '=', 'C-02630')
 
             ->select(
                 'p.NPK',
@@ -140,7 +140,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            ->where('ec1.npk', '=', 'C-02630')
+            // ->where('ec1.npk', '=', 'C-02630')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -949,7 +949,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
-            ->where('emp.NPK', '=', 'C-02630')
+            // ->where('emp.NPK', '=', 'C-02630')
 
             ->select(
                 'emp.NPK',
