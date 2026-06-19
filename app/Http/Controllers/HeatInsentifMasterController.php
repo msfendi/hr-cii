@@ -300,7 +300,7 @@ class HeatInsentifMasterController extends Controller
             ->distinct()
             ->get();
 
-        // dd($employees);
+        // dd($employeeBase->get(), $employees);
 
 
         /*
@@ -494,7 +494,7 @@ class HeatInsentifMasterController extends Controller
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
         */ else {
-            $employeeDates = DB::table('pad_efficiencies')
+            $employeeDates = DB::table('heat_efficiencies')
                 ->where('period_id', $period->id)
                 ->where('npk', $employee->NPK)
                 ->pluck('date')
@@ -545,11 +545,11 @@ class HeatInsentifMasterController extends Controller
                 | DENOMINATOR (ALL OPERATOR)
                 |----------------------------------
                 */
-            $jumlahOperator = DB::table('pad_efficiencies as pe')
-                ->where('pe.period_id', $period->id)
-                ->whereIn('pe.date', $employeeDates)
-                ->where('pe.role', '=', 'operator')
-                ->pluck('pe.npk')
+            $jumlahOperator = DB::table('heat_efficiencies as he')
+                ->where('he.period_id', $period->id)
+                ->whereIn('he.date', $employeeDates)
+                ->where('he.role', '=', 'operator')
+                ->pluck('he.npk')
                 ->unique()
                 ->count();
 

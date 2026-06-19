@@ -108,7 +108,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-02630')
+            // ->where('p.NPK', '=', 'C-00825')
 
             ->select(
                 'p.NPK',
@@ -140,7 +140,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-02630')
+            // ->where('ec1.npk', '=', 'C-00825')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -917,6 +917,14 @@ class GeneratePayrollProcess implements ShouldQueue
 
         $assignment6s = Employee6sAssignment::where('period_id', $period->id);
 
+        $bpjsException = DB::table('bpjs_exceptions')
+            ->select(
+                'npk',
+                DB::raw("MAX(CASE WHEN component = 'bpjs_kesehatan' THEN percentage END) as percentkes"),
+                DB::raw("MAX(CASE WHEN component = 'bpjs_ketenagakerjaan' THEN percentage END) as percentket")
+            )
+            ->groupBy('npk');
+
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
@@ -949,7 +957,10 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
-            // ->where('emp.NPK', '=', 'C-02630')
+            ->leftJoinSub($bpjsException, 'be', function ($join) {
+                $join->on('emp.NPK', '=', 'be.npk');
+            })
+            // ->where('emp.NPK', '=', 'C-00825')
 
             ->select(
                 'emp.NPK',
@@ -964,13 +975,14 @@ class GeneratePayrollProcess implements ShouldQueue
                 'emp.IS_SEWING',
                 'emp.KETERANGAN',
                 'emp.TANGGUNGAN',
-                'a6s.percentage',
 
                 'ec.salary',
                 'ec.allowance',
                 'ec.pph21',
                 'ec.type',
                 'ec.daily_salary',
+                DB::raw('COALESCE(be.percentkes,1) as percentkes'),
+                DB::raw('COALESCE(be.percentket,3) as percentket'),
 
                 DB::raw('COALESCE(pa.adjusment,0) as adjusment'),
                 // DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
@@ -1047,11 +1059,12 @@ class GeneratePayrollProcess implements ShouldQueue
                 'pph_21'         => (float) $employee->pph21,
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
-                'percentage'     => (float) $employee->percentage,
                 'tanggungan'     => (float) $employee->TANGGUNGAN,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => $employee->IS_STAFF === '1' ? (float) $employee->late_minutes : 0,
+                'bpjskesex' => (float) $employee->percentkes,
+                'bpjsketex' => (float) $employee->percentket,
                 // 'overtime_hours' => (float) $employee->overtime_hours,
                 // 'special_overtime_hours' => (float) $employee->special_overtime_hours
             ];
@@ -1980,7 +1993,7 @@ class GeneratePayrollProcess implements ShouldQueue
                             | NON OPERATOR (SPV / LEADER / HELPER)
                             |--------------------------------------------------------------------------
                             */ else {
-                                $employeeDates = DB::table('pad_efficiencies')
+                                $employeeDates = DB::table('heat_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('npk', $employee->NPK)
                                     ->pluck('date')
@@ -2028,11 +2041,11 @@ class GeneratePayrollProcess implements ShouldQueue
                                 | DENOMINATOR (ALL OPERATOR)
                                 |----------------------------------
                                 */
-                                $jumlahOperator = DB::table('pad_efficiencies as pe')
-                                    ->where('pe.period_id', $period->id)
-                                    ->whereIn('pe.date', $employeeDates)
-                                    ->where('pe.role', '=', 'operator')
-                                    ->pluck('pe.npk')
+                                $jumlahOperator = DB::table('heat_efficiencies as he')
+                                    ->where('he.period_id', $period->id)
+                                    ->whereIn('he.date', $employeeDates)
+                                    ->where('he.role', '=', 'operator')
+                                    ->pluck('he.npk')
                                     ->unique()
                                     ->count();
 
@@ -2088,6 +2101,8 @@ class GeneratePayrollProcess implements ShouldQueue
                     'tkk' => $employee->TKK,
                     'IS_STAFF' => $employee->IS_STAFF,
                     'IS_SEWING' => $employee->IS_SEWING,
+                    'bpjskesex' => $employee->percentkes,
+                    'bpjsketex' => $employee->percentket,
                     // 'overtime_hours' => $employee->overtime_hours,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,

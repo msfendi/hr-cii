@@ -166,6 +166,8 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
             <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
             <hr>
+            <a class="collapse-item" href="{{ route('bpjs-exceptions.index') }}">BPJS Exceptions</a>
+            <hr>
             @if(in_array($role,['Admin']))
             <a class="collapse-item" href="{{ route('compensation.index') }}">Compensation</a>
             @endif

@@ -25,6 +25,7 @@ use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\BiodataKeluarController;
+use App\Http\Controllers\BpjsExceptionController;
 use App\Http\Controllers\ChuFamilyController;
 use App\Http\Controllers\CompensationApproveController;
 use App\Http\Controllers\CompensationsController;
@@ -793,6 +794,16 @@ Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::cl
 Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 Route::delete('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+
+Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD'])->group(function () {
+
+    Route::get('/', [BpjsExceptionController::class, 'index'])->name('index');
+    Route::get('/create', [BpjsExceptionController::class, 'create'])->name('create');
+    Route::post('/store', [BpjsExceptionController::class, 'store'])->name('store');
+    Route::get('/edit/{id}', [BpjsExceptionController::class, 'edit'])->name('edit');
+    Route::put('/update/{id}', [BpjsExceptionController::class, 'update'])->name('update');
+    Route::delete('/delete/{id}', [BpjsExceptionController::class, 'destroy'])->name('destroy');
+});
 
 // Payroll 
 Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');

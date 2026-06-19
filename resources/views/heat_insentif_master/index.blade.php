@@ -15,10 +15,10 @@
             @include('layout.navbar')
             <div class="container-fluid">
                <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                  <h1 class="h3 mb-0 text-gray-800">Heat Print Insentif Master</h1>
+                  <h1 class="h3 mb-0 text-gray-800">Heat Seal Insentif Master</h1>
                   <div>
                      <a href="{{ route('heat-insentif-master.create') }}" class="d-none d-sm-inheat-block btn btn-sm btn-primary shadow-sm">
-                        <i class="fas fa-plus fa-sm text-white-50"></i> Create Heat Print Insentif Master
+                        <i class="fas fa-plus fa-sm text-white-50"></i> Create Heat Seal Insentif Master
                      </a>
                   </div>
                </div>
@@ -100,7 +100,7 @@ Detail Insentif Karyawan
                     <div class="d-flex justify-content-between align-items-center flex-wrap">
                         <!-- KIRI -->
                         <h6 class="m-0 font-weight-bold text-primary">
-                            Data Heat Print Insentif Master
+                            Data Heat Seal Insentif Master
                         </h6>
                         <!-- KANAN -->
                         <div class="d-flex align-items-center">
