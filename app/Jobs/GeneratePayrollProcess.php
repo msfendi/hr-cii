@@ -980,8 +980,8 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
-            ->orderBy('emp.NPK', 'asc')
             ->orderBy('emp.ID_DEPT', 'asc')
+            ->orderBy('emp.NPK', 'asc')
             ->get();
 
 

@@ -272,7 +272,11 @@
                     </div>
 
                     <div class="card-body">
-
+<div id="dept-filter-container" style="display:none;">
+    <select id="filterDept" class="form-control form-control-sm">
+        <option value="">All Department</option>
+    </select>
+</div>
                         <div class="table-responsive">
                             <table class="table table-bordered table-sm" id="table-details">
                                 <thead>
@@ -831,6 +835,80 @@ $(document).on('click','.btn-export',function(e){
                 $(row).addClass('table-danger');
             }
         },
+        initComplete:function(){
+
+            let api = this.api();
+
+            let deptColumn = api.column(3);
+
+            if($('#filterDept').hasClass('select2-hidden-accessible')){
+                $('#filterDept').select2('destroy');
+            }
+
+            $('#filterDept').empty().append(
+                '<option value="">All Department</option>'
+            );
+
+            let depts = [];
+
+            deptColumn.data().each(function(value){
+
+                if(value){
+                    depts.push(value);
+                }
+
+            });
+
+            depts = [...new Set(depts)].sort();
+
+            depts.forEach(function(dept){
+
+                $('#filterDept').append(
+                    `<option value="${dept}">${dept}</option>`
+                );
+
+            });
+
+            $('#filterDept').select2({
+                placeholder:'Department',
+                allowClear:true,
+                width:'220px'
+            });
+
+            /*
+            ============================
+            PINDAH KE KANAN SEARCH
+            ============================
+            */
+
+            $('#table-details_filter').addClass(
+            'd-flex align-items-center justify-content-end'
+        );
+
+        if(!$('#dept-filter-wrapper').length){
+
+            $('#table-details_filter').prepend(`
+                <div id="dept-filter-wrapper"
+                    class="mr-2"
+                    style="width:220px;">
+                </div>
+            `);
+
+        }
+
+        $('#filterDept').appendTo('#dept-filter-wrapper');
+
+        if($('#filterDept').hasClass('select2-hidden-accessible')){
+            $('#filterDept').select2('destroy');
+        }
+
+        $('#filterDept').select2({
+            placeholder:'Department',
+            allowClear:true,
+            width:'100%'
+        });
+
+        },
 
         columns: [
             { data: 'run_id' },
@@ -1066,5 +1144,83 @@ $(document).on('click','.btn-export',function(e){
     });
 
 });
+
+$(document).on('change', '#filterDept', function(){
+
+    let value = $(this).val();
+
+    if(value){
+
+        tableDetails
+            .column(3)
+            .search('^' + $.fn.dataTable.util.escapeRegex(value) + '$', true, false)
+            .draw();
+
+    }else{
+
+        tableDetails
+            .column(3)
+            .search('')
+            .draw();
+
+    }
+
+});
 </script>
+<style>
+    .dept-filter-wrapper{
+    min-width:220px;
+}
+
+.dept-filter-wrapper .select2-container{
+    width:220px !important;
+}
+
+.dept-filter-wrapper .select2-selection--single{
+    height:31px !important;
+    border-radius:6px !important;
+}
+
+.dept-filter-wrapper .select2-selection__rendered{
+    line-height:29px !important;
+    font-size:12px;
+}
+
+.dept-filter-wrapper .select2-selection__arrow{
+    height:29px !important;
+}
+
+#table-details_filter label{
+    margin-bottom:0;
+}
+    #filterDept + .select2-container .select2-selection--single{
+    height:34px;
+    border-radius:8px;
+    border:1px solid #d1d3e2;
+}
+
+#filterDept + .select2-container .select2-selection__rendered{
+    line-height:32px;
+    font-size:13px;
+}
+
+#filterDept + .select2-container .select2-selection__arrow{
+    height:32px;
+}
+
+.select2-dropdown{
+    border-radius:8px;
+    overflow:hidden;
+}
+
+.select2-results__option{
+    font-size:13px;
+}
+    .btn-late-detail{
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+</style>
 </html>

@@ -244,6 +244,7 @@ class BiodataController extends Controller
                 'BARCODE' => $biodata->BARCODE,
                 'SECTION' => $biodata->SECTION,
                 'STATUS' => $biodata->STATUS,
+                'IS_STAFF' => $biodata->IS_STAFF,
             ]);
 
             DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();
