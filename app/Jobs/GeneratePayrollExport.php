@@ -98,7 +98,7 @@ class GeneratePayrollExport implements ShouldQueue
         |--------------------------------------------------------------------------
         */
         $pkwtLatest = DB::table('PKWT as p1')
-            ->select('p1.NPK', 'p1.TKK')
+            ->select('p1.NPK', 'p1.TKK', 'p1.KETERANGAN')
             ->whereRaw('p1.TMK = (SELECT MAX(p2.TMK) FROM PKWT p2 WHERE p2.NPK = p1.NPK)');
 
         /*
@@ -130,7 +130,8 @@ class GeneratePayrollExport implements ShouldQueue
                 'pp.end_date',
                 'p.TKK',
                 'emp.IS_STAFF',
-                'd.IS_SEWING'
+                'd.IS_SEWING',
+                'p.KETERANGAN',
             )
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk')
@@ -245,13 +246,49 @@ class GeneratePayrollExport implements ShouldQueue
         | SPLIT EMPLOYEE BASE
         |--------------------------------------------------------------------------
         */
-        $activeEmployees = $data->filter(fn($r) => empty($r->TKK));
+        /*
+|--------------------------------------------------------------------------
+| ACTIVE
+|--------------------------------------------------------------------------
+*/
+        $activeEmployees = $data->filter(function ($r) {
 
-        $resignEmployees = $data->filter(
-            fn($r) => !empty($r->TKK)
+            $ket = strtolower(trim($r->KETERANGAN ?? ''));
+
+            if ($ket === 'mangkir') {
+                return false;
+            }
+
+            return empty($r->TKK);
+        });
+
+        /*
+|--------------------------------------------------------------------------
+| RESIGN
+|--------------------------------------------------------------------------
+*/
+        $resignEmployees = $data->filter(function ($r) {
+
+            $ket = strtolower(trim($r->KETERANGAN ?? ''));
+
+            if ($ket === 'mangkir') {
+                return false;
+            }
+
+            return !empty($r->TKK)
                 && $r->TKK >= $r->start_date
-                && $r->TKK <= $r->end_date
-        );
+                && $r->TKK <= $r->end_date;
+        });
+
+        /*
+|--------------------------------------------------------------------------
+| MANGKIR
+|--------------------------------------------------------------------------
+*/
+        $mangkirEmployees = $data->filter(function ($r) {
+
+            return strtolower(trim($r->KETERANGAN ?? '')) === 'mangkir';
+        });
 
         /*
         |--------------------------------------------------------------------------
@@ -365,15 +402,21 @@ class GeneratePayrollExport implements ShouldQueue
 
             $active = $activeEmployees->filter($filter);
             $resign = $resignEmployees->filter($filter);
+            $mangkir = $mangkirEmployees->filter($filter);
 
-            if ($active->isEmpty() && $resign->isEmpty()) continue;
+            if ($active->isEmpty() && $resign->isEmpty() && $mangkir->isEmpty()) continue;
 
             $viewData = [
                 'groupedActive' => $active->groupBy('DEPARTEMENT'),
                 'groupedResign' => $resign->groupBy('DEPARTEMENT'),
+                'groupedMangkir' => $mangkir->groupBy('DEPARTEMENT'),
+
                 'allComponents' => $allComponents,
+
                 'activeTotals' => $calcTotals($active),
                 'resignTotals' => $calcTotals($resign),
+                'mangkirTotals' => $calcTotals($mangkir),
+
                 'run_id' => $run_id,
                 'approvals' => $approvals
             ];

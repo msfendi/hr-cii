@@ -101,10 +101,10 @@ class PayrollDetailStaffSheet
         // ======================
         // NUMBER FORMAT
         // ======================
-        foreach (range('D', 'Z') as $colLetter) {
+        foreach (range('D', $lastCol) as $colLetter) {
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
-                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+                ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
         }
 
         // ======================

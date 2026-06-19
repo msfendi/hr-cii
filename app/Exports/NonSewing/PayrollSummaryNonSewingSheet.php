@@ -9,6 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class PayrollSummaryNonSewingSheet
 {
@@ -21,6 +22,7 @@ class PayrollSummaryNonSewingSheet
     protected $groups = [
         'active_non_sewing' => [],
         'resign_non_sewing' => [],
+        'mangkir_non_sewing' => [],
     ];
 
     protected $earning = [];
@@ -61,10 +63,10 @@ class PayrollSummaryNonSewingSheet
         // =========================
         // HEADER
         // =========================
-        $rows = $this->headings();
+        $headingRows = $this->headings();
 
         $rowNum = 1;
-        foreach ($rows as $row) {
+        foreach ($headingRows as $row) {
             $col = 1;
             foreach ($row as $value) {
                 $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
@@ -73,7 +75,7 @@ class PayrollSummaryNonSewingSheet
             $rowNum++;
         }
 
-        $lastCol = chr(64 + count($rows[0]));
+        $lastCol = Coordinate::stringFromColumnIndex(count($headingRows[0]));
 
         // =========================
         // HEADER STYLE
@@ -96,9 +98,9 @@ class PayrollSummaryNonSewingSheet
         // =========================
         // QUERY + MAP (TETAP)
         // =========================
-        $rowsData = $this->query()->get();
+        $dataRows = $this->query()->get();
 
-        foreach ($rowsData as $row) {
+        foreach ($dataRows as $row) {
             $this->map($row);
         }
 
@@ -155,16 +157,17 @@ class PayrollSummaryNonSewingSheet
         // =========================
         // NUMBER FORMAT
         // =========================
-        foreach (range('B', 'Z') as $colLetter) {
+        foreach (range('B', $lastCol) as $colLetter) {
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
-                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+                ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
         }
 
         // =========================
         // AUTO SIZE COLUMN
         // =========================
-        foreach (range('A', $lastCol) as $colLetter) {
+        for ($i = 1; $i <= count($headingRows[0]); $i++) {
+            $colLetter = Coordinate::stringFromColumnIndex($i);
             $sheet->getColumnDimension($colLetter)->setAutoSize(true);
         }
 
@@ -188,7 +191,8 @@ class PayrollSummaryNonSewingSheet
                 'b.NAMA_KARYAWAN',
                 'b.id_dept',
                 'p.TKK',
-                'b.IS_STAFF'
+                'b.IS_STAFF',
+                'p.KETERANGAN'
             );
 
         $keluar = DB::table('BIODATA_KELUAR as b')
@@ -198,7 +202,8 @@ class PayrollSummaryNonSewingSheet
                 'b.NAMA_KARYAWAN',
                 'b.id_dept',
                 'p.TKK',
-                'b.IS_STAFF'
+                'b.IS_STAFF',
+                'p.KETERANGAN'
             );
 
         $biodataUnion = $aktif->union($keluar);
@@ -213,7 +218,8 @@ class PayrollSummaryNonSewingSheet
                 'prd.components',
                 'bio.TKK',
                 'bio.IS_STAFF',
-                'd.IS_SEWING'
+                'd.IS_SEWING',
+                'bio.KETERANGAN',
             );
     }
 
@@ -226,7 +232,10 @@ class PayrollSummaryNonSewingSheet
     {
         $items = json_decode($row->components, true) ?? [];
 
+        $isMangkir = strtolower(trim($row->KETERANGAN ?? '')) === 'mangkir';
+
         $isResign =
+            !$isMangkir &&
             $row->TKK &&
             $row->TKK >= $this->period->start_date &&
             $row->TKK <= $this->period->end_date;
@@ -235,7 +244,11 @@ class PayrollSummaryNonSewingSheet
 
         $targets = [];
 
-        if ($isResign) {
+        if ($isMangkir) {
+            if ($isNonSewing) {
+                $targetGroups[] = 'mangkir_non_sewing';
+            }
+        } elseif ($isResign) {
             if ($isNonSewing) $targets[] = 'resign_non_sewing';
         } else {
             if ($isNonSewing) $targets[] = 'active_non_sewing';
@@ -268,12 +281,27 @@ class PayrollSummaryNonSewingSheet
             'Component',
             'Active Non Sewing',
             'Resign Non Sewing',
+            'Mangkir Non Sewing',
         ];
 
         $rows[] = $header;
 
         foreach ($this->components as $c) {
-            $rows[] = [$c->name, '', ''];
+            $rows[] = [
+                $c->name,
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+            ];
         }
 
         $rows[] = array_fill(0, count($header), '');
@@ -290,6 +318,7 @@ class PayrollSummaryNonSewingSheet
         return [
             'active_non_sewing' => 'B',
             'resign_non_sewing' => 'C',
+            'mangkir_non_sewing' => 'D',
         ][$group] ?? 'B';
     }
 }

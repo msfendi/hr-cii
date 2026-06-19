@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports\NonSewing;
+namespace App\Exports\Sewing;
 
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -9,7 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PayrollOutDetailNonSewingSheet
+class PayrollMADetailSewingSheet
 {
     protected $run_id;
     protected $componentTypes = [];
@@ -26,7 +26,7 @@ class PayrollOutDetailNonSewingSheet
 
     public function title(): string
     {
-        return 'Payroll_NonSewing_Out';
+        return 'Payroll_Sewing_MA';
     }
 
     public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex = 0)
@@ -147,9 +147,9 @@ class PayrollOutDetailNonSewingSheet
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
             ->where('bio.IS_STAFF', 0)
-            ->where('d.IS_SEWING', 1)
+            ->where('d.IS_SEWING', 0)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-            ->whereRaw('LOWER(bio.KETERANGAN) <> ?', ['mangkir'])
+            ->whereRaw('LOWER(bio.KETERANGAN) = ?', ['mangkir'])
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',

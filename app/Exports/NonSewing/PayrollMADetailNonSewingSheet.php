@@ -9,7 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PayrollOutDetailNonSewingSheet
+class PayrollMADetailNonSewingSheet
 {
     protected $run_id;
     protected $componentTypes = [];
@@ -26,7 +26,7 @@ class PayrollOutDetailNonSewingSheet
 
     public function title(): string
     {
-        return 'Payroll_NonSewing_Out';
+        return 'Payroll_NonSewing_MA';
     }
 
     public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex = 0)
@@ -149,7 +149,7 @@ class PayrollOutDetailNonSewingSheet
             ->where('bio.IS_STAFF', 0)
             ->where('d.IS_SEWING', 1)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-            ->whereRaw('LOWER(bio.KETERANGAN) <> ?', ['mangkir'])
+            ->whereRaw('LOWER(bio.KETERANGAN) = ?', ['mangkir'])
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',

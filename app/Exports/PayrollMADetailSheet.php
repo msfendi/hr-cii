@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports\NonSewing;
+namespace App\Exports;
 
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -9,7 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class PayrollOutDetailNonSewingSheet
+class PayrollMADetailSheet
 {
     protected $run_id;
     protected $componentTypes = [];
@@ -18,7 +18,6 @@ class PayrollOutDetailNonSewingSheet
     {
         $this->run_id = $run_id;
 
-        // Ambil tipe komponen dari payroll_components
         $this->componentTypes = DB::table('payroll_components')
             ->pluck('type', 'code')
             ->toArray();
@@ -26,10 +25,10 @@ class PayrollOutDetailNonSewingSheet
 
     public function title(): string
     {
-        return 'Payroll_NonSewing_Out';
+        return 'Payroll_MA';
     }
 
-    public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex = 0)
+    public function exportToSheet(Spreadsheet $spreadsheet, int $sheetIndex)
     {
         $sheet = $sheetIndex === 0
             ? $spreadsheet->getActiveSheet()
@@ -48,9 +47,9 @@ class PayrollOutDetailNonSewingSheet
             $col++;
         }
 
-        // STYLE HEADER
         $lastCol = chr(64 + count($headings));
 
+        // HEADER STYLE
         $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
             'font' => [
                 'bold' => true,
@@ -69,7 +68,8 @@ class PayrollOutDetailNonSewingSheet
         // ======================
         // DATA
         // ======================
-        $rows = $this->query()->get();
+        $query = $this->query();
+        $rows = $query->get();
 
         $rowNum = 2;
 
@@ -119,11 +119,11 @@ class PayrollOutDetailNonSewingSheet
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.KETERANGAN');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.KETERANGAN');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -146,10 +146,8 @@ class PayrollOutDetailNonSewingSheet
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
-            ->where('bio.IS_STAFF', 0)
-            ->where('d.IS_SEWING', 1)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-            ->whereRaw('LOWER(bio.KETERANGAN) <> ?', ['mangkir'])
+            ->whereRaw('LOWER(bio.KETERANGAN) = ?', ['mangkir'])
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',
@@ -212,7 +210,6 @@ class PayrollOutDetailNonSewingSheet
             'NPK',
             'Employee Name',
             'Departement',
-
             'Basic Salary',
             'Overtime Weekday',
             'Overtime Weekend',
@@ -224,15 +221,12 @@ class PayrollOutDetailNonSewingSheet
             'Cutting Insentif',
             'Heat Seal Insentif',
             'Adjusment',
-
             'BPJS Kesehatan',
             'BPJS Ketenagakerjaan',
-
             'PPH21',
             'PPH21 Deduction',
             'Absence Deduction',
             'Late Deduction',
-
             'Total Salary'
         ];
     }

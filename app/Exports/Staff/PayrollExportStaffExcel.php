@@ -24,7 +24,8 @@ class PayrollExportStaffExcel
 
         $this->addSheet($spreadsheet, 0, new PayrollDetailStaffSheet($this->run_id));
         $this->addSheet($spreadsheet, 1, new PayrollOutDetailStaffSheet($this->run_id));
-        $this->addSheet($spreadsheet, 2, new PayrollSummaryStaffSheet($this->run_id));
+        $this->addSheet($spreadsheet, 2, new PayrollMADetailStaffSheet($this->run_id));
+        $this->addSheet($spreadsheet, 3, new PayrollSummaryStaffSheet($this->run_id));
 
         $dir = dirname($filePath);
 

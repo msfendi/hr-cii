@@ -255,7 +255,7 @@ class ExpatSummarySheet implements
             $row->total_onleave,
             $row->total_onleave_days,
             $row->total_onleave_amount,
-            $row->total_living_cost + $row->total_meal_cost + $row->total_onleave_amount + $row->total_legal_cost,
+            $row->total_apartment_cost + $row->total_depo_apartment_cost + $row->total_living_cost + $row->total_meal_cost + $row->total_onleave_amount + $row->total_legal_cost,
         ];
     }
 

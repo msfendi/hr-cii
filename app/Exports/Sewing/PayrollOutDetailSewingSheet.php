@@ -101,10 +101,10 @@ class PayrollOutDetailSewingSheet
         // ======================
         // NUMBER FORMAT
         // ======================
-        foreach (range('D', 'Z') as $colLetter) {
+        foreach (range('D', $lastCol) as $colLetter) {
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
-                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+                ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
         }
 
         // ======================
@@ -119,11 +119,11 @@ class PayrollOutDetailSewingSheet
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -149,6 +149,7 @@ class PayrollOutDetailSewingSheet
             ->where('bio.IS_STAFF', 0)
             ->where('d.IS_SEWING', 0)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
+            ->whereRaw('LOWER(bio.KETERANGAN) <> ?', ['mangkir'])
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',

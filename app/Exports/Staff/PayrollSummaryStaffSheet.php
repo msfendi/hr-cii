@@ -9,6 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class PayrollSummaryStaffSheet
 {
@@ -19,6 +20,7 @@ class PayrollSummaryStaffSheet
     protected $groups = [
         'active_staff' => [],
         'resign_staff' => [],
+        'mangkir_staff' => [],
     ];
 
     protected $earning = [];
@@ -58,10 +60,10 @@ class PayrollSummaryStaffSheet
         // =========================
         // HEADER
         // =========================
-        $rows = $this->headings();
+        $headingRows = $this->headings();
 
         $rowNum = 1;
-        foreach ($rows as $row) {
+        foreach ($headingRows as $row) {
             $col = 1;
             foreach ($row as $value) {
                 $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
@@ -70,7 +72,7 @@ class PayrollSummaryStaffSheet
             $rowNum++;
         }
 
-        $lastCol = chr(64 + count($rows[0]));
+        $lastCol = Coordinate::stringFromColumnIndex(count($headingRows[0]));
 
         // =========================
         // HEADER STYLE
@@ -93,9 +95,9 @@ class PayrollSummaryStaffSheet
         // =========================
         // QUERY + MAP (TETAP)
         // =========================
-        $rowsData = $this->query()->get();
+        $dataRows = $this->query()->get();
 
-        foreach ($rowsData as $row) {
+        foreach ($dataRows as $row) {
             $this->map($row);
         }
 
@@ -152,16 +154,17 @@ class PayrollSummaryStaffSheet
         // =========================
         // NUMBER FORMAT
         // =========================
-        foreach (range('B', 'Z') as $colLetter) {
+        foreach (range('B', $lastCol) as $colLetter) {
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
-                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+                ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
         }
 
         // =========================
         // AUTO SIZE COLUMN
         // =========================
-        foreach (range('A', $lastCol) as $colLetter) {
+        for ($i = 1; $i <= count($headingRows[0]); $i++) {
+            $colLetter = Coordinate::stringFromColumnIndex($i);
             $sheet->getColumnDimension($colLetter)->setAutoSize(true);
         }
 
@@ -180,11 +183,11 @@ class PayrollSummaryStaffSheet
     {
         $aktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $keluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $biodataUnion = $aktif->union($keluar);
 
@@ -198,7 +201,8 @@ class PayrollSummaryStaffSheet
                 'prd.components',
                 'bio.TKK',
                 'bio.IS_STAFF',
-                'd.IS_SEWING'
+                'd.IS_SEWING',
+                'bio.KETERANGAN',
             );
     }
 
@@ -211,7 +215,10 @@ class PayrollSummaryStaffSheet
     {
         $items = json_decode($row->components, true) ?? [];
 
+        $isMangkir = strtolower(trim($row->KETERANGAN ?? '')) === 'mangkir';
+
         $isResign =
+            !$isMangkir &&
             $row->TKK &&
             $row->TKK >= $this->period->start_date &&
             $row->TKK <= $this->period->end_date;
@@ -220,7 +227,12 @@ class PayrollSummaryStaffSheet
 
         $targetGroups = [];
 
-        if ($isResign) {
+        if ($isMangkir) {
+            if ($isStaff) {
+                $targetGroups[] = 'mangkir_staff';
+            }
+        } elseif ($isResign) {
+
             if ($isStaff) {
                 $targetGroups[] = 'resign_staff';
             }
@@ -260,12 +272,27 @@ class PayrollSummaryStaffSheet
             'Component',
             'Active Staff',
             'Resign Staff',
+            'Mangkir Staff',
         ];
 
         $rows[] = $header;
 
-        foreach ($this->components as $component) {
-            $rows[] = [$component->name, '', ''];
+        foreach ($this->components as $c) {
+            $rows[] = [
+                $c->name,
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+            ];
         }
 
         $rows[] = array_fill(0, count($header), '');
@@ -282,6 +309,7 @@ class PayrollSummaryStaffSheet
         return [
             'active_staff' => 'B',
             'resign_staff' => 'C',
+            'mangkir_staff' => 'D',
         ][$group] ?? 'B';
     }
 }

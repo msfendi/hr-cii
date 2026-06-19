@@ -303,6 +303,7 @@ class PayrollApproveController extends Controller
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
 
             ->where('prd.run_id', $runId)
+            ->whereRaw('LOWER(p.KETERANGAN) <> ?', ['mangkir'])
 
             ->select(
                 'prd.employee_npk',

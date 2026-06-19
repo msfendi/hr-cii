@@ -6,10 +6,13 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 use App\Exports\NonSewing\PayrollDetailNonSewingSheet;
+use App\Exports\NonSewing\PayrollMADetailNonSewingSheet;
 use App\Exports\NonSewing\PayrollOutDetailNonSewingSheet;
 use App\Exports\Sewing\PayrollDetailSewingSheet;
+use App\Exports\Sewing\PayrollMADetailSewingSheet;
 use App\Exports\Sewing\PayrollOutDetailSewingSheet;
 use App\Exports\Staff\PayrollDetailStaffSheet;
+use App\Exports\Staff\PayrollMADetailStaffSheet;
 use App\Exports\Staff\PayrollOutDetailStaffSheet;
 
 class PayrollExportExcel
@@ -33,7 +36,11 @@ class PayrollExportExcel
         $this->addSheet($spreadsheet, 5, new PayrollOutDetailStaffSheet($this->run_id));
         $this->addSheet($spreadsheet, 6, new PayrollOutDetailSewingSheet($this->run_id));
         $this->addSheet($spreadsheet, 7, new PayrollOutDetailNonSewingSheet($this->run_id));
-        $this->addSheet($spreadsheet, 8, new PayrollSummarySheet($this->run_id));
+        $this->addSheet($spreadsheet, 8, new PayrollMADetailSheet($this->run_id));
+        $this->addSheet($spreadsheet, 9, new PayrollMADetailStaffSheet($this->run_id));
+        $this->addSheet($spreadsheet, 10, new PayrollMADetailSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 11, new PayrollMADetailNonSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 12, new PayrollSummarySheet($this->run_id));
 
         $dir = dirname($filePath);
 

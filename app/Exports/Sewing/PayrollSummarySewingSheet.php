@@ -9,6 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class PayrollSummarySewingSheet
 {
@@ -21,6 +22,7 @@ class PayrollSummarySewingSheet
     protected $groups = [
         'active_sewing' => [],
         'resign_sewing' => [],
+        'mangkir_sewing' => [],
     ];
 
     protected $earning = [];
@@ -61,10 +63,10 @@ class PayrollSummarySewingSheet
         // =========================
         // HEADER
         // =========================
-        $rows = $this->headings();
+        $headingRows = $this->headings();
 
         $rowNum = 1;
-        foreach ($rows as $row) {
+        foreach ($headingRows as $row) {
             $col = 1;
             foreach ($row as $value) {
                 $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
@@ -73,7 +75,7 @@ class PayrollSummarySewingSheet
             $rowNum++;
         }
 
-        $lastCol = chr(64 + count($rows[0]));
+        $lastCol = Coordinate::stringFromColumnIndex(count($headingRows[0]));
 
         // =========================
         // HEADER STYLE
@@ -96,9 +98,9 @@ class PayrollSummarySewingSheet
         // =========================
         // QUERY + MAP (TETAP)
         // =========================
-        $rowsData = $this->query()->get();
+        $dataRows = $this->query()->get();
 
-        foreach ($rowsData as $row) {
+        foreach ($dataRows as $row) {
             $this->map($row);
         }
 
@@ -155,16 +157,17 @@ class PayrollSummarySewingSheet
         // =========================
         // NUMBER FORMAT
         // =========================
-        foreach (range('B', 'Z') as $colLetter) {
+        foreach (range('B', $lastCol) as $colLetter) {
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
-                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+                ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
         }
 
         // =========================
         // AUTO SIZE COLUMN
         // =========================
-        foreach (range('A', $lastCol) as $colLetter) {
+        for ($i = 1; $i <= count($headingRows[0]); $i++) {
+            $colLetter = Coordinate::stringFromColumnIndex($i);
             $sheet->getColumnDimension($colLetter)->setAutoSize(true);
         }
 
@@ -188,7 +191,8 @@ class PayrollSummarySewingSheet
                 'b.NAMA_KARYAWAN',
                 'b.id_dept',
                 'p.TKK',
-                'b.IS_STAFF'
+                'b.IS_STAFF',
+                'p.KETERANGAN'
             );
 
         $keluar = DB::table('BIODATA_KELUAR as b')
@@ -198,7 +202,8 @@ class PayrollSummarySewingSheet
                 'b.NAMA_KARYAWAN',
                 'b.id_dept',
                 'p.TKK',
-                'b.IS_STAFF'
+                'b.IS_STAFF',
+                'p.KETERANGAN'
             );
 
         $biodataUnion = $aktif->union($keluar);
@@ -213,7 +218,8 @@ class PayrollSummarySewingSheet
                 'prd.components',
                 'bio.TKK',
                 'bio.IS_STAFF',
-                'd.IS_SEWING'
+                'd.IS_SEWING',
+                'bio.KETERANGAN',
             );
     }
 
@@ -226,7 +232,10 @@ class PayrollSummarySewingSheet
     {
         $items = json_decode($row->components, true) ?? [];
 
+        $isMangkir = strtolower(trim($row->KETERANGAN ?? '')) === 'mangkir';
+
         $isResign =
+            !$isMangkir &&
             $row->TKK &&
             $row->TKK >= $this->period->start_date &&
             $row->TKK <= $this->period->end_date;
@@ -235,7 +244,11 @@ class PayrollSummarySewingSheet
 
         $targetGroups = [];
 
-        if ($isResign) {
+        if ($isMangkir) {
+            if ($isSewing) {
+                $targetGroups[] = 'mangkir_sewing';
+            }
+        } elseif ($isResign) {
             if ($isSewing) {
                 $targetGroups[] = 'resign_sewing';
             }
@@ -275,12 +288,27 @@ class PayrollSummarySewingSheet
             'Component',
             'Active Sewing',
             'Resign Sewing',
+            'Mangkir Sewing',
         ];
 
         $rows[] = $header;
 
         foreach ($this->components as $c) {
-            $rows[] = [$c->name, '', ''];
+            $rows[] = [
+                $c->name,
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+            ];
         }
 
         $rows[] = array_fill(0, count($header), '');
@@ -297,6 +325,7 @@ class PayrollSummarySewingSheet
         return [
             'active_sewing' => 'B',
             'resign_sewing' => 'C',
+            'mangkir_sewing' => 'D',
         ][$group] ?? 'B';
     }
 }

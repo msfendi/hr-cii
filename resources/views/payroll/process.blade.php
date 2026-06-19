@@ -115,8 +115,7 @@
 
                         <button id="btnProcess"
                             class="btn btn-success btn-sm shadow-sm"
-                            disabled
-                            >
+                            disabled>
                             <i class="fas fa-cogs mr-2"></i>
                             Process Payroll
                         </button>
@@ -287,6 +286,7 @@ $('#period_id').on('change', function(){
 
     $('#approvalBox').hide();
     $('#btnProcess').prop('disabled', true);
+
 
     if(!periodId) return;
 
