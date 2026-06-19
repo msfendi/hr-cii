@@ -108,7 +108,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00827')
+            ->where('p.NPK', '=', 'C-02630')
 
             ->select(
                 'p.NPK',
@@ -140,7 +140,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00827')
+            ->where('ec1.npk', '=', 'C-02630')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -949,7 +949,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
-            // ->where('emp.NPK', '=', 'C-00827')
+            ->where('emp.NPK', '=', 'C-02630')
 
             ->select(
                 'emp.NPK',
@@ -1055,6 +1055,8 @@ class GeneratePayrollProcess implements ShouldQueue
                 // 'overtime_hours' => (float) $employee->overtime_hours,
                 // 'special_overtime_hours' => (float) $employee->special_overtime_hours
             ];
+
+            // dd($inputVariables);
 
             // dd($employee->late_minutes);
 
@@ -2050,7 +2052,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 // 🔹 PERBAIKAN: bulatkan setiap komponen
                 $amount = round((float) $amount, 0);
                 $results[$component->code] = $amount;
-                $results['late_minutes'] = $employee->late_minutes;
+                // $results['late_minutes'] = $employee->late_minutes;
 
                 // dd($results);
 
