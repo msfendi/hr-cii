@@ -80,9 +80,9 @@ class ExpatOnLeaveSheet implements
                 'l.onleave_start',
                 'l.onleave_end',
                 'l.leave_type',
-                'l.component',
-                'l.amount',
-                'l.transactions_date',
+                // 'l.component',
+                // 'l.amount',
+                // 'l.transactions_date',
                 'l.remark'
             )
             ->orderByDesc('l.id')
@@ -92,22 +92,15 @@ class ExpatOnLeaveSheet implements
 
         foreach ($data as $row) {
 
-            $componentArray = $this->decodeJson($row->component);
-            $amountArray    = $this->decodeJson($row->amount);
-            $dateArray      = $this->decodeJson($row->transactions_date);
-
-            foreach ($componentArray as $i => $componentId) {
-
-                $rows->push([
-                    'npk' => $row->npk,
-                    'name' => $row->name,
-                    'leave_start' => $row->onleave_start,
-                    'leave_end' => $row->onleave_end,
-                    'leave_type' => $row->leave_type,
-                    'leave_days' => Carbon::parse($row->onleave_end)->diffInDays(Carbon::parse($row->onleave_start)) + 1,
-                    'remark' => $row->remark,
-                ]);
-            }
+            $rows->push([
+                'npk' => $row->npk,
+                'name' => $row->name,
+                'leave_start' => $row->onleave_start,
+                'leave_end' => $row->onleave_end,
+                'leave_type' => $row->leave_type,
+                'leave_days' => Carbon::parse($row->onleave_end)->diffInDays(Carbon::parse($row->onleave_start)) + 1,
+                'remark' => $row->remark,
+            ]);
         }
 
         return new Collection($rows);
