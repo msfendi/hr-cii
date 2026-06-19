@@ -278,8 +278,8 @@ class PayrollApproveController extends Controller
     |--------------------------------------------------------------------------
     */
         $pkwtLatest = DB::table('PKWT')
-            ->select('NPK', DB::raw('MAX(TKK) as TKK'))
-            ->groupBy('NPK');
+            ->select('NPK', DB::raw('MAX(TKK) as TKK'), 'KETERANGAN')
+            ->groupBy('NPK', 'KETERANGAN');
 
         /*
     |--------------------------------------------------------------------------
