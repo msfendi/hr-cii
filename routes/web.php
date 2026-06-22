@@ -788,7 +788,7 @@ Route::prefix('pengajuan-cuti')->group(function () {
 });
 
 // Insentif 6S
-Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|IE']);
 Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::class, 'create'])->name('employee6s.create')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::class, 'store'])->name('employee6s.store')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);

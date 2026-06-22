@@ -72,11 +72,11 @@ class GeneratePayrollProcess implements ShouldQueue
 
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
-            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
             ->unionAll(
                 DB::connection('cii')
                     ->table('BIODATA_KELUAR')
-                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
             );
 
         // dd($biodataUnion->get());
@@ -123,6 +123,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'd.IS_SEWING',
                 'p.KETERANGAN',
                 'p.TANGGUNGAN',
+                'bio.IS_EXPAT'
             )
             ->distinct();
 
@@ -973,6 +974,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'emp.TKK',
                 'emp.IS_STAFF',
                 'emp.IS_SEWING',
+                'emp.IS_EXPAT',
                 'emp.KETERANGAN',
                 'emp.TANGGUNGAN',
 
@@ -1063,8 +1065,31 @@ class GeneratePayrollProcess implements ShouldQueue
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => $employee->IS_STAFF === '1' ? (float) $employee->late_minutes : 0,
+                'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
+                'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                 'bpjskesex' => (float) $employee->percentkes,
                 'bpjsketex' => (float) $employee->percentket,
+                // Basis BPJS
+                'bpjs_base' => (
+                    ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
+                    ? (
+                        Str::ucfirst(Str::lower($employee->type)) === 'Contract'
+                        ? (float) $employee->salary
+                        : ((float) $employee->daily_salary * (float) $count_days)
+                    )
+                    : (
+                        (
+                            Str::ucfirst(Str::lower($employee->type)) === 'Contract'
+                            ? (float) $employee->salary
+                            : ((float) $employee->daily_salary * (float) $count_days)
+                        )
+                        + (float) $employee->allowance
+                    )
+                ),
+                // JP hanya untuk non expat
+                'bpjsjpex' => $employee->IS_EXPAT == '1' ? 0 : 1,
+                // JHT selalu 2%
+                'bpjsjhtex' => 2,
                 // 'overtime_hours' => (float) $employee->overtime_hours,
                 // 'special_overtime_hours' => (float) $employee->special_overtime_hours
             ];
