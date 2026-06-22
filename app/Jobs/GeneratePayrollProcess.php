@@ -108,7 +108,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00825')
+            // ->where('p.NPK', '=', 'C-00827')
 
             ->select(
                 'p.NPK',
@@ -141,7 +141,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00825')
+            // ->where('ec1.npk', '=', 'C-00827')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -961,7 +961,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($bpjsException, 'be', function ($join) {
                 $join->on('emp.NPK', '=', 'be.npk');
             })
-            // ->where('emp.NPK', '=', 'C-00825')
+            // ->where('emp.NPK', '=', 'C-00827')
 
             ->select(
                 'emp.NPK',
@@ -983,8 +983,8 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec.pph21',
                 'ec.type',
                 'ec.daily_salary',
-                DB::raw('COALESCE(be.percentkes,1) as percentkes'),
-                DB::raw('COALESCE(be.percentket,3) as percentket'),
+                'be.percentkes',
+                'be.percentket',
 
                 DB::raw('COALESCE(pa.adjusment,0) as adjusment'),
                 // DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
@@ -1067,7 +1067,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'late_minutes'     => $employee->IS_STAFF === '1' ? (float) $employee->late_minutes : 0,
                 'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
                 'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
-                'bpjskesex' => (float) $employee->percentkes,
+                'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                 'bpjsketex' => (float) $employee->percentket,
                 // Basis BPJS
                 'bpjs_base' => (
@@ -2124,10 +2124,31 @@ class GeneratePayrollProcess implements ShouldQueue
                     'dept' => $employee->DEPARTEMENT,
                     'tmk' => $employee->TMK,
                     'tkk' => $employee->TKK,
-                    'IS_STAFF' => $employee->IS_STAFF,
-                    'IS_SEWING' => $employee->IS_SEWING,
-                    'bpjskesex' => $employee->percentkes,
-                    'bpjsketex' => $employee->percentket,
+                    'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
+                    'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
+                    'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
+                    'bpjsketex' => (float) $employee->percentket,
+                    // Basis BPJS
+                    'bpjs_base' => (
+                        ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
+                        ? (
+                            Str::ucfirst(Str::lower($employee->type)) === 'Contract'
+                            ? (float) $employee->salary
+                            : ((float) $employee->daily_salary * (float) $count_days)
+                        )
+                        : (
+                            (
+                                Str::ucfirst(Str::lower($employee->type)) === 'Contract'
+                                ? (float) $employee->salary
+                                : ((float) $employee->daily_salary * (float) $count_days)
+                            )
+                            + (float) $employee->allowance
+                        )
+                    ),
+                    // JP hanya untuk non expat
+                    'bpjsjpex' => $employee->IS_EXPAT == '1' ? 0 : 1,
+                    // JHT selalu 2%
+                    'bpjsjhtex' => 2,
                     // 'overtime_hours' => $employee->overtime_hours,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
