@@ -74,83 +74,83 @@ class PayrollProcessController extends Controller
         return view('payroll.process', compact('periods'));
     }
 
-    public function overtimeDetail($periodId, $npk)
-    {
-        $period = DB::table('payroll_periods')
-            ->where('id', $periodId)
-            ->first();
+    // public function overtimeDetail($periodId, $npk)
+    // {
+    //     $period = DB::table('payroll_periods')
+    //         ->where('id', $periodId)
+    //         ->first();
 
-        if (!$period) {
-            return response()->json([
-                'data' => []
-            ]);
-        }
+    //     if (!$period) {
+    //         return response()->json([
+    //             'data' => []
+    //         ]);
+    //     }
 
-        $periodStart = $period->start_date;
-        $periodEnd   = $period->end_date;
+    //     $periodStart = $period->start_date;
+    //     $periodEnd   = $period->end_date;
 
-        $count_days = \Carbon\Carbon::parse($periodStart)
-            ->diffInDays(
-                \Carbon\Carbon::parse($periodEnd)
-            ) + 1;
+    //     $count_days = \Carbon\Carbon::parse($periodStart)
+    //         ->diffInDays(
+    //             \Carbon\Carbon::parse($periodEnd)
+    //         ) + 1;
 
-        $overtimeDetails = DB::connection('cii')
-            ->table('overtimes')
+    //     $overtimeDetails = DB::connection('cii')
+    //         ->table('overtimes')
 
-            ->leftJoin('PKWT as p', 'overtimes.NPK', '=', 'p.NPK')
+    //         ->leftJoin('PKWT as p', 'overtimes.NPK', '=', 'p.NPK')
 
-            ->where('overtimes.NPK', $npk)
+    //         ->where('overtimes.NPK', $npk)
 
-            ->whereBetween(
-                'OVERTIME_DATE',
-                [$periodStart, $periodEnd]
-            )
+    //         ->whereBetween(
+    //             'OVERTIME_DATE',
+    //             [$periodStart, $periodEnd]
+    //         )
 
-            ->select(
-                'overtimes.NPK',
-                'overtimes.OVERTIME_DATE',
-                'overtimes.DAY',
-                'overtimes.JUMLAH_JAM_LEMBUR',
+    //         ->select(
+    //             'overtimes.NPK',
+    //             'overtimes.OVERTIME_DATE',
+    //             'overtimes.DAY',
+    //             'overtimes.JUMLAH_JAM_LEMBUR',
 
-                DB::raw("
-                CASE
-                    WHEN DAY NOT IN ('Sabtu','Minggu')
-                    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
-                    THEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
-                    ELSE 0
-                END AS overtime_hours
-            "),
+    //             DB::raw("
+    //             CASE
+    //                 WHEN DAY NOT IN ('Sabtu','Minggu')
+    //                 AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+    //                 THEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+    //                 ELSE 0
+    //             END AS overtime_hours
+    //         "),
 
-                DB::raw("
-                CASE
-                    WHEN DAY IN ('Sabtu','Minggu')
-                    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
-                    THEN
-                        CASE
-                            WHEN
-                            (
-                                COALESCE(p.GAJI,0)
-                            ) >= 3800000
-                            THEN
-                                CASE
-                                    WHEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) > 8
-                                    THEN 8
-                                    ELSE TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
-                                END
-                            ELSE
-                                TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
-                        END
-                    ELSE 0
-                END AS special_overtime_hours
-            ")
-            )
-            ->orderBy('OVERTIME_DATE')
-            ->get();
+    //             DB::raw("
+    //             CASE
+    //                 WHEN DAY IN ('Sabtu','Minggu')
+    //                 AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+    //                 THEN
+    //                     CASE
+    //                         WHEN
+    //                         (
+    //                             COALESCE(p.GAJI,0)
+    //                         ) >= 3800000
+    //                         THEN
+    //                             CASE
+    //                                 WHEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) > 8
+    //                                 THEN 8
+    //                                 ELSE TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+    //                             END
+    //                         ELSE
+    //                             TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+    //                     END
+    //                 ELSE 0
+    //             END AS special_overtime_hours
+    //         ")
+    //         )
+    //         ->orderBy('OVERTIME_DATE')
+    //         ->get();
 
-        return response()->json([
-            'data' => $overtimeDetails
-        ]);
-    }
+    //     return response()->json([
+    //         'data' => $overtimeDetails
+    //     ]);
+    // }
 
     public function approvalStatus($periodId)
     {
@@ -159,6 +159,8 @@ class PayrollProcessController extends Controller
         GET APPROVAL DATA
         ============================================
         */
+        $user = Auth::user();
+        $role = optional($user->roles->first())->name;
 
         $data = InsentifApproval::where('period_id', $periodId)
             ->orderBy('payroll_component')
@@ -221,13 +223,17 @@ class PayrollProcessController extends Controller
             $biodataUnion = DB::table('BIODATA')
                 ->select(
                     'NPK',
-                    'NAMA_KARYAWAN'
+                    'NAMA_KARYAWAN',
+                    'ID_DEPT',
+                    'IS_STAFF'
                 )
                 ->union(
                     DB::table('BIODATA_KELUAR')
                         ->select(
                             'NPK',
-                            'NAMA_KARYAWAN'
+                            'NAMA_KARYAWAN',
+                            'ID_DEPT',
+                            'IS_STAFF'
                         )
                 );
 
@@ -235,6 +241,7 @@ class PayrollProcessController extends Controller
                 ->leftJoinSub($biodataUnion, 'b', function ($join) {
                     $join->on('p.NPK', '=', 'b.NPK');
                 })
+                ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
                 ->leftJoin('employees_contract as ec', 'p.NPK', '=', 'ec.npk')
                 ->whereDate('p.TMK', '<=', $periodEnd)
                 ->where(function ($q) use ($periodStart) {
@@ -257,7 +264,9 @@ class PayrollProcessController extends Controller
                     'ec.contract_ke',
                     'ec.start_date',
                     'ec.end_date',
-                    'ec.status_contract'
+                    'ec.status_contract',
+                    'b.IS_STAFF',
+                    'd.IS_SEWING'
                 )
                 ->orderBy('p.NPK')
                 ->get();
@@ -265,6 +274,10 @@ class PayrollProcessController extends Controller
 
 
             $invalidBankAccounts = DB::table('PKWT as p')
+                ->leftJoinSub($biodataUnion, 'b', function ($join) {
+                    $join->on('p.NPK', '=', 'b.NPK');
+                })
+                ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
                 ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'p.NPK')
                 ->where('p.NPK', '!=', 'C-00017') // IGNORE C-00017
                 ->where('p.TMK', '<=', $periodEnd)
@@ -281,11 +294,41 @@ class PayrollProcessController extends Controller
                     'p.NAMA',
                     'p.TMK',
                     'p.TKK',
-                    'pm.bank_account'
+                    'pm.bank_account',
+                    'b.IS_STAFF',
+                    'd.IS_SEWING'
                 )
                 ->distinct()
                 ->orderBy('p.NPK')
                 ->get();
+
+            $filterByRole = function ($rows) use ($role) {
+
+                return collect($rows)
+                    ->filter(function ($row) use ($role) {
+
+                        if ($role === 'Payroll_STAFF') {
+                            return (int) $row->IS_STAFF === 1;
+                        }
+
+                        if ($role === 'Payroll_SEWING') {
+                            return (int) $row->IS_STAFF === 0
+                                && (int) $row->IS_SEWING === 0;
+                        }
+
+                        if ($role === 'Payroll_NONSEWING') {
+                            return (int) $row->IS_STAFF === 0
+                                && (int) $row->IS_SEWING === 1;
+                        }
+
+                        return true; // Admin
+                    })
+                    ->values();
+            };
+
+            $invalidContracts = $filterByRole($invalidContracts);
+
+            $invalidBankAccounts = $filterByRole($invalidBankAccounts);
         }
 
         /*
@@ -968,311 +1011,5 @@ class PayrollProcessController extends Controller
             'progress' => $runs->progress,
             'status' => $runs->status
         ]);
-    }
-
-    private function evaluateFormula($formula, $results, $inputVariables)
-    {
-        $variables = array_merge($inputVariables, $results);
-
-        foreach ($variables as $key => $value) {
-            $formula = preg_replace('/\b' . $key . '\b/', $value, $formula);
-        }
-
-        try {
-            return eval("return $formula;");
-        } catch (\Throwable $e) {
-            return 0;
-        }
-    }
-
-    private function getInsentifByEfficiency($efficiency, $rules)
-    {
-        krsort($rules);
-
-        foreach ($rules as $threshold => $value) {
-            if ($efficiency >= $threshold) {
-                return $value;
-            }
-        }
-
-        return 0;
-    }
-
-    private function calculateRoleSewingInsentif(
-        $role,
-        $dept,
-        $totalLineInsentif,
-        $jumlahLine
-    ) {
-
-        $jumlahLine = max($jumlahLine, 1);
-
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
-        $formula = Cache::remember(
-            "insentif_formula_{$dept}_{$role}",
-            300,
-            function () use ($role, $dept) {
-
-                return InsentifRoleFormula::where('role', $role)
-                    ->where('dept', $dept)
-                    ->value('formula');
-            }
-        );
-
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
-        if (!$formula) {
-            return $totalLineInsentif;
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
-
-        $variables = [
-            'totalLineInsentif' => $totalLineInsentif,
-            'jumlahLine'        => $jumlahLine,
-        ];
-
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
-        try {
-
-            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
-                throw new \Exception('Invalid formula');
-            }
-
-            return eval("return {$formula};");
-        } catch (\Throwable $e) {
-
-            return $totalLineInsentif;
-        }
-    }
-
-    private function calculateRolePadInsentif(
-        $role,
-        $dept,
-        $totalDeptInsentif,
-        $jumlahOperator
-    ) {
-
-        $jumlahOperator = max($jumlahOperator, 1);
-
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
-        $formula = Cache::remember(
-            "insentif_formula_{$dept}_{$role}",
-            300,
-            function () use ($role, $dept) {
-
-                return InsentifRoleFormula::where('role', $role)
-                    ->where('dept', $dept)
-                    ->value('formula');
-            }
-        );
-
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
-        if (!$formula) {
-            return $totalDeptInsentif;
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
-
-        $variables = [
-            'totalDeptInsentif' => $totalDeptInsentif,
-            'jumlahOperator'    => $jumlahOperator,
-        ];
-
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
-        try {
-
-            // hanya izinkan karakter matematika
-            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
-                throw new \Exception('Invalid formula');
-            }
-
-            return eval("return {$formula};");
-        } catch (\Throwable $e) {
-
-            return $totalDeptInsentif;
-        }
-    }
-
-    private function calculateRoleHeatInsentif(
-        $role,
-        $dept,
-        $totalDeptInsentif,
-        $jumlahOperator
-    ) {
-
-        $jumlahOperator = max($jumlahOperator, 1);
-
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
-        $formula = Cache::remember(
-            "insentif_formula_{$dept}_{$role}",
-            300,
-            function () use ($role, $dept) {
-
-                return InsentifRoleFormula::where('role', $role)
-                    ->where('dept', $dept)
-                    ->value('formula');
-            }
-        );
-
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
-        if (!$formula) {
-            return $totalDeptInsentif;
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
-
-        $variables = [
-            'totalDeptInsentif' => $totalDeptInsentif,
-            'jumlahOperator'    => $jumlahOperator,
-        ];
-
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
-        try {
-
-            // hanya izinkan karakter matematika
-            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
-                throw new \Exception('Invalid formula');
-            }
-
-            return eval("return {$formula};");
-        } catch (\Throwable $e) {
-
-            return $totalDeptInsentif;
-        }
-    }
-
-    private function calculateRoleCuttingInsentif(
-        $role,
-        $dept,
-        $insentif
-    ) {
-
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
-        $formula = Cache::remember(
-            "insentif_formula_{$dept}_{$role}",
-            300,
-            function () use ($role, $dept) {
-
-                return InsentifRoleFormula::where('role', $role)
-                    ->where('dept', $dept)
-                    ->value('formula');
-            }
-        );
-
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
-        if (!$formula) {
-            return $insentif;
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
-
-        $variables = [
-            'insentif' => $insentif,
-        ];
-
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
-        try {
-
-            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
-                throw new \Exception('Invalid formula');
-            }
-
-            return eval("return {$formula};");
-        } catch (\Throwable $e) {
-
-            return $insentif;
-        }
     }
 }
