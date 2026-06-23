@@ -394,12 +394,12 @@ class PayrollProcessController extends Controller
         } elseif ($role === 'Payroll_SEWING') {
 
             $payrollResults = $payrollResults->filter(function ($row) {
-                return ($row['is_sewing'] ?? 0) == 1;
+                return ($row['is_sewing'] ?? 0) == 0;
             });
         } elseif ($role === 'Payroll_NONSEWING') {
 
             $payrollResults = $payrollResults->filter(function ($row) {
-                return ($row['is_sewing'] ?? 0) == 0;
+                return ($row['is_sewing'] ?? 0) == 1;
             });
         }
 
