@@ -151,7 +151,7 @@ class HeatInsentifMasterController extends Controller
     JIKA INSENTIF → IMPORT EXCEL
     =====================================
     */
-        HeatEfficiency::where('period_id', $period->id)->delete();
+        // HeatEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
             Excel::import(

@@ -181,7 +181,7 @@ class PadInsentifMasterController extends Controller
     JIKA INSENTIF → IMPORT EXCEL
     =====================================
     */
-        PadEfficiency::where('period_id', $period->id)->delete();
+        // PadEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
             Excel::import(

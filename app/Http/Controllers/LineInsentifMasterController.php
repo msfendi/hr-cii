@@ -203,7 +203,7 @@ class LineInsentifMasterController extends Controller
     JIKA INSENTIF → IMPORT EXCEL
     =====================================
     */
-        LineEfficiency::where('period_id', $period->id)->delete();
+        // LineEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
             Excel::import(
