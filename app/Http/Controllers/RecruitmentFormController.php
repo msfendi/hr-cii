@@ -51,10 +51,19 @@ class RecruitmentFormController extends Controller
             ? []
             : Session::get($this->steps[$step]['session'], []);
 
-        return view($this->steps[$step]['view'], [
+        $extraData = [];
+        if ($step === 1) {
+            $extraData['positions'] = RecruitmentPosition::where('is_aktif', 'true')
+                ->select('dept', 'position')
+                ->distinct()
+                ->get()
+                ->groupBy('dept');
+        }
+
+        return view($this->steps[$step]['view'], array_merge([
             'currentStep' => $step,
             'savedData'   => $savedData,
-        ]);
+        ], $extraData));
     }
 
     /*

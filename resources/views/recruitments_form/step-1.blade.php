@@ -17,7 +17,24 @@
 @section('title', 'Registrasi — Step 1: Data Pribadi | RecruitFlow')
 
 @push('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
+    /* select2 override */
+    .select2-container--default .select2-selection--single {
+        background-color: transparent !important;
+        border: 1px solid #747684 !important;
+        border-radius: 0.25rem !important;
+        height: 38px !important;
+        padding: 0.2rem 0.5rem !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #1a1b22 !important;
+        line-height: 1.5 !important;
+        font-size: 0.875rem !important;
+    }
     /* ---------- Reusable field token classes ---------- */
     .rf-label {
         display: block;
@@ -541,20 +558,23 @@
                                 </div>
                             </div>
 
-                            {{-- Jabatan --}}
-                            <div>
-                                <label class="rf-label" for="jabatan">Jabatan</label>
-                                <input class="rf-input" id="jabatan" name="jabatan"
-                                       value="{{ old('jabatan', $savedData['jabatan'] ?? '') }}"
-                                       placeholder="Masukkan jabatan" type="text">
-                            </div>
-
                             {{-- Department --}}
                             <div>
                                 <label class="rf-label" for="department">Department</label>
-                                <input class="rf-input" id="department" name="department"
-                                       value="{{ old('department', $savedData['department'] ?? '') }}"
-                                       placeholder="Masukkan department" type="text">
+                                <select class="rf-select select2-dept" id="department" name="department" required>
+                                    <option value="" disabled selected>Pilih / Masukkan Department</option>
+                                    @foreach($positions ?? [] as $dept => $posList)
+                                        <option value="{{ $dept }}" {{ old('department', $savedData['department'] ?? '') === $dept ? 'selected' : '' }}>{{ $dept }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            {{-- Jabatan --}}
+                            <div>
+                                <label class="rf-label" for="jabatan">Jabatan</label>
+                                <select class="rf-select select2-jabatan" id="jabatan" name="jabatan" required>
+                                    <option value="" disabled selected>Pilih / Masukkan Jabatan</option>
+                                </select>
                             </div>
 
                         </div>
@@ -633,7 +653,56 @@
      SCRIPTS
      ============================================================ --}}
 @push('scripts')
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
+    // Select2 logic for Department and Jabatan
+    var positionData = @json($positions ?? []);
+    var oldJabatan = "{{ old('jabatan', $savedData['jabatan'] ?? '') }}";
+
+    $(document).ready(function() {
+        $('.select2-dept').select2({
+            placeholder: 'Pilih / Masukkan Department'
+        });
+        
+        $('.select2-jabatan').select2({
+            placeholder: 'Pilih / Masukkan Jabatan'
+        });
+
+        $('#department').on('change', function() {
+            var selectedDept = $(this).val();
+            var posOptions = '<option value="" disabled selected>Pilih / Masukkan Jabatan</option>';
+            if (selectedDept && positionData[selectedDept]) {
+                var uniquePositions = [];
+                positionData[selectedDept].forEach(function(item) {
+                    if(!uniquePositions.includes(item.position)){
+                        uniquePositions.push(item.position);
+                        var isSelected = (item.position === oldJabatan) ? 'selected' : '';
+                        posOptions += '<option value="' + item.position + '" ' + isSelected + '>' + item.position + '</option>';
+                    }
+                });
+            }
+            
+            var $jabatan = $('#jabatan');
+            $jabatan.html(posOptions);
+            
+            // Restore old jabatan if typed manually and not in the list
+            if (oldJabatan && !$jabatan.find("option[value='" + oldJabatan + "']").length) {
+                var newOption = new Option(oldJabatan, oldJabatan, true, true);
+                $jabatan.append(newOption);
+            }
+            
+            $jabatan.trigger('change.select2');
+        });
+
+        // Trigger change on load if department is already selected (back button or validation error)
+        if ($('#department').val()) {
+            $('#department').trigger('change');
+        }
+    });
+
+
     // Auto-calculate age from tanggal_lahir
     const dobEl  = document.getElementById('tanggal_lahir');
     const ageEl  = document.getElementById('umur');

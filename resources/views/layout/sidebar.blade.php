@@ -29,11 +29,13 @@ $role = $roleusers[0]->rolename;
             @if(in_array($role,['Admin','HRD','Payroll_STAFF','Payroll_SEWING','Payroll_NONSEWING']))
             <a class="collapse-item" href="{{ route('devices.index') }}">Whatsapp Device</a>
             <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
+            <a class="collapse-item" href="{{ route('recruitment-position.index') }}">Recruitment Position</a>
             <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar</a>
             <a class="collapse-item" href="{{ route('parent-dept.index') }}">Parent Departement</a>
             <a class="collapse-item" href="{{ route('dept.index') }}">Departement</a>
             <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
             <a class="collapse-item" href="{{ route('biodata_keluar.index') }}">Biodata Keluar</a>
+            <a class="collapse-item" href="{{ route('employee_exit_history.index') }}">Riwayat Karyawan Keluar</a>
             <a class="collapse-item" href="{{ route('employees-contract.index') }}">Kontrak Karyawan</a>
             @endif
          </div>
@@ -186,7 +188,7 @@ $role = $roleusers[0]->rolename;
          <div class="collapse-inner bg-white rounded">
             @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
             <a class="collapse-item" href="{{ route('insentif.threshold.index') }}">Insentif Threshold</a>
-            <a class="collapse-item" href="{{ route('dept-insentif-role.index') }}">Insentif Mapping</a>
+            <!-- <a class="collapse-item" href="{{ route('dept-insentif-role.index') }}">Insentif Mapping</a> -->
             <a class="collapse-item" href="{{ route('insentif-role-formulas.index') }}">Insentif Formula</a>
             <a class="collapse-item" href="{{ route('sewing-violations.index') }}">Sewing Violations</a>
             <hr>

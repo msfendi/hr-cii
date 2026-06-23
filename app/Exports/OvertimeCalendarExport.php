@@ -55,7 +55,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         $headerRow1[] = 'CT';
         $headerRow1[] = 'MA';
         $headerRow1[] = 'P1';
-        $headerRow1[] = 'PE';
+        $headerRow1[] = 'H';
         $headerRow1[] = 'SD';
         $rows[] = $headerRow1;
 
@@ -102,7 +102,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             $dataRow[] = $employee['CT'] ?? '0';
             $dataRow[] = $employee['MA'] ?? '0';
             $dataRow[] = $employee['P1'] ?? '0';
-            $dataRow[] = $employee['PE'] ?? '0';
+            $dataRow[] = $employee['H'] ?? '0';
             $dataRow[] = $employee['SD'] ?? '0';
 
             $rows[] = $dataRow;

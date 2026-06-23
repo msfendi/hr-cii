@@ -31,6 +31,7 @@ use App\Http\Controllers\CompensationApproveController;
 use App\Http\Controllers\CompensationsController;
 use App\Http\Controllers\DeptInsentifRoleController;
 use App\Http\Controllers\Employee6sAssignmentController;
+use App\Http\Controllers\EmployeeExitHistoryController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\EmployeePayrollController;
@@ -141,6 +142,12 @@ Route::group(['middleware' => 'auth'], function () {
     // BIODATA KELUAR
     Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
     Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::patch('/biodata-keluar/update-keterangan/{npk}', [BiodataKeluarController::class, 'updateKeterangan'])->name('biodata_keluar.update-keterangan')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+
+    // ========================================
+    // Riwayat Karyawan Keluar
+    Route::get('/employee-exit-history/index', [EmployeeExitHistoryController::class, 'index'])->name('employee_exit_history.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/employee-exit-history/get-data', [EmployeeExitHistoryController::class, 'getData'])->name('employee_exit_history.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
 
 
     // ========================================
@@ -170,6 +177,15 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/pelamar/assign', [PelamarController::class, 'assign'])->name('pelamar.assign')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/pelamar/detail/{id}', [PelamarController::class, 'detail'])->name('pelamar.detail')->middleware(['auth', 'role:Admin|HRD']);
     Route::get('/pelamar/template', [PelamarController::class, 'exportTemplate'])->name('pelamar.template')->middleware(['auth', 'role:Admin|HRD']);
+
+    // Recruitment Position
+    Route::prefix('recruitment-position')->middleware(['auth', 'role:Admin|HRD'])->group(function () {
+        Route::get('/', [\App\Http\Controllers\RecruitmentPositionController::class, 'index'])->name('recruitment-position.index');
+        Route::get('/get-data', [\App\Http\Controllers\RecruitmentPositionController::class, 'getData'])->name('recruitment-position.get-data');
+        Route::post('/store', [\App\Http\Controllers\RecruitmentPositionController::class, 'store'])->name('recruitment-position.store');
+        Route::put('/update/{id}', [\App\Http\Controllers\RecruitmentPositionController::class, 'update'])->name('recruitment-position.update');
+        Route::delete('/destroy/{id}', [\App\Http\Controllers\RecruitmentPositionController::class, 'destroy'])->name('recruitment-position.destroy');
+    });
 
     // Activity Log
     Route::prefix('activity-logs')->group(function () {
@@ -360,7 +376,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/line-insentif-master/{period}/check', [LineInsentifMasterController::class, 'check'])->name('line-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('/line-insentif-master/{period}/check', [LineInsentifMasterController::class, 'check'])->name('line-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
     Route::get('/line-insentif-master/{period}/data', [LineInsentifMasterController::class, 'getData'])->name('line-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
 
     // Cutting Insentif Master
@@ -373,7 +389,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/cutting-insentif-master/{period}/check', [CuttingInsentifMasterController::class, 'check'])->name('cutting-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('/cutting-insentif-master/{period}/check', [CuttingInsentifMasterController::class, 'check'])->name('cutting-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
     Route::get('/cutting-insentif-master/{period}/data', [CuttingInsentifMasterController::class, 'getData'])->name('cutting-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
 
     // Pad Print Insentif Master
@@ -386,7 +402,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/pad-insentif-master/{period}/check', [PadInsentifMasterController::class, 'check'])->name('pad-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('/pad-insentif-master/{period}/check', [PadInsentifMasterController::class, 'check'])->name('pad-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
     Route::get('/pad-insentif-master/{period}/data', [PadInsentifMasterController::class, 'getData'])->name('pad-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
 
 
@@ -400,7 +416,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('heat-insentif-master/export', [HeatInsentifMasterController::class, 'export'])->name('heat-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::get('/heat-insentif-master/template', [HeatInsentifMasterController::class, 'template'])->name('heat-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     Route::post('/heat-insentif-master/import', [HeatInsentifMasterController::class, 'import'])->name('heat-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/heat-insentif-master/{period}/check', [HeatInsentifMasterController::class, 'check'])->name('heat-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('/heat-insentif-master/{period}/check', [HeatInsentifMasterController::class, 'check'])->name('heat-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
     Route::get('/heat-insentif-master/{period}/data', [HeatInsentifMasterController::class, 'getData'])->name('heat-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
 
     // Dept Insentif Role
@@ -793,7 +809,8 @@ Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::cl
 Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::class, 'store'])->name('employee6s.store')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-Route::delete('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::get('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+Route::get('/employee-6s-assignment/{period}/check', [Employee6sAssignmentController::class, 'check'])->name('employee6s.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|IE|Management']);
 
 Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD'])->group(function () {
 

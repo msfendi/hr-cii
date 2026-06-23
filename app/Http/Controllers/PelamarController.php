@@ -307,9 +307,6 @@ class PelamarController extends Controller
             ? $this->countWorkingDays($fullMonthEnd->copy()->addDay(), $endDate)
             : 0;
 
-        // Hitung durasi bulan aktual (bukan dari input user, tapi dari tanggal nyata)
-        $actualMonthDuration = (int) $startDate->copy()->diffInMonths($endDate);
-
         return [$endDate, $dayDuration, $actualMonthDuration];
     }
 

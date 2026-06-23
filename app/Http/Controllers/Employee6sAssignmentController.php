@@ -4,20 +4,40 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee6sAssignment;
 use App\Models\PayrollPeriod;
+use App\Models\PayrollComponent;
 use App\Models\Section;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
+use App\Models\InsentifApproval;
 
 class Employee6sAssignmentController extends Controller
 {
     public function index()
     {
-        $data = Employee6sAssignment::with('period')
-            ->latest()
+        $sixsInsentifComponent = PayrollComponent::where('code', 'sixs_insentif')->first();
+        $sixsInsentifFormula = $sixsInsentifComponent->formula;
+
+        $periods = PayrollPeriod::select('id', 'name')
+            ->where('is_closed', 0)
+            ->orderBy('id', 'desc')
             ->get();
 
-        return view('6s_insentif.index', compact('data'));
+        $data = DB::connection('cii')
+            ->table('employee_6s_assignments as esa')
+            ->leftJoin('payroll_periods as pp', 'esa.period_id', '=', 'pp.id')
+            ->where('pp.is_closed', 0)
+            ->get();
+        // dd($data);
+
+        return view(
+            '6s_insentif.index',
+            compact(
+                'data',
+                'periods',
+                'sixsInsentifFormula'
+            )
+        );
     }
 
     public function create()
@@ -73,6 +93,52 @@ class Employee6sAssignmentController extends Controller
             'file_path'       => $filePath,
         ]);
 
+        /*
+        =====================================
+        GET APPROVAL SETTING
+        =====================================
+        */
+
+        $component = 'sixs_insentif';
+
+        $setting = DB::table('payroll_settings')
+            ->where('component', $component)
+            ->first();
+
+        if ($setting) {
+
+            $approvalArray = json_decode($setting->approval, true);
+
+            $approval = [
+                json_encode($approvalArray)
+            ];
+
+            $waitingStatus = array_fill(
+                0,
+                count($approvalArray),
+                'waiting'
+            );
+
+            $progress = [
+                [
+                    'npk' => json_encode($approvalArray),
+                    'status' => json_encode($waitingStatus),
+                ]
+            ];
+            InsentifApproval::updateOrCreate(
+                [
+                    'period_id' => $request->period_id,
+                    'payroll_component' => $component
+                ],
+                [
+                    'approval'     => $approval,
+                    'progress'     => $progress,
+                    'approved_at'  => null,
+                    'status'       => 'pending'
+                ]
+            );
+        }
+
         Alert::success('Success', '6S Insentif successfully created!');
         return redirect()
             ->route('employee6s.index')
@@ -119,5 +185,107 @@ class Employee6sAssignmentController extends Controller
         return redirect()
             ->route('employee6s.index')
             ->with('success', 'Data berhasil dihapus');
+    }
+
+    public function check($period_id)
+    {
+        $period = PayrollPeriod::findOrFail($period_id);
+
+        $periodStart = $period->start_date;
+        $periodEnd   = $period->end_date;
+
+        $assignmentNpk = DB::table('employee_6s_assignments')
+            ->where('period_id', $period->id);
+
+        $employeeBase = DB::connection('cii')
+            ->table(DB::raw("(
+        SELECT *
+        FROM employee_6s_assignments
+        WHERE period_id = {$period->id}
+    ) anpk"))
+
+            ->join('PKWT as p', 'p.NPK', '=', 'anpk.npk')
+
+            ->join(DB::raw("
+        (
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
+            UNION ALL
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
+        ) emp
+    "), 'p.NPK', '=', 'emp.NPK')
+
+            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+
+            ->leftJoin('sections as s', function ($join) {
+                $join->on(DB::raw('TRY_CAST(emp.SECTION AS BIGINT)'), '=', 's.id');
+            })
+
+            ->where(function ($q) use ($periodStart, $periodEnd) {
+                $q->whereNull('p.TKK')
+                    ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
+            })
+
+            ->select(
+                'p.NPK',
+                'emp.NAMA_KARYAWAN',
+                'anpk.percentage',
+                'p.TMK',
+                'p.TKK as tkk',
+                'emp.ID_DEPT',
+                'd.DEPARTEMENT as DEPARTEMENT',
+                'emp.SECTION as SECTION'
+            );
+
+        $employees = DB::connection('cii')
+            ->query()
+            ->fromSub($employeeBase, 'emp')
+            ->distinct()
+            ->get();
+
+        // dd($employees);
+
+        // ❗ AMBIL FORMULA (JANGAN JSON DECODE)
+        $sixsInsentifFormula = PayrollComponent::where('code', 'sixs_insentif')
+            ->value('formula');
+
+        $results = [];
+
+        foreach ($employees as $employee) {
+
+            $status = $employee->tkk ? 'Resign' : 'Active';
+
+            // hitung insentif dari formula
+            $sixs = $this->evaluateFormula($sixsInsentifFormula, $employee->percentage);
+
+            $results[] = [
+                'npk' => $employee->NPK,
+                'name' => $employee->NAMA_KARYAWAN,
+                'dept' => $employee->DEPARTEMENT, // ❗ fix ini
+                'sixs_insentif' => $sixs,
+                'tkk' => $employee->tkk,
+                'status' => $status
+            ];
+        }
+
+        return response()->json([
+            'data' => $results
+        ]);
+    }
+
+    private function evaluateFormula($formula, $percentage)
+    {
+        if (!$formula) {
+            return 0;
+        }
+
+        // replace variable percentage
+        $expr = str_replace('percentage', $percentage, $formula);
+
+        // evaluate expression
+        try {
+            return eval("return ($expr);");
+        } catch (\Throwable $e) {
+            return 0;
+        }
     }
 }

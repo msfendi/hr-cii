@@ -977,6 +977,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'emp.IS_EXPAT',
                 'emp.KETERANGAN',
                 'emp.TANGGUNGAN',
+                'a6s.percentage',
 
                 'ec.salary',
                 'ec.allowance',
@@ -1062,10 +1063,12 @@ class GeneratePayrollProcess implements ShouldQueue
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
                 'tanggungan'     => (float) $employee->TANGGUNGAN,
+                'percentage'     => (float) $employee->percentage,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => $employee->IS_STAFF === '1' ? (float) $employee->late_minutes : 0,
                 'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
+                'is_sewing'       => $employee->IS_SEWING == '1' ? 1 : 0,
                 'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                 'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                 'bpjsketex' => (float) $employee->percentket,
@@ -2124,10 +2127,12 @@ class GeneratePayrollProcess implements ShouldQueue
                     'dept' => $employee->DEPARTEMENT,
                     'tmk' => $employee->TMK,
                     'tkk' => $employee->TKK,
+                    'is_sewing'       => $employee->IS_SEWING == '1' ? 1 : 0,
                     'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
                     'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                     'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                     'bpjsketex' => (float) $employee->percentket,
+                    'percentage'     => (float) $employee->percentage,
                     // Basis BPJS
                     'bpjs_base' => (
                         ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')

@@ -21,6 +21,7 @@ class RecruitmentController extends Controller
     public function index(Request $request)
     {
         $status = $request->query('status');
+        $tglPendaftaran = $request->query('tgl_pendaftaran');
         $query = DB::connection('cii')->table('PELAMAR')
             ->where('PELAMAR.IS_KONTRAK', 'FALSE')
             ->leftJoin('pelamar_details as pd', 'pd.id_pelamar', '=', 'PELAMAR.ID')
@@ -75,7 +76,8 @@ class RecruitmentController extends Controller
                 'pd.comment_interview',
                 'pd.result_user',
                 'pd.comment_user',
-                'pd.file_test'
+                'pd.file_test',
+                'pd.created_at'
             );
 
         if ($status === 'never_confirm') {
@@ -107,6 +109,10 @@ class RecruitmentController extends Controller
             $query->where('pd.status_apply', 'REJECTED');
         } elseif ($status === 'onboarding') {
             $query->where('pd.status_apply', 'ONBOARDING');
+        }
+
+        if ($tglPendaftaran) {
+            $query->whereDate('pd.created_at', $tglPendaftaran);
         }
 
         $recruitments = $query->orderByDesc('PELAMAR.id')->get();

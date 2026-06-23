@@ -664,7 +664,17 @@
                             </h1>
                             <p class="mb-0 text-muted small">Kelola pipeline pelamar &amp; status rekrutmen</p>
                         </div>
-                        <div class="d-flex align-items-center" style="gap:10px;">
+                        <div class="d-flex align-items-center" style="gap:10px;">                 
+                            {{-- Tgl Pendaftaran Filter --}}
+                            <div>
+                                <label class="d-block mb-1" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#6b7280;">
+                                    <i class="fas fa-calendar-alt mr-1"></i>Tgl Pendaftaran
+                                </label>
+                                <input type="date" class="form-control form-control-sm" id="filter_tgl"
+                                    value="{{ request('tgl_pendaftaran') }}"
+                                    style="min-width:140px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
+                                    onchange="filterTgl(this.value)">
+                            </div>
                             {{-- Pipeline Filter --}}
                             <div>
                                 <label class="d-block mb-1" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#6b7280;">
@@ -673,10 +683,10 @@
                                 <select class="form-control form-control-sm" id="filter_pipeline"
                                     style="min-width:160px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
                                     onchange="if(this.value) window.location.href=this.value;">
-                                    <option value="{{ route('recruitment.index') }}" {{ is_null($status) ? 'selected' : '' }}>Semua Pelamar</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'never_confirm']) }}" {{ $status === 'never_confirm' ? 'selected' : '' }}>Applied</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'onboarding']) }}" {{ $status === 'onboarding' ? 'selected' : '' }}>Onboarding</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'decline']) }}" {{ $status === 'decline' ? 'selected' : '' }}>Decline</option>
+                                    <option value="{{ route('recruitment.index', request()->except('status')) }}" {{ is_null($status) ? 'selected' : '' }}>Semua Pelamar</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'never_confirm'])) }}" {{ $status === 'never_confirm' ? 'selected' : '' }}>Applied</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'onboarding'])) }}" {{ $status === 'onboarding' ? 'selected' : '' }}>Onboarding</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'decline'])) }}" {{ $status === 'decline' ? 'selected' : '' }}>Decline</option>
                                 </select>
                             </div>
 
@@ -688,11 +698,11 @@
                                 <select class="form-control form-control-sm" id="filter_penilaian"
                                     style="min-width:180px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
                                     onchange="if(this.value) window.location.href=this.value;">
-                                    <option value="" {{ !in_array($status, ['step_interview','step_kesehatan','step_teknis','step_user']) ? 'selected' : '' }}>— Semua Tahap —</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_interview']) }}" {{ $status === 'step_interview' ? 'selected' : '' }}>Tes Interview</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_kesehatan']) }}" {{ $status === 'step_kesehatan' ? 'selected' : '' }}>Tes Kesehatan</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_teknis']) }}" {{ $status === 'step_teknis' ? 'selected' : '' }}>Tes Teknis</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_user']) }}" {{ $status === 'step_user' ? 'selected' : '' }}>Tes User</option>
+                                    <option value="{{ route('recruitment.index', request()->except('status')) }}" {{ !in_array($status, ['step_interview','step_kesehatan','step_teknis','step_user']) ? 'selected' : '' }}>— Semua Tahap —</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_interview'])) }}" {{ $status === 'step_interview' ? 'selected' : '' }}>Tes Interview</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_kesehatan'])) }}" {{ $status === 'step_kesehatan' ? 'selected' : '' }}>Tes Kesehatan</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_teknis'])) }}" {{ $status === 'step_teknis' ? 'selected' : '' }}>Tes Teknis</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_user'])) }}" {{ $status === 'step_user' ? 'selected' : '' }}>Tes User</option>
                                 </select>
                             </div>
                         </div>
@@ -730,6 +740,8 @@
                                             <th style="min-width:100px">Fisik</th>
                                             <th style="min-width:120px">Kontak</th>
                                             <th style="min-width:90px">Agama / Status</th>
+                                            <th style="min-width:160px">Departemen / Posisi</th>
+                                            <th style="min-width:120px">Tanggal Apply</th>
                                             <th style="min-width:160px">Status Apply</th>
                                             <th width="70" class="text-center">Dok.</th>
                                             <th width="120" class="text-center">Aksi</th>
@@ -837,6 +849,22 @@
                                                     <div class="name-main" style="font-size:13px;">{{ $recruitment->AGAMA ?? '-' }}</div>
                                                     <div class="name-sub">{{ $recruitment->STATUS ?? '-' }}</div>
                                                     <div class="name-sub">{{ $recruitment->TANGGUNGAN ?? '0' }} tanggungan</div>
+                                                </td>
+                                                
+                                                {{-- Departemen / Posisi --}}
+                                                <td>
+                                                    <div class="name-main" style="font-size:13px;">{{ $recruitment->dept ?? '-' }}</div>
+                                                    <div class="name-sub">{{ $recruitment->jabatan ?? '-' }}</div>
+                                                </td>
+
+                                                {{-- Tanggal Apply --}}
+                                                <td>
+                                                    <div class="name-main" style="font-size:13px;">
+                                                        {{ 
+                                                            $recruitment->created_at 
+                                                            ? \Carbon\Carbon::parse($recruitment->created_at)->format('d F Y') 
+                                                            : '-' 
+                                                        }}</div>
                                                 </td>
 
                                                 {{-- Status Apply --}}
@@ -1672,6 +1700,17 @@
             $('#doc_grid_modal').html(dh || '<span class="text-muted"><i class="fas fa-folder-open mr-1"></i>Tidak ada dokumen tersedia</span>');
         });
     });
+
+    
+    function filterTgl(val) {
+        let url = new URL(window.location.href);
+        if(val) {
+            url.searchParams.set('tgl_pendaftaran', val);
+        } else {
+            url.searchParams.delete('tgl_pendaftaran');
+        }
+        window.location.href = url.toString();
+    }
     </script>
 
     <script src="{{ asset('js/demo/datatables-demo.js') }}"></script>

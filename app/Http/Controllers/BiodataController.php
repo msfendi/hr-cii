@@ -252,7 +252,10 @@ class BiodataController extends Controller
             if ($pkwt) {
                 DB::connection('cii')->table('PKWT')
                     ->where('NPK', $NPK)
-                    ->update(['TKK' => $request->tkk]);
+                    ->update([
+                        'TKK' => $request->tkk,
+                        'KETERANGAN' => $request->status_keluar,
+                    ]);
             }
 
             // Update employees_contract status berdasarkan TKK vs end_date

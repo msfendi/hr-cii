@@ -1035,7 +1035,7 @@
                                                                     id="exit_tmk" readonly>
                                                             </div>
                                                             <!-- TKK Field Added Here -->
-                                                            <div class="col-md-12 mb-3">
+                                                            <div class="col-md-6 mb-3">
                                                                 <label
                                                                     class="small font-weight-bold text-danger ml-2">Tanggal
                                                                     Keluar (TKK) <span
@@ -1043,6 +1043,17 @@
                                                                 <input type="date"
                                                                     class="form-control px-3 border-danger text-danger font-weight-bold"
                                                                     name="tkk" id="exit_tkk">
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="small font-weight-bold text-danger ml-2">Status
+                                                                    Keluar<span class="text-danger">*</span></label>
+                                                                <select name="status_keluar" id="status_keluar"
+                                                                    class="form-control px-3 border-danger text-danger font-weight-bold">
+                                                                    <option value="" disabled selected>Pilih Status Keluar</option>
+                                                                    <option value="SPD">Resign</option>
+                                                                    <option value="HK">Habis Kontrak</option>
+                                                                    <option value="MA">Mangkir</option>
+                                                                </select>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
                                                                 <label
@@ -1261,6 +1272,7 @@
 
             // Clear previous TKK
             $('#exit_tkk').val('');
+            $('#status_keluar').val('');
 
             // Store NPK for submission
             $('#confirmExitBtn').data('id', npk);
@@ -1311,10 +1323,16 @@
             e.preventDefault();
             var npk = $('#confirmExitBtn').data('id');
             var tkk = $('#exit_tkk').val();
+            var status_keluar = $('#status_keluar').val();
             var btn = $('#confirmExitBtn');
 
             if (!tkk) {
                 Swal.fire('Error', 'Harap isi Tanggal Keluar Kerja (TKK)', 'warning');
+                return;
+            }
+
+            if (!status_keluar) {
+                Swal.fire('Error', 'Harap pilih Status Keluar', 'warning');
                 return;
             }
 
@@ -1323,7 +1341,7 @@
             $.ajax({
                 url: '/biodata/exit/' + npk,
                 type: 'GET',
-                data: { tkk: tkk },
+                data: { tkk: tkk, status_keluar: status_keluar },
                 success: function (response) {
                     $('#exitModal').modal('hide');
                     if (response.original && response.original.status === 'success' || response.status === 'success') {

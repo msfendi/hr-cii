@@ -108,13 +108,34 @@
 
                       <div class="form-group">
 
+                        <label>Employee</label>
+
+                        <select id="npkSelect" name="npk" class="form-control" required>
+
+                          @foreach($employees as $employee)
+
+                          <option value="{{ $employee->NPK }}" {{ $data->npk == $employee->NPK ? 'selected' : '' }}>
+                            {{ $employee->NPK }} - {{ $employee->NAMA_KARYAWAN }}
+                          </option>
+
+                          @endforeach
+
+                        </select>
+
+                      </div>
+
+                    </div>
+                    <div class="col-md-6">
+
+                      <div class="form-group">
+
                         <label>Inspector</label>
 
                         <select id="inspectionSelect" name="inspector" class="form-control" required>
 
                           @foreach($employees as $employee)
 
-                          <option value="{{ $employee->NPK }}" {{ $data->npk == $employee->NPK ? 'selected' : '' }}>
+                          <option value="{{ $employee->NPK }}" {{ $data->inspector == $employee->NPK ? 'selected' : '' }}>
                             {{ $employee->NPK }} - {{ $employee->NAMA_KARYAWAN }}
                           </option>
 

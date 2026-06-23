@@ -378,43 +378,33 @@ class PayrollProcessController extends Controller
     {
         $period = PayrollPeriod::findOrFail($period_id);
 
-        $service = new GeneratePayrollProcess(
-            $period->id,
-            'check'
-        );
+        $service = new GeneratePayrollProcess($period->id, 'check');
+        $raw = $service->simulation();
 
-        $payrollResults = $service->simulation();
+        // ✅ IMPORTANT FIX
+        $payrollResults = collect($raw['data'] ?? $raw);
 
-        // $payrollResults = GeneratePayrollCheck::dispatchSync($period->id);
         $user = Auth::user();
-
-        $role = $user->role;
+        $role = optional($user->roles->first())->name;
 
         if ($role === 'Payroll_STAFF') {
-
-            $payrollResults = collect($payrollResults)
-                ->where('IS_STAFF', 1)
-                ->values();
+            $payrollResults = $payrollResults->filter(function ($row) {
+                return ($row['is_staff'] ?? 0) == 1;
+            });
         } elseif ($role === 'Payroll_SEWING') {
 
-            $payrollResults = collect($payrollResults)
-                ->filter(function ($row) {
-                    return $row['IS_STAFF'] == 0
-                        && $row['IS_SEWING'] == 0;
-                })
-                ->values();
+            $payrollResults = $payrollResults->filter(function ($row) {
+                return ($row['is_sewing'] ?? 0) == 1;
+            });
         } elseif ($role === 'Payroll_NONSEWING') {
 
-            $payrollResults = collect($payrollResults)
-                ->filter(function ($row) {
-                    return $row['IS_STAFF'] == 1
-                        && $row['IS_SEWING'] == 1;
-                })
-                ->values();
+            $payrollResults = $payrollResults->filter(function ($row) {
+                return ($row['is_sewing'] ?? 0) == 0;
+            });
         }
 
         return response()->json([
-            'data' => $payrollResults
+            'data' => $payrollResults->values()
         ]);
     }
 

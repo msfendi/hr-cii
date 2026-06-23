@@ -754,31 +754,13 @@ buttons: [
         url:url,
         dataSrc:function(json){
 
-            let role = userRole;
+            // console.log('RAW RESPONSE:', json);
 
-            let rows = json.data ?? [];
+            let rows = Array.isArray(json)
+                ? json
+                : (json.data ?? []);
 
-            if(role === 'Payroll_STAFF'){
-
-                rows = rows.filter(x =>
-                    Number(x.IS_STAFF) === 1
-                );
-
-            }else if(role === 'Payroll_SEWING'){
-
-                rows = rows.filter(x =>
-                    Number(x.IS_STAFF) === 0 &&
-                    Number(x.IS_SEWING) === 0
-                );
-
-            }else if(role === 'Payroll_NONSEWING'){
-
-                rows = rows.filter(x =>
-                    Number(x.IS_STAFF) === 0 &&
-                    Number(x.IS_SEWING) === 1
-                );
-
-            }
+            // console.log('ROWS FINAL:', rows.length);
 
             return rows;
         }

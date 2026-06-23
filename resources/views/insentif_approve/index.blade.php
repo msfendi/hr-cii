@@ -236,6 +236,7 @@
          row.pad_insentif ??
          row.cutting_insentif ??
          row.heat_insentif ??
+         row.sixs_insentif ??
          0;
          
          return formatRupiah(value);
@@ -290,6 +291,7 @@
          row.pad_insentif ??
          row.cutting_insentif ??
          row.heat_insentif ??
+         row.sixs_insentif ??
          0;
          
          return sum + Number(val);
@@ -342,6 +344,9 @@
          }
          else if(component==='heat_insentif'){
          url='/heat-insentif-master/'+period+'/check';
+         }
+         else if(component==='sixs_insentif'){
+         url='/employee-6s-assignment/'+period+'/check';
          }
          
          $('#insentifTable_processing').show();

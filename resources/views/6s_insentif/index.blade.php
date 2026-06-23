@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
   @include('layout.header')
+  <style>
+  .select-period + .select2-container{
+      width:200px !important;
+  }
+</style>
 
   <body id="page-top">
 
@@ -42,13 +47,26 @@
 
                 <div class="d-flex justify-content-between align-items-center">
 
-                  <h6 class="m-0 font-weight-bold text-primary">
-                    Data Employee 6S Assignment
-                  </h6>
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        Data Employee 6S Assignment
+                    </h6>
+
+                    <select id="checkPeriod"
+                            class="form-control select-period">
+
+                        <option value="">Pilih Payroll Period</option>
+
+                        @foreach($periods as $period)
+                            <option value="{{ $period->id }}">
+                                {{ $period->name }}
+                            </option>
+                        @endforeach
+
+                    </select>
 
                 </div>
 
-              </div>
+            </div>
 
               <div class="card-body">
 
@@ -60,12 +78,14 @@
 
                       <tr>
                         <th>ID</th>
+                        <th hidden>Period ID</th>
                         <th>Period</th>
                         <th>Group</th>
                         <th>Inspector</th>
                         <th>Inspection Date</th>
                         <th>Total Score</th>
                         <th>Percentage</th>
+                        <th>Insentif</th>
                         <th>Attachment</th>
                         <th width="120">Action</th>
                       </tr>
@@ -79,9 +99,9 @@
                       <tr>
 
                         <td>{{ $row->id }}</td>
-
+                        <td hidden>{{ $row->period_id }}</td>
                         <td>
-                          {{ optional($row->period)->name }}
+                          {{ $row->name }}
                         </td>
 
                         <td>
@@ -101,8 +121,22 @@
                         </td>
 
                         <td class="text-right">
-                          {{ number_format($row->percentage,2,'.',',') }} %
+                            {{ number_format($row->percentage,2,'.',',') }} %
                         </td>
+
+                        <td class="text-right">
+                          @php
+
+                              $insentif =
+                                  $row->percentage > 95 ? 3000000 :
+                                  ($row->percentage >= 85 ? 2000000 :
+                                  ($row->percentage >= 75 ? 1000000 : 0));
+
+                          @endphp
+
+                          {{ 'Rp ' . number_format($insentif, 0, ',', '.') }}
+
+                      </td>
 
                         <td class="text-center">
 
@@ -207,21 +241,55 @@
   <!-- ===================================================== -->
   <!-- DATATABLE -->
   <!-- ===================================================== -->
+   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
   <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
   <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
 
   <script>
-    let masterTable;
-    $(document).ready(function() {
-      masterTable = $('#dataTable').DataTable({
-        order: [
-          [0, 'desc']
-        ],
-        pageLength: 10,
-        responsive: true,
-        autoWidth: false
-      });
+    $('#checkPeriod').select2({
+        allowClear: true,
+        placeholder: 'Pilih Payroll Period',
+        width: '100%'
     });
+  </script>
+  <script>
+
+  let masterTable;
+
+  $(document).ready(function () { 
+
+      masterTable = $('#dataTable').DataTable({
+          order: [[0, 'desc']],
+          pageLength: 10,
+          responsive: true,
+          autoWidth: false
+      });
+
+      $('#checkPeriod').select2({
+          placeholder: 'Pilih Payroll Period',
+          allowClear: true
+      });
+
+      $('#checkPeriod').on('change', function () {
+
+          let periodId = $(this).val();
+
+          if (!periodId) {
+              masterTable.column(1).search('').draw();
+              return;
+          }
+
+          masterTable
+              .column(1)
+              .search(periodId)
+              .draw();
+
+      });
+
+  });
+
   </script>
 
   <!-- ===================================================== -->
