@@ -388,18 +388,21 @@ class PayrollProcessController extends Controller
         $role = optional($user->roles->first())->name;
 
         if ($role === 'Payroll_STAFF') {
+
             $payrollResults = $payrollResults->filter(function ($row) {
                 return ($row['is_staff'] ?? 0) == 1;
             });
         } elseif ($role === 'Payroll_SEWING') {
 
             $payrollResults = $payrollResults->filter(function ($row) {
-                return ($row['is_sewing'] ?? 0) == 0;
+                return (($row['is_staff'] ?? 0) == 0)
+                    && (($row['is_sewing'] ?? 0) == 1);
             });
         } elseif ($role === 'Payroll_NONSEWING') {
 
             $payrollResults = $payrollResults->filter(function ($row) {
-                return ($row['is_sewing'] ?? 0) == 1;
+                return (($row['is_staff'] ?? 0) == 0)
+                    && (($row['is_sewing'] ?? 0) == 0);
             });
         }
 
