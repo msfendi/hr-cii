@@ -108,7 +108,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00827')
+            // ->where('p.NPK', '=', 'C-03908')
 
             ->select(
                 'p.NPK',
@@ -141,7 +141,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00827')
+            // ->where('ec1.npk', '=', 'C-03908')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -215,7 +215,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 DB::raw("
             CASE
-                WHEN DAY NOT IN ('Sabtu','Minggu')
+                WHEN DAY NOT IN ('Sabtu','Minggu','Saturday','Sunday')
                 AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
                 THEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
                 ELSE 0
@@ -224,7 +224,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 DB::raw("
             CASE
-                WHEN DAY IN ('Sabtu','Minggu')
+                WHEN DAY IN ('Sabtu','Minggu','Saturday','Sunday')
                 AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
                 THEN
                     CASE
@@ -961,7 +961,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($bpjsException, 'be', function ($join) {
                 $join->on('emp.NPK', '=', 'be.npk');
             })
-            // ->where('emp.NPK', '=', 'C-00827')
+            // ->where('emp.NPK', '=', 'C-03908')
 
             ->select(
                 'emp.NPK',

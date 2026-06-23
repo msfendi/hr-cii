@@ -121,8 +121,14 @@
         </tr>
         @php $totalEarning = 0; @endphp
         @foreach($earnings as $name => $value)
+            @php
+                $labels = [
+                    'sixs_insentif' => '6S Insentif',
+                ];
+                $label = $labels[$name] ?? ucwords(str_replace('_', ' ', $name));
+            @endphp
             <tr>
-                <td>{{ ucwords(str_replace('_', ' ', $name)) }}</td>
+                <td>{{ $label }}</td>
                 <td class="right">{{ number_format($value, 0, ',', '.') }}</td>
             </tr>
             @php $totalEarning += $value; @endphp
