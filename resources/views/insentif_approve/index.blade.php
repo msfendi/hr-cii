@@ -1,6 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
    @include('layout.header')
+   <style>
+.select2-container {
+    z-index: 99999 !important;
+}
+.dataTables_wrapper .row {
+    align-items: center !important;
+}
+</style>
+<style>
+.dept-filter-modal {
+    display: flex;
+    align-items: center;
+}
+
+#filterDeptModal {
+    width: 250px !important;
+    min-width: 250px;
+}
+
+.dataTables_filter {
+    margin-left: auto;
+}
+</style>
    <body id="page-top">
       @include('sweetalert::alert')
       <div id="wrapper">
@@ -151,14 +174,7 @@
                            <tr>
                               <th>NPK</th>
                               <th>Name</th>
-                              <th>
-                                 Department
-                                 <br>
-                                 <input type="text"
-                                    id="searchDept"
-                                    class="form-control form-control-sm mt-1"
-                                    placeholder="Search Dept">
-                              </th>
+                              <th>Departement</th>
                               <th>Insentif</th>
                               <th>TKK</th>
                               <th>Status</th>
@@ -181,6 +197,7 @@
       </div>
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
+      <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
       <script>
          let insentifTable;
          
@@ -197,6 +214,39 @@
          }
          
          $(document).ready(function(){
+            let deptDropdownModal = `
+    <select id="filterDeptModal"
+            class="form-control form-control-sm"
+            style="min-width:250px; width:auto">
+        <option value="">Department</option>
+    </select>
+`;
+
+$('.dept-filter-modal').html(deptDropdownModal);
+
+$('#filterDeptModal').select2({
+    placeholder: 'Department',
+    allowClear: true,
+    width: '100%',
+});
+
+/*
+| FILTER DEPT (EXACT MATCH)
+*/
+$(document).on('change', '#filterDeptModal', function () {
+
+    let val = $(this).val();
+
+    if (!val) {
+        insentifTable.column(2).search('').draw();
+        return;
+    }
+
+    insentifTable
+        .column(2)
+        .search('^' + val + '$', true, false)
+        .draw();
+});
          
          $('#dataTable').DataTable({
          order:[[0,'desc']],
@@ -207,67 +257,99 @@
          
          
          insentifTable = $('#insentifTable').DataTable({
-         
-         processing:true,
-         searching:true,
-         paging:true,
-         info:false,
-         autoWidth:true,
-         data:[],
-         
-         language:{
-         processing:
-         '<div class="text-center p-3">'+
-         '<i class="fas fa-spinner fa-spin fa-2x"></i>'+
-         '<div>Loading data...</div>'+
-         '</div>'
-         },
-         
-         columns:[
-         {data:'npk'},
-         {data:'name'},
-         {data:'dept'},
-         {
-         data:null,
-         render:function(row){
-         
-         let value =
-         row.sewing_insentif ??
-         row.pad_insentif ??
-         row.cutting_insentif ??
-         row.heat_insentif ??
-         row.sixs_insentif ??
-         0;
-         
-         return formatRupiah(value);
-         }
-         },
-         
-         {
-         data:'tkk',
-         render:function(data){
-         return data ?? '-';
-         }
-         },
 
-         {
-         data:'status',
-         render:function(data){
+    processing:true,
+    searching:true,
+    paging:true,
+    info:false,
+    autoWidth:true,
+    data:[],
 
-         if(data==='Resign'){
-         return `
-         <span class="badge bg-danger text-white">
-         Resign
-         </span>`;
-         }
+    dom:
+    "<'row mb-2 align-items-center px-2'" +
+        "<'col-auto dept-filter-modal'>" +
+        "<'col text-end'f>" +
+    ">" +
+    "rtip",
 
-         return `
-         <span class="badge bg-success text-white">
-         Active
-         </span>`;
-         }
-         },
-         ],
+    initComplete: function () {
+
+        // =========================
+        // CREATE SELECT DEPT
+        // =========================
+        let deptDropdownModal = `
+        <select id="filterDeptModal"
+                class="form-control form-control-sm"
+                style="width:250px">
+            <option value="">Department</option>
+        </select>
+    `;
+
+    $('.dept-filter-modal').html(deptDropdownModal);
+
+    $('#filterDeptModal').select2({
+        placeholder: 'Department',
+        allowClear: true,
+        width: '250px',
+        dropdownParent: $('#detailModal')
+    });
+
+        // =========================
+        // FILTER EVENT
+        // =========================
+        $(document).on('change', '#filterDeptModal', function () {
+
+            let val = $(this).val();
+
+            if (!val) {
+                insentifTable.column(2).search('').draw();
+                return;
+            }
+
+            insentifTable
+                .column(2)
+                .search('^' + val + '$', true, false)
+                .draw();
+        });
+    },
+
+    columns:[
+        {data:'npk'},
+        {data:'name'},
+        {data:'dept'},
+        {
+            data:null,
+            render:function(row){
+
+                let value =
+                row.sewing_insentif ??
+                row.pad_insentif ??
+                row.cutting_insentif ??
+                row.heat_insentif ??
+                row.sixs_insentif ??
+                0;
+
+                return formatRupiah(value);
+            }
+        },
+        {
+            data:'tkk',
+            render:function(data){
+                return data ?? '-';
+            }
+        },
+        {
+            data:'status',
+            render:function(data){
+
+                if(data==='Resign'){
+                    return `<span class="badge bg-danger text-white">Resign</span>`;
+                }
+
+                return `<span class="badge bg-success text-white">Active</span>`;
+            }
+        },
+    ],
 
          createdRow:function(row,data){
 
@@ -303,18 +385,6 @@
          
          }
          
-         });
-         
-         
-         /* ✅ SEARCH DEPT */
-         
-         $('#searchDept').on('keyup change', function () {
-
-            insentifTable
-                  .column(2) // kolom Department
-                  .search(this.value)
-                  .draw();
-
          });
          
          });
@@ -362,6 +432,21 @@
          insentifTable.clear();
          insentifTable.rows.add(res.data);
          insentifTable.draw();
+         // BUILD DEPT OPTIONS
+let depts = [...new Set(res.data.map(item => item.dept))];
+
+let options = `<option value="">Department</option>`;
+
+depts.forEach(d => {
+    if(d){
+        options += `<option value="${d}">${d}</option>`;
+    }
+});
+
+$('#filterDeptModal')
+    .html(options)
+    .val('')
+    .trigger('change.select2');
          
          $('#insentifTable_processing').hide();
          
