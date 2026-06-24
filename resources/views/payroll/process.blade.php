@@ -114,7 +114,8 @@
                     <div class="d-flex flex-wrap mt-4">
 
                         <button id="btnProcess"
-                            class="btn btn-success btn-sm shadow-sm">
+                            class="btn btn-success btn-sm shadow-sm"
+                            disabled>
                             <i class="fas fa-cogs mr-2"></i>
                             Process Payroll
                         </button>
@@ -293,7 +294,7 @@ $('#period_id').on('change', function(){
     let periodId = $(this).val();
 
     $('#approvalBox').hide();
-    // $('#btnProcess').prop('disabled', true);
+    $('#btnProcess').prop('disabled', true);
 
 
     if(!periodId) return;
@@ -489,14 +490,14 @@ $('#period_id').on('change', function(){
         if(allFinish){
 
             $('#btnProcess')
-                // .prop('disabled',false)
+                .prop('disabled',false)
                 .removeClass('btn-secondary')
                 .addClass('btn-primary');
 
         }else{
 
             $('#btnProcess')
-                // .prop('disabled',true)
+                .prop('disabled',true)
                 .removeClass('btn-primary')
                 .addClass('btn-secondary');
         }

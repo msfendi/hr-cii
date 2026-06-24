@@ -53,9 +53,10 @@ class GeneratePayrollProcess implements ShouldQueue
         }
 
         //pindah ke controller copy dari sini
-        $periodStart = $period->start_date;
-        $periodEnd   = $period->end_date;
+        $periodStart = Carbon::parse($period->start_date);
+        $periodEnd   = Carbon::parse($period->end_date);
         $count_days  = Carbon::parse($periodStart)->diffInDays(Carbon::parse($periodEnd)) + 1;
+        $absenceDays = 0;
 
         /*
         |--------------------------------------------------------------------------
@@ -108,7 +109,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-03908')
+            ->where('p.NPK', '=', 'C-01544')
 
             ->select(
                 'p.NPK',
@@ -141,7 +142,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-03908')
+            ->where('ec1.npk', '=', 'C-01544')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -187,7 +188,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                         WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                             AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE')
+                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE','BR','OUT')
                             THEN 1
 
                         ELSE 0
@@ -263,7 +264,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE','BR','OUT')
                     THEN 1
 
                 ELSE 0
@@ -961,7 +962,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($bpjsException, 'be', function ($join) {
                 $join->on('emp.NPK', '=', 'be.npk');
             })
-            // ->where('emp.NPK', '=', 'C-03908')
+            ->where('emp.NPK', '=', 'C-01544')
 
             ->select(
                 'emp.NPK',
@@ -1051,12 +1052,43 @@ class GeneratePayrollProcess implements ShouldQueue
                 'progress' => 40,
             ]);
         }
+
         foreach ($employees as $employee) {
+            $absenceDays = 0;
+
+            /**
+             * cek apakah TMK atau TKK terjadi dalam periode payroll
+             */
+            $tmk = $employee->TMK ? Carbon::parse($employee->TMK) : null;
+            $tkk = $employee->TKK ? Carbon::parse($employee->TKK) : null;
+
+            $isJoinOrResignInPeriod =
+                ($tmk && $tmk->between($periodStart, $periodEnd)) ||
+                ($tkk && $tkk->between($periodStart, $periodEnd));
+
+            if ($isJoinOrResignInPeriod) {
+
+                // hitung hari kerja (Senin–Jumat) dalam periode full bulan
+                $cursor = $periodStart->copy();
+                $workingDays = 0;
+
+                while ($cursor->lte($periodEnd)) {
+                    if (!$cursor->isWeekend()) {
+                        $workingDays++;
+                    }
+                    $cursor->addDay();
+                }
+
+                // rumus: (hari kerja periode - 21) + absence lama
+                $absenceDays = (21 - $workingDays) + $employee->absence_days;
+            } else {
+                $absenceDays = $employee->absence_days;
+            }
 
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
-                'absence_days'   => (float) $employee->absence_days,
+                'absence_days'   => (float) $absenceDays,
                 'working_years'  => (float) $employee->working_years,
                 'adjusment'      => (float) $employee->adjusment,
                 'pph_21'         => (float) $employee->pph21,
@@ -2121,7 +2153,8 @@ class GeneratePayrollProcess implements ShouldQueue
             if ($isCheck) {
                 $payrollResults[] = [
                     // 'run_id'        => $run->id,
-                    'absence_days'  => $employee->absence_days,
+                    'absence_days_asli'   => (float) $employee->absence_days,
+                    'absence_days'   => (float) $absenceDays,
                     'count_days'    => $count_days,
                     'type' => Str::ucfirst(Str::lower($employee->type)),
                     'dept' => $employee->DEPARTEMENT,
