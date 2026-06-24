@@ -345,6 +345,8 @@ class LineInsentifMasterController extends Controller
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
             })
 
+            // ->where('emp.NPK', '=', 'C-00796')
+
             ->select(
                 'p.NPK',
                 'emp.NAMA_KARYAWAN',
@@ -744,19 +746,17 @@ class LineInsentifMasterController extends Controller
             // dd($lineViolations);
 
             $collectionDay = collect([]);
+            $collectionTotalLines = collect([]);
             $collectionLines = collect([]);
+
+            $jumlahLine = DB::table('line_efficiencies')
+                ->where('period_id', $period->id)
+                ->whereBetween('date', [$period->start_date, $period->end_date])
+                ->whereBetween('line_number', [$lineStart, $lineEnd])
+                ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
+                ->get();
+
             foreach ($grouped as $day) {
-
-                $jumlahLine = DB::table('line_efficiencies')
-                    ->where('period_id', $period->id)
-                    ->where('date', $day->date)
-                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                    ->whereBetween('line_number', [$lineStart, $lineEnd])
-                    ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
-                    ->get();
-
-                // dd($jumlahLine);
-
                 /*
                 |--------------------------------------------------------------------------
                 | CHECK RESIGN (NEW)
@@ -777,6 +777,7 @@ class LineInsentifMasterController extends Controller
                 $lines = DB::table('line_efficiencies')
                     ->where('period_id', $period->id)
                     ->where('date', $day->date)
+                    ->whereBetween('line_number', [$lineStart, $lineEnd])
                     ->get();
 
                 $totalLineInsentif = 0;
@@ -806,8 +807,9 @@ class LineInsentifMasterController extends Controller
                 );
 
                 $collectionDay->push($amount);
+                $collectionTotalLines->push($jumlahLine->first()->jumlah_line);
             }
-            // dd($collectionDay->values()->toJson(), $collectionLines->values()->toJson());
+            // dd($collectionDay->values()->toJson(), $collectionTotalLines->values()->toJson(), $collectionLines->values()->toJson());
         }
         // dd($collectionLinesTest->values()->toJson());
         return $amount;

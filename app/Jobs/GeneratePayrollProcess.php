@@ -1534,17 +1534,16 @@ class GeneratePayrollProcess implements ShouldQueue
 
                                 $collectionDay = collect([]);
                                 $collectionLines = collect([]);
+
+                                $jumlahLine = DB::table('line_efficiencies')
+                                    ->where('period_id', $period->id)
+                                    ->whereBetween('date', [$period->start_date, $period->end_date])
+                                    ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                    ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
+                                    ->get();
+
+                                // dd($jumlahLine);
                                 foreach ($grouped as $day) {
-
-                                    $jumlahLine = DB::table('line_efficiencies')
-                                        ->where('period_id', $period->id)
-                                        ->where('date', $day->date)
-                                        ->whereBetween('date', [$period->start_date, $period->end_date])
-                                        ->whereBetween('line_number', [$lineStart, $lineEnd])
-                                        ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
-                                        ->get();
-
-                                    // dd($jumlahLine);
 
                                     /*
                 |--------------------------------------------------------------------------
@@ -1566,6 +1565,7 @@ class GeneratePayrollProcess implements ShouldQueue
                                     $lines = DB::table('line_efficiencies')
                                         ->where('period_id', $period->id)
                                         ->where('date', $day->date)
+                                        ->whereBetween('line_number', [$lineStart, $lineEnd])
                                         ->get();
 
                                     $totalLineInsentif = 0;
