@@ -147,8 +147,8 @@ class EmployeePayrollController extends Controller
 
         $earnings = [];
         $deductions = [];
-
-        $late_minutes = $components['late_minutes'];
+        
+        $late_minutes = isset($components['late_minutes']) ? $components['late_minutes'] : 0;
 
         foreach ($components as $code => $value) {
 

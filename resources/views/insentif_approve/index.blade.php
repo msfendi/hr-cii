@@ -433,15 +433,24 @@ $(document).on('change', '#filterDeptModal', function () {
          insentifTable.rows.add(res.data);
          insentifTable.draw();
          // BUILD DEPT OPTIONS
-let depts = [...new Set(res.data.map(item => item.dept))];
+let deptMap = {};
 
-let options = `<option value="">Department</option>`;
+            res.data.forEach(item => {
 
-depts.forEach(d => {
-    if(d){
-        options += `<option value="${d}">${d}</option>`;
-    }
-});
+                let deptDisplay = item.dept;
+
+                if(item.line_start && item.line_end){
+                    deptDisplay += ` (${item.line_start}-${item.line_end})`;
+                }
+
+                deptMap[deptDisplay] = item.dept; // simpan dept asli
+            });
+
+            let options = `<option value="">Department</option>`;
+
+            Object.keys(deptMap).forEach(display => {
+                options += `<option value="${deptMap[display]}">${display}</option>`;
+            });
 
 $('#filterDeptModal')
     .html(options)

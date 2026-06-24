@@ -267,7 +267,7 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             ];
         }
 
-         // Get overtime data
+        // Get overtime data
         // ambil bagian dept dari join biodata dan dept
         // $queryLembur = Overtime::leftJoin(
         //     DB::raw('(SELECT NPK, ID_DEPT FROM BIODATA UNION SELECT NPK, ID_DEPT FROM BIODATA_KELUAR) AS BIO'),
@@ -332,6 +332,11 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             });
 
             $jumlahHariLembur = $lemburResmi->count();
+            // ambil semua lembur yang nilainya 0.5
+            $lemburNolKomaLima = $grupKaryawan->filter(fn($r) => $r->JUMLAH_JAM_LEMBUR == 0.5);
+            // kurangi jumlah hari lembur dengan jumlah lembur 0.5
+            $jumlahHariLembur = $jumlahHariLembur + $lemburNolKomaLima->count() * 0.5;
+
             $jamLebihDariSatu = $lemburResmi->filter(fn($r) => $r->JUMLAH_JAM_LEMBUR > 1);
             $jamEkstra = $jamLebihDariSatu->sum('JUMLAH_JAM_LEMBUR') - $jamLebihDariSatu->count();
 

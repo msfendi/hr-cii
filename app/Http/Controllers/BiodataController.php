@@ -29,7 +29,7 @@ class BiodataController extends Controller
     {
         $query = DB::connection('cii')
             ->table('BIODATA')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'employees_contract.end_date')
+            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'BIODATA.SECTION', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'employees_contract.end_date')
             ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
             ->leftJoin('employees_contract', function ($join) {
                 $join->on('BIODATA.NPK', '=', 'employees_contract.npk')
@@ -302,7 +302,7 @@ class BiodataController extends Controller
 
         if ($pkwt && $biodata) {
             $pkwt->IS_STAFF = $biodata->IS_STAFF ?? 0;
-            $pkwt->section = $biodata->SECTION;
+            $pkwt->SECTION = $biodata->SECTION;
         }
 
 

@@ -327,6 +327,11 @@ class OvertimeController extends Controller
                         }
                     }
 
+                    // Hitung jika jam lembur 0.5
+                    if ($jamLemburFloat == 0.5) {
+                        $jumlahHariLembur = $jumlahHariLembur + 0.5;
+                    }
+
                     // Lembur Khusus
                     if ( ($isWeekend || $isHoliday)) {
                         $lemburKhusus += $jamLemburFloat;

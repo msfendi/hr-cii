@@ -576,6 +576,7 @@ let insentifTable;
     /*
     | FILTER EVENT
     */
+   
     $(document).on('change', '#filterDept', function () {
 
         let val = $(this).val();
@@ -640,14 +641,23 @@ $('#checkPeriod').on('change',function(){
             // =========================
             // BUILD DEPT DROPDOWN
             // =========================
-            let depts = [...new Set(res.data.map(item => item.dept))];
+            let deptMap = {};
+
+            res.data.forEach(item => {
+
+                let deptDisplay = item.dept;
+
+                if(item.line_start && item.line_end){
+                    deptDisplay += ` (${item.line_start}-${item.line_end})`;
+                }
+
+                deptMap[deptDisplay] = item.dept; // simpan dept asli
+            });
 
             let options = `<option value="">Department</option>`;
 
-            depts.forEach(d => {
-                if(d){
-                    options += `<option value="${d}">${d}</option>`;
-                }
+            Object.keys(deptMap).forEach(display => {
+                options += `<option value="${deptMap[display]}">${display}</option>`;
             });
 
             $('#filterDept')

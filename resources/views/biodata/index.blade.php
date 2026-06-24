@@ -40,9 +40,9 @@
                                 <a href="{{ route('biodata.gender') }}" class="btn btn-info btn-sm text-white">
                                     <i class="fas fa-chart-pie"></i> Rekap Gender
                                 </a>
-                                <button type="button" class="btn btn-primary btn-sm btn-add">
+                                {{-- <button type="button" class="btn btn-primary btn-sm btn-add">
                                     <i class="fas fa-plus"></i> Add Employee
-                                </button>
+                                </button> --}}
                             </div>
                         </div>
                         <div class="card-body">
@@ -263,8 +263,10 @@
                                                                     <option value="">-- Pilih --</option>
                                                                     <option value="CHUTEX">CHUTEX</option>
                                                                     @foreach($sections as $section)
-                                                                        <option value="{{ $section->name }}">
-                                                                            {{ $section->name }} - ( {{ $section->line_start }} - {{ $section->line_end }} )
+                                                                        <option value="{{ $section->id }}">
+                                                                            {{ $section->name }} - (
+                                                                            {{ $section->line_start }} -
+                                                                            {{ $section->line_end }} )
                                                                         </option>
                                                                     @endforeach
                                                                 </select>
@@ -539,8 +541,10 @@
                                                                     <option value="">-- Pilih --</option>
                                                                     <option value="CHUTEX">CHUTEX</option>
                                                                     @foreach($sections as $section)
-                                                                        <option value="{{ $section->name }}">
-                                                                            {{ $section->name }} - ( {{ $section->line_start }} - {{ $section->line_end }} )
+                                                                        <option value="{{ $section->id }}">
+                                                                            {{ $section->name }} - (
+                                                                            {{ $section->line_start }} -
+                                                                            {{ $section->line_end }} )
                                                                         </option>
                                                                     @endforeach
                                                                 </select>
@@ -1215,7 +1219,7 @@
                     $('#show_pendidikan').val(response.PDDK ?? 'PENDIDIKAN TIDAK DIISI');
                     $('#show_sekolah').val(response.NAMA_SEKOLAH ?? 'SEKOLAH TIDAK DIISI');
                     $('#show_jurusan').val(response.JURUSAN ?? 'JURUSAN TIDAK DIISI');
-                    $('#show_section').val(response.section ?? 'SECTION TIDAK DIISI');
+                    $('#show_section').val(response.SECTION ?? 'SECTION TIDAK DIISI');
                     $('#show_id_dept').val(response.BAGIAN ?? 'DEPT TIDAK DIISI');
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');
@@ -1474,7 +1478,9 @@
                     $('#edit_pendidikan').val(response.PDDK);
                     $('#edit_sekolah').val(response.NAMA_SEKOLAH ?? '');
                     $('#edit_jurusan').val(response.JURUSAN);
-                    $('#edit_section').val(response.section);
+                    $("#edit_section option").filter(function () {
+                        return $.trim($(this).val()) === $.trim(response.SECTION);
+                    }).prop('selected', true);
 
                     $("#edit_id_dept option").filter(function () {
                         return $.trim($(this).text()) === $.trim(response.BAGIAN);
