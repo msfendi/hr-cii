@@ -231,11 +231,11 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll-periods/delete/{id}', [PayrollPeriodController::class, 'delete'])->name('payroll-periods.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
 
     // Payroll Process
-    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
+    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
+    Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
     Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
     Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::post('/payroll-process/update', [PayrollProcessController::class, 'update'])->name('payroll-process.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
@@ -245,7 +245,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll/export-progress/{run_id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/payroll/process-progress/{period_id}', [PayrollProcessController::class, 'progressRun'])->name('payroll.process.progress')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
     Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'role:Admin|Payroll_STAFF']);

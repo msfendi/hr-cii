@@ -191,6 +191,8 @@
                                     <th>NPK</th>
                                     <th>Name</th>
                                     <th>Dept</th>
+                                    <th>TMK</th>
+                                    <th>TKK</th>
                                     <th>Basic Salary</th>
                                     <th>Overtime</th>
                                     <th>Special OT</th>
@@ -224,6 +226,8 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -788,6 +792,14 @@ buttons: [
             {
                 data:'dept',
                 defaultContent:'-'
+            },
+            
+            {
+                data:'tmk'
+            },
+            
+            {
+                data:'tkk'
             },
 
             {
@@ -1369,7 +1381,9 @@ const userRole = @json(optional(Auth::user()->roles->first())->name);
 
 const canSeeSalary =
     userRole === 'Admin' ||
+    userRole === 'Audit' ||
     userRole === 'Payroll_STAFF' ||
+    userRole === 'Payroll_NONSTAFF' ||
     userRole === 'Payroll_SEWING' ||
     userRole === 'Payroll_NONSEWING';
 
@@ -2009,7 +2023,7 @@ $(document).on(
         );
 
         details = details.filter(row =>
-            ['MA','PE','H'].includes(
+            ['MA','P1','H','BR','OUT','SD'].includes(
                 row.absence_status
             )
         );
@@ -2068,21 +2082,21 @@ $('#total-absence-days')
                     },
 
                     {
-                        data:'absence_status',
-                        className:'text-center',
-                        render:function(data){
+                        data: 'absence_status',
+                        className: 'text-center',
+                        render: function(data) {
 
-                            if(data === 'MA'){
+                            if (data === 'MA' || data === 'P1' || data === 'OUT') {
                                 return `
                                     <span class="badge badge-danger">
-                                        MA
+                                        ${data}
                                     </span>
                                 `;
                             }
 
                             return `
                                 <span class="badge badge-warning">
-                                    PE
+                                    ${data ?? '-'}
                                 </span>
                             `;
                         }

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Exports\NonSewing\PayrollExportNonSewingExcel;
+use App\Exports\NonStaff\PayrollExportNonStaffExcel;
 use App\Exports\PayrollExportExcel;
 use App\Exports\Sewing\PayrollExportSewingExcel;
 use App\Exports\Staff\PayrollExportStaffExcel;
@@ -216,11 +217,14 @@ class GeneratePayrollExport implements ShouldQueue
 
         $folder = "public/payroll/$periodNameFormatted";
         $folderStaff = "$folder/STAFF";
+        $folderNonStaff = "$folder/NON_STAFF";
+        $folderNonStaff = "$folder/NON_STAFF";
         $folderSewing = "$folder/SEWING";
         $folderNonSewing = "$folder/NON_SEWING";
 
         Storage::makeDirectory($folder, 0777, true);
         Storage::makeDirectory($folderStaff, 0777, true);
+        Storage::makeDirectory($folderNonStaff, 0777, true);
         Storage::makeDirectory($folderSewing, 0777, true);
         Storage::makeDirectory($folderNonSewing, 0777, true);
 
@@ -241,11 +245,18 @@ class GeneratePayrollExport implements ShouldQueue
             ->export(storage_path("app/$folder/REKAP_$periodNameFormatted.xlsx"));
 
         $export->update([
-            'progress' => 35,
+            'progress' => 32,
             'status' => 'Processing Excel Files for STAFF'
         ]);
         (new PayrollExportStaffExcel($run_id))
             ->export(storage_path("app/$folderStaff/REKAP_$periodNameFormatted.xlsx"));
+
+        $export->update([
+            'progress' => 35,
+            'status' => 'Processing Excel Files for NON STAFF'
+        ]);
+        (new PayrollExportNonStaffExcel($run_id))
+            ->export(storage_path("app/$folderNonStaff/REKAP_$periodNameFormatted.xlsx"));
 
         $export->update([
             'progress' => 40,
@@ -361,6 +372,8 @@ class GeneratePayrollExport implements ShouldQueue
 
             'STAFF' => fn($r) => $r->IS_STAFF == 1,
 
+            'NONSTAFF' => fn($r) => $r->IS_STAFF == 0,
+
             'SEWING' => fn($r) => $r->IS_SEWING == 0 && $r->IS_STAFF == 0,
 
             'NON_SEWING' => fn($r) => $r->IS_SEWING == 1 && $r->IS_STAFF == 0,
@@ -441,6 +454,7 @@ class GeneratePayrollExport implements ShouldQueue
 
             $folderTarget = match ($key) {
                 'STAFF' => $folderStaff,
+                'NONSTAFF' => $folderNonStaff,
                 'SEWING' => $folderSewing,
                 'NON_SEWING' => $folderNonSewing,
                 default => $folder
@@ -448,6 +462,7 @@ class GeneratePayrollExport implements ShouldQueue
 
             $password = match ($key) {
                 'STAFF' => PdfPassword::generate('staff', $data->first()->start_date),
+                'NONSTAFF' => PdfPassword::generate('nonstaff', $data->first()->start_date),
                 'SEWING' => PdfPassword::generate('sewing', $data->first()->start_date),
                 'NON_SEWING' => PdfPassword::generate('nonsewing', $data->first()->start_date),
                 default => PdfPassword::generate('all', $data->first()->start_date)

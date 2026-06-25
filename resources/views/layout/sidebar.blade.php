@@ -152,7 +152,7 @@ $role = $roleusers[0]->rolename;
    </li>
    @endif
    {{-- ================= PAYROLL ================= --}}
-   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
+   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING', 'Audit']))
    <li class="nav-item">
       <a class="nav-link collapsed" data-toggle="collapse" data-target="#payroll">
       <i class="fas fa-calculator"></i>
@@ -160,19 +160,27 @@ $role = $roleusers[0]->rolename;
       </a>
       <div id="payroll" class="collapse" data-parent="#accordionSidebar">
          <div class="collapse-inner bg-white rounded">
+            @if(in_array($role,['Admin']))
             <a class="collapse-item" href="{{ route('payroll-setting.index') }}">Setting</a>
+            <a class="collapse-item" href="{{ route('payroll-components.index') }}">Components</a>
+            <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>
+            @endif
+            @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
             <a class="collapse-item" href="{{ route('payroll-master.index') }}">Master</a>
             <a class="collapse-item" href="{{ route('payroll-adjusments.index') }}">Payroll Adjusments</a>
-            <a class="collapse-item" href="{{ route('payroll-components.index') }}">Components</a>
             <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Period</a>
+            @endif
+            @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING', 'Audit']))
             <a class="collapse-item" href="{{ route('payroll-process.index') }}">Process</a>
-            <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>
+            @endif
+            @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
             <hr>
             <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
             <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
             <hr>
             <a class="collapse-item" href="{{ route('bpjs-exceptions.index') }}">BPJS Exceptions</a>
             <hr>
+            @endif
             @if(in_array($role,['Admin']))
             <a class="collapse-item" href="{{ route('compensation.index') }}">Compensation</a>
             @endif

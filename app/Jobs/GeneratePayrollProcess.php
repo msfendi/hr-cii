@@ -188,15 +188,28 @@ class GeneratePayrollProcess implements ShouldQueue
 
                         WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                             AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE','BR','OUT')
+                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
                             THEN 1
 
                         ELSE 0
                     END
                 ) as absence_days
             "),
+                DB::raw("
+                SUM(
+                    CASE
+                        WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
+                            AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('SD')
+                            THEN 1
+
+                        ELSE 0
+                    END
+                ) as sick_days
+            "),
             )
             ->groupBy('overtimes.NPK');
+
 
         $overtimeDetails = DB::connection('cii')
             ->table('overtimes')
@@ -264,7 +277,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE','BR','OUT')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
                     THEN 1
 
                 ELSE 0
@@ -277,7 +290,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','PE','H')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD')
                     THEN JUMLAH_JAM_LEMBUR
             END AS absence_status
         ")
@@ -1032,6 +1045,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 // DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
                 // DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
+                DB::raw('COALESCE(ot.sick_days,0) as sick_days'),
                 DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) as total_ijin_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
@@ -1131,6 +1145,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
                 'absence_days'   => (float) $absenceDays,
+                'sick_days'   => (float) $employee->sick_days,
                 'working_years'  => (float) $employee->working_years,
                 'adjusment'      => (float) $employee->adjusment,
                 'pph_21'         => (float) $employee->pph21,
@@ -2198,6 +2213,7 @@ class GeneratePayrollProcess implements ShouldQueue
                     // 'run_id'        => $run->id,
                     'absence_days_asli'   => (float) $employee->absence_days,
                     'absence_days'   => (float) $absenceDays,
+                    'sick_days'   => (float) $employee->sick_days,
                     'count_days'    => $count_days,
                     'type' => Str::ucfirst(Str::lower($employee->type)),
                     'dept' => $employee->DEPARTEMENT,

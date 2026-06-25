@@ -311,6 +311,10 @@ class PayrollProcessController extends Controller
                             return (int) $row->IS_STAFF === 1;
                         }
 
+                        if ($role === 'Payroll_NONSTAFF') {
+                            return (int) $row->IS_STAFF === 0;
+                        }
+
                         if ($role === 'Payroll_SEWING') {
                             return (int) $row->IS_STAFF === 0
                                 && (int) $row->IS_SEWING === 0;
@@ -392,6 +396,11 @@ class PayrollProcessController extends Controller
             $payrollResults = $payrollResults->filter(function ($row) {
                 return ($row['is_staff'] ?? 0) == 1;
             });
+        } elseif ($role === 'Payroll_NONSTAFF' || $role === 'Audit') {
+
+            $payrollResults = $payrollResults->filter(function ($row) {
+                return ($row['is_staff'] ?? 0) == 0;
+            });
         } elseif ($role === 'Payroll_SEWING') {
 
             $payrollResults = $payrollResults->filter(function ($row) {
@@ -424,6 +433,7 @@ class PayrollProcessController extends Controller
         $canSeeSalary = $user->hasRole([
             'Admin',
             'Payroll_STAFF',
+            'Payroll_NONSTAFF',
             'Payroll_SEWING',
             'Payroll_NONSEWING'
         ]);
@@ -479,6 +489,10 @@ class PayrollProcessController extends Controller
 
             if ($user->hasRole('Payroll_STAFF')) {
                 $query->where('emp.IS_STAFF', 1);
+            }
+
+            if ($user->hasRole('Payroll_NONSTAFF')) {
+                $query->where('emp.IS_STAFF', 0);
             }
 
             if ($user->hasRole('Payroll_SEWING')) {
