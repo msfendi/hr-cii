@@ -324,7 +324,7 @@ class LineInsentifMasterController extends Controller
                     DB::raw('TRY_CAST(emp.SECTION AS BIGINT)'),
                     '=',
                     's.id'
-                );
+                )->where('s.id', '!=', 109);
             })
             ->joinSub(
                 DB::table('insentif_role_formulas')
