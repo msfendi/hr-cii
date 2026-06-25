@@ -63,6 +63,7 @@ class EmployeesContractController extends Controller
                 'c.salary',
                 'c.allowance',
                 'c.pph21',
+                'c.daily_salary',
                 DB::raw("DATEDIFF(DAY, CAST(GETDATE() AS DATE), c.end_date) AS sisa_hari"),
                 DB::raw("DAY(c.end_date) AS end_day"),
             ]);
@@ -137,10 +138,11 @@ class EmployeesContractController extends Controller
                     $canSeeSalary = true;
                 }
 
-                $row->salary    = $canSeeSalary ? (float) $row->salary : '***';
-                $row->allowance = $canSeeSalary ? (float) $row->allowance : '***';
-                $row->pph21     = $canSeeSalary ? (float) $row->pph21 : '***';
-                $row->can_edit  = $canSeeSalary;
+                $row->salary       = $canSeeSalary ? (float) $row->salary : '***';
+                $row->allowance    = $canSeeSalary ? (float) $row->allowance : '***';
+                $row->pph21        = $canSeeSalary ? (float) $row->pph21 : '***';
+                $row->daily_salary = $canSeeSalary ? (float) $row->daily_salary : '***';
+                $row->can_edit     = $canSeeSalary;
 
                 return $row;
             });
@@ -185,10 +187,11 @@ class EmployeesContractController extends Controller
                     $canSeeSalary = true;
                 }
 
-                $row->salary    = $canSeeSalary ? (float) $row->salary : '***********';
-                $row->allowance = $canSeeSalary ? (float) $row->allowance : '***********';
-                $row->pph21     = $canSeeSalary ? (float) $row->pph21 : '***********';
-                $row->can_edit  = $canSeeSalary;
+                $row->salary       = $canSeeSalary ? (float) $row->salary : '***********';
+                $row->allowance    = $canSeeSalary ? (float) $row->allowance : '***********';
+                $row->pph21        = $canSeeSalary ? (float) $row->pph21 : '***********';
+                $row->daily_salary = $canSeeSalary ? (float) $row->daily_salary : '***********';
+                $row->can_edit     = $canSeeSalary;
 
                 return $row;
             });
