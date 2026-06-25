@@ -82,8 +82,28 @@ class AttendanceController extends Controller
         $employeeGroupChutex = DB::connection('cii')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->whereIn('KODE_BAGIAN', $request->department);
         $employeeGroup = $employeeGroupChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->get();
 
-        $employeesChutex = DB::connection('cii')->table('AUDIT')->select('NPK', 'NAMA_KARYAWAN', 'KODE_BAGIAN', 'SUBDIVISI', 'TANGGAL', 'JAM_PAGI', 'JAM_SIANG', 'JAM_MALAM', 'STATUS AS KETERANGAN')->whereIn('KODE_BAGIAN', $request->department)->whereBetween('TANGGAL', [$request->fromdate, $request->todate]);
-        $employees = $employeesChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->orderBy('TANGGAL', 'ASC')->get();
+        $employeesChutex = DB::connection('cii')->table('AUDIT')
+            ->select(
+                'AUDIT.NPK',
+                'AUDIT.NAMA_KARYAWAN',
+                'AUDIT.KODE_BAGIAN',
+                'AUDIT.SUBDIVISI',
+                'AUDIT.TANGGAL',
+                'AUDIT.JAM_PAGI',
+                'AUDIT.JAM_SIANG',
+                'AUDIT.JAM_MALAM',
+                DB::raw("CASE WHEN overtimes.JUMLAH_JAM_LEMBUR IS NOT NULL AND ISNUMERIC(overtimes.JUMLAH_JAM_LEMBUR) = 0 THEN overtimes.JUMLAH_JAM_LEMBUR ELSE AUDIT.STATUS END AS KETERANGAN"),
+                'PKWT.TMK',
+                'PKWT.TKK'
+            )
+            ->leftJoin('PKWT', 'PKWT.NPK', '=', 'AUDIT.NPK')
+            ->leftJoin('overtimes', function ($join) {
+                $join->on('overtimes.NPK', '=', 'AUDIT.NPK')
+                    ->on('overtimes.OVERTIME_DATE', '=', 'AUDIT.TANGGAL');
+            })
+            ->whereIn('AUDIT.KODE_BAGIAN', $request->department)
+            ->whereBetween('AUDIT.TANGGAL', [$request->fromdate, $request->todate]);
+        $employees = $employeesChutex->orderBy('AUDIT.KODE_BAGIAN', 'ASC')->orderBy('AUDIT.NPK', 'ASC')->orderBy('AUDIT.TANGGAL', 'ASC')->get();
 
         $days = $request->days;
         return view('template.report-final', compact('employees', 'employeeGroup', 'days'));

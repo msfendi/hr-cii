@@ -7,6 +7,7 @@ use App\Imports\EmployeeShiftImport;
 use App\Models\EmployeeShift;
 use App\Models\Shift;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
@@ -26,8 +27,9 @@ class EmployeeShiftController extends Controller
     public function create()
     {
         $shifts = Shift::all();
+        $biodatas = DB::table('BIODATA')->orderBy('NPK')->get();
 
-        return view('employee_shift.create', compact('shifts'));
+        return view('employee_shift.create', compact('shifts', 'biodatas'));
     }
 
     public function store(Request $request)

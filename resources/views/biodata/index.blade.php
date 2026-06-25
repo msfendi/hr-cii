@@ -56,7 +56,10 @@
                                             <th>NAMA_KARYAWAN</th>
                                             <th>BARCODE</th>
                                             <th>DEPARTMENT</th>
+                                            <th>SECTION</th>
                                             <th>STATUS CONTRACT</th>
+                                            <th>TMK</th>
+                                            <th>KONTRAK BERAKHIR</th>
                                             <th>ACTION</th>
                                         </tr>
                                     </thead>
@@ -1136,6 +1139,12 @@
                 {
                     data: null,
                     render: function (data, type, row) {
+                        return row.section + ' (' + row.line_start + ' - ' + row.line_end + ')';
+                    }
+                },
+                {
+                    data: null,
+                    render: function (data, type, row) {
                         if (!row.end_date) {
                             return '<span class="badge badge-secondary px-2 py-1">BELUM ADA KONTRAK</span>';
                         }
@@ -1149,6 +1158,20 @@
                         } else {
                             return '<span class="badge badge-danger px-2 py-1">BELUM DIPERPANJANG</span>';
                         }
+                    }
+                },
+                {
+                    data: null, render: function (data, type, row) {
+                        if (!row.TMK) return '';
+                        var d = new Date(row.TMK);
+                        return [d.getDate(), d.getMonth() + 1, d.getFullYear()].map(n => String(n).padStart(2, '0')).join('-');
+                    }
+                },
+                {
+                    data: null, render: function (data, type, row) {
+                        if (!row.end_date) return '';
+                        var d = new Date(row.end_date);
+                        return [d.getDate(), d.getMonth() + 1, d.getFullYear()].map(n => String(n).padStart(2, '0')).join('-');
                     }
                 },
                 {
@@ -1219,7 +1242,7 @@
                     $('#show_pendidikan').val(response.PDDK ?? 'PENDIDIKAN TIDAK DIISI');
                     $('#show_sekolah').val(response.NAMA_SEKOLAH ?? 'SEKOLAH TIDAK DIISI');
                     $('#show_jurusan').val(response.JURUSAN ?? 'JURUSAN TIDAK DIISI');
-                    $('#show_section').val(response.SECTION ?? 'SECTION TIDAK DIISI');
+                    $('#show_section').val(response.section_name + ' (' + response.line_start + ' - ' + response.line_end + ')' ?? 'SECTION TIDAK DIISI');
                     $('#show_id_dept').val(response.BAGIAN ?? 'DEPT TIDAK DIISI');
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');

@@ -29,11 +29,13 @@ class BiodataController extends Controller
     {
         $query = DB::connection('cii')
             ->table('BIODATA')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'BIODATA.SECTION', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'employees_contract.end_date')
+            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'sections.name as section', 'sections.line_start', 'sections.line_end', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'PKWT.TMK', 'employees_contract.end_date')
             ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
-            ->leftJoin('employees_contract', function ($join) {
+            ->join('sections', 'BIODATA.SECTION', 'sections.id')
+            ->join('PKWT', 'BIODATA.NPK', 'PKWT.NPK')
+            ->leftJoin('employees_contract', function($join) {
                 $join->on('BIODATA.NPK', '=', 'employees_contract.npk')
-                    ->where('employees_contract.status_contract', 'AKTIF');
+                     ->where('employees_contract.status_contract', 'AKTIF');
             });
 
         if ($request->has('department_id') && $request->department_id != '') {
@@ -297,19 +299,16 @@ class BiodataController extends Controller
      */
     public function show($NPK)
     {
-        $pkwt    = DB::connection('cii')->table('PKWT')->select('*')->where('NPK', $NPK)->first();
-        $biodata = DB::connection('cii')->table('BIODATA')->select('IS_STAFF', 'SECTION')->where('NPK', $NPK)->first();
+        $pkwt = DB::connection('cii')->table('PKWT')
+            ->leftJoin('BIODATA', 'PKWT.NPK', '=', 'BIODATA.NPK')
+            ->leftJoin('sections', 'BIODATA.SECTION', 'sections.id')
+            ->select('PKWT.*', 'BIODATA.IS_STAFF', 'BIODATA.SECTION', 'sections.name as section_name', 'sections.line_start', 'sections.line_end')
+            ->where('PKWT.NPK', $NPK)
+            ->first();
 
-        if ($pkwt && $biodata) {
-            $pkwt->IS_STAFF = $biodata->IS_STAFF ?? 0;
-            $pkwt->SECTION = $biodata->SECTION;
-        }
-
-
-        // Ambil bank_account dari payroll_masters
-        $payroll = PayrollMaster::where('npk', $NPK)->first();
         if ($pkwt) {
-            $pkwt->bank_account = $payroll->bank_account ?? null;
+            $pkwt->IS_STAFF = $pkwt->IS_STAFF ?? 0;
+            $pkwt->bank_account = PayrollMaster::where('npk', $NPK)->value('bank_account');
         }
 
         return response()->json($pkwt);
