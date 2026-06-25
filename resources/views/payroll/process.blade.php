@@ -2023,7 +2023,7 @@ $(document).on(
         );
 
         details = details.filter(row =>
-            ['MA','P1','H','BR','OUT','SD'].includes(
+            ['MA','P1','H','BR','OUT','SD','CT'].includes(
                 row.absence_status
             )
         );

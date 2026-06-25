@@ -592,7 +592,6 @@ let insentifTable;
             .draw();
     });
 
-
     /*
     | CHECK PERIOD
     */
