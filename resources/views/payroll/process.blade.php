@@ -1176,25 +1176,20 @@ buttons: [
             }
         ],
 
-        createdRow:function(row,data){
+        createdRow: function (row, data) {
 
-            if(
-                data.tkk !== null &&
-                data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() !== 'MA'
-            ){
+            const ket = (data.keterangan || '').toString().trim().toLowerCase();
 
-                $(row).addClass('table-warning');
+            $(row).removeClass('table-warning table-danger');
 
-            } else if(
-                data.tkk !== null &&
-                data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() === 'MA'
-            ){
+            if (data.tkk !== null && data.tkk !== '') {
 
-                $(row).addClass('table-danger');
+                if (ket === 'ma') {
+                    $(row).addClass('table-danger');
+                } else {
+                    $(row).addClass('table-warning');
+                }
             }
-
         },
         initComplete:function(){
 
