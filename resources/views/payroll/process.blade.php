@@ -210,6 +210,7 @@
                                     <th>Absence</th>
                                     <th>Late Deduction</th>
                                     <th>Total Salary</th>
+                                    <th>Total Ijin</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -223,6 +224,7 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -727,7 +729,7 @@ buttons: [
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
                 11,12,13,14,15,16,17,
-                18,19,20,21,22,23
+                18,19,20,21,22,23,24
             ],
 
             format: {
@@ -1086,23 +1088,56 @@ buttons: [
                     return salaryMask(data ?? 0);
                 }
             },
+            {
+                data:'total_ijin',
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    let ijinData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.ijin_details || []
+                            )
+                        );
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-ijin-detail"
+                        data-ijin="${ijinData}">
+                            ${data ?? 0} Menit
+                        </a>
+                    `;
+                }
+            },
 
             {
-                data:'tkk',
-                defaultContent:null,
-                render:function(data, type, row){
+                data: 'tkk',
+                defaultContent: null,
+                render: function (data, type, row) {
 
-                    if(data === null || data === ''){
+                    const tmk = row.tmk ? new Date(row.tmk) : null;
+                    const periodStart = row.period_start ? new Date(row.period_start) : null;
 
+                    const isTMKInPeriod =
+                        tmk &&
+                        periodStart &&
+                        tmk.getFullYear() === periodStart.getFullYear() &&
+                        tmk.getMonth() === periodStart.getMonth();
+
+                    // 1. BARU (TMK di periode berjalan)
+                    if (isTMKInPeriod) {
                         return `
-                            <span class="badge badge-success">
-                                Active
+                            <span class="badge badge-primary">
+                                Baru
                             </span>
                         `;
                     }
 
-                    if((row.keterangan || '').toLowerCase() === 'mangkir'){
-
+                    // 2. MANGKIR
+                    if ((row.keterangan || '').toLowerCase() === 'ma') {
                         return `
                             <span class="badge badge-danger">
                                 Mangkir
@@ -1110,9 +1145,19 @@ buttons: [
                         `;
                     }
 
+                    // 3. RESIGN
+                    if (data !== null && data !== '') {
+                        return `
+                            <span class="badge badge-warning">
+                                Resign
+                            </span>
+                        `;
+                    }
+
+                    // 4. ACTIVE
                     return `
-                        <span class="badge badge-warning">
-                            Resign
+                        <span class="badge badge-success">
+                            Active
                         </span>
                     `;
                 }
@@ -1124,7 +1169,7 @@ buttons: [
             if(
                 data.tkk !== null &&
                 data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() !== 'mangkir'
+                (data.keterangan || '').toLowerCase() !== 'MA'
             ){
 
                 $(row).addClass('table-warning');
@@ -1132,7 +1177,7 @@ buttons: [
             } else if(
                 data.tkk !== null &&
                 data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() === 'mangkir'
+                (data.keterangan || '').toLowerCase() === 'MA'
             ){
 
                 $(row).addClass('table-danger');
@@ -1258,6 +1303,16 @@ buttons: [
                 17,18,19,20,21,22
             ];
 
+            let ijinTotal = api
+                .column(23, { search: 'applied' })
+                .data()
+                .reduce(function(a, b) {
+                    return intVal(a) + intVal(b);
+                }, 0);
+
+            $(api.column(23).footer())
+                .html(ijinTotal + ' Menit');
+
             currencyCols.forEach(function(colIndex){
 
                 let total = api
@@ -1329,6 +1384,16 @@ function salaryMask(value){
 
 </script>
 <style>
+    .btn-ijin-detail{
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+.btn-ijin-detail:hover{
+    text-decoration:none;
+    color:#dc3545 !important;
+}
 .dept-filter-wrapper{
     min-width:220px;
 }
@@ -1777,6 +1842,56 @@ function salaryMask(value){
 
 </div>
 <div class="modal fade"
+     id="ijinDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-info text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-sign-out-alt mr-2"></i>
+                    Ijin Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-ijin-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead>
+                        <tr>
+                            <th>NPK</th>
+                            <th>Nama Karyawan</th>
+                            <th>Dept</th>
+                            <th>Date</th>
+                            <th>Jam Keluar</th>
+                            <th>Jam Kembali</th>
+                            <th>Reason</th>
+                            <th>Menit</th>
+                        </tr>
+                    </thead>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="modal fade"
      id="specialOvertimeDetailModal"
      tabindex="-1">
 
@@ -1846,6 +1961,39 @@ function salaryMask(value){
     </div>
 
 </div>
+<script>
+    let ijinDetailTable = null;
+
+$(document).on('click','.btn-ijin-detail',function(){
+
+    let details = JSON.parse(
+        decodeURIComponent($(this).data('ijin'))
+    );
+
+    if(ijinDetailTable){
+        ijinDetailTable.destroy();
+        $('#table-ijin-detail tbody').remove();
+    }
+
+    $('#table-ijin-detail').append('<tbody></tbody>');
+
+    ijinDetailTable = $('#table-ijin-detail').DataTable({
+        data: details,
+        columns: [
+            { data:'npk' },
+            { data:'NAMA_KARYAWAN' },
+            { data:'DEPARTEMENT' },
+            { data:'tanggal' },
+            { data:'jam_keluar' },
+            { data:'jam_kembali' },
+            { data:'reason' },
+            { data:'ijin_minutes' }
+        ]
+    });
+
+    $('#ijinDetailModal').modal('show');
+});
+</script>
 <script>
 let absenceDetailTable = null;
 

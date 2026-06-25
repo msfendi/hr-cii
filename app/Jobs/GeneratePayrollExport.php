@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\View;
 use App\Services\FastExcelExport;
 use App\Helpers\PdfPassword;
+use App\Models\PayrollPeriod;
 use App\Services\ExcelProtectService;
 use App\Services\PdfService;
 use App\Services\ExcelZipEncryptService;
@@ -52,6 +53,12 @@ class GeneratePayrollExport implements ShouldQueue
         if (!$export) return;
 
         $run_id = $export->run_id;
+
+        $period = DB::table('payroll_runs')
+            ->leftJoin('payroll_periods', 'payroll_periods.id', '=', 'payroll_runs.period_id')
+            ->select('payroll_periods.start_date', 'payroll_periods.end_date')
+            ->where('payroll_runs.id', $run_id)
+            ->first();
 
         $export->update([
             'status' => 'Start Processing',
@@ -106,6 +113,36 @@ class GeneratePayrollExport implements ShouldQueue
         | PAYROLL QUERY
         |--------------------------------------------------------------------------
         */
+
+        $overtimeAgg = DB::table('overtimes')
+            ->whereBetween('OVERTIME_DATE', [$period->start_date, $period->end_date])
+            ->selectRaw("
+        NPK,
+        SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'MA' THEN 1 ELSE 0 END) as MA,
+        SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'P1' THEN 1 ELSE 0 END) as P1,
+        SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'CT' THEN 1 ELSE 0 END) as CT,
+        SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'SD' THEN 1 ELSE 0 END) as SD,
+        SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'BR' THEN 1 ELSE 0 END) as BR,
+        SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'OUT' THEN 1 ELSE 0 END) as [OUT]
+    ")
+            ->groupBy('NPK');
+
+        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+            ->selectRaw("
+        npk,
+        SUM(
+            CASE 
+                WHEN jam_kembali IS NOT NULL 
+                THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+                ELSE 0 
+            END
+        ) as total_ijin_minutes
+    ")
+            ->whereBetween('tanggal', [$period->start_date, $period->end_date])
+            ->groupBy('npk');
+
+        // dd($overtimeAgg);
+
         $data = DB::table('payroll_run_details as prd')
             ->leftJoinSub(
                 $employeeUnion,
@@ -120,7 +157,19 @@ class GeneratePayrollExport implements ShouldQueue
             )
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+
+            // 🔥 JOIN overtime aggregate
+            ->leftJoinSub(
+                $overtimeAgg,
+                'ot',
+                fn($j) => $j->on('ot.NPK', '=', 'prd.employee_npk')
+            )
+            ->leftJoinSub($ijinSummary, 'ij', function ($join) {
+                $join->on('emp.NPK', '=', 'ij.npk');
+            })
+
             ->where('prd.run_id', $run_id)
+            // ->where('prd.employee_npk', '=', 'C-01831')
             ->select(
                 'prd.*',
                 'd.DEPARTEMENT',
@@ -132,10 +181,21 @@ class GeneratePayrollExport implements ShouldQueue
                 'emp.IS_STAFF',
                 'd.IS_SEWING',
                 'p.KETERANGAN',
+
+                // overtime hasil agregasi
+                'ot.MA',
+                'ot.P1',
+                'ot.CT',
+                'ot.SD',
+                'ot.BR',
+                'ot.OUT',
+                'ij.total_ijin_minutes'
             )
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk')
             ->get();
+
+        // dd($data);
 
         if ($data->isEmpty()) return;
 
@@ -255,7 +315,7 @@ class GeneratePayrollExport implements ShouldQueue
 
             $ket = strtolower(trim($r->KETERANGAN ?? ''));
 
-            if ($ket === 'mangkir') {
+            if ($ket === 'MA') {
                 return false;
             }
 
@@ -271,7 +331,7 @@ class GeneratePayrollExport implements ShouldQueue
 
             $ket = strtolower(trim($r->KETERANGAN ?? ''));
 
-            if ($ket === 'mangkir') {
+            if ($ket === 'MA') {
                 return false;
             }
 
@@ -287,7 +347,7 @@ class GeneratePayrollExport implements ShouldQueue
 */
         $mangkirEmployees = $data->filter(function ($r) {
 
-            return strtolower(trim($r->KETERANGAN ?? '')) === 'mangkir';
+            return strtolower(trim($r->KETERANGAN ?? '')) === 'MA';
         });
 
         /*

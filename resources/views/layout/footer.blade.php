@@ -45,7 +45,7 @@
         },
 
         init() {
-            console.log('NotificationManager initialized');
+            // console.log('NotificationManager initialized');
             this.loadNotifications();
             this.setupEchoListener();
 
@@ -56,7 +56,7 @@
         setupEchoListener() {
             // console.log('Checking window.Echo:', window.Echo);
             if (!window.Echo) {
-                console.warn('Waiting for Laravel Echo to initialize...');
+                // console.warn('Waiting for Laravel Echo to initialize...');
                 setTimeout(() => this.setupEchoListener(), 500);
                 return;
             }
@@ -64,7 +64,7 @@
             try {
                 window.Echo.private('hr.contract-notifications')
                     .listen('.ContractExpiring', (response) => {
-                        console.log('New contract expiring notification received:', response);
+                        // console.log('New contract expiring notification received:', response);
 
                         const { data } = response;
 
@@ -78,7 +78,7 @@
                         this.loadNotifications();
                     });
 
-                console.log('Echo listener registered successfully');
+                // console.log('Echo listener registered successfully');
             } catch (error) {
                 console.error('Error setting up Echo listener:', error);
             }

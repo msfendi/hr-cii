@@ -238,6 +238,11 @@
                                             @endif
 
                                             @if(!$period->export_status)
+                                            <!-- <a class="btn btn-warning btn-circle btn-sm"
+                                                href="{{ route('payroll.export.export', $period->id) }}"
+                                                title="Generate Export">
+                                                    <i class="fas fa-database"></i>
+                                            </a> -->
                                                 <a class="btn btn-warning btn-circle btn-sm btn-export"
                                                     href="#"
                                                     data-url="{{ route('payroll.export.export', $period->id) }}"
@@ -821,7 +826,7 @@ $(document).on('click','.btn-export',function(e){
             if(
                 data.tkk !== null &&
                 data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() !== 'mangkir'
+                (data.keterangan || '').toLowerCase() !== 'MA'
             ){
 
                 $(row).addClass('table-warning');
@@ -829,7 +834,7 @@ $(document).on('click','.btn-export',function(e){
             } else if(
                 data.tkk !== null &&
                 data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() === 'mangkir'
+                (data.keterangan || '').toLowerCase() === 'MA'
             ){
 
                 $(row).addClass('table-danger');
@@ -1048,7 +1053,7 @@ $(document).on('click','.btn-export',function(e){
                         `;
                     }
 
-                    if((row.keterangan || '').toLowerCase() === 'mangkir'){
+                    if((row.keterangan || '').toLowerCase() === 'MA'){
 
                         return `
                             <span class="badge badge-danger">

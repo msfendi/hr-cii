@@ -31,12 +31,15 @@ $role = $roleusers[0]->rolename;
             <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
             <a class="collapse-item" href="{{ route('recruitment-position.index') }}">Recruitment Position</a>
             <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar</a>
+            <hr>
             <a class="collapse-item" href="{{ route('parent-dept.index') }}">Parent Departement</a>
             <a class="collapse-item" href="{{ route('dept.index') }}">Departement</a>
             <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
             <a class="collapse-item" href="{{ route('biodata_keluar.index') }}">Biodata Keluar</a>
             <a class="collapse-item" href="{{ route('employee_exit_history.index') }}">Riwayat Karyawan Keluar</a>
             <a class="collapse-item" href="{{ route('employees-contract.index') }}">Kontrak Karyawan</a>
+            <hr>
+            <a class="collapse-item" href="{{ route('ijin-meninggalkan-pekerjaan.index') }}">Meninggalkan Pekerjaan</a>
             @endif
          </div>
       </div>

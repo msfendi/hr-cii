@@ -78,6 +78,7 @@ use App\Http\Controllers\ParentDeptController;
 use App\Http\Controllers\PortalRecruitmentStatusController;
 use App\Http\Controllers\RecruitmentFormController;
 use App\Http\Controllers\SewingViolationController;
+use App\Http\Controllers\IjinMeninggalkanPekerjaanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -352,6 +353,13 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/', [EvaluationJobscopeController::class, 'index'])->name('evaluation-jobscope.index')->middleware(['auth', 'role:Admin|HRD']);
         Route::get('/delete/{id}', [EvaluationJobscopeController::class, 'delete'])->name('evaluation-jobscope.delete')->middleware(['auth', 'role:Admin|HRD']);
     });
+
+    Route::get('/ijin-meninggalkan-pekerjaan', [IjinMeninggalkanPekerjaanController::class, 'index'])->name('ijin-meninggalkan-pekerjaan.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/ijin-meninggalkan-pekerjaan/create', [IjinMeninggalkanPekerjaanController::class, 'create'])->name('ijin-meninggalkan-pekerjaan.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::post('/ijin-meninggalkan-pekerjaan', [IjinMeninggalkanPekerjaanController::class, 'store'])->name('ijin-meninggalkan-pekerjaan.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/ijin-meninggalkan-pekerjaan/{id}/edit', [IjinMeninggalkanPekerjaanController::class, 'edit'])->name('ijin-meninggalkan-pekerjaan.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::put('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'update'])->name('ijin-meninggalkan-pekerjaan.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'destroy'])->name('ijin-meninggalkan-pekerjaan.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
 
     //  Evaluation Employee
     Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index')->middleware(['auth', 'role:Admin|HRD']);

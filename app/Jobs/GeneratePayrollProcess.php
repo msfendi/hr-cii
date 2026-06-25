@@ -109,7 +109,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-01544')
+            // ->where('p.NPK', '=', 'C-00827')
 
             ->select(
                 'p.NPK',
@@ -142,7 +142,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-01544')
+            // ->where('ec1.npk', '=', 'C-00827')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -927,6 +927,43 @@ class GeneratePayrollProcess implements ShouldQueue
             )
             ->groupBy('npk');
 
+        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+            ->selectRaw("
+        npk,
+        SUM(
+            CASE 
+                WHEN jam_kembali IS NOT NULL 
+                THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+                ELSE 0 
+            END
+        ) as total_ijin_minutes
+    ")
+            ->whereBetween('tanggal', [$periodStart, $periodEnd])
+            ->groupBy('npk');
+
+        $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
+            ->selectRaw("
+        ijin_meninggalkan_pekerjaans.npk,
+        NAMA_KARYAWAN,
+        DEPARTEMENT,
+        tanggal,
+        jam_keluar,
+        rencana_kembali,
+        jam_kembali,
+        reason,
+        CASE 
+            WHEN jam_kembali IS NOT NULL 
+            THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+            ELSE 0 
+        END as ijin_minutes
+    ")
+            ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
+            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
+            ->whereBetween('tanggal', [$periodStart, $periodEnd])
+            ->orderBy('tanggal', 'asc')
+            ->get()
+            ->groupBy('npk');
+
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
@@ -962,7 +999,10 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($bpjsException, 'be', function ($join) {
                 $join->on('emp.NPK', '=', 'be.npk');
             })
-            // ->where('emp.NPK', '=', 'C-01544')
+            ->leftJoinSub($ijinSummary, 'ij', function ($join) {
+                $join->on('emp.NPK', '=', 'ij.npk');
+            })
+            // ->where('emp.NPK', '=', 'C-00827')
 
             ->select(
                 'emp.NPK',
@@ -993,6 +1033,8 @@ class GeneratePayrollProcess implements ShouldQueue
                 // DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
                 DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
+                DB::raw('COALESCE(ij.total_ijin_minutes,0) as total_ijin_minutes'),
+                DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
@@ -1096,6 +1138,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'count_days'     => (float) $count_days,
                 'tanggungan'     => (float) $employee->TANGGUNGAN,
                 'percentage'     => (float) $employee->percentage,
+                'total_ijin'     => (float) $employee->total_ijin_minutes,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => $employee->IS_STAFF === '1' ? (float) $employee->late_minutes : 0,
@@ -2159,7 +2202,9 @@ class GeneratePayrollProcess implements ShouldQueue
                     'type' => Str::ucfirst(Str::lower($employee->type)),
                     'dept' => $employee->DEPARTEMENT,
                     'tmk' => $employee->TMK,
+                    'period_start'  => $periodStart,
                     'tkk' => $employee->TKK,
+                    'total_ijin'     => (float) $employee->total_ijin_minutes,
                     'is_sewing'       => $employee->IS_SEWING == '1' ? 1 : 0,
                     'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
                     'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
@@ -2197,6 +2242,7 @@ class GeneratePayrollProcess implements ShouldQueue
                         ->values(),
                     'late_details' => ($lateDetails[$employee->NPK] ?? collect())
                         ->values(),
+                    'ijin_details' => ($ijinDetails[$employee->NPK] ?? collect())->values(),
                     'total_salary'  => $grandTotal
                 ];
             }
