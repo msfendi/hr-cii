@@ -26,9 +26,11 @@ use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\BiodataKeluarController;
 use App\Http\Controllers\BpjsExceptionController;
+use App\Http\Controllers\BreakMasterController;
 use App\Http\Controllers\ChuFamilyController;
 use App\Http\Controllers\CompensationApproveController;
 use App\Http\Controllers\CompensationsController;
+use App\Http\Controllers\DeptBreaktimeController;
 use App\Http\Controllers\DeptInsentifRoleController;
 use App\Http\Controllers\Employee6sAssignmentController;
 use App\Http\Controllers\EmployeeExitHistoryController;
@@ -460,6 +462,32 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'role:Admin|HRD']);
     Route::post('/attendance-finger/download-template-manual', [AttendanceFingerController::class, 'downloadTemplateManual'])->name('attendance-finger.download-template-manual')->middleware(['auth', 'role:Admin|HRD']);
+
+    /*
+|--------------------------------------------------------------------------
+| Break Master
+|--------------------------------------------------------------------------
+*/
+
+    Route::get('/break-master', [BreakMasterController::class, 'index'])->name('break-master.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/break-master/create', [BreakMasterController::class, 'create'])->name('break-master.create')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/break-master/store', [BreakMasterController::class, 'store'])->name('break-master.store')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/break-master/{id}/edit', [BreakMasterController::class, 'edit'])->name('break-master.edit')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::put('/break-master/{id}', [BreakMasterController::class, 'update'])->name('break-master.update')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::delete('/break-master/{id}', [BreakMasterController::class, 'destroy'])->name('break-master.destroy')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+
+    /*
+|--------------------------------------------------------------------------
+| Department Breaktime
+|--------------------------------------------------------------------------
+*/
+
+    Route::get('/dept-breaktime', [DeptBreaktimeController::class, 'index'])->name('dept-breaktime.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/dept-breaktime/create', [DeptBreaktimeController::class, 'create'])->name('dept-breaktime.create')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::post('/dept-breaktime/store', [DeptBreaktimeController::class, 'store'])->name('dept-breaktime.store')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/dept-breaktime/{id}/edit', [DeptBreaktimeController::class, 'edit'])->name('dept-breaktime.edit')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::put('/dept-breaktime/{id}', [DeptBreaktimeController::class, 'update'])->name('dept-breaktime.update')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::delete('/dept-breaktime/{id}', [DeptBreaktimeController::class, 'destroy'])->name('dept-breaktime.destroy')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
 
     //Attendance
     Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);

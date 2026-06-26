@@ -109,7 +109,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-04271')
+            ->where('p.NPK', '=', 'C-01537')
 
             ->select(
                 'p.NPK',
@@ -142,7 +142,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-04271')
+            ->where('ec1.npk', '=', 'C-01537')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -763,40 +763,89 @@ class GeneratePayrollProcess implements ShouldQueue
             )
             ->groupBy('npk');
 
-        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans as imp')
+            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
+            ->leftJoin('dept_breaktimes as db', 'db.id_dept', '=', 'b.ID_DEPT')
+            ->leftJoin('break_masters as bm', 'bm.id', '=', 'db.id_break')
             ->selectRaw("
-        npk,
+        imp.npk,
+
         SUM(
-            CASE 
-                WHEN jam_kembali IS NOT NULL 
-                THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
-                ELSE 0 
+            CASE
+                WHEN imp.jam_kembali IS NULL THEN 0
+                ELSE
+                    DATEDIFF(MINUTE, imp.jam_keluar, imp.jam_kembali)
+                    -
+                    CASE
+                        WHEN imp.jam_keluar < bm.time_end
+                         AND imp.jam_kembali > bm.time_start
+                        THEN
+                            DATEDIFF(
+                                MINUTE,
+                                CASE
+                                    WHEN imp.jam_keluar > bm.time_start
+                                        THEN imp.jam_keluar
+                                    ELSE bm.time_start
+                                END,
+                                CASE
+                                    WHEN imp.jam_kembali < bm.time_end
+                                        THEN imp.jam_kembali
+                                    ELSE bm.time_end
+                                END
+                            )
+                        ELSE 0
+                    END
             END
         ) as total_ijin_minutes
     ")
-            ->whereBetween('tanggal', [$periodStart, $periodEnd])
-            ->groupBy('npk');
+            ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])
+            ->groupBy('imp.npk');
 
-        $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
+        $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans as imp')
+            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
+            ->leftJoin('dept_breaktimes as db', 'db.id_dept', '=', 'b.ID_DEPT')
+            ->leftJoin('break_masters as bm', 'bm.id', '=', 'db.id_break')
             ->selectRaw("
-        ijin_meninggalkan_pekerjaans.npk,
-        NAMA_KARYAWAN,
-        DEPARTEMENT,
-        tanggal,
-        jam_keluar,
-        rencana_kembali,
-        jam_kembali,
-        reason,
-        CASE 
-            WHEN jam_kembali IS NOT NULL 
-            THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
-            ELSE 0 
-        END as ijin_minutes
+        imp.npk,
+        b.NAMA_KARYAWAN,
+        d.DEPARTEMENT,
+        imp.tanggal,
+        imp.jam_keluar,
+        imp.rencana_kembali,
+        imp.jam_kembali,
+        imp.reason,
+        bm.time_start,
+        bm.time_end,
+
+        CASE
+            WHEN imp.jam_kembali IS NULL THEN 0
+            ELSE
+                DATEDIFF(MINUTE, imp.jam_keluar, imp.jam_kembali)
+                -
+                CASE
+                    WHEN imp.jam_keluar < bm.time_end
+                     AND imp.jam_kembali > bm.time_start
+                    THEN
+                        DATEDIFF(
+                            MINUTE,
+                            CASE
+                                WHEN imp.jam_keluar > bm.time_start
+                                    THEN imp.jam_keluar
+                                ELSE bm.time_start
+                            END,
+                            CASE
+                                WHEN imp.jam_kembali < bm.time_end
+                                    THEN imp.jam_kembali
+                                ELSE bm.time_end
+                            END
+                        )
+                    ELSE 0
+                END
+        END AS ijin_minutes
     ")
-            ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
-            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
-            ->whereBetween('tanggal', [$periodStart, $periodEnd])
-            ->orderBy('tanggal', 'asc')
+            ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])
+            ->orderBy('imp.tanggal', 'asc')
             ->get()
             ->groupBy('npk');
 
@@ -838,7 +887,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($ijinSummary, 'ij', function ($join) {
                 $join->on('emp.NPK', '=', 'ij.npk');
             })
-            // ->where('emp.NPK', '=', 'C-04271')
+            ->where('emp.NPK', '=', 'C-01537')
 
             ->select(
                 'emp.NPK',
