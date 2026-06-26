@@ -328,7 +328,6 @@
                                                             <select class="form-control py-0" id="assign_section"
                                                                 name="section" required>
                                                                 <option value="">-- Pilih --</option>
-                                                                <option value="CHUTEX">CHUTEX</option>
                                                                 @foreach($sections as $section)
                                                                     <option value="{{ $section->name }}">
                                                                         {{ $section->name }} - ( {{ $section->line_start }}

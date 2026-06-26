@@ -264,7 +264,6 @@
                                                                 <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
                                                                 <select class="form-control px-3" id="edit_section" name="section" required>
                                                                     <option value="">-- Pilih --</option>
-                                                                    <option value="CHUTEX">CHUTEX</option>
                                                                     @foreach($sections as $section)
                                                                         <option value="{{ $section->id }}">
                                                                             {{ $section->name }} - (
@@ -542,7 +541,6 @@
                                                                 <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
                                                                 <select class="form-control px-3" name="section" required>
                                                                     <option value="">-- Pilih --</option>
-                                                                    <option value="CHUTEX">CHUTEX</option>
                                                                     @foreach($sections as $section)
                                                                         <option value="{{ $section->id }}">
                                                                             {{ $section->name }} - (
