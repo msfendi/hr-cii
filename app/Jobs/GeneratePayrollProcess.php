@@ -1520,16 +1520,11 @@ class GeneratePayrollProcess implements ShouldQueue
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
     */
-                        $query = DB::table('pad_efficiencies')
+                        $assignments = DB::table('pad_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date]);
-
-                        $isOperator = (clone $query)->value('role') === 'operator';
-
-                        $assignments = $isOperator
-                            ? $query->get()
-                            : $query->limit(1)->get();
+                            ->whereBetween('date', [$period->start_date, $period->end_date])
+                            ->get();
 
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,

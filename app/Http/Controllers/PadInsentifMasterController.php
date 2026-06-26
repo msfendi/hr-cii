@@ -362,7 +362,7 @@ class PadInsentifMasterController extends Controller
                 $employee->role,
             );
 
-            // if ($pad <= 0) continue;
+            if ($pad <= 0) continue;
 
             $results[] = [
                 'npk' => $employee->NPK,
@@ -477,16 +477,11 @@ class PadInsentifMasterController extends Controller
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
     */
-        $query = DB::table('heat_efficiencies')
+        $assignments = DB::table('pad_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
-            ->whereBetween('date', [$period->start_date, $period->end_date]);
-
-        $isOperator = (clone $query)->value('role') === 'operator';
-
-        $assignments = $isOperator
-            ? $query->get()
-            : $query->limit(1)->get();
+            ->whereBetween('date', [$period->start_date, $period->end_date])
+            ->get();
 
         // dd($assignments);
 
