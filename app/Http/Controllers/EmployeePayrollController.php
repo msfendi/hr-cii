@@ -112,6 +112,7 @@ class EmployeePayrollController extends Controller
 
         $password = date('ymd', strtotime($birth));
 
+
         $employee = DB::table('payroll_run_details as prd')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
@@ -147,7 +148,7 @@ class EmployeePayrollController extends Controller
 
         $earnings = [];
         $deductions = [];
-        
+
         $late_minutes = isset($components['late_minutes']) ? $components['late_minutes'] : 0;
 
         foreach ($components as $code => $value) {
@@ -175,6 +176,51 @@ class EmployeePayrollController extends Controller
 
         $startDate = Carbon::parse($period->start_date);
         $endDate   = Carbon::parse($period->end_date);
+
+
+
+        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+            ->selectRaw("
+        npk,
+        SUM(
+            CASE
+                WHEN jam_kembali IS NOT NULL
+                THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+                ELSE 0
+            END
+        ) as total_ijin_minutes
+    ")
+            ->whereBetween('tanggal', [$startDate, $endDate])
+            ->where('npk', $npk)
+            ->groupBy('npk')
+            ->get()
+            ->keyBy('npk');
+
+        $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
+            ->selectRaw("
+        ijin_meninggalkan_pekerjaans.npk,
+        NAMA_KARYAWAN,
+        DEPARTEMENT,
+        tanggal,
+        jam_keluar,
+        rencana_kembali,
+        jam_kembali,
+        reason,
+        CASE 
+            WHEN jam_kembali IS NOT NULL 
+            THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+            ELSE 0 
+        END as ijin_minutes
+    ")
+            ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
+            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
+            ->whereBetween('tanggal', [$startDate, $endDate])
+            ->where('ijin_meninggalkan_pekerjaans.npk', $npk)
+            ->orderBy('tanggal', 'asc')
+            ->get()
+            ->groupBy('npk');
+
+        // dd($ijinDetails);
 
         $logs = DB::table('att_log')
             ->where('pin', $employee->BARCODE)
@@ -313,7 +359,7 @@ class EmployeePayrollController extends Controller
     IZIN
     ======================================================
     */
-            $izinCodes = ['MA', 'BR', 'PE', 'SI', 'CT', 'H'];
+            $izinCodes = ['MA', 'BR', 'P1', 'SD', 'CT', 'H', 'OUT'];
 
             if (in_array($lembur, $izinCodes)) {
 
@@ -337,8 +383,41 @@ class EmployeePayrollController extends Controller
 
                 $dailyLogs = $dailyLogs->sortBy('scan_date')->values();
 
-                $first = Carbon::parse($dailyLogs->first()->scan_date);
-                $last  = Carbon::parse($dailyLogs->last()->scan_date);
+                $last = Carbon::parse($dailyLogs->last()->scan_date);
+
+                /*
+|--------------------------------------------------------------------------
+| Cari scan masuk terbaik
+| Ambil log yang paling dekat dengan jam mulai shift,
+| tetapi jangan menggunakan data terakhir (karena diasumsikan scan pulang).
+|--------------------------------------------------------------------------
+*/
+                $bestIn = null;
+                $bestDiff = PHP_INT_MAX;
+
+                foreach ($dailyLogs as $index => $log) {
+
+                    // skip data terakhir
+                    if ($index == ($dailyLogs->count() - 1)) {
+                        continue;
+                    }
+
+                    $scan = Carbon::parse($log->scan_date);
+
+                    $diff = abs($scan->diffInSeconds($shiftStartDT, false));
+
+                    if ($diff < $bestDiff) {
+                        $bestDiff = $diff;
+                        $bestIn = $scan;
+                    }
+                }
+
+                // kalau hanya ada 1 log atau tidak ditemukan
+                if (!$bestIn) {
+                    $bestIn = Carbon::parse($dailyLogs->first()->scan_date);
+                }
+
+                $first = $bestIn;
 
                 $isLate = $first->gt(
                     $shiftStartDT->copy()->addMinutes(5)
@@ -412,7 +491,7 @@ class EmployeePayrollController extends Controller
                     }
                 } elseif ($isWeekend || $isHoliday) {
 
-                    $status = 'Holiday';
+                    $status = 'Libur';
                 } else {
 
                     $status = 'Tidak Masuk';
@@ -475,7 +554,10 @@ class EmployeePayrollController extends Controller
         //     'deductions' => $deductions,
         //     'attendance' => $attendance,
         //     'summary' => $summary,
-        //     'holidays' => $holidays
+        //     'holidays' => $holidays,
+        //     'late_minutes' => $late_minutes,
+        //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+        //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
         // ]);
     }
 }

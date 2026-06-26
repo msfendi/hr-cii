@@ -300,7 +300,7 @@ $('#period_id').on('change', function(){
     let periodId = $(this).val();
 
     $('#approvalBox').hide();
-    $('#btnProcess').prop('disabled', true);
+    // $('#btnProcess').prop('disabled', true);
 
 
     if(!periodId) return;

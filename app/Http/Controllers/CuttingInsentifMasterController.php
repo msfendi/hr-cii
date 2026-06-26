@@ -383,7 +383,7 @@ class CuttingInsentifMasterController extends Controller
                 $employee->role,
             );
 
-            if ($cutting <= 0) continue;
+            // if ($cutting <= 0) continue;
 
             $results[] = [
                 'npk' => $employee->NPK,

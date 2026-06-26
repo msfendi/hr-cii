@@ -334,7 +334,7 @@ class HeatInsentifMasterController extends Controller
                 $employee->role,
             );
 
-            if ($heat <= 0) continue;
+            // if ($heat <= 0) continue;
 
             $results[] = [
                 'npk' => $employee->NPK,
@@ -448,11 +448,16 @@ class HeatInsentifMasterController extends Controller
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
     */
-        $assignments = DB::table('heat_efficiencies')
+        $query = DB::table('heat_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
-            ->whereBetween('date', [$period->start_date, $period->end_date])
-            ->get();
+            ->whereBetween('date', [$period->start_date, $period->end_date]);
+
+        $isOperator = (clone $query)->value('role') === 'operator';
+
+        $assignments = $isOperator
+            ? $query->get()
+            : $query->limit(1)->get();
 
         // dd($assignments);
 

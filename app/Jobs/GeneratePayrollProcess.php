@@ -109,7 +109,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00827')
+            // ->where('p.NPK', '=', 'C-04271')
 
             ->select(
                 'p.NPK',
@@ -142,7 +142,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00827')
+            // ->where('ec1.npk', '=', 'C-04271')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -302,204 +302,208 @@ class GeneratePayrollProcess implements ShouldQueue
 
         // CHECK PER DATE LATE
 
-        $lateDetails =
-            DB::connection('cii')
+        $lateDetails = DB::connection('cii')
             ->query()
 
             /*
-        |--------------------------------------------------------------------------
-        | EMPLOYEE + CALENDAR
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | LAPISAN TERLUAR: filter hanya baris dengan rn = 1 (scan paling relevan)
+    |--------------------------------------------------------------------------
+    */
             ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
 
-                $q->fromSub($employeeBase, 'emp')
+                $q->fromSub(function ($q2) use ($employeeBase, $periodStart, $periodEnd) {
 
-                    ->crossJoinSub(
+                    /*
+            |----------------------------------------------------------------
+            | STEP B: base (emp+cal+shift) LEFT JOIN ke SEMUA baris att_log,
+            |         lalu ranking berdasarkan kedekatan ke jam masuk shift
+            |----------------------------------------------------------------
+            */
+                    $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
 
-                        DB::connection('cii')
-                            ->query()
+                        /*
+                    |------------------------------------------------------------
+                    | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved)
+                    |------------------------------------------------------------
+                    */
+                        $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
+
+                            $q4->fromSub($employeeBase, 'emp')
+                                ->crossJoinSub(
+                                    DB::connection('cii')
+                                        ->query()
+                                        ->selectRaw("
+                                            DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
+                                        ", [$periodStart])
+                                        ->from(DB::raw('master..spt_values v'))
+                                        ->where('v.type', 'P')
+                                        ->whereRaw("
+                                            v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
+                                        ", [$periodStart, $periodEnd]),
+                                    'cal'
+                                )
+                                ->select('emp.*', DB::raw('cal.shift_date'));
+                        }, 'emp')
+
+                            ->leftJoin('employee_shifts as es', function ($join) {
+                                $join->on('emp.NPK', '=', 'es.npk')
+                                    ->on(
+                                        DB::raw('CAST(emp.shift_date AS DATE)'),
+                                        '=',
+                                        DB::raw('CAST(es.shift_date AS DATE)')
+                                    );
+                            })
+
+                            ->leftJoin('shifts as s', function ($join) {
+                                $join->on('es.shift_id', '=', 's.id')
+                                    ->whereNotNull('es.shift_id');
+                            })
+
                             ->selectRaw("
+                            emp.NPK,
+                            emp.NAMA_KARYAWAN,
+                            emp.DEPARTEMENT,
+                            CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+                            CAST(emp.shift_date AS DATE) as scan_day,
+                            COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
+                            COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
                             DATEADD(
-                                DAY,
-                                v.number,
-                                CAST(? AS DATE)
-                            ) as shift_date
-                        ", [$periodStart])
-                            ->from(DB::raw('master..spt_values v'))
-                            ->where('v.type', 'P')
-                            ->whereRaw("
-                            v.number <= DATEDIFF(
-                                DAY,
-                                CAST(? AS DATE),
-                                CAST(? AS DATE)
-                            )
-                        ", [$periodStart, $periodEnd]),
+                                SECOND,
+                                DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
+                                CAST(emp.shift_date AS DATETIME)
+                            ) as shift_start_dt
+                        ");
+                    }, 'base')
 
-                        'cal'
-                    )
+                        /*
+                |--------------------------------------------------------------
+                | Join ke SEMUA baris att_log (bukan agregat MIN lagi)
+                |--------------------------------------------------------------
+                */
+                        ->leftJoin('att_log as att', function ($join) {
+                            $join->on(
+                                DB::raw('CAST(att.pin AS VARCHAR(50))'),
+                                '=',
+                                'base.pin'
+                            )
+                                ->on(
+                                    DB::raw('CAST(att.scan_date AS DATE)'),
+                                    '=',
+                                    'base.scan_day'
+                                )
+                                ->where('att.sn', '!=', '66208026030047');
+                        })
+
+                        ->selectRaw("
+                    base.NPK,
+                    base.NAMA_KARYAWAN,
+                    base.DEPARTEMENT,
+                    base.pin,
+                    base.scan_day,
+                    base.work_start,
+                    base.work_end,
+                    base.shift_start_dt,
+                    att.scan_date as scan_candidate,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY base.NPK, base.scan_day
+                        ORDER BY ABS(DATEDIFF(SECOND, base.shift_start_dt, att.scan_date)) ASC
+                    ) as rn
+                ");
+                }, 'ranked')
+
+                    ->where('ranked.rn', 1)
 
                     ->select(
-                        'emp.*',
-                        DB::raw('cal.shift_date')
+                        'ranked.NPK',
+                        'ranked.NAMA_KARYAWAN',
+                        'ranked.DEPARTEMENT',
+                        'ranked.pin',
+                        'ranked.scan_day',
+                        'ranked.work_start',
+                        'ranked.work_end',
+                        DB::raw('ranked.scan_candidate as first_scan')
                     );
             }, 'emp')
 
             /*
-        |--------------------------------------------------------------------------
-        | SHIFT
-        |--------------------------------------------------------------------------
-        */
-            ->leftJoin('employee_shifts as es', function ($join) {
-                $join->on('emp.NPK', '=', 'es.npk')
-                    ->on(
-                        DB::raw('CAST(emp.shift_date AS DATE)'),
-                        '=',
-                        DB::raw('CAST(es.shift_date AS DATE)')
-                    );
-            })
-
-            ->leftJoin('shifts as s', function ($join) {
-                $join->on('es.shift_id', '=', 's.id')
-                    ->whereNotNull('es.shift_id');
-            })
-
-            /*
-        |--------------------------------------------------------------------------
-        | ATT LOG (FIX: 1 ROW ONLY PER EMP-DATE)
-        |--------------------------------------------------------------------------
-        */
-            ->leftJoinSub(
-                DB::connection('cii')
-                    ->table('att_log')
-                    ->where('sn', '!=', '66208026030047')
-                    ->selectRaw("
-                    CAST(pin AS VARCHAR(50)) as pin,
-                    CAST(scan_date AS DATE) as scan_day,
-                    MIN(CAST(scan_date AS DATETIME)) as first_scan
-                ")
-                    ->groupBy(
-                        DB::raw('CAST(pin AS VARCHAR(50))'),
-                        DB::raw('CAST(scan_date AS DATE)')
-                    ),
-                'att',
-                function ($join) {
-                    $join->on(
-                        DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
-                        '=',
-                        'att.pin'
-                    )
-                        ->on(
-                            DB::raw('CAST(emp.shift_date AS DATE)'),
-                            '=',
-                            'att.scan_day'
-                        );
-                }
-            )
-
-            /*
-        |--------------------------------------------------------------------------
-        | LATE COMPENSATION
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | LATE COMPENSATION
+    |--------------------------------------------------------------------------
+    */
             ->leftJoin('late_compensations as lc', function ($join) {
                 $join->on('emp.NPK', '=', 'lc.npk')
-                    ->whereRaw("
-                    CAST(lc.date AS DATE) = CAST(emp.shift_date AS DATE)
-                ");
+                    ->whereRaw("CAST(lc.date AS DATE) = CAST(emp.scan_day AS DATE)");
             })
 
-            /*
-        |--------------------------------------------------------------------------
-        | SHIFT RESOLUTION
-        |--------------------------------------------------------------------------
-        */
             ->selectRaw("
-            emp.NPK,
-            emp.NAMA_KARYAWAN,
-            emp.DEPARTEMENT,
-            CAST(emp.BARCODE AS VARCHAR(50)) as pin,
-            CAST(emp.shift_date AS DATE) as scan_day,
-
-            COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
-            COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
-
-            att.first_scan
-        ")
+        emp.NPK,
+        emp.NAMA_KARYAWAN,
+        emp.DEPARTEMENT,
+        emp.pin,
+        emp.scan_day,
+        emp.work_start,
+        emp.work_end,
+        emp.first_scan
+    ")
 
             /*
-        |--------------------------------------------------------------------------
-        | FINAL LATE CALC (NO NULL POSSIBILITY)
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | FINAL LATE CALC (logika sama seperti sebelumnya, hanya sumber first_scan
+    | yang sudah diperbaiki)
+    |--------------------------------------------------------------------------
+    */
             ->selectRaw("
-            CASE
-                WHEN lc.id IS NOT NULL THEN 0
-                WHEN att.first_scan IS NULL THEN 0
-
-                ELSE
-                    CASE
-                        WHEN att.first_scan >
+        CASE
+            WHEN lc.id IS NOT NULL THEN 0
+            WHEN emp.first_scan IS NULL THEN 0
+ 
+            ELSE
+                CASE
+                    WHEN emp.first_scan >
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(SECOND, '00:00:00', emp.work_end),
+                            CAST(emp.scan_day AS DATETIME)
+                        )
+                    THEN 0
+ 
+                    WHEN DATEDIFF(
+                        MINUTE,
+                        DATEADD(
+                            MINUTE, 5,
                             DATEADD(
                                 SECOND,
-                                DATEDIFF(SECOND,'00:00:00',COALESCE(CAST(s.work_end AS TIME),'17:00:00')),
-                                CAST(emp.shift_date AS DATETIME)
+                                DATEDIFF(SECOND, '00:00:00', emp.work_start),
+                                CAST(emp.scan_day AS DATETIME)
                             )
-                        THEN 0
-
-                        WHEN DATEDIFF(
+                        ),
+                        emp.first_scan
+                    ) < 0 THEN 0
+ 
+                    ELSE
+                        DATEDIFF(
                             MINUTE,
                             DATEADD(
-                                MINUTE,5,
+                                MINUTE, 5,
                                 DATEADD(
                                     SECOND,
-                                    DATEDIFF(SECOND,'00:00:00',COALESCE(CAST(s.work_start AS TIME),'08:00:00')),
-                                    CAST(emp.shift_date AS DATETIME)
+                                    DATEDIFF(SECOND, '00:00:00', emp.work_start),
+                                    CAST(emp.scan_day AS DATETIME)
                                 )
                             ),
-                            att.first_scan
-                        ) < 0 THEN 0
-
-                        ELSE
-                            DATEDIFF(
-                                MINUTE,
-                                DATEADD(
-                                    MINUTE,5,
-                                    DATEADD(
-                                        SECOND,
-                                        DATEDIFF(SECOND,'00:00:00',COALESCE(CAST(s.work_start AS TIME),'08:00:00')),
-                                        CAST(emp.shift_date AS DATETIME)
-                                    )
-                                ),
-                                att.first_scan
-                            )
-                    END
-            END as late_minute
-        ")
-
-            /*
-        |--------------------------------------------------------------------------
-        | GROUP BY CLEAN
-        |--------------------------------------------------------------------------
-        */
-            ->groupBy(
-                'emp.NPK',
-                'emp.NAMA_KARYAWAN',
-                'emp.DEPARTEMENT',
-                DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
-                DB::raw('CAST(emp.shift_date AS DATE)'),
-                's.work_start',
-                's.work_end',
-                'att.first_scan',
-                'lc.id'
-            )
+                            emp.first_scan
+                        )
+                END
+        END as late_minute
+    ")
 
             ->whereBetween(
-                DB::raw('CAST(emp.shift_date AS DATE)'),
+                DB::raw('CAST(emp.scan_day AS DATE)'),
                 [$periodStart, $periodEnd]
             )
 
-            ->orderBy(DB::raw('CAST(emp.shift_date AS DATE)'))
+            ->orderBy(DB::raw('CAST(emp.scan_day AS DATE)'))
             ->get()
             ->groupBy('NPK');
 
@@ -512,279 +516,213 @@ class GeneratePayrollProcess implements ShouldQueue
             ]);
         }
 
+        $nearShiftEndToleranceMinutes = 30;
+
         $lateSummary =
             DB::connection('cii')
             ->query()
 
             /*
-        |--------------------------------------------------------------------------
-        | SOURCE LATE ENGINE (ORIGINAL STRUCTURE - CLEANED)
-        |--------------------------------------------------------------------------
-        */
-            ->fromSub(function ($query) use ($employeeBase, $periodStart, $periodEnd) {
+    |--------------------------------------------------------------------------
+    | LAPISAN TERLUAR: filter rn = 1, hitung late_minute per hari
+    |--------------------------------------------------------------------------
+    */
+            ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd, $nearShiftEndToleranceMinutes) {
 
-                $query->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
+                $q->fromSub(function ($q2) use ($employeeBase, $periodStart, $periodEnd) {
 
-                    $q->fromSub($employeeBase, 'emp')
+                    /*
+            |----------------------------------------------------------------
+            | STEP B: base (emp+cal+shift) LEFT JOIN ke SEMUA baris att_log
+            |         (termasuk kasus overnight lintas hari), + window function
+            |          rn (ranking kedekatan ke shift_start) & scan_count
+            |----------------------------------------------------------------
+            */
+                    $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
 
-                        ->crossJoinSub(
+                        /*
+                    |------------------------------------------------------------
+                    | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved, anti overnight)
+                    |------------------------------------------------------------
+                    */
+                        $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
 
-                            DB::connection('cii')
-                                ->query()
-                                ->selectRaw("
-                                DATEADD(
-                                    DAY,
-                                    v.number,
-                                    CAST(? AS DATE)
-                                ) as shift_date
-                            ", [$periodStart])
-                                ->from(DB::raw('master..spt_values v'))
-                                ->where('v.type', 'P')
-                                ->whereRaw("
-                                v.number <= DATEDIFF(
-                                    DAY,
-                                    CAST(? AS DATE),
-                                    CAST(? AS DATE)
+                            $q4->fromSub($employeeBase, 'emp')
+                                ->crossJoinSub(
+                                    DB::connection('cii')
+                                        ->query()
+                                        ->selectRaw("
+                                            DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
+                                        ", [$periodStart])
+                                        ->from(DB::raw('master..spt_values v'))
+                                        ->where('v.type', 'P')
+                                        ->whereRaw("
+                                            v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
+                                        ", [$periodStart, $periodEnd]),
+                                    'cal'
                                 )
-                            ", [$periodStart, $periodEnd]),
+                                ->select('emp.NPK', 'emp.BARCODE', DB::raw('cal.shift_date'));
+                        }, 'emp')
 
-                            'cal'
-                        )
+                            ->leftJoin('employee_shifts as es', function ($join) {
+                                $join->on('emp.NPK', '=', 'es.npk')
+                                    ->on(
+                                        DB::raw('CAST(emp.shift_date AS DATE)'),
+                                        '=',
+                                        DB::raw('CAST(es.shift_date AS DATE)')
+                                    );
+                            })
 
-                        ->select(
-                            'emp.NPK',
-                            'emp.BARCODE',
-                            DB::raw('cal.shift_date')
-                        );
-                }, 'emp')
+                            ->leftJoin('shifts as s', function ($join) {
+                                $join->on('es.shift_id', '=', 's.id')
+                                    ->whereNotNull('es.shift_id');
+                            })
 
-                    /*
-            |--------------------------------------------------------------------------
-            | DAILY SHIFT (ONLY EMPLOYEE SHIFT)
-            |--------------------------------------------------------------------------
-            */
-                    ->leftJoin('employee_shifts as es', function ($join) {
-                        $join->on('emp.NPK', '=', 'es.npk')
-                            ->on(
-                                DB::raw('CAST(emp.shift_date AS DATE)'),
-                                '=',
-                                DB::raw('CAST(es.shift_date AS DATE)')
-                            );
-                    })
-
-                    ->leftJoin('shifts as s', function ($join) {
-                        $join->on('es.shift_id', '=', 's.id')
-                            ->whereNotNull('es.shift_id');
-                    })
-
-                    /*
-            |--------------------------------------------------------------------------
-            | ATT LOG
-            |--------------------------------------------------------------------------
-            */
-                    ->leftJoinSub(
-                        DB::connection('cii')
-                            ->table('att_log')
-                            ->where('sn', '!=', '66208026030047')
-                            ->whereBetween(
-                                DB::raw('CAST(scan_date AS DATE)'),
-                                [$periodStart, $periodEnd]
-                            )
-                            ->select(
-                                DB::raw('CAST(pin AS VARCHAR(50)) as pin'),
-                                DB::raw('CAST(scan_date AS DATE) as scan_day'),
-                                'scan_date'
-                            ),
-                        'att',
-                        function ($join) {
-                            $join->on(
-                                DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
-                                '=',
-                                'att.pin'
-                            )
-                                ->where(function ($q) {
-
-                                    $q->whereRaw("
-                            CAST(att.scan_day AS DATE) = CAST(emp.shift_date AS DATE)
-                        ")
-                                        ->orWhereRaw("
-                            (
-                                es.shift_id IS NOT NULL
-                                AND CAST(s.work_start AS TIME) > CAST(s.work_end AS TIME)
-                                AND CAST(att.scan_day AS DATE) = DATEADD(DAY,1,CAST(emp.shift_date AS DATE))
-                            )
+                            ->selectRaw("
+                            emp.NPK,
+                            CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+                            CAST(emp.shift_date AS DATE) as shift_date,
+ 
+                            COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
+                            COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
+ 
+                            CASE
+                                WHEN COALESCE(CAST(s.work_start AS TIME), '08:00:00')
+                                   > COALESCE(CAST(s.work_end AS TIME), '17:00:00')
+                                THEN 1 ELSE 0
+                            END as is_overnight,
+ 
+                            DATEADD(
+                                SECOND,
+                                DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
+                                CAST(emp.shift_date AS DATETIME)
+                            ) as shift_start_dt,
+ 
+                            DATEADD(
+                                DAY,
+                                CASE
+                                    WHEN COALESCE(CAST(s.work_start AS TIME), '08:00:00')
+                                       > COALESCE(CAST(s.work_end AS TIME), '17:00:00')
+                                    THEN 1 ELSE 0
+                                END,
+                                DATEADD(
+                                    SECOND,
+                                    DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_end AS TIME), '17:00:00')),
+                                    CAST(emp.shift_date AS DATETIME)
+                                )
+                            ) as shift_end_dt
                         ");
+                    }, 'base')
+
+                        /*
+                |--------------------------------------------------------------
+                | Join ke SEMUA baris att_log (periode + sn dikecualikan),
+                | termasuk kasus overnight (scan di hari berikutnya)
+                |--------------------------------------------------------------
+                */
+                        ->leftJoin('att_log as att', function ($join) use ($periodStart, $periodEnd) {
+                            $join->on(
+                                DB::raw('CAST(att.pin AS VARCHAR(50))'),
+                                '=',
+                                'base.pin'
+                            )
+                                ->where('att.sn', '!=', '66208026030047')
+                                ->whereBetween(
+                                    DB::raw('CAST(att.scan_date AS DATE)'),
+                                    [$periodStart, $periodEnd]
+                                )
+                                ->where(function ($q) {
+                                    $q->whereRaw("CAST(att.scan_date AS DATE) = base.shift_date")
+                                        ->orWhereRaw("
+                                  base.is_overnight = 1
+                                  AND CAST(att.scan_date AS DATE) = DATEADD(DAY, 1, base.shift_date)
+                              ");
                                 });
-                        }
-                    )
+                        })
 
-                    ->groupBy(
-                        'emp.NPK',
-                        'emp.BARCODE',
-                        DB::raw('CAST(emp.shift_date AS DATE)'),
-                        's.work_start',
-                        's.work_end',
-                        'es.shift_id'
-                    )
+                        ->selectRaw("
+                    base.NPK,
+                    base.pin,
+                    base.shift_date,
+                    base.work_start,
+                    base.work_end,
+                    base.shift_start_dt,
+                    base.shift_end_dt,
+                    att.scan_date as scan_candidate,
+ 
+                    ROW_NUMBER() OVER (
+                        PARTITION BY base.NPK, base.shift_date
+                        ORDER BY ABS(DATEDIFF(SECOND, base.shift_start_dt, att.scan_date)) ASC
+                    ) as rn,
+ 
+                    COUNT(att.scan_date) OVER (
+                        PARTITION BY base.NPK, base.shift_date
+                    ) as scan_count
+                ");
+                }, 'ranked')
 
-                    /*
-            |--------------------------------------------------------------------------
-            | DAILY LATE RESULT (CLEANED - NO FS)
-            |--------------------------------------------------------------------------
-            */
+                    ->where('ranked.rn', 1)
+
                     ->selectRaw("
-                emp.NPK,
-                CAST(emp.BARCODE AS VARCHAR(50)) as pin,
-                CAST(emp.shift_date AS DATE) as shift_date,
-
-                MIN(att.scan_date) as first_scan,
-
-                COALESCE(
-                    CAST(s.work_end AS TIME),
-                    '17:00:00'
-                ) as work_end,
-
-                CASE
-                    WHEN MIN(att.scan_date) IS NULL THEN 0
-
-                    WHEN
-                        COALESCE(
-                            CAST(s.work_start AS TIME),
-                            '08:00:00'
-                        )
-                        >
-                        COALESCE(
-                            CAST(s.work_end AS TIME),
-                            '17:00:00'
-                        )
-
-                    THEN
-                        CASE
-                            WHEN DATEDIFF(
-                                MINUTE,
-                                DATEADD(
-                                    MINUTE,5,
-                                    DATEADD(
-                                        SECOND,
-                                        DATEDIFF(
-                                            SECOND,'00:00:00',
-                                            COALESCE(
-                                                CAST(s.work_start AS TIME),
-                                                '23:00:00'
-                                            )
-                                        ),
-                                        CAST(emp.shift_date AS DATETIME)
-                                    )
-                                ),
-                                MIN(att.scan_date)
-                            ) < 0 THEN 0
-                            ELSE
-                                DATEDIFF(
-                                    MINUTE,
-                                    DATEADD(
-                                        MINUTE,5,
-                                        DATEADD(
-                                            SECOND,
-                                            DATEDIFF(
-                                                SECOND,'00:00:00',
-                                                COALESCE(
-                                                    CAST(s.work_start AS TIME),
-                                                    '23:00:00'
-                                                )
-                                            ),
-                                            CAST(emp.shift_date AS DATETIME)
-                                        )
-                                    ),
-                                    MIN(att.scan_date)
-                                )
-                        END
-
-                    ELSE
-                        CASE
-                            WHEN DATEDIFF(
-                                MINUTE,
-                                DATEADD(
-                                    MINUTE,5,
-                                    DATEADD(
-                                        SECOND,
-                                        DATEDIFF(
-                                            SECOND,'00:00:00',
-                                            COALESCE(
-                                                CAST(s.work_start AS TIME),
-                                                '08:00:00'
-                                            )
-                                        ),
-                                        CAST(emp.shift_date AS DATETIME)
-                                    )
-                                ),
-                                MIN(att.scan_date)
-                            ) < 0 THEN 0
-                            ELSE
-                                DATEDIFF(
-                                    MINUTE,
-                                    DATEADD(
-                                        MINUTE,5,
-                                        DATEADD(
-                                            SECOND,
-                                            DATEDIFF(
-                                                SECOND,'00:00:00',
-                                                COALESCE(
-                                                    CAST(s.work_start AS TIME),
-                                                    '08:00:00'
-                                                )
-                                            ),
-                                            CAST(emp.shift_date AS DATETIME)
-                                        )
-                                    ),
-                                    MIN(att.scan_date)
-                                )
-                        END
-                END as late_minute
-            ")
-
-                    ->whereBetween(
-                        DB::raw('CAST(emp.shift_date AS DATE)'),
-                        [$periodStart, $periodEnd]
-                    );
+            ranked.NPK,
+            ranked.pin,
+            ranked.shift_date,
+            ranked.work_start,
+            ranked.work_end,
+            ranked.shift_start_dt,
+            ranked.shift_end_dt,
+            ranked.scan_candidate as first_scan,
+            ranked.scan_count
+        ");
             }, 'daily')
 
             /*
-        |--------------------------------------------------------------------------
-        | LATE COMPENSATION
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | LATE COMPENSATION
+    |--------------------------------------------------------------------------
+    */
             ->leftJoin('late_compensations as lc', function ($join) {
                 $join->on('daily.NPK', '=', 'lc.npk')
-                    ->whereRaw("
-                    CAST(lc.date AS DATE) = CAST(daily.shift_date AS DATE)
-                ");
+                    ->whereRaw("CAST(lc.date AS DATE) = CAST(daily.shift_date AS DATE)");
             })
 
             /*
-        |--------------------------------------------------------------------------
-        | FINAL RESULT
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | FINAL RESULT (rekap per pegawai)
+    |--------------------------------------------------------------------------
+    */
             ->selectRaw("
-            daily.NPK as npk,
-            daily.pin,
-
-            SUM(
-                CASE
-                    WHEN lc.id IS NOT NULL THEN 0
-
-                    WHEN daily.first_scan >
-                        DATEADD(
-                            SECOND,
-                            DATEDIFF(SECOND,'00:00:00',daily.work_end),
-                            CAST(daily.shift_date AS DATETIME)
-                        )
-                    THEN 0
-
-                    ELSE daily.late_minute
-                END
-            ) as late_minutes
-        ")
+        daily.NPK as npk,
+        daily.pin,
+ 
+        SUM(
+            CASE
+                WHEN lc.id IS NOT NULL THEN 0
+ 
+                WHEN daily.first_scan IS NULL THEN 0
+ 
+                -- ATURAN BARU: scan tunggal & sudah lewat/dekat jam shift selesai => bukan telat
+                WHEN daily.scan_count = 1
+                     AND DATEDIFF(MINUTE, daily.first_scan, daily.shift_end_dt) <= {$nearShiftEndToleranceMinutes}
+                THEN 0
+ 
+                WHEN daily.first_scan > daily.shift_end_dt THEN 0
+ 
+                WHEN DATEDIFF(
+                    MINUTE,
+                    DATEADD(MINUTE, 5, daily.shift_start_dt),
+                    daily.first_scan
+                ) < 0 THEN 0
+ 
+                ELSE
+                    DATEDIFF(
+                        MINUTE,
+                        DATEADD(MINUTE, 5, daily.shift_start_dt),
+                        daily.first_scan
+                    )
+            END
+        ) as late_minutes
+    ")
 
             ->groupBy('daily.NPK', 'daily.pin');
 
@@ -900,7 +838,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($ijinSummary, 'ij', function ($join) {
                 $join->on('emp.NPK', '=', 'ij.npk');
             })
-            // ->where('emp.NPK', '=', 'C-00827')
+            // ->where('emp.NPK', '=', 'C-04271')
 
             ->select(
                 'emp.NPK',
@@ -1582,11 +1520,16 @@ class GeneratePayrollProcess implements ShouldQueue
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
     */
-                        $assignments = DB::table('pad_efficiencies')
+                        $query = DB::table('pad_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date])
-                            ->get();
+                            ->whereBetween('date', [$period->start_date, $period->end_date]);
+
+                        $isOperator = (clone $query)->value('role') === 'operator';
+
+                        $assignments = $isOperator
+                            ? $query->get()
+                            : $query->limit(1)->get();
 
                         // $run->update([
                         //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
@@ -1890,17 +1833,23 @@ class GeneratePayrollProcess implements ShouldQueue
                             }
                         }
                     } else if ($component->code === 'heat_insentif') {
+                        // $collectionHeat = collect([]);
 
                         /*
     |--------------------------------------------------------------------------
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
     */
-                        $assignments = DB::table('heat_efficiencies')
+                        $query = DB::table('heat_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date])
-                            ->get();
+                            ->whereBetween('date', [$period->start_date, $period->end_date]);
+
+                        $isOperator = (clone $query)->value('role') === 'operator';
+
+                        $assignments = $isOperator
+                            ? $query->get()
+                            : $query->limit(1)->get();
 
                         // dd($assignments);
                         // $run->update([
@@ -2060,7 +2009,9 @@ class GeneratePayrollProcess implements ShouldQueue
                                     $jumlahOperator
                                 );
                             }
+                            // $collectionHeat->push($jumlahOperator, $totalDeptInsentif, $amount);
                         }
+                        // dd($collectionHeat);
                     } else {
                         $amount = $this->evaluateFormula($component->formula, $results, $inputVariables);
                     }
