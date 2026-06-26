@@ -432,11 +432,20 @@ class PayrollProcessController extends Controller
 
         $canSeeSalary = $user->hasRole([
             'Admin',
+            'Audit',
+            'Management',
             'Payroll_STAFF',
             'Payroll_NONSTAFF',
             'Payroll_SEWING',
             'Payroll_NONSEWING'
         ]);
+
+        $period = DB::table('payroll_runs')->leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')->where('payroll_runs.id', $id)->first();
+        // dd($period);
+
+        $periodStart = $period->start_date;
+        $periodEnd = $period->end_date;
+        $count_days  = Carbon::parse($periodStart)->diffInDays(Carbon::parse($periodEnd)) + 1;
 
         /*
     |--------------------------------------------------------------------------
@@ -444,12 +453,389 @@ class PayrollProcessController extends Controller
     |--------------------------------------------------------------------------
     */
 
-        $employeeUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')
-                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
+
+        $employeeUnion = DB::connection('cii')
+            ->query()
+            ->fromSub(function ($q) {
+
+                $q->from('BIODATA')
+                    ->select(
+                        'NPK',
+                        'ID_DEPT',
+                        'SECTION',
+                        'NAMA_KARYAWAN',
+                        'IS_STAFF',
+                        DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'),
+                        'IS_EXPAT'
+                    )
+
+                    ->unionAll(
+
+                        DB::connection('cii')
+                            ->table('BIODATA_KELUAR')
+                            ->select(
+                                'NPK',
+                                'ID_DEPT',
+                                'SECTION',
+                                'NAMA_KARYAWAN',
+                                'IS_STAFF',
+                                DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'),
+                                'IS_EXPAT'
+                            )
+
+                    );
+            }, 'bio')
+
+            ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+
+            ->select(
+                'bio.*',
+                'd.DEPARTEMENT'
             );
+
+        $latestContract = DB::table('employees_contract as ec1')
+            ->select(
+                'ec1.npk',
+                'ec1.salary',
+                'ec1.allowance',
+                'ec1.pph21',
+                'ec1.type',
+                'ec1.daily_salary'
+            )
+            ->where('ec1.npk', '!=', 'C-00017')
+            // ->where('ec1.npk', '=', 'C-00827')
+
+            // ✅ contract harus masuk range periode
+            ->whereDate('ec1.start_date', '<=', $periodEnd)
+            ->whereDate('ec1.end_date', '>=', $periodStart)
+            // ->where('ec1.status_contract', '=', 'AKTIF')
+
+            // ✅ ambil contract terbaru
+            ->whereRaw("
+        ec1.id = (
+            SELECT TOP 1 ec2.id
+            FROM employees_contract ec2
+            WHERE ec2.npk = ec1.npk
+              AND ec2.start_date <= ?
+              AND ec2.end_date >= ?
+            ORDER BY ec2.contract_ke DESC,
+                     ec2.start_date DESC
+        )
+    ", [$periodEnd, $periodStart]);
+
+
+        $overtimeDetails = DB::connection('cii')
+            ->table('overtimes')
+            ->leftJoinSub($latestContract, 'ec', function ($join) {
+                $join->on('overtimes.NPK', '=', 'ec.npk');
+            })
+            ->leftJoinSub($employeeUnion, 'bio', function ($join) {
+                $join->on('overtimes.NPK', '=', 'bio.NPK');
+            })
+            ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
+            ->select(
+                'overtimes.NPK',
+                'bio.NAMA_KARYAWAN',
+                'd.DEPARTEMENT',
+                'overtimes.OVERTIME_DATE',
+
+                DB::raw("
+            CASE
+                WHEN DAY NOT IN ('Sabtu','Minggu','Saturday','Sunday')
+                AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+                THEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+                ELSE 0
+            END AS overtime_hours
+        "),
+
+                DB::raw("
+            CASE
+                WHEN DAY IN ('Sabtu','Minggu','Saturday','Sunday')
+                AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+                THEN
+                    CASE
+                        WHEN
+                            (
+                                COALESCE(ec.salary,0)
+                                + COALESCE(ec.allowance,0)
+                            ) >= 3800000
+
+                            OR
+
+                            (
+                                (COALESCE(ec.daily_salary,0) * {$count_days})
+                                + COALESCE(ec.allowance,0)
+                            ) >= 3800000
+
+                        THEN
+                            CASE
+                                WHEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) > 8
+                                THEN 8
+                                ELSE TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+                            END
+
+                        ELSE
+                            TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+                    END
+
+                ELSE 0
+            END AS special_overtime_hours
+        "),
+
+                DB::raw("
+            CASE
+                WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
+                    THEN 0.5
+
+                WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
+                    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
+                    THEN 1
+
+                ELSE 0
+            END AS absence_days
+        "),
+                DB::raw("
+            CASE
+                WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
+                    THEN JUMLAH_JAM_LEMBUR
+
+                WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
+                    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD')
+                    THEN JUMLAH_JAM_LEMBUR
+            END AS absence_status
+        ")
+            )
+            ->orderBy('overtimes.NPK')
+            ->orderBy('overtimes.OVERTIME_DATE')
+            ->get()
+            ->groupBy('NPK');
+
+        $lateDetails =
+            DB::connection('cii')
+            ->query()
+
+            /*
+        |--------------------------------------------------------------------------
+        | EMPLOYEE + CALENDAR
+        |--------------------------------------------------------------------------
+        */
+            ->fromSub(function ($q) use ($employeeUnion, $periodStart, $periodEnd) {
+
+                $q->fromSub($employeeUnion, 'emp')
+
+                    ->crossJoinSub(
+
+                        DB::connection('cii')
+                            ->query()
+                            ->selectRaw("
+                            DATEADD(
+                                DAY,
+                                v.number,
+                                CAST(? AS DATE)
+                            ) as shift_date
+                        ", [$periodStart])
+                            ->from(DB::raw('master..spt_values v'))
+                            ->where('v.type', 'P')
+                            ->whereRaw("
+                            v.number <= DATEDIFF(
+                                DAY,
+                                CAST(? AS DATE),
+                                CAST(? AS DATE)
+                            )
+                        ", [$periodStart, $periodEnd]),
+
+                        'cal'
+                    )
+
+                    ->select(
+                        'emp.*',
+                        DB::raw('cal.shift_date')
+                    );
+            }, 'emp')
+
+            /*
+        |--------------------------------------------------------------------------
+        | SHIFT
+        |--------------------------------------------------------------------------
+        */
+            ->leftJoin('employee_shifts as es', function ($join) {
+                $join->on('emp.NPK', '=', 'es.npk')
+                    ->on(
+                        DB::raw('CAST(emp.shift_date AS DATE)'),
+                        '=',
+                        DB::raw('CAST(es.shift_date AS DATE)')
+                    );
+            })
+
+            ->leftJoin('shifts as s', function ($join) {
+                $join->on('es.shift_id', '=', 's.id')
+                    ->whereNotNull('es.shift_id');
+            })
+
+            /*
+        |--------------------------------------------------------------------------
+        | ATT LOG (FIX: 1 ROW ONLY PER EMP-DATE)
+        |--------------------------------------------------------------------------
+        */
+            ->leftJoinSub(
+                DB::connection('cii')
+                    ->table('att_log')
+                    ->where('sn', '!=', '66208026030047')
+                    ->selectRaw("
+                    CAST(pin AS VARCHAR(50)) as pin,
+                    CAST(scan_date AS DATE) as scan_day,
+                    MIN(CAST(scan_date AS DATETIME)) as first_scan
+                ")
+                    ->groupBy(
+                        DB::raw('CAST(pin AS VARCHAR(50))'),
+                        DB::raw('CAST(scan_date AS DATE)')
+                    ),
+                'att',
+                function ($join) {
+                    $join->on(
+                        DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
+                        '=',
+                        'att.pin'
+                    )
+                        ->on(
+                            DB::raw('CAST(emp.shift_date AS DATE)'),
+                            '=',
+                            'att.scan_day'
+                        );
+                }
+            )
+
+            /*
+        |--------------------------------------------------------------------------
+        | LATE COMPENSATION
+        |--------------------------------------------------------------------------
+        */
+            ->leftJoin('late_compensations as lc', function ($join) {
+                $join->on('emp.NPK', '=', 'lc.npk')
+                    ->whereRaw("
+                    CAST(lc.date AS DATE) = CAST(emp.shift_date AS DATE)
+                ");
+            })
+
+            /*
+        |--------------------------------------------------------------------------
+        | SHIFT RESOLUTION
+        |--------------------------------------------------------------------------
+        */
+            ->selectRaw("
+            emp.NPK,
+            emp.NAMA_KARYAWAN,
+            emp.DEPARTEMENT,
+            CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+            CAST(emp.shift_date AS DATE) as scan_day,
+
+            COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
+            COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
+
+            att.first_scan
+        ")
+
+            /*
+        |--------------------------------------------------------------------------
+        | FINAL LATE CALC (NO NULL POSSIBILITY)
+        |--------------------------------------------------------------------------
+        */
+            ->selectRaw("
+            CASE
+                WHEN lc.id IS NOT NULL THEN 0
+                WHEN att.first_scan IS NULL THEN 0
+
+                ELSE
+                    CASE
+                        WHEN att.first_scan >
+                            DATEADD(
+                                SECOND,
+                                DATEDIFF(SECOND,'00:00:00',COALESCE(CAST(s.work_end AS TIME),'17:00:00')),
+                                CAST(emp.shift_date AS DATETIME)
+                            )
+                        THEN 0
+
+                        WHEN DATEDIFF(
+                            MINUTE,
+                            DATEADD(
+                                MINUTE,5,
+                                DATEADD(
+                                    SECOND,
+                                    DATEDIFF(SECOND,'00:00:00',COALESCE(CAST(s.work_start AS TIME),'08:00:00')),
+                                    CAST(emp.shift_date AS DATETIME)
+                                )
+                            ),
+                            att.first_scan
+                        ) < 0 THEN 0
+
+                        ELSE
+                            DATEDIFF(
+                                MINUTE,
+                                DATEADD(
+                                    MINUTE,5,
+                                    DATEADD(
+                                        SECOND,
+                                        DATEDIFF(SECOND,'00:00:00',COALESCE(CAST(s.work_start AS TIME),'08:00:00')),
+                                        CAST(emp.shift_date AS DATETIME)
+                                    )
+                                ),
+                                att.first_scan
+                            )
+                    END
+            END as late_minute
+        ")
+
+            /*
+        |--------------------------------------------------------------------------
+        | GROUP BY CLEAN
+        |--------------------------------------------------------------------------
+        */
+            ->groupBy(
+                'emp.NPK',
+                'emp.NAMA_KARYAWAN',
+                'emp.DEPARTEMENT',
+                DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
+                DB::raw('CAST(emp.shift_date AS DATE)'),
+                's.work_start',
+                's.work_end',
+                'att.first_scan',
+                'lc.id'
+            )
+
+            ->whereBetween(
+                DB::raw('CAST(emp.shift_date AS DATE)'),
+                [$periodStart, $periodEnd]
+            )
+
+            ->orderBy(DB::raw('CAST(emp.shift_date AS DATE)'))
+            ->get()
+            ->groupBy('NPK');
+
+        $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
+            ->selectRaw("
+        ijin_meninggalkan_pekerjaans.npk,
+        NAMA_KARYAWAN,
+        DEPARTEMENT,
+        tanggal,
+        jam_keluar,
+        rencana_kembali,
+        jam_kembali,
+        reason,
+        CASE 
+            WHEN jam_kembali IS NOT NULL 
+            THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+            ELSE 0 
+        END as ijin_minutes
+    ")
+            ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
+            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
+            ->whereBetween('tanggal', [$periodStart, $periodEnd])
+            ->orderBy('tanggal', 'asc')
+            ->get()
+            ->groupBy('npk');
 
         /*
     |--------------------------------------------------------------------------
@@ -471,6 +857,7 @@ class PayrollProcessController extends Controller
                 'prd.run_id',
                 'prd.employee_npk',
                 'prd.employee_name',
+                'p.TMK as tmk',
                 'p.TKK as tkk',
                 'd.DEPARTEMENT as dept',
                 'prd.components',
@@ -521,9 +908,17 @@ class PayrollProcessController extends Controller
     |--------------------------------------------------------------------------
     */
 
-        $data->transform(function ($item) use ($canSeeSalary) {
+        $data->transform(function ($item) use (
+            $canSeeSalary,
+            $overtimeDetails,
+            $lateDetails,
+            $ijinDetails
+        ) {
 
             $components = json_decode($item->components, true) ?? [];
+
+            // tetap kirim object components
+            $item->components = $components;
 
             foreach ($components as $key => $value) {
                 $item->$key = $canSeeSalary
@@ -535,12 +930,6 @@ class PayrollProcessController extends Controller
                 ? (float) $item->total_salary
                 : '***';
 
-            /*
-    |--------------------------------------------------------------------------
-    | EMPLOYMENT STATUS (NEW)
-    |--------------------------------------------------------------------------
-    */
-
             if (empty($item->tkk)) {
                 $item->employment_status = 'Active';
             } elseif (strtoupper(trim($item->KETERANGAN ?? '')) === 'MA') {
@@ -548,6 +937,21 @@ class PayrollProcessController extends Controller
             } else {
                 $item->employment_status = 'Resign';
             }
+
+            // push detail overtime
+            $item->overtime_details =
+                $overtimeDetails->get($item->employee_npk, collect())
+                ->values();
+
+            // push detail keterlambatan
+            $item->late_details =
+                $lateDetails->get($item->employee_npk, collect())
+                ->values();
+
+            // push detail ijin
+            $item->ijin_details =
+                $ijinDetails->get($item->employee_npk, collect())
+                ->values();
 
             return $item;
         });

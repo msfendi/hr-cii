@@ -11,15 +11,42 @@ class IjinMeninggalkanPekerjaanController extends Controller
 {
     public function index()
     {
-        $data = DB::table('ijin_meninggalkan_pekerjaans')->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
-            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')->latest()->get();
+        $employee = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            );
+
+        $data = DB::table('ijin_meninggalkan_pekerjaans')
+            ->leftJoinSub($employee, 'biodata', function ($join) {
+                $join->on('biodata.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk');
+            })
+            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'biodata.ID_DEPT')
+            ->select(
+                'ijin_meninggalkan_pekerjaans.*',
+                'biodata.NAMA_KARYAWAN',
+                'DEPT.DEPARTEMENT'
+            )
+            ->get();
 
         return view('ijin_meninggalkan_pekerjaan.index', compact('data'));
     }
 
     public function create()
     {
-        $biodatas = DB::table('BIODATA')->orderBy('NPK')->get();
+        $biodatas = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NPK')
+            ->get();
         return view('ijin_meninggalkan_pekerjaan.create', compact('biodatas'));
     }
 
@@ -48,7 +75,18 @@ class IjinMeninggalkanPekerjaanController extends Controller
     public function edit($id)
     {
         $data = IjinMeninggalkanPekerjaan::findOrFail($id);
-        $biodatas = DB::table('BIODATA')->orderBy('NPK')->get();
+        $biodatas = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NPK')
+            ->get();
 
         return view('ijin_meninggalkan_pekerjaan.edit', compact('data', 'biodatas'));
     }
