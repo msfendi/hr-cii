@@ -109,7 +109,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            ->where('p.NPK', '=', 'C-01537')
+            // ->where('p.NPK', '=', 'C-01537')
 
             ->select(
                 'p.NPK',
@@ -142,7 +142,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            ->where('ec1.npk', '=', 'C-01537')
+            // ->where('ec1.npk', '=', 'C-01537')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -887,7 +887,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($ijinSummary, 'ij', function ($join) {
                 $join->on('emp.NPK', '=', 'ij.npk');
             })
-            ->where('emp.NPK', '=', 'C-01537')
+            // ->where('emp.NPK', '=', 'C-01537')
 
             ->select(
                 'emp.NPK',
