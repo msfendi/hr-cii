@@ -34,7 +34,18 @@ class ExpatController extends Controller
 
     public function createMaster()
     {
-        $employees = DB::table('BIODATA')->select('NPK', 'NAMA_KARYAWAN')->orderBy('NAMA_KARYAWAN')->get();
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
         return view('expat_master.create', compact('employees'));
     }
 
@@ -95,7 +106,18 @@ class ExpatController extends Controller
     public function createOnLeave()
     {
         $components = ExpatCostComponent::orderBy('component')->get();
-        $employees = DB::table('BIODATA')->select('NPK', 'NAMA_KARYAWAN')->orderBy('NAMA_KARYAWAN')->get();
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
 
         return view('expat_onleave.create', compact('components', 'employees'));
     }
@@ -160,7 +182,18 @@ class ExpatController extends Controller
 
     public function createCost()
     {
-        $employees = DB::table('BIODATA')->select('NPK', 'NAMA_KARYAWAN')->orderBy('NAMA_KARYAWAN')->get();
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
         $components = ExpatCostComponent::orderBy('component')->get();
 
         return view('expat_cost.create', compact('components', 'employees'));
@@ -277,7 +310,18 @@ class ExpatController extends Controller
     public function editMaster($id)
     {
         $data = ExpatMaster::findOrFail($id);
-        $employees = DB::table('BIODATA')->select('NPK', 'NAMA_KARYAWAN')->orderBy('NAMA_KARYAWAN')->get();
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
 
         return view('expat_master.edit', compact('data', 'employees'));
     }
@@ -285,7 +329,18 @@ class ExpatController extends Controller
     public function editOnLeave($id)
     {
         $data = ExpatOnleave::findOrFail($id);
-        $employees = DB::table('BIODATA')->select('NPK', 'NAMA_KARYAWAN')->orderBy('NAMA_KARYAWAN')->get();
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
         $components = ExpatCostComponent::orderBy('component')->get();
 
         return view('expat_onleave.edit', compact('data', 'employees', 'components'));
@@ -295,7 +350,18 @@ class ExpatController extends Controller
     public function editCost($id)
     {
         $data = ExpatCost::findOrFail($id);
-        $employees = DB::table('BIODATA')->select('NPK', 'NAMA_KARYAWAN')->orderBy('NAMA_KARYAWAN')->get();
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
         $components = ExpatCostComponent::orderBy('component')->get();
 
         return view('expat_cost.edit', compact('data', 'employees', 'components'));
