@@ -114,9 +114,9 @@
                     <div class="d-flex flex-wrap mt-4">
 
                         <button id="btnProcess"
-                            class="btn btn-success btn-sm shadow-sm">
-                            <i class="fas fa-cogs mr-2"
-                            disabled></i>
+                            class="btn btn-success btn-sm shadow-sm"
+                            disabled>
+                            <i class="fas fa-cogs mr-2"></i>
                             Process Payroll
                         </button>
 
