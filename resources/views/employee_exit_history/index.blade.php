@@ -74,7 +74,7 @@
     $(document).ready(function () {
         var table = $('#dataTable').DataTable({
             ajax: {
-                url: '{{ route("biodata_keluar.get-data") }}',
+                url: '{{ route("employee_exit_history.get-data") }}',
                 data: function (d) {
                     d.department_id = $('#department_filter').val();
                 },

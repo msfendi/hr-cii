@@ -114,8 +114,7 @@
                     <div class="d-flex flex-wrap mt-4">
 
                         <button id="btnProcess"
-                            class="btn btn-success btn-sm shadow-sm"
-                            disabled>
+                            class="btn btn-success btn-sm shadow-sm">
                             <i class="fas fa-cogs mr-2"></i>
                             Process Payroll
                         </button>
@@ -211,8 +210,8 @@
                                     <th>PPh21 Deduction</th>
                                     <th>Absence</th>
                                     <th>Late Deduction</th>
+                                    <th>Work Leave Deduction</th>
                                     <th>Total Salary</th>
-                                    <th>Total Ijin</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -300,7 +299,7 @@ $('#period_id').on('change', function(){
     let periodId = $(this).val();
 
     $('#approvalBox').hide();
-    $('#btnProcess').prop('disabled', true);
+    // $('#btnProcess').prop('disabled', true);
 
 
     if(!periodId) return;
@@ -496,14 +495,14 @@ $('#period_id').on('change', function(){
         if(allFinish){
 
             $('#btnProcess')
-                .prop('disabled',false)
+                // .prop('disabled',false)
                 .removeClass('btn-secondary')
                 .addClass('btn-primary');
 
         }else{
 
             $('#btnProcess')
-                .prop('disabled',true)
+                // .prop('disabled',true)
                 .removeClass('btn-primary')
                 .addClass('btn-secondary');
         }
@@ -1087,21 +1086,8 @@ buttons: [
                     `;
                 }
             },
-
             {
-                data:'total_salary',
-                defaultContent:0,
-                render:function(data,type){
-
-                    if(type !== 'display'){
-                        return data ?? 0;
-                    }
-
-                    return salaryMask(data ?? 0);
-                }
-            },
-            {
-                data:'total_ijin',
+                data:'components.work_leave_deduction',
                 render:function(data,type,row){
 
                     if(type !== 'display'){
@@ -1119,9 +1105,22 @@ buttons: [
                         <a href="javascript:void(0)"
                         class="btn-ijin-detail"
                         data-ijin="${ijinData}">
-                            ${data ?? 0} Menit
+                            ${salaryMask(data ?? 0)}
                         </a>
                     `;
+                }
+            },
+
+            {
+                data:'total_salary',
+                defaultContent:0,
+                render:function(data,type){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMask(data ?? 0);
                 }
             },
 
@@ -1307,18 +1306,18 @@ buttons: [
                 6,7,8,
                 9,10,11,12,
                 13,14,15,16,
-                17,18,19,20,21,22,23,24
+                17,18,19,20,21,22,23,24,25
             ];
 
-            let ijinTotal = api
-                .column(23, { search: 'applied' })
-                .data()
-                .reduce(function(a, b) {
-                    return intVal(a) + intVal(b);
-                }, 0);
+            // let ijinTotal = api
+            //     .column(23, { search: 'applied' })
+            //     .data()
+            //     .reduce(function(a, b) {
+            //         return intVal(a) + intVal(b);
+            //     }, 0);
 
-            $(api.column(23).footer())
-                .html(ijinTotal + ' Menit');
+            // $(api.column(23).footer())
+            //     .html(ijinTotal + ' Menit');
 
             currencyCols.forEach(function(colIndex){
 

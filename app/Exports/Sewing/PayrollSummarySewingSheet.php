@@ -232,7 +232,7 @@ class PayrollSummarySewingSheet
     {
         $items = json_decode($row->components, true) ?? [];
 
-        $isMangkir = strtolower(trim($row->KETERANGAN ?? '')) === 'mangkir';
+        $isMangkir = strtoupper(trim($row->KETERANGAN ?? '')) === 'MA';
 
         $isResign =
             !$isMangkir &&

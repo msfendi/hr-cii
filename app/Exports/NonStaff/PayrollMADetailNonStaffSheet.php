@@ -148,7 +148,7 @@ class PayrollMADetailNonStaffSheet
             ->where('prd.run_id', $this->run_id)
             ->where('bio.IS_STAFF', 0)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-            ->whereRaw('LOWER(bio.KETERANGAN) = ?', ['mangkir'])
+            ->whereRaw('UPPER(bio.KETERANGAN) = ?', ['MA'])
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',
@@ -180,7 +180,8 @@ class PayrollMADetailNonStaffSheet
             'pph_21',
             'pph_21_deduction',
             'absence_deduction',
-            'late_deduction'
+            'late_deduction',
+            'work_leave_deduction'
         ];
 
         $values = [];
@@ -231,6 +232,7 @@ class PayrollMADetailNonStaffSheet
             'PPH21 Deduction',
             'Absence Deduction',
             'Late Deduction',
+            'Work Leave Deduction',
 
             'Total Salary'
         ];

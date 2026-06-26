@@ -306,8 +306,9 @@
                                         <th>BPJS TK</th>
                                         <th>PPh21</th>
                                         <th>PPh21 Deduction</th>
-                                        <th>Absence</th>
-                                        <th>Late</th>
+                                        <th>Absence Deduction</th>
+                                        <th>Late Deduction</th>
+                                        <th>Work Leave Deduction</th>
                                         <th>Total Salary</th>
                                         <th>Status</th>
                                         <th>Slip</th>
@@ -317,6 +318,8 @@
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -821,23 +824,19 @@ $(document).on('click','.btn-export',function(e){
         responsive: true,
         ajax: url,
 
-        createdRow:function(row,data,dataIndex){
+        createdRow: function (row, data) {
 
-            if(
-                data.tkk !== null &&
-                data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() !== 'MA'
-            ){
+            const ket = (data.employment_status || '').toString();
 
-                $(row).addClass('table-warning');
+            $(row).removeClass('table-warning table-danger');
 
-            } else if(
-                data.tkk !== null &&
-                data.tkk !== '' &&
-                (data.keterangan || '').toLowerCase() === 'MA'
-            ){
+            if (data.tkk !== null && data.tkk !== '') {
 
-                $(row).addClass('table-danger');
+                if (ket === 'Mangkir') {
+                    $(row).addClass('table-danger');
+                } else {
+                    $(row).addClass('table-warning');
+                }
             }
         },
         initComplete:function(){
@@ -1032,6 +1031,13 @@ $(document).on('click','.btn-export',function(e){
                         : data ?? 0;
                 }
             },
+            
+            { data:'work_leave_deduction', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
             { data:'total_salary', defaultContent:0, render:function(data,type){
                     return type === 'display'
@@ -1040,33 +1046,40 @@ $(document).on('click','.btn-export',function(e){
                 }
             },
             {
-                data:'tkk',
-                defaultContent:null,
-                render:function(data, type, row){
+                data: 'employment_status',
+                defaultContent: '',
+                render: function (data) {
 
-                    if(data === null || data === ''){
+                    switch (data) {
 
-                        return `
-                            <span class="badge badge-success">
-                                Active
-                            </span>
-                        `;
+                        case 'Active':
+                            return `
+                                <span class="badge badge-success">
+                                    Active
+                                </span>
+                            `;
+
+                        case 'Mangkir':
+                            return `
+                                <span class="badge badge-danger">
+                                    Mangkir
+                                </span>
+                            `;
+
+                        case 'Resign':
+                            return `
+                                <span class="badge badge-warning">
+                                    Resign
+                                </span>
+                            `;
+
+                        default:
+                            return `
+                                <span class="badge badge-secondary">
+                                    -
+                                </span>
+                            `;
                     }
-
-                    if((row.keterangan || '').toLowerCase() === 'MA'){
-
-                        return `
-                            <span class="badge badge-danger">
-                                Mangkir
-                            </span>
-                        `;
-                    }
-
-                    return `
-                        <span class="badge badge-warning">
-                            Resign
-                        </span>
-                    `;
                 }
             },
 
@@ -1130,7 +1143,7 @@ $(document).on('click','.btn-export',function(e){
                 13,
                 14,15,
                 16,17,18,19,
-                20,21,22
+                20,21,22,23
             ];
 
             cols.forEach(function(colIndex){

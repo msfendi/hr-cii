@@ -254,8 +254,9 @@
                               <th>BPJS TK</th>
                               <th>PPh21</th>
                               <th>PPh21 Deduction</th>
-                              <th>Absence</th>
-                              <th>Late</th>
+                              <th>Absence Deduction</th>
+                              <th>Late Deduction</th>
+                              <th>Work Leave Deduction</th>
                               <th>Total Salary</th>
                               <th>Status</th>
                            </tr>
@@ -264,6 +265,7 @@
                             <tfoot>
                                 <tr style="font-weight:bold;background:#f8f9fc">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -477,6 +479,13 @@ $('.btn-detail').click(function(){
                         : data ?? 0;
                 }
             },
+            
+            { data:'work_leave_deduction', defaultContent:0, render:function(data,type){
+                    return type === 'display'
+                        ? formatRupiah(data ?? 0)
+                        : data ?? 0;
+                }
+            },
 
             { data:'total_salary', defaultContent:0, render:function(data,type){
                     return type === 'display'
@@ -544,7 +553,7 @@ $('.btn-detail').click(function(){
                 4,5,6,7,8,
                 9,10,11,12,13,
                 14,15,16,17,18,
-                19,20,21
+                19,20,21,22
             ];
 
             cols.forEach(function(colIndex){

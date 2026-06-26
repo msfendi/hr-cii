@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Pelamar;
 use App\Models\PelamarDetails;
+use App\Models\RecruitmentPosition;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;

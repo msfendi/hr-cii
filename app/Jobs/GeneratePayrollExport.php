@@ -170,7 +170,7 @@ class GeneratePayrollExport implements ShouldQueue
             })
 
             ->where('prd.run_id', $run_id)
-            // ->where('prd.employee_npk', '=', 'C-01831')
+            // ->where('prd.employee_npk', '=', 'C-00741')
             ->select(
                 'prd.*',
                 'd.DEPARTEMENT',
@@ -324,7 +324,7 @@ class GeneratePayrollExport implements ShouldQueue
 */
         $activeEmployees = $data->filter(function ($r) {
 
-            $ket = strtolower(trim($r->KETERANGAN ?? ''));
+            $ket = strtoupper(trim($r->KETERANGAN ?? ''));
 
             if ($ket === 'MA') {
                 return false;
@@ -340,7 +340,7 @@ class GeneratePayrollExport implements ShouldQueue
 */
         $resignEmployees = $data->filter(function ($r) {
 
-            $ket = strtolower(trim($r->KETERANGAN ?? ''));
+            $ket = strtoupper(trim($r->KETERANGAN ?? ''));
 
             if ($ket === 'MA') {
                 return false;
@@ -348,7 +348,7 @@ class GeneratePayrollExport implements ShouldQueue
 
             return !empty($r->TKK)
                 && $r->TKK >= $r->start_date
-                && $r->TKK <= $r->end_date;
+                && $r->TKK <= $r->end_date && strtoupper(trim($r->KETERANGAN ?? '')) !== 'MA';
         });
 
         /*
@@ -357,8 +357,9 @@ class GeneratePayrollExport implements ShouldQueue
 |--------------------------------------------------------------------------
 */
         $mangkirEmployees = $data->filter(function ($r) {
-
-            return strtolower(trim($r->KETERANGAN ?? '')) === 'MA';
+            return !empty($r->TKK)
+                && $r->TKK >= $r->start_date
+                && $r->TKK <= $r->end_date && strtoupper(trim($r->KETERANGAN ?? '')) === 'MA';
         });
 
         /*
@@ -479,6 +480,8 @@ class GeneratePayrollExport implements ShouldQueue
             $resign = $resignEmployees->filter($filter);
             $mangkir = $mangkirEmployees->filter($filter);
 
+            // dd($resign, $mangkir);
+
             if ($active->isEmpty() && $resign->isEmpty() && $mangkir->isEmpty()) continue;
 
             $viewData = [
@@ -501,7 +504,15 @@ class GeneratePayrollExport implements ShouldQueue
             | RENDER HTML MANUAL
             |--------------------------------------------------------------------------
             */
+            // dd(
+            //     $active->pluck('employee_npk'),
+            //     $resign->pluck('employee_npk'),
+            //     $mangkir->pluck('employee_npk'),
 
+            //     $active->groupBy('DEPARTEMENT'),
+            //     $resign->groupBy('DEPARTEMENT'),
+            //     $mangkir->groupBy('DEPARTEMENT')
+            // );
             $htmlRekap = View::make('payroll.rekap_pdf', $viewData)->render();
             $htmlPeng  = View::make('payroll.pengeluaran_pdf', $viewData)->render();
 

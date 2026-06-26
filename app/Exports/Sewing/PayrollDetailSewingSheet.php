@@ -169,7 +169,8 @@ class PayrollDetailSewingSheet
             'pph_21',
             'pph_21_deduction',
             'absence_deduction',
-            'late_deduction'
+            'late_deduction',
+            'work_leave_deduction'
         ];
 
         $values = [];
@@ -217,6 +218,7 @@ class PayrollDetailSewingSheet
             'PPH21 Deduction',
             'Absence Deduction',
             'Late Deduction',
+            'Work Leave Deduction',
             'Total Salary'
         ];
     }

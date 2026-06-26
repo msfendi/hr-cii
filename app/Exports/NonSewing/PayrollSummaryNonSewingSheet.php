@@ -232,7 +232,7 @@ class PayrollSummaryNonSewingSheet
     {
         $items = json_decode($row->components, true) ?? [];
 
-        $isMangkir = strtolower(trim($row->KETERANGAN ?? '')) === 'mangkir';
+        $isMangkir = strtoupper(trim($row->KETERANGAN ?? '')) === 'MA';
 
         $isResign =
             !$isMangkir &&
@@ -242,16 +242,16 @@ class PayrollSummaryNonSewingSheet
 
         $isNonSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 1;
 
-        $targets = [];
+        $targetGroups = [];
 
         if ($isMangkir) {
             if ($isNonSewing) {
                 $targetGroups[] = 'mangkir_non_sewing';
             }
         } elseif ($isResign) {
-            if ($isNonSewing) $targets[] = 'resign_non_sewing';
+            if ($isNonSewing) $targetGroups[] = 'resign_non_sewing';
         } else {
-            if ($isNonSewing) $targets[] = 'active_non_sewing';
+            if ($isNonSewing) $targetGroups[] = 'active_non_sewing';
         }
 
         foreach ($this->components as $component) {
@@ -259,7 +259,7 @@ class PayrollSummaryNonSewingSheet
             $code = $component->code;
             $value = (float)($items[$code] ?? 0);
 
-            foreach ($targets as $grp) {
+            foreach ($targetGroups as $grp) {
                 $this->groups[$grp][$code] =
                     ($this->groups[$grp][$code] ?? 0) + $value;
             }

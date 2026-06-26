@@ -476,7 +476,8 @@ class PayrollProcessController extends Controller
                 'prd.components',
                 'prd.total_salary',
                 'emp.IS_STAFF',
-                'd.IS_SEWING'
+                'd.IS_SEWING',
+                'p.KETERANGAN'
             );
 
         /*
@@ -540,9 +541,13 @@ class PayrollProcessController extends Controller
     |--------------------------------------------------------------------------
     */
 
-            $item->employment_status = empty($item->tkk)
-                ? 'Active'
-                : 'Resign';
+            if (empty($item->tkk)) {
+                $item->employment_status = 'Active';
+            } elseif (strtoupper(trim($item->KETERANGAN ?? '')) === 'MA') {
+                $item->employment_status = 'Mangkir';
+            } else {
+                $item->employment_status = 'Resign';
+            }
 
             return $item;
         });

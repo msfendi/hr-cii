@@ -147,7 +147,7 @@ class PayrollMADetailSheet
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-            ->whereRaw('LOWER(bio.KETERANGAN) = ?', ['mangkir'])
+            ->whereRaw('UPPER(bio.KETERANGAN) = ?', ['MA'])
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',
@@ -179,7 +179,8 @@ class PayrollMADetailSheet
             'pph_21',
             'pph_21_deduction',
             'absence_deduction',
-            'late_deduction'
+            'late_deduction',
+            'work_leave_deduction'
         ];
 
         $values = [];
@@ -227,6 +228,7 @@ class PayrollMADetailSheet
             'PPH21 Deduction',
             'Absence Deduction',
             'Late Deduction',
+            'Work Leave Deduction',
             'Total Salary'
         ];
     }
