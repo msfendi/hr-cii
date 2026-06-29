@@ -13,8 +13,25 @@ class PayrollAdjusmentController extends Controller
      */
     public function index()
     {
-        $data = PayrollAdjusment::with('period')
-            ->orderBy('id')
+        $employeeQuery = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            ->union(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            );
+
+        $data = PayrollAdjusment::query()
+            ->with('period')
+            ->leftJoinSub($employeeQuery, 'employees', function ($join) {
+                $join->on('payroll_adjusments.npk', '=', 'employees.NPK');
+            })
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'employees.ID_DEPT')
+            ->select(
+                'payroll_adjusments.*',
+                'employees.NAMA_KARYAWAN',
+                'd.DEPARTEMENT'
+            )
+            ->orderBy('payroll_adjusments.id')
             ->get();
 
         return view('payroll_adjusments.index', compact('data'));
@@ -48,7 +65,8 @@ class PayrollAdjusmentController extends Controller
         $request->validate([
             'npk' => 'required',
             'period_id' => 'required',
-            'adjusment' => 'required|numeric'
+            'adjusment' => 'required|numeric',
+            'keterangan' => 'required',
         ]);
 
         PayrollAdjusment::updateOrCreate(
@@ -58,6 +76,7 @@ class PayrollAdjusmentController extends Controller
             ],
             [
                 'adjusment' => $request->adjusment,
+                'keterangan' => $request->keterangan,
             ]
         );
 
@@ -85,7 +104,8 @@ class PayrollAdjusmentController extends Controller
         $request->validate([
             'npk' => 'required',
             'period_id' => 'required',
-            'adjusment' => 'required|numeric'
+            'adjusment' => 'required|numeric',
+            'keterangan' => 'required',
         ]);
 
         $data = PayrollAdjusment::findOrFail($id);

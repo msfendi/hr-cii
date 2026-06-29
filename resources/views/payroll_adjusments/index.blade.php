@@ -16,16 +16,22 @@
                       <tr>
                         <th width="50">ID</th>
                         <th>NPK</th>
+                        <th>Nama Karyawan</th>
+                        <th>Dept</th>
                         <th>Period</th>
                         <th>Adjusment</th>
+                        <th>Keterangan</th>
                         <th width="120">Action</th>
                       </tr>
                     </thead>
                     <tbody> @foreach($data as $row) <tr>
                         <td>{{ $row->id }}</td>
                         <td>{{ $row->npk }}</td>
+                        <td>{{ $row->NAMA_KARYAWAN }}</td>
+                        <td>{{ $row->DEPARTEMENT }}</td>
                         <td>{{ $row->period->name ?? '-' }}</td>
                         <td>Rp {{ number_format($row->adjusment,0,',','.') }}</td>
+                        <td>{{ $row->keterangan }}</td>
                         <td class="text-center">
                           <a href="{{ route('payroll-adjusments.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>

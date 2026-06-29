@@ -30,10 +30,15 @@
                     </select>
                   </div>
                   <br>
-                  {{-- ================= ALLOWANCE ================= --}}
+                  {{-- ================= ADJUSMENTS ================= --}}
                   <div>
                     <label>Adjusment :</label>
                     <input type="number" name="adjusment" class="form-control" required>
+                  </div>
+                  <br>
+                  <div>
+                    <label>Keterangan :</label>
+                    <input type="text" name="keterangan" class="form-control" required>
                   </div>
                   <br>
                   <div class="row">

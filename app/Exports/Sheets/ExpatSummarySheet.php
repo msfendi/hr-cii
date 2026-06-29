@@ -132,6 +132,7 @@ class ExpatSummarySheet implements
                 'm.passport_expiry',
                 'm.kitas_expiry',
                 'm.rptka_expiry',
+                'm.house_startdate',
                 'm.lease_enddate',
 
                 DB::raw('ISNULL(ac.total_apartment_cost,0) total_apartment_cost'),
@@ -220,6 +221,7 @@ class ExpatSummarySheet implements
             'KITAS Status',
             'RPTKA Exp',
             'RPTKA Status',
+            'Lease Start',
             'Lease End',
             'Total Apartment Cost',
             'Total Depo Apartment Cost',
@@ -247,6 +249,7 @@ class ExpatSummarySheet implements
             $row->kitas_status,
             $row->rptka_expiry,
             $row->rptka_status,
+            $row->house_startdate,
             $row->lease_enddate,
             $row->total_apartment_cost,
             $row->total_depo_apartment_cost,
@@ -272,7 +275,7 @@ class ExpatSummarySheet implements
         /*
         | HEADER
         */
-        $sheet->getStyle('A1:U1')->applyFromArray([
+        $sheet->getStyle('A1:V1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 11,
@@ -291,39 +294,24 @@ class ExpatSummarySheet implements
 
         /*
         | FORMAT RUPIAH
-        | M = Total Apartment Cost
-        | N = Total Depo Apartment Cost
-        | O = Total Living Cost
-        | P = Total Legal Cost
-        | Q = Total Meal
-        | T = On Leave Amount
-        | U = Total Amount
+        | N = Total Apartment Cost
+        | O = Total Depo Apartment Cost
+        | P = Total Living Cost
+        | Q = Total Legal Cost
+        | R = Total Meal
+        | U = On Leave Amount
+        | V = Total Amount
         */
-        $sheet->getStyle("M2:M{$highestRow}")
-            ->getNumberFormat()
-            ->setFormatCode('"Rp" #,##0');
-
-        $sheet->getStyle("N2:N{$highestRow}")
-            ->getNumberFormat()
-            ->setFormatCode('"Rp" #,##0');
-
-        $sheet->getStyle("O2:O{$highestRow}")
-            ->getNumberFormat()
-            ->setFormatCode('"Rp" #,##0');
-
-        $sheet->getStyle("P2:P{$highestRow}")
-            ->getNumberFormat()
-            ->setFormatCode('"Rp" #,##0');
-
-        $sheet->getStyle("Q2:Q{$highestRow}")
-            ->getNumberFormat()
-            ->setFormatCode('"Rp" #,##0');
-
-        $sheet->getStyle("T2:T{$highestRow}")
+        $sheet->getStyle("N2:R{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
         $sheet->getStyle("U2:U{$highestRow}")
+            ->getNumberFormat()
+            ->setFormatCode('"Rp" #,##0');
+
+
+        $sheet->getStyle("V2:V{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
@@ -339,13 +327,13 @@ class ExpatSummarySheet implements
         $sheet->getStyle("G2:L{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $sheet->getStyle("R2:S{$highestRow}")
+        $sheet->getStyle("S2:T{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         /*
         | BORDER TABLE
         */
-        $sheet->getStyle("A1:U{$highestRow}")
+        $sheet->getStyle("A1:V{$highestRow}")
             ->applyFromArray([
                 'borders' => [
                     'allBorders' => [
