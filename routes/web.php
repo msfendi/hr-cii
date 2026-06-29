@@ -446,12 +446,12 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/insentif-role-formulas/delete/{id}', [InsentifRoleFormulaController::class, 'delete'])->name('insentif-role-formulas.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
 
     Route::prefix('payroll-adjusments')->group(function () {
-        Route::get('/', [PayrollAdjusmentController::class, 'index'])->name('payroll-adjusments.index')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::get('/create', [PayrollAdjusmentController::class, 'create'])->name('payroll-adjusments.create')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::post('/store', [PayrollAdjusmentController::class, 'store'])->name('payroll-adjusments.store')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::get('/edit/{id}', [PayrollAdjusmentController::class, 'edit'])->name('payroll-adjusments.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::post('/update/{id}', [PayrollAdjusmentController::class, 'update'])->name('payroll-adjusments.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::delete('/delete/{id}', [PayrollAdjusmentController::class, 'destroy'])->name('payroll-adjusments.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+        Route::get('/', [PayrollAdjusmentController::class, 'index'])->name('payroll-adjusments.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+        Route::get('/create', [PayrollAdjusmentController::class, 'create'])->name('payroll-adjusments.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+        Route::post('/store', [PayrollAdjusmentController::class, 'store'])->name('payroll-adjusments.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+        Route::get('/edit/{id}', [PayrollAdjusmentController::class, 'edit'])->name('payroll-adjusments.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+        Route::post('/update/{id}', [PayrollAdjusmentController::class, 'update'])->name('payroll-adjusments.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+        Route::delete('/delete/{id}', [PayrollAdjusmentController::class, 'destroy'])->name('payroll-adjusments.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     });
 
     // attendance finger
