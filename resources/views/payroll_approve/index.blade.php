@@ -433,6 +433,7 @@ buttons: [
         },
 
         exportOptions: {
+            orthogonal: 'export',
 
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
@@ -860,15 +861,20 @@ buttons: [
                         percentage = ((totalSalary - baseSalary) / baseSalary) * 100;
                     }
 
+                    if(type === 'export'){
+                        // Excel membutuhkan 0.185 agar tampil 18.5%
+                        return percentage / 100;
+                    }
+
                     if(type !== 'display'){
                         return percentage;
                     }
 
                     let badge = 'success';
 
-                    if(percentage > 20){
+                    if(percentage > 30){
                         badge = 'danger';
-                    }else if(percentage > 10){
+                    }else if(percentage > 20){
                         badge = 'warning';
                     }
 

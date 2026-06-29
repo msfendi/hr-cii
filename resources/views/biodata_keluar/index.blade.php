@@ -183,7 +183,6 @@
                 type: 'POST',
                 data: {
                     _token: '{{ csrf_token() }}',
-                    _method: 'PUT',
                     keterangan: val
                 },
                 success: function (res) {
