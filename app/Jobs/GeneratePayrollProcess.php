@@ -109,7 +109,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00923')
+            // ->where('p.NPK', '=', 'C-03094')
 
             ->select(
                 'p.NPK',
@@ -142,7 +142,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00923')
+            // ->where('ec1.npk', '=', 'C-03094')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -330,14 +330,13 @@ END AS special_overtime_hours
 
         // CHECK PER DATE LATE
 
+        /*
+|--------------------------------------------------------------------------
+| LAPISAN TERLUAR: filter hanya baris dengan rn = 1 (scan paling relevan)
+|--------------------------------------------------------------------------
+*/
         $lateDetails = DB::connection('cii')
             ->query()
-
-            /*
-    |--------------------------------------------------------------------------
-    | LAPISAN TERLUAR: filter hanya baris dengan rn = 1 (scan paling relevan)
-    |--------------------------------------------------------------------------
-    */
             ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
 
                 $q->fromSub(function ($q2) use ($employeeBase, $periodStart, $periodEnd) {
@@ -351,10 +350,10 @@ END AS special_overtime_hours
                     $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
 
                         /*
-                    |------------------------------------------------------------
-                    | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved)
-                    |------------------------------------------------------------
-                    */
+                |------------------------------------------------------------
+                | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved)
+                |------------------------------------------------------------
+                */
                         $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
 
                             $q4->fromSub($employeeBase, 'emp')
@@ -362,13 +361,13 @@ END AS special_overtime_hours
                                     DB::connection('cii')
                                         ->query()
                                         ->selectRaw("
-                                            DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
-                                        ", [$periodStart])
+                                    DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
+                                ", [$periodStart])
                                         ->from(DB::raw('master..spt_values v'))
                                         ->where('v.type', 'P')
                                         ->whereRaw("
-                                            v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
-                                        ", [$periodStart, $periodEnd]),
+                                    v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
+                                ", [$periodStart, $periodEnd]),
                                     'cal'
                                 )
                                 ->select('emp.*', DB::raw('cal.shift_date'));
@@ -389,19 +388,19 @@ END AS special_overtime_hours
                             })
 
                             ->selectRaw("
-                            emp.NPK,
-                            emp.NAMA_KARYAWAN,
-                            emp.DEPARTEMENT,
-                            CAST(emp.BARCODE AS VARCHAR(50)) as pin,
-                            CAST(emp.shift_date AS DATE) as scan_day,
-                            COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
-                            COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
-                            DATEADD(
-                                SECOND,
-                                DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
-                                CAST(emp.shift_date AS DATETIME)
-                            ) as shift_start_dt
-                        ");
+                        emp.NPK,
+                        emp.NAMA_KARYAWAN,
+                        emp.DEPARTEMENT,
+                        CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+                        CAST(emp.shift_date AS DATE) as scan_day,
+                        COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
+                        COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
+                            CAST(emp.shift_date AS DATETIME)
+                        ) as shift_start_dt
+                    ");
                     }, 'base')
 
                         /*
@@ -477,15 +476,14 @@ END AS special_overtime_hours
 
             /*
     |--------------------------------------------------------------------------
-    | FINAL LATE CALC (logika sama seperti sebelumnya, hanya sumber first_scan
-    | yang sudah diperbaiki)
+    | LATE ACTUAL (logika SAMA seperti sebelumnya, TANPA batas menit harian)
     |--------------------------------------------------------------------------
     */
             ->selectRaw("
         CASE
             WHEN lc.id IS NOT NULL THEN 0
             WHEN emp.first_scan IS NULL THEN 0
- 
+
             ELSE
                 CASE
                     WHEN emp.first_scan >
@@ -495,7 +493,7 @@ END AS special_overtime_hours
                             CAST(emp.scan_day AS DATETIME)
                         )
                     THEN 0
- 
+
                     WHEN DATEDIFF(
                         MINUTE,
                         DATEADD(
@@ -508,7 +506,7 @@ END AS special_overtime_hours
                         ),
                         emp.first_scan
                     ) < 0 THEN 0
- 
+
                     ELSE
                         DATEDIFF(
                             MINUTE,
@@ -523,15 +521,40 @@ END AS special_overtime_hours
                             emp.first_scan
                         )
                 END
-        END as late_minute
+        END as late_actual
     ")
 
             ->whereBetween(
                 DB::raw('CAST(emp.scan_day AS DATE)'),
                 [$periodStart, $periodEnd]
-            )
+            );
 
-            ->orderBy(DB::raw('CAST(emp.scan_day AS DATE)'))
+        /*
+|--------------------------------------------------------------------------
+| LAPISAN PEMBUNGKUS TERAKHIR:
+| - late_actual  : nilai telat sebenarnya, TANPA batas (dari subquery di atas)
+| - late_minute  : late_actual yang di-cap maksimal 240 menit/hari
+|--------------------------------------------------------------------------
+*/
+        $lateDetails = DB::connection('cii')
+            ->query()
+            ->fromSub($lateDetails, 'calc')
+            ->selectRaw("
+        calc.NPK,
+        calc.NAMA_KARYAWAN,
+        calc.DEPARTEMENT,
+        calc.pin,
+        calc.scan_day,
+        calc.work_start,
+        calc.work_end,
+        calc.first_scan,
+        calc.late_actual,
+        CASE
+            WHEN calc.late_actual > 240 THEN 240
+            ELSE calc.late_actual
+        END as late_minute
+    ")
+            ->orderBy(DB::raw('CAST(calc.scan_day AS DATE)'))
             ->get()
             ->groupBy('NPK');
 
@@ -569,10 +592,10 @@ END AS special_overtime_hours
                     $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
 
                         /*
-                    |------------------------------------------------------------
-                    | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved, anti overnight)
-                    |------------------------------------------------------------
-                    */
+                |------------------------------------------------------------
+                | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved, anti overnight)
+                |------------------------------------------------------------
+                */
                         $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
 
                             $q4->fromSub($employeeBase, 'emp')
@@ -580,13 +603,13 @@ END AS special_overtime_hours
                                     DB::connection('cii')
                                         ->query()
                                         ->selectRaw("
-                                            DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
-                                        ", [$periodStart])
+                                    DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
+                                ", [$periodStart])
                                         ->from(DB::raw('master..spt_values v'))
                                         ->where('v.type', 'P')
                                         ->whereRaw("
-                                            v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
-                                        ", [$periodStart, $periodEnd]),
+                                    v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
+                                ", [$periodStart, $periodEnd]),
                                     'cal'
                                 )
                                 ->select('emp.NPK', 'emp.BARCODE', DB::raw('cal.shift_date'));
@@ -607,39 +630,39 @@ END AS special_overtime_hours
                             })
 
                             ->selectRaw("
-                            emp.NPK,
-                            CAST(emp.BARCODE AS VARCHAR(50)) as pin,
-                            CAST(emp.shift_date AS DATE) as shift_date,
- 
-                            COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
-                            COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
- 
+                        emp.NPK,
+                        CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+                        CAST(emp.shift_date AS DATE) as shift_date,
+
+                        COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
+                        COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
+
+                        CASE
+                            WHEN COALESCE(CAST(s.work_start AS TIME), '08:00:00')
+                               > COALESCE(CAST(s.work_end AS TIME), '17:00:00')
+                            THEN 1 ELSE 0
+                        END as is_overnight,
+
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
+                            CAST(emp.shift_date AS DATETIME)
+                        ) as shift_start_dt,
+
+                        DATEADD(
+                            DAY,
                             CASE
                                 WHEN COALESCE(CAST(s.work_start AS TIME), '08:00:00')
                                    > COALESCE(CAST(s.work_end AS TIME), '17:00:00')
                                 THEN 1 ELSE 0
-                            END as is_overnight,
- 
+                            END,
                             DATEADD(
                                 SECOND,
-                                DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
+                                DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_end AS TIME), '17:00:00')),
                                 CAST(emp.shift_date AS DATETIME)
-                            ) as shift_start_dt,
- 
-                            DATEADD(
-                                DAY,
-                                CASE
-                                    WHEN COALESCE(CAST(s.work_start AS TIME), '08:00:00')
-                                       > COALESCE(CAST(s.work_end AS TIME), '17:00:00')
-                                    THEN 1 ELSE 0
-                                END,
-                                DATEADD(
-                                    SECOND,
-                                    DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_end AS TIME), '17:00:00')),
-                                    CAST(emp.shift_date AS DATETIME)
-                                )
-                            ) as shift_end_dt
-                        ");
+                            )
+                        ) as shift_end_dt
+                    ");
                     }, 'base')
 
                         /*
@@ -662,9 +685,9 @@ END AS special_overtime_hours
                                 ->where(function ($q) {
                                     $q->whereRaw("CAST(att.scan_date AS DATE) = base.shift_date")
                                         ->orWhereRaw("
-                                  base.is_overnight = 1
-                                  AND CAST(att.scan_date AS DATE) = DATEADD(DAY, 1, base.shift_date)
-                              ");
+                          base.is_overnight = 1
+                          AND CAST(att.scan_date AS DATE) = DATEADD(DAY, 1, base.shift_date)
+                      ");
                                 });
                         })
 
@@ -677,12 +700,12 @@ END AS special_overtime_hours
                     base.shift_start_dt,
                     base.shift_end_dt,
                     att.scan_date as scan_candidate,
- 
+
                     ROW_NUMBER() OVER (
                         PARTITION BY base.NPK, base.shift_date
                         ORDER BY ABS(DATEDIFF(SECOND, base.shift_start_dt, att.scan_date)) ASC
                     ) as rn,
- 
+
                     COUNT(att.scan_date) OVER (
                         PARTITION BY base.NPK, base.shift_date
                     ) as scan_count
@@ -705,54 +728,73 @@ END AS special_overtime_hours
             }, 'daily')
 
             /*
-    |--------------------------------------------------------------------------
-    | LATE COMPENSATION
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | LATE COMPENSATION
+        |--------------------------------------------------------------------------
+        */
             ->leftJoin('late_compensations as lc', function ($join) {
                 $join->on('daily.NPK', '=', 'lc.npk')
                     ->whereRaw("CAST(lc.date AS DATE) = CAST(daily.shift_date AS DATE)");
             })
 
             /*
-    |--------------------------------------------------------------------------
-    | FINAL RESULT (rekap per pegawai)
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | DAILY RAW LATE (logika SAMA seperti sebelumnya, TANPA batas menit harian)
+        |--------------------------------------------------------------------------
+        */
             ->selectRaw("
-        daily.NPK as npk,
-        daily.pin,
- 
-        SUM(
+            daily.NPK as npk,
+            daily.pin,
+            daily.shift_date,
             CASE
                 WHEN lc.id IS NOT NULL THEN 0
- 
+
                 WHEN daily.first_scan IS NULL THEN 0
- 
+
                 -- ATURAN BARU: scan tunggal & sudah lewat/dekat jam shift selesai => bukan telat
                 WHEN daily.scan_count = 1
                      AND DATEDIFF(MINUTE, daily.first_scan, daily.shift_end_dt) <= {$nearShiftEndToleranceMinutes}
                 THEN 0
- 
+
                 WHEN daily.first_scan > daily.shift_end_dt THEN 0
- 
+
                 WHEN DATEDIFF(
                     MINUTE,
                     DATEADD(MINUTE, 5, daily.shift_start_dt),
                     daily.first_scan
                 ) < 0 THEN 0
- 
+
                 ELSE
                     DATEDIFF(
                         MINUTE,
                         DATEADD(MINUTE, 5, daily.shift_start_dt),
                         daily.first_scan
                     )
-            END
-        ) as late_minutes
-    ")
+            END as raw_late_minute
+        ");
 
-            ->groupBy('daily.NPK', 'daily.pin');
+        /*
+|--------------------------------------------------------------------------
+| LAPISAN PEMBUNGKUS TERAKHIR (rekap per pegawai):
+| - late_minutes : SUM raw_late_minute per hari, DI-CAP maksimal 240 menit/hari
+| - late_actual  : SUM raw_late_minute per hari, TANPA batas
+|--------------------------------------------------------------------------
+*/
+        $lateSummary = DB::connection('cii')
+            ->query()
+            ->fromSub($lateSummary, 'calc')
+            ->selectRaw("
+        calc.npk,
+        calc.pin,
+        SUM(
+            CASE
+                WHEN calc.raw_late_minute > 240 THEN 240
+                ELSE calc.raw_late_minute
+            END
+        ) as late_minutes,
+        SUM(calc.raw_late_minute) as late_actual
+    ")
+            ->groupBy('calc.npk', 'calc.pin');
 
         // dd($lateSummary->get());
 
@@ -941,7 +983,7 @@ END AS special_overtime_hours
             ->leftJoinSub($ijinSummary, 'ij', function ($join) {
                 $join->on('emp.NPK', '=', 'ij.npk');
             })
-            // ->where('emp.NPK', '=', 'C-00923')
+            // ->where('emp.NPK', '=', 'C-03094')
 
             ->select(
                 'emp.NPK',

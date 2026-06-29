@@ -2478,13 +2478,22 @@ $(document).on(
                             }
 
                             let minute = Number(row.late_minute || 0);
+                            let actualminute = Number(row.late_actual || 0);
 
                             if(minute > 0){
-                                return `
+                                if(minute == actualminute) {
+                                    return `
                                     <span class="badge badge-danger">
                                         ${minute} Min
                                     </span>
                                 `;
+                                } else {
+                                return `
+                                    <span class="badge badge-danger">
+                                        ${minute}(${actualminute}) Min
+                                    </span>
+                                `;
+                                }
                             }
 
                             return `
