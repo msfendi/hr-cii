@@ -213,6 +213,7 @@
                                     <th>Late Deduction</th>
                                     <th>Work Leave Deduction</th>
                                     <th>Total Salary</th>
+                                    <th>% Difference</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -226,6 +227,7 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -733,7 +735,7 @@ buttons: [
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
                 11,12,13,14,15,16,17,
-                18,19,20,21,22,23,24,25,26
+                18,19,20,21,22,23,24,25,26,27
             ],
 
             format: {
@@ -1135,6 +1137,43 @@ buttons: [
                     }
 
                     return salaryMask(data ?? 0);
+                }
+            },
+            {
+                data: null,
+                orderable: true,
+                searchable: false,
+                render: function(data, type, row){
+
+                    const basic = Number(row.components?.basic_salary || 0);
+                    const allowance = Number(row.components?.allowance || 0);
+                    const totalSalary = Number(row.total_salary || 0);
+
+                    const baseSalary = basic + allowance;
+
+                    let percentage = 0;
+
+                    if(baseSalary > 0){
+                        percentage = ((totalSalary - baseSalary) / baseSalary) * 100;
+                    }
+
+                    if(type !== 'display'){
+                        return percentage;
+                    }
+
+                    let badge = 'success';
+
+                    if(percentage > 20){
+                        badge = 'danger';
+                    }else if(percentage > 10){
+                        badge = 'warning';
+                    }
+
+                    return `
+                        <span class="badge badge-${badge}">
+                            ${percentage.toFixed(2)}%
+                        </span>
+                    `;
                 }
             },
 
