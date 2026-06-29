@@ -363,6 +363,8 @@
                                                                 <option value="10">10 Bulan</option>
                                                                 <option value="11">11 Bulan</option>
                                                                 <option value="12">12 Bulan</option>
+                                                                <option value="24">24 Bulan</option>
+                                                                <option value="36">36 Bulan</option>
                                                             </select>
                                                         </div>
                                                     </div>

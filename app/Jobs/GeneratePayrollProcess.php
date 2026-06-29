@@ -109,7 +109,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-01537')
+            // ->where('p.NPK', '=', 'C-00923')
 
             ->select(
                 'p.NPK',
@@ -142,7 +142,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-01537')
+            // ->where('ec1.npk', '=', 'C-00923')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -177,36 +177,45 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($latestContract, 'ec', function ($join) {
                 $join->on('overtimes.NPK', '=', 'ec.npk');
             })
+            ->leftJoin('holidays as h', function ($join) {
+                $join->on(
+                    DB::raw('CAST(overtimes.OVERTIME_DATE AS DATE)'),
+                    '=',
+                    DB::raw('CAST(h.holiday_date AS DATE)')
+                );
+            })
             ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
             ->select(
                 'overtimes.NPK',
+
                 DB::raw("
-                SUM(
-                    CASE
-                        WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
-                            THEN 0.5
+            SUM(
+                CASE
+                    WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
+                        THEN 0.5
 
-                        WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
-                            AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
-                            THEN 1
+                    WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
+                        AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
+                        THEN 1
 
-                        ELSE 0
-                    END
-                ) as absence_days
-            "),
+                    ELSE 0
+                END
+            ) as absence_days
+        "),
+
                 DB::raw("
-                SUM(
-                    CASE
-                        WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
-                            AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                            AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('SD')
-                            THEN 1
+            SUM(
+                CASE
+                    WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
+                        AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
+                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'SD'
+                        THEN 1
 
-                        ELSE 0
-                    END
-                ) as sick_days
-            "),
+                    ELSE 0
+                END
+            ) as sick_days
+        ")
             )
             ->groupBy('overtimes.NPK');
 
@@ -220,55 +229,74 @@ class GeneratePayrollProcess implements ShouldQueue
                 $join->on('overtimes.NPK', '=', 'bio.NPK');
             })
             ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->leftJoin('holidays as h', function ($join) {
+                $join->on(
+                    DB::raw('CAST(overtimes.OVERTIME_DATE AS DATE)'),
+                    '=',
+                    DB::raw('CAST(h.holiday_date AS DATE)')
+                );
+            })
             ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
             ->select(
                 'overtimes.NPK',
                 'bio.NAMA_KARYAWAN',
                 'd.DEPARTEMENT',
                 'overtimes.OVERTIME_DATE',
+                'h.name as holiday_name',
+                'h.is_national',
 
                 DB::raw("
-            CASE
-                WHEN DAY NOT IN ('Sabtu','Minggu','Saturday','Sunday')
-                AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
-                THEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
-                ELSE 0
-            END AS overtime_hours
-        "),
+                CASE
+                    WHEN
+                        DAY NOT IN ('Sabtu','Minggu','Saturday','Sunday')
+                        AND h.holiday_date IS NULL
+                        AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+                    THEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+
+                    ELSE 0
+                END AS overtime_hours
+                "),
 
                 DB::raw("
-            CASE
-                WHEN DAY IN ('Sabtu','Minggu','Saturday','Sunday')
-                AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
-                THEN
-                    CASE
-                        WHEN
-                            (
-                                COALESCE(ec.salary,0)
-                                + COALESCE(ec.allowance,0)
-                            ) >= 3800000
+CASE
+    WHEN
+    (
+        DAY IN ('Sabtu','Minggu','Saturday','Sunday')
+        OR h.holiday_date IS NOT NULL
+    )
+    AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL
+    THEN
 
-                            OR
+        CASE
+            WHEN
+                (
+                    COALESCE(ec.salary,0)
+                    + COALESCE(ec.allowance,0)
+                ) >= 3800000
 
-                            (
-                                (COALESCE(ec.daily_salary,0) * {$count_days})
-                                + COALESCE(ec.allowance,0)
-                            ) >= 3800000
+                OR
 
-                        THEN
-                            CASE
-                                WHEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) > 8
-                                THEN 8
-                                ELSE TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
-                            END
+                (
+                    (COALESCE(ec.daily_salary,0) * {$count_days})
+                    + COALESCE(ec.allowance,0)
+                ) >= 3800000
 
-                        ELSE
-                            TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
-                    END
+            THEN
 
-                ELSE 0
-            END AS special_overtime_hours
-        "),
+                CASE
+                    WHEN TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) > 8
+                    THEN 8
+                    ELSE TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+                END
+
+            ELSE
+                TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT)
+
+        END
+
+    ELSE 0
+END AS special_overtime_hours
+"),
 
                 DB::raw("
             CASE
@@ -849,6 +877,33 @@ class GeneratePayrollProcess implements ShouldQueue
             ->get()
             ->groupBy('npk');
 
+        $payrollAdjustmentSummary = DB::table('payroll_adjusments')
+            ->select(
+                'npk',
+                'period_id',
+                DB::raw('SUM(adjusment) as total_adjusment')
+            )
+            ->where('period_id', $period->id)
+            ->groupBy('npk', 'period_id');
+
+        $payrollAdjustmentDetails = DB::table('payroll_adjusments as pa')
+            ->leftJoinSub($employeeBase, 'emp', function ($join) {
+                $join->on('pa.npk', '=', 'emp.NPK');
+            })
+            ->leftJoin(DB::connection('cii')->raw('DEPT as d'), 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            ->where('pa.period_id', $period->id)
+            ->select(
+                'pa.*',
+                'emp.NAMA_KARYAWAN',
+                'emp.ID_DEPT',
+                'd.DEPARTEMENT'
+            )
+            ->orderBy('emp.ID_DEPT')
+            ->orderBy('pa.npk')
+            ->orderBy('pa.id')
+            ->get()
+            ->groupBy('npk');
+
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
@@ -870,9 +925,8 @@ class GeneratePayrollProcess implements ShouldQueue
                 $join->on('emp.NPK', '=', 'ec.npk');
             })
 
-            ->leftJoin('payroll_adjusments as pa', function ($join) use ($period) {
-                $join->on('emp.NPK', '=', 'pa.npk')
-                    ->where('pa.period_id', '=', $period->id);
+            ->leftJoinSub($payrollAdjustmentSummary, 'pa', function ($join) {
+                $join->on('emp.NPK', '=', 'pa.npk');
             })
 
             ->leftJoinSub($assignment6s, 'a6s', function ($join) use ($period) {
@@ -887,7 +941,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($ijinSummary, 'ij', function ($join) {
                 $join->on('emp.NPK', '=', 'ij.npk');
             })
-            // ->where('emp.NPK', '=', 'C-01537')
+            // ->where('emp.NPK', '=', 'C-00923')
 
             ->select(
                 'emp.NPK',
@@ -914,7 +968,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'be.percentkes',
                 'be.percentket',
 
-                DB::raw('COALESCE(pa.adjusment,0) as adjusment'),
+                DB::raw('COALESCE(pa.total_adjusment,0) as adjusment'),
                 // DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
                 // DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
@@ -2136,6 +2190,10 @@ class GeneratePayrollProcess implements ShouldQueue
                     'tanggungan' => $employee->TANGGUNGAN,
                     'keterangan' => $employee->KETERANGAN,
                     'components'    => $results,
+                    'payroll_adjustment_details' => ($payrollAdjustmentDetails[$employee->NPK] ?? collect())
+                        ->values(),
+
+                    'payroll_adjustment_total' => (float) $employee->adjusment,
                     'overtime_details' => ($overtimeDetails[$employee->NPK] ?? collect())
                         ->values(),
                     'late_details' => ($lateDetails[$employee->NPK] ?? collect())

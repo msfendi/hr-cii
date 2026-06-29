@@ -974,13 +974,26 @@ buttons: [
             {
                 data:'components.adjusment',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    let adjusmentData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.payroll_adjustment_details || []
+                            )
+                        );
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-adjusment-detail"
+                        data-adjusment="${adjusmentData}">
+                            ${salaryMask(data ?? 0)}
+                        </a>
+                    `;
                 }
             },
 
@@ -1393,6 +1406,16 @@ function salaryMask(value){
 
 </script>
 <style>
+    .btn-adjusment-detail{
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+.btn-adjusment-detail:hover{
+    text-decoration:none;
+    color:#dc3545 !important;
+}
     .btn-ijin-detail{
     text-decoration:none;
     transition:.2s;
@@ -1723,6 +1746,78 @@ function salaryMask(value){
 
 </div>
 <div class="modal fade"
+     id="adjusmentDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-user-clock mr-2"></i>
+                    Adjusment Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+
+                    <span>&times;</span>
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-adjusment-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead class="thead-light">
+
+                        <tr>
+                            <th>NPK</th>
+                            <th>NAMA KARYAWAN</th>
+                            <th>DEPARTEMENT</th>
+                            <th>Adjusment</th>
+                            <th>Keterangan</th>
+                        </tr>
+
+                    </thead>
+
+                    <tfoot>
+
+                        <tr style="
+                            font-weight:bold;
+                            background:#fff0f0">
+
+                            <th colspan="3"
+                                class="text-right">
+
+                                TOTAL ADJUSMENT
+
+                            </th>
+
+                            <th id="total-adjusment">
+                                0
+                            </th>
+
+                        </tr>
+
+                    </tfoot>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="modal fade"
      id="overtimeDetailModal"
      tabindex="-1">
 
@@ -2002,6 +2097,101 @@ $(document).on('click','.btn-ijin-detail',function(){
 
     $('#ijinDetailModal').modal('show');
 });
+</script>
+<script>
+    let adjusmentDetailTable = null;
+
+$(document).on(
+    'click',
+    '.btn-adjusment-detail',
+    function(){
+
+        let details = JSON.parse(
+            decodeURIComponent(
+                $(this).data('adjusment')
+            )
+        );
+
+        let totalAdjusment = 0;
+
+        details.forEach(function(row){
+
+            totalAdjusment += Number(
+                row.adjusment || 0
+            );
+
+        });
+
+        $('#total-adjusment')
+            .html(
+                totalAdjusment.toLocaleString('id-ID')
+            );
+
+        if(adjusmentDetailTable){
+
+            adjusmentDetailTable.destroy();
+
+            $('#table-adjusment-detail tbody')
+                .remove();
+        }
+
+        $('#table-adjusment-detail')
+            .append('<tbody></tbody>');
+
+        adjusmentDetailTable =
+            $('#table-adjusment-detail')
+            .DataTable({
+
+                data: details,
+
+                pageLength: 10,
+
+                responsive: true,
+
+                ordering: true,
+
+                searching: true,
+
+                order:[[0,'asc']],
+
+                createdRow:function(row,data){
+
+                    if(
+                        Number(data.adjusment) > 0
+                    ){
+                        $(row).addClass(
+                            'adjusment-row'
+                        );
+                    }
+
+                },
+
+                columns:[
+                    {
+                        data:'npk'
+                    },
+                    {
+                        data:'NAMA_KARYAWAN'
+                    },
+                    {
+                        data:'DEPARTEMENT'
+                    },
+                    {
+                        data:'adjusment'
+                    },
+                    {
+                        data:'keterangan'
+                    },
+
+                ]
+
+            });
+
+        $('#adjusmentDetailModal')
+            .modal('show');
+
+    }
+);
 </script>
 <script>
 let absenceDetailTable = null;

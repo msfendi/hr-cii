@@ -294,6 +294,8 @@
                                     <option value="10">10 bulan</option>
                                     <option value="11">11 bulan</option>
                                     <option value="12">12 bulan</option>
+                                    <option value="24">24 bulan</option>
+                                    <option value="36">36 bulan</option>
                                 </select>
                             </div>
                         </div>
