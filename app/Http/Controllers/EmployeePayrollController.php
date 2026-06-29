@@ -220,6 +220,17 @@ class EmployeePayrollController extends Controller
             ->get()
             ->groupBy('npk');
 
+        $payrollAdjustmentDetails = DB::table('payroll_adjusments as pa')
+            ->where('pa.period_id', $period->id)
+            ->where('npk', $npk)
+            ->select(
+                'pa.*',
+            )
+            ->orderBy('pa.npk')
+            ->orderBy('pa.id')
+            ->get()
+            ->groupBy('npk');
+
         // dd($ijinDetails);
 
         $logs = DB::table('att_log')
@@ -538,7 +549,10 @@ class EmployeePayrollController extends Controller
             'attendance' => $attendance,
             'summary' => $summary,
             'holidays' => $holidays,
-            'late_minutes' => $late_minutes
+            'late_minutes' => $late_minutes,
+            'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+            'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
+            'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
         ])
             ->setPaper('A4', 'portrait');
 
@@ -557,6 +571,7 @@ class EmployeePayrollController extends Controller
         //     'holidays' => $holidays,
         //     'late_minutes' => $late_minutes,
         //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+        //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
         //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
         // ]);
     }

@@ -128,8 +128,35 @@
                 $label = $labels[$name] ?? ucwords(str_replace('_', ' ', $name));
             @endphp
             <tr>
-                <td>{{ $label }}</td>
-                <td class="right">{{ number_format($value, 0, ',', '.') }}</td>
+                <td>
+                    {{ $label }}
+
+                    @if($name === 'adjusment' && count($adjusment_details))
+
+                        <div style="
+                            font-size:10px;
+                            color:#666;
+                            margin-top:4px;
+                            padding-left:12px;
+                        ">
+                            @foreach($adjusment_details as $index => $detail)
+                                ({{ $index + 1 }})
+                                {{ $detail->keterangan }}
+                                :
+                                {{ number_format($detail->adjusment,0,',','.') }}
+
+                                @if(!$loop->last)
+                                    <br>
+                                @endif
+                            @endforeach
+                        </div>
+
+                    @endif
+                </td>
+
+                <td class="right">
+                    {{ number_format($value, 0, ',', '.') }}
+                </td>
             </tr>
             @php $totalEarning += $value; @endphp
         @endforeach

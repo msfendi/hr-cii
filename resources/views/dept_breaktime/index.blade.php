@@ -75,13 +75,13 @@
 
                                         <td>{{ $row->id }}</td>
 
-                                        <td>{{ $row->id_dept }}</td>
+                                        <td>{{ $row->DEPARTEMENT }}</td>
 
-                                        <td>{{ $row->breakMaster->sesi ?? '-' }}</td>
+                                        <td>{{ $row->sesi ?? '-' }}</td>
 
-                                        <td>{{ $row->breakMaster->time_start ?? '-' }}</td>
+                                        <td>{{ $row->time_start ?? '-' }}</td>
 
-                                        <td>{{ $row->breakMaster->time_end ?? '-' }}</td>
+                                        <td>{{ $row->time_end ?? '-' }}</td>
 
                                         <td class="text-center">
 

@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\BreakMaster;
 use App\Models\DeptBreaktime;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DeptBreaktimeController extends Controller
 {
     public function index()
     {
-        $deptBreaks = DeptBreaktime::with('breakMaster')->get();
+        $deptBreaks = DB::table('dept_breaktimes')->select('DEPT.DEPARTEMENT', 'break_masters.*')->leftJoin('break_masters', 'dept_breaktimes.id_break', '=', 'break_masters.id')->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'dept_breaktimes.id_dept')->get();
 
         return view('dept_breaktime.index', compact('deptBreaks'));
     }
