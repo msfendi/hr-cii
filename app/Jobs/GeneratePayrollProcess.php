@@ -1200,7 +1200,7 @@ END AS special_overtime_hours
                     );
 
                     if ($component->code === 'bpjs_kesehatan') {
-                        if ($employee->TKK !== null) {
+                        if (($employee->TKK !== null) && ($employee->percentkes == null)) {
                             if (Carbon::parse($employee->TKK)->day <= 20) {
                                 continue;
                             }
