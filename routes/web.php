@@ -120,73 +120,73 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
 
     //Register
-    Route::get('/register/create', [RegisterController::class, 'create'])->name('register.create')->middleware(['auth', 'role:Admin']);
-    Route::post('/register', [RegisterController::class, 'storeAuth'])->name('register')->middleware(['auth', 'role:Admin']);
+    Route::get('/register/create', [RegisterController::class, 'create'])->name('register.create')->middleware(['auth', 'permission']);
+    Route::post('/register', [RegisterController::class, 'storeAuth'])->name('register')->middleware(['auth', 'permission']);
 
     // PKWT
-    Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'permission']);
 
 
     // BIODATA
-    Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata/gender', [BiodataController::class, 'viewGender'])->name('biodata.gender')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::post('/biodata/update/{NPK}', [BiodataController::class, 'update'])->name('biodata.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata/index', [BiodataController::class, 'index'])->name('biodata.index')->middleware(['auth', 'permission']);
+    Route::get('/biodata/gender', [BiodataController::class, 'viewGender'])->name('biodata.gender')->middleware(['auth', 'permission']);
+    Route::get('/biodata/get-data', [BiodataController::class, 'getData'])->name('biodata.get-data')->middleware(['auth', 'permission']);
+    Route::get('/biodata/fetch-last-npk', [BiodataController::class, 'fetchLastNpk'])->name('biodata.fetch-last-npk')->middleware(['auth', 'permission']);
+    Route::post('/biodata/store', [BiodataController::class, 'store'])->name('biodata.store')->middleware(['auth', 'permission']);
+    Route::get('/biodata/edit/{NPK}', [BiodataController::class, 'edit'])->name('biodata.edit')->middleware(['auth', 'permission']);
+    Route::post('/biodata/update/{NPK}', [BiodataController::class, 'update'])->name('biodata.update')->middleware(['auth', 'permission']);
+    Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'permission']);
+    Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'permission']);
+    Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'permission']);
+    Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'permission']);
 
 
     // PKWT
-    Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/pkwt/index', [PKWTController::class, 'index'])->name('pkwt.index')->middleware(['auth', 'permission']);
 
     // ========================================
     // BIODATA KELUAR
-    Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::post('/biodata-keluar/update-keterangan/{npk}', [BiodataKeluarController::class, 'updateKeterangan'])->name('biodata_keluar.update-keterangan')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'permission']);
+    Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'permission']);
+    Route::post('/biodata-keluar/update-keterangan/{npk}', [BiodataKeluarController::class, 'updateKeterangan'])->name('biodata_keluar.update-keterangan')->middleware(['auth', 'permission']);
 
     // ========================================
     // Riwayat Karyawan Keluar
-    Route::get('/employee-exit-history/index', [EmployeeExitHistoryController::class, 'index'])->name('employee_exit_history.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/employee-exit-history/get-data', [EmployeeExitHistoryController::class, 'getData'])->name('employee_exit_history.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/employee-exit-history/index', [EmployeeExitHistoryController::class, 'index'])->name('employee_exit_history.index')->middleware(['auth', 'permission']);
+    Route::get('/employee-exit-history/get-data', [EmployeeExitHistoryController::class, 'getData'])->name('employee_exit_history.get-data')->middleware(['auth', 'permission']);
 
 
     // ========================================
     // EMPLOYEES CONTRACT
     // ========================================
     Route::prefix('employees-contract')->group(function () {
-        Route::get('/',                 [EmployeesContractController::class, 'index'])->name('employees-contract.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::get('/get-data',         [EmployeesContractController::class, 'getData'])->name('employees-contract.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::get('/by-npk/{npk}',     [EmployeesContractController::class, 'getByNpk'])->name('employees-contract.by-npk')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/split/{id}',      [EmployeesContractController::class, 'split'])->name('employees-contract.split')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/delete/{id}',     [EmployeesContractController::class, 'destroy'])->name('employees-contract.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::get('/bagian',           [EmployeesContractController::class, 'getBagian'])->name('employees-contract.bagian')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-        Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import')->middleware(['auth', 'role:Admin']);
-        Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+        Route::get('/',                 [EmployeesContractController::class, 'index'])->name('employees-contract.index')->middleware(['auth', 'permission']);
+        Route::get('/get-data',         [EmployeesContractController::class, 'getData'])->name('employees-contract.get-data')->middleware(['auth', 'permission']);
+        Route::get('/by-npk/{npk}',     [EmployeesContractController::class, 'getByNpk'])->name('employees-contract.by-npk')->middleware(['auth', 'permission']);
+        Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store')->middleware(['auth', 'permission']);
+        Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop')->middleware(['auth', 'permission']);
+        Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish')->middleware(['auth', 'permission']);
+        Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend')->middleware(['auth', 'permission']);
+        Route::post('/split/{id}',      [EmployeesContractController::class, 'split'])->name('employees-contract.split')->middleware(['auth', 'permission']);
+        Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary')->middleware(['auth', 'permission']);
+        Route::post('/delete/{id}',     [EmployeesContractController::class, 'destroy'])->name('employees-contract.destroy')->middleware(['auth', 'permission']);
+        Route::get('/bagian',           [EmployeesContractController::class, 'getBagian'])->name('employees-contract.bagian')->middleware(['auth', 'permission']);
+        Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template')->middleware(['auth', 'permission']);
+        Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import')->middleware(['auth', 'permission']);
+        Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export')->middleware(['auth', 'permission']);
         Route::get('/export-all',       [EmployeesContractController::class, 'exportAll'])->name('employees-contract.export-all');
-        });
+    });
 
 
     // Pelamar
-    Route::get('/pelamar/index', [PelamarController::class, 'index'])->name('pelamar.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/pelamar/import', [PelamarController::class, 'import'])->name('pelamar.import')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/pelamar/assign', [PelamarController::class, 'assign'])->name('pelamar.assign')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/pelamar/detail/{id}', [PelamarController::class, 'detail'])->name('pelamar.detail')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/pelamar/template', [PelamarController::class, 'exportTemplate'])->name('pelamar.template')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/pelamar/index', [PelamarController::class, 'index'])->name('pelamar.index')->middleware(['auth', 'permission']);
+    Route::post('/pelamar/import', [PelamarController::class, 'import'])->name('pelamar.import')->middleware(['auth', 'permission']);
+    Route::post('/pelamar/assign', [PelamarController::class, 'assign'])->name('pelamar.assign')->middleware(['auth', 'permission']);
+    Route::get('/pelamar/detail/{id}', [PelamarController::class, 'detail'])->name('pelamar.detail')->middleware(['auth', 'permission']);
+    Route::get('/pelamar/template', [PelamarController::class, 'exportTemplate'])->name('pelamar.template')->middleware(['auth', 'permission']);
 
     // Recruitment Position
-    Route::prefix('recruitment-position')->middleware(['auth', 'role:Admin|HRD'])->group(function () {
+    Route::prefix('recruitment-position')->middleware(['auth', 'permission'])->group(function () {
         Route::get('/', [\App\Http\Controllers\RecruitmentPositionController::class, 'index'])->name('recruitment-position.index');
         Route::get('/get-data', [\App\Http\Controllers\RecruitmentPositionController::class, 'getData'])->name('recruitment-position.get-data');
         Route::post('/store', [\App\Http\Controllers\RecruitmentPositionController::class, 'store'])->name('recruitment-position.store');
@@ -202,104 +202,104 @@ Route::group(['middleware' => 'auth'], function () {
 
 
     //Role
-    Route::get('/role/index', [RoleController::class, 'index'])->name('role.index')->middleware(['auth', 'role:Admin']);
-    Route::get('/role/delete/{id}', [RoleController::class, 'delete'])->name('role.delete')->middleware(['auth', 'role:Admin']);
-    Route::get('/role/create', [RoleController::class, 'create'])->name('role.create')->middleware(['auth', 'role:Admin']);
-    Route::post('/role/store', [RoleController::class, 'store'])->name('role.store')->middleware(['auth', 'role:Admin']);
-    Route::get('/role/find/{id}', [RoleController::class, 'find'])->name('role.find')->middleware(['auth', 'role:Admin']);
-    Route::post('/role/update', [RoleController::class, 'update'])->name('role.update')->middleware(['auth', 'role:Admin']);
+    Route::get('/role/index', [RoleController::class, 'index'])->name('role.index')->middleware(['auth', 'permission']);
+    Route::get('/role/delete/{id}', [RoleController::class, 'delete'])->name('role.delete')->middleware(['auth', 'permission']);
+    Route::get('/role/create', [RoleController::class, 'create'])->name('role.create')->middleware(['auth', 'permission']);
+    Route::post('/role/store', [RoleController::class, 'store'])->name('role.store')->middleware(['auth', 'permission']);
+    Route::get('/role/find/{id}', [RoleController::class, 'find'])->name('role.find')->middleware(['auth', 'permission']);
+    Route::post('/role/update', [RoleController::class, 'update'])->name('role.update')->middleware(['auth', 'permission']);
 
     //User
-    Route::get('/user/index', [UserController::class, 'index'])->name('user.index')->middleware(['auth', 'role:Admin']);
+    Route::get('/user/index', [UserController::class, 'index'])->name('user.index')->middleware(['auth', 'permission']);
     Route::get('/user/profile', [UserController::class, 'profile'])->name('user.profile');
-    Route::post('/user/update', [UserController::class, 'update'])->name('user.update')->middleware(['auth', 'role:Admin']);
-    Route::get('/user/detail/{id}', [UserController::class, 'detail'])->name('user.detail')->middleware(['auth', 'role:Admin']);
-    Route::get('/user/delete/{id}', [UserController::class, 'delete'])->name('user.delete')->middleware(['auth', 'role:Admin']);
-    Route::get('/user/assign/{id}', [UserController::class, 'assign'])->name('user.assign')->middleware(['auth', 'role:Admin']);
-    Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'role:Admin']);
+    Route::post('/user/update', [UserController::class, 'update'])->name('user.update')->middleware(['auth', 'permission']);
+    Route::get('/user/detail/{id}', [UserController::class, 'detail'])->name('user.detail')->middleware(['auth', 'permission']);
+    Route::get('/user/delete/{id}', [UserController::class, 'delete'])->name('user.delete')->middleware(['auth', 'permission']);
+    Route::get('/user/assign/{id}', [UserController::class, 'assign'])->name('user.assign')->middleware(['auth', 'permission']);
+    Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'permission']);
 
     // Payroll Component
-    Route::get('/payroll-components/index', [PayrollComponentController::class, 'index'])->name('payroll-components.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-components/create', [PayrollComponentController::class, 'create'])->name('payroll-components.create')->middleware(['auth', 'role:Admin']);
-    Route::post('/payroll-components/store', [PayrollComponentController::class, 'store'])->name('payroll-components.store')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-components/detail/{id}', [PayrollComponentController::class, 'detail'])->name('payroll-components.detail')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-components/edit/{id}', [PayrollComponentController::class, 'edit'])->name('payroll-components.edit')->middleware(['auth', 'role:Admin']);
-    Route::post('/payroll-components/update', [PayrollComponentController::class, 'update'])->name('payroll-components.update')->middleware(['auth', 'role:Admin']);
-    Route::get('/payroll-components/delete/{id}', [PayrollComponentController::class, 'delete'])->name('payroll-components.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('/payroll-components/index', [PayrollComponentController::class, 'index'])->name('payroll-components.index')->middleware(['auth', 'permission']);
+    Route::get('/payroll-components/create', [PayrollComponentController::class, 'create'])->name('payroll-components.create')->middleware(['auth', 'permission']);
+    Route::post('/payroll-components/store', [PayrollComponentController::class, 'store'])->name('payroll-components.store')->middleware(['auth', 'permission']);
+    Route::get('/payroll-components/detail/{id}', [PayrollComponentController::class, 'detail'])->name('payroll-components.detail')->middleware(['auth', 'permission']);
+    Route::get('/payroll-components/edit/{id}', [PayrollComponentController::class, 'edit'])->name('payroll-components.edit')->middleware(['auth', 'permission']);
+    Route::post('/payroll-components/update', [PayrollComponentController::class, 'update'])->name('payroll-components.update')->middleware(['auth', 'permission']);
+    Route::get('/payroll-components/delete/{id}', [PayrollComponentController::class, 'delete'])->name('payroll-components.delete')->middleware(['auth', 'permission']);
 
     // Payroll Period
-    Route::get('/payroll-periods/index', [PayrollPeriodController::class, 'index'])->name('payroll-periods.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-periods/create', [PayrollPeriodController::class, 'create'])->name('payroll-periods.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/payroll-periods/store', [PayrollPeriodController::class, 'store'])->name('payroll-periods.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-periods/detail/{id}', [PayrollPeriodController::class, 'detail'])->name('payroll-periods.detail')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-periods/edit/{id}', [PayrollPeriodController::class, 'edit'])->name('payroll-periods.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/payroll-periods/update', [PayrollPeriodController::class, 'update'])->name('payroll-periods.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-periods/delete/{id}', [PayrollPeriodController::class, 'delete'])->name('payroll-periods.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-periods/index', [PayrollPeriodController::class, 'index'])->name('payroll-periods.index')->middleware(['auth', 'permission']);
+    Route::get('/payroll-periods/create', [PayrollPeriodController::class, 'create'])->name('payroll-periods.create')->middleware(['auth', 'permission']);
+    Route::post('/payroll-periods/store', [PayrollPeriodController::class, 'store'])->name('payroll-periods.store')->middleware(['auth', 'permission']);
+    Route::get('/payroll-periods/detail/{id}', [PayrollPeriodController::class, 'detail'])->name('payroll-periods.detail')->middleware(['auth', 'permission']);
+    Route::get('/payroll-periods/edit/{id}', [PayrollPeriodController::class, 'edit'])->name('payroll-periods.edit')->middleware(['auth', 'permission']);
+    Route::post('/payroll-periods/update', [PayrollPeriodController::class, 'update'])->name('payroll-periods.update')->middleware(['auth', 'permission']);
+    Route::get('/payroll-periods/delete/{id}', [PayrollPeriodController::class, 'delete'])->name('payroll-periods.delete')->middleware(['auth', 'permission']);
 
     // Payroll Process
-    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
-    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
-    Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
-    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
-    Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::post('/payroll-process/update', [PayrollProcessController::class, 'update'])->name('payroll-process.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-slip/{run_id}/{npk}', [PayrollProcessController::class, 'slip'])->name('payroll-slip')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('payroll-process/export-rekap/{run_id}', [PayrollProcessController::class, 'exportRekap'])->name('payroll.export.rekap')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll/export-progress/{run_id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll/process-progress/{period_id}', [PayrollProcessController::class, 'progressRun'])->name('payroll.process.progress')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->name('payroll-slip.view')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->name('payroll-process.approval')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
-    Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'permission']);
+    Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'permission']);
+    Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'permission']);
+    Route::post('/payroll-process/update', [PayrollProcessController::class, 'update'])->name('payroll-process.update')->middleware(['auth', 'permission']);
+    Route::get('/payroll-slip/{run_id}/{npk}', [PayrollProcessController::class, 'slip'])->name('payroll-slip')->middleware(['auth', 'permission']);
+    Route::get('payroll-process/export-rekap/{run_id}', [PayrollProcessController::class, 'exportRekap'])->name('payroll.export.rekap')->middleware(['auth', 'permission']);
+    Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export')->middleware(['auth', 'permission']);
+    Route::get('/payroll/export-progress/{run_id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress')->middleware(['auth', 'permission']);
+    Route::get('/payroll/process-progress/{period_id}', [PayrollProcessController::class, 'progressRun'])->name('payroll.process.progress')->middleware(['auth', 'permission']);
+    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->name('payroll-slip.view')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->name('payroll-process.approval')->middleware(['auth', 'permission']);
+    Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'permission']);
+    Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'permission']);
+    Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'permission']);
 
     //Payroll Master
-    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'permission']);
+    Route::get('/payroll-master/create', [PayrollMasterController::class, 'create'])->name('payroll-master.create')->middleware(['auth', 'permission']);
+    Route::get('/payroll-master/edit/{id}', [PayrollMasterController::class, 'edit'])->name('payroll-master.edit')->middleware(['auth', 'permission']);
+    Route::post('/payroll-master/update/{id}', [PayrollMasterController::class, 'update'])->name('payroll-master.update')->middleware(['auth', 'permission']);
+    Route::get('/payroll-master/delete/{id}', [PayrollMasterController::class, 'delete'])->name('payroll-master.delete')->middleware(['auth', 'permission']);
+    Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store')->middleware(['auth', 'permission']);
+    Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import')->middleware(['auth', 'permission']);
+    Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template')->middleware(['auth', 'permission']);
 
 
     // Thr Period
-    Route::get('/thr-periods/index', [ThrPeriodController::class, 'index'])->name('thr-periods.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/thr-periods/create', [ThrPeriodController::class, 'create'])->name('thr-periods.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/thr-periods/store', [ThrPeriodController::class, 'store'])->name('thr-periods.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/thr-periods/detail/{id}', [ThrPeriodController::class, 'detail'])->name('thr-periods.detail')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/thr-periods/edit/{id}', [ThrPeriodController::class, 'edit'])->name('thr-periods.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/thr-periods/update', [ThrPeriodController::class, 'update'])->name('thr-periods.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/thr-periods/delete/{id}', [ThrPeriodController::class, 'delete'])->name('thr-periods.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('/thr-periods/index', [ThrPeriodController::class, 'index'])->name('thr-periods.index')->middleware(['auth', 'permission']);
+    Route::get('/thr-periods/create', [ThrPeriodController::class, 'create'])->name('thr-periods.create')->middleware(['auth', 'permission']);
+    Route::post('/thr-periods/store', [ThrPeriodController::class, 'store'])->name('thr-periods.store')->middleware(['auth', 'permission']);
+    Route::get('/thr-periods/detail/{id}', [ThrPeriodController::class, 'detail'])->name('thr-periods.detail')->middleware(['auth', 'permission']);
+    Route::get('/thr-periods/edit/{id}', [ThrPeriodController::class, 'edit'])->name('thr-periods.edit')->middleware(['auth', 'permission']);
+    Route::post('/thr-periods/update', [ThrPeriodController::class, 'update'])->name('thr-periods.update')->middleware(['auth', 'permission']);
+    Route::get('/thr-periods/delete/{id}', [ThrPeriodController::class, 'delete'])->name('thr-periods.delete')->middleware(['auth', 'permission']);
 
     // Thr Process
-    Route::get('/thr-process/index', [ThrProcessController::class, 'index'])->name('thr-process.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/thr-process/generate', [ThrProcessController::class, 'generate'])->name('thr-process.generate')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::post('/thr-process/process', [ThrProcessController::class, 'process'])->name('thr-process.process')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/thr-process/details/{id}', [ThrProcessController::class, 'details'])->name('thr-process.details')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('/thr-process/delete/{period_id}', [ThrProcessController::class, 'destroy'])->name('thr-process.destroy')->middleware(['auth', 'role:Admin']);
-    Route::get('/thr-process/edit/{id}', [ThrProcessController::class, 'edit'])->name('thr-process.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::post('/thr-process/update', [ThrProcessController::class, 'update'])->name('thr-process.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/thr-slip/{run_id}/{npk}', [ThrProcessController::class, 'slip'])->name('thr-slip')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('thr-process/export-rekap/{run_id}', [ThrProcessController::class, 'exportRekap'])->name('thr.export.rekap')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/thr/export/{run_id}', [ThrProcessController::class, 'export'])->name('thr.export.export')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::get('/thr-process/index', [ThrProcessController::class, 'index'])->name('thr-process.index')->middleware(['auth', 'permission']);
+    Route::get('/thr-process/generate', [ThrProcessController::class, 'generate'])->name('thr-process.generate')->middleware(['auth', 'permission']);
+    Route::post('/thr-process/process', [ThrProcessController::class, 'process'])->name('thr-process.process')->middleware(['auth', 'permission']);
+    Route::get('/thr-process/details/{id}', [ThrProcessController::class, 'details'])->name('thr-process.details')->middleware(['auth', 'permission']);
+    Route::delete('/thr-process/delete/{period_id}', [ThrProcessController::class, 'destroy'])->name('thr-process.destroy')->middleware(['auth', 'permission']);
+    Route::get('/thr-process/edit/{id}', [ThrProcessController::class, 'edit'])->name('thr-process.edit')->middleware(['auth', 'permission']);
+    Route::post('/thr-process/update', [ThrProcessController::class, 'update'])->name('thr-process.update')->middleware(['auth', 'permission']);
+    Route::get('/thr-slip/{run_id}/{npk}', [ThrProcessController::class, 'slip'])->name('thr-slip')->middleware(['auth', 'permission']);
+    Route::get('thr-process/export-rekap/{run_id}', [ThrProcessController::class, 'exportRekap'])->name('thr.export.rekap')->middleware(['auth', 'permission']);
+    Route::get('/thr/export/{run_id}', [ThrProcessController::class, 'export'])->name('thr.export.export')->middleware(['auth', 'permission']);
     Route::get('/thr/export-progress/{id}', [ThrProcessController::class, 'progress'])->name('thr.export.progress');
     Route::get('/thr/process-progress/{period_id}', [ThrProcessController::class, 'progressRun'])->name('thr.process.progress');
-    Route::get('/thr-slip/view/{run_id}/{npk}', [ThrProcessController::class, 'passwordForm'])->name('thr-slip.view')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/thr-process/approval/{period}', [ThrProcessController::class, 'approvalStatus'])->name('thr-process.approval')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::post('/thr-process/check', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    // Route::get('/thr-process/check/{period_id}', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::get('/thr-slip/view/{run_id}/{npk}', [ThrProcessController::class, 'passwordForm'])->name('thr-slip.view')->middleware(['auth', 'permission']);
+    Route::get('/thr-process/approval/{period}', [ThrProcessController::class, 'approvalStatus'])->name('thr-process.approval')->middleware(['auth', 'permission']);
+    Route::post('/thr-process/check', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'permission']);
+    // Route::get('/thr-process/check/{period_id}', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'permission']);
 
     // Evaluation Questionnaire
     Route::prefix('evaluation-questionnaire')->group(function () {
-        Route::get('/', [EvaluationQuestionnaireController::class, 'index'])->name('evaluation-questionnaire.index')->middleware(['auth', 'role:Admin|HRD']);
-        Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import')->middleware(['auth', 'role:Admin|HRD']);
-        Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template')->middleware(['auth', 'role:Admin|HRD']);
-        Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete')->middleware(['auth', 'role:Admin|HRD']);
+        Route::get('/', [EvaluationQuestionnaireController::class, 'index'])->name('evaluation-questionnaire.index')->middleware(['auth', 'permission']);
+        Route::post('/import', [EvaluationQuestionnaireController::class, 'import'])->name('evaluation-questionnaire.import')->middleware(['auth', 'permission']);
+        Route::get('/template', [EvaluationQuestionnaireController::class, 'template'])->name('evaluation-questionnaire.template')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [EvaluationQuestionnaireController::class, 'delete'])->name('evaluation-questionnaire.delete')->middleware(['auth', 'permission']);
     });
 
     // ========================================
@@ -318,179 +318,179 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Payroll Approve
     Route::prefix('payroll-approve')->group(function () {
-        Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index')->middleware(['auth', 'role:Admin|Management']);
-        Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create')->middleware(['auth', 'role:Admin|Management']);
-        Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve')->middleware(['auth', 'role:Admin|Management']);
+        Route::get('/', [PayrollApproveController::class, 'index'])->name('payroll-approve.index')->middleware(['auth', 'permission']);
+        Route::post('/create/{payroll_run_id}', [PayrollApproveController::class, 'store'])->name('payroll-approve.create')->middleware(['auth', 'permission']);
+        Route::post('/{id}/approve', [PayrollApproveController::class, 'approve'])->name('payroll-approve.approve')->middleware(['auth', 'permission']);
     });
 
     // Compensation Approve
     Route::prefix('compensation-approve')->group(function () {
-        Route::get('/', [CompensationApproveController::class, 'index'])->name('compensation-approve.index')->middleware(['auth', 'role:Admin|Management']);
-        Route::post('/create/{run_id}', [CompensationApproveController::class, 'store'])->name('compensation-approve.create')->middleware(['auth', 'role:Admin|Management']);
-        Route::post('/{id}/approve', [CompensationApproveController::class, 'approve'])->name('compensation-approve.approve')->middleware(['auth', 'role:Admin|Management']);
+        Route::get('/', [CompensationApproveController::class, 'index'])->name('compensation-approve.index')->middleware(['auth', 'permission']);
+        Route::post('/create/{run_id}', [CompensationApproveController::class, 'store'])->name('compensation-approve.create')->middleware(['auth', 'permission']);
+        Route::post('/{id}/approve', [CompensationApproveController::class, 'approve'])->name('compensation-approve.approve')->middleware(['auth', 'permission']);
     });
 
 
 
     // Thr Approve
-    Route::post('/thr-approve/{id}/approve', [ThrApproveController::class, 'approve'])->name('thr-approve.approve')->middleware(['auth', 'role:Admin|Management']);
+    Route::post('/thr-approve/{id}/approve', [ThrApproveController::class, 'approve'])->name('thr-approve.approve')->middleware(['auth', 'permission']);
     Route::prefix('thr-approve')->group(function () {
-        Route::get('/', [ThrApproveController::class, 'index'])->name('thr-approve.index')->middleware(['auth', 'role:Admin|Management']);
-        Route::post('/create/{thr_run_id}', [ThrApproveController::class, 'store'])->name('thr-approve.create')->middleware(['auth', 'role:Admin|Management']);
-        Route::post('/{id}/approve', [ThrApproveController::class, 'approve'])->name('thr-approve.approve')->middleware(['auth', 'role:Admin|Management']);
+        Route::get('/', [ThrApproveController::class, 'index'])->name('thr-approve.index')->middleware(['auth', 'permission']);
+        Route::post('/create/{thr_run_id}', [ThrApproveController::class, 'store'])->name('thr-approve.create')->middleware(['auth', 'permission']);
+        Route::post('/{id}/approve', [ThrApproveController::class, 'approve'])->name('thr-approve.approve')->middleware(['auth', 'permission']);
     });
 
 
     // Insentif Approve
-    Route::get('/insentif-approve', [InsentifApprovalController::class, 'index'])->name('insentif-approve.index')->middleware(['auth', 'role:Admin|Management']);
-    Route::post('/insentif-approve/{id}/approve', [InsentifApprovalController::class, 'approve'])->name('insentif-approve.approve')->middleware(['auth', 'role:Admin|Management']);
-    Route::get('/insentif-approve/{id}/detail', [InsentifApprovalController::class, 'detail'])->name('insentif-approve.detail')->middleware(['auth', 'role:Admin|Management']);
+    Route::get('/insentif-approve', [InsentifApprovalController::class, 'index'])->name('insentif-approve.index')->middleware(['auth', 'permission']);
+    Route::post('/insentif-approve/{id}/approve', [InsentifApprovalController::class, 'approve'])->name('insentif-approve.approve')->middleware(['auth', 'permission']);
+    Route::get('/insentif-approve/{id}/detail', [InsentifApprovalController::class, 'detail'])->name('insentif-approve.detail')->middleware(['auth', 'permission']);
 
     Route::prefix('payroll-setting')->group(function () {
-        Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::post('/store', [PayrollSettingController::class, 'store'])->name('payroll-setting.store')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::get('/edit/{id}', [PayrollSettingController::class, 'edit'])->name('payroll-setting.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::put('/update/{id}', [PayrollSettingController::class, 'update'])->name('payroll-setting.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-        Route::delete('/delete/{id}', [PayrollSettingController::class, 'delete'])->name('payroll-setting.delete')->middleware(['auth', 'role:Admin']);
+        Route::get('/', [PayrollSettingController::class, 'index'])->name('payroll-setting.index')->middleware(['auth', 'permission']);
+        Route::post('/store', [PayrollSettingController::class, 'store'])->name('payroll-setting.store')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [PayrollSettingController::class, 'edit'])->name('payroll-setting.edit')->middleware(['auth', 'permission']);
+        Route::put('/update/{id}', [PayrollSettingController::class, 'update'])->name('payroll-setting.update')->middleware(['auth', 'permission']);
+        Route::delete('/delete/{id}', [PayrollSettingController::class, 'delete'])->name('payroll-setting.delete')->middleware(['auth', 'permission']);
     });
 
     // Evaluation Jobscope
     Route::prefix('evaluation-jobscope')->group(function () {
-        Route::get('/', [EvaluationJobscopeController::class, 'index'])->name('evaluation-jobscope.index')->middleware(['auth', 'role:Admin|HRD']);
-        Route::get('/delete/{id}', [EvaluationJobscopeController::class, 'delete'])->name('evaluation-jobscope.delete')->middleware(['auth', 'role:Admin|HRD']);
+        Route::get('/', [EvaluationJobscopeController::class, 'index'])->name('evaluation-jobscope.index')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [EvaluationJobscopeController::class, 'delete'])->name('evaluation-jobscope.delete')->middleware(['auth', 'permission']);
     });
 
-    Route::get('/ijin-meninggalkan-pekerjaan', [IjinMeninggalkanPekerjaanController::class, 'index'])->name('ijin-meninggalkan-pekerjaan.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/ijin-meninggalkan-pekerjaan/create', [IjinMeninggalkanPekerjaanController::class, 'create'])->name('ijin-meninggalkan-pekerjaan.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::post('/ijin-meninggalkan-pekerjaan', [IjinMeninggalkanPekerjaanController::class, 'store'])->name('ijin-meninggalkan-pekerjaan.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/ijin-meninggalkan-pekerjaan/{id}/edit', [IjinMeninggalkanPekerjaanController::class, 'edit'])->name('ijin-meninggalkan-pekerjaan.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::put('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'update'])->name('ijin-meninggalkan-pekerjaan.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'destroy'])->name('ijin-meninggalkan-pekerjaan.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
+    Route::get('/ijin-meninggalkan-pekerjaan', [IjinMeninggalkanPekerjaanController::class, 'index'])->name('ijin-meninggalkan-pekerjaan.index')->middleware(['auth', 'permission']);
+    Route::get('/ijin-meninggalkan-pekerjaan/create', [IjinMeninggalkanPekerjaanController::class, 'create'])->name('ijin-meninggalkan-pekerjaan.create')->middleware(['auth', 'permission']);
+    Route::post('/ijin-meninggalkan-pekerjaan', [IjinMeninggalkanPekerjaanController::class, 'store'])->name('ijin-meninggalkan-pekerjaan.store')->middleware(['auth', 'permission']);
+    Route::get('/ijin-meninggalkan-pekerjaan/{id}/edit', [IjinMeninggalkanPekerjaanController::class, 'edit'])->name('ijin-meninggalkan-pekerjaan.edit')->middleware(['auth', 'permission']);
+    Route::put('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'update'])->name('ijin-meninggalkan-pekerjaan.update')->middleware(['auth', 'permission']);
+    Route::get('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'destroy'])->name('ijin-meninggalkan-pekerjaan.delete')->middleware(['auth', 'permission']);
 
     //  Evaluation Employee
-    Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index')->middleware(['auth', 'permission']);
 
     // Holiday
-    Route::get('holidays/sync', [HolidayController::class, 'sync'])->name('holidays.sync')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('holidays/delete/{id}', [HolidayController::class, 'destroy'])->name('holidays.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('holidays/sync', [HolidayController::class, 'sync'])->name('holidays.sync')->middleware(['auth', 'permission']);
+    Route::get('holidays/index', [HolidayController::class, 'index'])->name('holidays.index')->middleware(['auth', 'permission']);
+    Route::get('holidays/create', [HolidayController::class, 'create'])->name('holidays.create')->middleware(['auth', 'permission']);
+    Route::post('holidays/store', [HolidayController::class, 'store'])->name('holidays.store')->middleware(['auth', 'permission']);
+    Route::get('holidays/delete/{id}', [HolidayController::class, 'destroy'])->name('holidays.delete')->middleware(['auth', 'permission']);
+    Route::get('/holidays/edit/{id}', [HolidayController::class, 'edit'])->name('holidays.edit')->middleware(['auth', 'permission']);
+    Route::post('holidays/import', [HolidayController::class, 'import'])->name('holidays.import')->middleware(['auth', 'permission']);
+    Route::get('holidays/export', [HolidayController::class, 'export'])->name('holidays.export')->middleware(['auth', 'permission']);
 
     // Line Insentif Master
-    Route::get('line-insentif-master/index', [LineInsentifMasterController::class, 'index'])->name('line-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
-    Route::get('line-insentif-master/create', [LineInsentifMasterController::class, 'create'])->name('line-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('line-insentif-master/store', [LineInsentifMasterController::class, 'store'])->name('line-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/line-insentif-master/edit/{id}', [LineInsentifMasterController::class, 'edit'])->name('line-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/line-insentif-master/{period}/check', [LineInsentifMasterController::class, 'check'])->name('line-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
-    Route::get('/line-insentif-master/{period}/data', [LineInsentifMasterController::class, 'getData'])->name('line-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('line-insentif-master/index', [LineInsentifMasterController::class, 'index'])->name('line-insentif-master.index')->middleware(['auth', 'permission']);
+    Route::get('line-insentif-master/create', [LineInsentifMasterController::class, 'create'])->name('line-insentif-master.create')->middleware(['auth', 'permission']);
+    Route::post('line-insentif-master/store', [LineInsentifMasterController::class, 'store'])->name('line-insentif-master.store')->middleware(['auth', 'permission']);
+    Route::get('line-insentif-master/delete/{id}', [LineInsentifMasterController::class, 'destroy'])->name('line-insentif-master.delete')->middleware(['auth', 'permission']);
+    Route::get('/line-insentif-master/edit/{id}', [LineInsentifMasterController::class, 'edit'])->name('line-insentif-master.edit')->middleware(['auth', 'permission']);
+    Route::post('line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('line-insentif-master/export', [LineInsentifMasterController::class, 'export'])->name('line-insentif-master.export')->middleware(['auth', 'permission']);
+    Route::get('/line-insentif-master/template', [LineInsentifMasterController::class, 'template'])->name('line-insentif-master.template')->middleware(['auth', 'permission']);
+    Route::post('/line-insentif-master/import', [LineInsentifMasterController::class, 'import'])->name('line-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('/line-insentif-master/{period}/check', [LineInsentifMasterController::class, 'check'])->name('line-insentif-master.check')->middleware(['auth', 'permission']);
+    Route::get('/line-insentif-master/{period}/data', [LineInsentifMasterController::class, 'getData'])->name('line-insentif-master.data')->middleware(['auth', 'permission']);
 
     // Cutting Insentif Master
-    Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
-    Route::get('cutting-insentif-master/create', [CuttingInsentifMasterController::class, 'create'])->name('cutting-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('cutting-insentif-master/store', [CuttingInsentifMasterController::class, 'store'])->name('cutting-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/cutting-insentif-master/edit/{id}', [CuttingInsentifMasterController::class, 'edit'])->name('cutting-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/cutting-insentif-master/{period}/check', [CuttingInsentifMasterController::class, 'check'])->name('cutting-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
-    Route::get('/cutting-insentif-master/{period}/data', [CuttingInsentifMasterController::class, 'getData'])->name('cutting-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('cutting-insentif-master/index', [CuttingInsentifMasterController::class, 'index'])->name('cutting-insentif-master.index')->middleware(['auth', 'permission']);
+    Route::get('cutting-insentif-master/create', [CuttingInsentifMasterController::class, 'create'])->name('cutting-insentif-master.create')->middleware(['auth', 'permission']);
+    Route::post('cutting-insentif-master/store', [CuttingInsentifMasterController::class, 'store'])->name('cutting-insentif-master.store')->middleware(['auth', 'permission']);
+    Route::get('cutting-insentif-master/delete/{id}', [CuttingInsentifMasterController::class, 'destroy'])->name('cutting-insentif-master.delete')->middleware(['auth', 'permission']);
+    Route::get('/cutting-insentif-master/edit/{id}', [CuttingInsentifMasterController::class, 'edit'])->name('cutting-insentif-master.edit')->middleware(['auth', 'permission']);
+    Route::post('cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('cutting-insentif-master/export', [CuttingInsentifMasterController::class, 'export'])->name('cutting-insentif-master.export')->middleware(['auth', 'permission']);
+    Route::get('/cutting-insentif-master/template', [CuttingInsentifMasterController::class, 'template'])->name('cutting-insentif-master.template')->middleware(['auth', 'permission']);
+    Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('/cutting-insentif-master/{period}/check', [CuttingInsentifMasterController::class, 'check'])->name('cutting-insentif-master.check')->middleware(['auth', 'permission']);
+    Route::get('/cutting-insentif-master/{period}/data', [CuttingInsentifMasterController::class, 'getData'])->name('cutting-insentif-master.data')->middleware(['auth', 'permission']);
 
     // Pad Print Insentif Master
-    Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
-    Route::get('pad-insentif-master/create', [PadInsentifMasterController::class, 'create'])->name('pad-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('pad-insentif-master/store', [PadInsentifMasterController::class, 'store'])->name('pad-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/pad-insentif-master/edit/{id}', [PadInsentifMasterController::class, 'edit'])->name('pad-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/pad-insentif-master/{period}/check', [PadInsentifMasterController::class, 'check'])->name('pad-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
-    Route::get('/pad-insentif-master/{period}/data', [PadInsentifMasterController::class, 'getData'])->name('pad-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index')->middleware(['auth', 'permission']);
+    Route::get('pad-insentif-master/create', [PadInsentifMasterController::class, 'create'])->name('pad-insentif-master.create')->middleware(['auth', 'permission']);
+    Route::post('pad-insentif-master/store', [PadInsentifMasterController::class, 'store'])->name('pad-insentif-master.store')->middleware(['auth', 'permission']);
+    Route::get('pad-insentif-master/delete/{id}', [PadInsentifMasterController::class, 'destroy'])->name('pad-insentif-master.delete')->middleware(['auth', 'permission']);
+    Route::get('/pad-insentif-master/edit/{id}', [PadInsentifMasterController::class, 'edit'])->name('pad-insentif-master.edit')->middleware(['auth', 'permission']);
+    Route::post('pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('pad-insentif-master/export', [PadInsentifMasterController::class, 'export'])->name('pad-insentif-master.export')->middleware(['auth', 'permission']);
+    Route::get('/pad-insentif-master/template', [PadInsentifMasterController::class, 'template'])->name('pad-insentif-master.template')->middleware(['auth', 'permission']);
+    Route::post('/pad-insentif-master/import', [PadInsentifMasterController::class, 'import'])->name('pad-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('/pad-insentif-master/{period}/check', [PadInsentifMasterController::class, 'check'])->name('pad-insentif-master.check')->middleware(['auth', 'permission']);
+    Route::get('/pad-insentif-master/{period}/data', [PadInsentifMasterController::class, 'getData'])->name('pad-insentif-master.data')->middleware(['auth', 'permission']);
 
 
     // Heat Insentif Master
-    Route::get('heat-insentif-master/index', [HeatInsentifMasterController::class, 'index'])->name('heat-insentif-master.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
-    Route::get('heat-insentif-master/create', [HeatInsentifMasterController::class, 'create'])->name('heat-insentif-master.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('heat-insentif-master/store', [HeatInsentifMasterController::class, 'store'])->name('heat-insentif-master.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('heat-insentif-master/delete/{id}', [HeatInsentifMasterController::class, 'destroy'])->name('heat-insentif-master.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/heat-insentif-master/edit/{id}', [HeatInsentifMasterController::class, 'edit'])->name('heat-insentif-master.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('heat-insentif-master/import', [HeatInsentifMasterController::class, 'import'])->name('heat-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('heat-insentif-master/export', [HeatInsentifMasterController::class, 'export'])->name('heat-insentif-master.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/heat-insentif-master/template', [HeatInsentifMasterController::class, 'template'])->name('heat-insentif-master.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/heat-insentif-master/import', [HeatInsentifMasterController::class, 'import'])->name('heat-insentif-master.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/heat-insentif-master/{period}/check', [HeatInsentifMasterController::class, 'check'])->name('heat-insentif-master.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE|Management']);
-    Route::get('/heat-insentif-master/{period}/data', [HeatInsentifMasterController::class, 'getData'])->name('heat-insentif-master.data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|IE']);
+    Route::get('heat-insentif-master/index', [HeatInsentifMasterController::class, 'index'])->name('heat-insentif-master.index')->middleware(['auth', 'permission']);
+    Route::get('heat-insentif-master/create', [HeatInsentifMasterController::class, 'create'])->name('heat-insentif-master.create')->middleware(['auth', 'permission']);
+    Route::post('heat-insentif-master/store', [HeatInsentifMasterController::class, 'store'])->name('heat-insentif-master.store')->middleware(['auth', 'permission']);
+    Route::get('heat-insentif-master/delete/{id}', [HeatInsentifMasterController::class, 'destroy'])->name('heat-insentif-master.delete')->middleware(['auth', 'permission']);
+    Route::get('/heat-insentif-master/edit/{id}', [HeatInsentifMasterController::class, 'edit'])->name('heat-insentif-master.edit')->middleware(['auth', 'permission']);
+    Route::post('heat-insentif-master/import', [HeatInsentifMasterController::class, 'import'])->name('heat-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('heat-insentif-master/export', [HeatInsentifMasterController::class, 'export'])->name('heat-insentif-master.export')->middleware(['auth', 'permission']);
+    Route::get('/heat-insentif-master/template', [HeatInsentifMasterController::class, 'template'])->name('heat-insentif-master.template')->middleware(['auth', 'permission']);
+    Route::post('/heat-insentif-master/import', [HeatInsentifMasterController::class, 'import'])->name('heat-insentif-master.import')->middleware(['auth', 'permission']);
+    Route::get('/heat-insentif-master/{period}/check', [HeatInsentifMasterController::class, 'check'])->name('heat-insentif-master.check')->middleware(['auth', 'permission']);
+    Route::get('/heat-insentif-master/{period}/data', [HeatInsentifMasterController::class, 'getData'])->name('heat-insentif-master.data')->middleware(['auth', 'permission']);
 
     // Dept Insentif Role
-    Route::get('dept-insentif-role', [DeptInsentifRoleController::class, 'index'])->name('dept-insentif-role.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('dept-insentif-role/create', [DeptInsentifRoleController::class, 'create'])->name('dept-insentif-role.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('dept-insentif-role/store', [DeptInsentifRoleController::class, 'store'])->name('dept-insentif-role.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('dept-insentif-role/edit/{id}', [DeptInsentifRoleController::class, 'edit'])->name('dept-insentif-role.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('dept-insentif-role/update/{id}', [DeptInsentifRoleController::class, 'update'])->name('dept-insentif-role.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('dept-insentif-role/delete/{id}', [DeptInsentifRoleController::class, 'delete'])->name('dept-insentif-role.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('dept-insentif-role', [DeptInsentifRoleController::class, 'index'])->name('dept-insentif-role.index')->middleware(['auth', 'permission']);
+    Route::get('dept-insentif-role/create', [DeptInsentifRoleController::class, 'create'])->name('dept-insentif-role.create')->middleware(['auth', 'permission']);
+    Route::post('dept-insentif-role/store', [DeptInsentifRoleController::class, 'store'])->name('dept-insentif-role.store')->middleware(['auth', 'permission']);
+    Route::get('dept-insentif-role/edit/{id}', [DeptInsentifRoleController::class, 'edit'])->name('dept-insentif-role.edit')->middleware(['auth', 'permission']);
+    Route::post('dept-insentif-role/update/{id}', [DeptInsentifRoleController::class, 'update'])->name('dept-insentif-role.update')->middleware(['auth', 'permission']);
+    Route::get('dept-insentif-role/delete/{id}', [DeptInsentifRoleController::class, 'delete'])->name('dept-insentif-role.delete')->middleware(['auth', 'permission']);
 
     // Insentif Role Formula
-    Route::get('/insentif-role-formulas', [InsentifRoleFormulaController::class, 'index'])->name('insentif-role-formulas.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/insentif-role-formulas/create', [InsentifRoleFormulaController::class, 'create'])->name('insentif-role-formulas.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/insentif-role-formulas/store', [InsentifRoleFormulaController::class, 'store'])->name('insentif-role-formulas.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/insentif-role-formulas/edit/{id}', [InsentifRoleFormulaController::class, 'edit'])->name('insentif-role-formulas.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::put('/insentif-role-formulas/update/{id}', [InsentifRoleFormulaController::class, 'update'])->name('insentif-role-formulas.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/insentif-role-formulas/delete/{id}', [InsentifRoleFormulaController::class, 'delete'])->name('insentif-role-formulas.delete')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/insentif-role-formulas', [InsentifRoleFormulaController::class, 'index'])->name('insentif-role-formulas.index')->middleware(['auth', 'permission']);
+    Route::get('/insentif-role-formulas/create', [InsentifRoleFormulaController::class, 'create'])->name('insentif-role-formulas.create')->middleware(['auth', 'permission']);
+    Route::post('/insentif-role-formulas/store', [InsentifRoleFormulaController::class, 'store'])->name('insentif-role-formulas.store')->middleware(['auth', 'permission']);
+    Route::get('/insentif-role-formulas/edit/{id}', [InsentifRoleFormulaController::class, 'edit'])->name('insentif-role-formulas.edit')->middleware(['auth', 'permission']);
+    Route::put('/insentif-role-formulas/update/{id}', [InsentifRoleFormulaController::class, 'update'])->name('insentif-role-formulas.update')->middleware(['auth', 'permission']);
+    Route::get('/insentif-role-formulas/delete/{id}', [InsentifRoleFormulaController::class, 'delete'])->name('insentif-role-formulas.delete')->middleware(['auth', 'permission']);
 
     Route::prefix('payroll-adjusments')->group(function () {
-        Route::get('/', [PayrollAdjusmentController::class, 'index'])->name('payroll-adjusments.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-        Route::get('/create', [PayrollAdjusmentController::class, 'create'])->name('payroll-adjusments.create')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-        Route::post('/store', [PayrollAdjusmentController::class, 'store'])->name('payroll-adjusments.store')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-        Route::get('/edit/{id}', [PayrollAdjusmentController::class, 'edit'])->name('payroll-adjusments.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-        Route::post('/update/{id}', [PayrollAdjusmentController::class, 'update'])->name('payroll-adjusments.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-        Route::delete('/delete/{id}', [PayrollAdjusmentController::class, 'destroy'])->name('payroll-adjusments.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+        Route::get('/', [PayrollAdjusmentController::class, 'index'])->name('payroll-adjusments.index')->middleware(['auth', 'permission']);
+        Route::get('/create', [PayrollAdjusmentController::class, 'create'])->name('payroll-adjusments.create')->middleware(['auth', 'permission']);
+        Route::post('/store', [PayrollAdjusmentController::class, 'store'])->name('payroll-adjusments.store')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [PayrollAdjusmentController::class, 'edit'])->name('payroll-adjusments.edit')->middleware(['auth', 'permission']);
+        Route::post('/update/{id}', [PayrollAdjusmentController::class, 'update'])->name('payroll-adjusments.update')->middleware(['auth', 'permission']);
+        Route::delete('/delete/{id}', [PayrollAdjusmentController::class, 'destroy'])->name('payroll-adjusments.destroy')->middleware(['auth', 'permission']);
     });
 
-    // Route::prefix('rbac')->middleware(['auth', 'role:Admin'])->group(function () {
+    Route::prefix('rbac')->middleware(['auth', 'permission'])->group(function () {
 
-    //     // CRUD Permission
-    //     Route::get('/permissions', [PermissionController::class, 'index'])->name('permission.index');
-    //     Route::get('/permissions/create', [PermissionController::class, 'create'])->name('permission.create');
-    //     Route::post('/permissions', [PermissionController::class, 'store'])->name('permission.store');
-    //     Route::get('/permissions/{id}/edit', [PermissionController::class, 'edit'])->name('permission.edit');
-    //     Route::put('/permissions/{id}', [PermissionController::class, 'update'])->name('permission.update');
-    //     Route::delete('/permissions/{id}', [PermissionController::class, 'destroy'])->name('permission.destroy');
+        // CRUD Permission
+        Route::get('/permissions', [PermissionController::class, 'index'])->name('permission.index');
+        Route::get('/permissions/create', [PermissionController::class, 'create'])->name('permission.create');
+        Route::post('/permissions', [PermissionController::class, 'store'])->name('permission.store');
+        Route::get('/permissions/{id}/edit', [PermissionController::class, 'edit'])->name('permission.edit');
+        Route::put('/permissions/{id}', [PermissionController::class, 'update'])->name('permission.update');
+        Route::delete('/permissions/{id}', [PermissionController::class, 'destroy'])->name('permission.destroy');
 
-    //     // CRUD Menu
-    //     Route::get('/menus', [MenuController::class, 'index'])->name('menu.index');
-    //     Route::get('/menus/create', [MenuController::class, 'create'])->name('menu.create');
-    //     Route::post('/menus', [MenuController::class, 'store'])->name('menu.store');
-    //     Route::get('/menus/{id}/edit', [MenuController::class, 'edit'])->name('menu.edit');
-    //     Route::put('/menus/{id}', [MenuController::class, 'update'])->name('menu.update');
-    //     Route::delete('/menus/{id}', [MenuController::class, 'destroy'])->name('menu.destroy');
-    //     Route::post('/menus/reorder', [MenuController::class, 'reorder'])->name('menu.reorder');
+        // CRUD Menu
+        Route::get('/menus', [MenuController::class, 'index'])->name('menu.index');
+        Route::get('/menus/create', [MenuController::class, 'create'])->name('menu.create');
+        Route::post('/menus', [MenuController::class, 'store'])->name('menu.store');
+        Route::get('/menus/{id}/edit', [MenuController::class, 'edit'])->name('menu.edit');
+        Route::put('/menus/{id}', [MenuController::class, 'update'])->name('menu.update');
+        Route::delete('/menus/{id}', [MenuController::class, 'destroy'])->name('menu.destroy');
+        Route::post('/menus/reorder', [MenuController::class, 'reorder'])->name('menu.reorder');
 
-    //     // Assign Permission ke Role
-    //     Route::get('/role-permissions', [RolePermissionController::class, 'index'])->name('role-permission.index');
-    //     Route::get('/role-permissions/{role}/edit', [RolePermissionController::class, 'edit'])->name('role-permission.edit');
-    //     Route::put('/role-permissions/{role}', [RolePermissionController::class, 'update'])->name('role-permission.update');
-    // });
+        // Assign Permission ke Role
+        Route::get('/role-permissions', [RolePermissionController::class, 'index'])->name('role-permission.index');
+        Route::get('/role-permissions/{role}/edit', [RolePermissionController::class, 'edit'])->name('role-permission.edit');
+        Route::put('/role-permissions/{role}', [RolePermissionController::class, 'update'])->name('role-permission.update');
+    });
 
     // attendance finger
-    Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance-finger/sync', [AttendanceFingerController::class, 'sync'])->name('attendance-finger.sync')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/attendance-finger/not-finger', [AttendanceFingerController::class, 'notFinger'])->name('attendance-finger.not-finger')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/attendance-finger/download-template-manual', [AttendanceFingerController::class, 'downloadTemplateManual'])->name('attendance-finger.download-template-manual')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index')->middleware(['auth', 'permission']);
+    Route::post('/attendance-finger/sync', [AttendanceFingerController::class, 'sync'])->name('attendance-finger.sync')->middleware(['auth', 'permission']);
+    Route::post('/attendance-finger/export', [AttendanceFingerController::class, 'export'])->name('attendance-finger.export')->middleware(['auth', 'permission']);
+    Route::get('/attendance-finger/not-finger', [AttendanceFingerController::class, 'notFinger'])->name('attendance-finger.not-finger')->middleware(['auth', 'permission']);
+    Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'permission']);
+    Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'permission']);
+    Route::post('/attendance-finger/download-template-manual', [AttendanceFingerController::class, 'downloadTemplateManual'])->name('attendance-finger.download-template-manual')->middleware(['auth', 'permission']);
 
     /*
 |--------------------------------------------------------------------------
@@ -498,12 +498,12 @@ Route::group(['middleware' => 'auth'], function () {
 |--------------------------------------------------------------------------
 */
 
-    Route::get('/break-master', [BreakMasterController::class, 'index'])->name('break-master.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/break-master/create', [BreakMasterController::class, 'create'])->name('break-master.create')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/break-master/store', [BreakMasterController::class, 'store'])->name('break-master.store')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/break-master/{id}/edit', [BreakMasterController::class, 'edit'])->name('break-master.edit')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::put('/break-master/{id}', [BreakMasterController::class, 'update'])->name('break-master.update')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('/break-master/{id}', [BreakMasterController::class, 'destroy'])->name('break-master.destroy')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/break-master', [BreakMasterController::class, 'index'])->name('break-master.index')->middleware(['auth', 'permission']);
+    Route::get('/break-master/create', [BreakMasterController::class, 'create'])->name('break-master.create')->middleware(['auth', 'permission']);
+    Route::post('/break-master/store', [BreakMasterController::class, 'store'])->name('break-master.store')->middleware(['auth', 'permission']);
+    Route::get('/break-master/{id}/edit', [BreakMasterController::class, 'edit'])->name('break-master.edit')->middleware(['auth', 'permission']);
+    Route::put('/break-master/{id}', [BreakMasterController::class, 'update'])->name('break-master.update')->middleware(['auth', 'permission']);
+    Route::delete('/break-master/{id}', [BreakMasterController::class, 'destroy'])->name('break-master.destroy')->middleware(['auth', 'permission']);
 
     /*
 |--------------------------------------------------------------------------
@@ -511,74 +511,74 @@ Route::group(['middleware' => 'auth'], function () {
 |--------------------------------------------------------------------------
 */
 
-    Route::get('/dept-breaktime', [DeptBreaktimeController::class, 'index'])->name('dept-breaktime.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/dept-breaktime/create', [DeptBreaktimeController::class, 'create'])->name('dept-breaktime.create')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/dept-breaktime/store', [DeptBreaktimeController::class, 'store'])->name('dept-breaktime.store')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/dept-breaktime/{id}/edit', [DeptBreaktimeController::class, 'edit'])->name('dept-breaktime.edit')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::put('/dept-breaktime/{id}', [DeptBreaktimeController::class, 'update'])->name('dept-breaktime.update')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('/dept-breaktime/{id}', [DeptBreaktimeController::class, 'destroy'])->name('dept-breaktime.destroy')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/dept-breaktime', [DeptBreaktimeController::class, 'index'])->name('dept-breaktime.index')->middleware(['auth', 'permission']);
+    Route::get('/dept-breaktime/create', [DeptBreaktimeController::class, 'create'])->name('dept-breaktime.create')->middleware(['auth', 'permission']);
+    Route::post('/dept-breaktime/store', [DeptBreaktimeController::class, 'store'])->name('dept-breaktime.store')->middleware(['auth', 'permission']);
+    Route::get('/dept-breaktime/{id}/edit', [DeptBreaktimeController::class, 'edit'])->name('dept-breaktime.edit')->middleware(['auth', 'permission']);
+    Route::put('/dept-breaktime/{id}', [DeptBreaktimeController::class, 'update'])->name('dept-breaktime.update')->middleware(['auth', 'permission']);
+    Route::delete('/dept-breaktime/{id}', [DeptBreaktimeController::class, 'destroy'])->name('dept-breaktime.destroy')->middleware(['auth', 'permission']);
 
     //Attendance
-    Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/attendance/import', [AttendanceController::class, 'import'])->name('attendance.import')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/attendance/export', [AttendanceController::class, 'export'])->name('attendance.export')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/attendance/export_view', [AttendanceController::class, 'export_view'])->name('attendance.export_view')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/attendance/deleteAll', [AttendanceController::class, 'deleteAll'])->name('attendance.deleteAll')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/attendance/auditsewing', [AttendanceController::class, 'auditsewing'])->name('attendance.auditsewing')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/attendance/auditnonsewing', [AttendanceController::class, 'auditnonsewing'])->name('attendance.auditnonsewing')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/attendance/report', [AttendanceController::class, 'report'])->name('attendance.report')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/attendance/check-master-data', [AttendanceController::class, 'checkMasterData'])->name('attendance.checkMasterData')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/attendance/edit/{id}', [AttendanceController::class, 'edit'])->name('attendance.edit')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance')->middleware(['auth', 'role:Admin|HRD|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/attendance/index', [AttendanceController::class, 'index'])->name('attendance.index')->middleware(['auth', 'permission']);
+    Route::post('/attendance/import', [AttendanceController::class, 'import'])->name('attendance.import')->middleware(['auth', 'permission']);
+    Route::post('/attendance/export', [AttendanceController::class, 'export'])->name('attendance.export')->middleware(['auth', 'permission']);
+    Route::get('/attendance/export_view', [AttendanceController::class, 'export_view'])->name('attendance.export_view')->middleware(['auth', 'permission']);
+    Route::post('/attendance/deleteAll', [AttendanceController::class, 'deleteAll'])->name('attendance.deleteAll')->middleware(['auth', 'permission']);
+    Route::post('/attendance/auditsewing', [AttendanceController::class, 'auditsewing'])->name('attendance.auditsewing')->middleware(['auth', 'permission']);
+    Route::post('/attendance/auditnonsewing', [AttendanceController::class, 'auditnonsewing'])->name('attendance.auditnonsewing')->middleware(['auth', 'permission']);
+    Route::get('/attendance/report', [AttendanceController::class, 'report'])->name('attendance.report')->middleware(['auth', 'permission']);
+    Route::get('/attendance/check-master-data', [AttendanceController::class, 'checkMasterData'])->name('attendance.checkMasterData')->middleware(['auth', 'permission']);
+    Route::get('/attendance/edit/{id}', [AttendanceController::class, 'edit'])->name('attendance.edit')->middleware(['auth', 'permission']);
+    Route::post('/attendance/update/{id}', [AttendanceController::class, 'update'])->name('attendance.update')->middleware(['auth', 'permission']);
+    Route::get('/attendance/showAttendance', [AttendanceController::class, 'showAttendance'])->name('attendance.showAttendance')->middleware(['auth', 'permission']);
 
     // PARENT DEPT
-    Route::get('/parent-dept/index', [ParentDeptController::class, 'index'])->name('parent-dept.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/parent-dept/template', [ParentDeptController::class, 'exportTemplate'])->name('parent-dept.template')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/parent-dept/export', [ParentDeptController::class, 'exportData'])->name('parent-dept.export')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/parent-dept/import', [ParentDeptController::class, 'import'])->name('parent-dept.import')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/parent-dept/get-data', [ParentDeptController::class, 'getData'])->name('parent-dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/parent-dept/store', [ParentDeptController::class, 'store'])->name('parent-dept.store')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/parent-dept/update/{id}', [ParentDeptController::class, 'update'])->name('parent-dept.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/parent-dept/destroy/{id}', [ParentDeptController::class, 'destroy'])->name('parent-dept.destroy')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/parent-dept/index', [ParentDeptController::class, 'index'])->name('parent-dept.index')->middleware(['auth', 'permission']);
+    Route::get('/parent-dept/template', [ParentDeptController::class, 'exportTemplate'])->name('parent-dept.template')->middleware(['auth', 'permission']);
+    Route::get('/parent-dept/export', [ParentDeptController::class, 'exportData'])->name('parent-dept.export')->middleware(['auth', 'permission']);
+    Route::post('/parent-dept/import', [ParentDeptController::class, 'import'])->name('parent-dept.import')->middleware(['auth', 'permission']);
+    Route::get('/parent-dept/get-data', [ParentDeptController::class, 'getData'])->name('parent-dept.get-data')->middleware(['auth', 'permission']);
+    Route::post('/parent-dept/store', [ParentDeptController::class, 'store'])->name('parent-dept.store')->middleware(['auth', 'permission']);
+    Route::post('/parent-dept/update/{id}', [ParentDeptController::class, 'update'])->name('parent-dept.update')->middleware(['auth', 'permission']);
+    Route::post('/parent-dept/destroy/{id}', [ParentDeptController::class, 'destroy'])->name('parent-dept.destroy')->middleware(['auth', 'permission']);
 
     // DEPT
-    Route::get('/dept/index', [DeptController::class, 'index'])->name('dept.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/dept/template', [DeptController::class, 'exportTemplate'])->name('dept.template')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/dept/export', [DeptController::class, 'exportData'])->name('dept.export')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/dept/import', [DeptController::class, 'import'])->name('dept.import')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/dept/get-data', [DeptController::class, 'getData'])->name('dept.get-data')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/dept/store', [DeptController::class, 'store'])->name('dept.store')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/dept/update/{id}', [DeptController::class, 'update'])->name('dept.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/dept/destroy/{id}', [DeptController::class, 'destroy'])->name('dept.destroy')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/dept/index', [DeptController::class, 'index'])->name('dept.index')->middleware(['auth', 'permission']);
+    Route::get('/dept/template', [DeptController::class, 'exportTemplate'])->name('dept.template')->middleware(['auth', 'permission']);
+    Route::get('/dept/export', [DeptController::class, 'exportData'])->name('dept.export')->middleware(['auth', 'permission']);
+    Route::post('/dept/import', [DeptController::class, 'import'])->name('dept.import')->middleware(['auth', 'permission']);
+    Route::get('/dept/get-data', [DeptController::class, 'getData'])->name('dept.get-data')->middleware(['auth', 'permission']);
+    Route::post('/dept/store', [DeptController::class, 'store'])->name('dept.store')->middleware(['auth', 'permission']);
+    Route::post('/dept/update/{id}', [DeptController::class, 'update'])->name('dept.update')->middleware(['auth', 'permission']);
+    Route::post('/dept/destroy/{id}', [DeptController::class, 'destroy'])->name('dept.destroy')->middleware(['auth', 'permission']);
 
     // Overtime
-    Route::get('/overtime', [OvertimeController::class, 'index'])->name('overtime.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/overtime/download-template', [OvertimeController::class, 'downloadTemplateOvertime'])->name('overtime.downloadTemplate')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/overtime/import', [OvertimeController::class, 'importOvertime'])->name('overtime.import')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/overtime/get-data', [OvertimeController::class, 'getData'])->name('overtime.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/overtime/calendar', [OvertimeController::class, 'calendarOvertime'])->name('overtime.calendar')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/overtime/export', [OvertimeController::class, 'exportCalendar'])->name('overtime.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/overtime/export-template', [OvertimeController::class, 'exportCalendarTemplate'])->name('overtime.export-template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/overtime', [OvertimeController::class, 'index'])->name('overtime.index')->middleware(['auth', 'permission']);
+    Route::get('/overtime/download-template', [OvertimeController::class, 'downloadTemplateOvertime'])->name('overtime.downloadTemplate')->middleware(['auth', 'permission']);
+    Route::post('/overtime/import', [OvertimeController::class, 'importOvertime'])->name('overtime.import')->middleware(['auth', 'permission']);
+    Route::get('/overtime/get-data', [OvertimeController::class, 'getData'])->name('overtime.get-data')->middleware(['auth', 'permission']);
+    Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data')->middleware(['auth', 'permission']);
+    Route::get('/overtime/calendar', [OvertimeController::class, 'calendarOvertime'])->name('overtime.calendar')->middleware(['auth', 'permission']);
+    Route::get('/overtime/export', [OvertimeController::class, 'exportCalendar'])->name('overtime.export')->middleware(['auth', 'permission']);
+    Route::get('/overtime/export-template', [OvertimeController::class, 'exportCalendarTemplate'])->name('overtime.export-template')->middleware(['auth', 'permission']);
+    Route::post('/overtime/update/{id}', [OvertimeController::class, 'update'])->name('overtime.update')->middleware(['auth', 'permission']);
+    Route::delete('/overtime/delete/{id}', [OvertimeController::class, 'destroy'])->name('overtime.destroy')->middleware(['auth', 'permission']);
+    Route::post('/overtime/delete-all', [OvertimeController::class, 'destroyAll'])->name('overtime.destroyAll')->middleware(['auth', 'permission']);
 
     // Late Compensation
     Route::prefix('late-compensation')->name('late-compensation.')->group(function () {
-        Route::get('/', [LateCompensationController::class, 'index'])->name('index')->middleware(['auth', 'role:Admin|HRD']);
-        Route::get('/create', [LateCompensationController::class, 'create'])->name('create')->middleware(['auth', 'role:Admin|HRD']);
-        Route::post('/store', [LateCompensationController::class, 'store'])->name('store')->middleware(['auth', 'role:Admin|HRD']);
-        Route::get('/edit/{id}', [LateCompensationController::class, 'edit'])->name('edit')->middleware(['auth', 'role:Admin|HRD']);
-        Route::post('/update/{id}', [LateCompensationController::class, 'update'])->name('update')->middleware(['auth', 'role:Admin|HRD']);
-        Route::get('/delete/{id}', [LateCompensationController::class, 'delete'])->name('delete')->middleware(['auth', 'role:Admin|HRD']);
+        Route::get('/', [LateCompensationController::class, 'index'])->name('index')->middleware(['auth', 'permission']);
+        Route::get('/create', [LateCompensationController::class, 'create'])->name('create')->middleware(['auth', 'permission']);
+        Route::post('/store', [LateCompensationController::class, 'store'])->name('store')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [LateCompensationController::class, 'edit'])->name('edit')->middleware(['auth', 'permission']);
+        Route::post('/update/{id}', [LateCompensationController::class, 'update'])->name('update')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [LateCompensationController::class, 'delete'])->name('delete')->middleware(['auth', 'permission']);
     });
 
     // ========================================
     // APPROVAL RULES (Master)
     // ========================================
-    Route::prefix('approval')->middleware('role:Admin|HRD')->group(function () {
+    Route::prefix('approval')->middleware('permission')->group(function () {
         Route::get('/', [ApprovalController::class, 'index'])->name('approval.index');
         Route::get('/get-data', [ApprovalController::class, 'getData'])->name('approval.get-data');
         Route::get('/search-employee', [ApprovalController::class, 'searchEmployee'])->name('approval.search-employee');
@@ -595,7 +595,7 @@ Route::group(['middleware' => 'auth'], function () {
     // ========================================
     // LEAVE RECAP (Admin)
     // ========================================
-    Route::prefix('leave-recap')->middleware('role:Admin|HRD')->group(function () {
+    Route::prefix('leave-recap')->middleware('permission')->group(function () {
         Route::get('/', [\App\Http\Controllers\AdminLeaveRecapController::class, 'index'])->name('leave-recap.index');
         Route::get('/get-data', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getData'])->name('leave-recap.get-data');
         Route::get('/detail/{token}', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getDetail'])->name('leave-recap.detail');
@@ -604,7 +604,7 @@ Route::group(['middleware' => 'auth'], function () {
     // ========================================
     // LEAVE BALANCES (Admin)
     // ========================================
-    Route::prefix('leave-balances')->middleware('role:Admin|HRD')->group(function () {
+    Route::prefix('leave-balances')->middleware('permission')->group(function () {
         Route::get('/', [AdminLeaveBalanceController::class, 'index'])->name('leave-balances.index');
         Route::get('/get-data', [AdminLeaveBalanceController::class, 'getData'])->name('leave-balances.get-data');
         Route::get('/show/{NPK}', [AdminLeaveBalanceController::class, 'show'])->name('leave-balances.show');
@@ -648,9 +648,9 @@ Route::group(['middleware' => 'auth'], function () {
     });
 
     // Recruitment
-    Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'permission']);
+    Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'permission']);
+    Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'permission']);
 
     /*
     |--------------------------------------------------------------------------
@@ -658,15 +658,15 @@ Route::group(['middleware' => 'auth'], function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/devices', [WhatsappDeviceController::class, 'index'])->name('devices.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/devices/create', [WhatsappDeviceController::class, 'create'])->name('devices.create')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/devices/store', [WhatsappDeviceController::class, 'store'])->name('devices.store')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/devices/edit/{id}', [WhatsappDeviceController::class, 'edit'])->name('devices.edit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/devices/update/{id}', [WhatsappDeviceController::class, 'update'])->name('devices.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::delete('/devices/destroy/{id}', [WhatsappDeviceController::class, 'destroy'])->name('devices.destroy')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/devices/status/{id}', [WhatsappDeviceController::class, 'checkStatus'])->name('devices.status')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('devices/{id}/qr', [WhatsappDeviceController::class, 'qr'])->name('devices.qr')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/devices/{device}/disconnect', [WhatsappDeviceController::class, 'disconnect'])->name('devices.disconnect')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/devices', [WhatsappDeviceController::class, 'index'])->name('devices.index')->middleware(['auth', 'permission']);
+    Route::get('/devices/create', [WhatsappDeviceController::class, 'create'])->name('devices.create')->middleware(['auth', 'permission']);
+    Route::post('/devices/store', [WhatsappDeviceController::class, 'store'])->name('devices.store')->middleware(['auth', 'permission']);
+    Route::get('/devices/edit/{id}', [WhatsappDeviceController::class, 'edit'])->name('devices.edit')->middleware(['auth', 'permission']);
+    Route::post('/devices/update/{id}', [WhatsappDeviceController::class, 'update'])->name('devices.update')->middleware(['auth', 'permission']);
+    Route::delete('/devices/destroy/{id}', [WhatsappDeviceController::class, 'destroy'])->name('devices.destroy')->middleware(['auth', 'permission']);
+    Route::get('/devices/status/{id}', [WhatsappDeviceController::class, 'checkStatus'])->name('devices.status')->middleware(['auth', 'permission']);
+    Route::get('devices/{id}/qr', [WhatsappDeviceController::class, 'qr'])->name('devices.qr')->middleware(['auth', 'permission']);
+    Route::post('/devices/{device}/disconnect', [WhatsappDeviceController::class, 'disconnect'])->name('devices.disconnect')->middleware(['auth', 'permission']);
 
 
     /*
@@ -675,12 +675,12 @@ Route::group(['middleware' => 'auth'], function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/templates/create', [WhatsappTemplateController::class, 'create'])->name('templates.create')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/templates/store', [WhatsappTemplateController::class, 'store'])->name('templates.store')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/templates/edit/{id}', [WhatsappTemplateController::class, 'edit'])->name('templates.edit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/templates/update/{id}', [WhatsappTemplateController::class, 'update'])->name('templates.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/templates/destroy/{id}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index')->middleware(['auth', 'permission']);
+    Route::get('/templates/create', [WhatsappTemplateController::class, 'create'])->name('templates.create')->middleware(['auth', 'permission']);
+    Route::post('/templates/store', [WhatsappTemplateController::class, 'store'])->name('templates.store')->middleware(['auth', 'permission']);
+    Route::get('/templates/edit/{id}', [WhatsappTemplateController::class, 'edit'])->name('templates.edit')->middleware(['auth', 'permission']);
+    Route::post('/templates/update/{id}', [WhatsappTemplateController::class, 'update'])->name('templates.update')->middleware(['auth', 'permission']);
+    Route::get('/templates/destroy/{id}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy')->middleware(['auth', 'permission']);
 
     /*
     |--------------------------------------------------------------------------
@@ -688,9 +688,9 @@ Route::group(['middleware' => 'auth'], function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/send/create', [WhatsappSendController::class, 'create'])->name('send.create')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/send-whatsapp', [WhatsappSendController::class, 'create'])->name('send.create')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/send-template', [WhatsappSendController::class, 'sendTemplate'])->name('send-template')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/send/create', [WhatsappSendController::class, 'create'])->name('send.create')->middleware(['auth', 'permission']);
+    Route::get('/send-whatsapp', [WhatsappSendController::class, 'create'])->name('send.create')->middleware(['auth', 'permission']);
+    Route::post('/send-template', [WhatsappSendController::class, 'sendTemplate'])->name('send-template')->middleware(['auth', 'permission']);
 
     Route::get('/applicant-contact', [ApplicantContactController::class, 'index'])->name('applicant-contact.index');
     Route::get('/applicant-contact/send', [ApplicantContactController::class, 'send'])->name('applicant-contact.send');
@@ -801,12 +801,12 @@ Route::group(['middleware' => 'auth'], function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/shift', [ShiftController::class, 'index'])->name('shift.index')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/shift/create', [ShiftController::class, 'create'])->name('shift.create')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/shift/store', [ShiftController::class, 'store'])->name('shift.store')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/shift/edit/{id}', [ShiftController::class, 'edit'])->name('shift.edit')->middleware(['auth', 'role:Admin|HRD']);
-    Route::post('/shift/update/{id}', [ShiftController::class, 'update'])->name('shift.update')->middleware(['auth', 'role:Admin|HRD']);
-    Route::get('/shift/delete/{id}', [ShiftController::class, 'delete'])->name('shift.delete')->middleware(['auth', 'role:Admin|HRD']);
+    Route::get('/shift', [ShiftController::class, 'index'])->name('shift.index')->middleware(['auth', 'permission']);
+    Route::get('/shift/create', [ShiftController::class, 'create'])->name('shift.create')->middleware(['auth', 'permission']);
+    Route::post('/shift/store', [ShiftController::class, 'store'])->name('shift.store')->middleware(['auth', 'permission']);
+    Route::get('/shift/edit/{id}', [ShiftController::class, 'edit'])->name('shift.edit')->middleware(['auth', 'permission']);
+    Route::post('/shift/update/{id}', [ShiftController::class, 'update'])->name('shift.update')->middleware(['auth', 'permission']);
+    Route::get('/shift/delete/{id}', [ShiftController::class, 'delete'])->name('shift.delete')->middleware(['auth', 'permission']);
 
     Route::get('/employee-mutations', [EmployeeMutationController::class, 'index'])->name('employee-mutations.index');
     Route::post('/employee-mutations', [EmployeeMutationController::class, 'store'])->name('employee-mutations.store');
@@ -831,12 +831,12 @@ Route::group(['middleware' => 'auth'], function () {
 });
 
 Route::prefix('insentif-threshold')->group(function () {
-    Route::get('/', [InsentifThresholdController::class, 'index'])->name('insentif.threshold.index')->middleware(['auth', 'role:Admin']);
-    Route::get('/create', [InsentifThresholdController::class, 'create'])->name('insentif.threshold.create')->middleware(['auth', 'role:Admin']);
-    Route::post('/store', [InsentifThresholdController::class, 'store'])->name('insentif.threshold.store')->middleware(['auth', 'role:Admin']);
-    Route::get('/edit/{id}', [InsentifThresholdController::class, 'edit'])->name('insentif.threshold.edit')->middleware(['auth', 'role:Admin']);
-    Route::post('/update/{id}', [InsentifThresholdController::class, 'update'])->name('insentif.threshold.update')->middleware(['auth', 'role:Admin']);
-    Route::get('/delete/{id}', [InsentifThresholdController::class, 'delete'])->name('insentif.threshold.delete')->middleware(['auth', 'role:Admin']);
+    Route::get('/', [InsentifThresholdController::class, 'index'])->name('insentif.threshold.index')->middleware(['auth', 'permission']);
+    Route::get('/create', [InsentifThresholdController::class, 'create'])->name('insentif.threshold.create')->middleware(['auth', 'permission']);
+    Route::post('/store', [InsentifThresholdController::class, 'store'])->name('insentif.threshold.store')->middleware(['auth', 'permission']);
+    Route::get('/edit/{id}', [InsentifThresholdController::class, 'edit'])->name('insentif.threshold.edit')->middleware(['auth', 'permission']);
+    Route::post('/update/{id}', [InsentifThresholdController::class, 'update'])->name('insentif.threshold.update')->middleware(['auth', 'permission']);
+    Route::get('/delete/{id}', [InsentifThresholdController::class, 'delete'])->name('insentif.threshold.delete')->middleware(['auth', 'permission']);
 });
 
 Route::prefix('sewing-violations')->group(function () {
@@ -869,15 +869,15 @@ Route::prefix('pengajuan-cuti')->group(function () {
 });
 
 // Insentif 6S
-Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|IE']);
-Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::class, 'create'])->name('employee6s.create')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::class, 'store'])->name('employee6s.store')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-Route::get('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-Route::get('/employee-6s-assignment/{period}/check', [Employee6sAssignmentController::class, 'check'])->name('employee6s.check')->middleware(['auth', 'role:Admin|Payroll_STAFF|IE|Management']);
+Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'permission']);
+Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::class, 'create'])->name('employee6s.create')->middleware(['auth', 'permission']);
+Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::class, 'store'])->name('employee6s.store')->middleware(['auth', 'permission']);
+Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'permission']);
+Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'permission']);
+Route::get('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'permission']);
+Route::get('/employee-6s-assignment/{period}/check', [Employee6sAssignmentController::class, 'check'])->name('employee6s.check')->middleware(['auth', 'permission']);
 
-Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD'])->group(function () {
+Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'permission'])->group(function () {
 
     Route::get('/', [BpjsExceptionController::class, 'index'])->name('index');
     Route::get('/create', [BpjsExceptionController::class, 'create'])->name('create');
