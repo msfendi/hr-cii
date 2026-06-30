@@ -137,7 +137,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00005')
+            // ->where('p.NPK', '=', 'C-04216')
 
             ->select(
                 'p.NPK',
@@ -166,7 +166,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00005')
+            // ->where('ec1.npk', '=', 'C-04216')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -773,6 +773,7 @@ END AS special_overtime_hours
         $bpjsException = DB::table('bpjs_exceptions')
             ->select(
                 'npk',
+                DB::raw("1 as is_excep"),
                 DB::raw("MAX(CASE WHEN component = 'bpjs_kesehatan' THEN percentage END) as percentkes"),
                 DB::raw("MAX(CASE WHEN component = 'bpjs_ketenagakerjaan' THEN percentage END) as percentket")
             )
@@ -952,6 +953,7 @@ END AS special_overtime_hours
                 'ec.daily_salary',
                 'be.percentkes',
                 'be.percentket',
+                'be.is_excep',
 
                 DB::raw('COALESCE(pa.total_adjusment,0) as adjusment'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
@@ -1161,6 +1163,7 @@ END AS special_overtime_hours
                 'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                 'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                 'bpjsketex' => (float) $employee->percentket,
+                'is_excep'  => $employee->is_excep === null ? 0 : (float) $employee->is_excep,
                 'bpjs_base' => (
                     ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                     ? (
@@ -1845,6 +1848,7 @@ END AS special_overtime_hours
                     'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                     'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                     'bpjsketex' => (float) $employee->percentket,
+                    'is_excep'  => $employee->is_excep === null ? 0 : (float) $employee->is_excep,
                     'percentage'     => (float) $employee->percentage,
                     'bpjs_base' => (
                         ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
