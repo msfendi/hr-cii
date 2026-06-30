@@ -55,9 +55,13 @@ class CheckPermission
             return $next($request);
         }
 
-        $hasAccess = $user->roles()->whereHas('permissions', function ($q) use ($permission) {
-            $q->where('permissions.id', $permission->id);
-        })->exists();
+        $hasAccess = $permission->roles()
+            ->whereIn('roles.id', $user->roles()->pluck('id'))
+            ->exists();
+
+        // dd(
+        //     $hasAccess,
+        // );
 
         if (!$hasAccess) {
             abort(403, 'Anda tidak memiliki akses ke halaman ini.');
