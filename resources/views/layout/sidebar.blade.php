@@ -29,33 +29,52 @@
    </li>
 
    {{-- MENU DINAMIS DARI DATABASE --}}
-   @foreach ($sidebarMenus as $menu)
-      @if ($menu->children->isEmpty() && $menu->route_name)
-         {{-- Parent tanpa anak tapi punya route sendiri, tampilkan sebagai link langsung --}}
-         <li class="nav-item">
+   {{-- MENU DINAMIS DARI DATABASE --}}
+@foreach ($sidebarMenus as $menu)
+
+    {{-- Hide jika parent kosong (tidak punya route dan tidak punya child) --}}
+    @if (!$menu->route_name && $menu->children->isEmpty())
+        @continue
+    @endif
+
+    @if ($menu->children->isEmpty())
+        {{-- Parent tanpa child tetapi punya route --}}
+        <li class="nav-item">
             <a class="nav-link" href="{{ route($menu->route_name) }}">
-               <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
-               <span>{{ $menu->name }}</span>
+                <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
+                <span>{{ $menu->name }}</span>
             </a>
-         </li>
-      @else
-         <li class="nav-item">
-            <a class="nav-link collapsed" data-toggle="collapse" data-target="#menu-{{ $menu->id }}">
-               <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
-               <span>{{ $menu->name }}</span>
+        </li>
+    @else
+        {{-- Parent dengan child --}}
+        <li class="nav-item">
+            <a class="nav-link collapsed"
+               href="#"
+               data-toggle="collapse"
+               data-target="#menu-{{ $menu->id }}"
+               aria-expanded="false"
+               aria-controls="menu-{{ $menu->id }}">
+                <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
+                <span>{{ $menu->name }}</span>
             </a>
-            <div id="menu-{{ $menu->id }}" class="collapse" data-parent="#accordionSidebar">
-               <div class="collapse-inner bg-white rounded">
-                  @foreach ($menu->children as $child)
-                     <a class="collapse-item" href="{{ $child->route_name ? route($child->route_name) : '#' }}">
-                        {{ $child->name }}
-                     </a>
-                  @endforeach
-               </div>
+
+            <div id="menu-{{ $menu->id }}"
+                 class="collapse"
+                 data-parent="#accordionSidebar">
+
+                <div class="collapse-inner bg-white rounded">
+                    @foreach ($menu->children as $child)
+                        <a class="collapse-item"
+                           href="{{ $child->route_name ? route($child->route_name) : '#' }}">
+                            {{ $child->name }}
+                        </a>
+                    @endforeach
+                </div>
             </div>
-         </li>
-      @endif
-   @endforeach
+        </li>
+    @endif
+
+@endforeach
 
    <hr class="sidebar-divider d-none d-md-block">
 </ul>
