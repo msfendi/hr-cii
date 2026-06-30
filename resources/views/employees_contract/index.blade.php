@@ -28,6 +28,9 @@
                             <button class="btn btn-outline-secondary btn-sm" id="btnExport">
                                 <i class="fas fa-file-excel mr-1"></i> Export
                             </button>
+                            <button class="btn btn-outline-secondary btn-sm" id="btnExportAll">
+                                <i class="fas fa-file-excel mr-1"></i> Export All Contract
+                            </button>
                             {{-- <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modalTambah">
                                 <i class="fas fa-plus mr-1"></i> Tambah Kontrak
                             </button> --}}
@@ -382,6 +385,22 @@
                     </div>
 
                     <hr class="mt-0 mb-3">
+                    
+                    {{-- Tanggal Mulai & Berakhir --}}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="font-weight-bold">Tgl Mulai</label>
+                                <input type="date" id="uf_start_date" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="font-weight-bold">Tgl Berakhir</label>
+                                <input type="date" id="uf_end_date" class="form-control">
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="row">
                         <div class="col-md-6">
@@ -552,6 +571,7 @@
             bagian: "{{ route('employees-contract.bagian') }}",
             importUrl: "{{ route('employees-contract.import') }}",
             exportUrl: "{{ route('employees-contract.export') }}",
+            exportAllUrl: "{{ route('employees-contract.export-all') }}",
             salaryUrl: "{{ url('employees-contract/update-salary') }}",
             splitUrl: "{{ url('employees-contract/split') }}",
         };
@@ -860,6 +880,12 @@
                     pph21: parseRupiah($('#uf_pph21').val()),
                     daily_salary: parseRupiah($('#uf_daily_salary').val()),
                 };
+                
+                // Sertakan tanggal hanya jika diisi
+                const ufStart = $('#uf_start_date').val();
+                const ufEnd   = $('#uf_end_date').val();
+                if (ufStart) payload.start_date = ufStart;
+                if (ufEnd)   payload.end_date   = ufEnd;
 
                 if (isSplit) {
                     url = ROUTES.splitUrl + '/' + $('#uf_id').val();
@@ -911,6 +937,11 @@
             $('#btnExport').on('click', function () {
                 const [y, m] = ($('#filterMonth').val() || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`).split('-');
                 window.location.href = ROUTES.exportUrl + `?month=${m}&year=${y}`;
+            });
+
+            // ── Export All ────────────────────────────────────────────────────────────
+            $('#btnExportAll').on('click', function () {
+                window.location.href = ROUTES.exportAllUrl;
             });
         });
 
@@ -991,6 +1022,9 @@
             $('#uf_durasi').text(row.month_duration ? row.month_duration + ' bulan' : '—');
             $('#uf_status').html(statusBadge(row.status_contract));
             $('#uf_sisa').html(sisaBadge(row.sisa_hari, row.urgensi));
+            // Date inputs
+            $('#uf_start_date').val(row.start_date ? row.start_date.slice(0, 10) : '');
+            $('#uf_end_date').val(row.end_date ? row.end_date.slice(0, 10) : '');
             // Financial inputs (formatted)
             $('#uf_salary').val(toRupiah(row.salary || 0));
             $('#uf_allowance').val(toRupiah(row.allowance || 0));
