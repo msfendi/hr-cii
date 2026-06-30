@@ -41,10 +41,7 @@
                         </datalist>
                      </div>
 
-                     <div class="form-group">
-                        <label>Group</label>
-                        <input type="text" name="group" class="form-control" value="{{ old('group', $permission->group) }}">
-                     </div>
+                     <div class="form-group"> <label>Group</label> <select name="group" id="group" class="form-control select2"> <option value="">-- Pilih Group --</option> @foreach($groups as $group) <option value="{{ $group }}" {{ old('group', $permission->group) == $group ? 'selected' : '' }}> {{ $group }} </option> @endforeach </select> </div>
 
                      <div class="form-group">
                         <label>Deskripsi</label>
@@ -60,4 +57,5 @@
       </div>
       @include('layout.footer')
    </body>
+   <script> $(function () { $('#group').select2({ placeholder: '-- Pilih Group --', allowClear: true, width: '100%' }); }); </script>
 </html>

@@ -44,7 +44,17 @@
 
                      <div class="form-group">
                         <label>Group (untuk pengelompokan tampilan)</label>
-                        <input type="text" name="group" class="form-control" value="{{ old('group') }}" placeholder="Contoh: Biodata">
+
+                        <select name="group" id="group" class="form-control select2">
+                           <option value="">-- Pilih Group --</option>
+
+                           @foreach($groups as $group)
+                                 <option value="{{ $group }}"
+                                    {{ old('group') == $group ? 'selected' : '' }}>
+                                    {{ $group }}
+                                 </option>
+                           @endforeach
+                        </select>
                      </div>
 
                      <div class="form-group">
@@ -61,4 +71,13 @@
       </div>
       @include('layout.footer')
    </body>
+   <script>
+$(function () {
+    $('#group').select2({
+        placeholder: '-- Pilih Group --',
+        allowClear: true,
+        width: '100%'
+    });
+});
+</script>
 </html>

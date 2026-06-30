@@ -59,7 +59,7 @@ class AttendanceManualSheet implements FromCollection, WithTitle, WithHeadings, 
                 'Department' => $this->deptName,
                 'TMK' => $emp->TMK ? Carbon::parse($emp->TMK)->format('d-M-y') : '',
             ];
-            
+
             for ($day = 1; $day <= $this->daysInMonth; $day++) {
                 $row[(string)$day] = '';
             }
@@ -72,7 +72,7 @@ class AttendanceManualSheet implements FromCollection, WithTitle, WithHeadings, 
     public function headings(): array
     {
         $monthYear = Carbon::create($this->year, $this->month, 1)->translatedFormat('F Y');
-        
+
         $row1 = ['No', 'NPK', 'Nama Karyawan', 'Department', 'TMK'];
         $row1[] = strtoupper($monthYear);
         for ($day = 2; $day <= $this->daysInMonth; $day++) {
@@ -106,15 +106,19 @@ class AttendanceManualSheet implements FromCollection, WithTitle, WithHeadings, 
     public function registerEvents(): array
     {
         return [
-            AfterSheet::class => function(AfterSheet $event) {
+            AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $highestRow = $sheet->getHighestRow();
                 $highestColumn = $sheet->getHighestColumn();
 
+                // Header merge
+                $sheet->mergeCells('A1:D1');
+                $sheet->mergeCells('A2:D2');
+
                 // Custom Header text
                 $sheet->setCellValue('A1', 'PT. CHUTEX INTERNATIONAL INDONESIA');
                 $sheet->setCellValue('F1', 'CHIEF : ..............................................................');
-                
+
                 $sheet->setCellValue('A2', 'ABSENSI KARYAWAN');
                 $sheet->setCellValue('F2', 'SPV : ..............................................................');
                 $sheet->setCellValue('O2', 'ADM : ..............................................................');
@@ -167,7 +171,8 @@ class AttendanceManualSheet implements FromCollection, WithTitle, WithHeadings, 
                         if ($response->successful()) {
                             return $response->json();
                         }
-                    } catch (\Exception $e) {}
+                    } catch (\Exception $e) {
+                    }
                     return [];
                 });
 
@@ -175,13 +180,13 @@ class AttendanceManualSheet implements FromCollection, WithTitle, WithHeadings, 
                     // Offset by 5 columns (No, NPK, Nama, Dept, TMK) -> so Date 1 is Col 6 (F)
                     $colIndex = 5 + $day;
                     $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
-                    
+
                     $date = Carbon::create($this->year, $this->month, $day);
                     $dateString = $date->format('Y-m-d');
-                    
+
                     // Sabtu dan Minggu libur
                     $isWeekend = $date->isSunday() || $date->isSaturday();
-                    
+
                     $isHoliday = isset($hariLibur[$dateString]) && ($hariLibur[$dateString]['holiday'] ?? false) === true;
 
                     // Block red if weekend or holiday
@@ -193,17 +198,39 @@ class AttendanceManualSheet implements FromCollection, WithTitle, WithHeadings, 
                             ]
                         ]);
                     }
-                    
+
                     // Set width for date columns
                     $sheet->getColumnDimension($colLetter)->setWidth(5);
                 }
 
                 // Auto size columns A, B, C, D, E
-                $sheet->getColumnDimension('A')->setAutoSize(true);
+                // Freeze row 1-5
+                $sheet->freezePane('A6');
+                $sheet->getColumnDimension('A')->setWidth(5);
                 $sheet->getColumnDimension('B')->setAutoSize(true);
                 $sheet->getColumnDimension('C')->setAutoSize(true);
                 $sheet->getColumnDimension('D')->setAutoSize(true);
                 $sheet->getColumnDimension('E')->setAutoSize(true);
+
+                $pageSetup = $sheet->getPageSetup();
+
+                $pageSetup->setOrientation(
+                    \PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE
+                );
+
+                $pageSetup->setPaperSize(
+                    \PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4
+                );
+
+                // Semua kolom muat dalam 1 halaman
+                $pageSetup->setFitToWidth(1);
+                $pageSetup->setFitToHeight(0);
+                $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, 5);
+                $sheet->getPageMargins()
+                    ->setTop(0.3)
+                    ->setRight(0.2)
+                    ->setLeft(0.2)
+                    ->setBottom(0.3);
             },
         ];
     }

@@ -31,7 +31,13 @@ class PermissionController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('permission.create', compact('routeNames', 'permissions'));
+        $groups = Permission::whereNotNull('group')
+            ->where('group', '!=', '')
+            ->distinct()
+            ->orderBy('group')
+            ->pluck('group');
+
+        return view('permission.create', compact('routeNames', 'permissions', 'groups'));
     }
 
     public function store(Request $request)
@@ -52,6 +58,8 @@ class PermissionController extends Controller
     {
         $permission = Permission::findOrFail($id);
 
+        $groups = Permission::whereNotNull('group')->where('group', '!=', '')->distinct()->orderBy('group')->pluck('group');
+
         $routeNames = collect(Route::getRoutes())
             ->map(fn($r) => $r->getName())
             ->filter()
@@ -59,7 +67,7 @@ class PermissionController extends Controller
             ->sort()
             ->values();
 
-        return view('permission.edit', compact('permission', 'routeNames'));
+        return view('permission.edit', compact('permission', 'routeNames', 'groups'));
     }
 
     public function update(Request $request, $id)
