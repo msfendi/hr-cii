@@ -81,6 +81,9 @@ use App\Http\Controllers\PortalRecruitmentStatusController;
 use App\Http\Controllers\RecruitmentFormController;
 use App\Http\Controllers\SewingViolationController;
 use App\Http\Controllers\IjinMeninggalkanPekerjaanController;
+use App\Http\Controllers\MenuController;
+use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\RolePermissionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -171,7 +174,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
         Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import')->middleware(['auth', 'role:Admin']);
         Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    });
+        Route::get('/export-all',       [EmployeesContractController::class, 'exportAll'])->name('employees-contract.export-all');
+        });
 
 
     // Pelamar
@@ -246,8 +250,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll/export/{run_id}', [PayrollProcessController::class, 'export'])->name('payroll.export.export')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/payroll/export-progress/{run_id}', [PayrollProcessController::class, 'progress'])->name('payroll.export.progress')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/payroll/process-progress/{period_id}', [PayrollProcessController::class, 'progressRun'])->name('payroll.process.progress')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
-    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
+    Route::get('/payroll-slip/view/{run_id}/{npk}', [PayrollProcessController::class, 'passwordForm'])->name('payroll-slip.view')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
+    Route::get('/payroll-process/approval/{period}', [PayrollProcessController::class, 'approvalStatus'])->name('payroll-process.approval')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|Audit']);
     Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
@@ -285,8 +289,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/thr/export/{run_id}', [ThrProcessController::class, 'export'])->name('thr.export.export')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::get('/thr/export-progress/{id}', [ThrProcessController::class, 'progress'])->name('thr.export.progress');
     Route::get('/thr/process-progress/{period_id}', [ThrProcessController::class, 'progressRun'])->name('thr.process.progress');
-    Route::get('/thr-slip/view/{run_id}/{npk}', [ThrProcessController::class, 'passwordForm'])->middleware(['auth', 'role:Admin|Payroll_STAFF']);
-    Route::get('/thr-process/approval/{period}', [ThrProcessController::class, 'approvalStatus'])->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::get('/thr-slip/view/{run_id}/{npk}', [ThrProcessController::class, 'passwordForm'])->name('thr-slip.view')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
+    Route::get('/thr-process/approval/{period}', [ThrProcessController::class, 'approvalStatus'])->name('thr-process.approval')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     Route::post('/thr-process/check', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
     // Route::get('/thr-process/check/{period_id}', [ThrProcessController::class, 'check'])->name('thr-process.check')->middleware(['auth', 'role:Admin|Payroll_STAFF']);
 
@@ -301,15 +305,15 @@ Route::group(['middleware' => 'auth'], function () {
     // ========================================
     // NOTIFICATIONS CONTRACT
     // ========================================
-    Route::prefix('api/notifications')->group(function () {
-        Route::get('/', [NotificationsContractController::class, 'index']);
-        Route::get('/unread', [NotificationsContractController::class, 'unread']);
-        Route::get('/statistics', [NotificationsContractController::class, 'statistics']);
-        Route::get('/{id}', [NotificationsContractController::class, 'show']);
-        Route::post('/{id}/read', [NotificationsContractController::class, 'markAsRead']);
-        Route::post('/read-all', [NotificationsContractController::class, 'markAllAsRead']);
-        Route::post('/{id}/archive', [NotificationsContractController::class, 'archive']);
-        Route::delete('/{id}', [NotificationsContractController::class, 'destroy']);
+    Route::prefix('api/notifications')->name('api.notifications.')->group(function () {
+        Route::get('/', [NotificationsContractController::class, 'index'])->name('index');
+        Route::get('/unread', [NotificationsContractController::class, 'unread'])->name('unread');
+        Route::get('/statistics', [NotificationsContractController::class, 'statistics'])->name('statistics');
+        Route::get('/{id}', [NotificationsContractController::class, 'show'])->name('show');
+        Route::post('/{id}/read', [NotificationsContractController::class, 'markAsRead'])->name('read');
+        Route::post('/read-all', [NotificationsContractController::class, 'markAllAsRead'])->name('read-all');
+        Route::post('/{id}/archive', [NotificationsContractController::class, 'archive'])->name('archive');
+        Route::delete('/{id}', [NotificationsContractController::class, 'destroy'])->name('destroy');
     });
 
     // Payroll Approve
@@ -453,6 +457,31 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/update/{id}', [PayrollAdjusmentController::class, 'update'])->name('payroll-adjusments.update')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
         Route::delete('/delete/{id}', [PayrollAdjusmentController::class, 'destroy'])->name('payroll-adjusments.destroy')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING']);
     });
+
+    // Route::prefix('rbac')->middleware(['auth', 'role:Admin'])->group(function () {
+
+    //     // CRUD Permission
+    //     Route::get('/permissions', [PermissionController::class, 'index'])->name('permission.index');
+    //     Route::get('/permissions/create', [PermissionController::class, 'create'])->name('permission.create');
+    //     Route::post('/permissions', [PermissionController::class, 'store'])->name('permission.store');
+    //     Route::get('/permissions/{id}/edit', [PermissionController::class, 'edit'])->name('permission.edit');
+    //     Route::put('/permissions/{id}', [PermissionController::class, 'update'])->name('permission.update');
+    //     Route::delete('/permissions/{id}', [PermissionController::class, 'destroy'])->name('permission.destroy');
+
+    //     // CRUD Menu
+    //     Route::get('/menus', [MenuController::class, 'index'])->name('menu.index');
+    //     Route::get('/menus/create', [MenuController::class, 'create'])->name('menu.create');
+    //     Route::post('/menus', [MenuController::class, 'store'])->name('menu.store');
+    //     Route::get('/menus/{id}/edit', [MenuController::class, 'edit'])->name('menu.edit');
+    //     Route::put('/menus/{id}', [MenuController::class, 'update'])->name('menu.update');
+    //     Route::delete('/menus/{id}', [MenuController::class, 'destroy'])->name('menu.destroy');
+    //     Route::post('/menus/reorder', [MenuController::class, 'reorder'])->name('menu.reorder');
+
+    //     // Assign Permission ke Role
+    //     Route::get('/role-permissions', [RolePermissionController::class, 'index'])->name('role-permission.index');
+    //     Route::get('/role-permissions/{role}/edit', [RolePermissionController::class, 'edit'])->name('role-permission.edit');
+    //     Route::put('/role-permissions/{role}', [RolePermissionController::class, 'update'])->name('role-permission.update');
+    // });
 
     // attendance finger
     Route::get('/attendance-finger/index', [AttendanceFingerController::class, 'index'])->name('attendance-finger.index')->middleware(['auth', 'role:Admin|HRD']);
@@ -893,7 +922,7 @@ Route::get('/test-reverb', function () {
         'danger'
     ));
     return 'Notification Event Sent!';
-});
+})->name('test-reverb');
 
 Route::prefix('recruitments')->name('recruitments.')->group(function () {
     Route::get('/', fn() => redirect()->route('recruitments.step', ['step' => 1]))
