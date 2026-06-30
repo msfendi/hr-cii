@@ -27,6 +27,12 @@ class GeneratePayrollProcess implements ShouldQueue
 
     public $runId;
 
+    /**
+     * Throttle timestamp for progress updates (avoid 1 UPDATE query per
+     * employee x component, which was previously hammering the DB).
+     */
+    private $lastProgressUpdate = 0;
+
     public function __construct($runId)
     {
         $this->runId = $runId;
@@ -40,6 +46,30 @@ class GeneratePayrollProcess implements ShouldQueue
     public function simulation()
     {
         return $this->processPayroll(true);
+    }
+
+    /**
+     * Throttled wrapper around $run->update() for progress/status text.
+     * Same end-result for the user (status text + progress bar), just not
+     * fired on every single component x employee iteration.
+     */
+    private function updateProgress($run, $isCheck, $status, $progress, $minIntervalSeconds = 1)
+    {
+        if ($isCheck) {
+            return;
+        }
+
+        $now = microtime(true);
+        if (($now - $this->lastProgressUpdate) < $minIntervalSeconds) {
+            return;
+        }
+
+        $run->update([
+            'status'   => $status,
+            'progress' => $progress,
+        ]);
+
+        $this->lastProgressUpdate = $now;
     }
 
     private function processPayroll($isCheck = false)
@@ -80,13 +110,11 @@ class GeneratePayrollProcess implements ShouldQueue
                     ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
             );
 
-        // dd($biodataUnion->get());
         /*
         |--------------------------------------------------------------------------
         | EMPLOYEE BASE + SHIFT
         |--------------------------------------------------------------------------
         */
-
 
         if (!$isCheck) {
             $run->update([
@@ -109,7 +137,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-03094')
+            ->where('p.NPK', '=', 'C-00005')
 
             ->select(
                 'p.NPK',
@@ -128,10 +156,6 @@ class GeneratePayrollProcess implements ShouldQueue
             )
             ->distinct();
 
-        // dd($employeeBase->get());
-
-
-
         $latestContract = DB::table('employees_contract as ec1')
             ->select(
                 'ec1.npk',
@@ -142,12 +166,11 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-03094')
+            ->where('ec1.npk', '=', 'C-00005')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
             ->whereDate('ec1.end_date', '>=', $periodStart)
-            // ->where('ec1.status_contract', '=', 'AKTIF')
 
             // ✅ ambil contract terbaru
             ->whereRaw("
@@ -161,9 +184,6 @@ class GeneratePayrollProcess implements ShouldQueue
                      ec2.start_date DESC
         )
     ", [$periodEnd, $periodStart]);
-
-        // dd($employeeBase->get(), $latestContract);
-
 
         if (!$isCheck) {
             $run->update([
@@ -218,7 +238,6 @@ class GeneratePayrollProcess implements ShouldQueue
         ")
             )
             ->groupBy('overtimes.NPK');
-
 
         $overtimeDetails = DB::connection('cii')
             ->table('overtimes')
@@ -328,8 +347,6 @@ END AS special_overtime_hours
             ->get()
             ->groupBy('NPK');
 
-        // CHECK PER DATE LATE
-
         /*
 |--------------------------------------------------------------------------
 | LAPISAN TERLUAR: filter hanya baris dengan rn = 1 (scan paling relevan)
@@ -341,19 +358,8 @@ END AS special_overtime_hours
 
                 $q->fromSub(function ($q2) use ($employeeBase, $periodStart, $periodEnd) {
 
-                    /*
-            |----------------------------------------------------------------
-            | STEP B: base (emp+cal+shift) LEFT JOIN ke SEMUA baris att_log,
-            |         lalu ranking berdasarkan kedekatan ke jam masuk shift
-            |----------------------------------------------------------------
-            */
                     $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
 
-                        /*
-                |------------------------------------------------------------
-                | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved)
-                |------------------------------------------------------------
-                */
                         $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
 
                             $q4->fromSub($employeeBase, 'emp')
@@ -403,11 +409,6 @@ END AS special_overtime_hours
                     ");
                     }, 'base')
 
-                        /*
-                |--------------------------------------------------------------
-                | Join ke SEMUA baris att_log (bukan agregat MIN lagi)
-                |--------------------------------------------------------------
-                */
                         ->leftJoin('att_log as att', function ($join) {
                             $join->on(
                                 DB::raw('CAST(att.pin AS VARCHAR(50))'),
@@ -453,11 +454,6 @@ END AS special_overtime_hours
                     );
             }, 'emp')
 
-            /*
-    |--------------------------------------------------------------------------
-    | LATE COMPENSATION
-    |--------------------------------------------------------------------------
-    */
             ->leftJoin('late_compensations as lc', function ($join) {
                 $join->on('emp.NPK', '=', 'lc.npk')
                     ->whereRaw("CAST(lc.date AS DATE) = CAST(emp.scan_day AS DATE)");
@@ -474,11 +470,6 @@ END AS special_overtime_hours
         emp.first_scan
     ")
 
-            /*
-    |--------------------------------------------------------------------------
-    | LATE ACTUAL (logika SAMA seperti sebelumnya, TANPA batas menit harian)
-    |--------------------------------------------------------------------------
-    */
             ->selectRaw("
         CASE
             WHEN lc.id IS NOT NULL THEN 0
@@ -531,9 +522,7 @@ END AS special_overtime_hours
 
         /*
 |--------------------------------------------------------------------------
-| LAPISAN PEMBUNGKUS TERAKHIR:
-| - late_actual  : nilai telat sebenarnya, TANPA batas (dari subquery di atas)
-| - late_minute  : late_actual yang di-cap maksimal 240 menit/hari
+| LAPISAN PEMBUNGKUS TERAKHIR
 |--------------------------------------------------------------------------
 */
         $lateDetails = DB::connection('cii')
@@ -573,29 +562,12 @@ END AS special_overtime_hours
             DB::connection('cii')
             ->query()
 
-            /*
-    |--------------------------------------------------------------------------
-    | LAPISAN TERLUAR: filter rn = 1, hitung late_minute per hari
-    |--------------------------------------------------------------------------
-    */
             ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd, $nearShiftEndToleranceMinutes) {
 
                 $q->fromSub(function ($q2) use ($employeeBase, $periodStart, $periodEnd) {
 
-                    /*
-            |----------------------------------------------------------------
-            | STEP B: base (emp+cal+shift) LEFT JOIN ke SEMUA baris att_log
-            |         (termasuk kasus overnight lintas hari), + window function
-            |          rn (ranking kedekatan ke shift_start) & scan_count
-            |----------------------------------------------------------------
-            */
                     $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
 
-                        /*
-                |------------------------------------------------------------
-                | STEP A: EMPLOYEE + CALENDAR + SHIFT (resolved, anti overnight)
-                |------------------------------------------------------------
-                */
                         $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
 
                             $q4->fromSub($employeeBase, 'emp')
@@ -665,12 +637,6 @@ END AS special_overtime_hours
                     ");
                     }, 'base')
 
-                        /*
-                |--------------------------------------------------------------
-                | Join ke SEMUA baris att_log (periode + sn dikecualikan),
-                | termasuk kasus overnight (scan di hari berikutnya)
-                |--------------------------------------------------------------
-                */
                         ->leftJoin('att_log as att', function ($join) use ($periodStart, $periodEnd) {
                             $join->on(
                                 DB::raw('CAST(att.pin AS VARCHAR(50))'),
@@ -727,21 +693,11 @@ END AS special_overtime_hours
         ");
             }, 'daily')
 
-            /*
-        |--------------------------------------------------------------------------
-        | LATE COMPENSATION
-        |--------------------------------------------------------------------------
-        */
             ->leftJoin('late_compensations as lc', function ($join) {
                 $join->on('daily.NPK', '=', 'lc.npk')
                     ->whereRaw("CAST(lc.date AS DATE) = CAST(daily.shift_date AS DATE)");
             })
 
-            /*
-        |--------------------------------------------------------------------------
-        | DAILY RAW LATE (logika SAMA seperti sebelumnya, TANPA batas menit harian)
-        |--------------------------------------------------------------------------
-        */
             ->selectRaw("
             daily.NPK as npk,
             daily.pin,
@@ -751,7 +707,6 @@ END AS special_overtime_hours
 
                 WHEN daily.first_scan IS NULL THEN 0
 
-                -- ATURAN BARU: scan tunggal & sudah lewat/dekat jam shift selesai => bukan telat
                 WHEN daily.scan_count = 1
                      AND DATEDIFF(MINUTE, daily.first_scan, daily.shift_end_dt) <= {$nearShiftEndToleranceMinutes}
                 THEN 0
@@ -775,9 +730,7 @@ END AS special_overtime_hours
 
         /*
 |--------------------------------------------------------------------------
-| LAPISAN PEMBUNGKUS TERAKHIR (rekap per pegawai):
-| - late_minutes : SUM raw_late_minute per hari, DI-CAP maksimal 240 menit/hari
-| - late_actual  : SUM raw_late_minute per hari, TANPA batas
+| LAPISAN PEMBUNGKUS TERAKHIR (rekap per pegawai)
 |--------------------------------------------------------------------------
 */
         $lateSummary = DB::connection('cii')
@@ -796,25 +749,17 @@ END AS special_overtime_hours
     ")
             ->groupBy('calc.npk', 'calc.pin');
 
-        // dd($lateSummary->get());
-
-        $lateSummary->get();
-
-
-
-
-        // dd(DB::query()
-        //     ->fromSub($employeeBase, 'emp')
-        //     ->select('NPK', 'BARCODE')
-        //     ->where('BARCODE', '151004200')
-        //     ->get(), $lateSummary->get());
+        // NOTE: removed redundant `$lateSummary->get();` call here.
+        // The exact same query is already consumed below as a subquery via
+        // leftJoinSub() when building $employees — calling ->get() on it
+        // separately executed this expensive window-function query twice
+        // and discarded the result. No behavior change, pure waste removed.
 
         /*
         |--------------------------------------------------------------------------
         | EMPLOYEES QUERY (DITAMBAHKAN LATE HOURS)
         |--------------------------------------------------------------------------
         */
-
 
         if (!$isCheck) {
             $run->update([
@@ -962,7 +907,6 @@ END AS special_overtime_hours
                 );
             })
 
-            // ->leftJoin('payroll_masters as pm',   'emp.NPK', '=', 'pm.npk')
             ->leftJoinSub($latestContract, 'ec', function ($join) {
                 $join->on('emp.NPK', '=', 'ec.npk');
             })
@@ -983,7 +927,6 @@ END AS special_overtime_hours
             ->leftJoinSub($ijinSummary, 'ij', function ($join) {
                 $join->on('emp.NPK', '=', 'ij.npk');
             })
-            // ->where('emp.NPK', '=', 'C-03094')
 
             ->select(
                 'emp.NPK',
@@ -1011,8 +954,6 @@ END AS special_overtime_hours
                 'be.percentket',
 
                 DB::raw('COALESCE(pa.total_adjusment,0) as adjusment'),
-                // DB::raw('COALESCE(ot.overtime_hours,0) as overtime_hours'),
-                // DB::raw('COALESCE(ot.special_overtime_hours,0) as special_overtime_hours'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
                 DB::raw('COALESCE(ot.sick_days,0) as sick_days'),
                 DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
@@ -1024,10 +965,6 @@ END AS special_overtime_hours
             ->orderBy('emp.ID_DEPT', 'asc')
             ->orderBy('emp.NPK', 'asc')
             ->get();
-
-
-        // dd($employees);
-
 
         if (!$isCheck) {
             $run->update([
@@ -1077,6 +1014,99 @@ END AS special_overtime_hours
                 'progress' => 40,
             ]);
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | PRE-FETCH DATA YANG SEBELUMNYA DI-QUERY ULANG PER EMPLOYEE (N+1 FIX)
+        |--------------------------------------------------------------------------
+        | Semua data berikut sebelumnya di-query di dalam foreach($employees)
+        | -> per employee -> per component, sehingga jumlah query DB bisa
+        | mencapai ribuan untuk payroll dengan banyak karyawan.
+        |
+        | Di sini kita ambil SEMUA data yang relevan untuk periode berjalan
+        | dalam satu query per tabel, lalu kita group/keyBy di memori (PHP)
+        | supaya bisa dipakai sebagai lookup table per NPK / per dept /
+        | per tanggal. Filter yang tadinya di klausa SQL `WHERE npk = ?`
+        | sekarang menjadi `$collection->get($npk)` — hasilnya identik,
+        | karena filternya sama persis, hanya dipindah ke level aplikasi.
+        |--------------------------------------------------------------------------
+        */
+
+        // Overtime (dipakai berulang di sewing/pad/cutting/heat insentif untuk
+        // validasi "apakah hari ini valid dihitung insentif")
+        $allOvertimesForInsentif = DB::table('overtimes')
+            ->whereBetween('OVERTIME_DATE', [$period->start_date, $period->end_date])
+            ->get()
+            ->groupBy('NPK')
+            ->map(function ($rows) {
+                return $rows->keyBy('OVERTIME_DATE');
+            });
+
+        $isValidOvertimeFor = function ($npk, $date) use ($allOvertimesForInsentif) {
+            $row = $allOvertimesForInsentif[$npk][$date] ?? null;
+
+            if (!$row) {
+                return true; // tidak ada overtime → tetap dihitung
+            }
+
+            $lembur = $row->JUMLAH_JAM_LEMBUR;
+
+            if ($lembur === null || $lembur === '') {
+                return true;
+            }
+
+            if (is_numeric($lembur)) {
+                return true;
+            }
+
+            // karakter (MA, CT, BR, S1, dll)
+            return false;
+        };
+
+        // Sewing violations untuk operator (per id_dept) dan untuk supervisor
+        // (per range line). Kita ambil sekali, sudah join ke DEPT supaya bisa
+        // dipakai untuk perhitungan range "LINE n" pada cabang supervisor.
+        $allSewingViolationsRaw = DB::table('sewing_violations')
+            ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
+            ->whereBetween('sewing_violations.tanggal', [$period->start_date, $period->end_date])
+            ->select('sewing_violations.id_dept', 'd.DEPARTEMENT')
+            ->get();
+
+        // by id_dept langsung -> dipakai untuk role operator
+        $sewingViolationsByDept = $allSewingViolationsRaw->groupBy('id_dept');
+
+        // by nomor line (hasil parse "LINE n") -> dipakai untuk role supervisor
+        $sewingViolationsByLineNumber = $allSewingViolationsRaw
+            ->filter(function ($row) {
+                return $row->DEPARTEMENT && stripos($row->DEPARTEMENT, 'LINE ') === 0;
+            })
+            ->groupBy(function ($row) {
+                return (int) str_ireplace('LINE ', '', $row->DEPARTEMENT);
+            });
+
+        // cutting violations dipakai untuk range line (supervisor sewing,
+        // dihitung dari DEPT yang formatnya "LINE n")
+        $countSewingViolationsForLineRange = function ($lineStart, $lineEnd) use ($sewingViolationsByLineNumber) {
+            $count = 0;
+            foreach ($sewingViolationsByLineNumber as $lineNumber => $rows) {
+                if ($lineNumber >= $lineStart && $lineNumber <= $lineEnd) {
+                    $count += $rows->count();
+                }
+            }
+            return $count;
+        };
+
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Payroll Calculation In Progress',
+                'progress' => 45,
+            ]);
+        }
+
+        // Untuk batch insert PayrollRunDetail di akhir, alih-alih create()
+        // satu per satu di dalam loop.
+        $payrollRunDetailRows = [];
+        $now = Carbon::now();
 
         foreach ($employees as $employee) {
             $absenceDays = 0;
@@ -1131,13 +1161,12 @@ END AS special_overtime_hours
                 'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                 'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                 'bpjsketex' => (float) $employee->percentket,
-                // Basis BPJS
                 'bpjs_base' => (
                     ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                     ? (
                         Str::ucfirst(Str::lower($employee->type)) === 'Contract'
                         ? (float) $employee->salary
-                        : ((float) $employee->daily_salary * (float) $count_days)
+                        : ((float) $employee->salary)
                     )
                     : (
                         (
@@ -1148,17 +1177,9 @@ END AS special_overtime_hours
                         + (float) $employee->allowance
                     )
                 ),
-                // JP hanya untuk non expat
                 'bpjsjpex' => $employee->IS_EXPAT == '1' ? 0 : 1,
-                // JHT selalu 2%
                 'bpjsjhtex' => 2,
-                // 'overtime_hours' => (float) $employee->overtime_hours,
-                // 'special_overtime_hours' => (float) $employee->special_overtime_hours
             ];
-
-            // dd($inputVariables);
-
-            // dd($employee->late_minutes);
 
             $results = [];
             $grandTotal = 0;
@@ -1171,12 +1192,13 @@ END AS special_overtime_hours
                     $amount = $component->value;
                 } else {
 
-                    if (!$isCheck) {
-                        $run->update([
-                            'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                            'progress' => 60
-                        ]);
-                    }
+                    $this->updateProgress(
+                        $run ?? null,
+                        $isCheck,
+                        'Calculation for ' . $employee->NPK . ' - ' . $component->name,
+                        60
+                    );
+
                     if ($component->code === 'bpjs_kesehatan') {
                         if ($employee->TKK !== null) {
                             if (Carbon::parse($employee->TKK)->day <= 20) {
@@ -1217,7 +1239,6 @@ END AS special_overtime_hours
                         );
 
                         $amount = $total6sInsentif;
-                        // dd($employee->percentage, $sixsInsentifFormula, $results, $inputVariables, $amount);
                     } else if ($component->code === 'overtime_pay') {
                         $employeeOvertimes = $overtimeDetails[$employee->NPK] ?? collect();
 
@@ -1240,12 +1261,14 @@ END AS special_overtime_hours
 
                         $amount = $totalOvertimePay;
                     } else if ($component->code === 'special_overtime_pay') {
-                        if (!$isCheck) {
-                            $run->update([
-                                'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                                'progress' => 60
-                            ]);
-                        }
+
+                        $this->updateProgress(
+                            $run ?? null,
+                            $isCheck,
+                            'Calculation for ' . $employee->NPK . ' - ' . $component->name,
+                            60
+                        );
+
                         $employeeOvertimes = $overtimeDetails[$employee->NPK] ?? collect();
 
                         $totalSpecialOvertimePay = 0;
@@ -1280,12 +1303,11 @@ END AS special_overtime_hours
 
                         $amount = 0;
 
-                        $collectionLinesTest = collect([]);
                         /*
-    |--------------------------------------------------------------------------
-    | LOAD THRESHOLD
-    |--------------------------------------------------------------------------
-    */
+                        |----------------------------------------------------
+                        | LOAD THRESHOLD
+                        |----------------------------------------------------
+                        */
                         $thresholds = DB::table('insentif_thresholds')
                             ->where('insentif_type', 'Sewing')
                             ->where('type', 'Percentage')
@@ -1300,70 +1322,21 @@ END AS special_overtime_hours
                             return $thresholds->max();
                         };
 
+                        // NOTE: $mutations (employee_mutations) yang sebelumnya
+                        // di-query di sini dihapus karena hasilnya tidak pernah
+                        // digunakan di logic manapun pada blok ini (dead code).
 
-
-                        /*
-        |--------------------------------------------------------------------------
-        | GET MUTATIONS EMPLOYEE
-        |--------------------------------------------------------------------------
-        */
-                        $mutations = DB::table('employee_mutations')
-                            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
-                            ->where('npk', $employee->NPK)
-                            ->orderBy('date')
-                            ->get();
-
-                        // dd($mutations);
-
-
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD OVERTIME (ONCE)
-    |--------------------------------------------------------------------------
-    */
-                        $overtimes = DB::table('overtimes')
-                            ->where('NPK', $employee->NPK)
-                            ->whereBetween('OVERTIME_DATE', [
-                                $period->start_date,
-                                $period->end_date
-                            ])
-                            ->get()
-                            ->keyBy(fn($o) => $o->OVERTIME_DATE);
-
-
-                        /*
-    |--------------------------------------------------------------------------
-    | FUNCTION VALIDATE OVERTIME
-    |--------------------------------------------------------------------------
-    */
-                        $isValidOvertime = function ($date) use ($overtimes) {
-
-                            if (!isset($overtimes[$date])) {
-                                return true; // tidak ada overtime → tetap hitung
-                            }
-
-                            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
-
-                            // NULL → tetap dihitung
-                            if ($lembur === null || $lembur === '') {
-                                return true;
-                            }
-
-                            // numeric → tetap dihitung
-                            if (is_numeric($lembur)) {
-                                return true;
-                            }
-
-                            // karakter (MA, CT, BR, S1, dll)
-                            return false;
+                        // Validasi overtime sekarang pakai data yang sudah
+                        // di-prefetch sebelum loop (lihat $isValidOvertimeFor).
+                        $isValidOvertime = function ($date) use ($employee, $isValidOvertimeFor) {
+                            return $isValidOvertimeFor($employee->NPK, $date);
                         };
 
-
                         /*
-        |--------------------------------------------------------------------------
-        | OPERATOR
-        |--------------------------------------------------------------------------
-        */
+                        |----------------------------------------------------
+                        | OPERATOR
+                        |----------------------------------------------------
+                        */
                         $lineViolations = 0;
                         foreach ($assignmentNpk as $assignment) {
                             if (empty($assignment->role)) {
@@ -1371,19 +1344,9 @@ END AS special_overtime_hours
                             }
                             if ($assignment->role == 'operator' || $assignment->role == 'supervisor') {
 
-                                /*
-            |--------------------------------------------------------------------------
-            | GET INITIAL LINE
-            |--------------------------------------------------------------------------
-            */
                                 preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
                                 $defaultLine = $matches[0] ?? null;
 
-                                /*
-            |--------------------------------------------------------------------------
-            | GET ALL LINE EFFICIENCIES
-            |--------------------------------------------------------------------------
-            */
                                 $lineefficiencies = DB::table('employee_line_assignments as ela')
                                     ->leftJoin('line_efficiencies as le', function ($join) {
                                         $join->on('le.period_id', '=', 'ela.period_id')
@@ -1421,28 +1384,18 @@ END AS special_overtime_hours
                                         'le.line_number',
                                         'le.efficiency',
                                         'le.date',
-
-                                        // work hours employee
                                         'ela.work_hours',
-
-                                        // max work hours pada line & tanggal yang sama
                                         'max_wh.max_work_hours'
                                     )
 
                                     ->orderBy('le.date')
                                     ->get();
 
-                                // dd($lineefficiencies);
-
                                 if (strtolower($assignment->role) == 'operator') {
 
-                                    $lineViolations = DB::table('sewing_violations')
-                                        ->whereBetween('tanggal', [
-                                            $period->start_date,
-                                            $period->end_date
-                                        ])
-                                        ->where('id_dept', $employee->ID_DEPT)
-                                        ->count();
+                                    // Sebelumnya: query sewing_violations per employee.
+                                    // Sekarang: lookup dari hasil prefetch by id_dept.
+                                    $lineViolations = ($sewingViolationsByDept[$employee->ID_DEPT] ?? collect())->count();
                                 } elseif (strtolower($assignment->role) == 'supervisor') {
 
                                     $leaderDept = DB::table('DEPT')
@@ -1461,45 +1414,24 @@ END AS special_overtime_hours
                                         ->where('DEPARTEMENT', 'LINE ' . $lineNumber)
                                         ->value('ID_DEPT');
 
-                                    $lineViolations = DB::table('sewing_violations')
-                                        ->whereBetween('tanggal', [
-                                            $period->start_date,
-                                            $period->end_date
-                                        ])
-                                        ->where('id_dept', $lineDeptId)
-                                        ->count();
+                                    // Sebelumnya: query sewing_violations per employee.
+                                    // Sekarang: lookup dari hasil prefetch by id_dept.
+                                    $lineViolations = ($sewingViolationsByDept[$lineDeptId] ?? collect())->count();
                                 } else {
 
                                     $lineViolations = 0;
                                 }
 
-                                // dd($employee, $lineViolations);
-
                                 foreach ($lineefficiencies as $row) {
 
-                                    /*
-                |--------------------------------------------------------------------------
-                | CHECK RESIGN (NEW)
-                |--------------------------------------------------------------------------
-                */
                                     if ($tkkDate && $row->date >= $tkkDate) {
                                         continue;
                                     }
 
-                                    /*
-                |--------------------------------------------------------------------------
-                | CHECK OVERTIME
-                |--------------------------------------------------------------------------
-                */
                                     if (!$isValidOvertime($row->date)) {
                                         continue;
                                     }
 
-                                    /*
-                |--------------------------------------------------------------------------
-                | CALCULATE INSENTIF
-                |--------------------------------------------------------------------------
-                */
                                     $lineInsentif =
                                         $this->getInsentifByEfficiency($row->efficiency, $sewingInsentifFormula) * $row->work_hours / $row->max_work_hours;
 
@@ -1507,34 +1439,29 @@ END AS special_overtime_hours
                                         $assignment->role,
                                         'sewing',
                                         $lineInsentif,
-                                        1, //karena hanya 1 line
+                                        1,
                                         $lineViolations
                                     );
                                 }
                             } else {
 
                                 /*
-            |--------------------------------------------------------------------------
-            | CHIEF / MEKANIK / MEKANIK LEADER
-            |--------------------------------------------------------------------------
-            */
+                                |--------------------------------------------
+                                | CHIEF / MEKANIK / MEKANIK LEADER
+                                |--------------------------------------------
+                                */
                                 $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
 
                                 if (!in_array($assignment->role, $validRoles)) {
-                                    // return $amount;
                                     continue;
                                 }
-
 
                                 $section = DB::table('sections')
                                     ->whereRaw('id = ?', [(int) $employee->SECTION])
                                     ->select('line_start', 'line_end')
                                     ->first();
 
-                                // dd($employee->SECTION, $section);
-
                                 if (!$section) {
-                                    // return $amount;
                                     continue;
                                 }
 
@@ -1561,35 +1488,20 @@ END AS special_overtime_hours
                                     ])
 
                                     ->select(
-                                        // 'le.line_number',
                                         'le.date'
                                     )
 
                                     ->groupBy(
-                                        'le.date',
-                                        // 'le.line_number'
+                                        'le.date'
                                     )
 
                                     ->orderBy('le.date')
                                     ->get();
 
-                                // dd($grouped);
-
-
-                                $lineViolations = DB::table('sewing_violations')
-                                    ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
-                                    ->whereBetween('sewing_violations.tanggal', [
-                                        $period->start_date,
-                                        $period->end_date
-                                    ])
-                                    ->where('d.DEPARTEMENT', 'like', 'LINE %')
-                                    ->whereRaw("
-                        CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)
-                        BETWEEN ? AND ?
-                    ", [$lineStart, $lineEnd])
-                                    ->count();
-
-                                // dd($lineViolations);
+                                // Sebelumnya: query sewing_violations per employee
+                                // dengan filter range "LINE n" pada DEPARTEMENT.
+                                // Sekarang: hitung dari hasil prefetch by line number.
+                                $lineViolations = $countSewingViolationsForLineRange($lineStart, $lineEnd);
 
                                 $collectionDay = collect([]);
                                 $collectionLines = collect([]);
@@ -1601,22 +1513,12 @@ END AS special_overtime_hours
                                     ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
                                     ->get();
 
-                                // dd($jumlahLine);
                                 foreach ($grouped as $day) {
 
-                                    /*
-                |--------------------------------------------------------------------------
-                | CHECK RESIGN (NEW)
-                |--------------------------------------------------------------------------
-                */
                                     if ($tkkDate && $day->date >= $tkkDate) {
                                         continue;
                                     }
-                                    /*
-                |----------------------------------
-                | CHECK OVERTIME
-                |----------------------------------
-                */
+
                                     if (!$isValidOvertime($day->date)) {
                                         continue;
                                     }
@@ -1639,11 +1541,7 @@ END AS special_overtime_hours
                                         }
 
                                         $collectionLines->push($totalLineInsentif);
-
-                                        // dd($grouped, $lines, $totalLineInsentif, $amount);
                                     }
-
-                                    // dd($grouped, $collectionLines);
 
                                     $amount += $this->calculateRoleSewingInsentif(
                                         $assignment->role,
@@ -1655,16 +1553,10 @@ END AS special_overtime_hours
 
                                     $collectionDay->push($amount);
                                 }
-                                // dd($collectionDay->values()->toJson(), $collectionLines->values()->toJson());
                             }
                         }
                     } else if ($component->code === 'pad_insentif') {
 
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD ASSIGNMENT
-    |--------------------------------------------------------------------------
-    */
                         $query = DB::table('pad_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
@@ -1676,84 +1568,21 @@ END AS special_overtime_hours
                             ? $query->get()
                             : $query->limit(1)->get();
 
-                        // $run->update([
-                        //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                        //     'progress' => 60
-                        // ]);
-
                         $amount = 0;
 
-                        /*
-        |--------------------------------------------------------------------------
-        | GET MUTATIONS EMPLOYEE
-        |--------------------------------------------------------------------------
-        */
-                        $mutations = DB::table('employee_mutations')
-                            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
-                            ->where('npk', $employee->NPK)
-                            ->orderBy('date')
-                            ->get();
+                        // NOTE: $mutations (employee_mutations) dihapus — dead code,
+                        // tidak pernah dipakai di blok ini.
 
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD OVERTIME (ONLY ONCE)
-    |--------------------------------------------------------------------------
-    */
-                        $overtimes = DB::table('overtimes')
-                            ->where('NPK', $employee->NPK)
-                            ->whereBetween('OVERTIME_DATE', [
-                                $period->start_date,
-                                $period->end_date
-                            ])
-                            ->get()
-                            ->keyBy(fn($o) => $o->OVERTIME_DATE);
-
-
-                        /*
-    |--------------------------------------------------------------------------
-    | VALIDATE OVERTIME
-    |--------------------------------------------------------------------------
-    */
-                        $isValidOvertime = function ($date) use ($overtimes) {
-
-                            // tidak ada record → tetap dihitung
-                            if (!isset($overtimes[$date])) {
-                                return true;
-                            }
-
-                            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
-
-                            // NULL / kosong → tetap dihitung
-                            if ($lembur === null || $lembur === '') {
-                                return true;
-                            }
-
-                            // angka → tetap dihitung
-                            if (is_numeric($lembur)) {
-                                return true;
-                            }
-
-                            // MA / CT / BR / S1 dll → skip
-                            return false;
+                        $isValidOvertime = function ($npk, $date) use ($isValidOvertimeFor) {
+                            return $isValidOvertimeFor($npk, $date);
                         };
 
-
-                        // dd($assignments);
-
-
-                        /*
-            |--------------------------------------------------------------------------
-            | OPERATOR
-            |--------------------------------------------------------------------------
-            */
                         foreach ($assignments as $assignment) {
 
                             if (empty($assignment->role)) {
                                 continue;
                             }
                             if ($assignment->role === 'operator') {
-
-                                // dd($rows);
 
                                 if (!$isValidOvertime($assignment->npk, $assignment->date)) {
                                     continue;
@@ -1765,11 +1594,7 @@ END AS special_overtime_hours
                                 );
 
                                 $amount += $rate * $assignment->piece;
-                            }/*
-        |--------------------------------------------------------------------------
-        | NON OPERATOR (SPV / LEADER / HELPER)
-        |--------------------------------------------------------------------------
-        */ else {
+                            } else {
 
                                 $employeeDates = DB::table('pad_efficiencies')
                                     ->where('period_id', $period->id)
@@ -1777,16 +1602,8 @@ END AS special_overtime_hours
                                     ->pluck('date')
                                     ->unique()
                                     ->toArray();
-                                // dd($employee);
 
-                                /*
-            |----------------------------------
-            | TOTAL DEPT INSENTIF
-            | ONLY VALID OPERATOR
-            |----------------------------------
-            */
                                 $totalDeptInsentif = 0;
-
 
                                 $operators = DB::table('pad_efficiencies')
                                     ->where('period_id', $period->id)
@@ -1795,11 +1612,7 @@ END AS special_overtime_hours
                                     ->whereIn('date', $employeeDates)
                                     ->get();
 
-                                // dd($operators);
-
-
                                 foreach ($operators as $operator) {
-                                    // FILTER HANYA NUMERATOR
                                     if (!$isValidOvertime($operator->npk, $operator->date)) {
                                         continue;
                                     }
@@ -1810,15 +1623,8 @@ END AS special_overtime_hours
                                     );
 
                                     $totalDeptInsentif += $rate * $operator->piece;
-
-                                    // dd($totalDeptInsentif);
                                 }
 
-                                /*
-                |----------------------------------
-                | DENOMINATOR (ALL OPERATOR)
-                |----------------------------------
-                */
                                 $jumlahOperator = DB::table('pad_efficiencies as pe')
                                     ->where('pe.period_id', $period->id)
                                     ->whereIn('pe.date', $employeeDates)
@@ -1845,81 +1651,22 @@ END AS special_overtime_hours
                         $tkkDate = !empty($employee->TKK)
                             ? Carbon::parse($employee->TKK)->format('Y-m-d')
                             : null;
-                        // $run->update([
-                        //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                        //     'progress' => 60
-                        // ]);
-
 
                         $amount = 0;
 
-                        /*
-        |--------------------------------------------------------------------------
-        | GET MUTATIONS EMPLOYEE
-        |--------------------------------------------------------------------------
-        */
-                        $mutations = DB::table('employee_mutations')
-                            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
-                            ->where('npk', $employee->NPK)
-                            ->orderBy('date')
-                            ->get();
+                        // NOTE: $mutations dihapus — dead code, tidak dipakai.
 
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD OVERTIME (ONLY ONCE)
-    |--------------------------------------------------------------------------
-    */
-                        $overtimes = DB::table('overtimes')
-                            ->where('NPK', $employee->NPK)
-                            ->whereBetween('OVERTIME_DATE', [
-                                $period->start_date,
-                                $period->end_date
-                            ])
-                            ->get()
-                            ->keyBy(fn($o) => $o->OVERTIME_DATE);
-
-
-                        /*
-    |--------------------------------------------------------------------------
-    | VALIDATE OVERTIME
-    |--------------------------------------------------------------------------
-    */
-                        $isValidOvertime = function ($date) use ($overtimes) {
-
-                            // tidak ada record → tetap dihitung
-                            if (!isset($overtimes[$date])) {
-                                return true;
-                            }
-
-                            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
-
-                            // NULL / kosong → tetap dihitung
-                            if ($lembur === null || $lembur === '') {
-                                return true;
-                            }
-
-                            // angka → tetap dihitung
-                            if (is_numeric($lembur)) {
-                                return true;
-                            }
-
-                            // MA / CT / BR / S1 dll → skip
-                            return false;
+                        $isValidOvertime = function ($date) use ($employee, $isValidOvertimeFor) {
+                            return $isValidOvertimeFor($employee->NPK, $date);
                         };
 
-
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD CUTTING EFFICIENCY
-    |--------------------------------------------------------------------------
-    */
                         $employeeDates = DB::table('employee_cutting_assignments')
                             ->where('period_id', $period->id)
                             ->where('npk', $employee->NPK)
                             ->pluck('start_date')
                             ->unique()
                             ->toArray();
-                        // dd($employeeDates);
+
                         $cuttingEfficiencies = DB::table('cutting_efficiencies')
                             ->where('period_id', $period->id)
                             ->whereBetween('date', [
@@ -1929,16 +1676,7 @@ END AS special_overtime_hours
                             ->whereIn('date', $employeeDates)
                             ->get();
 
-                        // dd($cuttingEfficiencies);
-
-
-                        /*
-    |--------------------------------------------------------------------------
-    | CALCULATE INSENTIF
-    |--------------------------------------------------------------------------
-    */
                         foreach ($assignmentNpk as $assignment) {
-                            // dd($assignmentNpk, $assignment->role);
                             if (empty($assignment->role)) {
                                 continue;
                             }
@@ -1946,30 +1684,16 @@ END AS special_overtime_hours
                                 if ($tkkDate && $row->date >= $tkkDate) {
                                     continue;
                                 }
-                                /*
-        |----------------------------------
-        | CHECK OVERTIME
-        |----------------------------------
-        */
+
                                 if (!$isValidOvertime($row->date)) {
                                     continue;
                                 }
 
-                                /*
-        |----------------------------------
-        | GET INSENTIF BY EFFICIENCY
-        |----------------------------------
-        */
                                 $insentif = $this->getInsentifByEfficiency(
                                     $row->efficiency,
                                     $cuttingInsentifFormula
                                 );
 
-                                /*
-        |----------------------------------
-        | ADD AMOUNT BASED ROLE
-        |----------------------------------
-        */
                                 $amount += $this->calculateRoleCuttingInsentif(
                                     $assignment->role,
                                     'cutting',
@@ -1978,13 +1702,7 @@ END AS special_overtime_hours
                             }
                         }
                     } else if ($component->code === 'heat_insentif') {
-                        // $collectionHeat = collect([]);
 
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD ASSIGNMENT
-    |--------------------------------------------------------------------------
-    */
                         $query = DB::table('heat_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
@@ -1996,83 +1714,20 @@ END AS special_overtime_hours
                             ? $query->get()
                             : $query->limit(1)->get();
 
-                        // dd($assignments);
-                        // $run->update([
-                        //     'status' => 'Calculation for ' . $employee->NPK . ' - ' . $component->name,
-                        //     'progress' => 60
-                        // ]);
                         $amount = 0;
 
-                        /*
-        |--------------------------------------------------------------------------
-        | GET MUTATIONS EMPLOYEE
-        |--------------------------------------------------------------------------
-        */
-                        $mutations = DB::table('employee_mutations')
-                            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
-                            ->where('npk', $employee->NPK)
-                            ->orderBy('date')
-                            ->get();
+                        // NOTE: $mutations dihapus — dead code, tidak dipakai.
 
-                        /*
-    |--------------------------------------------------------------------------
-    | LOAD OVERTIME (ONLY ONCE)
-    |--------------------------------------------------------------------------
-    */
-                        $overtimes = DB::table('overtimes')
-                            ->where('NPK', $employee->NPK)
-                            ->whereBetween('OVERTIME_DATE', [
-                                $period->start_date,
-                                $period->end_date
-                            ])
-                            ->get()
-                            ->keyBy(fn($o) => $o->OVERTIME_DATE);
-
-
-                        /*
-    |--------------------------------------------------------------------------
-    | VALIDATE OVERTIME
-    |--------------------------------------------------------------------------
-    */
-                        $isValidOvertime = function ($date) use ($overtimes) {
-
-                            // tidak ada record → tetap dihitung
-                            if (!isset($overtimes[$date])) {
-                                return true;
-                            }
-
-                            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
-
-                            // NULL / kosong → tetap dihitung
-                            if ($lembur === null || $lembur === '') {
-                                return true;
-                            }
-
-                            // angka → tetap dihitung
-                            if (is_numeric($lembur)) {
-                                return true;
-                            }
-
-                            // MA / CT / BR / S1 dll → skip
-                            return false;
+                        $isValidOvertime = function ($npk, $date) use ($isValidOvertimeFor) {
+                            return $isValidOvertimeFor($npk, $date);
                         };
 
-                        // dd($assignments);
-
-
-                        /*
-            |--------------------------------------------------------------------------
-            | OPERATOR
-            |--------------------------------------------------------------------------
-            */
                         foreach ($assignments as $assignment) {
 
                             if (empty($assignment->role)) {
                                 continue;
                             }
                             if ($assignment->role === 'operator') {
-
-                                // dd($rows);
 
                                 if (!$isValidOvertime($assignment->npk, $assignment->date)) {
                                     continue;
@@ -2084,29 +1739,15 @@ END AS special_overtime_hours
                                 );
 
                                 $amount += $rate * $assignment->piece;
-                            }
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | NON OPERATOR (SPV / LEADER / HELPER)
-                            |--------------------------------------------------------------------------
-                            */ else {
+                            } else {
                                 $employeeDates = DB::table('heat_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('npk', $employee->NPK)
                                     ->pluck('date')
                                     ->unique()
                                     ->toArray();
-                                // dd($employee);
 
-                                /*
-                                |----------------------------------
-                                | TOTAL DEPT INSENTIF
-                                | ONLY VALID OPERATOR
-                                |----------------------------------
-                                */
                                 $totalDeptInsentif = 0;
-
 
                                 $operators = DB::table('heat_efficiencies')
                                     ->where('period_id', $period->id)
@@ -2115,11 +1756,7 @@ END AS special_overtime_hours
                                     ->whereIn('date', $employeeDates)
                                     ->get();
 
-                                // dd($operators);
-
-
                                 foreach ($operators as $operator) {
-                                    // FILTER HANYA NUMERATOR
                                     if (!$isValidOvertime($operator->npk, $operator->date)) {
                                         continue;
                                     }
@@ -2130,15 +1767,8 @@ END AS special_overtime_hours
                                     );
 
                                     $totalDeptInsentif += $rate * $operator->piece;
-
-                                    // dd($totalDeptInsentif);
                                 }
 
-                                /*
-                                |----------------------------------
-                                | DENOMINATOR (ALL OPERATOR)
-                                |----------------------------------
-                                */
                                 $jumlahOperator = DB::table('heat_efficiencies as he')
                                     ->where('he.period_id', $period->id)
                                     ->whereIn('he.date', $employeeDates)
@@ -2154,9 +1784,7 @@ END AS special_overtime_hours
                                     $jumlahOperator
                                 );
                             }
-                            // $collectionHeat->push($jumlahOperator, $totalDeptInsentif, $amount);
                         }
-                        // dd($collectionHeat);
                     } else {
                         $amount = $this->evaluateFormula($component->formula, $results, $inputVariables);
                     }
@@ -2165,9 +1793,6 @@ END AS special_overtime_hours
                 // 🔹 PERBAIKAN: bulatkan setiap komponen
                 $amount = round((float) $amount, 0);
                 $results[$component->code] = $amount;
-                // $results['late_minutes'] = $employee->late_minutes;
-
-                // dd($results);
 
                 if ($component->type === 'earning') {
                     $grandTotal += $amount;
@@ -2179,20 +1804,31 @@ END AS special_overtime_hours
             $grandTotal = round($grandTotal, 0);
 
             if (!$isCheck) {
-                PayrollRunDetail::create([
+                $payrollRunDetailRows[] = [
                     'run_id'        => $run->id,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
-                    'components'    => $results,
-                    'total_salary'  => $grandTotal
-                ]);
+                    'components'    => json_encode($results),
+                    'total_salary'  => $grandTotal,
+                    'created_at'    => $now,
+                    'updated_at'    => $now,
+                ];
+
+                // Flush batch insert tiap 500 baris supaya tidak terlalu besar
+                // dalam satu query, sambil tetap jauh lebih sedikit query
+                // dibanding insert satu-satu seperti sebelumnya.
+                if (count($payrollRunDetailRows) >= 500) {
+                    PayrollRunDetail::insert($payrollRunDetailRows);
+                    $payrollRunDetailRows = [];
+                }
             }
 
             $totalPayroll += $grandTotal;
 
             if ($isCheck) {
                 $payrollResults[] = [
-                    // 'run_id'        => $run->id,
+                    'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
+                    'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                     'absence_days_asli'   => (float) $employee->absence_days,
                     'absence_days'   => (float) $absenceDays,
                     'sick_days'   => (float) $employee->sick_days,
@@ -2210,13 +1846,15 @@ END AS special_overtime_hours
                     'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                     'bpjsketex' => (float) $employee->percentket,
                     'percentage'     => (float) $employee->percentage,
-                    // Basis BPJS
                     'bpjs_base' => (
                         ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                         ? (
                             Str::ucfirst(Str::lower($employee->type)) === 'Contract'
                             ? (float) $employee->salary
-                            : ((float) $employee->daily_salary * (float) $count_days)
+                            : ((float) $employee->salary)
+                            // Str::ucfirst(Str::lower($employee->type)) === 'Contract'
+                            // ? (float) $employee->salary
+                            // : ((float) $employee->daily_salary * (float) $count_days)
                         )
                         : (
                             (
@@ -2227,11 +1865,8 @@ END AS special_overtime_hours
                             + (float) $employee->allowance
                         )
                     ),
-                    // JP hanya untuk non expat
                     'bpjsjpex' => $employee->IS_EXPAT == '1' ? 0 : 1,
-                    // JHT selalu 2%
                     'bpjsjhtex' => 2,
-                    // 'overtime_hours' => $employee->overtime_hours,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'tanggungan' => $employee->TANGGUNGAN,
@@ -2251,6 +1886,12 @@ END AS special_overtime_hours
             }
         }
 
+        // Flush sisa baris yang belum mencapai batch size 500
+        if (!$isCheck && !empty($payrollRunDetailRows)) {
+            PayrollRunDetail::insert($payrollRunDetailRows);
+            $payrollRunDetailRows = [];
+        }
+
         if (!$isCheck) {
             $run->update([
                 'employee_count' => $employees->count(),
@@ -2259,7 +1900,6 @@ END AS special_overtime_hours
                 'status'         => 'Payroll calculation completed'
             ]);
         }
-
 
         /*
         |--------------------------------------------------------------------------
@@ -2301,7 +1941,6 @@ END AS special_overtime_hours
         }
     }
 
-
     private function evaluateFormula($formula, $results, $inputVariables)
     {
         $variables = array_merge($inputVariables, $results);
@@ -2340,12 +1979,6 @@ END AS special_overtime_hours
 
         $jumlahLine = max($jumlahLine, 1);
 
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
         $formula = Cache::remember(
             "insentif_formula_{$dept}_{$role}",
             300,
@@ -2357,21 +1990,9 @@ END AS special_overtime_hours
             }
         );
 
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
         if (!$formula) {
             return $totalLineInsentif;
         }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
 
         $variables = [
             'totalLineInsentif' => $totalLineInsentif,
@@ -2382,12 +2003,6 @@ END AS special_overtime_hours
         foreach ($variables as $key => $value) {
             $formula = str_replace($key, $value, $formula);
         }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
 
         try {
 
@@ -2411,12 +2026,6 @@ END AS special_overtime_hours
 
         $jumlahOperator = max($jumlahOperator, 1);
 
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
         $formula = Cache::remember(
             "insentif_formula_{$dept}_{$role}",
             300,
@@ -2428,21 +2037,9 @@ END AS special_overtime_hours
             }
         );
 
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
         if (!$formula) {
             return $totalDeptInsentif;
         }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
 
         $variables = [
             'totalDeptInsentif' => $totalDeptInsentif,
@@ -2453,15 +2050,8 @@ END AS special_overtime_hours
             $formula = str_replace($key, $value, $formula);
         }
 
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
         try {
 
-            // hanya izinkan karakter matematika
             if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
                 throw new \Exception('Invalid formula');
             }
@@ -2482,12 +2072,6 @@ END AS special_overtime_hours
 
         $jumlahOperator = max($jumlahOperator, 1);
 
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
         $formula = Cache::remember(
             "insentif_formula_{$dept}_{$role}",
             300,
@@ -2499,21 +2083,9 @@ END AS special_overtime_hours
             }
         );
 
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
         if (!$formula) {
             return $totalDeptInsentif;
         }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
 
         $variables = [
             'totalDeptInsentif' => $totalDeptInsentif,
@@ -2524,15 +2096,8 @@ END AS special_overtime_hours
             $formula = str_replace($key, $value, $formula);
         }
 
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
-
         try {
 
-            // hanya izinkan karakter matematika
             if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
                 throw new \Exception('Invalid formula');
             }
@@ -2550,12 +2115,6 @@ END AS special_overtime_hours
         $insentif
     ) {
 
-        /*
-    |--------------------------------------------------------------------------
-    | GET FORMULA FROM DB (CACHE)
-    |--------------------------------------------------------------------------
-    */
-
         $formula = Cache::remember(
             "insentif_formula_{$dept}_{$role}",
             300,
@@ -2567,21 +2126,9 @@ END AS special_overtime_hours
             }
         );
 
-        /*
-    |--------------------------------------------------------------------------
-    | DEFAULT FALLBACK
-    |--------------------------------------------------------------------------
-    */
-
         if (!$formula) {
             return $insentif;
         }
-
-        /*
-    |--------------------------------------------------------------------------
-    | VARIABLE REPLACEMENT
-    |--------------------------------------------------------------------------
-    */
 
         $variables = [
             'insentif' => $insentif,
@@ -2590,12 +2137,6 @@ END AS special_overtime_hours
         foreach ($variables as $key => $value) {
             $formula = str_replace($key, $value, $formula);
         }
-
-        /*
-    |--------------------------------------------------------------------------
-    | SAFE EVALUATION
-    |--------------------------------------------------------------------------
-    */
 
         try {
 
