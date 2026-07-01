@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Permission;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Helper singleton untuk cek permission per route name.
@@ -15,10 +16,6 @@ class RoutePermission
     /** @var array<string, bool> */
     protected static array $cache = [];
 
-    /**
-     * Cek apakah user yang sedang login memiliki permission untuk $routeName.
-     * Admin selalu lolos.
-     */
     public static function check(string $routeName): bool
     {
         if (isset(self::$cache[$routeName])) {
@@ -31,24 +28,31 @@ class RoutePermission
             return self::$cache[$routeName] = false;
         }
 
-        // Admin selalu lolos
-        if ($user->roles()->where('name', 'Admin')->exists()) {
+        // Gunakan hasRole() dari Spatie — dijamin benar sesuai konfigurasi Spatie
+        if ($user->hasRole('Admin')) {
             return self::$cache[$routeName] = true;
         }
 
-        // Cari permission di tabel
+        // Cari permission di tabel custom kita
         $permission = Permission::where('route_name', $routeName)->first();
 
         if (!$permission) {
-            // Belum di-seed = permissive (izinkan), konsisten dengan CheckPermission middleware
+            // Belum di-seed = permissive (konsisten dengan middleware)
             return self::$cache[$routeName] = true;
         }
 
-        // Cek apakah salah satu role user punya permission ini
-        $hasAccess = $user->roles()
-            ->whereHas('permissions', function ($q) use ($permission) {
-                $q->where('permissions.id', $permission->id);
-            })
+        // Ambil semua role ID yang dimiliki user via Spatie
+        $userRoleIds = $user->roles()->pluck('id');
+
+        if ($userRoleIds->isEmpty()) {
+            return self::$cache[$routeName] = false;
+        }
+
+        // Query LANGSUNG ke tabel role_permission kita — bypass ORM ambiguity
+        // antara Spatie's role model dan App\Models\Role kita
+        $hasAccess = DB::table('role_permission')
+            ->where('permission_id', $permission->id)
+            ->whereIn('role_id', $userRoleIds)
             ->exists();
 
         return self::$cache[$routeName] = $hasAccess;
