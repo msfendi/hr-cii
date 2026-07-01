@@ -23,13 +23,23 @@ class HeatInsentifMasterController extends Controller
 {
     public function index()
     {
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
         $data = DB::table('heat_efficiencies as h')
             ->join('payroll_periods as pp', 'h.period_id', '=', 'pp.id')
-            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'h.npk')
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('h.npk', '=', 'bio.NPK');
+            })
             ->select(
                 'h.id',
                 'h.npk',
-                'b.NAMA_KARYAWAN as name',
+                'bio.NAMA_KARYAWAN as name',
                 'h.role',
                 'pp.name as period',
                 'h.efficiency',
@@ -49,9 +59,20 @@ class HeatInsentifMasterController extends Controller
 
     public function getData($period)
     {
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
         $data = DB::table('heat_efficiencies as h')
             ->join('payroll_periods as pp', 'h.period_id', '=', 'pp.id')
-            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'h.npk')
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('ela.NPK', '=', 'bio.NPK');
+            })
             ->select(
                 'h.id',
                 'h.npk',
