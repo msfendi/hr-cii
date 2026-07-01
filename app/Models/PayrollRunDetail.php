@@ -11,6 +11,7 @@ class PayrollRunDetail extends Model
         'run_id',
         'employee_npk',
         'employee_name',
+        'employee_dept',
         'components',
         'total_salary'
     ];

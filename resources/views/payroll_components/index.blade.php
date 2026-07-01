@@ -20,9 +20,11 @@
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <h1 class="h3 mb-0 text-gray-800">Daftar Payroll Component</h1>
                         <div>
+                            @canRoute('payroll-components.create')
                             <a href="{{ route('payroll-components.create') }}"
                                 class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                                     class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Component</a>
+                            @endcanRoute
                         </div>
                     </div>
 
@@ -101,16 +103,20 @@
                                                     @endif
                                                 </td>
                                                 <td class="text-center">
+                                                    @canRoute('payroll-components.edit')
                                                     <a href="{{ route('payroll-components.edit', ['id' => $component->id]) }}"
                                                         class="btn btn-primary btn-circle btn-sm">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
+                                                    @endcanRoute
+                                                    @canRoute('payroll-components.delete')
                                                     <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_comp"
                                                         data-delete-link="{{ route('payroll-components.delete', ['id' => $component->id]) }}"
                                                         data-payroll_comp-name="{{ $component->name }}" data-toggle="modal"
                                                         data-target="#deleteModal">
                                                         <i class="fas fa-trash"></i>
                                                     </a>
+                                                    @endcanRoute
                                                 </td>
                                             </tr>
                                         @endforeach

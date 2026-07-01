@@ -108,14 +108,14 @@ if (count($employees) > 0) {
         @endif
     </div>
 
-    <div class="table-container">
-        <table>
-            @php
+    @php
                 // Group by KODE_BAGIAN first
                 $groupedByDept = collect($employees)->groupBy('KODE_BAGIAN');
-            @endphp
+                @endphp
             
             @foreach($groupedByDept as $dept => $deptEmployees)
+            <div class="table-container">
+                <table>
                 <!-- Table Header for each Department -->
                 <tr>
                     <th>Dept</th>
@@ -124,7 +124,7 @@ if (count($employees) > 0) {
                     @for($date = 1; $date <= $getTotalDays; $date++)
                         <th>{{ $date }}</th>
                     @endfor
-                    <th>Keterangan</th>
+                    <th>#</th>
                 </tr>
                 
                 @php
@@ -144,6 +144,31 @@ if (count($employees) > 0) {
                                 $recordsByDate[$dayNum] = $rec;
                             }
                         }
+
+                        $isBrMap = [];
+                        $isOutMap = [];
+                        for($d = 1; $d <= $getTotalDays; $d++) {
+                            $isBrMap[$d] = false;
+                            $isOutMap[$d] = false;
+                            
+                            if (!empty($firstRecord->TMK)) {
+                                $tmkCarbon = \Carbon\Carbon::parse($firstRecord->TMK);
+                                if ($tmkCarbon->format('Y') == $year && $tmkCarbon->format('m') == $month) {
+                                    if ($d < (int) $tmkCarbon->format('d')) $isBrMap[$d] = true;
+                                } elseif ($tmkCarbon->format('Y-m') > $year . '-' . $month) {
+                                    $isBrMap[$d] = true;
+                                }
+                            }
+                            
+                            if (!empty($firstRecord->TKK)) {
+                                $tkkCarbon = \Carbon\Carbon::parse($firstRecord->TKK);
+                                if ($tkkCarbon->format('Y') == $year && $tkkCarbon->format('m') == $month) {
+                                    if ($d >= (int) $tkkCarbon->format('d')) $isOutMap[$d] = true;
+                                } elseif ($tkkCarbon->format('Y-m') < $year . '-' . $month) {
+                                    $isOutMap[$d] = true;
+                                }
+                            }
+                        }
                     @endphp
                     
                     <!-- Row 1: Jam Masuk -->
@@ -155,7 +180,9 @@ if (count($employees) > 0) {
                         @for($date = 1; $date <= $getTotalDays; $date++)
                             @php $record = $recordsByDate[$date] ?? null; @endphp
                             <td>
-                                @if($record)
+                                @if($isBrMap[$date] || $isOutMap[$date])
+                                    -
+                                @elseif($record)
                                     {{ $record->JAM_PAGI != null ? $record->JAM_PAGI : ($record->JAM_SIANG != null ? $record->JAM_SIANG : '-') }}
                                 @else
                                     -
@@ -170,7 +197,9 @@ if (count($employees) > 0) {
                         @for($date = 1; $date <= $getTotalDays; $date++)
                             @php $record = $recordsByDate[$date] ?? null; @endphp
                             <td>
-                                @if($record)
+                                @if($isBrMap[$date] || $isOutMap[$date])
+                                    -
+                                @elseif($record)
                                     {{ $record->JAM_MALAM != null ? $record->JAM_MALAM : ($record->JAM_SIANG != null ? $record->JAM_SIANG : '-') }}
                                 @else
                                     -
@@ -189,7 +218,11 @@ if (count($employees) > 0) {
                                 $isLiburNasional = in_array($date, array_map('intval', $days));
                             @endphp
                             <td>
-                                @if($record)
+                                @if($isBrMap[$date])
+                                    BR
+                                @elseif($isOutMap[$date])
+                                    OUT
+                                @elseif($record)
                                     @if($isWeekend && ($record->JAM_PAGI != null || $record->JAM_SIANG != null || $record->JAM_MALAM != null))
                                         MSK
                                     @elseif($isWeekend && $record->KETERANGAN != 'CT')
@@ -211,8 +244,8 @@ if (count($employees) > 0) {
                         <td>Keterangan</td>
                     </tr>
                 @endforeach
-            @endforeach
-        </table>
-    </div>
+            </table>
+        </div>
+        @endforeach
 </body>
 </html>

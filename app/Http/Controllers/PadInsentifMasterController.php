@@ -64,6 +64,8 @@ class PadInsentifMasterController extends Controller
 
     public function getData($period)
     {
+        $periods = PayrollPeriod::findOrFail($period);
+        $periodEnd = $periods->end_date;
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
             ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
@@ -72,6 +74,20 @@ class PadInsentifMasterController extends Controller
                     ->table('BIODATA_KELUAR')
                     ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
             );
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
 
         $data = DB::table('pad_efficiencies as p')
             ->join('payroll_periods as pp', 'p.period_id', '=', 'pp.id')
@@ -79,8 +95,24 @@ class PadInsentifMasterController extends Controller
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('p.NPK', '=', 'bio.NPK');
             })
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('bio.NPK', '=', 'em.npk');
+            })
 
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE bio.ID_DEPT
+            END
+        ")
+                );
+            })
+
             ->select(
                 'p.id',
                 'p.npk',
@@ -282,6 +314,20 @@ class PadInsentifMasterController extends Controller
     | EMPLOYEE SOURCE (TETAP SAMA LOGIC)
     |--------------------------------------------------------------------------
     */
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
 
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
@@ -297,7 +343,23 @@ class PadInsentifMasterController extends Controller
             ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
                 $join->on('p.NPK', '=', 'anpk.npk');
             })
-            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('emp.NPK', '=', 'em.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE emp.ID_DEPT
+            END
+        ")
+                );
+            })
             ->joinSub(
                 DB::table('insentif_role_formulas')
                     ->select('role')

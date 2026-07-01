@@ -36,6 +36,12 @@ class LineInsentifMasterController extends Controller
                     ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
             );
 
+
+        $periods = PayrollPeriod::select('id', 'name')
+            ->where('is_closed', 0)
+            ->orderBy('id', 'desc')
+            ->get();
+
         $data = DB::table('employee_line_assignments as ela')
 
             ->leftJoin('line_efficiencies as l', function ($join) {
@@ -65,19 +71,14 @@ class LineInsentifMasterController extends Controller
             ->where('pp.is_closed', 0)
             ->orderBy('l.date')
             ->get();
-
-        // dd($data);
-
-        $periods = PayrollPeriod::select('id', 'name')
-            ->where('is_closed', 0)
-            ->orderBy('id', 'desc')
-            ->get();
-        // dd($data);
         return view('line_insentif_master.index', compact('data', 'periods'));
     }
 
     public function getData($period)
     {
+        $periods = PayrollPeriod::findOrFail($period);
+        $periodEnd = $periods->end_date;
+
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
             ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
@@ -86,6 +87,21 @@ class LineInsentifMasterController extends Controller
                     ->table('BIODATA_KELUAR')
                     ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
             );
+
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
 
         $data = DB::table('employee_line_assignments as ela')
 
@@ -100,7 +116,24 @@ class LineInsentifMasterController extends Controller
                 $join->on('ela.NPK', '=', 'bio.NPK');
             })
 
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
+
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('bio.NPK', '=', 'em.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE bio.ID_DEPT
+            END
+        ")
+                );
+            })
 
             ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
             ->select(
@@ -304,6 +337,30 @@ class LineInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     */
 
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
+
+
+        $employeeViolationSummary = DB::table('employee_violations')
+            ->select(
+                'npk',
+                DB::raw('SUM(percentage) as violation_percentage')
+            )
+            ->where('period_id', $period->id)
+            ->groupBy('npk');
+
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
 
@@ -318,7 +375,27 @@ class LineInsentifMasterController extends Controller
             ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
                 $join->on('p.NPK', '=', 'anpk.npk');
             })
-            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('emp.NPK', '=', 'em.npk');
+            })
+            ->leftJoinSub($employeeViolationSummary, 'ev', function ($join) {
+                $join->on('emp.NPK', '=', 'ev.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE emp.ID_DEPT
+            END
+        ")
+                );
+            })
             ->leftJoin('sections as s', function ($join) {
                 $join->on(
                     DB::raw('TRY_CAST(emp.SECTION AS BIGINT)'),
@@ -357,7 +434,15 @@ class LineInsentifMasterController extends Controller
                 'd.DEPARTEMENT as DEPARTEMENT',
                 'emp.SECTION as SECTION',
                 's.line_start',
-                's.line_end'
+                's.line_end',
+                DB::raw('COALESCE(ev.violation_percentage, 0) as violation_percentage'),
+                DB::raw("
+                CASE
+                    WHEN em.from_dept IS NOT NULL
+                    THEN em.from_dept
+                    ELSE emp.ID_DEPT
+                END as payroll_dept
+                "),
             );
 
         $employees = DB::connection('cii')
@@ -664,7 +749,8 @@ class LineInsentifMasterController extends Controller
                     'sewing',
                     $lineInsentif,
                     1, //karena hanya 1 line
-                    $lineViolations
+                    $lineViolations,
+                    $employee->violation_percentage
                 );
             }
         } else {
@@ -803,7 +889,8 @@ class LineInsentifMasterController extends Controller
                     'sewing',
                     $totalLineInsentif,
                     $jumlahLine->first()->jumlah_line,
-                    $lineViolations
+                    $lineViolations,
+                    $employee->violation_percentage
                 );
 
                 $collectionDay->push($amount);
@@ -840,7 +927,8 @@ class LineInsentifMasterController extends Controller
         $dept,
         $totalLineInsentif,
         $jumlahLine,
-        $violationsCount
+        $violationsCount,
+        $employeeViolations,
     ) {
 
         $jumlahLine = max($jumlahLine, 1);
@@ -882,7 +970,8 @@ class LineInsentifMasterController extends Controller
         $variables = [
             'totalLineInsentif' => $totalLineInsentif,
             'jumlahLine'        => $jumlahLine,
-            'violationsCount'   => $violationsCount ?? 0
+            'violationsCount'   => $violationsCount ?? 0,
+            'violation_percentage' => $employeeViolations ?? 0
         ];
 
         foreach ($variables as $key => $value) {

@@ -19,11 +19,13 @@
                     <h1 class="h3 mb-0 text-gray-800">BPJS Exception</h1>
 
                     <div>
+                          @canRoute('bpjs-exceptions.create')
                         <a href="{{ route('bpjs-exceptions.create') }}"
                            class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
                             <i class="fas fa-plus fa-sm text-white-50"></i>
                             Create BPJS Exception
                         </a>
+                        @endcanRoute
                     </div>
                 </div>
 
@@ -80,11 +82,14 @@
 
                                         <td class="text-center">
 
+                                            @canRoute('bpjs-exceptions.edit')
                                             <a href="{{ route('bpjs-exceptions.edit',$row->id) }}"
                                                 class="btn btn-primary btn-circle btn-sm">
                                                 <i class="fas fa-edit"></i>
                                             </a>
+                                            @endcanRoute
 
+                                            @canRoute('bpjs-exceptions.destroy')
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete"
                                                 data-delete-link="{{ route('bpjs-exceptions.destroy',$row->id) }}"
                                                 data-name="{{ $row->npk }}"
@@ -92,7 +97,7 @@
                                                 data-target="#deleteModal">
                                                 <i class="fas fa-trash"></i>
                                             </a>
-
+                                            @endcanRoute
                                         </td>
                                     </tr>
                                     @endforeach

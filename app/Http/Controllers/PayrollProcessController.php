@@ -849,7 +849,7 @@ class PayrollProcessController extends Controller
                 'emp',
                 fn($j) => $j->on('emp.NPK', '=', 'prd.employee_npk')
             )
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
             ->leftJoin('PKWT as p', 'p.NPK', '=', 'emp.NPK')
             ->where('prd.run_id', $id)
             ->select(

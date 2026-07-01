@@ -40,6 +40,7 @@ use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
 use App\Http\Controllers\EmployeeShiftController;
 use App\Http\Controllers\EmployeeThrController;
+use App\Http\Controllers\EmployeeViolationController;
 use App\Http\Controllers\EpoController;
 use App\Http\Controllers\EvaluationEmployeeController;
 use App\Http\Controllers\EvaluationJobscopeController;
@@ -876,6 +877,15 @@ Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController:
 Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'permission']);
 Route::get('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'permission']);
 Route::get('/employee-6s-assignment/{period}/check', [Employee6sAssignmentController::class, 'check'])->name('employee6s.check')->middleware(['auth', 'permission']);
+
+Route::prefix('employee-violation')->name('employee-violation.')->group(function () {
+    Route::get('/', [EmployeeViolationController::class, 'index'])->name('index')->middleware(['auth', 'permission']);
+    Route::get('/create', [EmployeeViolationController::class, 'create'])->name('create')->middleware(['auth', 'permission']);
+    Route::post('/store', [EmployeeViolationController::class, 'store'])->name('store')->middleware(['auth', 'permission']);
+    Route::get('/edit/{id}', [EmployeeViolationController::class, 'edit'])->name('edit')->middleware(['auth', 'permission']);
+    Route::put('/update/{id}', [EmployeeViolationController::class, 'update'])->name('update')->middleware(['auth', 'permission']);
+    Route::delete('/delete/{id}', [EmployeeViolationController::class, 'delete'])->name('delete')->middleware(['auth', 'permission']);
+});
 
 Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'permission'])->group(function () {
 

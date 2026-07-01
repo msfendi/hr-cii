@@ -21,10 +21,12 @@
                             Break Master
                         </h1>
 
+                        @canRoute('break-master.create')
                         <a href="{{ route('break-master.create') }}" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i>
                             Create Break
                         </a>
+                        @endcanRoute
                     </div>
 
                     <div class="card shadow mb-4">
@@ -72,11 +74,14 @@
 
                                                 <td class="text-center">
 
+                                                    @canRoute('break-master.edit')
                                                     <a href="{{ route('break-master.edit',$row->id) }}"
                                                         class="btn btn-primary btn-circle btn-sm">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
+                                                    @endcanRoute
 
+                                                    @canRoute('break-master.destroy')
                                                     <button
                                                         class="btn btn-danger btn-circle btn-sm btn-delete"
                                                         data-link="{{ route('break-master.destroy',$row->id) }}"
@@ -87,6 +92,7 @@
                                                         <i class="fas fa-trash"></i>
 
                                                     </button>
+                                                    @endcanRoute
 
                                                 </td>
 

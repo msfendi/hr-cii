@@ -14,8 +14,6 @@ return new class extends Migration
             $table->string('npk');
             $table->decimal('percentage', 5, 2)->default(0);
             $table->timestamps();
-
-            $table->foreign('period_id')->references('id')->on('periods')->onDelete('cascade');
             // Kalau tabel employees pakai npk sebagai kolom (bukan primary key id), bisa tambahkan index saja:
             $table->index('npk');
         });

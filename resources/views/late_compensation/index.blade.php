@@ -10,10 +10,12 @@
                <div class="container-fluid">
                   <div class="d-sm-flex align-items-center justify-content-between mb-4">
                      <h1 class="h3 mb-0 text-gray-800">Late Compensation</h1>
+                     @canRoute('late-compensation.create')
                      <a href="{{ route('late-compensation.create') }}"
                         class="btn btn-primary btn-sm">
                      <i class="fas fa-plus"></i> Create Late Compensation
                      </a>
+                     @endcanRoute
                   </div>
                   <div class="card shadow mb-4">
                      <div class="card-header">
@@ -48,10 +50,13 @@
                                     <td>{{ $row->date }}</td>
                                     <td>{{ $row->reason }}</td>
                                     <td class="text-center">
+                                        @canRoute('late-compensation.edit')
                                        <a href="{{ route('late-compensation.edit',$row->id) }}"
                                           class="btn btn-primary btn-circle btn-sm">
                                        <i class="fas fa-edit"></i>
                                        </a>
+                                       @endcanRoute
+                                        @canRoute('late-compensation.delete')
                                        <button
                                           class="btn btn-danger btn-circle btn-sm btn-delete"
                                           data-link="{{ route('late-compensation.delete',$row->id) }}"
@@ -60,6 +65,7 @@
                                           data-target="#deleteModal">
                                        <i class="fas fa-trash"></i>
                                        </button>
+                                       @endcanRoute
                                     </td>
                                  </tr>
                                  @endforeach

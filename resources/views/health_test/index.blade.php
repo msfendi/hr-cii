@@ -16,9 +16,11 @@
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <h1 class="h3">Health Test</h1>
 
+                        @canRoute('health-test.create')
                         <a href="{{ route('health-test.create') }}" class="btn btn-sm btn-primary shadow-sm">
                             <i class="fas fa-plus"></i> Create Data
                         </a>
+                        @endcanRoute
                     </div>
 
                     <div class="card shadow">
@@ -116,18 +118,21 @@
                                                 @endif
 
                                                 {{-- EDIT --}}
+                                                @canRoute('health-test.edit')
                                                 <a href="{{ route('health-test.edit',$row->id) }}"
                                                     class="btn btn-warning btn-circle btn-sm">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                                @endcanRoute
 
                                                 {{-- DELETE --}}
+                                                @canRoute('health-test.delete')
                                                 <a href="javascript:void(0)"
                                                     data-url="{{ route('health-test.delete',$row->id) }}"
                                                     class="btn btn-danger btn-circle btn-sm btn-delete">
                                                     <i class="fas fa-trash"></i>
                                                 </a>
-
+                                                @endcanRoute
                                             </td>
                                         </tr>
                                         @endforeach

@@ -19,8 +19,10 @@
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Daftar Payroll Period</h1>
                     <div>
+                    @canRoute('payroll-periods.create')
                     <a href="{{ route('payroll-periods.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Period</a>
+                        @endcanRoute
                     </div>
                 </div>
                 
@@ -81,9 +83,11 @@
                                             <!-- <a href="{{ route('payroll-periods.edit', ['id' => $period->id]) }}" class="btn btn-primary btn-circle btn-sm">
                                                 <i class="fas fa-edit"></i>
                                             </a> -->
+                                            @canRoute('payroll-periods.delete')
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_comp" data-delete-link="{{ route('payroll-periods.delete', ['id' => $period->id]) }}" data-payroll_comp-name="{{ $period->name }}" data-toggle="modal" data-target="#deleteModal">
                                                 <i class="fas fa-trash"></i>
                                             </a>
+                                            @endcanRoute
                                         </td>
                                     </tr>
                                     @endforeach

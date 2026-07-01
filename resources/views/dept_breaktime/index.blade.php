@@ -23,10 +23,12 @@
                         Department Break Time
                     </h1>
 
+                    @canRoute('dept-breaktime.create')
                     <a href="{{ route('dept-breaktime.create') }}" class="btn btn-primary btn-sm">
                         <i class="fas fa-plus"></i>
                         Create Mapping
                     </a>
+                    @endcanRoute
 
                 </div>
 
@@ -85,13 +87,15 @@
 
                                         <td class="text-center">
 
+                                            @canRoute('dept-breaktime.edit')
                                             <a href="{{ route('dept-breaktime.edit',$row->id) }}"
                                                class="btn btn-primary btn-circle btn-sm">
 
                                                 <i class="fas fa-edit"></i>
 
                                             </a>
-
+                                            @endcanRoute
+                                            @canRoute('dept-breaktime.destroy')
                                             <button
                                                 class="btn btn-danger btn-circle btn-sm btn-delete"
                                                 data-id="{{ $row->id }}"
@@ -102,6 +106,7 @@
                                                 <i class="fas fa-trash"></i>
 
                                             </button>
+                                            @endcanRoute
 
                                         </td>
 

@@ -74,6 +74,8 @@ class CuttingInsentifMasterController extends Controller
     }
     public function getData($period)
     {
+        $periods = PayrollPeriod::findOrFail($period);
+        $periodEnd = $periods->end_date;
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
             ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
@@ -82,6 +84,20 @@ class CuttingInsentifMasterController extends Controller
                     ->table('BIODATA_KELUAR')
                     ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
             );
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
 
         $data = DB::table('employee_cutting_assignments as ela')
 
@@ -94,7 +110,24 @@ class CuttingInsentifMasterController extends Controller
                 $join->on('ela.NPK', '=', 'bio.NPK');
             })
 
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('bio.NPK', '=', 'em.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE bio.ID_DEPT
+            END
+        ")
+                );
+            })
+
 
             ->join('payroll_periods as pp', 'l.period_id', '=', 'pp.id')
             ->select(
@@ -299,6 +332,20 @@ class CuttingInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     */
 
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
 
@@ -312,7 +359,23 @@ class CuttingInsentifMasterController extends Controller
             ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
                 $join->on('p.NPK', '=', 'anpk.npk');
             })
-            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('emp.NPK', '=', 'em.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE emp.ID_DEPT
+            END
+        ")
+                );
+            })
             ->joinSub(
                 DB::table('insentif_role_formulas')
                     ->select('role')

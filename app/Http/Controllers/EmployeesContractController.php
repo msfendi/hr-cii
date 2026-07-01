@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\EmployeesContractAllExport;
 use App\Exports\EmployeesContractExport;
 use App\Imports\EmployeesContractImport;
 use App\Models\EmployeesContract;
@@ -520,7 +521,7 @@ class EmployeesContractController extends Controller
         $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
 
         return Excel::download(
-            new \App\Exports\EmployeesContractAllExport($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing),
+            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing),
             $filename
         );
     }

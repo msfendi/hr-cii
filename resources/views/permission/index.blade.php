@@ -13,9 +13,11 @@
                <h1 class="h3 mb-0 text-gray-800">
                   Permissions
                </h1>
+               @canRoute('permission.create')
                <a href="{{ route('permission.create') }}" class="btn btn-primary btn-sm">
                   <i class="fas fa-plus"></i> Tambah Permission
                </a>
+               @endcanRoute
             </div>
             {{-- ===============================
             TABLE
@@ -47,15 +49,19 @@
                               <td>{{ $permission->description }}</td>
                               {{-- ================= ACTION ================= --}}
                               <td class="text-center">
+                                 @canRoute('permission.edit')
                                  <a href="{{ route('permission.edit', $permission->id) }}"
                                     class="btn btn-warning btn-sm">
                                  <i class="fas fa-edit"></i>
                                  </a>
+                                 @endcanRoute
+                                 @canRoute('permission.destroy')
                                  <button
                                     class="btn btn-danger btn-sm btn-delete"
                                     data-id="{{ $permission->id }}">
                                  <i class="fas fa-trash"></i>
                                  </button>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @endforeach

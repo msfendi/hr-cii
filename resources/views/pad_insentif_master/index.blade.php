@@ -17,9 +17,11 @@
                <div class="d-sm-flex align-items-center justify-content-between mb-4">
                   <h1 class="h3 mb-0 text-gray-800">Pad Print Insentif Master</h1>
                   <div>
+                    @canRoute('pad-insentif-master.create')
                      <a href="{{ route('pad-insentif-master.create') }}" class="d-none d-sm-inpad-block btn btn-sm btn-primary shadow-sm">
                         <i class="fas fa-plus fa-sm text-white-50"></i> Create Pad Print Insentif Master
                      </a>
+                     @endcanRoute
                   </div>
                </div>
                

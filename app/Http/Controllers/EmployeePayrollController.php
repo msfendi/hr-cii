@@ -111,13 +111,22 @@ class EmployeePayrollController extends Controller
             ->value('TGLLAHIR');
 
         $password = date('ymd', strtotime($birth));
-
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+            );
 
         $employee = DB::table('payroll_run_details as prd')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
-            ->leftJoin('BIODATA as b', 'b.NPK', '=', 'prd.employee_npk')
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'b.id_dept')
+            ->leftJoinSub($biodataUnion, 'b', function ($join) {
+                $join->on('b.NPK', '=', 'prd.employee_npk');
+            })
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
             ->where('prd.run_id', $run_id)
             ->where('prd.employee_npk', $npk)
             ->select(

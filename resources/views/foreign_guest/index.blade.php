@@ -11,11 +11,13 @@
       <div class="container-fluid">
          {{-- TITLE --}}
          <div class="d-sm-flex align-items-center justify-content-between mb-4">
-            <h1 class="h3 mb-0 text-gray-800">Foreign Guest</h1>
+               <h1 class="h3 mb-0 text-gray-800">Foreign Guest</h1>
+               @canRoute('foreign-guest.create')
             <a href="{{ route('foreign-guest.create') }}"
                class="btn btn-sm btn-primary shadow-sm">
             <i class="fas fa-plus"></i> Create Guest
             </a>
+            @endcanRoute
          </div>
          <div class="card shadow mb-4">
             {{-- HEADER --}}
@@ -145,10 +147,13 @@
                               @endif
                            </td>
                            <td class="text-center">
+                              @canRoute('foreign-guest.delete')
                               <a href="{{ route('foreign-guest.edit',$row->id) }}"
                                  class="btn btn-primary btn-circle btn-sm">
                               <i class="fas fa-edit"></i>
                               </a>
+                              @endcanRoute
+                              @canRoute('foreign-guest.delete')
                               <button
                                  class="btn btn-danger btn-circle btn-sm btn-delete"
                                  data-link="{{ route('foreign-guest.delete',$row->id) }}"
@@ -157,6 +162,7 @@
                                  data-target="#deleteModal">
                               <i class="fas fa-trash"></i>
                               </button>
+                              @endcanRoute
                            </td>
                         </tr>
                         @endforeach

@@ -17,9 +17,11 @@
                <div class="d-sm-flex align-items-center justify-content-between mb-4">
                   <h1 class="h3 mb-0 text-gray-800">Heat Seal Insentif Master</h1>
                   <div>
-                     <a href="{{ route('heat-insentif-master.create') }}" class="d-none d-sm-inheat-block btn btn-sm btn-primary shadow-sm">
+                    @canRoute('heat-insentif-master.create')
+                     <a href="{{ route('heat-insentif-master.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
                         <i class="fas fa-plus fa-sm text-white-50"></i> Create Heat Seal Insentif Master
                      </a>
+                     @endcanRoute
                   </div>
                </div>
                
@@ -105,17 +107,21 @@ Detail Insentif Karyawan
                         <!-- KANAN -->
                         <div class="d-flex align-items-center">
                             <!-- DOWNLOAD TEMPLATE -->
+                            @canRoute('heat-insentif-master.template')
                             <a href="{{ route('heat-insentif-master.template') }}"
                                 class="btn btn-info btn-sm mr-2">
                             <i class="fas fa-download"></i> Download Template
                             </a>
+                            @endcanRoute
                             <!-- IMPORT FORM -->
+                            @canRoute('heat-insentif-master.import')
                             <button class="btn btn-success btn-sm"
                                  data-toggle="modal"
                                  data-target="#importModal">
                               <i class="fas fa-file-excel"></i>
                               Import Excel Insentif
                            </button>
+                           @endcanRoute
                         </div>
                     </div>
                     <!-- PROGRESS BAR -->

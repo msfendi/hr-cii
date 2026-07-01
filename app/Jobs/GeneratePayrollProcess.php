@@ -137,7 +137,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00775')
+            // ->where('p.NPK', '=', 'C-00872')
 
             ->select(
                 'p.NPK',
@@ -166,7 +166,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00775')
+            // ->where('ec1.npk', '=', 'C-00872')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -905,6 +905,29 @@ END AS special_overtime_hours
             ->get()
             ->groupBy('npk');
 
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
+
+        $employeeViolationSummary = DB::table('employee_violations')
+            ->select(
+                'npk',
+                DB::raw('SUM(percentage) as violation_percentage')
+            )
+            ->where('period_id', $period->id)
+            ->groupBy('npk');
+
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
@@ -928,13 +951,31 @@ END AS special_overtime_hours
             ->leftJoinSub($payrollAdjustmentSummary, 'pa', function ($join) {
                 $join->on('emp.NPK', '=', 'pa.npk');
             })
+            ->leftJoinSub($employeeViolationSummary, 'ev', function ($join) {
+                $join->on('emp.NPK', '=', 'ev.npk');
+            })
 
             ->leftJoinSub($assignment6s, 'a6s', function ($join) use ($period) {
                 $join->on('emp.NPK', '=', 'a6s.npk')
                     ->where('a6s.period_id', '=', $period->id);
             })
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('emp.NPK', '=', 'em.npk');
+            })
 
-            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE emp.ID_DEPT
+            END
+        ")
+                );
+            })
             ->leftJoinSub($bpjsException, 'be', function ($join) {
                 $join->on('emp.NPK', '=', 'be.npk');
             })
@@ -969,6 +1010,15 @@ END AS special_overtime_hours
                 'be.is_excepkes',
                 'be.is_exceptk',
 
+                DB::raw("
+                CASE
+                    WHEN em.from_dept IS NOT NULL
+                    THEN em.from_dept
+                    ELSE emp.ID_DEPT
+                END as payroll_dept
+                "),
+
+                DB::raw('COALESCE(ev.violation_percentage, 0) as violation_percentage'),
                 DB::raw('COALESCE(pa.total_adjusment,0) as adjusment'),
                 DB::raw('COALESCE(ot.absence_days,0) as absence_days'),
                 DB::raw('COALESCE(ot.sick_days,0) as sick_days'),
@@ -1168,6 +1218,7 @@ END AS special_overtime_hours
                 'count_days'     => (float) $count_days,
                 'tanggungan'     => (float) $employee->TANGGUNGAN,
                 'percentage'     => (float) $employee->percentage,
+                'violation_percentage' => (float) $employee->violation_percentage,
                 'total_ijin'     => (float) $employee->total_ijin_minutes,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
@@ -1458,7 +1509,8 @@ END AS special_overtime_hours
                                         'sewing',
                                         $lineInsentif,
                                         1,
-                                        $lineViolations
+                                        $lineViolations,
+                                        $employee->violation_percentage
                                     );
                                 }
                             } else {
@@ -1566,7 +1618,8 @@ END AS special_overtime_hours
                                         'sewing',
                                         $totalLineInsentif,
                                         $jumlahLine->first()->jumlah_line,
-                                        $lineViolations
+                                        $lineViolations,
+                                        $employee->violation_percentage
                                     );
 
                                     $collectionDay->push($amount);
@@ -1822,10 +1875,12 @@ END AS special_overtime_hours
             $grandTotal = round($grandTotal, 0);
 
             if (!$isCheck) {
+                $batchSize = 250;
                 $payrollRunDetailRows[] = [
                     'run_id'        => $run->id,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
+                    'employee_dept' => $employee->payroll_dept,
                     'components'    => json_encode($results),
                     'total_salary'  => $grandTotal,
                     'created_at'    => $now,
@@ -1835,7 +1890,7 @@ END AS special_overtime_hours
                 // Flush batch insert tiap 500 baris supaya tidak terlalu besar
                 // dalam satu query, sambil tetap jauh lebih sedikit query
                 // dibanding insert satu-satu seperti sebelumnya.
-                if (count($payrollRunDetailRows) >= 500) {
+                if (count($payrollRunDetailRows) >= $batchSize) {
                     PayrollRunDetail::insert($payrollRunDetailRows);
                     $payrollRunDetailRows = [];
                 }
@@ -1853,10 +1908,13 @@ END AS special_overtime_hours
                     'count_days'    => $count_days,
                     'type' => Str::ucfirst(Str::lower($employee->type)),
                     'dept' => $employee->DEPARTEMENT,
+                    'id_dept' => $employee->ID_DEPT,
+                    'employee_dept' => $employee->payroll_dept,
                     'tmk' => $employee->TMK,
                     'period_start'  => $periodStart,
                     'tkk' => $employee->TKK,
                     'late_summary' => $employee->total_telat,
+                    'violation_percentage' => (float) $employee->violation_percentage,
                     'total_ijin'     => (float) $employee->total_ijin_minutes,
                     'is_sewing'       => $employee->IS_SEWING == '1' ? 1 : 0,
                     'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
@@ -1994,7 +2052,8 @@ END AS special_overtime_hours
         $dept,
         $totalLineInsentif,
         $jumlahLine,
-        $violationsCount
+        $violationsCount,
+        $employeeViolations
     ) {
 
         $jumlahLine = max($jumlahLine, 1);
@@ -2017,7 +2076,8 @@ END AS special_overtime_hours
         $variables = [
             'totalLineInsentif' => $totalLineInsentif,
             'jumlahLine'        => $jumlahLine,
-            'violationsCount'   => $violationsCount ?? 0
+            'violationsCount'   => $violationsCount ?? 0,
+            'violation_percentage' => $employeeViolations ?? 0
         ];
 
         foreach ($variables as $key => $value) {

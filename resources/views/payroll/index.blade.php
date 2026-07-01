@@ -19,10 +19,15 @@
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Daftar Payroll Process</h1>
                     <div>
+                    @canRoute('payroll-process.generate')
                     <a href="{{ route('payroll-process.generate') }}" class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Generate Payroll</a>
+                    @endcanRoute
+                    
+                    @canRoute('payroll-periods.create')
                     <a href="{{ route('payroll-periods.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Period</a>
+                    @endcanRoute
                     </div>
                 </div>
                 
@@ -210,16 +215,18 @@
                                             @endif
                                         </td>
                                         <td class="text-center">
-
+                                            @canRoute('payroll-process.details')
                                             <button class="btn btn-info btn-circle btn-sm btn-detail"
                                                 data-id="{{ $period->id }}"
                                                 data-period="{{ $period->period_name }}">
                                                 <i class="fas fa-eye"></i>
                                             </button>
+                                            @endcanRoute
 
                                             
                                             @if($period->export_status == 'finished' || $period->export_status == 'approved')
 
+                                            @canRoute('payroll-process.update-pph21')
                                             <button
                                                 class="btn btn-warning btn-circle btn-sm btn-update-pph"
                                                 data-id="{{ $period->id }}"
@@ -227,6 +234,8 @@
                                             >
                                                 <i class="fas fa-percent"></i>
                                             </button>
+                                            @endcanRoute
+                                            @canRoute('payroll-process.recreate-document')
                                             <button
                                                 class="btn btn-secondary btn-circle btn-sm btn-recreate"
                                                 data-id="{{ $period->id }}"
@@ -234,6 +243,7 @@
                                             >
                                                 <i class="fas fa-sync"></i>
                                             </button>
+                                            @endcanRoute
 
                                             @endif
 
@@ -243,20 +253,24 @@
                                                 title="Generate Export">
                                                     <i class="fas fa-database"></i>
                                             </a> -->
+                                            @canRoute('payroll.export.export')
                                                 <a class="btn btn-warning btn-circle btn-sm btn-export"
                                                     href="#"
                                                     data-url="{{ route('payroll.export.export', $period->id) }}"
                                                     title="Generate Export">
                                                     <i class="fas fa-database"></i>
                                                 </a>
+                                            @endcanRoute
                                             @endif
+                                            @canRoute('payroll-process.destroy')
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll"
-                                            data-id="{{ $period->id }}"
-                                            data-period="{{ $period->period_name }}"
-                                            data-toggle="modal"
-                                            data-target="#deleteModal">
-                                            <i class="fas fa-trash"></i>
+                                                data-id="{{ $period->id }}"
+                                                data-period="{{ $period->period_name }}"
+                                                data-toggle="modal"
+                                                data-target="#deleteModal">
+                                                <i class="fas fa-trash"></i>
                                             </a>
+                                            @endcanRoute
                                         </td>
                                     </tr>
                                     @endforeach

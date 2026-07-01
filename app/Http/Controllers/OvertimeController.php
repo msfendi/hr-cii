@@ -215,10 +215,12 @@ class OvertimeController extends Controller
 
         // ▸ LANGKAH 2: Ambil data lembur dari database
         $deptGroup   = $request->input('dept_group');
-        $queryLembur = Overtime::whereBetween('OVERTIME_DATE', [$tanggalAwal->format('Y-m-d'), $tanggalAkhir->format('Y-m-d')]);
+        $queryLembur = Overtime::select('overtimes.*', 'PKWT.TMK', 'PKWT.TKK')
+            ->leftJoin('PKWT', 'PKWT.NPK', '=', 'overtimes.NPK')
+            ->whereBetween('overtimes.OVERTIME_DATE', [$tanggalAwal->format('Y-m-d'), $tanggalAkhir->format('Y-m-d')]);
 
         if ($deptGroup && $deptGroup !== 'all') {
-            $queryLembur->where('DEPT_GROUP', $deptGroup);
+            $queryLembur->where('overtimes.DEPT_GROUP', $deptGroup);
         }
 
         $dataLembur = $queryLembur->get();
@@ -286,7 +288,7 @@ class OvertimeController extends Controller
         }
 
         // ▸ LANGKAH 4: Pivot data — satu row per karyawan (NPK)
-        $hasilPivot = $dataLembur->groupBy('NPK')->map(function ($grupKaryawan) use ($dateMeta, $validDaysPerWeek) {
+        $hasilPivot = $dataLembur->groupBy('NPK')->map(function ($grupKaryawan) use ($dateMeta, $validDaysPerWeek, $jumlahHari, $prefixBulan) {
 
             $employee = $grupKaryawan->first();
             $row = [
@@ -302,10 +304,28 @@ class OvertimeController extends Controller
             $lemburKhusus     = 0;
             $lemburKarakter   = [];
 
+            $tmkDate = !empty($employee->TMK) ? \Carbon\Carbon::parse($employee->TMK)->format('Y-m-d') : null;
+            $tkkDate = !empty($employee->TKK) ? \Carbon\Carbon::parse($employee->TKK)->format('Y-m-d') : null;
+
+            for ($d = 1; $d <= $jumlahHari; $d++) {
+                $tglStr = $prefixBulan . '-' . str_pad($d, 2, '0', STR_PAD_LEFT);
+                if ($tmkDate && $tglStr < $tmkDate) {
+                    $row[$tglStr] = 'BR';
+                    $lemburKarakter['BR'] = ($lemburKarakter['BR'] ?? 0) + 1;
+                } elseif ($tkkDate && $tglStr >= $tkkDate) {
+                    $row[$tglStr] = 'OUT';
+                    $lemburKarakter['OUT'] = ($lemburKarakter['OUT'] ?? 0) + 1;
+                }
+            }
+
             // ── Kalkulasi hanya dalam SATU loop tiap karyawan untuk performance ──
             foreach ($grupKaryawan as $record) {
                 $tglValue = $record->OVERTIME_DATE;
                 $tglStr   = $tglValue instanceof \DateTimeInterface ? $tglValue->format('Y-m-d') : substr((string)$tglValue, 0, 10);
+                
+                if (isset($row[$tglStr]) && ($row[$tglStr] === 'BR' || $row[$tglStr] === 'OUT')) {
+                    continue;
+                }
 
                 $jamLembur = $record->JUMLAH_JAM_LEMBUR;
                 $row[$tglStr] = $jamLembur;
@@ -333,7 +353,7 @@ class OvertimeController extends Controller
                     }
 
                     // Lembur Khusus
-                    if ( ($isWeekend || $isHoliday)) {
+                    if (($isWeekend || $isHoliday)) {
                         $lemburKhusus += $jamLemburFloat;
                     }
 

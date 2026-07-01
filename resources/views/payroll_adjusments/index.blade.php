@@ -3,8 +3,10 @@
         <div id="content"> @include('layout.navbar') <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
               <h1 class="h3 mb-0 text-gray-800">Payroll Adjusment</h1>
+              @canRoute('payroll-adjusments.create')
               <a href="{{ route('payroll-adjusments.create') }}" class="btn btn-sm btn-primary shadow-sm">
                 <i class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Adjusment </a>
+              @endcanRoute
             </div>
             <div class="card shadow mb-4">
               <div class="card-header py-3">
@@ -33,12 +35,16 @@
                         <td>Rp {{ number_format($row->adjusment,0,',','.') }}</td>
                         <td>{{ $row->keterangan }}</td>
                         <td class="text-center">
+                          @canRoute('payroll-adjusments.edit')
                           <a href="{{ route('payroll-adjusments.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>
                           </a>
+                          @endcanRoute
+                          @canRoute('payroll-adjusments.destroy')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('payroll-adjusments.destroy',$row->id) }}" data-npk="{{ $row->npk }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                          @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

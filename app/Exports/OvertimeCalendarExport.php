@@ -280,14 +280,15 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
         //     ->whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir]);
 
         // ambil dept bagian dari overtime langsung
-        $queryLembur = Overtime::leftJoin(
+         $queryLembur = Overtime::leftJoin(
             DB::raw('(SELECT NPK, ID_DEPT FROM BIODATA UNION SELECT NPK, ID_DEPT FROM BIODATA_KELUAR) AS BIO'),
             'overtimes.NPK',
             '=',
             'BIO.NPK'
         )
+            ->leftJoin('PKWT', 'PKWT.NPK', '=', 'overtimes.NPK')
             // ->leftJoin('DEPT', 'BIO.ID_DEPT', '=', 'DEPT.ID_DEPT')
-            ->select('overtimes.NPK', 'overtimes.NAMA_KARYAWAN', 'overtimes.OVERTIME_DATE', 'overtimes.JUMLAH_JAM_LEMBUR', 'overtimes.DAY', 'overtimes.DEPT_GROUP', 'overtimes.BAGIAN')
+            ->select('overtimes.NPK', 'overtimes.NAMA_KARYAWAN', 'overtimes.OVERTIME_DATE', 'overtimes.JUMLAH_JAM_LEMBUR', 'overtimes.DAY', 'overtimes.DEPT_GROUP', 'overtimes.BAGIAN', 'PKWT.TMK', 'PKWT.TKK')
             ->whereBetween('OVERTIME_DATE', [$tanggalAwal, $tanggalAkhir]);
 
         if ($this->type !== 'all') {
@@ -314,6 +315,30 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
                 'NAMA_KARYAWAN' => $employee->NAMA_KARYAWAN,
                 'BAGIAN'        => $employee->BAGIAN,
             ];
+            
+            $tmkDate = !empty($employee->TMK) ? \Carbon\Carbon::parse($employee->TMK)->format('Y-m-d') : null;
+            $tkkDate = !empty($employee->TKK) ? \Carbon\Carbon::parse($employee->TKK)->format('Y-m-d') : null;
+            $jumlahHari = $tanggalAwal->copy()->endOfMonth()->day;
+            $prefixBulan = $tanggalAwal->format('Y-m');
+
+            $lemburKarakterCount = [];
+
+            for ($d = 1; $d <= $jumlahHari; $d++) {
+                $tglStr = $prefixBulan . '-' . str_pad($d, 2, '0', STR_PAD_LEFT);
+                if ($tmkDate && $tglStr < $tmkDate) {
+                    $row[$tglStr] = 'BR';
+                    $lemburKarakterCount['BR'] = ($lemburKarakterCount['BR'] ?? 0) + 1;
+                } elseif ($tkkDate && $tglStr >= $tkkDate) {
+                    $row[$tglStr] = 'OUT';
+                    $lemburKarakterCount['OUT'] = ($lemburKarakterCount['OUT'] ?? 0) + 1;
+                }
+            }
+
+            // Filter out records that fall on BR or OUT days so they don't affect attendance/overtime counts
+            $grupKaryawan = $grupKaryawan->filter(function ($record) use ($row) {
+                $tgl = Carbon::parse($record->OVERTIME_DATE)->format('Y-m-d');
+                return !(isset($row[$tgl]) && ($row[$tgl] === 'BR' || $row[$tgl] === 'OUT'));
+            });
 
             foreach ($grupKaryawan as $record) {
                 $tgl = Carbon::parse($record->OVERTIME_DATE)->format('Y-m-d');
@@ -363,6 +388,10 @@ class OvertimeCalendarExport implements FromArray, WithStyles, ShouldAutoSize, W
             $lemburKarakter = $grupKaryawan->filter(fn($r) => !is_numeric($r->JUMLAH_JAM_LEMBUR))->groupBy('JUMLAH_JAM_LEMBUR');
             foreach ($lemburKarakter as $kode => $daftarRecord) {
                 $row[$kode] = $daftarRecord->count();
+            }
+
+            foreach ($lemburKarakterCount as $kode => $count) {
+                $row[$kode] = ($row[$kode] ?? 0) + $count;
             }
 
             $prefixBulan = $tanggalAwal->format('Y-m');

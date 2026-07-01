@@ -39,10 +39,12 @@
                               <td>{{ $role->name }}</td>
                               <td>{{ $role->guard_name }}</td>
                               <td class="text-center">
+                                 @canRoute('role-permission.edit')
                                  <a href="{{ route('role-permission.edit', $role->id) }}"
                                     class="btn btn-primary btn-sm">
                                  <i class="fas fa-key"></i> Atur Permission
                                  </a>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @endforeach

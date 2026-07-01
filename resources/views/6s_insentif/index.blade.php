@@ -31,10 +31,12 @@
                 Employee 6S Assignment
               </h1>
 
+              @canRoute('employee6s.create')
               <a href="{{ route('employee6s.create') }}" class="btn btn-primary btn-sm shadow-sm">
                 <i class="fas fa-plus fa-sm"></i>
                 Create 6S Insentif
               </a>
+              @endcanRoute
 
             </div>
 
@@ -154,17 +156,21 @@
 
                         <td class="text-center">
 
+                          @canRoute('employee6s.edit')
                           <a href="{{ route('employee6s.edit',$row->id) }}" class="btn btn-warning btn-sm">
 
                             <i class="fas fa-edit"></i>
 
                           </a>
+                          @endcanRoute
 
+                          @canRoute('employee6s.destroy')
                           <button class="btn btn-danger btn-sm btn-delete-payroll_master" data-toggle="modal" data-target="#deleteModal" data-delete-link="{{ route('employee6s.destroy',$row->id) }}">
 
                             <i class="fas fa-trash"></i>
 
                           </button>
+                          @endcanRoute
 
                         </td>
 

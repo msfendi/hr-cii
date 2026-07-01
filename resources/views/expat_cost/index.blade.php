@@ -66,12 +66,16 @@
                         <td>{{ $row->transactions_date }}</td>
                         <td>{{ $row->remark }}</td>
                         <td class="text-center">
+                        @canRoute('expat.cost.edit')
                           <a href="{{ route('expat.cost.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>
                           </a>
+                        @endcanRoute
+                        @canRoute('expat.cost.delete')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('expat.cost.delete',$row->id) }}" data-npk="{{ $row->npk }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                          @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

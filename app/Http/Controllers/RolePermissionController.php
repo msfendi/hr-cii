@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Http\Request;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class RolePermissionController extends Controller
 {
@@ -31,6 +32,7 @@ class RolePermissionController extends Controller
 
         $role->permissions()->sync($permissionIds);
 
+        Alert::success('Success', "Permission untuk role {$role->name} berhasil diupdate.");
         return redirect()->route('role-permission.index')->with('success', "Permission untuk role {$role->name} berhasil diupdate.");
     }
 }

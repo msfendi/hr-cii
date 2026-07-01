@@ -78,10 +78,10 @@ class GeneratePayrollExport implements ShouldQueue
         ]);
 
         $employeeUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'ID_DEPT', 'IS_STAFF')
             ->unionAll(
                 DB::table('BIODATA_KELUAR')
-                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'id_dept', 'IS_STAFF')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'ID_DEPT', 'IS_STAFF')
             );
 
         $employees = DB::query()
@@ -150,7 +150,7 @@ class GeneratePayrollExport implements ShouldQueue
                 'emp',
                 fn($j) => $j->on('emp.NPK', '=', 'prd.employee_npk')
             )
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
             ->leftJoinSub(
                 $pkwtLatest,
                 'p',

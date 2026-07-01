@@ -13,9 +13,11 @@
                <h1 class="h3 mb-0 text-gray-800">
                   Menu / Sidebar
                </h1>
+               @canRoute('menu.create')
                <a href="{{ route('menu.create') }}" class="btn btn-primary btn-sm">
                   <i class="fas fa-plus"></i> Tambah Menu
                </a>
+               @endcanRoute
             </div>
             {{-- ===============================
             TABLE
@@ -49,15 +51,19 @@
                               <td>{{ $menu->is_active ? 'Ya' : 'Tidak' }}</td>
                               {{-- ================= ACTION ================= --}}
                               <td class="text-center">
+                                 @canRoute('menu.edit')
                                  <a href="{{ route('menu.edit', $menu->id) }}"
                                     class="btn btn-warning btn-sm">
                                  <i class="fas fa-edit"></i>
                                  </a>
+                                 @endcanRoute
+                                 @canRoute('menu.destroy')
                                  <button
                                     class="btn btn-danger btn-sm btn-delete"
                                     data-id="{{ $menu->id }}">
                                  <i class="fas fa-trash"></i>
                                  </button>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @foreach ($menu->children as $child)

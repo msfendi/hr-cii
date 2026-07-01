@@ -15,6 +15,7 @@
             {{-- ===================================================== --}}
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
               <h1 class="h3 mb-0 text-gray-800">Compensation</h1>
+              @canRoute('compensation.generate')
               <form method="POST" action="{{ route('compensation.generate') }}" id="generateForm" class="form-inline">
                 @csrf
                 <input type="text" name="generate_date" id="generate_date" class="form-control form-control-sm mr-2" placeholder="Select Date" required readonly>
@@ -27,6 +28,7 @@
                   Generate Compensation
                 </button>
               </form>
+              @endcanRoute
             </div>
             {{-- ===================================================== --}}
             {{-- DATA TABLE --}}

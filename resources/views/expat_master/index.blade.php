@@ -18,9 +18,12 @@
                         Download Rekap Expat
                     </button>
                     <!-- DOWNLOAD TEMPLATE -->
+                        @canRoute('expat.template.master')
                     <a href="{{ route('expat.template.master') }}" class="btn btn-info btn-sm mr-2">
                       <i class="fas fa-download"></i> Download Template </a>
+                      @endcanRoute
                     <!-- IMPORT -->
+                        @canRoute('expat.import.master')
                     <form id="importForm" action="{{ route('expat.import.master') }}" method="POST" enctype="multipart/form-data"> @csrf <div class="input-group input-group-sm">
                         <input type="file" name="file" id="fileInput" class="d-none" accept=".xlsx,.xls,.csv">
                         <button type="button" class="btn btn-primary btn-sm" id="btnUpload">
@@ -32,6 +35,7 @@
                         </div>
                       </div>
                     </form>
+                    @endcanRoute
                   </div>
                 </div>
                 <!-- PROGRESS BAR -->
@@ -163,13 +167,17 @@
                         <td>@if($row->lease_enddate) <span class="badge badge-secondary">
                             {{ $row->lease_enddate }}
                           </span> @endif</td>
-                        <td class="text-center">
+                          <td class="text-center">
+                          @canRoute('expat.master.edit')
                           <a href="{{ route('expat.master.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>
                           </a>
+                          @endcanRoute
+                          @canRoute('expat.master.delete')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('expat.master.delete',$row->id) }}" data-npk="{{ $row->npk }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                          @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

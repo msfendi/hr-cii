@@ -17,10 +17,12 @@
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
 <h1 class="h3 mb-0 text-gray-800">Insentif Threshold</h1>
 
+@canRoute('insentif.threshold.create')
 <a href="{{ route('insentif.threshold.create') }}"
 class="btn btn-primary btn-sm">
 <i class="fas fa-plus"></i> Create Threshold
 </a>
+@endcanRoute
 </div>
 
 <div class="card shadow mb-4">
@@ -63,11 +65,14 @@ Data Threshold
 
 <td class="text-center">
 
+@canRoute('insentif.threshold.edit')
 <a href="{{ route('insentif.threshold.edit',$row->id) }}"
 class="btn btn-primary btn-circle btn-sm">
 <i class="fas fa-edit"></i>
 </a>
+@endcanRoute
 
+@canRoute('insentif.threshold.delete')
 <button
 class="btn btn-danger btn-circle btn-sm btn-delete"
 data-link="{{ route('insentif.threshold.delete',$row->id) }}"
@@ -76,6 +81,7 @@ data-toggle="modal"
 data-target="#deleteModal">
 <i class="fas fa-trash"></i>
 </button>
+@endcanRoute
 
 </td>
 </tr>

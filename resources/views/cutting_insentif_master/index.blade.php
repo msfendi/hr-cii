@@ -17,9 +17,11 @@
                <div class="d-sm-flex align-items-center justify-content-between mb-4">
                   <h1 class="h3 mb-0 text-gray-800">Cutting Insentif Master</h1>
                   <div>
+                    @canRoute('cutting-insentif-master.create')
                      <a href="{{ route('cutting-insentif-master.create') }}" class="d-none d-sm-incutting-block btn btn-sm btn-primary shadow-sm">
                         <i class="fas fa-plus fa-sm text-white-50"></i> Create Cutting Insentif Master
                      </a>
+                     @endcanRoute
                   </div>
                </div>
                
@@ -105,18 +107,21 @@ Detail Insentif Karyawan
                         <!-- KANAN -->
                         <div class="d-flex align-items-center">
                             <!-- DOWNLOAD TEMPLATE -->
+                            @canRoute('cutting-insentif-master.template')
                             <a href="{{ route('cutting-insentif-master.template') }}"
                                 class="btn btn-info btn-sm mr-2">
                             <i class="fas fa-download"></i> Download Template
                             </a>
+                            @endcanRoute
                             <!-- IMPORT FORM -->
-                            
+                            @canRoute('cutting-insentif-master.import')
                             <button class="btn btn-success btn-sm"
                                  data-toggle="modal"
                                  data-target="#importModal">
                               <i class="fas fa-file-excel"></i>
                               Import Excel Insentif
                            </button>
+                            @endcanRoute
                         </div>
                     </div>
                     <!-- PROGRESS BAR -->

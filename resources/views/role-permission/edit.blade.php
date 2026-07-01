@@ -188,39 +188,62 @@
 @include('layout.footer')
 
 <script>
+$(document).ready(function () {
 
-$("#searchPermission").on("keyup", function(){
+    // SEARCH PERMISSION
+    $("#searchPermission").on("keyup", function () {
 
-    let value = $(this).val().toLowerCase();
+        let keyword = $(this).val().toLowerCase().trim();
 
-    $(".permission-item").filter(function(){
+        $(".permission-group").each(function () {
 
-        $(this).toggle(
-            $(this).text().toLowerCase().indexOf(value) > -1
-        );
+            let visibleCount = 0;
+
+            $(this).find(".permission-item").each(function () {
+
+                let text = $(this).text().toLowerCase();
+
+                if (text.indexOf(keyword) > -1) {
+                    $(this).show();
+                    visibleCount++;
+                } else {
+                    $(this).hide();
+                }
+
+            });
+
+            // Jika tidak ada permission yang tampil, sembunyikan group
+            if (visibleCount === 0) {
+                $(this).hide();
+            } else {
+                $(this).show();
+            }
+
+        });
+
+    });
+
+    // CHECK ALL
+    $(".check-all").click(function () {
+
+        $(this)
+            .closest(".permission-group")
+            .find(".permission-switch:visible")
+            .prop("checked", true);
+
+    });
+
+    // UNCHECK ALL
+    $(".uncheck-all").click(function () {
+
+        $(this)
+            .closest(".permission-group")
+            .find(".permission-switch:visible")
+            .prop("checked", false);
 
     });
 
 });
-
-$(".check-all").click(function(){
-
-    $(this)
-        .closest(".permission-group")
-        .find(".permission-switch")
-        .prop("checked",true);
-
-});
-
-$(".uncheck-all").click(function(){
-
-    $(this)
-        .closest(".permission-group")
-        .find(".permission-switch")
-        .prop("checked",false);
-
-});
-
 </script>
 
 </body>

@@ -21,14 +21,14 @@
                             <small class="text-muted">Pantau & kelola kontrak yang akan segera berakhir</small>
                         </div>
                         <div class="d-flex gap-2">
-                            <button class="btn btn-outline-success btn-sm" data-toggle="modal"
+                            <button class="btn btn-outline-primary btn-sm" data-toggle="modal"
                                 data-target="#modalImport">
                                 <i class="fas fa-file-import mr-1"></i> Import
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" id="btnExport">
                                 <i class="fas fa-file-excel mr-1"></i> Export
                             </button>
-                            <button class="btn btn-outline-secondary btn-sm" id="btnExportAll">
+                            <button class="btn btn-outline-success btn-sm" id="btnExportAll">
                                 <i class="fas fa-file-excel mr-1"></i> Export All Contract
                             </button>
                             {{-- <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modalTambah">

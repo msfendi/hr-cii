@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
 use App\Exports\PKWTExport;
+use App\Models\EmployeeMutation;
 use App\Models\PayrollMaster;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
@@ -31,11 +32,19 @@ class BiodataController extends Controller
             ->table('BIODATA')
             ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'sections.name as section', 'sections.line_start', 'sections.line_end', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'PKWT.TMK', 'employees_contract.end_date')
             ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
-            ->join('sections', 'BIODATA.SECTION', 'sections.id')
+
+            ->leftJoin('sections', function ($join) {
+                $join->on(
+                    DB::raw('TRY_CAST(BIODATA.SECTION AS BIGINT)'),
+                    '=',
+                    'sections.id'
+                );
+            })
+            // ->join('sections', 'BIODATA.SECTION', 'sections.id')
             ->join('PKWT', 'BIODATA.NPK', 'PKWT.NPK')
-            ->leftJoin('employees_contract', function($join) {
+            ->leftJoin('employees_contract', function ($join) {
                 $join->on('BIODATA.NPK', '=', 'employees_contract.npk')
-                     ->where('employees_contract.status_contract', 'AKTIF');
+                    ->where('employees_contract.status_contract', 'AKTIF');
             });
 
         if ($request->has('department_id') && $request->department_id != '') {
@@ -166,7 +175,9 @@ class BiodataController extends Controller
             'ID_DEPT' => $request->id_dept,
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
-            'SECTION' => strtoupper($request->section),            'SECTION' => strtoupper($request->section),'SECTION' => strtoupper($request->section),
+            'SECTION' => strtoupper($request->section),
+            'SECTION' => strtoupper($request->section),
+            'SECTION' => strtoupper($request->section),
             'STATUS' => 'A',
             'IS_STAFF' => '0',
         ]);
@@ -325,6 +336,7 @@ class BiodataController extends Controller
         try {
             DB::connection('cii')->beginTransaction();
 
+            $oldIdDept = DB::connection('cii')->table('BIODATA')->select('ID_DEPT')->where('NPK', $NPK)->first();
             $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT')->where('ID_DEPT', $request->id_dept)->first();
 
             // UBAH FOTO KARYAWAN
@@ -382,12 +394,19 @@ class BiodataController extends Controller
                 'JURUSAN' => strtoupper($request->jurusan)
             ]);
 
+            EmployeeMutation::create([
+                'npk' => $NPK,
+                'from_dept' => $oldIdDept->ID_DEPT,
+                'to_dept' => $request->id_dept,
+                'date' => now(),
+            ]);
+
             // Update bank_account di payroll_masters
             if ($request->filled('bank_account')) {
                 PayrollMaster::updateOrCreate(
                     ['npk' => $NPK],
                     [
-                        'bank_name' => 'PERMATA BANK',
+                        'bank_name' => 'Permata Bank',
                         'bank_account' => $request->bank_account
                     ]
                 );
