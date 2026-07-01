@@ -29,6 +29,7 @@
                         <thead>
                            <tr>
                               <th>Role</th>
+                              <th>Guard Name</th>
                               <th width="150" class="text-center">Action</th>
                            </tr>
                         </thead>
@@ -36,6 +37,7 @@
                            @foreach ($roles as $role)
                            <tr>
                               <td>{{ $role->name }}</td>
+                              <td>{{ $role->guard_name }}</td>
                               <td class="text-center">
                                  <a href="{{ route('role-permission.edit', $role->id) }}"
                                     class="btn btn-primary btn-sm">
