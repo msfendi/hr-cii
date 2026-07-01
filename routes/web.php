@@ -884,7 +884,7 @@ Route::prefix('employee-violation')->name('employee-violation.')->group(function
     Route::post('/store', [EmployeeViolationController::class, 'store'])->name('store')->middleware(['auth', 'permission']);
     Route::get('/edit/{id}', [EmployeeViolationController::class, 'edit'])->name('edit')->middleware(['auth', 'permission']);
     Route::put('/update/{id}', [EmployeeViolationController::class, 'update'])->name('update')->middleware(['auth', 'permission']);
-    Route::delete('/delete/{id}', [EmployeeViolationController::class, 'delete'])->name('delete')->middleware(['auth', 'permission']);
+    Route::get('/delete/{id}', [EmployeeViolationController::class, 'delete'])->name('delete')->middleware(['auth', 'permission']);
 });
 
 Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'permission'])->group(function () {

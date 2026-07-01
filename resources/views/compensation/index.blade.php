@@ -266,7 +266,7 @@
                       render: data => new Intl.NumberFormat('id-ID', {
                         style: 'currency',
                         currency: 'IDR',
-                        minimumFractionDigits: 0
+                        minimumFractionDigits: 2
                       }).format(data ?? 0)
                     },
                   ],
@@ -296,7 +296,7 @@
                       new Intl.NumberFormat('id-ID', {
                         style: 'currency',
                         currency: 'IDR',
-                        minimumFractionDigits: 0
+                        minimumFractionDigits: 2
                       }).format(total)
                     );
                   }
@@ -387,7 +387,7 @@
                   render: data => new Intl.NumberFormat('id-ID', {
                     style: 'currency',
                     currency: 'IDR',
-                    minimumFractionDigits: 0
+                    minimumFractionDigits: 2
                   }).format(data ?? 0)
                 },
                 {
@@ -428,7 +428,7 @@
                   new Intl.NumberFormat('id-ID', {
                     style: 'currency',
                     currency: 'IDR',
-                    minimumFractionDigits: 0
+                    minimumFractionDigits: 2
                   }).format(total)
                 );
               }
