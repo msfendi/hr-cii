@@ -1279,6 +1279,16 @@ END AS special_overtime_hours
                         if (($employee->TKK !== null) || ($employee->is_excepkes == 0)) {
                             if (Carbon::parse($employee->TKK)->day <= 20) {
                                 continue;
+                            } else {
+                                $totalBPJSKesehatan = 0;
+
+                                $totalBPJSKesehatan += $this->evaluateFormula(
+                                    $BPJSKesehatanFormula,
+                                    $results,
+                                    $inputVariables
+                                );
+
+                                $amount = $totalBPJSKesehatan;
                             }
                         } else {
                             $totalBPJSKesehatan = 0;
@@ -1292,7 +1302,7 @@ END AS special_overtime_hours
                             $amount = $totalBPJSKesehatan;
                         }
                     } else if ($component->code === 'bpjs_ketenagakerjaan') {
-                        if (($employee->TKK !== null) || ($employee->is_exceptk == 0)) {
+                        if (($employee->TKK !== null) && ($employee->is_exceptk == 0)) {
                             continue;
                         } else {
                             $totalBPJSKetenagakerjaan = 0;
