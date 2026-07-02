@@ -113,13 +113,16 @@
                      <br>
                     <div class="d-flex flex-wrap mt-4">
 
+                    @canRoute('payroll-process.process')
                         <button id="btnProcess"
                             class="btn btn-success btn-sm shadow-sm"
                             disabled>
                             <i class="fas fa-cogs mr-2"></i>
                             Process Payroll
                         </button>
+                        @endcanRoute
 
+                    @canRoute('payroll-process.check')
                         <button type="button"
                             id="btnCheckPayroll"
                             class="btn btn-outline-primary btn-sm ml-2 shadow-sm">
@@ -129,6 +132,7 @@
 
                         </button>
 
+                    @endcanRoute
                     </div>
                   </form>
                </div>
