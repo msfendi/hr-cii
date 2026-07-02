@@ -131,9 +131,16 @@ class GeneratePayrollProcess implements ShouldQueue
             })
             ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
             ->where('p.TMK', '<=', $periodEnd)
-            ->where(function ($q) use ($periodStart, $periodEnd) {
+            ->where('p.TMK', '<=', $periodEnd)
+            ->where(function ($q) use ($periodStart) {
+                // Karyawan dianggap masih aktif di periode ini selama TKK
+                // belum lewat SEBELUM periode dimulai. TKK yang jatuh SETELAH
+                // periodEnd (mis. resign 1 Juli sedangkan periode payroll
+                // adalah Juni) tetap harus dianggap aktif penuh di periode
+                // Juni — jadi batas atas (periodEnd) TIDAK boleh dipakai
+                // di sini, cukup batas bawah (periodStart).
                 $q->whereNull('p.TKK')
-                    ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
+                    ->orWhere('p.TKK', '>=', $periodStart);
             })
 
             ->where('p.NPK', '!=', 'C-00017')
