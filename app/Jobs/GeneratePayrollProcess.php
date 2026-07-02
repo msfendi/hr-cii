@@ -1276,45 +1276,25 @@ END AS special_overtime_hours
                     );
 
                     if ($component->code === 'bpjs_kesehatan') {
-                        if (($employee->TKK !== null) && ($employee->is_excepkes == 0)) {
-                            if (Carbon::parse($employee->TKK)->day <= 20) {
-                                continue;
-                            } else {
-                                $totalBPJSKesehatan = 0;
+                        $totalBPJSKesehatan = 0;
 
-                                $totalBPJSKesehatan += $this->evaluateFormula(
-                                    $BPJSKesehatanFormula,
-                                    $results,
-                                    $inputVariables
-                                );
+                        $totalBPJSKesehatan += $this->evaluateFormula(
+                            $BPJSKesehatanFormula,
+                            $results,
+                            $inputVariables
+                        );
 
-                                $amount = $totalBPJSKesehatan;
-                            }
-                        } else {
-                            $totalBPJSKesehatan = 0;
-
-                            $totalBPJSKesehatan += $this->evaluateFormula(
-                                $BPJSKesehatanFormula,
-                                $results,
-                                $inputVariables
-                            );
-
-                            $amount = $totalBPJSKesehatan;
-                        }
+                        $amount = $totalBPJSKesehatan;
                     } else if ($component->code === 'bpjs_ketenagakerjaan') {
-                        if (($employee->TKK !== null) && ($employee->is_exceptk == 0)) {
-                            continue;
-                        } else {
-                            $totalBPJSKetenagakerjaan = 0;
+                        $totalBPJSKetenagakerjaan = 0;
 
-                            $totalBPJSKetenagakerjaan += $this->evaluateFormula(
-                                $BPJSKetenagakerjaanFormula,
-                                $results,
-                                $inputVariables
-                            );
+                        $totalBPJSKetenagakerjaan += $this->evaluateFormula(
+                            $BPJSKetenagakerjaanFormula,
+                            $results,
+                            $inputVariables
+                        );
 
-                            $amount = $totalBPJSKetenagakerjaan;
-                        }
+                        $amount = $totalBPJSKetenagakerjaan;
                     } else if ($component->code === 'sixs_insentif') {
                         $total6sInsentif = 0;
 
