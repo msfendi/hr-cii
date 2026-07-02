@@ -144,7 +144,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            ->where('p.NPK', '=', 'C-04290')
+            // ->where('p.NPK', '=', 'C-04290')
 
             ->select(
                 'p.NPK',
@@ -173,7 +173,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            ->where('ec1.npk', '=', 'C-04290')
+            // ->where('ec1.npk', '=', 'C-04290')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -1276,7 +1276,7 @@ END AS special_overtime_hours
                     );
 
                     if ($component->code === 'bpjs_kesehatan') {
-                        if (($employee->TKK !== null) && ($employee->is_excepkes == 0)) {
+                        if (($employee->TKK !== null) || ($employee->is_excepkes == 0)) {
                             if (Carbon::parse($employee->TKK)->day <= 20) {
                                 continue;
                             }
@@ -1292,7 +1292,7 @@ END AS special_overtime_hours
                             $amount = $totalBPJSKesehatan;
                         }
                     } else if ($component->code === 'bpjs_ketenagakerjaan') {
-                        if (($employee->TKK !== null) && ($employee->is_exceptk == 0)) {
+                        if (($employee->TKK !== null) || ($employee->is_exceptk == 0)) {
                             continue;
                         } else {
                             $totalBPJSKetenagakerjaan = 0;
