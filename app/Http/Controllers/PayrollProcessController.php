@@ -173,21 +173,38 @@ class PayrollProcessController extends Controller
             ])
             ->map(function ($item) {
 
-                $approved = $item->approved_at;
+                /*
+        ============================================
+        DECODE APPROVED_AT (LIST TIMESTAMP APPROVE)
+        ============================================
+        */
+                $approvedAtRaw = $item->approved_at;
 
-                // jika masih string JSON
-                if (is_string($approved)) {
-                    $approved = json_decode($approved, true);
+                if (is_string($approvedAtRaw)) {
+                    $approvedAtRaw = json_decode($approvedAtRaw, true);
                 }
 
-                // ambil data terakhir
-                $item->approved_at = is_array($approved)
-                    ? end($approved)
-                    : null;
+                // approved_at formatnya: [["ts1","ts2",...]] -> flatten jadi satu list linear
+                $timestampList = [];
+
+                if (is_array($approvedAtRaw)) {
+                    foreach ($approvedAtRaw as $group) {
+                        if (is_array($group)) {
+                            foreach ($group as $ts) {
+                                $timestampList[] = $ts;
+                            }
+                        } elseif (is_string($group)) {
+                            $timestampList[] = $group;
+                        }
+                    }
+                }
+
+                // simpan timestamp terakhir untuk kompatibilitas lama (kalau masih dipakai di tempat lain)
+                $item->approved_at = end($timestampList) ?: null;
 
                 /*
         ============================================
-        DECODE APPROVAL PROGRESS (NPK + STATUS)
+        DECODE APPROVAL PROGRESS (NPK + STATUS + WAKTU)
         ============================================
         */
                 $progress = $item->progress;
@@ -205,7 +222,6 @@ class PayrollProcessController extends Controller
                     $npkList    = $first['npk'] ?? null;
                     $statusList = $first['status'] ?? null;
 
-                    // npk & status masih berupa string JSON di dalam JSON
                     if (is_string($npkList)) {
                         $npkList = json_decode($npkList, true);
                     }
@@ -215,11 +231,25 @@ class PayrollProcessController extends Controller
                     }
 
                     if (is_array($npkList)) {
+
+                        $tsCursor = 0; // pointer ke timestampList, hanya maju saat status = approve
+
                         foreach ($npkList as $i => $npk) {
+
+                            $status = $statusList[$i] ?? null;
+
+                            $approvedTime = null;
+
+                            if ($status === 'approve' && isset($timestampList[$tsCursor])) {
+                                $approvedTime = $timestampList[$tsCursor];
+                                $tsCursor++;
+                            }
+
                             $progressList[] = [
-                                'npk'    => $npk,
-                                'status' => $statusList[$i] ?? null,
-                                'nama'   => null, // diisi setelah lookup BIODATA
+                                'npk'          => $npk,
+                                'status'       => $status,
+                                'nama'         => null, // diisi setelah lookup BIODATA
+                                'approved_at'  => $approvedTime,
                             ];
                         }
                     }
@@ -990,23 +1020,44 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
     | TRANSFORM COMPONENTS
     |--------------------------------------------------------------------------
     */
+        $componentTypeMap = PayrollComponent::pluck('type', 'code')->toArray();
 
         $data->transform(function ($item) use (
             $canSeeSalary,
             $overtimeDetails,
             $lateDetails,
-            $ijinDetails
+            $ijinDetails,
+            $componentTypeMap
         ) {
 
-            $components = json_decode($item->components, true) ?? [];
+            $rawComponents = json_decode($item->components, true) ?? [];
 
-            // tetap kirim object components
+            /*
+    |--------------------------------------------------------------------------
+    | NORMALISASI COMPONENTS -> { amount, type }
+    |--------------------------------------------------------------------------
+    | components di DB masih berupa { code: amount } scalar biasa.
+    | Type (earning/deduction) diambil dari lookup $componentTypeMap
+    | (payroll_components.code -> payroll_components.type), bukan dari
+    | JSON itu sendiri, supaya data run lama maupun baru tetap konsisten
+    | tanpa perlu re-generate payroll.
+    |--------------------------------------------------------------------------
+    */
+            $components = [];
+
+            foreach ($rawComponents as $code => $amount) {
+                $components[$code] = [
+                    'amount' => $canSeeSalary ? (float) $amount : '***',
+                    'type'   => $componentTypeMap[$code] ?? null,
+                ];
+            }
+
             $item->components = $components;
 
-            foreach ($components as $key => $value) {
-                $item->$key = $canSeeSalary
-                    ? (float) $value
-                    : '***';
+            // flatten juga ke top-level property (kompatibilitas lama),
+            // pakai amount saja
+            foreach ($components as $key => $comp) {
+                $item->$key = $comp['amount'];
             }
 
             $item->total_salary = $canSeeSalary

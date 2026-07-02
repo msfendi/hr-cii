@@ -664,6 +664,15 @@ function formatRupiah(number){
         minimumFractionDigits:2
     }).format(number);
 }
+
+function componentColor(componentType){
+    return componentType === 'deduction' ? '#dc3545' : '#212529';
+}
+
+function formatRupiahColored(amount, componentType){
+    let masked = formatRupiah(amount ?? 0);
+    return `<span style="color:${componentColor(componentType)}">${masked}</span>`;
+}
 </script>
 <script>
 
@@ -934,122 +943,103 @@ $(document).on('click','.btn-export',function(e){
             { data: 'employee_name' },
             { data: 'dept' },
 
-            { data:'basic_salary',defaultContent:0,render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.basic_salary.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.basic_salary?.type);
                 }
             },
-            { data:'overtime_pay', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.overtime_pay.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.overtime_pay?.type);
                 }
             },
-            { data:'special_overtime_pay', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.special_overtime_pay.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.special_overtime_pay?.type);
                 }
             },
-            { data:'monthly_premi', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.monthly_premi.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.monthly_premi?.type);
                 }
             },
-            { data:'long_service_allowance', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.long_service_allowance.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.long_service_allowance?.type);
                 }
             },
-            { data:'allowance', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.allowance.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.allowance?.type);
                 }
             },
 
-            { data:'sewing_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.sewing_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.sewing_insentif?.type);
                 }
             },
-            { data:'pad_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.pad_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.pad_insentif?.type);
                 }
             },
-            { data:'cutting_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.cutting_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.cutting_insentif?.type);
                 }
             },
-            { data:'heat_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.heat_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.heat_insentif?.type);
                 }
             },
-            { data:'sixs_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.sixs_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.sixs_insentif?.type);
                 }
             },
 
-            { data:'adjusment', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.adjusment.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.adjusment?.type);
                 }
             },
 
-            { data:'bpjs_kesehatan', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.bpjs_kesehatan.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.bpjs_kesehatan?.type);
                 }
             },
-            { data:'bpjs_ketenagakerjaan', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.bpjs_ketenagakerjaan.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.bpjs_ketenagakerjaan?.type);
                 }
             },
-            { data:'pph_21', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.pph_21.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.pph_21?.type);
                 }
             },
-            { data:'pph_21_deduction', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.pph_21_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.pph_21_deduction?.type);
                 }
             },
-            { data:'absence_deduction', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.absence_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.absence_deduction?.type);
                 }
             },
-            { data:'late_deduction', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.late_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.late_deduction?.type);
                 }
             },
-            
-            { data:'work_leave_deduction', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+
+            { data:'components.work_leave_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.work_leave_deduction?.type);
                 }
             },
 

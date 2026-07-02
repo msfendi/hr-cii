@@ -1052,6 +1052,8 @@ END AS special_overtime_hours
             ->orderByDesc('priority')
             ->get();
 
+        $componentTypeMap = $components->pluck('type', 'code')->toArray();
+
         $overtimeComponent = PayrollComponent::where('code', 'overtime_pay')->first();
         $overtimeFormula = $overtimeComponent->formula;
 
@@ -1871,6 +1873,14 @@ END AS special_overtime_hours
 
             $grandTotal = round($grandTotal, 0);
 
+            $componentsWithType = [];
+            foreach ($results as $code => $amount) {
+                $componentsWithType[$code] = [
+                    'amount' => $amount,
+                    'type'   => $componentTypeMap[$code] ?? null,
+                ];
+            }
+
             if (!$isCheck) {
                 $batchSize = 250;
                 $payrollRunDetailRows[] = [
@@ -1878,7 +1888,7 @@ END AS special_overtime_hours
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'employee_dept' => $employee->payroll_dept,
-                    'components'    => json_encode($results),
+                    'components' => json_encode($componentsWithType),
                     'total_salary'  => $grandTotal,
                     'created_at'    => $now,
                     'updated_at'    => $now,
@@ -1946,7 +1956,7 @@ END AS special_overtime_hours
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'tanggungan' => $employee->TANGGUNGAN,
                     'keterangan' => $employee->KETERANGAN,
-                    'components'    => $results,
+                    'components' => $componentsWithType,
                     'payroll_adjustment_details' => ($payrollAdjustmentDetails[$employee->NPK] ?? collect())
                         ->values(),
 

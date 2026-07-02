@@ -381,6 +381,18 @@ function salaryMask(value){
     return '****';
 }
 
+function componentColor(componentType){
+    return componentType === 'deduction' ? '#dc3545' : '#212529';
+}
+
+function salaryMaskColored(amount, componentType){
+    let masked = salaryMask(amount ?? 0);
+    if(!canSeeSalary){
+        return masked; // tetap '****' tanpa styling
+    }
+    return `<span style="color:${componentColor(componentType)}">${masked}</span>`;
+}
+
 </script>
 <script>
 
@@ -508,26 +520,20 @@ buttons: [
             },
 
             {
-                data:'basic_salary',
+                data:'components.basic_salary.amount',
                 defaultContent:0,
-                render:function(data,type){
-
-                    if(type !== 'display'){
-                        return data ?? 0;
-                    }
-
-                    return salaryMask(data ?? 0);
+                render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return salaryMaskColored(data ?? 0, row.components?.basic_salary?.type);
                 }
             },
 
             {
-                data:'overtime_pay',
+                data:'components.overtime_pay.amount',
                 defaultContent:0,
                 render:function(data,type,row){
 
-                    if(type !== 'display'){
-                        return data ?? 0;
-                    }
+                    if(type !== 'display'){ return data ?? 0; }
 
                     let overtimeData =
                         encodeURIComponent(
@@ -540,14 +546,14 @@ buttons: [
                         <a href="javascript:void(0)"
                         class="btn-overtime-detail"
                         data-overtime="${overtimeData}">
-                            ${salaryMask(data ?? 0)}
+                            ${salaryMaskColored(data ?? 0, row.components?.overtime_pay?.type)}
                         </a>
                     `;
                 }
             },
 
             {
-                data:'special_overtime_pay',
+                data:'components.special_overtime_pay.amount',
                 defaultContent:0,
                 render:function(data,type,row){
 
@@ -566,118 +572,118 @@ buttons: [
                         <a href="javascript:void(0)"
                         class="btn-special-overtime-detail"
                         data-special-overtime="${specialOvertimeData}">
-                            ${salaryMask(data ?? 0)}
+                            ${salaryMaskColored(data ?? 0, row.components?.special_overtime_pay?.type)}
                         </a>
                     `;
                 }
             },
 
             {
-                data:'monthly_premi',
+                data:'components.monthly_premi.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.monthly_premi?.type);
                 }
             },
 
             {
-                data:'long_service_allowance',
+                data:'components.long_service_allowance.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.long_service_allowance?.type);
                 }
             },
 
             {
-                data:'allowance',
+                data:'components.allowance.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.allowance?.type);
                 }
             },
 
             {
-                data:'sewing_insentif',
+                data:'components.sewing_insentif.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.sewing_insentif?.type);
                 }
             },
 
             {
-                data:'pad_insentif',
+                data:'components.pad_insentif.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.pad_insentif?.type);
                 }
             },
 
             {
-                data:'cutting_insentif',
+                data:'components.cutting_insentif.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.cutting_insentif?.type);
                 }
             },
 
             {
-                data:'heat_insentif',
+                data:'components.heat_insentif.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.heat_insentif?.type);
                 }
             },
 
             {
-                data:'sixs_insentif',
+                data:'components.sixs_insentif.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.sixs_insentif?.type);
                 }
             },
 
             {
-                data:'components.adjusment',
+                data:'components.adjusment.amount',
                 defaultContent:0,
                 render:function(data,type,row){
 
@@ -696,66 +702,66 @@ buttons: [
                         <a href="javascript:void(0)"
                         class="btn-adjusment-detail"
                         data-adjusment="${adjusmentData}">
-                            ${salaryMask(data ?? 0)}
+                            ${salaryMaskColored(data ?? 0, row.components?.adjusment?.type)}
                         </a>
                     `;
                 }
             },
 
             {
-                data:'bpjs_kesehatan',
+                data:'components.bpjs_kesehatan.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.bpjs_kesehatan?.type);
                 }
             },
 
             {
-                data:'bpjs_ketenagakerjaan',
+                data:'components.bpjs_ketenagakerjaan.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.bpjs_ketenagakerjaan?.type);
                 }
             },
 
             {
-                data:'pph_21',
+                data:'components.pph_21.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.pph_21?.type);
                 }
             },
 
             {
-                data:'pph_21_deduction',
+                data:'components.pph_21_deduction.amount',
                 defaultContent:0,
-                render:function(data,type){
+                render:function(data,type,row){
 
                     if(type !== 'display'){
                         return data ?? 0;
                     }
 
-                    return salaryMask(data ?? 0);
+                    return salaryMaskColored(data ?? 0, row.components?.pph_21_deduction?.type);
                 }
             },
 
             {
-                data:'absence_deduction',
+                data:'components.absence_deduction.amount',
                 defaultContent:0,
                 render:function(data,type,row){
 
@@ -774,14 +780,14 @@ buttons: [
                         <a href="javascript:void(0)"
                         class="btn-absence-detail"
                         data-absence="${absenceData}">
-                            ${salaryMask(data ?? 0)}
+                            ${salaryMaskColored(data ?? 0, row.components?.absence_deduction?.type)}
                         </a>
                     `;
                 }
             },
 
             {
-                data:'late_deduction',
+                data:'components.late_deduction.amount',
                 defaultContent:0,
                 render:function(data,type,row){
 
@@ -800,13 +806,13 @@ buttons: [
                         <a href="javascript:void(0)"
                         class="btn-late-detail"
                         data-late="${lateData}">
-                            ${salaryMask(data ?? 0)}
+                            ${salaryMaskColored(data ?? 0, row.components?.late_deduction?.type)}
                         </a>
                     `;
                 }
             },
             {
-                data:'work_leave_deduction',
+                data:'components.work_leave_deduction.amount',
                 render:function(data,type,row){
 
                     if(type !== 'display'){
@@ -824,7 +830,7 @@ buttons: [
                         <a href="javascript:void(0)"
                         class="btn-ijin-detail"
                         data-ijin="${ijinData}">
-                            ${salaryMask(data ?? 0)}
+                            ${salaryMaskColored(data ?? 0, row.components?.work_leave_deduction?.type)}
                         </a>
                     `;
                 }
