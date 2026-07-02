@@ -100,11 +100,11 @@
                               <table class="table table-sm table-bordered mb-0">
                                  <thead>
                                     <tr>
-                                       <th>Payroll Component</th>
-                                       <th>Status</th>
-                                       <th>Approved At</th>
+                                        <th>Payroll Component</th>
+                                        <th>Status</th>
+                                        <th>Approval Progress</th>
                                     </tr>
-                                 </thead>
+                                </thead>
                                  <tbody id="approvalTable"></tbody>
                               </table>
                            </div>
@@ -356,24 +356,49 @@ $('#period_id').on('change', function(){
         approvals.forEach(row=>{
 
             let badge='';
-            let approved='-';
 
             if(row.status==='finish'){
-
                 badge=`<span class="badge badge-success">Finish</span>`;
-                approved=row.approved_at ?? '-';
-
             }else{
-
                 badge=`<span class="badge badge-warning">Pending</span>`;
                 allFinish=false;
+            }
+
+            /*
+            =========================================
+            RENDER APPROVAL PROGRESS (NPK + STATUS)
+            =========================================
+            */
+
+            let progressHtml = '-';
+
+            if(row.progress && row.progress.length > 0){
+
+                progressHtml = row.progress.map(p=>{
+
+                    let statusBadge = '';
+
+                    if(p.status === 'approve'){
+                        statusBadge = `<span class="badge badge-success">Approve</span>`;
+                    }else{
+                        statusBadge = `<span class="badge badge-warning">Waiting</span>`;
+                    }
+
+                    return `
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="mr-2">${p.npk} - ${p.nama}</span>
+                            ${statusBadge}
+                        </div>
+                    `;
+
+                }).join('');
             }
 
             html+=`
                 <tr>
                     <td>${row.payroll_component.toUpperCase()}</td>
                     <td>${badge}</td>
-                    <td>${approved}</td>
+                    <td style="min-width:220px">${progressHtml}</td>
                 </tr>
             `;
         });

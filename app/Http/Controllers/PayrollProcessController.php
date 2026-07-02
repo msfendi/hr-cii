@@ -168,7 +168,8 @@ class PayrollProcessController extends Controller
                 'id',
                 'payroll_component',
                 'status',
-                'approved_at'
+                'approved_at',
+                'progress'
             ])
             ->map(function ($item) {
 
@@ -184,8 +185,90 @@ class PayrollProcessController extends Controller
                     ? end($approved)
                     : null;
 
+                /*
+        ============================================
+        DECODE APPROVAL PROGRESS (NPK + STATUS)
+        ============================================
+        */
+                $progress = $item->progress;
+
+                if (is_string($progress)) {
+                    $progress = json_decode($progress, true);
+                }
+
+                $progressList = [];
+
+                if (is_array($progress) && count($progress) > 0) {
+
+                    $first = $progress[0];
+
+                    $npkList    = $first['npk'] ?? null;
+                    $statusList = $first['status'] ?? null;
+
+                    // npk & status masih berupa string JSON di dalam JSON
+                    if (is_string($npkList)) {
+                        $npkList = json_decode($npkList, true);
+                    }
+
+                    if (is_string($statusList)) {
+                        $statusList = json_decode($statusList, true);
+                    }
+
+                    if (is_array($npkList)) {
+                        foreach ($npkList as $i => $npk) {
+                            $progressList[] = [
+                                'npk'    => $npk,
+                                'status' => $statusList[$i] ?? null,
+                                'nama'   => null, // diisi setelah lookup BIODATA
+                            ];
+                        }
+                    }
+                }
+
+                $item->progress = $progressList;
+
                 return $item;
             });
+
+        /*
+============================================
+ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
+============================================
+*/
+
+        $allNpks = $data->pluck('progress')
+            ->flatten(1)
+            ->pluck('npk')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($allNpks->count() > 0) {
+
+            $namesMap = DB::table('BIODATA')
+                ->select('NPK', 'NAMA_KARYAWAN')
+                ->whereIn('NPK', $allNpks)
+                ->union(
+                    DB::table('BIODATA_KELUAR')
+                        ->select('NPK', 'NAMA_KARYAWAN')
+                        ->whereIn('NPK', $allNpks)
+                )
+                ->get()
+                ->pluck('NAMA_KARYAWAN', 'NPK');
+
+            $data = $data->map(function ($item) use ($namesMap) {
+
+                $item->progress = collect($item->progress)
+                    ->map(function ($p) use ($namesMap) {
+                        $p['nama'] = $namesMap[$p['npk']] ?? $p['npk'];
+                        return $p;
+                    })
+                    ->values();
+
+                return $item;
+            });
+        }
+
 
         /*
         ============================================
