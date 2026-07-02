@@ -136,8 +136,43 @@
                                  <i class="fas fa-search"></i>
                                  </button>
                               </td>
+                              {{-- ================= ACTION ================= --}}
                               <td class="text-center">
-                                 @if($row->status=='finish')
+                                 @php
+                                 $progress=collect($row->progress);
+                                 $currentIndex=$progress->search(fn($i)=>$i['status']!=='approve');
+                                 $canApprove=false;
+                                 if($currentIndex!==false){
+                                 $current=$progress[$currentIndex];
+                                 $npkList=is_array($current['npk'])
+                                 ? $current['npk']
+                                 : json_decode($current['npk'],true);
+                                 $statusList=$current['status']=='pending'
+                                 ? array_fill(0,count($npkList),'waiting')
+                                 : (json_decode($current['status'],true)
+                                 ?? array_fill(0,count($npkList),'waiting'));
+                                 foreach($npkList as $idx=>$npk){
+                                 $beforeApproved=true;
+                                 for($i=0;$i<$idx;$i++){
+                                 if($statusList[$i]!=='approve')
+                                 $beforeApproved=false;
+                                 }
+                                 if(
+                                 $npk==auth()->user()->npk &&
+                                 $statusList[$idx]!='approve' &&
+                                 $beforeApproved
+                                 ){
+                                 $canApprove=true;
+                                 }
+                                 }
+                                 }
+                                 @endphp
+                                 @if($canApprove)
+                                 <button class="btn btn-success btn-sm btn-approve"
+                                    data-id="{{ $row->id }}">
+                                 <i class="fas fa-check"></i> Approve
+                                 </button>
+                                 @elseif($row->status=='finish')
                                  <span class="badge badge-success">Done</span>
                                  @else
                                  <span class="badge badge-secondary">Waiting</span>
@@ -198,6 +233,7 @@
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
       <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
+      <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
       <script>
          let insentifTable;
          
@@ -472,6 +508,58 @@ $('#filterDeptModal')
          
          });
          
+      </script>
+      <script>
+         /* ======================================
+         APPROVE
+         ====================================== */
+         
+         $('.btn-approve').click(function(){
+         
+         let btn=$(this);
+         btn.prop('disabled',true);
+         
+         let id=$(this).data('id');
+         
+         Swal.fire({
+         title:'Approve Insentif?',
+         icon:'question',
+         showCancelButton:true
+         }).then((result)=>{
+         
+         if(result.isConfirmed){
+         
+         $.ajax({
+         url:'/insentif-approve/'+id+'/approve',
+         type:'POST',
+         data:{
+         _token:'{{ csrf_token() }}',
+         npk:'{{ auth()->user()->npk }}'
+         },
+         success:function(res){
+         
+         Swal.fire({
+         icon:'success',
+         title:res.message,
+         timer:1200,
+         showConfirmButton:false
+         });
+         
+         setTimeout(()=>location.reload(),1200);
+         },
+         error:function(err){
+         
+         Swal.fire({
+         icon:'error',
+         title:err.responseJSON.message,
+         timer:2000,
+         showConfirmButton:false
+         });
+         }
+         });
+         }
+         });
+         });
       </script>
    </body>
 </html>

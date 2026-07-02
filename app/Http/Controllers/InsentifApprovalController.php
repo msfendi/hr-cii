@@ -83,6 +83,7 @@ class InsentifApprovalController extends Controller
                 return $row;
             });
 
+
         return view('insentif_approve.index', compact('data', 'filter'));
     }
 

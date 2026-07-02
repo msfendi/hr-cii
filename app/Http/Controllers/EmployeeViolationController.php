@@ -52,11 +52,19 @@ class EmployeeViolationController extends Controller
             'percentage' => 'required|numeric|min:0|max:100',
         ]);
 
-        EmployeeViolation::create($request->only('period_id', 'npk', 'percentage'));
+        EmployeeViolation::updateOrCreate(
+            [
+                'period_id' => $request->period_id,
+                'npk'       => $request->npk,
+            ],
+            [
+                'percentage' => $request->percentage,
+            ]
+        );
 
         return redirect()
             ->route('employee-violation.index')
-            ->with('success', 'Data pelanggaran karyawan berhasil ditambahkan.');
+            ->with('success', 'Data pelanggaran karyawan berhasil disimpan.');
     }
 
     public function edit($id)
