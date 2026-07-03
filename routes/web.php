@@ -699,7 +699,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/applicant-contact/store', [ApplicantContactController::class, 'store'])->name('applicant-contact.store');
     Route::delete('/applicant-contact/{id}', [ApplicantContactController::class, 'destroy'])->name('applicant-contact.destroy');
 
-    Route::prefix('expat')->middleware('role:Admin|GA')->group(function () {
+    Route::prefix('expat')->middleware(['auth', 'permission'])->group(function () {
 
         Route::get('master/index', [ExpatController::class, 'indexMaster'])->name('expat.master.index');
         Route::get('master/create', [ExpatController::class, 'createMaster'])->name('expat.master.create');
