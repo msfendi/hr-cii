@@ -1045,10 +1045,22 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
     */
             $components = [];
 
-            foreach ($rawComponents as $code => $amount) {
+            foreach ($rawComponents as $code => $value) {
+
+                // Jika value sudah berbentuk { amount, type } (format baru)
+                if (is_array($value) && array_key_exists('amount', $value)) {
+
+                    $amount = $value['amount'];
+                    $type   = $value['type'] ?? ($componentTypeMap[$code] ?? null);
+                } else {
+                    // Format lama: value adalah scalar langsung
+                    $amount = $value;
+                    $type   = $componentTypeMap[$code] ?? null;
+                }
+
                 $components[$code] = [
                     'amount' => $canSeeSalary ? (float) $amount : '***',
-                    'type'   => $componentTypeMap[$code] ?? null,
+                    'type'   => $type,
                 ];
             }
 

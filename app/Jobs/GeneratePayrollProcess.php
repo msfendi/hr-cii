@@ -144,7 +144,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-04290')
+            // ->where('p.NPK', '=', 'C-00005')
 
             ->select(
                 'p.NPK',
@@ -173,7 +173,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-04290')
+            // ->where('ec1.npk', '=', 'C-00005')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -1259,6 +1259,24 @@ END AS special_overtime_hours
                 'bpjsjhtex' => 2,
             ];
 
+            /*
+            |--------------------------------------------------------------------------
+            | SALARY DAILY CONTRACT (EXPAT + DAILY)
+            |--------------------------------------------------------------------------
+            | Untuk karyawan expat berstatus Daily, basic_salary yang tampil di
+            | payroll bukan hasil kalkulasi formula seperti biasa, melainkan
+            | diambil langsung dari kolom `salary` pada employees_contract
+            | (sudah tersedia di $employee->salary via $latestContract join).
+            | Ini murni penanda/nilai tambahan — tidak mengubah $inputVariables
+            | ataupun proses evaluateFormula di bawah.
+            |--------------------------------------------------------------------------
+*/
+            $isExpatDaily = $inputVariables['is_expat'] == 1 && $inputVariables['is_daily'] == 1;
+
+            $salaryDailyContract = $isExpatDaily
+                ? (float) $employee->salary
+                : null;
+
             $results = [];
             $grandTotal = 0;
 
@@ -1881,6 +1899,22 @@ END AS special_overtime_hours
                 ];
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | OVERRIDE BASIC_SALARY UNTUK EXPAT + DAILY
+            |--------------------------------------------------------------------------
+            | Jika karyawan expat & daily, nilai yang disimpan ke components
+            | (dan otomatis ikut ke payroll_run_details.components) untuk
+            | basic_salary diganti pakai salary_daily_contract, bukan hasil
+            | formula/basic_salary hasil kalkulasi biasa. total_salary /
+            | $grandTotal TIDAK diubah — hanya representasi nilai basic_salary
+            | yang disimpan di kolom components.
+            |--------------------------------------------------------------------------
+            */
+            if ($salaryDailyContract !== null && isset($componentsWithType['basic_salary'])) {
+                $componentsWithType['basic_salary']['amount'] = $salaryDailyContract;
+            }
+
             if (!$isCheck) {
                 $batchSize = 250;
                 $payrollRunDetailRows[] = [
@@ -1909,6 +1943,8 @@ END AS special_overtime_hours
                 $payrollResults[] = [
                     'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                     'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
+                    'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
+                    'salary_daily_contract' => $salaryDailyContract,
                     'absence_days_asli'   => (float) $employee->absence_days,
                     'absence_days'   => (float) $absenceDays,
                     'sick_days'   => (float) $employee->sick_days,
@@ -1925,7 +1961,6 @@ END AS special_overtime_hours
                     'total_ijin'     => (float) $employee->total_ijin_minutes,
                     'is_sewing'       => $employee->IS_SEWING == '1' ? 1 : 0,
                     'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
-                    'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                     'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
                     'bpjsketex' => (float) $employee->percentket,
                     'is_excepkes'  => $employee->is_excepkes === null ? 0 : (float) $employee->is_excepkes,

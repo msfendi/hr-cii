@@ -1097,11 +1097,20 @@ $(document).on('click','.btn-export',function(e){
                         "/employee-payroll/show/"
                         + row.run_id + "/" + row.employee_npk;
 
+                    let viewUrlAudit =
+                        "/employee-payroll/show-audit/"
+                        + row.run_id + "/" + row.employee_npk;
+
                     return `
                         <a href="${viewUrl}" 
-                        class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
+                        class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center mb-1"
                         title="View Slip">
                             <i class="fa fa-eye"></i>
+                        </a>
+                        <a href="${viewUrlAudit}" 
+                        class="btn btn-warning btn-circle btn-sm d-flex align-items-center justify-content-center"
+                        title="View Slip Audit">
+                            <i class="fa fa-clipboard-check"></i>
                         </a>
                     `;
                 }
