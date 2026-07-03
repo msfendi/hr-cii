@@ -1215,6 +1215,13 @@ END AS special_overtime_hours
                 $absenceDays = $employee->absence_days;
             }
 
+            $isJoinOrResignInPeriod =
+                ($tmk && $tmk->between($periodStart, $periodEnd)) ||
+                ($tkk && $tkk->between($periodStart, $periodEnd));
+
+            // tambahan: khusus untuk cek TKK apakah jatuh di periode berjalan
+            $isTkkInPeriod = ($tkk && $tkk->between($periodStart, $periodEnd)) ? 1 : 0;
+
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
@@ -1227,6 +1234,7 @@ END AS special_overtime_hours
                 'count_days'     => (float) $count_days,
                 'tanggungan'     => (float) $employee->TANGGUNGAN,
                 'percentage'     => (float) $employee->percentage,
+
                 'violation_percentage' => (float) $employee->violation_percentage,
                 'total_ijin'     => (float) $employee->total_ijin_minutes,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
@@ -1257,6 +1265,9 @@ END AS special_overtime_hours
                 ),
                 'bpjsjpex' => $employee->IS_EXPAT == '1' ? 0 : 1,
                 'bpjsjhtex' => 2,
+                // BARU — dipakai formula bpjs_kesehatan untuk aturan cut-off tanggal 20
+                'tkk_in_period' => $isTkkInPeriod,
+                'tkk_day'        => $tkk ? (float) $tkk->day : 0,
             ];
 
             /*
@@ -1987,6 +1998,9 @@ END AS special_overtime_hours
                     ),
                     'bpjsjpex' => $employee->IS_EXPAT == '1' ? 0 : 1,
                     'bpjsjhtex' => 2,
+                    // BARU — dipakai formula bpjs_kesehatan untuk aturan cut-off tanggal 20
+                    'tkk_in_period' => $isTkkInPeriod,
+                    'tkk_day'        => $tkk ? (float) $tkk->day : 0,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'tanggungan' => $employee->TANGGUNGAN,
