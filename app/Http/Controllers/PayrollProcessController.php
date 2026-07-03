@@ -227,7 +227,15 @@ class PayrollProcessController extends Controller
                     }
 
                     if (is_string($statusList)) {
-                        $statusList = json_decode($statusList, true);
+                        $decodedStatus = json_decode($statusList, true);
+
+                        if (is_array($decodedStatus)) {
+                            // ternyata json array yang ter-encode sebagai string
+                            $statusList = $decodedStatus;
+                        } else {
+                            // status tunggal, berlaku untuk semua npk
+                            $statusList = array_fill(0, count($npkList), $statusList);
+                        }
                     }
 
                     if (is_array($npkList)) {
