@@ -34,6 +34,7 @@ use App\Http\Controllers\DeptBreaktimeController;
 use App\Http\Controllers\DeptInsentifRoleController;
 use App\Http\Controllers\Employee6sAssignmentController;
 use App\Http\Controllers\EmployeeExitHistoryController;
+use App\Http\Controllers\EmployeeLateController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\EmployeePayrollController;
@@ -257,12 +258,6 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'permission']);
-
-    Route::prefix('payroll/recap')->name('payroll-recap.')->middleware(['auth', 'permission'])->group(function () {
-        Route::get('/', [PayrollRecapController::class, 'index'])->name('index');
-        Route::get('/chart-data', [PayrollRecapController::class, 'chartData'])->name('chart-data');
-        Route::get('/search-employee', [PayrollRecapController::class, 'searchEmployee'])->name('search-employee');
-    });
 
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'permission']);
@@ -903,6 +898,24 @@ Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 
     Route::put('/update/{id}', [BpjsExceptionController::class, 'update'])->name('update');
     Route::delete('/delete/{id}', [BpjsExceptionController::class, 'destroy'])->name('destroy');
 });
+
+
+Route::prefix('payroll/recap')->name('payroll-recap.')->middleware(['auth', 'permission'])->group(function () {
+    Route::get('/', [PayrollRecapController::class, 'index'])->name('index');
+    Route::get('/chart-data', [PayrollRecapController::class, 'chartData'])->name('chart-data');
+    Route::get('/search-employee', [PayrollRecapController::class, 'searchEmployee'])->name('search-employee');
+});
+
+
+Route::get('/employee-late', [EmployeeLateController::class, 'index'])->name('employee-late.index')->middleware(['auth', 'permission']);
+Route::get('/employee-late/create', [EmployeeLateController::class, 'create'])->name('employee-late.create')->middleware(['auth', 'permission']);
+Route::post('/employee-late', [EmployeeLateController::class, 'store'])->name('employee-late.store')->middleware(['auth', 'permission']);
+Route::get('/employee-late/{id}/edit', [EmployeeLateController::class, 'edit'])->name('employee-late.edit')->middleware(['auth', 'permission']);
+Route::put('/employee-late/{id}', [EmployeeLateController::class, 'update'])->name('employee-late.update')->middleware(['auth', 'permission']);
+Route::delete('/employee-late/{id}', [EmployeeLateController::class, 'destroy'])->name('employee-late.delete')->middleware(['auth', 'permission']);
+Route::get('/employee-late/template', [EmployeeLateController::class, 'template'])->name('employee-late.template')->middleware(['auth', 'permission']);
+Route::post('/employee-late/import', [EmployeeLateController::class, 'import'])->name('employee-late.import')->middleware(['auth', 'permission']);
+Route::get('/employee-late/search-npk', [EmployeeLateController::class, 'searchNpk'])->name('employee-late.search-npk')->middleware(['auth', 'permission']);
 
 // Payroll 
 Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');

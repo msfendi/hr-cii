@@ -360,57 +360,172 @@ END AS special_overtime_hours
 |--------------------------------------------------------------------------
 */
         $lateDetails = DB::connection('cii')
-            ->table('employee_lates as el')
+            ->query()
+            ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd) {
 
-            ->leftJoinSub($employeeBase, 'emp', function ($join) {
-                $join->on('el.npk', '=', 'emp.NPK');
-            })
+                $q->fromSub(function ($q2) use ($employeeBase, $periodStart, $periodEnd) {
 
-            ->leftJoin('employee_shifts as es', function ($join) {
-                $join->on('el.npk', '=', 'es.npk')
-                    ->on(
-                        DB::raw('CAST(el.date AS DATE)'),
-                        '=',
-                        DB::raw('CAST(es.shift_date AS DATE)')
+                    $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
+
+                        $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
+
+                            $q4->fromSub($employeeBase, 'emp')
+                                ->crossJoinSub(
+                                    DB::connection('cii')
+                                        ->query()
+                                        ->selectRaw("
+                                    DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
+                                ", [$periodStart])
+                                        ->from(DB::raw('master..spt_values v'))
+                                        ->where('v.type', 'P')
+                                        ->whereRaw("
+                                    v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
+                                ", [$periodStart, $periodEnd]),
+                                    'cal'
+                                )
+                                ->select('emp.*', DB::raw('cal.shift_date'));
+                        }, 'emp')
+
+                            ->leftJoin('employee_shifts as es', function ($join) {
+                                $join->on('emp.NPK', '=', 'es.npk')
+                                    ->on(
+                                        DB::raw('CAST(emp.shift_date AS DATE)'),
+                                        '=',
+                                        DB::raw('CAST(es.shift_date AS DATE)')
+                                    );
+                            })
+
+                            ->leftJoin('shifts as s', function ($join) {
+                                $join->on('es.shift_id', '=', 's.id')
+                                    ->whereNotNull('es.shift_id');
+                            })
+
+                            ->selectRaw("
+                        emp.NPK,
+                        emp.NAMA_KARYAWAN,
+                        emp.DEPARTEMENT,
+                        CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+                        CAST(emp.shift_date AS DATE) as scan_day,
+                        COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
+                        COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
+                            CAST(emp.shift_date AS DATETIME)
+                        ) as shift_start_dt
+                    ");
+                    }, 'base')
+
+                        ->leftJoin('att_log as att', function ($join) {
+                            $join->on(
+                                DB::raw('CAST(att.pin AS VARCHAR(50))'),
+                                '=',
+                                'base.pin'
+                            )
+                                ->on(
+                                    DB::raw('CAST(att.scan_date AS DATE)'),
+                                    '=',
+                                    'base.scan_day'
+                                )
+                                ->where('att.sn', '!=', '66208026030047');
+                        })
+
+                        ->selectRaw("
+                    base.NPK,
+                    base.NAMA_KARYAWAN,
+                    base.DEPARTEMENT,
+                    base.pin,
+                    base.scan_day,
+                    base.work_start,
+                    base.work_end,
+                    base.shift_start_dt,
+                    att.scan_date as scan_candidate,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY base.NPK, base.scan_day
+                        ORDER BY ABS(DATEDIFF(SECOND, base.shift_start_dt, att.scan_date)) ASC
+                    ) as rn
+                ");
+                }, 'ranked')
+
+                    ->where('ranked.rn', 1)
+
+                    ->select(
+                        'ranked.NPK',
+                        'ranked.NAMA_KARYAWAN',
+                        'ranked.DEPARTEMENT',
+                        'ranked.pin',
+                        'ranked.scan_day',
+                        'ranked.work_start',
+                        'ranked.work_end',
+                        DB::raw('ranked.scan_candidate as first_scan')
                     );
-            })
-
-            ->leftJoin('shifts as s', function ($join) {
-                $join->on('es.shift_id', '=', 's.id')
-                    ->whereNotNull('es.shift_id');
-            })
+            }, 'emp')
 
             ->leftJoin('late_compensations as lc', function ($join) {
-                $join->on('el.npk', '=', 'lc.npk')
-                    ->whereRaw('CAST(lc.date AS DATE) = CAST(el.date AS DATE)');
+                $join->on('emp.NPK', '=', 'lc.npk')
+                    ->whereRaw("CAST(lc.date AS DATE) = CAST(emp.scan_day AS DATE)");
             })
 
-            ->whereBetween(DB::raw('CAST(el.date AS DATE)'), [$periodStart, $periodEnd])
+            ->selectRaw("
+        emp.NPK,
+        emp.NAMA_KARYAWAN,
+        emp.DEPARTEMENT,
+        emp.pin,
+        emp.scan_day,
+        emp.work_start,
+        emp.work_end,
+        emp.first_scan
+    ")
 
             ->selectRaw("
-                el.npk as NPK,
-                emp.NAMA_KARYAWAN,
-                emp.DEPARTEMENT,
-                CAST(emp.BARCODE AS VARCHAR(50)) as pin,
-                CAST(el.date AS DATE) as scan_day,
-                COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
-                COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
-                el.arrival_time as first_scan,
-                el.reason,
+        CASE
+            WHEN lc.id IS NOT NULL THEN 0
+            WHEN emp.first_scan IS NULL THEN 0
+
+            ELSE
                 CASE
-                    WHEN lc.id IS NOT NULL THEN 0
+                    WHEN emp.first_scan >
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(SECOND, '00:00:00', emp.work_end),
+                            CAST(emp.scan_day AS DATETIME)
+                        )
+                    THEN 0
+
                     WHEN DATEDIFF(
                         MINUTE,
-                        DATEADD(MINUTE, 5, COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
-                        el.arrival_time
+                        DATEADD(
+                            MINUTE, 5,
+                            DATEADD(
+                                SECOND,
+                                DATEDIFF(SECOND, '00:00:00', emp.work_start),
+                                CAST(emp.scan_day AS DATETIME)
+                            )
+                        ),
+                        emp.first_scan
                     ) < 0 THEN 0
-                    ELSE DATEDIFF(
-                        MINUTE,
-                        DATEADD(MINUTE, 5, COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
-                        el.arrival_time
-                    )
-                END as late_actual
-            ");
+
+                    ELSE
+                        DATEDIFF(
+                            MINUTE,
+                            DATEADD(
+                                MINUTE, 5,
+                                DATEADD(
+                                    SECOND,
+                                    DATEDIFF(SECOND, '00:00:00', emp.work_start),
+                                    CAST(emp.scan_day AS DATETIME)
+                                )
+                            ),
+                            emp.first_scan
+                        )
+                END
+        END as late_actual
+    ")
+
+            ->whereBetween(
+                DB::raw('CAST(emp.scan_day AS DATE)'),
+                [$periodStart, $periodEnd]
+            );
 
         /*
 |--------------------------------------------------------------------------
@@ -429,7 +544,6 @@ END AS special_overtime_hours
         calc.work_start,
         calc.work_end,
         calc.first_scan,
-        calc.reason,
         calc.late_actual,
         CASE
             WHEN calc.late_actual > 240 THEN 240
@@ -449,57 +563,177 @@ END AS special_overtime_hours
             ]);
         }
 
-        /*
-|--------------------------------------------------------------------------
-| LATE SUMMARY (SUMBER BARU: employee_lates, JOIN by NPK)
-|--------------------------------------------------------------------------
-| Direkap per NPK: late_minutes (sudah dicap maksimal 240 menit/hari,
-| dijumlahkan sepanjang periode) dan late_actual (jumlah mentah tanpa cap).
-| Query ini dipakai sebagai leftJoinSub ke $employees berdasarkan
-| emp.NPK = lt.npk (tidak lagi lewat BARCODE/pin seperti versi att_log).
-|--------------------------------------------------------------------------
-*/
+        $nearShiftEndToleranceMinutes = 30;
+
         $lateSummary =
             DB::connection('cii')
-            ->table('employee_lates as el')
+            ->query()
 
-            ->leftJoin('employee_shifts as es', function ($join) {
-                $join->on('el.npk', '=', 'es.npk')
-                    ->on(
-                        DB::raw('CAST(el.date AS DATE)'),
-                        '=',
-                        DB::raw('CAST(es.shift_date AS DATE)')
-                    );
-            })
+            ->fromSub(function ($q) use ($employeeBase, $periodStart, $periodEnd, $nearShiftEndToleranceMinutes) {
 
-            ->leftJoin('shifts as s', function ($join) {
-                $join->on('es.shift_id', '=', 's.id')
-                    ->whereNotNull('es.shift_id');
-            })
+                $q->fromSub(function ($q2) use ($employeeBase, $periodStart, $periodEnd) {
+
+                    $q2->fromSub(function ($q3) use ($employeeBase, $periodStart, $periodEnd) {
+
+                        $q3->fromSub(function ($q4) use ($employeeBase, $periodStart, $periodEnd) {
+
+                            $q4->fromSub($employeeBase, 'emp')
+                                ->crossJoinSub(
+                                    DB::connection('cii')
+                                        ->query()
+                                        ->selectRaw("
+                                    DATEADD(DAY, v.number, CAST(? AS DATE)) as shift_date
+                                ", [$periodStart])
+                                        ->from(DB::raw('master..spt_values v'))
+                                        ->where('v.type', 'P')
+                                        ->whereRaw("
+                                    v.number <= DATEDIFF(DAY, CAST(? AS DATE), CAST(? AS DATE))
+                                ", [$periodStart, $periodEnd]),
+                                    'cal'
+                                )
+                                ->select('emp.NPK', 'emp.BARCODE', DB::raw('cal.shift_date'));
+                        }, 'emp')
+
+                            ->leftJoin('employee_shifts as es', function ($join) {
+                                $join->on('emp.NPK', '=', 'es.npk')
+                                    ->on(
+                                        DB::raw('CAST(emp.shift_date AS DATE)'),
+                                        '=',
+                                        DB::raw('CAST(es.shift_date AS DATE)')
+                                    );
+                            })
+
+                            ->leftJoin('shifts as s', function ($join) {
+                                $join->on('es.shift_id', '=', 's.id')
+                                    ->whereNotNull('es.shift_id');
+                            })
+
+                            ->selectRaw("
+                        emp.NPK,
+                        CAST(emp.BARCODE AS VARCHAR(50)) as pin,
+                        CAST(emp.shift_date AS DATE) as shift_date,
+
+                        COALESCE(CAST(s.work_start AS TIME), '08:00:00') as work_start,
+                        COALESCE(CAST(s.work_end AS TIME), '17:00:00') as work_end,
+
+                        CASE
+                            WHEN COALESCE(CAST(s.work_start AS TIME), '08:00:00')
+                               > COALESCE(CAST(s.work_end AS TIME), '17:00:00')
+                            THEN 1 ELSE 0
+                        END as is_overnight,
+
+                        DATEADD(
+                            SECOND,
+                            DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
+                            CAST(emp.shift_date AS DATETIME)
+                        ) as shift_start_dt,
+
+                        DATEADD(
+                            DAY,
+                            CASE
+                                WHEN COALESCE(CAST(s.work_start AS TIME), '08:00:00')
+                                   > COALESCE(CAST(s.work_end AS TIME), '17:00:00')
+                                THEN 1 ELSE 0
+                            END,
+                            DATEADD(
+                                SECOND,
+                                DATEDIFF(SECOND, '00:00:00', COALESCE(CAST(s.work_end AS TIME), '17:00:00')),
+                                CAST(emp.shift_date AS DATETIME)
+                            )
+                        ) as shift_end_dt
+                    ");
+                    }, 'base')
+
+                        ->leftJoin('att_log as att', function ($join) use ($periodStart, $periodEnd) {
+                            $join->on(
+                                DB::raw('CAST(att.pin AS VARCHAR(50))'),
+                                '=',
+                                'base.pin'
+                            )
+                                ->where('att.sn', '!=', '66208026030047')
+                                ->whereBetween(
+                                    DB::raw('CAST(att.scan_date AS DATE)'),
+                                    [$periodStart, $periodEnd]
+                                )
+                                ->where(function ($q) {
+                                    $q->whereRaw("CAST(att.scan_date AS DATE) = base.shift_date")
+                                        ->orWhereRaw("
+                          base.is_overnight = 1
+                          AND CAST(att.scan_date AS DATE) = DATEADD(DAY, 1, base.shift_date)
+                      ");
+                                });
+                        })
+
+                        ->selectRaw("
+                    base.NPK,
+                    base.pin,
+                    base.shift_date,
+                    base.work_start,
+                    base.work_end,
+                    base.shift_start_dt,
+                    base.shift_end_dt,
+                    att.scan_date as scan_candidate,
+
+                    ROW_NUMBER() OVER (
+                        PARTITION BY base.NPK, base.shift_date
+                        ORDER BY ABS(DATEDIFF(SECOND, base.shift_start_dt, att.scan_date)) ASC
+                    ) as rn,
+
+                    COUNT(att.scan_date) OVER (
+                        PARTITION BY base.NPK, base.shift_date
+                    ) as scan_count
+                ");
+                }, 'ranked')
+
+                    ->where('ranked.rn', 1)
+
+                    ->selectRaw("
+            ranked.NPK,
+            ranked.pin,
+            ranked.shift_date,
+            ranked.work_start,
+            ranked.work_end,
+            ranked.shift_start_dt,
+            ranked.shift_end_dt,
+            ranked.scan_candidate as first_scan,
+            ranked.scan_count
+        ");
+            }, 'daily')
 
             ->leftJoin('late_compensations as lc', function ($join) {
-                $join->on('el.npk', '=', 'lc.npk')
-                    ->whereRaw('CAST(lc.date AS DATE) = CAST(el.date AS DATE)');
+                $join->on('daily.NPK', '=', 'lc.npk')
+                    ->whereRaw("CAST(lc.date AS DATE) = CAST(daily.shift_date AS DATE)");
             })
 
-            ->whereBetween(DB::raw('CAST(el.date AS DATE)'), [$periodStart, $periodEnd])
-
             ->selectRaw("
-                el.npk,
-                CASE
-                    WHEN lc.id IS NOT NULL THEN 0
-                    WHEN DATEDIFF(
+            daily.NPK as npk,
+            daily.pin,
+            daily.shift_date,
+            CASE
+                WHEN lc.id IS NOT NULL THEN 0
+
+                WHEN daily.first_scan IS NULL THEN 0
+
+                WHEN daily.scan_count = 1
+                     AND DATEDIFF(MINUTE, daily.first_scan, daily.shift_end_dt) <= {$nearShiftEndToleranceMinutes}
+                THEN 0
+
+                WHEN daily.first_scan > daily.shift_end_dt THEN 0
+
+                WHEN DATEDIFF(
+                    MINUTE,
+                    DATEADD(MINUTE, 5, daily.shift_start_dt),
+                    daily.first_scan
+                ) < 0 THEN 0
+
+                ELSE
+                    DATEDIFF(
                         MINUTE,
-                        DATEADD(MINUTE, 5, COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
-                        el.arrival_time
-                    ) < 0 THEN 0
-                    ELSE DATEDIFF(
-                        MINUTE,
-                        DATEADD(MINUTE, 5, COALESCE(CAST(s.work_start AS TIME), '08:00:00')),
-                        el.arrival_time
+                        DATEADD(MINUTE, 5, daily.shift_start_dt),
+                        daily.first_scan
                     )
-                END as raw_late_minute
-            ");
+            END as raw_late_minute
+        ");
 
         /*
 |--------------------------------------------------------------------------
@@ -511,6 +745,7 @@ END AS special_overtime_hours
             ->fromSub($lateSummary, 'calc')
             ->selectRaw("
         calc.npk,
+        calc.pin,
         SUM(
             CASE
                 WHEN calc.raw_late_minute > 240 THEN 240
@@ -519,7 +754,7 @@ END AS special_overtime_hours
         ) as late_minutes,
         SUM(calc.raw_late_minute) as late_actual
     ")
-            ->groupBy('calc.npk');
+            ->groupBy('calc.npk', 'calc.pin');
 
         // NOTE: removed redundant `$lateSummary->get();` call here.
         // The exact same query is already consumed below as a subquery via
@@ -710,9 +945,9 @@ END AS special_overtime_hours
 
             ->leftJoinSub($lateSummary, 'lt', function ($join) {
                 $join->on(
-                    DB::raw('CAST(emp.NPK AS VARCHAR(50))'),
+                    DB::raw('CAST(emp.BARCODE AS VARCHAR(50))'),
                     '=',
-                    DB::raw('CAST(lt.npk AS VARCHAR(50))')
+                    DB::raw('CAST(lt.pin AS VARCHAR(50))')
                 );
             })
 
@@ -1732,7 +1967,6 @@ END AS special_overtime_hours
                     'employee_dept' => $employee->payroll_dept,
                     'tmk' => $employee->TMK,
                     'period_start'  => $periodStart,
-                    'period_end'  => $periodEnd,
                     'tkk' => $employee->TKK,
                     'late_summary' => $employee->total_telat,
                     'violation_percentage' => (float) $employee->violation_percentage,

@@ -605,27 +605,7 @@ MULTI SCAN
         |--------------------------------------------------------------------------
         */
 
-        // $pdf = Pdf::loadView('payroll.viewslip', [
-        //     'employee' => $employee,
-        //     'earnings' => $earnings,
-        //     'deductions' => $deductions,
-        //     'attendance' => $attendance,
-        //     'summary' => $summary,
-        //     'holidays' => $holidays,
-        //     'late_minutes' => $late_minutes,
-        //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
-        //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
-        //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        // ])
-        //     ->setPaper('A4', 'portrait');
-
-        // // SET PASSWORD
-        // $pdf->getDomPDF()->getCanvas()->get_cpdf()
-        //     ->setEncryption($password, $password, ['print', 'copy']);
-
-        // return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
-
-        return view('payroll.viewslip', [
+        $pdf = Pdf::loadView('payroll.viewslip', [
             'employee' => $employee,
             'earnings' => $earnings,
             'deductions' => $deductions,
@@ -636,7 +616,27 @@ MULTI SCAN
             'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
             'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
             'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        ]);
+        ])
+            ->setPaper('A4', 'portrait');
+
+        // SET PASSWORD
+        $pdf->getDomPDF()->getCanvas()->get_cpdf()
+            ->setEncryption($password, $password, ['print', 'copy']);
+
+        return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
+
+        // return view('payroll.viewslip', [
+        //     'employee' => $employee,
+        //     'earnings' => $earnings,
+        //     'deductions' => $deductions,
+        //     'attendance' => $attendance,
+        //     'summary' => $summary,
+        //     'holidays' => $holidays,
+        //     'late_minutes' => $late_minutes,
+        //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+        //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
+        //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
+        // ]);
     }
 
     public function showSlipAudit($run_id, $npk)
@@ -1025,27 +1025,7 @@ MULTI SCAN
     |--------------------------------------------------------------------------
     */
 
-        // $pdf = Pdf::loadView('payroll.viewslip', [
-        //     'employee' => $employee,
-        //     'earnings' => $earnings,
-        //     'deductions' => $deductions,
-        //     'attendance' => $attendance,
-        //     'summary' => $summary,
-        //     'holidays' => $holidays,
-        //     'late_minutes' => $late_minutes,
-        //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
-        //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
-        //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        // ])
-        //     ->setPaper('A4', 'portrait');
-
-        // $pdf->getDomPDF()->getCanvas()->get_cpdf()
-        //     ->setEncryption($password, $password, ['print', 'copy']);
-
-        // return $pdf->download('SLIP_AUDIT_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
-
-
-        return view('payroll.viewslip', [
+        $pdf = Pdf::loadView('payroll.viewslip', [
             'employee' => $employee,
             'earnings' => $earnings,
             'deductions' => $deductions,
@@ -1056,6 +1036,26 @@ MULTI SCAN
             'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
             'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
             'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        ]);
+        ])
+            ->setPaper('A4', 'portrait');
+
+        $pdf->getDomPDF()->getCanvas()->get_cpdf()
+            ->setEncryption($password, $password, ['print', 'copy']);
+
+        return $pdf->download('SLIP_AUDIT_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
+
+
+        // return view('payroll.viewslip', [
+        //     'employee' => $employee,
+        //     'earnings' => $earnings,
+        //     'deductions' => $deductions,
+        //     'attendance' => $attendance,
+        //     'summary' => $summary,
+        //     'holidays' => $holidays,
+        //     'late_minutes' => $late_minutes,
+        //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+        //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
+        //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
+        // ]);
     }
 }

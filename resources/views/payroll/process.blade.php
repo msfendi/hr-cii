@@ -1226,64 +1226,77 @@ buttons: [
             },
 
             {
-                data: 'tkk',
-                defaultContent: null,
-                render: function (data, type, row) {
+    data: 'tkk',
+    defaultContent: null,
+    render: function (data, type, row) {
 
-                    const tmk = row.tmk ? new Date(row.tmk) : null;
-                    const periodStart = row.period_start ? new Date(row.period_start) : null;
+        const ket = (row.keterangan || '').trim().toLowerCase();
 
-                    const isTMKInPeriod =
-                        tmk &&
-                        periodStart &&
-                        tmk.getFullYear() === periodStart.getFullYear() &&
-                        tmk.getMonth() === periodStart.getMonth();
+        const tmk = row.tmk ? new Date(row.tmk) : null;
+        const tkk = row.tkk ? new Date(row.tkk) : null;
+        const periodStart = row.period_start ? new Date(row.period_start) : null;
+        const periodEnd = row.period_end ? new Date(row.period_end) : null;
 
-                    // 1. BARU (TMK di periode berjalan)
-                    if (isTMKInPeriod) {
-                        return `
-                            <span class="badge badge-primary">
-                                Baru
-                            </span>
-                        `;
-                    }
+        // Hilangkan pengaruh jam/timezone
+        if (tmk) tmk.setHours(0, 0, 0, 0);
+        if (tkk) tkk.setHours(0, 0, 0, 0);
+        if (periodStart) periodStart.setHours(0, 0, 0, 0);
+        if (periodEnd) periodEnd.setHours(23, 59, 59, 999);
 
-                    // 2. MANGKIR
-                    if ((row.keterangan || '').toLowerCase() === 'ma') {
-                        return `
-                            <span class="badge badge-danger">
-                                Mangkir
-                            </span>
-                        `;
-                    }
+        const isTMKInPeriod =
+            tmk &&
+            periodStart &&
+            tmk.getFullYear() === periodStart.getFullYear() &&
+            tmk.getMonth() === periodStart.getMonth();
 
-                    // 3. RESIGN
-                    if (data !== null && data !== '') {
-                        return `
-                            <span class="badge badge-warning">
-                                Resign
-                            </span>
-                        `;
-                    }
+        const isTKKInPeriod =
+            tkk &&
+            periodStart &&
+            periodEnd &&
+            tkk >= periodStart &&
+            tkk <= periodEnd;
 
-                    // 4. ACTIVE
-                    return `
-                        <span class="badge badge-success">
-                            Active
-                        </span>
-                    `;
-                }
+        // BARU
+        if (isTMKInPeriod) {
+            return `<span class="badge badge-primary">Baru</span>`;
+        }
+
+        // TKK berada dalam periode payroll
+        if (isTKKInPeriod) {
+
+            if (ket === 'ma') {
+                return `<span class="badge badge-danger">Mangkir</span>`;
             }
+
+            return `<span class="badge badge-warning">Resign</span>`;
+        }
+
+        // Selain itu Active
+        return `<span class="badge badge-success">Active</span>`;
+    }
+}
         ],
 
         createdRow: function (row, data) {
 
-            const ket = (data.keterangan || '').toString().trim().toLowerCase();
+            const ket = (data.keterangan || '').trim().toLowerCase();
 
             $(row).removeClass('table-warning table-danger');
 
-            if (data.tkk !== null && data.tkk !== '') {
+            if (!data.tkk || !data.period_start || !data.period_end) {
+                return;
+            }
 
+            const tkk = new Date(data.tkk);
+            const periodStart = new Date(data.period_start);
+            const periodEnd = new Date(data.period_end);
+
+            // Normalisasi jam
+            tkk.setHours(0, 0, 0, 0);
+            periodStart.setHours(0, 0, 0, 0);
+            periodEnd.setHours(23, 59, 59, 999);
+
+            if (tkk >= periodStart && tkk <= periodEnd) {
                 if (ket === 'ma') {
                     $(row).addClass('table-danger');
                 } else {
