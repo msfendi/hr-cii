@@ -699,83 +699,83 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/applicant-contact/store', [ApplicantContactController::class, 'store'])->name('applicant-contact.store');
     Route::delete('/applicant-contact/{id}', [ApplicantContactController::class, 'destroy'])->name('applicant-contact.destroy');
 
-    Route::prefix('expat')->middleware(['auth', 'permission'])->group(function () {
+    Route::prefix('expat')->group(function () {
 
-        Route::get('master/index', [ExpatController::class, 'indexMaster'])->name('expat.master.index');
-        Route::get('master/create', [ExpatController::class, 'createMaster'])->name('expat.master.create');
-        Route::get('master/edit/{id}', [ExpatController::class, 'editMaster'])->name('expat.master.edit');
-        Route::get('master/delete/{id}', [ExpatController::class, 'deleteMaster'])->name('expat.master.delete');
-        Route::post('master/store', [ExpatController::class, 'storeMaster'])->name('expat.master.store');
-        Route::post('master/update/{id}', [ExpatController::class, 'updateMaster'])->name('expat.master.update');
-        Route::post('import/master', [ExpatController::class, 'importMaster'])->name('expat.import.master');
-        Route::get('template/master', [ExpatController::class, 'templateMaster'])->name('expat.template.master');
+        Route::get('master/index', [ExpatController::class, 'indexMaster'])->name('expat.master.index')->middleware(['auth', 'permission']);
+        Route::get('master/create', [ExpatController::class, 'createMaster'])->name('expat.master.create')->middleware(['auth', 'permission']);
+        Route::get('master/edit/{id}', [ExpatController::class, 'editMaster'])->name('expat.master.edit')->middleware(['auth', 'permission']);
+        Route::get('master/delete/{id}', [ExpatController::class, 'deleteMaster'])->name('expat.master.delete')->middleware(['auth', 'permission']);
+        Route::post('master/store', [ExpatController::class, 'storeMaster'])->name('expat.master.store')->middleware(['auth', 'permission']);
+        Route::post('master/update/{id}', [ExpatController::class, 'updateMaster'])->name('expat.master.update')->middleware(['auth', 'permission']);
+        Route::post('import/master', [ExpatController::class, 'importMaster'])->name('expat.import.master')->middleware(['auth', 'permission']);
+        Route::get('template/master', [ExpatController::class, 'templateMaster'])->name('expat.template.master')->middleware(['auth', 'permission']);
 
-        Route::get('onleave/index', [ExpatController::class, 'indexOnleave'])->name('expat.onleave.index');
-        Route::get('onleave/create', [ExpatController::class, 'createOnLeave'])->name('expat.onleave.create');
-        Route::post('onleave/store', [ExpatController::class, 'storeOnleave'])->name('expat.onleave.store');
-        Route::get('onleave/edit/{id}', [ExpatController::class, 'editOnleave'])->name('expat.onleave.edit');
-        Route::post('onleave/update/{id}', [ExpatController::class, 'updateOnleave'])->name('expat.onleave.update');
-        Route::get('onleave/delete/{id}', [ExpatController::class, 'deleteOnleave'])->name('expat.onleave.delete');
-        Route::post('import/onleave', [ExpatController::class, 'importOnleave'])->name('expat.import.onleave');
-        Route::get('template/onleave', [ExpatController::class, 'templateOnleave'])->name('expat.template.onleave');
+        Route::get('onleave/index', [ExpatController::class, 'indexOnleave'])->name('expat.onleave.index')->middleware(['auth', 'permission']);
+        Route::get('onleave/create', [ExpatController::class, 'createOnLeave'])->name('expat.onleave.create')->middleware(['auth', 'permission']);
+        Route::post('onleave/store', [ExpatController::class, 'storeOnleave'])->name('expat.onleave.store')->middleware(['auth', 'permission']);
+        Route::get('onleave/edit/{id}', [ExpatController::class, 'editOnleave'])->name('expat.onleave.edit')->middleware(['auth', 'permission']);
+        Route::post('onleave/update/{id}', [ExpatController::class, 'updateOnleave'])->name('expat.onleave.update')->middleware(['auth', 'permission']);
+        Route::get('onleave/delete/{id}', [ExpatController::class, 'deleteOnleave'])->name('expat.onleave.delete')->middleware(['auth', 'permission']);
+        Route::post('import/onleave', [ExpatController::class, 'importOnleave'])->name('expat.import.onleave')->middleware(['auth', 'permission']);
+        Route::get('template/onleave', [ExpatController::class, 'templateOnleave'])->name('expat.template.onleave')->middleware(['auth', 'permission']);
 
-        Route::get('cost/index', [ExpatController::class, 'indexCost'])->name('expat.cost.index');
-        Route::get('cost/create', [ExpatController::class, 'createCost'])->name('expat.cost.create');
-        Route::post('cost/store', [ExpatController::class, 'storeCost'])->name('expat.cost.store');
-        Route::get('cost/edit/{id}', [ExpatController::class, 'editCost'])->name('expat.cost.edit');
-        Route::post('cost/update/{id}', [ExpatController::class, 'updateCost'])->name('expat.cost.update');
-        Route::get('cost/delete/{id}', [ExpatController::class, 'deleteCost'])->name('expat.cost.delete');
-        Route::post('import/cost', [ExpatController::class, 'importCost'])->name('expat.import.cost');
-        Route::get('template/cost', [ExpatController::class, 'templateCost'])->name('expat.template.cost');
+        Route::get('cost/index', [ExpatController::class, 'indexCost'])->name('expat.cost.index')->middleware(['auth', 'permission']);
+        Route::get('cost/create', [ExpatController::class, 'createCost'])->name('expat.cost.create')->middleware(['auth', 'permission']);
+        Route::post('cost/store', [ExpatController::class, 'storeCost'])->name('expat.cost.store')->middleware(['auth', 'permission']);
+        Route::get('cost/edit/{id}', [ExpatController::class, 'editCost'])->name('expat.cost.edit')->middleware(['auth', 'permission']);
+        Route::post('cost/update/{id}', [ExpatController::class, 'updateCost'])->name('expat.cost.update')->middleware(['auth', 'permission']);
+        Route::get('cost/delete/{id}', [ExpatController::class, 'deleteCost'])->name('expat.cost.delete')->middleware(['auth', 'permission']);
+        Route::post('import/cost', [ExpatController::class, 'importCost'])->name('expat.import.cost')->middleware(['auth', 'permission']);
+        Route::get('template/cost', [ExpatController::class, 'templateCost'])->name('expat.template.cost')->middleware(['auth', 'permission']);
 
-        Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export');
+        Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export')->middleware(['auth', 'permission']);
     });
 
-    Route::prefix('chu-family')->middleware(['auth', 'permission'])->group(function () {
-        Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index');
-        Route::get('/create', [ChuFamilyController::class, 'create'])->name('chu-family.create');
-        Route::post('/store', [ChuFamilyController::class, 'store'])->name('chu-family.store');
-        Route::get('/edit/{id}', [ChuFamilyController::class, 'edit'])->name('chu-family.edit');
-        Route::put('/update/{id}', [ChuFamilyController::class, 'update'])->name('chu-family.update');
-        Route::get('/delete/{id}', [ChuFamilyController::class, 'delete'])->name('chu-family.delete');
-        Route::post('/import', [ChuFamilyController::class, 'import'])->name('chu-family.import');
-        Route::get('/template', [ChuFamilyController::class, 'template'])->name('chu-family.template');
-        Route::get('/export', [ChuFamilyController::class, 'export'])->name('chu-family.export');
+    Route::prefix('chu-family')->group(function () {
+        Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index')->middleware(['auth', 'permission']);
+        Route::get('/create', [ChuFamilyController::class, 'create'])->name('chu-family.create')->middleware(['auth', 'permission']);
+        Route::post('/store', [ChuFamilyController::class, 'store'])->name('chu-family.store')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [ChuFamilyController::class, 'edit'])->name('chu-family.edit')->middleware(['auth', 'permission']);
+        Route::put('/update/{id}', [ChuFamilyController::class, 'update'])->name('chu-family.update')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [ChuFamilyController::class, 'delete'])->name('chu-family.delete')->middleware(['auth', 'permission']);
+        Route::post('/import', [ChuFamilyController::class, 'import'])->name('chu-family.import')->middleware(['auth', 'permission']);
+        Route::get('/template', [ChuFamilyController::class, 'template'])->name('chu-family.template')->middleware(['auth', 'permission']);
+        Route::get('/export', [ChuFamilyController::class, 'export'])->name('chu-family.export')->middleware(['auth', 'permission']);
     });
 
-    Route::prefix('epo')->middleware(['auth', 'permission'])->group(function () {
-        Route::get('/index', [EpoController::class, 'index'])->name('epo.index');
-        Route::get('/create', [EpoController::class, 'create'])->name('epo.create');
-        Route::get('/edit/{id}', [EpoController::class, 'edit'])->name('epo.edit');
-        Route::post('/store', [EpoController::class, 'store'])->name('epo.store');
-        Route::put('/{epo}', [EpoController::class, 'update'])->name('epo.update');
-        Route::get('/{epo}', [EpoController::class, 'destroy'])->name('epo.delete');
-        Route::post('/import', [EpoController::class, 'import'])->name('epo.import');
-        Route::get('/template', [EpoController::class, 'template'])->name('epo.template');
-        Route::get('/export', [EpoController::class, 'export'])->name('epo.export');
+    Route::prefix('epo')->group(function () {
+        Route::get('/index', [EpoController::class, 'index'])->name('epo.index')->middleware(['auth', 'permission']);
+        Route::get('/create', [EpoController::class, 'create'])->name('epo.create')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [EpoController::class, 'edit'])->name('epo.edit')->middleware(['auth', 'permission']);
+        Route::post('/store', [EpoController::class, 'store'])->name('epo.store')->middleware(['auth', 'permission']);
+        Route::put('/{epo}', [EpoController::class, 'update'])->name('epo.update')->middleware(['auth', 'permission']);
+        Route::get('/{epo}', [EpoController::class, 'destroy'])->name('epo.delete')->middleware(['auth', 'permission']);
+        Route::post('/import', [EpoController::class, 'import'])->name('epo.import')->middleware(['auth', 'permission']);
+        Route::get('/template', [EpoController::class, 'template'])->name('epo.template')->middleware(['auth', 'permission']);
+        Route::get('/export', [EpoController::class, 'export'])->name('epo.export')->middleware(['auth', 'permission']);
     });
 
-    Route::prefix('foreign-guest')->middleware(['auth', 'permission'])->group(function () {
+    Route::prefix('foreign-guest')->group(function () {
 
-        Route::get('/', [ForeignGuestController::class, 'index'])->name('foreign-guest.index');
-        Route::get('/create', [ForeignGuestController::class, 'create'])->name('foreign-guest.create');
-        Route::post('/store', [ForeignGuestController::class, 'store'])->name('foreign-guest.store');
-        Route::get('/{id}', [ForeignGuestController::class, 'show'])->name('foreign-guest.show');
-        Route::get('/edit/{id}', [ForeignGuestController::class, 'edit'])->name('foreign-guest.edit');
-        Route::put('/update/{id}', [ForeignGuestController::class, 'update'])->name('foreign-guest.update');
-        Route::get('/delete/{id}', [ForeignGuestController::class, 'destroy'])->name('foreign-guest.delete');
+        Route::get('/', [ForeignGuestController::class, 'index'])->name('foreign-guest.index')->middleware(['auth', 'permission']);
+        Route::get('/create', [ForeignGuestController::class, 'create'])->name('foreign-guest.create')->middleware(['auth', 'permission']);
+        Route::post('/store', [ForeignGuestController::class, 'store'])->name('foreign-guest.store')->middleware(['auth', 'permission']);
+        Route::get('/{id}', [ForeignGuestController::class, 'show'])->name('foreign-guest.show')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [ForeignGuestController::class, 'edit'])->name('foreign-guest.edit')->middleware(['auth', 'permission']);
+        Route::put('/update/{id}', [ForeignGuestController::class, 'update'])->name('foreign-guest.update')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [ForeignGuestController::class, 'destroy'])->name('foreign-guest.delete')->middleware(['auth', 'permission']);
     });
 
-    Route::prefix('guest-master')->middleware(['auth', 'permission'])->group(function () {
+    Route::prefix('guest-master')->group(function () {
 
-        Route::get('/', [GuestMasterController::class, 'index'])->name('guest-master.index');
-        Route::get('/create', [GuestMasterController::class, 'create'])->name('guest-master.create');
-        Route::post('/store', [GuestMasterController::class, 'store'])->name('guest-master.store');
-        Route::get('/{id}', [GuestMasterController::class, 'show'])->name('guest-master.show');
-        Route::get('/edit/{id}', [GuestMasterController::class, 'edit'])->name('guest-master.edit');
-        Route::post('/update/', [GuestMasterController::class, 'update'])->name('guest-master.update');
-        Route::get('/delete/{id}', [GuestMasterController::class, 'destroy'])->name('guest-master.delete');
-        Route::get('/guest-master/export', [GuestMasterController::class, 'export'])->name('guest-master.export');
+        Route::get('/', [GuestMasterController::class, 'index'])->name('guest-master.index')->middleware(['auth', 'permission']);
+        Route::get('/create', [GuestMasterController::class, 'create'])->name('guest-master.create')->middleware(['auth', 'permission']);
+        Route::post('/store', [GuestMasterController::class, 'store'])->name('guest-master.store')->middleware(['auth', 'permission']);
+        Route::get('/{id}', [GuestMasterController::class, 'show'])->name('guest-master.show')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [GuestMasterController::class, 'edit'])->name('guest-master.edit')->middleware(['auth', 'permission']);
+        Route::post('/update/', [GuestMasterController::class, 'update'])->name('guest-master.update')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [GuestMasterController::class, 'destroy'])->name('guest-master.delete')->middleware(['auth', 'permission']);
+        Route::get('/guest-master/export', [GuestMasterController::class, 'export'])->name('guest-master.export')->middleware(['auth', 'permission']);
     });
 
     // Compensation
