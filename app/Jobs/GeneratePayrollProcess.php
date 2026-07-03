@@ -1268,6 +1268,7 @@ END AS special_overtime_hours
                 // BARU — dipakai formula bpjs_kesehatan untuk aturan cut-off tanggal 20
                 'tkk_in_period' => $isTkkInPeriod,
                 'tkk_day'        => $tkk ? (float) $tkk->day : 0,
+                'has_tkk'        => $tkk ? 1 : 0,
             ];
 
             /*
@@ -2001,6 +2002,7 @@ END AS special_overtime_hours
                     // BARU — dipakai formula bpjs_kesehatan untuk aturan cut-off tanggal 20
                     'tkk_in_period' => $isTkkInPeriod,
                     'tkk_day'        => $tkk ? (float) $tkk->day : 0,
+                    'has_tkk'        => $tkk ? 1 : 0,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'tanggungan' => $employee->TANGGUNGAN,

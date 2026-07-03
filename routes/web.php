@@ -83,6 +83,7 @@ use App\Http\Controllers\RecruitmentFormController;
 use App\Http\Controllers\SewingViolationController;
 use App\Http\Controllers\IjinMeninggalkanPekerjaanController;
 use App\Http\Controllers\MenuController;
+use App\Http\Controllers\PayrollRecapController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RolePermissionController;
 
@@ -256,6 +257,12 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'permission']);
+
+    Route::prefix('payroll/recap')->name('payroll-recap.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [PayrollRecapController::class, 'index'])->name('index');
+        Route::get('/chart-data', [PayrollRecapController::class, 'chartData'])->name('chart-data');
+        Route::get('/search-employee', [PayrollRecapController::class, 'searchEmployee'])->name('search-employee');
+    });
 
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'permission']);
