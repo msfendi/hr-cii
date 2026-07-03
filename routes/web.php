@@ -731,7 +731,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export');
     });
 
-    Route::prefix('chu-family')->middleware('role:Admin|GA')->group(function () {
+    Route::prefix('chu-family')->middleware(['auth', 'permission'])->group(function () {
         Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index');
         Route::get('/create', [ChuFamilyController::class, 'create'])->name('chu-family.create');
         Route::post('/store', [ChuFamilyController::class, 'store'])->name('chu-family.store');
@@ -743,7 +743,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/export', [ChuFamilyController::class, 'export'])->name('chu-family.export');
     });
 
-    Route::prefix('epo')->group(function () {
+    Route::prefix('epo')->middleware(['auth', 'permission'])->group(function () {
         Route::get('/index', [EpoController::class, 'index'])->name('epo.index');
         Route::get('/create', [EpoController::class, 'create'])->name('epo.create');
         Route::get('/edit/{id}', [EpoController::class, 'edit'])->name('epo.edit');
@@ -755,7 +755,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/export', [EpoController::class, 'export'])->name('epo.export');
     });
 
-    Route::prefix('foreign-guest')->middleware('role:Admin|GA')->group(function () {
+    Route::prefix('foreign-guest')->middleware(['auth', 'permission'])->group(function () {
 
         Route::get('/', [ForeignGuestController::class, 'index'])->name('foreign-guest.index');
         Route::get('/create', [ForeignGuestController::class, 'create'])->name('foreign-guest.create');
@@ -766,7 +766,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/delete/{id}', [ForeignGuestController::class, 'destroy'])->name('foreign-guest.delete');
     });
 
-    Route::prefix('guest-master')->middleware('role:Admin|GA')->group(function () {
+    Route::prefix('guest-master')->middleware(['auth', 'permission'])->group(function () {
 
         Route::get('/', [GuestMasterController::class, 'index'])->name('guest-master.index');
         Route::get('/create', [GuestMasterController::class, 'create'])->name('guest-master.create');
