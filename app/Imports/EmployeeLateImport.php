@@ -64,14 +64,20 @@ class EmployeeLateImport implements ToModel, WithHeadingRow, SkipsEmptyRows
             return null;
         }
 
+        EmployeeLate::updateOrCreate(
+            [
+                'npk'  => $npk,
+                'date' => $date,
+            ],
+            [
+                'arrival_time' => $time,
+                'reason'       => $row['reason'] ?? null,
+            ]
+        );
+
         $this->importedCount++;
 
-        return new EmployeeLate([
-            'npk'          => $npk,
-            'date'         => $date,
-            'arrival_time' => $time,
-            'reason'       => $row['reason'] ?? null,
-        ]);
+        return null;
     }
 
     /**
