@@ -179,23 +179,57 @@ class PayrollSummaryNonStaffSheet
     QUERY (TIDAK DIUBAH)
     =====================================================
     */
+    private function baseBiodataQuery()
+    {
+        $start = \Carbon\Carbon::parse($this->period->start_date)->format('Y-m-d');
+        $end   = \Carbon\Carbon::parse($this->period->end_date)->format('Y-m-d');
+
+        $sql = "
+        SELECT NPK, id_dept, TKK, TMK, IS_STAFF, KETERANGAN
+        FROM (
+            SELECT b.NPK, b.id_dept, p.TKK, p.TMK, b.IS_STAFF, p.KETERANGAN,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY b.NPK
+                       ORDER BY 
+                           CASE WHEN p.TKK IS NOT NULL 
+                                AND p.TKK BETWEEN '{$start}' AND '{$end}' 
+                                THEN 0 ELSE 1 END,
+                           p.TKK DESC
+                   ) as rn
+            FROM BIODATA b
+            LEFT JOIN PKWT p ON b.NPK = p.NPK
+
+            UNION ALL
+
+            SELECT b.NPK, b.id_dept, p.TKK, p.TMK, b.IS_STAFF, p.KETERANGAN,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY b.NPK
+                       ORDER BY 
+                           CASE WHEN p.TKK IS NOT NULL 
+                                AND p.TKK BETWEEN '{$start}' AND '{$end}' 
+                                THEN 0 ELSE 1 END,
+                           p.TKK DESC
+                   ) as rn
+            FROM BIODATA_KELUAR b
+            LEFT JOIN PKWT p ON b.NPK = p.NPK
+        ) t
+        WHERE rn = 1
+    ";
+
+        return DB::table(DB::raw("({$sql}) as bio"));
+    }
+
     public function query()
     {
-        $aktif = DB::table('BIODATA as b')
-            ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
+        $union = $this->baseBiodataQuery();
 
-        $keluar = DB::table('BIODATA_KELUAR as b')
-            ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
-
-        $biodataUnion = $aktif->union($keluar);
-
-        return DB::query()
-            ->fromSub($biodataUnion, 'bio')
-            ->join('payroll_run_details as prd', 'prd.employee_npk', '=', 'bio.NPK')
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.id_dept')
+        return DB::table('payroll_run_details as prd')
+            ->leftJoinSub($union, 'bio', function ($join) {
+                $join->on('bio.NPK', '=', 'prd.employee_npk');
+            })
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->where('prd.run_id', $this->run_id)
+            ->where('bio.IS_STAFF', 0)
             ->select(
                 'bio.NPK',
                 'prd.components',
@@ -241,19 +275,19 @@ class PayrollSummaryNonStaffSheet
 
         $isNonStaff = $row->IS_STAFF == 0;
 
-        $targetGroups = [];
+        $groups = [];
 
         if ($isMangkir) {
             if ($isNonStaff) {
-                $targetGroups[] = 'mangkir_non_staff';
+                $groups[] = 'mangkir_non_staff';
             }
         } elseif ($isResign) {
             if ($isNonStaff) {
-                $targetGroups[] = 'resign_non_staff';
+                $groups[] = 'resign_non_staff';
             }
         } elseif ($isActive) {
             if ($isNonStaff) {
-                $targetGroups[] = 'active_non_staff';
+                $groups[] = 'active_non_staff';
             }
         }
 
@@ -271,7 +305,7 @@ class PayrollSummaryNonStaffSheet
                 $value = (float)($item ?? 0);
             }
 
-            foreach ($targetGroups as $grp) {
+            foreach ($groups as $grp) {
                 $this->groups[$grp][$code] =
                     ($this->groups[$grp][$code] ?? 0) + $value;
             }
@@ -328,9 +362,9 @@ class PayrollSummaryNonStaffSheet
     private function getColumnIndex($group)
     {
         return [
-            'active_staff' => 'B',
-            'resign_staff' => 'C',
-            'mangkir_staff' => 'D',
+            'active_non_staff' => 'B',
+            'resign_non_staff' => 'C',
+            'mangkir_non_staff' => 'D',
         ][$group] ?? 'B';
     }
 }

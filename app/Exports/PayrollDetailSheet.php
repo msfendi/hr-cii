@@ -118,11 +118,11 @@ class PayrollDetailSheet
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'P.TMK', 'b.IS_STAFF');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'P.TMK', 'b.IS_STAFF');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -135,14 +135,18 @@ class PayrollDetailSheet
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'bio.id_dept')
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
             ->where(function ($query) {
-            $query->whereNull('bio.TKK')
-                  ->orWhereColumn('bio.TKK', '>', 'pp.end_date');
-        })
+                $query->whereNull('bio.TKK')
+                    ->orWhereColumn('bio.TKK', '>', 'pp.end_date')
+                    ->orWhereBetween('bio.TMK', [
+                        DB::raw('pp.start_date'),
+                        DB::raw('pp.end_date'),
+                    ]);
+            })
             ->select('prd.*', 'bio.NAMA_KARYAWAN', 'd.DEPARTEMENT as departement', 'pp.name as period_name')
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk');
@@ -163,6 +167,7 @@ class PayrollDetailSheet
             'pad_insentif',
             'cutting_insentif',
             'heat_insentif',
+            'sixs_insentif',
             'adjusment',
             'bpjs_kesehatan',
             'bpjs_ketenagakerjaan',
@@ -191,6 +196,8 @@ class PayrollDetailSheet
             if ($type === 'deduction') {
                 $value = -abs($value);
             }
+
+            $values[] = $value;
         }
 
         return array_merge([
@@ -218,6 +225,7 @@ class PayrollDetailSheet
             'Pad Print Insentif',
             'Cutting Insentif',
             'Heat Seal Insentif',
+            'Six S Insentif',
             'Adjusment',
             'BPJS Kesehatan',
             'BPJS Ketenagakerjaan',

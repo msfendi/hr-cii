@@ -290,10 +290,10 @@ class PayrollApproveController extends Controller
 
             ->leftJoinSub($employeeData, 'emp', function ($join) {
                 $join->on('emp.NPK', '=', 'prd.employee_npk')
-                    ->whereRaw("LOWER(emp.bank_name) = 'permata'");
+                    ->whereRaw("LOWER(emp.bank_name) = 'permata bank'");
             })
 
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'emp.id_dept')
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
 
             ->leftJoinSub($pkwtLatest, 'p', function ($join) {
                 $join->on('p.NPK', '=', 'prd.employee_npk');
@@ -303,7 +303,7 @@ class PayrollApproveController extends Controller
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
 
             ->where('prd.run_id', $runId)
-            ->whereRaw('LOWER(p.KETERANGAN) <> ?', ['mangkir'])
+            ->whereRaw('UPPER(p.KETERANGAN) <> ?', ['MA'])
 
             ->select(
                 'prd.employee_npk',

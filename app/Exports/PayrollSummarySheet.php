@@ -202,10 +202,11 @@ class PayrollSummarySheet
 
         $union = $aktif->union($keluar);
 
-        return DB::query()
-            ->fromSub($union, 'bio')
-            ->join('payroll_run_details as prd', 'prd.employee_npk', '=', 'bio.NPK')
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.id_dept')
+        return DB::table('payroll_run_details as prd')
+            ->leftJoinSub($union, 'bio', function ($join) {
+                $join->on('bio.NPK', '=', 'prd.employee_npk');
+            })
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->where('prd.run_id', $this->run_id)
             ->select(
                 'bio.NPK',
@@ -254,52 +255,52 @@ class PayrollSummarySheet
         $isSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 0;
         $isNonSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 1;
 
-        $targets = [];
+        $groups = [];
 
         if ($isMangkir) {
 
-            $targets[] = 'mangkir_all';
+            $groups[] = 'mangkir_all';
 
             if ($isStaff) {
-                $targets[] = 'mangkir_staff';
+                $groups[] = 'mangkir_staff';
             }
 
             if ($isSewing) {
-                $targets[] = 'mangkir_sewing';
+                $groups[] = 'mangkir_sewing';
             }
 
             if ($isNonSewing) {
-                $targets[] = 'mangkir_non_sewing';
+                $groups[] = 'mangkir_non_sewing';
             }
         } elseif ($isResign) {
 
-            $targets[] = 'resign_all';
+            $groups[] = 'resign_all';
 
             if ($isStaff) {
-                $targets[] = 'resign_staff';
+                $groups[] = 'resign_staff';
             }
 
             if ($isSewing) {
-                $targets[] = 'resign_sewing';
+                $groups[] = 'resign_sewing';
             }
 
             if ($isNonSewing) {
-                $targets[] = 'resign_non_sewing';
+                $groups[] = 'resign_non_sewing';
             }
         } elseif ($isActive) {
 
-            $targets[] = 'active_all';
+            $groups[] = 'active_all';
 
             if ($isStaff) {
-                $targets[] = 'active_staff';
+                $groups[] = 'active_staff';
             }
 
             if ($isSewing) {
-                $targets[] = 'active_sewing';
+                $groups[] = 'active_sewing';
             }
 
             if ($isNonSewing) {
-                $targets[] = 'active_non_sewing';
+                $groups[] = 'active_non_sewing';
             }
         }
 
@@ -316,7 +317,7 @@ class PayrollSummarySheet
                 $value = (float)($item ?? 0);
             }
 
-            foreach ($targets as $grp) {
+            foreach ($groups as $grp) {
                 $this->groups[$grp][$code] =
                     ($this->groups[$grp][$code] ?? 0) + $value;
             }

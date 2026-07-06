@@ -119,11 +119,11 @@ class PayrollOutDetailNonStaffSheet
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -142,13 +142,24 @@ class PayrollOutDetailNonStaffSheet
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'bio.id_dept')
+            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
             ->where('bio.IS_STAFF', 0)
-            ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-            ->whereRaw('LOWER(bio.KETERANGAN) <> ?', ['mangkir'])
+            ->where(function ($query) use ($period) {
+                $query->whereNotNull('bio.TKK')
+                    ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
+                    ->where(function ($q) {
+                        $q->whereNull('bio.KETERANGAN')
+                          ->orWhereRaw('UPPER(LTRIM(RTRIM(bio.KETERANGAN))) <> ?', ['MA']);
+                    })
+                    ->where(function ($query) use ($period) {
+                        $query->whereNull('bio.TMK')
+                            ->orWhere('bio.TMK', '<', $period->start_date)
+                            ->orWhere('bio.TMK', '>', $period->end_date);
+                    });
+            })
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',
@@ -174,6 +185,7 @@ class PayrollOutDetailNonStaffSheet
             'pad_insentif',
             'cutting_insentif',
             'heat_insentif',
+            'sixs_insentif',
             'adjusment',
             'bpjs_kesehatan',
             'bpjs_ketenagakerjaan',
@@ -202,6 +214,8 @@ class PayrollOutDetailNonStaffSheet
             if ($type === 'deduction') {
                 $value = -abs($value);
             }
+
+            $values[] = $value;
         }
 
         return array_merge([
@@ -230,6 +244,7 @@ class PayrollOutDetailNonStaffSheet
             'Pad Print Insentif',
             'Cutting Insentif',
             'Heat Seal Insentif',
+            'Six S Insentif',
             'Adjusment',
 
             'BPJS Kesehatan',

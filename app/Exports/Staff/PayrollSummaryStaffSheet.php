@@ -183,19 +183,21 @@ class PayrollSummaryStaffSheet
     {
         $aktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $keluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
-        $biodataUnion = $aktif->union($keluar);
+        $union = $aktif->union($keluar);
 
-        return DB::query()
-            ->fromSub($biodataUnion, 'bio')
-            ->join('payroll_run_details as prd', 'prd.employee_npk', '=', 'bio.NPK')
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.id_dept')
+        return DB::table('payroll_run_details as prd')
+            ->leftJoinSub($union, 'bio', function ($join) {
+                $join->on('bio.NPK', '=', 'prd.employee_npk');
+            })
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->where('prd.run_id', $this->run_id)
+            ->where('bio.IS_STAFF', 1)
             ->select(
                 'bio.NPK',
                 'prd.components',
@@ -241,19 +243,19 @@ class PayrollSummaryStaffSheet
 
         $isStaff = $row->IS_STAFF == 1;
 
-        $targetGroups = [];
+        $groups = [];
 
         if ($isMangkir) {
             if ($isStaff) {
-                $targetGroups[] = 'mangkir_staff';
+                $groups[] = 'mangkir_staff';
             }
         } elseif ($isResign) {
             if ($isStaff) {
-                $targetGroups[] = 'resign_staff';
+                $groups[] = 'resign_staff';
             }
         } elseif ($isActive) {
             if ($isStaff) {
-                $targetGroups[] = 'active_staff';
+                $groups[] = 'active_staff';
             }
         }
 
@@ -271,7 +273,7 @@ class PayrollSummaryStaffSheet
                 $value = (float)($item ?? 0);
             }
 
-            foreach ($targetGroups as $grp) {
+            foreach ($groups as $grp) {
                 $this->groups[$grp][$code] =
                     ($this->groups[$grp][$code] ?? 0) + $value;
             }
