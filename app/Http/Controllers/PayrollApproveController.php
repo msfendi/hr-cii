@@ -382,7 +382,7 @@ class PayrollApproveController extends Controller
         DB::table('payroll_periods')->updateOrInsert(
             ['id' => $period->id],
             [
-                'is_closed' => 0
+                'is_closed' => 1
             ]
         );
 
