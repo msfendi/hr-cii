@@ -580,6 +580,9 @@ MULTI SCAN
                             ->diffInMinutes($arrivalForLate);
                     }
                 }
+                if ($isWorkday) {
+                    $summary['hadir']++;
+                }
             }
 
             /*
@@ -1102,6 +1105,13 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             $lateEntry = $employeeLates->get($tanggal);
 
             if ($lateEntry && !empty($lateEntry->arrival_time)) {
+
+                if ($status === 'Tidak Masuk') {
+                    $summary['absent']--;
+                    if ($isWorkday) {
+                        $summary['hadir']++;
+                    }
+                }
 
                 $arrivalTime = Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time);
 
