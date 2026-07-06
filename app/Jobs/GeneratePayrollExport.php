@@ -568,8 +568,8 @@ class GeneratePayrollExport implements ShouldQueue
                 ->setPaper('a4')
                 ->setOrientation('landscape')
                 ->setOption('enable-local-file-access', true)
+                ->setOption('no-stop-slow-scripts', true)
                 ->setOption('encoding', 'UTF-8');
-
             $pdfPeng = App::make('snappy.pdf.wrapper');
             $pdfPeng->loadHTML($htmlPeng)
                 ->setPaper('a4')

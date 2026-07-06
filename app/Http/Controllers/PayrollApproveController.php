@@ -251,97 +251,97 @@ class PayrollApproveController extends Controller
 
         /*
     |--------------------------------------------------------------------------
-    | EMPLOYEE UNION (AKTIF + RESIGN)
+    | EMPLOYEE UNION (AKTIF + RESIGN) + PKWT
     |--------------------------------------------------------------------------
     */
-        $employeeUnion = DB::table('BIODATA')
-            ->select('NPK', 'id_dept')
+        $aktif = DB::table('BIODATA as b')
+            ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')
-                    ->select('NPK', 'id_dept')
-            );
+        $keluar = DB::table('BIODATA_KELUAR as b')
+            ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
-        $employeeData = DB::query()
-            ->fromSub($employeeUnion, 'bio')
-            ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'bio.NPK')
-            ->select(
-                'bio.NPK',
-                'bio.id_dept',
-                'pm.bank_name',
-                'pm.bank_account'
-            );
+        $union = $aktif->union($keluar);
 
         /*
     |--------------------------------------------------------------------------
-    | TANGGAL RESIGN TERBARU
+    | BASE QUERY PAYROLL
     |--------------------------------------------------------------------------
     */
-        $pkwtLatest = DB::table('PKWT')
-            ->select('NPK', DB::raw('MAX(TKK) as TKK'), 'KETERANGAN')
-            ->groupBy('NPK', 'KETERANGAN');
+        $baseQuery = DB::table('payroll_run_details as prd')
 
-        /*
-    |--------------------------------------------------------------------------
-    | DATA PAYROLL
-    |--------------------------------------------------------------------------
-    */
-        $data = DB::table('payroll_run_details as prd')
-
-            ->leftJoinSub($employeeData, 'emp', function ($join) {
-                $join->on('emp.NPK', '=', 'prd.employee_npk')
-                    ->whereRaw("LOWER(emp.bank_name) = 'permata bank'");
+            ->leftJoinSub($union, 'bio', function ($join) {
+                $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
 
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
 
-            ->leftJoinSub($pkwtLatest, 'p', function ($join) {
-                $join->on('p.NPK', '=', 'prd.employee_npk');
-            })
-
-            ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
-            ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
+            ->leftJoinSub(
+                DB::table('payroll_masters')->select('npk', 'bank_name', 'bank_account'),
+                'pm',
+                function ($join) {
+                    $join->on('pm.npk', '=', 'prd.employee_npk')
+                        ->whereRaw("LOWER(pm.bank_name) = 'permata bank'");
+                }
+            )
 
             ->where('prd.run_id', $runId)
-            ->whereRaw('UPPER(p.KETERANGAN) <> ?', ['MA'])
 
             ->select(
                 'prd.employee_npk',
                 'prd.employee_name',
                 'prd.total_salary',
-                'emp.bank_account',
+                'pm.bank_account',
                 'd.DEPARTEMENT',
-                'pp.start_date',
-                'pp.end_date',
-                'p.TKK'
+                'bio.TKK',
+                'bio.TMK',
+                'bio.KETERANGAN'
             )
 
             ->orderBy('d.DEPARTEMENT')
-            ->orderBy('prd.employee_npk')
-            ->get();
-
-        if ($data->isEmpty()) {
-            return false;
-        }
+            ->orderBy('prd.employee_npk');
 
         /*
     |--------------------------------------------------------------------------
-    | PISAH AKTIF VS RESIGN
+    | ACTIVE
+    | isActive = is_null(TKK) || (TKK > end_date) || (TMK between start & end)
     |--------------------------------------------------------------------------
     */
-        $activeEmployees = $data->filter(function ($row) {
-            return empty($row->TKK);
-        });
+        $activeEmployees = (clone $baseQuery)
+            ->where(function ($query) use ($period) {
+                $query->whereNull('bio.TKK')
+                    ->orWhere('bio.TKK', '>', $period->end_date)
+                    ->orWhereBetween('bio.TMK', [$period->start_date, $period->end_date]);
+            })
+            ->get();
 
-        $resignEmployees = $data->filter(function ($row) {
+        /*
+    |--------------------------------------------------------------------------
+    | RESIGN
+    | isResign = !is_null(TKK) && !isTMKInPeriod && KETERANGAN != 'MA'
+    |            && TKK between start & end
+    |--------------------------------------------------------------------------
+    */
+        $resignEmployees = (clone $baseQuery)
+            ->where(function ($query) use ($period) {
+                $query->whereNotNull('bio.TKK')
+                    ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
+                    ->where(function ($q) {
+                        $q->whereNull('bio.KETERANGAN')
+                            ->orWhereRaw('UPPER(LTRIM(RTRIM(bio.KETERANGAN))) <> ?', ['MA']);
+                    })
+                    ->where(function ($query) use ($period) {
+                        $query->whereNull('bio.TMK')
+                            ->orWhere('bio.TMK', '<', $period->start_date)
+                            ->orWhere('bio.TMK', '>', $period->end_date);
+                    });
+            })
+            ->get();
 
-            if (empty($row->TKK)) {
-                return false;
-            }
-
-            return $row->TKK >= $row->start_date &&
-                $row->TKK <= $row->end_date;
-        });
+        if ($activeEmployees->isEmpty() && $resignEmployees->isEmpty()) {
+            return false;
+        }
 
         /*
     |--------------------------------------------------------------------------
@@ -382,7 +382,7 @@ class PayrollApproveController extends Controller
         DB::table('payroll_periods')->updateOrInsert(
             ['id' => $period->id],
             [
-                'is_closed' => 1
+                'is_closed' => 0
             ]
         );
 

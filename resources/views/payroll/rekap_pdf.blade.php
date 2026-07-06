@@ -521,12 +521,19 @@
 
           <div style="height:80px">
 
-              @if($approve['status']=='approve' && !empty($approve['signature_img']))
-                  <img
-                      src="{{ storage_path('app/public/signature/'.$approve['signature_img']) }}"
-                      style="height:70px"
-                  >
-              @endif
+              @php
+                  $sigPath = storage_path('app/public/signature/'.($approve['signature_img'] ?? ''));
+                  $sigUrl = 'file:///' . str_replace('\\', '/', $sigPath);
+              @endphp
+
+              <div style="height:80px">
+                  @if($approve['status']=='approve' && !empty($approve['signature_img']) && file_exists($sigPath))
+                      <img
+                          src="{{ $sigUrl }}"
+                          style="height:70px"
+                      >
+                  @endif
+              </div>
 
           </div>
 
