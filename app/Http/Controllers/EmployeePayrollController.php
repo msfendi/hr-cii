@@ -450,37 +450,27 @@ class EmployeePayrollController extends Controller
                 }
 
                 $status = 'Lembur';
-            }
-
-            /*
-            ======================================================
-            ADA FINGERPRINT
-            ======================================================
-            */ elseif ($hasLog) {
+            } elseif ($hasLog) {
 
                 $dailyLogs = $dailyLogs->sortBy('scan_date')->values();
 
                 $last = Carbon::parse($dailyLogs->last()->scan_date);
 
                 /*
-|--------------------------------------------------------------------------
-| Cari scan masuk terbaik
-| Ambil log yang paling dekat dengan jam mulai shift,
-| tetapi jangan menggunakan data terakhir (karena diasumsikan scan pulang).
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | Cari scan masuk terbaik
+    |--------------------------------------------------------------------------
+    */
                 $bestIn = null;
                 $bestDiff = PHP_INT_MAX;
 
                 foreach ($dailyLogs as $index => $log) {
 
-                    // skip data terakhir
                     if ($index == ($dailyLogs->count() - 1)) {
                         continue;
                     }
 
                     $scan = Carbon::parse($log->scan_date);
-
                     $diff = abs($scan->diffInSeconds($shiftStartDT, false));
 
                     if ($diff < $bestDiff) {
@@ -489,28 +479,21 @@ class EmployeePayrollController extends Controller
                     }
                 }
 
-                // kalau hanya ada 1 log atau tidak ditemukan
                 if (!$bestIn) {
                     $bestIn = Carbon::parse($dailyLogs->first()->scan_date);
                 }
 
                 $first = $bestIn;
 
-                $lateEntry = $employeeLates->get($tanggal);
-                $arrivalForLate = ($lateEntry && !empty($lateEntry->arrival_time))
-                    ? Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time)
-                    : $first;
-
-                // $isLate = $isStaff && $arrivalForLate->gt(
-                $isLate = $arrivalForLate->gt(
-                    $shiftStartDT->copy()->addMinutes(5)
-                );
+                // ⭐ Terlambat HANYA ditentukan oleh data employee_lates
+                $lateEntry     = $employeeLates->get($tanggal);
+                $hasLateEntry  = $lateEntry && !empty($lateEntry->arrival_time);
 
                 /*
-        ======================================================
-        ⭐ SINGLE SCAN SMART DETECTION ⭐
-        ======================================================
-        */
+    ======================================================
+    ⭐ SINGLE SCAN SMART DETECTION ⭐
+    ======================================================
+    */
                 if ($dailyLogs->count() == 1) {
 
                     $scan = $first;
@@ -520,39 +503,18 @@ class EmployeePayrollController extends Controller
 
                     if ($distanceEnd < $distanceStart) {
 
-                        // ✅ lebih dekat ke pulang
                         $jamPulang = $scan->format('H:i');
                         $status = 'Scan Pulang';
                     } else {
 
-                        // ✅ lebih dekat ke masuk
                         $jamMasuk = $scan->format('H:i');
+                        $status = $hasLateEntry ? 'Terlambat' : 'Scan Masuk';
 
-                        $lateEntry = $employeeLates->get($tanggal);
-                        $arrivalForLate = ($lateEntry && !empty($lateEntry->arrival_time))
-                            ? Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time)
-                            : $scan;
-
-                        // $isLateSingle = $isStaff && $arrivalForLate->gt(
-                        $isLateSingle = $arrivalForLate->gt(
-                            $shiftStartDT->copy()->addMinutes(5)
-                        );
-
-                        $status = $isLateSingle
-                            ? 'Terlambat'
-                            : 'Scan Masuk';
-
-                        //Dari scan_date
-                        // if ($isLateSingle) {
-                        //     $late_minutes += $shiftStartDT->copy()
-                        //         ->addMinutes(5)
-                        //         ->diffInMinutes($scan);
-                        // }
-
-                        if ($isLateSingle) {
+                        if ($hasLateEntry) {
+                            $arrivalTime = Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time);
                             $late_minutes += $shiftStartDT->copy()
                                 ->addMinutes(5)
-                                ->diffInMinutes($arrivalForLate);
+                                ->diffInMinutes($arrivalTime);
                         }
                     }
                 } else {
@@ -563,23 +525,16 @@ MULTI SCAN
                     $jamMasuk  = $first->format('H:i');
                     $jamPulang = $last->format('H:i');
 
-                    $status = $isLate
-                        ? 'Terlambat'
-                        : 'Hadir';
+                    $status = $hasLateEntry ? 'Terlambat' : 'Hadir';
 
-                    //     Dari scan_date
-                    // if ($isLate) {
-                    //     $late_minutes += $shiftStartDT->copy()
-                    //         ->addMinutes(5)
-                    //         ->diffInMinutes($first);
-                    // }
-
-                    if ($isLate) {
+                    if ($hasLateEntry) {
+                        $arrivalTime = Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time);
                         $late_minutes += $shiftStartDT->copy()
                             ->addMinutes(5)
-                            ->diffInMinutes($arrivalForLate);
+                            ->diffInMinutes($arrivalTime);
                     }
                 }
+
                 if ($isWorkday) {
                     $summary['hadir']++;
                 }
@@ -610,7 +565,7 @@ MULTI SCAN
                     $status = 'Libur';
                 } else {
 
-                    $status = 'Tidak Masuk';
+                    $status = 'Tidak Finger';
                     $summary['absent']++;
                 }
             }
@@ -1007,12 +962,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 $jamPulang = $last ? $last->format('H:i') : '-';
 
                 $status = 'Lembur';
-            }
-            /*
-        ======================================================
-        ADA DATA DI TABEL AUDIT (JAM_PAGI / JAM_SIANG)
-        ======================================================
-        */ elseif ($audit && (!empty($audit->JAM_PAGI) || !empty($audit->JAM_SIANG))) {
+            } elseif ($audit && (!empty($audit->JAM_PAGI) || !empty($audit->JAM_SIANG))) {
 
                 $hasMasuk  = !empty($audit->JAM_PAGI);
                 $hasPulang = !empty($audit->JAM_SIANG);
@@ -1020,22 +970,19 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 $first = $hasMasuk ? $parseAuditTime($tanggal, $audit->JAM_PAGI) : null;
                 $last  = $hasPulang ? $parseAuditTime($tanggal, $audit->JAM_SIANG) : null;
 
-                // Status default dari data AUDIT (bisa ditimpa employee_lates di bawah)
-                $isLate = ($first)
-                    ? $first->gt($shiftStartDT->copy()->addMinutes(5))
-                    : false;
-
+                // ⭐ Status default TIDAK pernah 'Terlambat' di sini.
+                // 'Terlambat' hanya ditentukan oleh override employee_lates di bawah.
                 if ($hasMasuk && $hasPulang) {
 
                     $jamMasuk  = $first->format('H:i');
                     $jamPulang = $last->format('H:i');
 
-                    $status = $isLate ? 'Terlambat' : 'Hadir';
+                    $status = 'Hadir';
                 } elseif ($hasMasuk) {
 
                     $jamMasuk = $first->format('H:i');
 
-                    $status = $isLate ? 'Terlambat' : 'Scan Masuk';
+                    $status = 'Scan Masuk';
                 } else {
 
                     $jamPulang = $last->format('H:i');
@@ -1071,7 +1018,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                     $status = 'Libur';
                 } else {
 
-                    $status = 'Tidak Masuk';
+                    $status = 'Tidak Finger';
                     $summary['absent']++;
                 }
             }
@@ -1106,7 +1053,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
 
             if ($lateEntry && !empty($lateEntry->arrival_time)) {
 
-                if ($status === 'Tidak Masuk') {
+                if ($status === 'Tidak Finger') {
                     $summary['absent']--;
                     if ($isWorkday) {
                         $summary['hadir']++;
