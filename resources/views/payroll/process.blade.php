@@ -1381,76 +1381,77 @@ buttons: [
 
         footerCallback:function(row,data,start,end,display){
 
-            let api = this.api();
+    let api = this.api();
 
-            function intVal(i){
+    // Ambil data mentah untuk baris yang sedang aktif (sesuai filter/search)
+    let rowsData = api.rows({search:'applied'}).data().toArray();
 
-                if(i === null || i === undefined || i === ''){
-                    return 0;
+    // Mapping index kolom -> field komponen (harus sinkron dgn definisi kolom di atas)
+    let currencyFields = [
+        {index:6,  field:'basic_salary'},
+        {index:7,  field:'overtime_pay'},
+        {index:8,  field:'special_overtime_pay'},
+        {index:9,  field:'monthly_premi'},
+        {index:10, field:'long_service_allowance'},
+        {index:11, field:'allowance'},
+        {index:12, field:'sewing_insentif'},
+        {index:13, field:'pad_insentif'},
+        {index:14, field:'cutting_insentif'},
+        {index:15, field:'heat_insentif'},
+        {index:16, field:'sixs_insentif'},
+        {index:17, field:'adjusment'},
+        {index:18, field:'bpjs_kesehatan'},
+        {index:19, field:'bpjs_ketenagakerjaan'},
+        {index:20, field:'pph_21'},
+        {index:21, field:'pph_21_deduction'},
+        {index:22, field:'absence_deduction'},
+        {index:23, field:'late_deduction'},
+        {index:24, field:'work_leave_deduction'}
+    ];
+
+    currencyFields.forEach(function(cfg){
+
+        let total = 0;
+        let isDeduction = false;
+
+        rowsData.forEach(function(rowData){
+
+            let comp = rowData.components
+                ? rowData.components[cfg.field]
+                : null;
+
+            if(!comp) return;
+
+            let amount = Number(comp.amount || 0);
+
+            if(comp.type === 'deduction'){
+                isDeduction = true;
+                if(amount > 0){
+                    amount = -amount;
                 }
-
-                if(typeof i === 'number'){
-                    return i;
-                }
-
-                if(typeof i === 'string'){
-
-                    i = i.replace(/[Rp\s]/g,'');
-
-                    i = i.replace(/\./g,'')
-                        .replace(',', '.');
-
-                    let num = parseFloat(i);
-
-                    return isNaN(num)
-                        ? 0
-                        : num;
-                }
-
-                return 0;
             }
 
-            /*
-            ==========================================
-            KOLOM CURRENCY
-            ==========================================
-            */
+            total += amount;
+        });
 
-            let currencyCols = [
-                6,7,8,
-                9,10,11,12,
-                13,14,15,16,
-                17,18,19,20,21,22,23,24,25
-            ];
+        let color = isDeduction ? '#dc3545' : '#003366';
 
-            // let ijinTotal = api
-            //     .column(23, { search: 'applied' })
-            //     .data()
-            //     .reduce(function(a, b) {
-            //         return intVal(a) + intVal(b);
-            //     }, 0);
+        $(api.column(cfg.index).footer())
+            .html(
+                `<span style="color:${color}">${formatRupiah(total)}</span>`
+            );
 
-            // $(api.column(23).footer())
-            //     .html(ijinTotal + ' Menit');
+    });
 
-            currencyCols.forEach(function(colIndex){
+    // TOTAL SALARY (kolom 25) tetap net, tanpa dibalik tandanya
+    let totalSalarySum = rowsData.reduce(function(sum, rowData){
+        return sum + Number(rowData.total_salary || 0);
+    }, 0);
 
-                let total = api
-                    .column(colIndex,{search:'applied'})
-                    .data()
-                    .reduce(function(a,b){
+    $(api.column(25).footer())
+        .html(formatRupiah(totalSalarySum));
 
-                        return intVal(a)
-                            + intVal(b);
-
-                    },0);
-
-                $(api.column(colIndex).footer())
-                    .html(formatRupiah(total));
-
-            });
-
-        }
+}
 
     });
     tableDetails.buttons()
@@ -1509,10 +1510,20 @@ function componentColor(componentType){
 }
 
 function salaryMaskColored(amount, componentType){
-    let masked = salaryMask(amount ?? 0);
+
+    let value = Number(amount ?? 0);
+
+    // Jika deduction, jadikan minus (kecuali sudah negatif)
+    if(componentType === 'deduction' && value > 0){
+        value = -value;
+    }
+
+    let masked = salaryMask(value);
+
     if(!canSeeSalary){
         return masked; // tetap '****' tanpa styling
     }
+
     return `<span style="color:${componentColor(componentType)}">${masked}</span>`;
 }
 
