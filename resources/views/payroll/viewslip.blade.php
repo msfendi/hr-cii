@@ -231,7 +231,16 @@
         @foreach($attendance as $row)
             @php
             $date = \Carbon\Carbon::parse($row->tanggal);
-            $day = $date->translatedFormat('l');
+            $hariIndo = [
+                'Sunday' => 'Minggu',
+                'Monday' => 'Senin',
+                'Tuesday' => 'Selasa',
+                'Wednesday' => 'Rabu',
+                'Thursday' => 'Kamis',
+                'Friday' => 'Jumat',
+                'Saturday' => 'Sabtu',
+            ];
+            $day = $hariIndo[$date->format('l')];
             $isWeekend = $date->isWeekend();
             $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []);
                $rowClass = '';
