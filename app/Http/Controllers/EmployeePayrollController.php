@@ -202,8 +202,8 @@ class EmployeePayrollController extends Controller
 
         // dd($period);
 
-        $startDate = Carbon::parse($period->start_date);
-        $endDate   = Carbon::parse($period->end_date);
+        $startDate = Carbon::parse($period->start_date)->startOfDay();
+        $endDate   = Carbon::parse($period->end_date)->endOfDay();
 
 
 
@@ -263,8 +263,8 @@ class EmployeePayrollController extends Controller
 
         $logs = DB::table('att_log')
             ->where('pin', $employee->BARCODE)
-            ->where('sn', '!=', '66208026030047') // EXCLUDE SN REGISTER
-            ->whereBetween('scan_date', [$startDate, $endDate])
+            ->where('sn', '!=', '66208026030047')
+            ->whereBetween('scan_date', [$startDate, $endDate->copy()->addDay()->endOfDay()])
             ->orderBy('scan_date')
             ->get();
 
@@ -770,8 +770,8 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             ->where('id', $employee->period_id)
             ->first();
 
-        $startDate = Carbon::parse($period->start_date);
-        $endDate   = Carbon::parse($period->end_date);
+        $startDate = Carbon::parse($period->start_date)->startOfDay();
+        $endDate   = Carbon::parse($period->end_date)->endOfDay();
 
         $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
             ->selectRaw("
