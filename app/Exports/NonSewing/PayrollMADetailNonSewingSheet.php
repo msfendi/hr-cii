@@ -142,7 +142,7 @@ class PayrollMADetailNonSewingSheet
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)

@@ -990,6 +990,7 @@ END AS special_overtime_hours
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
+                'absence_days_asli'   => (float) $employee->absence_days,
                 'absence_days'   => (float) $absenceDays,
                 'sick_days'   => (float) $employee->sick_days,
                 'working_years'  => (float) $employee->working_years,

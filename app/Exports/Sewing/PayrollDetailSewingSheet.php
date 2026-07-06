@@ -119,11 +119,11 @@ class PayrollDetailSewingSheet
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -136,7 +136,7 @@ class PayrollDetailSewingSheet
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'prd.employee_dept')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)

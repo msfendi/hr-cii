@@ -183,11 +183,11 @@ class PayrollSummaryStaffSheet
     {
         $aktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $keluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $union = $aktif->union($keluar);
 
@@ -221,25 +221,24 @@ class PayrollSummaryStaffSheet
         $keterangan = strtoupper(trim($row->KETERANGAN ?? ''));
         $tkk = $row->TKK ? \Carbon\Carbon::parse($row->TKK) : null;
         $tmk = !empty($row->TMK) ? \Carbon\Carbon::parse($row->TMK) : null;
-        $isTMKInPeriod = $tmk && $tmk->betweenIncluded(
-            \Carbon\Carbon::parse($this->period->start_date),
-            \Carbon\Carbon::parse($this->period->end_date)
-        );
+
+        $periodStart = \Carbon\Carbon::parse($this->period->start_date);
+        $periodEnd   = \Carbon\Carbon::parse($this->period->end_date);
+
+        $isTMKInPeriod = $tmk && $tmk->betweenIncluded($periodStart, $periodEnd);
 
         $isMangkir =
             !is_null($tkk) && !$isTMKInPeriod &&
             $keterangan === 'MA' &&
-            $tkk >= $this->period->start_date &&
-            $tkk <= $this->period->end_date;
+            $tkk->betweenIncluded($periodStart, $periodEnd);
 
         $isResign =
             !is_null($tkk) && !$isTMKInPeriod &&
             $keterangan !== 'MA' &&
-            $tkk >= $this->period->start_date &&
-            $tkk <= $this->period->end_date;
+            $tkk->betweenIncluded($periodStart, $periodEnd);
 
         $isActive =
-            is_null($tkk) || ($tkk > $this->period->end_date) || $isTMKInPeriod;
+            is_null($tkk) || $tkk->greaterThan($periodEnd) || $isTMKInPeriod;
 
         $isStaff = $row->IS_STAFF == 1;
 
