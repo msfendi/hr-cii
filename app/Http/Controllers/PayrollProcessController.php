@@ -517,7 +517,7 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
             $payrollResults = $payrollResults->filter(function ($row) {
                 return ($row['is_staff'] ?? 0) == 1;
             });
-        } elseif ($role === 'Payroll_NONSTAFF' || $role === 'Audit') {
+        } elseif ($role === 'Payroll_NONSTAFF') {
 
             $payrollResults = $payrollResults->filter(function ($row) {
                 return ($row['is_staff'] ?? 0) == 0;
