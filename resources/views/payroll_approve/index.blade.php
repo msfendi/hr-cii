@@ -58,6 +58,9 @@
                         </thead>
                         <tbody>
                            @foreach($data as $row)
+                            @php
+                            $folder = strtoupper(str_replace(' ', '_', $row->period_name));
+                            @endphp
                            <tr>
                               <td>{{ $row->id }}</td>
                               <td>{{ $row->payroll_run_id }}</td>
@@ -71,19 +74,19 @@
                                  @else
                                  @if($row->is_exported && $row->file_excel)
                                  <a class="btn btn-success btn-sm"
-                                    href="{{ asset('storage/'.$row->file_excel) }}" target="_blank">
+                                    href="{{ Storage::url('payroll/'.$folder.'/'.$row->file_excel) }}" target="_blank">
                                  <i class="fas fa-file-excel mr-1"></i> Excel
                                  </a>
                                  @endif
                                  @if($row->is_exported && $row->file_pdf)
                                  <a class="btn btn-danger btn-sm"
-                                    href="{{ asset('storage/'.$row->file_pdf) }}" target="_blank">
+                                    href="{{ Storage::url('payroll/'.$folder.'/'.$row->file_pdf) }}" target="_blank">
                                  <i class="fas fa-file-pdf mr-1"></i> PDF
                                  </a>
                                  @endif
                                  @if($row->is_exported && $row->file_peng)
                                  <a class="btn btn-secondary btn-sm"
-                                    href="{{ asset('storage/'.$row->file_peng) }}" target="_blank">
+                                    href="{{ Storage::url('payroll/'.$folder.'/'.$row->file_peng) }}" target="_blank">
                                  <i class="fas fa-file-pdf mr-1"></i> Pengeluaran
                                  </a>
                                  @endif
