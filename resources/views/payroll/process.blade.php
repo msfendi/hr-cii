@@ -1226,55 +1226,55 @@ buttons: [
             },
 
             {
-    data: 'tkk',
-    defaultContent: null,
-    render: function (data, type, row) {
+                data: 'tkk',
+                defaultContent: null,
+                render: function (data, type, row) {
 
-        const ket = (row.keterangan || '').trim().toLowerCase();
+                    const ket = (row.keterangan || '').trim().toLowerCase();
 
-        const tmk = row.tmk ? new Date(row.tmk) : null;
-        const tkk = row.tkk ? new Date(row.tkk) : null;
-        const periodStart = row.period_start ? new Date(row.period_start) : null;
-        const periodEnd = row.period_end ? new Date(row.period_end) : null;
+                    const tmk = row.tmk ? new Date(row.tmk) : null;
+                    const tkk = row.tkk ? new Date(row.tkk) : null;
+                    const periodStart = row.period_start ? new Date(row.period_start) : null;
+                    const periodEnd = row.period_end ? new Date(row.period_end) : null;
 
-        // Hilangkan pengaruh jam/timezone
-        if (tmk) tmk.setHours(0, 0, 0, 0);
-        if (tkk) tkk.setHours(0, 0, 0, 0);
-        if (periodStart) periodStart.setHours(0, 0, 0, 0);
-        if (periodEnd) periodEnd.setHours(23, 59, 59, 999);
+                    // Hilangkan pengaruh jam/timezone
+                    if (tmk) tmk.setHours(0, 0, 0, 0);
+                    if (tkk) tkk.setHours(0, 0, 0, 0);
+                    if (periodStart) periodStart.setHours(0, 0, 0, 0);
+                    if (periodEnd) periodEnd.setHours(23, 59, 59, 999);
 
-        const isTMKInPeriod =
-            tmk &&
-            periodStart &&
-            tmk.getFullYear() === periodStart.getFullYear() &&
-            tmk.getMonth() === periodStart.getMonth();
+                    const isTMKInPeriod =
+                        tmk &&
+                        periodStart &&
+                        tmk.getFullYear() === periodStart.getFullYear() &&
+                        tmk.getMonth() === periodStart.getMonth();
 
-        const isTKKInPeriod =
-            tkk &&
-            periodStart &&
-            periodEnd &&
-            tkk >= periodStart &&
-            tkk <= periodEnd;
+                    const isTKKInPeriod =
+                        tkk &&
+                        periodStart &&
+                        periodEnd &&
+                        tkk >= periodStart &&
+                        tkk <= periodEnd;
 
-        // BARU
-        if (isTMKInPeriod) {
-            return `<span class="badge badge-primary">Baru</span>`;
-        }
+                    // BARU
+                    if (isTMKInPeriod) {
+                        return `<span class="badge badge-primary">Baru</span>`;
+                    }
 
-        // TKK berada dalam periode payroll
-        if (isTKKInPeriod) {
+                    // TKK berada dalam periode payroll
+                    if (isTKKInPeriod) {
 
-            if (ket === 'ma') {
-                return `<span class="badge badge-danger">Mangkir</span>`;
+                        if (ket === 'ma') {
+                            return `<span class="badge badge-danger">Mangkir</span>`;
+                        }
+
+                        return `<span class="badge badge-warning">Resign</span>`;
+                    }
+
+                    // Selain itu Active
+                    return `<span class="badge badge-success">Active</span>`;
+                }
             }
-
-            return `<span class="badge badge-warning">Resign</span>`;
-        }
-
-        // Selain itu Active
-        return `<span class="badge badge-success">Active</span>`;
-    }
-}
         ],
 
         createdRow: function (row, data) {

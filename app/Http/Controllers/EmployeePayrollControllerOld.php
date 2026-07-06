@@ -496,13 +496,7 @@ class EmployeePayrollController extends Controller
 
                 $first = $bestIn;
 
-                $lateEntry = $employeeLates->get($tanggal);
-                $arrivalForLate = ($lateEntry && !empty($lateEntry->arrival_time))
-                    ? Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time)
-                    : $first;
-
-                // $isLate = $isStaff && $arrivalForLate->gt(
-                $isLate = $arrivalForLate->gt(
+                $isLate = $isStaff && $first->gt(
                     $shiftStartDT->copy()->addMinutes(5)
                 );
 
@@ -528,13 +522,7 @@ class EmployeePayrollController extends Controller
                         // ✅ lebih dekat ke masuk
                         $jamMasuk = $scan->format('H:i');
 
-                        $lateEntry = $employeeLates->get($tanggal);
-                        $arrivalForLate = ($lateEntry && !empty($lateEntry->arrival_time))
-                            ? Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time)
-                            : $scan;
-
-                        // $isLateSingle = $isStaff && $arrivalForLate->gt(
-                        $isLateSingle = $arrivalForLate->gt(
+                        $isLateSingle = $isStaff && $scan->gt(
                             $shiftStartDT->copy()->addMinutes(5)
                         );
 
@@ -542,17 +530,10 @@ class EmployeePayrollController extends Controller
                             ? 'Terlambat'
                             : 'Scan Masuk';
 
-                        //Dari scan_date
-                        // if ($isLateSingle) {
-                        //     $late_minutes += $shiftStartDT->copy()
-                        //         ->addMinutes(5)
-                        //         ->diffInMinutes($scan);
-                        // }
-
                         if ($isLateSingle) {
                             $late_minutes += $shiftStartDT->copy()
                                 ->addMinutes(5)
-                                ->diffInMinutes($arrivalForLate);
+                                ->diffInMinutes($scan);
                         }
                     }
                 } else {
@@ -567,17 +548,10 @@ MULTI SCAN
                         ? 'Terlambat'
                         : 'Hadir';
 
-                    //     Dari scan_date
-                    // if ($isLate) {
-                    //     $late_minutes += $shiftStartDT->copy()
-                    //         ->addMinutes(5)
-                    //         ->diffInMinutes($first);
-                    // }
-
                     if ($isLate) {
                         $late_minutes += $shiftStartDT->copy()
                             ->addMinutes(5)
-                            ->diffInMinutes($arrivalForLate);
+                            ->diffInMinutes($first);
                     }
                 }
             }
@@ -653,27 +627,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         |--------------------------------------------------------------------------
         */
 
-        $pdf = Pdf::loadView('payroll.viewslip', [
-            'employee' => $employee,
-            'earnings' => $earnings,
-            'deductions' => $deductions,
-            'attendance' => $attendance,
-            'summary' => $summary,
-            'holidays' => $holidays,
-            'late_minutes' => $late_minutes,
-            'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
-            'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
-            'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        ])
-            ->setPaper('A4', 'portrait');
-
-        // SET PASSWORD
-        $pdf->getDomPDF()->getCanvas()->get_cpdf()
-            ->setEncryption($password, $password, ['print', 'copy']);
-
-        return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
-
-        // return view('payroll.viewslip', [
+        // $pdf = Pdf::loadView('payroll.viewslip', [
         //     'employee' => $employee,
         //     'earnings' => $earnings,
         //     'deductions' => $deductions,
@@ -684,7 +638,27 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
         //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
         //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        // ]);
+        // ])
+        //     ->setPaper('A4', 'portrait');
+
+        // // SET PASSWORD
+        // $pdf->getDomPDF()->getCanvas()->get_cpdf()
+        //     ->setEncryption($password, $password, ['print', 'copy']);
+
+        // return $pdf->download('SLIP_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
+
+        return view('payroll.viewslip', [
+            'employee' => $employee,
+            'earnings' => $earnings,
+            'deductions' => $deductions,
+            'attendance' => $attendance,
+            'summary' => $summary,
+            'holidays' => $holidays,
+            'late_minutes' => $late_minutes,
+            'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+            'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
+            'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
+        ]);
     }
 
     public function showSlipAudit($run_id, $npk)
@@ -843,10 +817,10 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         });
 
         /*
-    |--------------------------------------------------------------------------
-    | Employee Lates (SUMBER UTAMA jam masuk & status Terlambat, jika ada)
-    |--------------------------------------------------------------------------
-    */
+|--------------------------------------------------------------------------
+| Employee Lates (override jam masuk jika ada koreksi manual)
+|--------------------------------------------------------------------------
+*/
         $employeeLates = DB::table('employee_lates')
             ->where('npk', $npk)
             ->whereBetween('date', [$startDate, $endDate])
@@ -854,6 +828,11 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             ->keyBy(function ($row) {
                 return Carbon::parse($row->date)->format('Y-m-d');
             });
+
+        // key by tanggal (Y-m-d) supaya mudah di-lookup per hari di loop
+        $auditByDate = $auditRows->keyBy(function ($row) {
+            return Carbon::parse($row->TANGGAL)->format('Y-m-d');
+        });
 
         // overtime tetap dari tabel overtimes (sama seperti showSlip, tidak diubah)
         $overtimeRaw = DB::table('overtimes')
@@ -879,6 +858,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         $attendance = [];
         $late_minutes = 0;
 
+        $isStaff = ($employee->IS_STAFF == '1' || $employee->IS_STAFF === 1);
         $dates = CarbonPeriod::create($startDate, $endDate);
 
         $holidays = DB::table('holidays')
@@ -886,43 +866,6 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             ->pluck('holiday_date')
             ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
             ->toArray();
-
-        /*
-    |--------------------------------------------------------------------------
-    | Helper: konversi nilai varchar JAM_PAGI/JAM_SIANG ke Carbon
-    |--------------------------------------------------------------------------
-    | Menangani 2 kemungkinan format di kolom AUDIT:
-    | 1. Format jam biasa      -> "07:47", "18:33:00"
-    | 2. Format pecahan hari   -> "0.33125" (mis. Excel serial time,
-    |    1.0 = 24 jam, sehingga 0.33125 * 86400 detik = 07:57:00)
-    |--------------------------------------------------------------------------
-    */
-        $parseAuditTime = function (string $tanggal, ?string $rawValue) {
-
-            if ($rawValue === null || trim($rawValue) === '') {
-                return null;
-            }
-
-            $rawValue = trim($rawValue);
-
-            // Format pecahan hari (tidak mengandung ":")
-            if (is_numeric($rawValue) && strpos($rawValue, ':') === false) {
-
-                $fraction = (float) $rawValue;
-                $fraction = $fraction - floor($fraction); // jaga-jaga kalau > 1
-
-                $totalSeconds = (int) round($fraction * 86400);
-
-                return Carbon::parse($tanggal)->startOfDay()->addSeconds($totalSeconds);
-            }
-
-            // Format jam biasa "H:i" / "H:i:s"
-            try {
-                return Carbon::parse($tanggal . ' ' . $rawValue);
-            } catch (\Exception $e) {
-                return null;
-            }
-        };
 
         foreach ($dates as $date) {
 
@@ -989,36 +932,47 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 }
             }
             /*
-        ======================================================
-        LIBUR / WEEKEND TAPI ADA LEMBUR (CEK SEBELUM AUDIT)
-        ======================================================
-        */ elseif (($isWeekend || $isHoliday) && $isNumericOT) {
+            ======================================================
+            LIBUR / WEEKEND TAPI ADA LEMBUR (CEK SEBELUM AUDIT)
+            ======================================================
+            | Hari weekend / libur nasional dengan data lembur numerik
+            | harus tetap berstatus "Lembur", walaupun tabel AUDIT punya
+            | data JAM_PAGI/JAM_SIANG — status tidak boleh tertimpa jadi
+            | Hadir/Terlambat karena itu bukan shift kerja normal.
+            ======================================================
+            */ elseif (($isWeekend || $isHoliday) && $isNumericOT) {
 
                 $hasMasuk  = $audit && !empty($audit->JAM_PAGI);
                 $hasPulang = $audit && !empty($audit->JAM_SIANG);
 
-                $first = $hasMasuk ? $parseAuditTime($tanggal, $audit->JAM_PAGI) : null;
-                $last  = $hasPulang ? $parseAuditTime($tanggal, $audit->JAM_SIANG) : null;
+                $jamMasuk  = $hasMasuk
+                    ? Carbon::parse($tanggal . ' ' . $audit->JAM_PAGI)->format('H:i')
+                    : '-';
 
-                $jamMasuk  = $first ? $first->format('H:i') : '-';
-                $jamPulang = $last ? $last->format('H:i') : '-';
+                $jamPulang = $hasPulang
+                    ? Carbon::parse($tanggal . ' ' . $audit->JAM_SIANG)->format('H:i')
+                    : '-';
 
                 $status = 'Lembur';
             }
             /*
-        ======================================================
-        ADA DATA DI TABEL AUDIT (JAM_PAGI / JAM_SIANG)
-        ======================================================
-        */ elseif ($audit && (!empty($audit->JAM_PAGI) || !empty($audit->JAM_SIANG))) {
+            ======================================================
+            ADA DATA DI TABEL AUDIT (JAM_PAGI / JAM_SIANG)
+            ======================================================
+            */ elseif ($audit && (!empty($audit->JAM_PAGI) || !empty($audit->JAM_SIANG))) {
 
                 $hasMasuk  = !empty($audit->JAM_PAGI);
                 $hasPulang = !empty($audit->JAM_SIANG);
 
-                $first = $hasMasuk ? $parseAuditTime($tanggal, $audit->JAM_PAGI) : null;
-                $last  = $hasPulang ? $parseAuditTime($tanggal, $audit->JAM_SIANG) : null;
+                $first = $hasMasuk
+                    ? Carbon::parse($tanggal . ' ' . $audit->JAM_PAGI)
+                    : null;
 
-                // Status default dari data AUDIT (bisa ditimpa employee_lates di bawah)
-                $isLate = ($first)
+                $last = $hasPulang
+                    ? Carbon::parse($tanggal . ' ' . $audit->JAM_SIANG)
+                    : null;
+
+                $isLate = ($isStaff && $first)
                     ? $first->gt($shiftStartDT->copy()->addMinutes(5))
                     : false;
 
@@ -1037,6 +991,12 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
 
                     $jamPulang = $last->format('H:i');
                     $status = 'Scan Pulang';
+                }
+
+                if ($isLate) {
+                    $late_minutes += $shiftStartDT->copy()
+                        ->addMinutes(5)
+                        ->diffInMinutes($first);
                 }
 
                 if ($isWorkday) {
@@ -1090,30 +1050,12 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             }
 
             /*
-        ======================================================
-        OVERRIDE DARI EMPLOYEE_LATES (SUMBER UTAMA)
-        ======================================================
-        | Jika NPK tercatat di employee_lates untuk tanggal ini:
-        | - jam_masuk  -> pakai arrival_time
-        | - status     -> dipaksa jadi "Terlambat"
-        | - late_minutes -> HANYA dihitung dari sini
-        ======================================================
-        */
-            $lateEntry = $employeeLates->get($tanggal);
-
-            if ($lateEntry && !empty($lateEntry->arrival_time)) {
-
-                $arrivalTime = Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time);
-
-                $jamMasuk = $arrivalTime->format('H:i');
-                $status   = 'Terlambat';
-
-                $threshold   = $shiftStartDT->copy()->addMinutes(5);
-                $diffSeconds = $arrivalTime->getTimestamp() - $threshold->getTimestamp();
-
-                if ($diffSeconds > 0) {
-                    $late_minutes += (int) floor($diffSeconds / 60);
-                }
+======================================================
+OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
+======================================================
+*/
+            if ($employeeLates->has($tanggal) && !empty($employeeLates[$tanggal]->arrival_time)) {
+                $jamMasuk = Carbon::parse($employeeLates[$tanggal]->arrival_time)->format('H:i');
             }
 
             $attendance[] = (object)[
@@ -1132,26 +1074,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
     |--------------------------------------------------------------------------
     */
 
-        $pdf = Pdf::loadView('payroll.viewslip', [
-            'employee' => $employee,
-            'earnings' => $earnings,
-            'deductions' => $deductions,
-            'attendance' => $attendance,
-            'summary' => $summary,
-            'holidays' => $holidays,
-            'late_minutes' => $late_minutes,
-            'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
-            'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
-            'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        ])
-            ->setPaper('A4', 'portrait');
-
-        $pdf->getDomPDF()->getCanvas()->get_cpdf()
-            ->setEncryption($password, $password, ['print', 'copy']);
-
-        return $pdf->download('SLIP_AUDIT_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
-
-        // return view('payroll.viewslip', [
+        // $pdf = Pdf::loadView('payroll.viewslip', [
         //     'employee' => $employee,
         //     'earnings' => $earnings,
         //     'deductions' => $deductions,
@@ -1162,6 +1085,26 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         //     'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
         //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
         //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
-        // ]);
+        // ])
+        //     ->setPaper('A4', 'portrait');
+
+        // $pdf->getDomPDF()->getCanvas()->get_cpdf()
+        //     ->setEncryption($password, $password, ['print', 'copy']);
+
+        // return $pdf->download('SLIP_AUDIT_' . $employee->period_name . '_' . $employee->employee_npk . '.pdf');
+
+
+        return view('payroll.viewslip', [
+            'employee' => $employee,
+            'earnings' => $earnings,
+            'deductions' => $deductions,
+            'attendance' => $attendance,
+            'summary' => $summary,
+            'holidays' => $holidays,
+            'late_minutes' => $late_minutes,
+            'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+            'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
+            'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
+        ]);
     }
 }

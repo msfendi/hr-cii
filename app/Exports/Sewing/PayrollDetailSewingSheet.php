@@ -142,7 +142,10 @@ class PayrollDetailSewingSheet
             ->where('prd.run_id', $this->run_id)
             ->where('bio.IS_STAFF', 0)
             ->where('d.IS_SEWING', 0)
-            ->whereNull('bio.TKK')
+            ->where(function ($query) {
+            $query->whereNull('bio.TKK')
+                  ->orWhereColumn('bio.TKK', '>', 'pp.end_date');
+        })
             ->select('prd.*', 'bio.NAMA_KARYAWAN', 'd.DEPARTEMENT as departement', 'pp.name as period_name')
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk');
@@ -176,14 +179,21 @@ class PayrollDetailSewingSheet
         $values = [];
 
         foreach ($fields as $field) {
-            $value = array_key_exists($field, $components) ? (float)$components[$field] : 0;
-            $type  = $this->componentTypes[$field] ?? 'earning';
+            $component = $components[$field] ?? null;
+
+            if (is_array($component)) {
+                // Format baru: {"amount": ..., "type": "earning|deduction"}
+                $value = (float)($component['amount'] ?? 0);
+                $type  = $component['type'] ?? ($this->componentTypes[$field] ?? 'earning');
+            } else {
+                // Fallback untuk format lama: nilai langsung berupa angka
+                $value = (float)($component ?? 0);
+                $type  = $this->componentTypes[$field] ?? 'earning';
+            }
 
             if ($type === 'deduction') {
                 $value = -abs($value);
             }
-
-            $values[] = $value;
         }
 
         return array_merge([

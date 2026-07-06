@@ -1054,35 +1054,18 @@ $(document).on('click','.btn-export',function(e){
                 defaultContent: '',
                 render: function (data) {
 
-                    switch (data) {
+                    switch ((data || '').toLowerCase()) {
+                        case 'baru':
+                            return `<span class="badge badge-primary">Baru</span>`;
 
-                        case 'Active':
-                            return `
-                                <span class="badge badge-success">
-                                    Active
-                                </span>
-                            `;
+                        case 'mangkir':
+                            return `<span class="badge badge-danger">Mangkir</span>`;
 
-                        case 'Mangkir':
-                            return `
-                                <span class="badge badge-danger">
-                                    Mangkir
-                                </span>
-                            `;
-
-                        case 'Resign':
-                            return `
-                                <span class="badge badge-warning">
-                                    Resign
-                                </span>
-                            `;
+                        case 'resign':
+                            return `<span class="badge badge-warning">Resign</span>`;
 
                         default:
-                            return `
-                                <span class="badge badge-secondary">
-                                    -
-                                </span>
-                            `;
+                            return `<span class="badge badge-success">Active</span>`;
                     }
                 }
             },

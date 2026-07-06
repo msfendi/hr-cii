@@ -149,7 +149,7 @@ class PayrollMADetailNonSewingSheet
             ->where('bio.IS_STAFF', 0)
             ->where('d.IS_SEWING', 1)
             ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
-            ->whereRaw('LOWER(bio.KETERANGAN) = ?', ['mangkir'])
+            ->whereRaw('UPPER(bio.KETERANGAN) = ?', ['MA'])
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',
@@ -188,14 +188,21 @@ class PayrollMADetailNonSewingSheet
         $values = [];
 
         foreach ($fields as $field) {
-            $value = array_key_exists($field, $components) ? (float)$components[$field] : 0;
-            $type  = $this->componentTypes[$field] ?? 'earning';
+            $component = $components[$field] ?? null;
+
+            if (is_array($component)) {
+                // Format baru: {"amount": ..., "type": "earning|deduction"}
+                $value = (float)($component['amount'] ?? 0);
+                $type  = $component['type'] ?? ($this->componentTypes[$field] ?? 'earning');
+            } else {
+                // Fallback untuk format lama: nilai langsung berupa angka
+                $value = (float)($component ?? 0);
+                $type  = $this->componentTypes[$field] ?? 'earning';
+            }
 
             if ($type === 'deduction') {
                 $value = -abs($value);
             }
-
-            $values[] = $value;
         }
 
         return array_merge([

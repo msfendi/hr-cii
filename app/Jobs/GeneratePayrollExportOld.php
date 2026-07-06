@@ -106,7 +106,7 @@ class GeneratePayrollExport implements ShouldQueue
         |--------------------------------------------------------------------------
         */
         $pkwtLatest = DB::table('PKWT as p1')
-            ->select('p1.NPK', 'p1.TMK', 'p1.TKK', 'p1.KETERANGAN') // tambah TMK
+            ->select('p1.NPK', 'p1.TKK', 'p1.KETERANGAN')
             ->whereRaw('p1.TMK = (SELECT MAX(p2.TMK) FROM PKWT p2 WHERE p2.NPK = p1.NPK)');
 
         /*
@@ -179,7 +179,6 @@ class GeneratePayrollExport implements ShouldQueue
                 'pp.start_date',
                 'pp.end_date',
                 'p.TKK',
-                'p.TMK',
                 'emp.IS_STAFF',
                 'd.IS_SEWING',
                 'p.KETERANGAN',
@@ -295,32 +294,21 @@ class GeneratePayrollExport implements ShouldQueue
         $componentMasters = PayrollComponent::whereIn('code', $componentKeys)
             ->get()->keyBy('code');
 
-        $componentTypeMap = [];
-        foreach ($data as $row) {
-            $decoded = json_decode($row->components, true) ?? [];
-            foreach ($decoded as $code => $val) {
-                if (!isset($componentTypeMap[$code]) && is_array($val) && isset($val['type'])) {
-                    $componentTypeMap[$code] = $val['type'];
-                }
-            }
-        }
-
-        $allComponents = $componentKeys->mapWithKeys(function ($code) use ($componentMasters, $componentTypeMap) {
+        $allComponents = $componentKeys->mapWithKeys(function ($code) use ($componentMasters) {
 
             $m = $componentMasters[$code] ?? null;
 
             return [$code => (object)[
                 'code' => $code,
                 'name' => $m->name ?? strtoupper(str_replace('_', ' ', $code)),
-                'type' => $componentTypeMap[$code] ?? ($m->type ?? 'earning'),
+                'type' => $m->type ?? 'earning',
                 'orders' => 0
             ]];
         });
 
         foreach ($data as $item) {
             foreach (json_decode($item->components, true) ?? [] as $k => $v) {
-                // dukung struktur baru {"amount":..,"type":..} maupun struktur lama (angka langsung)
-                $item->$k = is_array($v) ? ($v['amount'] ?? 0) : $v;
+                $item->$k = $v;
             }
         }
 
@@ -336,15 +324,13 @@ class GeneratePayrollExport implements ShouldQueue
 */
         $activeEmployees = $data->filter(function ($r) {
 
-            $tmk = !empty($r->TMK) ? \Carbon\Carbon::parse($r->TMK) : null;
-            $isTMKInPeriod = $tmk && $tmk->betweenIncluded(
-                \Carbon\Carbon::parse($r->start_date),
-                \Carbon\Carbon::parse($r->end_date)
-            );
+            $ket = strtoupper(trim($r->KETERANGAN ?? ''));
 
-            // Baru (TMK di periode) tetap dianggap Active di export ini,
-            // atau TKK kosong, atau TKK di atas akhir periode (belum resign di periode ini)
-            return $isTMKInPeriod || empty($r->TKK) || $r->TKK > $r->end_date;
+            if ($ket === 'MA') {
+                return false;
+            }
+
+            return empty($r->TKK);
         });
 
         /*
@@ -354,20 +340,15 @@ class GeneratePayrollExport implements ShouldQueue
 */
         $resignEmployees = $data->filter(function ($r) {
 
-            $tmk = !empty($r->TMK) ? \Carbon\Carbon::parse($r->TMK) : null;
-            $isTMKInPeriod = $tmk && $tmk->betweenIncluded(
-                \Carbon\Carbon::parse($r->start_date),
-                \Carbon\Carbon::parse($r->end_date)
-            );
-
             $ket = strtoupper(trim($r->KETERANGAN ?? ''));
 
-            // Resign: bukan Baru (TMK tidak di periode), TKK ada di dalam range periode, dan keterangan BUKAN MA
-            return !$isTMKInPeriod
-                && !empty($r->TKK)
+            if ($ket === 'MA') {
+                return false;
+            }
+
+            return !empty($r->TKK)
                 && $r->TKK >= $r->start_date
-                && $r->TKK <= $r->end_date
-                && $ket !== 'MA';
+                && $r->TKK <= $r->end_date && strtoupper(trim($r->KETERANGAN ?? '')) !== 'MA';
         });
 
         /*
@@ -376,21 +357,9 @@ class GeneratePayrollExport implements ShouldQueue
 |--------------------------------------------------------------------------
 */
         $mangkirEmployees = $data->filter(function ($r) {
-
-            $tmk = !empty($r->TMK) ? \Carbon\Carbon::parse($r->TMK) : null;
-            $isTMKInPeriod = $tmk && $tmk->betweenIncluded(
-                \Carbon\Carbon::parse($r->start_date),
-                \Carbon\Carbon::parse($r->end_date)
-            );
-
-            $ket = strtoupper(trim($r->KETERANGAN ?? ''));
-
-            // Mangkir: bukan Baru (TMK tidak di periode), TKK ada di dalam range periode, dan keterangan MA
-            return !$isTMKInPeriod
-                && !empty($r->TKK)
+            return !empty($r->TKK)
                 && $r->TKK >= $r->start_date
-                && $r->TKK <= $r->end_date
-                && $ket === 'MA';
+                && $r->TKK <= $r->end_date && strtoupper(trim($r->KETERANGAN ?? '')) === 'MA';
         });
 
         /*

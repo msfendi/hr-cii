@@ -194,11 +194,11 @@ class PayrollSummarySheet
     {
         $aktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $keluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $union = $aktif->union($keluar);
 
@@ -211,6 +211,7 @@ class PayrollSummarySheet
                 'bio.NPK',
                 'prd.components',
                 'bio.TKK',
+                'bio.TMK',
                 'bio.IS_STAFF',
                 'd.IS_SEWING',
                 'bio.KETERANGAN',
@@ -226,13 +227,28 @@ class PayrollSummarySheet
     {
         $items = json_decode($row->components, true) ?? [];
 
-        $isMangkir = strtoupper(trim($row->KETERANGAN ?? '')) === 'MA';
+        $keterangan = strtoupper(trim($row->KETERANGAN ?? ''));
+        $tkk = $row->TKK;
+        $tmk = !empty($row->TMK) ? \Carbon\Carbon::parse($row->TMK) : null;
+        $isTMKInPeriod = $tmk && $tmk->betweenIncluded(
+            \Carbon\Carbon::parse($this->period->start_date),
+            \Carbon\Carbon::parse($this->period->end_date)
+        );
+
+        $isMangkir =
+            !is_null($tkk) && !$isTMKInPeriod &&
+            $keterangan === 'MA' &&
+            $tkk >= $this->period->start_date &&
+            $tkk <= $this->period->end_date;
 
         $isResign =
-            !$isMangkir &&
-            $row->TKK &&
-            $row->TKK >= $this->period->start_date &&
-            $row->TKK <= $this->period->end_date;
+            !is_null($tkk) && !$isTMKInPeriod &&
+            $keterangan !== 'MA' &&
+            $tkk >= $this->period->start_date &&
+            $tkk <= $this->period->end_date;
+
+        $isActive =
+            is_null($tkk) || ($tkk > $this->period->end_date) || $isTMKInPeriod;
 
         $isStaff = $row->IS_STAFF == 1;
         $isSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 0;
@@ -270,7 +286,7 @@ class PayrollSummarySheet
             if ($isNonSewing) {
                 $targets[] = 'resign_non_sewing';
             }
-        } else {
+        } elseif ($isActive) {
 
             $targets[] = 'active_all';
 
@@ -290,7 +306,15 @@ class PayrollSummarySheet
         foreach ($this->components as $component) {
 
             $code = $component->code;
-            $value = (float) ($items[$code] ?? 0);
+            $item = $items[$code] ?? null;
+
+            if (is_array($item)) {
+                // Format baru: {"amount": ..., "type": "earning|deduction"}
+                $value = (float)($item['amount'] ?? 0);
+            } else {
+                // Fallback untuk format lama: nilai langsung berupa angka
+                $value = (float)($item ?? 0);
+            }
 
             foreach ($targets as $grp) {
                 $this->groups[$grp][$code] =

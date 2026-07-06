@@ -1035,7 +1035,9 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
             $overtimeDetails,
             $lateDetails,
             $ijinDetails,
-            $componentTypeMap
+            $componentTypeMap,
+            $periodStart,
+            $periodEnd
         ) {
 
             $rawComponents = json_decode($item->components, true) ?? [];
@@ -1084,11 +1086,36 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
                 ? (float) $item->total_salary
                 : '***';
 
-            if (empty($item->tkk)) {
+            $tkk = $item->tkk ? Carbon::parse($item->tkk) : null;
+            $tmk = $item->tmk ? Carbon::parse($item->tmk) : null;
+
+            $periodStart = Carbon::parse($periodStart);
+            $periodEnd   = Carbon::parse($periodEnd);
+
+            $isTMKInPeriod = $tmk &&
+                $tmk->betweenIncluded($periodStart, $periodEnd);
+
+            $isTKKInPeriod = $tkk &&
+                $tkk->betweenIncluded($periodStart, $periodEnd);
+
+            // Prioritas 1: Baru
+            if ($isTMKInPeriod) {
+                // Walaupun TKK juga berada di periode payroll, tetap dianggap Baru
+                $item->employment_status = 'Baru';
+
+                // Prioritas 2: Active
+            } elseif (!$isTKKInPeriod) {
+                // TKK kosong atau di luar periode payroll
                 $item->employment_status = 'Active';
+
+                // Prioritas 3: Mangkir
             } elseif (strtoupper(trim($item->KETERANGAN ?? '')) === 'MA') {
+                // TKK di periode payroll + MA
                 $item->employment_status = 'Mangkir';
+
+                // Prioritas 4: Resign
             } else {
+                // TKK di periode payroll + selain MA
                 $item->employment_status = 'Resign';
             }
 
