@@ -248,18 +248,18 @@
                                             @endif
 
                                             @if(!$period->export_status)
-                                            <a class="btn btn-warning btn-circle btn-sm"
+                                            <!-- <a class="btn btn-warning btn-circle btn-sm"
                                                 href="{{ route('payroll.export.export', $period->id) }}"
                                                 title="Generate Export">
                                                     <i class="fas fa-database"></i>
-                                            </a>
+                                            </a> -->
                                             @canRoute('payroll.export.export')
-                                                <!-- <a class="btn btn-warning btn-circle btn-sm btn-export"
+                                                <a class="btn btn-warning btn-circle btn-sm btn-export"
                                                     href="#"
                                                     data-url="{{ route('payroll.export.export', $period->id) }}"
                                                     title="Generate Export">
                                                     <i class="fas fa-database"></i>
-                                                </a> -->
+                                                </a>
                                             @endcanRoute
                                             @endif
                                             @canRoute('payroll-process.destroy')
