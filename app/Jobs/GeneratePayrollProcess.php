@@ -144,7 +144,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-00005')
+            ->where('p.NPK', '=', 'C-03323')
 
             ->select(
                 'p.NPK',
@@ -173,7 +173,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-00005')
+            ->where('ec1.npk', '=', 'C-03323')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -602,6 +602,8 @@ END AS special_overtime_hours
             ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])
             ->groupBy('imp.npk');
 
+        // dd($ijinSummary->get());
+
         $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans as imp')
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
@@ -752,7 +754,11 @@ END AS special_overtime_hours
                 $join->on('emp.NPK', '=', 'be.npk');
             })
             ->leftJoinSub($ijinSummary, 'ij', function ($join) {
-                $join->on('emp.NPK', '=', 'ij.npk');
+                $join->on(
+                    DB::raw('CAST(emp.NPK AS VARCHAR(50))'),
+                    '=',
+                    DB::raw('CAST(ij.npk AS VARCHAR(50))')
+                );
             })
 
             ->select(
@@ -796,7 +802,7 @@ END AS special_overtime_hours
                 DB::raw('COALESCE(ot.sick_days,0) as sick_days'),
                 DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) as total_ijin_minutes'),
-                DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
+                // DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )
