@@ -144,7 +144,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            ->where('p.NPK', '=', 'C-03323')
+            // ->where('p.NPK', '=', 'C-04133')
 
             ->select(
                 'p.NPK',
@@ -173,7 +173,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            ->where('ec1.npk', '=', 'C-03323')
+            // ->where('ec1.npk', '=', 'C-04133')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -980,7 +980,7 @@ END AS special_overtime_hours
                     $cursor->addDay();
                 }
 
-                // rumus: (hari kerja periode - 21) + absence lama
+                // rumus: (21 - hari kerja periode) + absence karyawan
                 $absenceDays = (21 - $workingDays) + $employee->absence_days;
             } else {
                 $absenceDays = $employee->absence_days;
