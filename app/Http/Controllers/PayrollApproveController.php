@@ -294,6 +294,8 @@ class PayrollApproveController extends Controller
                 'prd.total_salary',
                 'pm.bank_account',
                 'd.DEPARTEMENT',
+                'd.IS_SEWING',
+                'bio.IS_STAFF',
                 'bio.TKK',
                 'bio.TMK',
                 'bio.KETERANGAN'
@@ -401,6 +403,8 @@ class PayrollApproveController extends Controller
         fputcsv($handle, [
             'No Rekening Tujuan',
             'Nama Penerima',
+            'Dept',
+            'Group',
             'Bank',
             'Kode Bank',
             'Nominal',
@@ -420,9 +424,24 @@ class PayrollApproveController extends Controller
                 //     continue;
                 // }
 
+                // =========================
+                // 🔥 GROUP MAPPING
+                // =========================
+                if ((int) $emp->IS_STAFF === 1) {
+                    $group = 'STAFF';
+                } elseif ((int) $emp->IS_SEWING === 0 && (int) $emp->IS_STAFF === 0) {
+                    $group = 'SEWING';
+                } elseif ((int) $emp->IS_SEWING === 1 && (int) $emp->IS_STAFF === 0) {
+                    $group = 'NON SEWING';
+                } else {
+                    $group = '-';
+                }
+
                 fputcsv($handle, [
                     $emp->bank_account ?? '',
                     strtoupper($emp->employee_name),
+                    $emp->DEPARTEMENT ?? $dept ?? '',
+                    $group,
                     'PERMATA',
                     '013',
                     number_format($emp->total_salary ?? 0, 0, '', ''),
