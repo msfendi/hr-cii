@@ -28,6 +28,15 @@
                            value="{{ $employeeShift->npk }}"
                            required>
                      </div>
+                     {{-- nama --}}
+                     <div class="form-group">
+                        <label>Nama</label>
+                        <input type="text"
+                           name="nama"
+                           class="form-control"
+                           value="{{ $biodatas->NAMA_KARYAWAN }}"
+                           disabled>
+                     </div>
                      <div class="form-group">
                         <label>Shift</label>
                         <select name="shift_id" class="form-control" required>
@@ -44,7 +53,7 @@
                         <input type="date"
                            name="shift_date"
                            class="form-control"
-                           value="{{ $employeeShift->shift_date }}"
+                           value="{{ \Carbon\Carbon::parse($employeeShift->shift_date)->format('Y-m-d') }}"
                            required>
                      </div>
                      <button class="btn btn-primary btn-block">

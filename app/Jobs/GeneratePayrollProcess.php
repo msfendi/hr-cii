@@ -802,7 +802,7 @@ END AS special_overtime_hours
                 DB::raw('COALESCE(ot.sick_days,0) as sick_days'),
                 DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) as total_ijin_minutes'),
-                // DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
+                DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             )

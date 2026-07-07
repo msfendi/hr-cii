@@ -41,7 +41,7 @@
                 </a>
             </div>
             <!-- Menu 2 -->
-            <div class="col-lg-3 col-md-4 col-6 mb-4">
+            <!-- <div class="col-lg-3 col-md-4 col-6 mb-4">
                 <a href="/employee-thr" class="text-decoration-none">
                     <div class="card shadow h-100 text-center menu-card">
                         <div class="card-body">
@@ -50,10 +50,10 @@
                         </div>
                     </div>
                 </a>
-            </div>
+            </div> -->
 
             <!-- Menu 3 -->
-            <div class="col-lg-3 col-md-4 col-6 mb-4">
+            <!-- <div class="col-lg-3 col-md-4 col-6 mb-4">
                 <a href="/pengajuan-cuti/login" class="text-decoration-none">
                     <div class="card shadow h-100 text-center menu-card">
                         <div class="card-body">
@@ -62,7 +62,7 @@
                         </div>
                     </div>
                 </a>
-            </div>
+            </div> -->
 
         </div>
 

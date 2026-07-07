@@ -87,6 +87,7 @@ use App\Http\Controllers\MenuController;
 use App\Http\Controllers\PayrollRecapController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RolePermissionController;
+use App\Http\Controllers\JobVacancyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -671,6 +672,19 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('devices/{id}/qr', [WhatsappDeviceController::class, 'qr'])->name('devices.qr')->middleware(['auth', 'permission']);
     Route::post('/devices/{device}/disconnect', [WhatsappDeviceController::class, 'disconnect'])->name('devices.disconnect')->middleware(['auth', 'permission']);
 
+    Route::prefix('job-vacancy')
+        ->name('job-vacancy.')
+        ->middleware(['auth', 'permission'])
+        ->group(function () {
+            Route::get('/', [JobVacancyController::class, 'index'])->name('index');
+            Route::get('/data', [JobVacancyController::class, 'data'])->name('data');
+            Route::post('/', [JobVacancyController::class, 'store'])->name('store');
+            Route::get('/{jobVacancy}/edit', [JobVacancyController::class, 'edit'])->name('edit');
+            Route::put('/{jobVacancy}', [JobVacancyController::class, 'update'])->name('update');
+            Route::delete('/{jobVacancy}', [JobVacancyController::class, 'destroy'])->name('destroy');
+            Route::patch('/{jobVacancy}/toggle-status', [JobVacancyController::class, 'toggleStatus'])->name('toggle-status');
+        });
+
 
     /*
     |--------------------------------------------------------------------------
@@ -808,7 +822,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/shift/create', [ShiftController::class, 'create'])->name('shift.create')->middleware(['auth', 'permission']);
     Route::post('/shift/store', [ShiftController::class, 'store'])->name('shift.store')->middleware(['auth', 'permission']);
     Route::get('/shift/edit/{id}', [ShiftController::class, 'edit'])->name('shift.edit')->middleware(['auth', 'permission']);
-    Route::post('/shift/update/{id}', [ShiftController::class, 'update'])->name('shift.update')->middleware(['auth', 'permission']);
+    Route::put('/shift/update/{id}', [ShiftController::class, 'update'])->name('shift.update')->middleware(['auth', 'permission']);
     Route::get('/shift/delete/{id}', [ShiftController::class, 'delete'])->name('shift.delete')->middleware(['auth', 'permission']);
 
     Route::get('/employee-mutations', [EmployeeMutationController::class, 'index'])->name('employee-mutations.index');
@@ -829,6 +843,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/employee-shift/import', [EmployeeShiftController::class, 'importTemplate'])->name('employee-shift.import');
     Route::get('/employee-shift/create', [EmployeeShiftController::class, 'create'])->name('employee-shift.create');
     Route::get('/employee-shift/edit/{id}', [EmployeeShiftController::class, 'edit'])->name('employee-shift.edit');
+    Route::put('/employee-shift/update/{id}', [EmployeeShiftController::class, 'update'])->name('employee-shift.update');
     Route::post('/employee-shift/store', [EmployeeShiftController::class, 'store'])->name('employee-shift.store');
     Route::get('/employee-shift/delete/{id}', [EmployeeShiftController::class, 'delete'])->name('employee-shift.delete');
 });
@@ -971,3 +986,6 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
 
 Route::get('/portal-recruitment-status', [PortalRecruitmentStatusController::class, 'index'])->name('portal.recruitment-status.index');
 Route::post('/portal-recruitment-status/check', [PortalRecruitmentStatusController::class, 'check'])->name('portal.recruitment-status.check');
+Route::get('/lowongan', [JobVacancyController::class, 'publicIndex'])->name('job-vacancy.public');
+Route::get('/lowongan/data', [JobVacancyController::class, 'publicData'])
+    ->name('job-vacancy.public-data');
