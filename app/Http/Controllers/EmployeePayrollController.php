@@ -106,11 +106,13 @@ class EmployeePayrollController extends Controller
     public function showSlip($run_id, $npk)
     {
 
-        $birth = DB::table('PKWT')
+        $birth = DB::table('PKWT')->select('KTP', 'TGLLAHIR')
             ->where('NPK', $npk)
-            ->value('TGLLAHIR');
+            ->first();
 
-        $password = date('ymd', strtotime($birth));
+        // dd($birth);
+
+        $password = substr($birth->KTP, -6) . date('ymd', strtotime($birth->TGLLAHIR));
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
             ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
@@ -648,11 +650,11 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
     public function showSlipAudit($run_id, $npk)
     {
 
-        $birth = DB::table('PKWT')
+        $birth = DB::table('PKWT')->select('KTP', 'TGLLAHIR')
             ->where('NPK', $npk)
-            ->value('TGLLAHIR');
+            ->first();
 
-        $password = date('ymd', strtotime($birth));
+        $password = substr($birth->KTP, -6) . date('ymd', strtotime($birth->TGLLAHIR));
 
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
