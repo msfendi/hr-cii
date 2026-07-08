@@ -185,14 +185,6 @@ class RecruitmentController extends Controller
 
     public function sendWhatsApp(Request $request)
     {
-        $devices = WhatsappDevice::where('is_active', true)->get();
-
-        // dd(count($devices));
-        if (count($devices) == 0) {
-            Alert::warning('Whatsapp Failed!', 'Device Not Linked!');
-            return back()->with('error', 'Failed to send WhatsApp message: ' . ($response['reason'] ?? 'Unknown error'));
-        }
-
         $request->validate([
             'id' => 'required',
             'type' => 'required',
@@ -201,9 +193,23 @@ class RecruitmentController extends Controller
             'message' => 'required',
         ]);
 
-        $response = $this->fonnteService->sendMessage($devices[0]->id, $request->nomor_hp, $request->message);
+        $sendWa = $request->has('send_wa');
+        $waSuccess = true;
+        $response = [];
 
-        if ($response['status'] ?? false) {
+        if ($sendWa) {
+            $devices = WhatsappDevice::where('is_active', true)->get();
+
+            if (count($devices) == 0) {
+                Alert::warning('Whatsapp Failed!', 'Device Not Linked!');
+                return back()->with('error', 'Failed to send WhatsApp message: Device not linked');
+            }
+
+            $response = $this->fonnteService->sendMessage($devices[0]->id, $request->nomor_hp, $request->message);
+            $waSuccess = $response['status'] ?? false;
+        }
+
+        if ($waSuccess) {
             $updates = [
                 'status_apply' => strtoupper(str_replace('_', ' ', $request->type)),
             ];
@@ -233,10 +239,16 @@ class RecruitmentController extends Controller
                 ->where('id_pelamar', $request->id)
                 ->update($updates);
 
-            Alert::success('Whatsapp Send!', 'Whatsapp message send succesfully!');
-            return back()->with('success', 'WhatsApp message sent and status updated for ' . $request->nama);
+            if ($sendWa) {
+                Alert::success('Berhasil', 'Status diperbarui dan pesan WhatsApp berhasil dikirim!');
+                return back()->with('success', 'Status diperbarui dan pesan WhatsApp berhasil dikirim untuk ' . $request->nama);
+            } else {
+                Alert::success('Berhasil', 'Status berhasil diperbarui (tanpa mengirim WhatsApp)');
+                return back()->with('success', 'Status berhasil diperbarui untuk ' . $request->nama);
+            }
         }
 
+        Alert::error('Whatsapp Failed!', 'Gagal mengirim pesan WhatsApp.');
         return back()->with('error', 'Failed to send WhatsApp message: ' . ($response['reason'] ?? 'Unknown error'));
     }
 }

@@ -270,13 +270,10 @@ class PayrollApproveController extends Controller
     |--------------------------------------------------------------------------
     */
         $baseQuery = DB::table('payroll_run_details as prd')
-
             ->leftJoinSub($union, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
-
             ->leftJoinSub(
                 DB::table('payroll_masters')->select('npk', 'bank_name', 'bank_account'),
                 'pm',
@@ -285,9 +282,7 @@ class PayrollApproveController extends Controller
                         ->whereRaw("LOWER(pm.bank_name) = 'permata bank'");
                 }
             )
-
             ->where('prd.run_id', $runId)
-
             ->select(
                 'prd.employee_npk',
                 'prd.employee_name',
@@ -300,7 +295,6 @@ class PayrollApproveController extends Controller
                 'bio.TMK',
                 'bio.KETERANGAN'
             )
-
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk');
 
@@ -313,16 +307,15 @@ class PayrollApproveController extends Controller
         $activeEmployees = (clone $baseQuery)
             ->where(function ($query) use ($period) {
                 $query->whereNull('bio.TKK')
-                    ->orWhere('bio.TKK', '>', $period->end_date)
-                    ->orWhereBetween('bio.TMK', [$period->start_date, $period->end_date]);
+                    ->orWhere('bio.TKK', '>', $period->end_date);
             })
             ->get();
 
         /*
     |--------------------------------------------------------------------------
     | RESIGN
-    | isResign = !is_null(TKK) && !isTMKInPeriod && KETERANGAN != 'MA'
-    |            && TKK between start & end
+    | isResign = !is_null(TKK) && TKK between period && KETERANGAN <> 'MA'
+    |            && !isTMKInPeriod
     |--------------------------------------------------------------------------
     */
         $resignEmployees = (clone $baseQuery)
@@ -332,52 +325,99 @@ class PayrollApproveController extends Controller
                     ->where(function ($q) {
                         $q->whereNull('bio.KETERANGAN')
                             ->orWhereRaw('UPPER(LTRIM(RTRIM(bio.KETERANGAN))) <> ?', ['MA']);
-                    })
-                    ->where(function ($query) use ($period) {
-                        $query->whereNull('bio.TMK')
-                            ->orWhere('bio.TMK', '<', $period->start_date)
-                            ->orWhere('bio.TMK', '>', $period->end_date);
                     });
             })
             ->get();
 
-        if ($activeEmployees->isEmpty() && $resignEmployees->isEmpty()) {
+        /*
+    |--------------------------------------------------------------------------
+    | MANGKIR
+    | sama seperti RESIGN, hanya KETERANGAN = 'MA'
+    |--------------------------------------------------------------------------
+    */
+        $mangkirEmployees = (clone $baseQuery)
+            ->where(function ($query) use ($period) {
+                $query->whereNotNull('bio.TKK')
+                    ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
+                    ->whereRaw('UPPER(LTRIM(RTRIM(bio.KETERANGAN))) = ?', ['MA']);
+            })
+            ->get();
+
+        if ($activeEmployees->isEmpty() && $resignEmployees->isEmpty() && $mangkirEmployees->isEmpty()) {
             return false;
+        }
+
+        $cleanPeriod = str_replace(' ', '_', strtoupper($period->name));
+
+        /*
+    |--------------------------------------------------------------------------
+    | GENERATE CSV UMUM (SEMUA ROLE DIGABUNG)
+    | Disimpan langsung di payroll/{PERIODE}/, TIDAK masuk folder role
+    |--------------------------------------------------------------------------
+    */
+        $activeFileName  = "PERMATA_{$cleanPeriod}_AKTIF.csv";
+        $resignFileName  = "PERMATA_{$cleanPeriod}_RESIGN.csv";
+        $mangkirFileName = "PERMATA_{$cleanPeriod}_MANGKIR.csv";
+
+        $activePath  = "payroll/{$cleanPeriod}/{$activeFileName}";
+        $resignPath  = "payroll/{$cleanPeriod}/{$resignFileName}";
+        $mangkirPath = "payroll/{$cleanPeriod}/{$mangkirFileName}";
+
+        $this->createBankCSV($activeEmployees, $period->name, $activePath);
+        $this->createBankCSV($resignEmployees, $period->name, $resignPath);
+        $this->createBankCSV($mangkirEmployees, $period->name, $mangkirPath);
+
+        /*
+    |--------------------------------------------------------------------------
+    | GROUP BY ROLE (STAFF / SEWING / NON SEWING / NON STAFF)
+    |--------------------------------------------------------------------------
+    */
+        $groupedActive  = $activeEmployees->groupBy(fn($emp) => $this->resolveGroup($emp));
+        $groupedResign  = $resignEmployees->groupBy(fn($emp) => $this->resolveGroup($emp));
+        $groupedMangkir = $mangkirEmployees->groupBy(fn($emp) => $this->resolveGroup($emp));
+
+        /*
+    |--------------------------------------------------------------------------
+    | GENERATE CSV PER ROLE FOLDER
+    | Disimpan di payroll/{PERIODE}/{ROLE}/
+    |--------------------------------------------------------------------------
+    */
+        $roles = ['STAFF', 'SEWING', 'NON SEWING', 'NON STAFF'];
+
+        foreach ($roles as $role) {
+            $roleFolder = str_replace(' ', '_', $role); // NON_SEWING, NON_STAFF, dst
+            $basePath   = "payroll/{$cleanPeriod}/{$roleFolder}";
+
+            $statuses = [
+                'AKTIF'   => $groupedActive->get($role, collect()),
+                'RESIGN'  => $groupedResign->get($role, collect()),
+                'MANGKIR' => $groupedMangkir->get($role, collect()),
+            ];
+
+            foreach ($statuses as $statusLabel => $employees) {
+                if ($employees->isEmpty()) {
+                    continue; // skip, tidak buat file kosong
+                }
+
+                $roleFileName = "PERMATA_{$cleanPeriod}_{$roleFolder}_{$statusLabel}.csv";
+                $roleFilePath = "{$basePath}/{$roleFileName}";
+
+                $this->createBankCSV($employees, $period->name, $roleFilePath);
+            }
         }
 
         /*
     |--------------------------------------------------------------------------
-    | GROUP DEPARTMENT
-    |--------------------------------------------------------------------------
-    */
-        $groupedActive = $activeEmployees->groupBy('DEPARTEMENT');
-        $groupedResign = $resignEmployees->groupBy('DEPARTEMENT');
-
-        /*
-    |--------------------------------------------------------------------------
-    | GENERATE CSV
-    |--------------------------------------------------------------------------
-    */
-        $cleanPeriod = str_replace(' ', '_', strtoupper($period->name));
-        $activeFileName = "PERMATA_{$cleanPeriod}_AKTIF.csv";
-        $resignFileName = "PERMATA_{$cleanPeriod}_RESIGN.csv";
-
-        $activePath = "payroll/" . $cleanPeriod . "/" . $activeFileName;
-        $resignPath = "payroll/" . $cleanPeriod . "/" . $resignFileName;
-
-        $this->createBankCSV($groupedActive, $period->name, $activePath);
-        $this->createBankCSV($groupedResign, $period->name, $resignPath);
-
-        /*
-    |--------------------------------------------------------------------------
     | UPDATE EXPORT TABLE
+    | Hanya nama file umum (gabungan semua role) yang disimpan
     |--------------------------------------------------------------------------
     */
         DB::table('payroll_exports')->updateOrInsert(
             ['run_id' => $runId],
             [
-                'file_bank_active' => $activeFileName,
-                'file_bank_resign' => $resignFileName
+                'file_bank_active'  => $activeFileName,
+                'file_bank_resign'  => $resignFileName,
+                'file_bank_mangkir' => $mangkirFileName,
             ]
         );
 
@@ -391,63 +431,57 @@ class PayrollApproveController extends Controller
         return true;
     }
 
-    private function createBankCSV($groupedData, $periodName, $path)
+    /*
+|--------------------------------------------------------------------------
+| RESOLVE GROUP / ROLE MAPPING
+|--------------------------------------------------------------------------
+| STAFF      : IS_STAFF = 1
+| SEWING     : IS_STAFF = 0 && IS_SEWING = 0
+| NON SEWING : IS_STAFF = 0 && IS_SEWING = 1
+| NON STAFF  : IS_STAFF = 0 && IS_SEWING = null (dept tidak ketemu / kosong)
+|--------------------------------------------------------------------------
+*/
+    private function resolveGroup($emp)
+    {
+        if ((int) $emp->IS_STAFF === 1) {
+            return 'STAFF';
+        } elseif ((int) $emp->IS_SEWING === 0 && (int) $emp->IS_STAFF === 0) {
+            return 'SEWING';
+        } elseif ((int) $emp->IS_SEWING === 1 && (int) $emp->IS_STAFF === 0) {
+            return 'NON SEWING';
+        } elseif (is_null($emp->IS_SEWING) && (int) $emp->IS_STAFF === 0) {
+            return 'NON STAFF';
+        }
+
+        return '-';
+    }
+
+    private function createBankCSV($employees, $periodName, $path)
     {
         $handle = fopen('php://temp', 'r+');
 
-        /*
-    |--------------------------------------------------------------------------
-    | HEADER
-    |--------------------------------------------------------------------------
-    */
-        fputcsv($handle, [
-            'No Rekening Tujuan',
-            'Nama Penerima',
-            'Dept',
-            'Group',
-            'Bank',
-            'Kode Bank',
-            'Nominal',
-            'Keterangan'
-        ]);
+        foreach ($employees as $emp) {
 
-        /*
-    |--------------------------------------------------------------------------
-    | DATA
-    |--------------------------------------------------------------------------
-    */
-        foreach ($groupedData as $dept => $employees) {
+            // if (empty($emp->bank_account) || $emp->total_salary <= 0) {
+            //     continue;
+            // }
 
-            foreach ($employees as $emp) {
-
-                // if (empty($emp->bank_account) || $emp->total_salary <= 0) {
-                //     continue;
-                // }
-
-                // =========================
-                // 🔥 GROUP MAPPING
-                // =========================
-                if ((int) $emp->IS_STAFF === 1) {
-                    $group = 'STAFF';
-                } elseif ((int) $emp->IS_SEWING === 0 && (int) $emp->IS_STAFF === 0) {
-                    $group = 'SEWING';
-                } elseif ((int) $emp->IS_SEWING === 1 && (int) $emp->IS_STAFF === 0) {
-                    $group = 'NON SEWING';
-                } else {
-                    $group = '-';
-                }
-
-                fputcsv($handle, [
-                    $emp->bank_account ?? '',
-                    strtoupper($emp->employee_name),
-                    $emp->DEPARTEMENT ?? $dept ?? '',
-                    $group,
-                    'PERMATA',
-                    '013',
-                    number_format($emp->total_salary ?? 0, 0, '', ''),
-                    'GAJI ' . strtoupper($periodName)
-                ]);
-            }
+            fputcsv($handle, [
+                'PERMATA',                                          // A
+                '',                                                 // B
+                '',                                                 // C
+                '',                                                 // D
+                strtoupper(trim($emp->employee_name)),                    // E
+                $emp->bank_account ?? '',                           // F
+                'IDR',                                               // G
+                number_format($emp->total_salary ?? 0, 0, '', ''),   // H
+                'GAJI ' . strtoupper($periodName),                  // I
+                '',                                                 // J
+                '',                                                 // K
+                'OVB',                                              // L
+                0,                                                  // M
+                0,                                                  // N
+            ]);
         }
 
         rewind($handle);

@@ -453,7 +453,45 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
 
             $invalidContracts = $filterByRole($invalidContracts);
 
-            $invalidBankAccounts = $filterByRole($invalidBankAccounts);
+            $invalidBankAccounts = $filterByRole($invalidBankAccounts); // <-- baris existing
+
+            /*
+============================================
+CEK DUPLICATE BANK ACCOUNT (payroll_masters)
+============================================
+*/
+
+            $duplicateBankAccountNumbers = DB::table('payroll_masters')
+                ->select('bank_account')
+                ->whereNotNull('bank_account')
+                ->whereRaw("LTRIM(RTRIM(bank_account)) != ''")
+                ->groupBy('bank_account')
+                ->havingRaw('COUNT(*) > 1')
+                ->pluck('bank_account');
+
+            $duplicateBankAccounts = [];
+
+            if ($duplicateBankAccountNumbers->count() > 0) {
+
+                $duplicateBankAccounts = DB::table('payroll_masters as pm')
+                    ->leftJoinSub($biodataUnion, 'b', function ($join) {
+                        $join->on('pm.npk', '=', 'b.NPK');
+                    })
+                    ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
+                    ->whereIn('pm.bank_account', $duplicateBankAccountNumbers)
+                    ->select(
+                        'pm.npk as NPK',
+                        'pm.bank_account',
+                        'b.NAMA_KARYAWAN',
+                        'b.IS_STAFF',
+                        'd.IS_SEWING'
+                    )
+                    ->orderBy('pm.bank_account')
+                    ->orderBy('pm.npk')
+                    ->get();
+
+                $duplicateBankAccounts = $filterByRole($duplicateBankAccounts);
+            }
         }
 
         /*
@@ -465,7 +503,8 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
         return response()->json([
             'approval' => $data,
             'invalid_contracts' => $invalidContracts,
-            'invalid_bank_accounts' => $invalidBankAccounts
+            'invalid_bank_accounts' => $invalidBankAccounts,
+            'duplicate_bank_accounts' => $duplicateBankAccounts   // <-- tambahan
         ]);
     }
 
@@ -1099,7 +1138,7 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
                 $tkk->betweenIncluded($periodStart, $periodEnd);
 
             // Prioritas 1: Baru
-            if ($isTMKInPeriod) {
+            if ($isTMKInPeriod && $tkk === null) {
                 // Walaupun TKK juga berada di periode payroll, tetap dianggap Baru
                 $item->employment_status = 'Baru';
 

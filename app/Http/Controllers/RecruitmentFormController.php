@@ -54,12 +54,12 @@ class RecruitmentFormController extends Controller
 
         $extraData = [];
         if ($step === 1) {
-            $extraData['positions'] = RecruitmentPosition::where('is_aktif', 'true')
-                ->select('dept', 'position')
-                ->distinct()
-                ->get()
-                ->groupBy('dept');
-        }
+                $extraData['positions'] = RecruitmentPosition::where('is_aktif', 'true')
+                    ->select('dept', 'position')
+                    ->distinct()
+                    ->get()
+                    ->groupBy('dept');
+            }
 
         return view($this->steps[$step]['view'], array_merge([
             'currentStep' => $step,
@@ -140,7 +140,7 @@ class RecruitmentFormController extends Controller
         foreach ($fileFields as $field) {
             if ($request->hasFile($field)) {
                 $file      = $request->file($field);
-                $ext       = $file->getClientOriginalExtension();
+                $ext       = $file->extension(); // aman: berdasarkan konten file, bukan nama dari client
                 $filename  = "{$field}_{$namaPelamar}_{$timestamp}.{$ext}";
                 $folder    = "pelamar/{$field}";
                 $uploadedFiles[$field] = $file->storeAs($folder, $filename, 'public');
@@ -343,7 +343,7 @@ class RecruitmentFormController extends Controller
                 'no_kk'             => ['required', 'digits:16'],
                 'sim'               => ['nullable', 'string', 'max:30'],
                 'tempat_lahir'      => ['required', 'string', 'max:100'],
-                'tanggal_lahir'     => ['nullable', 'date', 'before:today'],
+                'tanggal_lahir'     => ['required', 'date', 'before_or_equal:' . now()->subYears(18)->toDateString()],
                 'warga_negara'      => ['nullable', 'in:WNI,WNA'],
                 'golongan_darah'    => ['nullable', 'in:A,B,AB,O'],
                 'jenis_kelamin'     => ['required', 'in:L,P'],
@@ -452,15 +452,15 @@ class RecruitmentFormController extends Controller
             // Step 8 — Upload Dokumen
             // ----------------------------------------------------------------
             8 => [
-                'surat_lamaran'         => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-                'cv'                    => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-                'scan_ktp'              => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-                'scan_kk'               => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-                'pas_foto'              => ['nullable', 'file', 'mimes:jpg,jpeg,png',      'max:2048'],
-                'ijazah'                => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-                'scan_akta_kelahiran'   => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-                'scan_skck'             => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
-                'scan_blanko_kesehatan' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'surat_lamaran'         => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'cv'                    => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'scan_ktp'              => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'scan_kk'               => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'pas_foto'              => ['required', 'file', 'mimes:jpg,jpeg,png',     'mimetypes:image/jpeg,image/png',                 'max:2048'],
+                'ijazah'                => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'scan_akta_kelahiran'   => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'scan_skck'             => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'scan_blanko_kesehatan' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
                 'deklarasi'             => ['required', 'accepted'],
             ],
 
@@ -488,9 +488,10 @@ class RecruitmentFormController extends Controller
 
         $perStep = match ($step) {
             1 => [
-                'nik.digits'           => 'NIK harus tepat 16 digit.',
-                'no_kk.digits'         => 'Nomor KK harus tepat 16 digit.',
-                'tanggal_lahir.before' => 'Tanggal lahir harus sebelum hari ini.',
+                'nik.digits'                    => 'NIK harus tepat 16 digit.',
+                'no_kk.digits'                  => 'Nomor KK harus tepat 16 digit.',
+                'tanggal_lahir.required'        => 'Tanggal lahir wajib diisi.',
+                'tanggal_lahir.before_or_equal' => 'Pendaftar harus berusia minimal 18 tahun.',
             ],
             2 => [
                 'nama_darurat.required'       => 'Nama kontak darurat wajib diisi.',

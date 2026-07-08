@@ -655,7 +655,6 @@
 @push('scripts')
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
 <script>
     // Select2 logic for Department and Jabatan
     var positionData = @json($positions ?? []);
@@ -702,19 +701,65 @@
         }
     });
 
+    // Auto-calculate age from tanggal_lahir + validasi minimal 18 tahun
+    const dobEl     = document.getElementById('tanggal_lahir');
+    const ageEl     = document.getElementById('umur');
+    const submitBtn = document.querySelector('[type="submit"]');
+    const MIN_AGE   = 18;
 
-    // Auto-calculate age from tanggal_lahir
-    const dobEl  = document.getElementById('tanggal_lahir');
-    const ageEl  = document.getElementById('umur');
+    // Batas maksimal input: harus sudah berulang tahun ke-18
+    (function setMaxDate() {
+        const max = new Date();
+        max.setFullYear(max.getFullYear() - MIN_AGE);
+        if (dobEl) dobEl.max = max.toISOString().split('T')[0];
+    })();
+
+    // Hapus error age sebelumnya jika ada
+    function clearAgeError() {
+        const old = document.getElementById('age-error-msg');
+        if (old) old.remove();
+    }
+
+    function showAgeError(msg) {
+        clearAgeError();
+        const p = document.createElement('p');
+        p.id        = 'age-error-msg';
+        p.className = 'rf-error';
+        p.textContent = msg;
+        dobEl.closest('div').appendChild(p);
+    }
 
     function calcAge(dob) {
-        if (!dob) { ageEl.value = ''; return; }
+        clearAgeError();
+        if (!dob) {
+            ageEl.value = '';
+            if (submitBtn) submitBtn.disabled = false;
+            return;
+        }
+
         const today = new Date();
         const birth = new Date(dob);
+
+        // Cegah tanggal masa depan
+        if (birth > today) {
+            ageEl.value = '';
+            showAgeError('Tanggal lahir tidak boleh di masa depan.');
+            if (submitBtn) submitBtn.disabled = true;
+            return;
+        }
+
         let age = today.getFullYear() - birth.getFullYear();
         const m = today.getMonth() - birth.getMonth();
         if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+
         ageEl.value = age + ' Tahun';
+
+        if (age < MIN_AGE) {
+            showAgeError(`Usia minimum pendaftaran adalah ${MIN_AGE} tahun. Usia Anda saat ini: ${age} tahun.`);
+            if (submitBtn) submitBtn.disabled = true;
+        } else {
+            if (submitBtn) submitBtn.disabled = false;
+        }
     }
 
     dobEl?.addEventListener('change', e => calcAge(e.target.value));

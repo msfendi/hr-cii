@@ -105,14 +105,19 @@ class EmployeePayrollController extends Controller
 
     public function showSlip($run_id, $npk)
     {
+        // $birth = DB::table('PKWT')->select('KTP', 'TGLLAHIR')
+        //     ->where('NPK', $npk)
+        //     ->first();
 
-        $birth = DB::table('PKWT')->select('KTP', 'TGLLAHIR')
+        // // dd($birth);
+
+        // $password = substr($birth->KTP, -6) . date('ymd', strtotime($birth->TGLLAHIR));
+
+        $birth = DB::table('PKWT')
             ->where('NPK', $npk)
-            ->first();
+            ->value('TGLLAHIR');
 
-        // dd($birth);
-
-        $password = substr($birth->KTP, -6) . date('ymd', strtotime($birth->TGLLAHIR));
+        $password = date('ymd', strtotime($birth));
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
             ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
@@ -650,11 +655,11 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
     public function showSlipAudit($run_id, $npk)
     {
 
-        $birth = DB::table('PKWT')->select('KTP', 'TGLLAHIR')
+        $birth = DB::table('PKWT')
             ->where('NPK', $npk)
-            ->first();
+            ->value('TGLLAHIR');
 
-        $password = substr($birth->KTP, -6) . date('ymd', strtotime($birth->TGLLAHIR));
+        $password = date('ymd', strtotime($birth));
 
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')

@@ -344,7 +344,7 @@ class GeneratePayrollExport implements ShouldQueue
 
             // Baru (TMK di periode) tetap dianggap Active di export ini,
             // atau TKK kosong, atau TKK di atas akhir periode (belum resign di periode ini)
-            return $isTMKInPeriod || empty($r->TKK) || $r->TKK > $r->end_date;
+            return empty($r->TKK) || $r->TKK > $r->end_date;
         });
 
         /*
@@ -363,8 +363,7 @@ class GeneratePayrollExport implements ShouldQueue
             $ket = strtoupper(trim($r->KETERANGAN ?? ''));
 
             // Resign: bukan Baru (TMK tidak di periode), TKK ada di dalam range periode, dan keterangan BUKAN MA
-            return !$isTMKInPeriod
-                && !empty($r->TKK)
+            return !empty($r->TKK)
                 && $r->TKK >= $r->start_date
                 && $r->TKK <= $r->end_date
                 && $ket !== 'MA';
@@ -386,8 +385,7 @@ class GeneratePayrollExport implements ShouldQueue
             $ket = strtoupper(trim($r->KETERANGAN ?? ''));
 
             // Mangkir: bukan Baru (TMK tidak di periode), TKK ada di dalam range periode, dan keterangan MA
-            return !$isTMKInPeriod
-                && !empty($r->TKK)
+            return !empty($r->TKK)
                 && $r->TKK >= $r->start_date
                 && $r->TKK <= $r->end_date
                 && $ket === 'MA';

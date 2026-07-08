@@ -238,17 +238,17 @@ class PayrollSummarySheet
         $isTMKInPeriod = $tmk && $tmk->betweenIncluded($periodStart, $periodEnd);
 
         $isMangkir =
-            !is_null($tkk) && !$isTMKInPeriod &&
+            !is_null($tkk) &&
             $keterangan === 'MA' &&
             $tkk->betweenIncluded($periodStart, $periodEnd);
 
         $isResign =
-            !is_null($tkk) && !$isTMKInPeriod &&
+            !is_null($tkk) &&
             $keterangan !== 'MA' &&
             $tkk->betweenIncluded($periodStart, $periodEnd);
 
         $isActive =
-            is_null($tkk) || $tkk->greaterThan($periodEnd) || $isTMKInPeriod;
+            is_null($tkk) || $tkk->greaterThan($periodEnd);
 
         $isStaff = $row->IS_STAFF == 1;
         $isSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 0;

@@ -89,6 +89,20 @@ class PayrollRecapController extends Controller
     }
 
     /**
+     * Ubah nilai JUMLAH_JAM_LEMBUR (nvarchar) menjadi float dengan aman.
+     * Menangani pemisah desimal koma ("2,5" -> 2.5). Sesuaikan di sini jika
+     * format datanya ternyata berbeda (mis. "HH:MM").
+     */
+    private function parseJam($value): float
+    {
+        if ($value === null) return 0.0;
+        $value = trim((string) $value);
+        if ($value === '') return 0.0;
+        $value = str_replace(',', '.', $value);
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    /**
      * AJAX: data untuk chart rekap payroll.
      * GET /payroll/recap/chart-data
      *
@@ -109,6 +123,19 @@ class PayrollRecapController extends Controller
      *  - bulan-tahun TKK <= bulan periode -> Keluar di bulan itu
      * Contoh: TKK = Juli, payroll bulan Juni -> Aktif di Juni, baru
      * terhitung Keluar mulai payroll bulan Juli.
+     *
+     * Overtime / Lembur:
+     *  - Diambil dari table `overtimes_payroll`, kolom JUMLAH_JAM_LEMBUR.
+     *  - Hari Senin-Jumat (dan bukan hari libur nasional)  -> Overtime biasa.
+     *  - Hari Sabtu/Minggu ATAU tanggal ada di table `holidays`
+     *    (is_national = 1)                                  -> Overtime khusus.
+     *  - Dept diambil dengan join NPK -> payroll_run_details (baris terbaru
+     *    per NPK) -> DEPT.ID_DEPT, agar konsisten dengan filter Department
+     *    lainnya di halaman ini.
+     *  - `overtime_dates` & `overtime_matrix` menyediakan rincian jam lembur
+     *    per Department per tanggal (OVERTIME_DATE), dipakai untuk
+     *    menampilkan tabel "Rincian Overtime per Dept" dengan kolom per
+     *    tanggal di frontend.
      */
     public function chartData(Request $request)
     {
@@ -149,6 +176,7 @@ class PayrollRecapController extends Controller
             ->join('payroll_periods as pp', 'pr.period_id', '=', 'pp.id')
             ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
             ->leftJoin('PKWT as pkwt', 'pkwt.NPK', '=', 'prd.employee_npk')
+            ->leftJoin('DEPT as dept_main', 'dept_main.ID_DEPT', '=', 'prd.employee_dept')
             ->whereBetween('pp.start_date', [$startMonth->toDateString(), $endMonth->toDateString()])
             ->when($npk, fn($q) => $q->where('prd.employee_npk', $npk))
             ->when($dept, fn($q) => $q->where('prd.employee_dept', $dept))
@@ -157,10 +185,12 @@ class PayrollRecapController extends Controller
                 'pp.name as period_name',
                 'pp.start_date as period_start',
                 'prd.employee_npk',
+                'prd.employee_dept as dept_id',
                 'prd.total_salary',
                 'prd.components',
                 DB::raw('COALESCE(bio.NAMA_KARYAWAN, prd.employee_name) as nama'),
                 DB::raw('bio.BAG as bagian'),
+                DB::raw('COALESCE(dept_main.DEPARTEMENT, \'Tanpa Dept\') as dept_name'),
                 'pkwt.TKK as tkk'
             )
             ->orderBy('pp.start_date')
@@ -181,6 +211,9 @@ class PayrollRecapController extends Controller
         }
 
         $employees = [];
+        // Rekap payroll per Department (mengikuti filter dept/npk/component/rentang bulan
+        // yang sama), berdasarkan employee_dept yang tercatat pada masing-masing periode.
+        $deptRecap = [];
 
         foreach ($rows as $row) {
             $periodKey = Carbon::parse($row->period_start)->format('Y-m');
@@ -221,6 +254,19 @@ class PayrollRecapController extends Controller
             }
             $employees[$row->employee_npk]['total'] += $value;
             $employees[$row->employee_npk]['months_count'] += 1;
+
+            // Rekap per Department
+            $deptKey = $row->dept_id ?? '-';
+            if (!isset($deptRecap[$deptKey])) {
+                $deptRecap[$deptKey] = [
+                    'dept_id'   => $deptKey,
+                    'dept_name' => $row->dept_name,
+                    'total'     => 0.0,
+                    'employees' => [],
+                ];
+            }
+            $deptRecap[$deptKey]['total'] += $value;
+            $deptRecap[$deptKey]['employees'][$row->employee_npk] = true;
         }
 
         $labels        = $months->pluck('label')->values();
@@ -246,6 +292,144 @@ class PayrollRecapController extends Controller
             return $emp;
         })->sortByDesc('total')->values();
 
+        // Rincian payroll per Department (mengikuti filter yang sama, termasuk
+        // filter Department itu sendiri jika dipilih -> tinggal 1 baris)
+        $payrollByDept = collect($deptRecap)
+            ->map(function ($d) {
+                return [
+                    'dept_id'        => $d['dept_id'],
+                    'dept_name'      => $d['dept_name'],
+                    'employee_count' => count($d['employees']),
+                    'total'          => round($d['total'], 2),
+                ];
+            })
+            ->sortBy('dept_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        // ===================== OVERTIME / LEMBUR =====================
+
+        // Hari libur nasional dalam rentang tanggal terpilih (untuk menentukan special overtime)
+        $holidaySet = DB::table('holidays')
+            ->whereBetween('holiday_date', [$startMonth->toDateString(), $endMonth->toDateString()])
+            ->where('is_national', 1)
+            ->pluck('holiday_date')
+            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+            ->flip();
+
+        // Ambil dept terbaru per NPK dari payroll_run_details, lalu join ke DEPT.
+        // Dipakai supaya filter Department pada overtime konsisten dengan filter
+        // Department utama (yang bersumber dari DEPT.ID_DEPT).
+        $latestDeptPerNpk = DB::table('payroll_run_details as prd')
+            ->select('prd.employee_npk', 'prd.employee_dept')
+            ->whereRaw('prd.id = (SELECT MAX(prd2.id) FROM payroll_run_details prd2 WHERE prd2.employee_npk = prd.employee_npk)');
+
+        $overtimeRows = DB::table('overtimes_payroll as ot')
+            ->leftJoinSub($latestDeptPerNpk, 'ndept', fn($join) => $join->on('ndept.employee_npk', '=', 'ot.NPK'))
+            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'ndept.employee_dept')
+            ->whereBetween('ot.OVERTIME_DATE', [$startMonth->toDateString(), $endMonth->toDateString()])
+            ->when($npk, fn($q) => $q->where('ot.NPK', $npk))
+            ->when($dept, fn($q) => $q->where('DEPT.ID_DEPT', $dept))
+            ->select(
+                'ot.NPK',
+                'ot.NAMA_KARYAWAN',
+                'ot.OVERTIME_DATE',
+                'ot.JUMLAH_JAM_LEMBUR',
+                DB::raw('COALESCE(DEPT.ID_DEPT, ot.DEPT_GROUP, \'-\') as dept_key'),
+                DB::raw('COALESCE(DEPT.DEPARTEMENT, ot.BAGIAN, \'Tanpa Dept\') as dept_name')
+            )
+            ->orderBy('ot.OVERTIME_DATE')
+            ->get();
+
+        $overtimeByDept    = [];
+        $overtimeEmployees = [];
+        $overtimeTotalReg  = 0.0;
+        $overtimeTotalSpec = 0.0;
+
+        // Matrix: dept_key => [ 'Y-m-d' => total jam pada tanggal itu (reguler + khusus) ]
+        $overtimeMatrix = [];
+        // Kumpulan tanggal unik yang benar-benar punya data lembur, dipakai
+        // sebagai kolom dinamis di tabel "Rincian Overtime per Dept".
+        $overtimeDateKeys = [];
+
+        foreach ($overtimeRows as $row) {
+            $date     = Carbon::parse($row->OVERTIME_DATE);
+            $dateKey  = $date->format('Y-m-d');
+            $isWeekend = $date->isWeekend(); // Sabtu/Minggu
+            $isHoliday = $holidaySet->has($dateKey);
+            $isSpecial = $isWeekend || $isHoliday;
+
+            $jam = $this->parseJam($row->JUMLAH_JAM_LEMBUR);
+
+            $deptKey  = $row->dept_key;
+            $deptName = $row->dept_name;
+
+            if (!isset($overtimeByDept[$deptKey])) {
+                $overtimeByDept[$deptKey] = [
+                    'dept_id'              => $deptKey,
+                    'dept_name'            => $deptName,
+                    'overtime_jam'         => 0.0,
+                    'special_overtime_jam' => 0.0,
+                ];
+            }
+
+            if ($isSpecial) {
+                $overtimeByDept[$deptKey]['special_overtime_jam'] += $jam;
+                $overtimeTotalSpec += $jam;
+            } else {
+                $overtimeByDept[$deptKey]['overtime_jam'] += $jam;
+                $overtimeTotalReg += $jam;
+            }
+
+            $overtimeMatrix[$deptKey][$dateKey] = ($overtimeMatrix[$deptKey][$dateKey] ?? 0) + $jam;
+            $overtimeDateKeys[$dateKey] = true;
+
+            $overtimeEmployees[] = [
+                'dept_id'           => $deptKey,
+                'dept_name'         => $deptName,
+                'npk'               => $row->NPK,
+                'nama'              => $row->NAMA_KARYAWAN,
+                'tanggal'           => $dateKey,
+                'tanggal_formatted' => $date->format('d-m-Y'),
+                'jam'               => round($jam, 2),
+                'jenis'             => $isSpecial ? 'special_overtime' : 'overtime',
+                'is_weekend'        => $isWeekend,
+                'is_holiday'        => $isHoliday,
+            ];
+        }
+
+        $overtimeByDept = collect($overtimeByDept)
+            ->map(function ($d) {
+                $d['overtime_jam']         = round($d['overtime_jam'], 2);
+                $d['special_overtime_jam'] = round($d['special_overtime_jam'], 2);
+                $d['total_jam']            = round($d['overtime_jam'] + $d['special_overtime_jam'], 2);
+                return $d;
+            })
+            ->sortBy('dept_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        // Bulatkan matrix per tanggal
+        foreach ($overtimeMatrix as $deptKey => $dates) {
+            foreach ($dates as $dateKey => $jam) {
+                $overtimeMatrix[$deptKey][$dateKey] = round($jam, 2);
+            }
+        }
+
+        // Susun daftar tanggal (kolom) terurut kronologis, dengan label singkat d/m.
+        // is_weekend / is_holiday dipakai frontend untuk highlight merah kolom
+        // tanggal yang jatuh pada hari libur (Sabtu/Minggu atau libur nasional).
+        $overtimeDates = collect(array_keys($overtimeDateKeys))
+            ->sort()
+            ->values()
+            ->map(function ($dateKey) use ($holidaySet) {
+                $date = Carbon::parse($dateKey);
+                return [
+                    'key'        => $dateKey,
+                    'label'      => $date->format('d/m'),
+                    'is_weekend' => $date->isWeekend(),
+                    'is_holiday' => $holidaySet->has($dateKey),
+                ];
+            });
+
         return response()->json([
             'labels'          => $labels,
             'values'          => $values,
@@ -255,6 +439,7 @@ class PayrollRecapController extends Controller
             'keluar_counts'   => $keluarCounts,
             'employee_counts' => $employeeCounts,
             'employees'       => $employeeList,
+            'payroll_by_dept' => $payrollByDept,
             'component_label' => $componentLabel,
             'grand_total'     => $grandTotal,
             'avg_per_month'   => $avgPerMonth,
@@ -263,6 +448,15 @@ class PayrollRecapController extends Controller
                 'start' => $startMonth->format('Y-m'),
                 'end'   => $endMonth->format('Y-m'),
             ],
+
+            // Overtime
+            'overtime_by_dept'        => $overtimeByDept,
+            'overtime_employees'      => $overtimeEmployees,
+            'overtime_dates'          => $overtimeDates,
+            'overtime_matrix'         => $overtimeMatrix,
+            'overtime_total'          => round($overtimeTotalReg + $overtimeTotalSpec, 2),
+            'overtime_total_regular'  => round($overtimeTotalReg, 2),
+            'overtime_total_special'  => round($overtimeTotalSpec, 2),
         ]);
     }
 }

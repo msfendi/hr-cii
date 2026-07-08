@@ -329,6 +329,7 @@ $('#period_id').on('change', function(){
         let approvals = res.approval ?? [];
         let invalidContracts = res.invalid_contracts ?? [];
         let invalidBankAccounts = res.invalid_bank_accounts ?? [];
+        let duplicateBankAccounts = res.duplicate_bank_accounts ?? [];
 
         /*
         =========================================
@@ -524,6 +525,82 @@ $('#period_id').on('change', function(){
 
                                 <ul style="margin-bottom:0;padding-left:20px">
                                     ${employeeListBankAccount}
+                                </ul>
+
+                            </div>
+
+                        </div>
+
+                    </td>
+                </tr>
+            `;
+        }
+
+        /*
+        =========================================
+        DUPLICATE BANK ACCOUNT CHECK
+        =========================================
+        */
+
+        if(duplicateBankAccounts.length > 0){
+
+            allFinish = false;
+
+            // Group by bank_account
+            let grouped = {};
+
+            duplicateBankAccounts.forEach(emp=>{
+
+                let key = emp.bank_account ?? '-';
+
+                if(!grouped[key]){
+                    grouped[key] = [];
+                }
+
+                grouped[key].push(emp);
+            });
+
+            let groupedHtml = '';
+
+            Object.keys(grouped).forEach(bankAcc=>{
+
+                groupedHtml += `
+                    <li class="mb-2">
+                        <b>No. Rek: ${bankAcc}</b>
+                        <ul style="padding-left:20px">
+                `;
+
+                grouped[bankAcc].forEach(emp=>{
+                    groupedHtml += `
+                        <li>${emp.NPK} - ${emp.NAMA_KARYAWAN ?? '-'}</li>
+                    `;
+                });
+
+                groupedHtml += `</ul></li>`;
+            });
+
+            html += `
+                <tr>
+                    <td colspan="3">
+
+                        <div class="alert alert-danger mb-0">
+
+                            <b>Nomor Rekening Bank Duplikat (Digunakan Lebih Dari 1 Karyawan) :</b>
+                            <br>
+                            <b>Total Nomor Rekening Duplikat : ${Object.keys(grouped).length}</b>
+
+                            <br><br>
+
+                            <div style="
+                                max-height:250px;
+                                overflow-y:auto;
+                                border:1px solid #ddd;
+                                padding:10px;
+                                background:#fff;
+                            ">
+
+                                <ul style="margin-bottom:0;padding-left:20px">
+                                    ${groupedHtml}
                                 </ul>
 
                             </div>
@@ -1257,7 +1334,7 @@ buttons: [
                         tkk <= periodEnd;
 
                     // BARU
-                    if (isTMKInPeriod) {
+                    if (isTMKInPeriod && tkk === null) {
                         return `<span class="badge badge-primary">Baru</span>`;
                     }
 

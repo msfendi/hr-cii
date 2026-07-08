@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('overtimes', function (Blueprint $table) {
+        Schema::create('overtimes_payroll', function (Blueprint $table) {
             $table->id();
             $table->string('NPK');
             $table->string('NAMA_KARYAWAN');

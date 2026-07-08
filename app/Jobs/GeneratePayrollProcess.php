@@ -1844,6 +1844,42 @@ END AS special_overtime_hours
                     ]);
                 }
             }
+
+            DB::transaction(function () use ($periodStart, $periodEnd) {
+
+                // Hapus data payroll lembur pada periode yang akan digenerate
+                DB::table('overtimes_payroll')
+                    ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
+                    ->delete();
+
+                // Insert ulang dari tabel overtimes
+                DB::table('overtimes_payroll')->insertUsing(
+                    [
+                        'NPK',
+                        'NAMA_KARYAWAN',
+                        'BAGIAN',
+                        'OVERTIME_DATE',
+                        'JUMLAH_JAM_LEMBUR',
+                        'created_at',
+                        'updated_at',
+                        'DAY',
+                        'DEPT_GROUP',
+                    ],
+                    DB::table('overtimes')
+                        ->select(
+                            'NPK',
+                            'NAMA_KARYAWAN',
+                            'BAGIAN',
+                            'OVERTIME_DATE',
+                            'JUMLAH_JAM_LEMBUR',
+                            'created_at',
+                            'updated_at',
+                            'DAY',
+                            'DEPT_GROUP',
+                        )
+                        ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
+                );
+            });
         }
         if ($isCheck) {
             return $payrollResults;

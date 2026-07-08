@@ -67,6 +67,32 @@
                                     </div>
                                     @enderror
                                 </div>
+                                <div class="form-group">
+                                    <label class="small mb-1">Masukkan Kode Captcha</label>
+                                    <div class="text-center mb-2">
+                                        <img id="captcha-img"
+                                            src="{{ route('captcha.image') }}?t={{ time() }}"
+                                            alt="Captcha"
+                                            style="border:1px solid #ccc; border-radius:4px; cursor:pointer;"
+                                            title="Klik untuk refresh"
+                                            onclick="refreshCaptcha()">
+                                    </div>
+                                    <div class="input-group">
+                                        <input type="text" autocomplete="off"
+                                            class="form-control form-control-user @error('captcha') is-invalid @enderror"
+                                            id="captcha" name="captcha" placeholder="Masukkan kode di atas">
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="refreshCaptcha()" title="Refresh Captcha">
+                                                &#x21bb;
+                                            </button>
+                                        </div>
+                                        @error('captcha')
+                                        <div class="invalid-feedback d-block">
+                                            {{ $message }}
+                                        </div>
+                                        @enderror
+                                    </div>
+                                </div>
                                 <div class="mb-3">
                                     <button type="submit" class="btn btn-primary btn-user btn-block">Login</button>
                                 </div>
@@ -150,5 +176,13 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
     }
 
 });
+</script>
+<script>
+function refreshCaptcha() {
+    // tambahkan timestamp supaya browser tidak pakai cache gambar lama
+    document.getElementById('captcha-img').src =
+        "{{ route('captcha.image') }}?t=" + new Date().getTime();
+    document.getElementById('captcha').value = '';
+}
 </script>
 </html>

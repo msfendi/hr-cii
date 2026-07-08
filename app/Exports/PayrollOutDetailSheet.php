@@ -152,11 +152,6 @@ class PayrollOutDetailSheet
                     ->where(function ($q) {
                         $q->whereNull('bio.KETERANGAN')
                             ->orWhereRaw('UPPER(LTRIM(RTRIM(bio.KETERANGAN))) <> ?', ['MA']);
-                    })
-                    ->where(function ($query) use ($period) {
-                        $query->whereNull('bio.TMK')
-                            ->orWhere('bio.TMK', '<', $period->start_date)
-                            ->orWhere('bio.TMK', '>', $period->end_date);
                     });
             })
             ->select(

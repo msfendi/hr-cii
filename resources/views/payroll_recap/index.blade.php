@@ -21,6 +21,23 @@
     padding:.45rem;
 }
 
+.overtime-dept-row{
+    cursor:pointer;
+}
+
+.overtime-dept-row:hover{
+    background-color: rgba(0,0,0,.04);
+}
+
+#overtimeDeptTable_wrapper .dataTables_scrollBody{
+    max-height: 420px;
+}
+
+.ot-special-col{
+    background-color:#f8d7da !important;
+    color:#842029;
+}
+
 </style>
 <body id="page-top">
     @include('sweetalert::alert')
@@ -250,10 +267,12 @@
 
                     </div>
 
-                    {{-- ===================== TABLE RINCIAN PER KARYAWAN ===================== --}}
+                    {{-- ===================== RINCIAN PER KARYAWAN & PER DEPARTMENT ===================== --}}
                     <div class="row">
-                        <div class="col-12">
-                            <div class="card shadow mb-4">
+
+                        {{-- RINCIAN PER KARYAWAN (setengah) --}}
+                        <div class="col-lg-6">
+                            <div class="card shadow mb-4 h-100">
                                 <div class="card-header py-3">
                                     <h6 class="m-0 font-weight-bold text-primary">Rincian per Karyawan</h6>
                                 </div>
@@ -277,6 +296,65 @@
                                 </div>
                             </div>
                         </div>
+
+                        {{-- RINCIAN PAYROLL PER DEPARTMENT (setengah, tepat di sebelah kanan) --}}
+                        <div class="col-lg-6">
+                            <div class="card shadow mb-4 h-100">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary">Rincian Payroll per Department</h6>
+                                    <small class="text-muted">Mengikuti filter Karyawan, Department, dan Komponen Payroll di atas.</small>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered table-hover mb-0 small" id="deptPayrollTable" width="100%" cellspacing="0">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th>Department</th>
+                                                    <th class="text-right">Jumlah Karyawan</th>
+                                                    <th class="text-right" id="deptComponentLabel">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                            <tfoot>
+                                                <tr class="font-weight-bold">
+                                                    <td>Grand Total</td>
+                                                    <td class="text-right" id="deptPayrollFooterCount">-</td>
+                                                    <td class="text-right" id="deptPayrollFooterTotal">Rp 0</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <br>
+                    {{-- ===================== RINCIAN OVERTIME PER DEPT (full lebar) ===================== --}}
+                    <div class="row">
+
+                        <div class="col-lg-12">
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary">
+                                        Rincian Overtime per Dept
+                                    </h6>
+                                    <small class="text-muted">
+                                        Kolom angka menunjukkan tanggal lembur (tgl/bln). Klik baris department untuk melihat rincian per tanggal per karyawan.
+                                        <span class="badge ml-1" style="background-color:#f8d7da;color:#842029;">&nbsp;&nbsp;</span>
+                                        = hari libur (Sabtu/Minggu atau libur nasional)
+                                    </small>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="table-responsive">
+                                        {{-- Thead/tbody/tfoot dibangun dinamis via JS karena jumlah kolom
+                                             tanggal tergantung data OVERTIME_DATE pada rentang terpilih. --}}
+                                        <table class="table table-sm table-bordered table-hover mb-0 small" id="overtimeDeptTable" width="100%"></table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
                 </div>
@@ -289,6 +367,34 @@
         <!-- End of Content Wrapper -->
     </div>
     <!-- End of Page Wrapper -->
+
+    {{-- ===================== MODAL: RINCIAN OVERTIME PER DEPT ===================== --}}
+    <div class="modal fade" id="overtimeDetailModal" tabindex="-1" role="dialog" aria-labelledby="overtimeDetailModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="overtimeDetailModalLabel">Rincian Overtime</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">
+                        <span class="badge" style="background-color:#f8d7da;color:#842029;">&nbsp;&nbsp;</span>
+                        Kolom tanggal berwarna merah = hari libur (Sabtu/Minggu atau libur nasional)
+                    </p>
+                    {{-- Thead/tbody/tfoot dibangun dinamis via JS sesuai tanggal overtime
+                         milik department yang dipilih. --}}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0 small" id="overtimeDetailTable" width="100%"></table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -304,7 +410,14 @@
             style: 'currency', currency: 'IDR', minimumFractionDigits: 0
         }).format(value || 0);
 
+        const jamFormat = (value) => new Intl.NumberFormat('id-ID', {
+            minimumFractionDigits: 0, maximumFractionDigits: 2
+        }).format(value || 0);
+
         let recapChart = null;
+        let overtimeEmployeesData = [];
+        let overtimeDeptTable = null;
+        let overtimeDetailTable = null;
 
         function setDefaultMonthRange() {
             const now = new Date();
@@ -343,6 +456,151 @@
             return value;
         }
 
+        /**
+         * Render tabel "Rincian Overtime per Dept" sebagai DataTables dengan
+         * kolom dinamis per tanggal (sesuai OVERTIME_DATE pada rentang
+         * terpilih), diurutkan berdasarkan nama Department (A-Z).
+         *
+         * @param {Array}  overtimeByDept  [{dept_id, dept_name, overtime_jam, special_overtime_jam, total_jam}]
+         * @param {Array}  overtimeDates   [{key: 'YYYY-MM-DD', label: 'dd/mm'}]
+         * @param {Object} overtimeMatrix  { dept_id: { 'YYYY-MM-DD': jam } }
+         */
+        function renderOvertimeByDept(overtimeByDept, overtimeDates, overtimeMatrix) {
+            const $table = $('#overtimeDeptTable');
+
+            const sorted = [...overtimeByDept].sort((a, b) =>
+                String(a.dept_name).localeCompare(String(b.dept_name), 'id', { sensitivity: 'base' })
+            );
+
+            const getJam = (deptId, dateKey) =>
+                (overtimeMatrix[deptId] && overtimeMatrix[deptId][dateKey]) || 0;
+
+            // helper: kolom tanggal special (weekend / libur nasional) -> highlight merah
+            const dateColClass = (d) =>
+                'text-right' + ((d.is_weekend || d.is_holiday) ? ' ot-special-col' : '');
+
+            // ---- THEAD ----
+            let theadHtml = '<thead class="thead-light"><tr><th>Department</th>';
+            overtimeDates.forEach(d => {
+                theadHtml += `<th class="${dateColClass(d)}">${d.label}</th>`;
+            });
+            theadHtml += '<th class="text-right">Lembur (Jam)</th>' +
+                        '<th class="text-right">Lembur Khusus (Jam)</th>' +
+                        '<th class="text-right">Total (Jam)</th></tr></thead>';
+
+            // ---- TBODY ----
+            let bodyHtml = '';
+            sorted.forEach(dept => {
+                bodyHtml += `<tr class="overtime-dept-row" data-dept="${dept.dept_id}" data-dept-name="${dept.dept_name}">` +
+                            `<td>${dept.dept_name}</td>`;
+
+                overtimeDates.forEach(d => {
+                    const jam = getJam(dept.dept_id, d.key);
+                    bodyHtml += `<td class="${dateColClass(d)}">${jam ? jamFormat(jam) : '-'}</td>`;
+                });
+
+                bodyHtml += `<td class="text-right">${jamFormat(dept.overtime_jam)}</td>` +
+                            `<td class="text-right">${jamFormat(dept.special_overtime_jam)}</td>` +
+                            `<td class="text-right font-weight-bold">${jamFormat(dept.total_jam)}</td>` +
+                            '</tr>';
+            });
+
+            const totalCols = 4 + overtimeDates.length;
+            if (!sorted.length) {
+                bodyHtml = `<tr><td colspan="${totalCols}" class="text-center text-muted">Tidak ada data overtime.</td></tr>`;
+            }
+
+            // ---- TFOOT (Grand Total) ----
+            let footHtml = '<tfoot><tr class="font-weight-bold"><td>Grand Total</td>';
+            overtimeDates.forEach(d => {
+                const sum = sorted.reduce((acc, dept) => acc + getJam(dept.dept_id, d.key), 0);
+                footHtml += `<td class="${dateColClass(d)}">${sum ? jamFormat(sum) : '-'}</td>`;
+            });
+            const grandReg   = sorted.reduce((acc, d) => acc + (d.overtime_jam || 0), 0);
+            const grandSpec  = sorted.reduce((acc, d) => acc + (d.special_overtime_jam || 0), 0);
+            const grandTotal = sorted.reduce((acc, d) => acc + (d.total_jam || 0), 0);
+            footHtml += `<td class="text-right">${jamFormat(grandReg)}</td>` +
+                        `<td class="text-right">${jamFormat(grandSpec)}</td>` +
+                        `<td class="text-right">${jamFormat(grandTotal)}</td>` +
+                        '</tr></tfoot>';
+
+            if ($.fn.DataTable.isDataTable($table)) {
+                $table.DataTable().destroy();
+            }
+            $table.html(theadHtml + '<tbody>' + bodyHtml + '</tbody>' + footHtml);
+
+            overtimeDeptTable = $table.DataTable({
+                order: [[0, 'asc']],
+                scrollX: true,
+                paging: sorted.length > 10,
+                searching: sorted.length > 10,
+                info: sorted.length > 10,
+                lengthChange: false,
+                language: {
+                    search: 'Cari:',
+                    zeroRecords: 'Tidak ada data overtime.',
+                    emptyTable: 'Tidak ada data overtime.',
+                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ department',
+                    infoEmpty: 'Tidak ada data',
+                    infoFiltered: '(difilter dari _MAX_ total data)',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+        }
+
+        let deptPayrollTable = null;
+
+        /**
+         * Inisialisasi tabel "Rincian Payroll per Department" sebagai DataTables
+         * (opsi tampil data 10/25/50/100). Dipanggil sekali saat halaman siap.
+         */
+        function initDeptPayrollTable() {
+            deptPayrollTable = $('#deptPayrollTable').DataTable({
+                data: [],
+                columns: [
+                    { data: 'dept_name', title: 'Department' },
+                    { data: 'employee_count', title: 'Jumlah Karyawan', className: 'text-right' },
+                    {
+                        data: 'total',
+                        title: 'Total',
+                        className: 'text-right font-weight-bold',
+                        render: (data, type) => type === 'display' ? rupiah(data) : data
+                    },
+                ],
+                order: [[0, 'asc']],
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                language: {
+                    search: 'Cari:',
+                    lengthMenu: 'Tampilkan _MENU_ data',
+                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ department',
+                    infoEmpty: 'Tidak ada data',
+                    infoFiltered: '(difilter dari _MAX_ total data)',
+                    zeroRecords: 'Tidak ada department yang cocok',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+        }
+
+        /**
+         * Update data tabel "Rincian Payroll per Department". Ikut ter-filter
+         * oleh Karyawan (NPK), Department, Komponen Payroll, dan rentang bulan
+         * yang sama dengan filter utama.
+         */
+        function updateDeptPayrollTable(payrollByDept, componentLabel) {
+            $('#deptComponentLabel').text('Total ' + (componentLabel || ''));
+
+            if (!deptPayrollTable) return;
+            deptPayrollTable.clear();
+            deptPayrollTable.rows.add(payrollByDept);
+            deptPayrollTable.draw();
+
+            const totalEmployees = payrollByDept.reduce((acc, d) => acc + (d.employee_count || 0), 0);
+            const totalAll = payrollByDept.reduce((acc, d) => acc + (d.total || 0), 0);
+            $('#deptPayrollFooterCount').text(payrollByDept.length ? totalEmployees : '-');
+            $('#deptPayrollFooterTotal').text(rupiah(totalAll));
+        }
+
         function loadChartData() {
             const params = {
                 end_month: $('#endMonth').val(),
@@ -378,7 +636,6 @@
                     // Chart - grouped bar: Aktif vs Keluar berdampingan (kanan-kiri)
                     if (recapChart) recapChart.destroy();
                     const ctx = document.getElementById('recapChart');
-                    console.log(data.labels);
                     recapChart = new Chart(ctx, {
                         type: 'bar',
                         data: {
@@ -459,6 +716,17 @@
 
                     // Tabel rincian per karyawan (DataTables)
                     updateEmployeeTable(data.employees);
+
+                    // Rincian payroll per Department (DataTables)
+                    updateDeptPayrollTable(data.payroll_by_dept || [], data.component_label);
+
+                    // Rincian overtime per Dept (DataTables, kolom per tanggal)
+                    overtimeEmployeesData = data.overtime_employees || [];
+                    renderOvertimeByDept(
+                        data.overtime_by_dept || [],
+                        data.overtime_dates || [],
+                        data.overtime_matrix || {}
+                    );
                 })
                 .catch(err => {
                     $('#chartLoading').hide();
@@ -514,9 +782,150 @@
             employeeTable.draw();
         }
 
+        /**
+         * Render tabel detail overtime pada modal sebagai pivot per tanggal:
+         * NPK | Nama | <tanggal1> | <tanggal2> | ... | Total Lembur (Jam) | Total Lembur Khusus (Jam)
+         * Kolom tanggal yang jatuh pada Sabtu/Minggu atau hari libur nasional
+         * (is_weekend / is_holiday dari backend) diberi highlight merah.
+         */
+        function renderOvertimeDetail(details, deptName) {
+            // Kumpulkan tanggal unik (kolom) untuk department ini, urut kronologis,
+            // sekaligus tandai tanggal mana yang special (weekend/libur nasional).
+            // Label header dibuat singkat: dd/mm (tanpa tahun).
+            const dateMap = {};
+            details.forEach(e => {
+                if (!dateMap[e.tanggal]) {
+                    const [, mm, dd] = e.tanggal.split('-'); // e.tanggal format: YYYY-MM-DD
+                    dateMap[e.tanggal] = {
+                        key: e.tanggal,
+                        label: `${dd}/${mm}`,
+                        special: !!(e.is_weekend || e.is_holiday)
+                    };
+                }
+            });
+            const dates = Object.values(dateMap).sort((a, b) => a.key.localeCompare(b.key));
+
+            // Pivot per karyawan: jam per tanggal + total lembur biasa & khusus
+            const empMap = {};
+            details.forEach(e => {
+                if (!empMap[e.npk]) {
+                    empMap[e.npk] = {
+                        npk: e.npk,
+                        nama: e.nama || '-',
+                        dates: {},
+                        totalReg: 0,
+                        totalKhusus: 0,
+                    };
+                }
+                const emp = empMap[e.npk];
+                emp.dates[e.tanggal] = (emp.dates[e.tanggal] || 0) + e.jam;
+                if (e.jenis === 'special_overtime') {
+                    emp.totalKhusus += e.jam;
+                } else {
+                    emp.totalReg += e.jam;
+                }
+            });
+
+            const employees = Object.values(empMap).sort((a, b) =>
+                String(a.nama).localeCompare(String(b.nama), 'id', { sensitivity: 'base' })
+            );
+
+            // ---- THEAD ----
+            let theadHtml = '<thead class="thead-light"><tr><th>NPK</th><th>Nama</th>';
+            dates.forEach(d => {
+                const cls = 'text-right' + (d.special ? ' ot-special-col' : '');
+                theadHtml += `<th class="${cls}">${d.label}</th>`;
+            });
+            theadHtml += '<th class="text-right">Total Lembur (Jam)</th>' +
+                         '<th class="text-right">Total Lembur Khusus (Jam)</th></tr></thead>';
+
+            // ---- TBODY ----
+            let bodyHtml = '';
+            employees.forEach(emp => {
+                bodyHtml += `<tr><td>${emp.npk}</td><td>${emp.nama}</td>`;
+                dates.forEach(d => {
+                    const jam = emp.dates[d.key] || 0;
+                    const cls = 'text-right' + (d.special ? ' ot-special-col' : '');
+                    bodyHtml += `<td class="${cls}">${jam ? jamFormat(jam) : '-'}</td>`;
+                });
+                bodyHtml += `<td class="text-right">${jamFormat(emp.totalReg)}</td>`;
+                bodyHtml += `<td class="text-right">${jamFormat(emp.totalKhusus)}</td>`;
+                bodyHtml += '</tr>';
+            });
+
+            const totalCols = 4 + dates.length;
+            if (!employees.length) {
+                bodyHtml = `<tr><td colspan="${totalCols}" class="text-center text-muted">Tidak ada data.</td></tr>`;
+            }
+
+            // ---- TFOOT ----
+            let footHtml = '<tfoot><tr class="font-weight-bold"><td colspan="2">Grand Total</td>';
+            dates.forEach(d => {
+                const sum = employees.reduce((acc, emp) => acc + (emp.dates[d.key] || 0), 0);
+                const cls = 'text-right' + (d.special ? ' ot-special-col' : '');
+                footHtml += `<td class="${cls}">${sum ? jamFormat(sum) : '-'}</td>`;
+            });
+            const grandReg    = employees.reduce((acc, e) => acc + e.totalReg, 0);
+            const grandKhusus = employees.reduce((acc, e) => acc + e.totalKhusus, 0);
+            footHtml += `<td class="text-right">${jamFormat(grandReg)}</td>`;
+            footHtml += `<td class="text-right">${jamFormat(grandKhusus)}</td>`;
+            footHtml += '</tr></tfoot>';
+
+            $('#overtimeDetailModalLabel').text('Rincian Overtime - ' + deptName);
+
+            const $table = $('#overtimeDetailTable');
+
+            if ($.fn.DataTable.isDataTable($table)) {
+                $table.DataTable().destroy();
+            }
+            $table.html(theadHtml + '<tbody>' + bodyHtml + '</tbody>' + footHtml);
+
+            overtimeDetailTable = $table.DataTable({
+                order: [[1, 'asc']],
+                scrollX: true,
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                paging: employees.length > 10,
+                searching: employees.length > 10,
+                info: employees.length > 10,
+                language: {
+                    search: 'Cari:',
+                    lengthMenu: 'Tampilkan _MENU_ data',
+                    zeroRecords: 'Tidak ada data.',
+                    emptyTable: 'Tidak ada data.',
+                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ karyawan',
+                    infoEmpty: 'Tidak ada data',
+                    infoFiltered: '(difilter dari _MAX_ total data)',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+        }
+
+        // Klik baris department pada card "Rincian Overtime per Dept" -> tampilkan modal
+        $(document).on('click', '.overtime-dept-row', function () {
+            const deptId   = $(this).data('dept');
+            const deptName = $(this).data('dept-name');
+
+            const details = overtimeEmployeesData
+                .filter(e => String(e.dept_id) === String(deptId))
+                .sort((a, b) => a.tanggal.localeCompare(b.tanggal) || a.npk.localeCompare(b.npk));
+
+            renderOvertimeDetail(details, deptName);
+            $('#overtimeDetailModal').modal('show');
+        });
+
+        // DataTables yang diinisialisasi saat modal masih tersembunyi butuh
+        // penyesuaian ulang lebar kolom setelah modal benar-benar terlihat.
+        $('#overtimeDetailModal').on('shown.bs.modal', function () {
+            if (overtimeDetailTable) {
+                overtimeDetailTable.columns.adjust();
+            }
+        });
+
         $(document).ready(function () {
             setDefaultMonthRange();
             initEmployeeTable();
+            initDeptPayrollTable();
 
             $('#npkSelect').select2({
                 placeholder: 'Semua Karyawan',

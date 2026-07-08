@@ -146,6 +146,8 @@
 
                                                     if(auth()->user()->hasRole('Payroll_STAFF')){
                                                         $roleFolder = 'STAFF/';
+                                                    } elseif(auth()->user()->hasRole('Payroll_NONSTAFF')){
+                                                        $roleFolder = 'NON_STAFF/';
                                                     } elseif(auth()->user()->hasRole('Payroll_SEWING')){
                                                         $roleFolder = 'SEWING/';
                                                     } elseif(auth()->user()->hasRole('Payroll_NONSEWING')){

@@ -69,16 +69,12 @@ class PayrollAdjusmentController extends Controller
             'keterangan' => 'required',
         ]);
 
-        PayrollAdjusment::updateOrCreate(
-            [
-                'npk'       => $request->npk,
-                'period_id' => $request->period_id,
-            ],
-            [
-                'adjusment' => $request->adjusment,
-                'keterangan' => $request->keterangan,
-            ]
-        );
+        PayrollAdjusment::create([
+            'npk'         => $request->npk,
+            'period_id'   => $request->period_id,
+            'adjusment'   => $request->adjusment,
+            'keterangan'  => $request->keterangan,
+        ]);
 
         return redirect()
             ->route('payroll-adjusments.index')

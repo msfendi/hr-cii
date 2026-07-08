@@ -143,11 +143,7 @@ class PayrollDetailNonStaffSheet
             ->where('bio.IS_STAFF', 0)
             ->where(function ($query) {
                 $query->whereNull('bio.TKK')
-                    ->orWhereColumn('bio.TKK', '>', 'pp.end_date')
-                    ->orWhereBetween('bio.TMK', [
-                        DB::raw('pp.start_date'),
-                        DB::raw('pp.end_date'),
-                    ]);
+                    ->orWhereColumn('bio.TKK', '>', 'pp.end_date');
             })
             ->select('prd.*', 'bio.NAMA_KARYAWAN', 'd.DEPARTEMENT as departement', 'pp.name as period_name')
             ->orderBy('d.DEPARTEMENT')

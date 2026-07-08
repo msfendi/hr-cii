@@ -1419,11 +1419,17 @@
                                     <textarea name="message" id="wa_message" class="form-control" rows="9" required style="font-size:14.5px; line-height:1.65;"></textarea>
                                     <small class="form-text text-muted">Pesan dapat diedit secara manual sebelum dikirim.</small>
                                 </div>
+                                <div class="form-group mb-0 custom-control custom-checkbox">
+                                    <input type="checkbox" name="send_wa" id="send_wa_check" class="custom-control-input" value="1" checked>
+                                    <label class="custom-control-label font-weight-bold text-primary" for="send_wa_check" style="cursor:pointer">
+                                        Kirim pesan WhatsApp ke pelamar ini
+                                    </label>
+                                </div>
                             </div>
                             <div class="modal-footer bg-light border-top py-2">
                                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Batal</button>
                                 <button type="submit" class="btn btn-success btn-sm font-weight-bold px-4">
-                                    <i class="fab fa-whatsapp mr-1"></i>Kirim WhatsApp
+                                    <i class="fab fa-send mr-1"></i>Submit
                                 </button>
                             </div>
                         </form>

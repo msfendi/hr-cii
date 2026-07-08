@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class PKWTKeluar extends Model
 {
     use HasFactory;
+    protected $table = 'PKWT_OUT';
     protected $fillable = [
         'NPK',
         'NAMA',

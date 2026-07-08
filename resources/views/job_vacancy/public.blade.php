@@ -341,6 +341,102 @@
             height:28px;
             object-fit:contain;
         }
+
+        /* ===================== MODAL PERINGATAN PENIPUAN ===================== */
+
+        #scamWarningModal .modal-content{
+            border:none;
+            border-radius:1rem;
+            overflow:hidden;
+        }
+
+        #scamWarningModal .warning-header{
+            background:linear-gradient(135deg,#f6c23e,#e74a3b);
+            color:#fff;
+            padding:1.6rem 1.5rem 1.3rem;
+            text-align:center;
+        }
+
+        #scamWarningModal .warning-header i{
+            font-size:2.4rem;
+            margin-bottom:.5rem;
+        }
+
+        #scamWarningModal .warning-header h5{
+            font-weight:700;
+            margin-bottom:.15rem;
+        }
+
+        #scamWarningModal .warning-header p{
+            font-size:.82rem;
+            opacity:.92;
+            margin-bottom:0;
+        }
+
+        #scamWarningModal .modal-body{
+            padding:1.5rem;
+        }
+
+        #scamWarningModal .warning-point{
+            display:flex;
+            align-items:flex-start;
+            gap:.7rem;
+            margin-bottom:1rem;
+        }
+
+        #scamWarningModal .warning-point i{
+            color:#e74a3b;
+            font-size:1.05rem;
+            margin-top:.15rem;
+        }
+
+        #scamWarningModal .warning-point .warning-title{
+            font-weight:700;
+            font-size:.9rem;
+            color:#2e2f45;
+            margin-bottom:.1rem;
+        }
+
+        #scamWarningModal .warning-point .warning-desc{
+            font-size:.82rem;
+            color:#6b6d7d;
+            line-height:1.5;
+        }
+
+        #scamWarningModal .official-box{
+            background:#f8f9fc;
+            border:1px solid #eaecf4;
+            border-radius:.7rem;
+            padding:.9rem 1rem;
+            font-size:.82rem;
+            color:#4a4c5f;
+        }
+
+        #scamWarningModal .official-box strong{
+            color:#2e2f45;
+        }
+
+        #scamWarningModal .official-box ul{
+            margin-bottom:0;
+            padding-left:1.1rem;
+        }
+
+        #scamWarningModal .official-box li{
+            margin-bottom:.2rem;
+        }
+
+        #scamWarningModal .modal-footer{
+            border-top:none;
+            padding-top:0;
+            flex-direction:column;
+            align-items:stretch;
+        }
+
+        #scamWarningModal .form-check{
+            font-size:.8rem;
+            color:#6b6d7d;
+            margin-bottom:.85rem;
+        }
     </style>
 </head>
 <body>
@@ -401,6 +497,51 @@
         </div>
 
         <div class="row pb-5" id="vacancyGrid"></div>
+    </div>
+
+    {{-- ===================== MODAL PERINGATAN PENIPUAN ===================== --}}
+    <div class="modal fade" id="scamWarningModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="warning-header">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <h5>Hati-hati Penipuan Lowongan Kerja!</h5>
+                    <p>Baca peringatan ini sebelum melanjutkan</p>
+                </div>
+                <div class="modal-body">
+                    <div class="warning-point">
+                        <i class="fas fa-hand-holding-dollar"></i>
+                        <div>
+                            <div class="warning-title">Jangan pernah membayar biaya apapun</div>
+                            <div class="warning-desc">PT. Chutex International Indonesia tidak pernah memungut biaya dalam bentuk apapun (biaya administrasi, seragam, pelatihan, transportasi, dll) pada proses rekrutmen.</div>
+                        </div>
+                    </div>
+                    <div class="warning-point">
+                        <i class="fas fa-user-secret"></i>
+                        <div>
+                            <div class="warning-title">Waspada pihak yang mengaku dari HRD</div>
+                            <div class="warning-desc">Jangan mudah percaya pada pesan (WhatsApp, SMS, DM sosial media) yang mengatasnamakan HRD atau karyawan Chutex jika tidak berasal dari kanal resmi di bawah ini.</div>
+                        </div>
+                    </div>
+                    <div class="warning-point">
+                        <i class="fas fa-globe"></i>
+                        <div>
+                            <div class="warning-title">Hanya percaya sumber resmi</div>
+                            <div class="warning-desc">Pastikan informasi lowongan, jadwal wawancara, maupun hasil seleksi hanya kamu terima melalui situs resmi, akun sosial media resmi, atau nomor telepon resmi milik PT. Chutex International Indonesia.</div>
+                        </div>
+                    </div>
+
+                    <div class="official-box">
+                        <strong>Jika ragu, selalu verifikasi melalui kanal resmi perusahaan</strong> dan jangan mengambil keputusan atau melakukan pembayaran hanya berdasarkan informasi dari pihak yang tidak dapat dipastikan keasliannya.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary btn-block" id="btnUnderstandWarning">
+                        <i class="fas fa-check mr-1"></i> Saya Mengerti dan Akan Berhati-hati
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- ===================== MODAL DETAIL LOWONGAN ===================== --}}
@@ -680,6 +821,13 @@
         }
 
         $(document).ready(function () {
+            // Tampilkan peringatan penipuan setiap kali halaman dibuka.
+            $('#scamWarningModal').modal('show');
+
+            $('#btnUnderstandWarning').on('click', function () {
+                $('#scamWarningModal').modal('hide');
+            });
+
             // Tampilkan SEMUA data job_vacancies begitu halaman dimuat pertama kali.
             loadVacancies();
 
