@@ -120,16 +120,56 @@ class PayrollMasterController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'npk' => 'required',
-            'bank_name' => 'required',
+            'npk'          => 'required',
+            'bank_name'    => 'required',
             'bank_account' => 'required',
         ]);
 
+        // Union BIODATA + BIODATA_KELUAR
+        $employee = DB::connection('cii')->table('BIODATA')
+            ->select(
+                'NPK',
+                DB::raw('LTRIM(RTRIM(NAMA_KARYAWAN)) as NAMA_KARYAWAN')
+            )
+            ->unionAll(
+                DB::connection('cii')->table('BIODATA_KELUAR')
+                    ->select(
+                        'NPK',
+                        DB::raw('LTRIM(RTRIM(NAMA_KARYAWAN)) as NAMA_KARYAWAN')
+                    )
+            );
+
+        // Cek apakah nomor rekening sudah dipakai NPK lain
+        $duplicate = PayrollMaster::query()
+            ->from('payroll_masters as pm')
+            ->joinSub($employee, 'emp', function ($join) {
+                $join->on('pm.npk', '=', 'emp.NPK');
+            })
+            ->where('pm.bank_account', trim($request->bank_account))
+            ->where('pm.npk', '<>', $request->npk)
+            ->select(
+                'pm.npk',
+                'emp.NAMA_KARYAWAN',
+                'pm.bank_account'
+            )
+            ->first();
+        // dd($duplicate);
+
+        if ($duplicate) {
+            session()->flash(
+                'error',
+                "Nomor rekening {$duplicate->bank_account} sudah digunakan oleh {$duplicate->NAMA_KARYAWAN} ({$duplicate->npk})."
+            );
+            return redirect()->back()->withInput();
+        }
+
         PayrollMaster::updateOrCreate(
-            ['npk' => $request->npk], // kondisi pencarian
             [
-                'bank_name' => $request->bank_name,
-                'bank_account' => $request->bank_account,
+                'npk' => $request->npk,
+            ],
+            [
+                'bank_name'    => $request->bank_name,
+                'bank_account' => trim($request->bank_account),
             ]
         );
 
