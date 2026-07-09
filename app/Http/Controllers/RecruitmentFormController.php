@@ -354,7 +354,7 @@ class RecruitmentFormController extends Controller
                 'agama'             => ['nullable', 'in:Islam,Kristen,Katolik,Hindu,Buddha,Khonghucu'],
                 'hobby'             => ['nullable', 'string', 'max:255'],
                 'transportasi'      => ['nullable', 'string', 'max:100'],
-                'pendidikan'        => ['nullable', 'in:SMA/SMK,D3,S1,S2,S3'],
+                'pendidikan'        => ['nullable', 'in:SD,SMP,SMA/SMK,D3,S1,S2,S3'],
                 'jabatan'           => ['nullable', 'string', 'max:100'],
                 'department'        => ['nullable', 'string', 'max:100'],
                 'bpjs_tk'           => ['nullable', 'string', 'max:30'],

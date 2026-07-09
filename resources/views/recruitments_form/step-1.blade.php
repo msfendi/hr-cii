@@ -561,7 +561,7 @@
                             {{-- Department --}}
                             <div>
                                 <label class="rf-label" for="department">Department</label>
-                                <select class="rf-select select2-dept" id="department" name="department" required>
+                                <select class="rf-select select2-dept" id="department" name="department">
                                     <option value="" disabled selected>Pilih / Masukkan Department</option>
                                     @foreach($positions ?? [] as $dept => $posList)
                                         <option value="{{ $dept }}" {{ old('department', $savedData['department'] ?? '') === $dept ? 'selected' : '' }}>{{ $dept }}</option>
@@ -572,7 +572,7 @@
                             {{-- Jabatan --}}
                             <div>
                                 <label class="rf-label" for="jabatan">Jabatan</label>
-                                <select class="rf-select select2-jabatan" id="jabatan" name="jabatan" required>
+                                <select class="rf-select select2-jabatan" id="jabatan" name="jabatan">
                                     <option value="" disabled selected>Pilih / Masukkan Jabatan</option>
                                 </select>
                             </div>
@@ -729,11 +729,14 @@
         dobEl.closest('div').appendChild(p);
     }
 
+    // Flag: apakah umur valid?
+    let ageValid = true;
+
     function calcAge(dob) {
         clearAgeError();
         if (!dob) {
             ageEl.value = '';
-            if (submitBtn) submitBtn.disabled = false;
+            ageValid = true;
             return;
         }
 
@@ -744,7 +747,7 @@
         if (birth > today) {
             ageEl.value = '';
             showAgeError('Tanggal lahir tidak boleh di masa depan.');
-            if (submitBtn) submitBtn.disabled = true;
+            ageValid = false;
             return;
         }
 
@@ -756,13 +759,22 @@
 
         if (age < MIN_AGE) {
             showAgeError(`Usia minimum pendaftaran adalah ${MIN_AGE} tahun. Usia Anda saat ini: ${age} tahun.`);
-            if (submitBtn) submitBtn.disabled = true;
+            ageValid = false;
         } else {
-            if (submitBtn) submitBtn.disabled = false;
+            ageValid = true;
         }
     }
 
     dobEl?.addEventListener('change', e => calcAge(e.target.value));
     calcAge(dobEl?.value); // on page load (e.g. after validation bounce-back)
+
+    // Intercept form submit — cegah submit hanya jika umur tidak valid
+    document.getElementById('registrationForm')?.addEventListener('submit', function(e) {
+        if (!ageValid) {
+            e.preventDefault();
+            dobEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showAgeError(`Usia minimum pendaftaran adalah ${MIN_AGE} tahun. Harap periksa tanggal lahir.`);
+        }
+    });
 </script>
 @endpush
