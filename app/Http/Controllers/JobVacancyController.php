@@ -447,7 +447,6 @@ class JobVacancyController extends Controller
                     'no' => $index + 1,
                     'id' => $a->id,
                     'name' => $a->name,
-                    'email' => $a->email,
                     'phone' => $a->phone,
                     'gender' => $a->gender,
                     'address' => $a->address,
