@@ -873,7 +873,6 @@
                             a.no,
                             `<div class="font-weight-bold">${escapeHtml(a.name || '-')}</div>
                             <div class="small text-muted">${escapeHtml(a.gender || '-')}</div>`,
-                            escapeHtml(a.email || '-'),
                             escapeHtml(a.phone || '-'),
                             escapeHtml(a.education || '-'),
                             escapeHtml(a.applied_at_formatted || '-'),
