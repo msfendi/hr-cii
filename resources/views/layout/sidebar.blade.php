@@ -21,12 +21,12 @@
    <hr class="sidebar-divider my-0">
 
    {{-- DASHBOARD (selalu tampil, tidak butuh permission) --}}
-   <li class="nav-item active">
+   <!-- <li class="nav-item active">
       <a class="nav-link" href="{{ route('home') }}">
          <i class="fas fa-tachometer-alt"></i>
          <span>Dashboard</span>
       </a>
-   </li>
+   </li> -->
 
    {{-- MENU DINAMIS DARI DATABASE --}}
    {{-- MENU DINAMIS DARI DATABASE --}}
