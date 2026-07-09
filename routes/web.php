@@ -122,9 +122,9 @@ Route::group(['middleware' => 'guest'], function () {
 });
 
 Route::group(['middleware' => 'auth'], function () {
-    Route::get('/home', [HomeController::class, 'home'])->name('home');
-    Route::get('/home/get-pkwt-chart', [HomeController::class, 'getPKWTChart'])->name('home.get-pkwt-chart');
-    Route::get('/home/get-recap-count', [HomeController::class, 'getRecapCount'])->name('home.get-recap-count');
+    Route::get('/home', [HomeController::class, 'home'])->name('home')->middleware(['auth', 'permission']);
+    Route::get('/home/get-pkwt-chart', [HomeController::class, 'getPKWTChart'])->name('home.get-pkwt-chart')->middleware(['auth', 'permission']);
+    Route::get('/home/get-recap-count', [HomeController::class, 'getRecapCount'])->name('home.get-recap-count')->middleware(['auth', 'permission']);
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
 
     //Register
