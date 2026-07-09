@@ -513,6 +513,14 @@ class GeneratePayrollExport implements ShouldQueue
 
             if ($active->isEmpty() && $resign->isEmpty() && $mangkir->isEmpty()) continue;
 
+            $folderName = match ($key) {
+                'STAFF'       => 'STAFF',
+                'NONSTAFF'    => 'NON STAFF',
+                'SEWING'      => 'SEWING',
+                'NON_SEWING'  => 'NON SEWING',
+                default       => 'ALL',
+            };
+
             $viewData = [
                 'groupedActive' => $active->groupBy('DEPARTEMENT'),
                 'groupedResign' => $resign->groupBy('DEPARTEMENT'),
@@ -525,7 +533,8 @@ class GeneratePayrollExport implements ShouldQueue
                 'mangkirTotals' => $calcTotals($mangkir),
 
                 'run_id' => $run_id,
-                'approvals' => $approvals
+                'approvals' => $approvals,
+                'folderName' => $folderName,
             ];
 
             /*

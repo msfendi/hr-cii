@@ -88,6 +88,7 @@ use App\Http\Controllers\PayrollRecapController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\JobVacancyController;
+use App\Http\Controllers\RolePayrollController;
 
 /*
 |--------------------------------------------------------------------------
@@ -115,7 +116,9 @@ Route::group(['middleware' => 'guest'], function () {
     Route::get('/login', [LoginController::class, 'login'])->name('login.guest');
     Route::post('/login', [LoginController::class, 'authenticate'])->name('login');
     Route::get('/captcha/image', [LoginController::class, 'captchaImage'])->name('captcha.image');
-    Route::get('/login/qrauth', [LoginController::class, 'qrauth'])->name('login.qrauth');
+    Route::post('/login/qrauth', [LoginController::class, 'qrauth'])
+        ->middleware('throttle:5,1') // 5 percobaan per menit per IP
+        ->name('login.qrauth');
 });
 
 Route::group(['middleware' => 'auth'], function () {
@@ -920,6 +923,14 @@ Route::prefix('payroll/recap')->name('payroll-recap.')->middleware(['auth', 'per
     Route::get('/', [PayrollRecapController::class, 'index'])->name('index');
     Route::get('/chart-data', [PayrollRecapController::class, 'chartData'])->name('chart-data');
     Route::get('/search-employee', [PayrollRecapController::class, 'searchEmployee'])->name('search-employee');
+});
+
+Route::prefix('role-payroll')->name('role-payroll.')->middleware(['auth', 'permission'])->group(function () {
+    Route::get('/', [RolePayrollController::class, 'index'])->name('index');
+    Route::post('/', [RolePayrollController::class, 'store'])->name('store');
+    Route::get('/{id}/users-for-edit', [RolePayrollController::class, 'usersForEdit'])->name('users-for-edit');
+    Route::put('/{id}', [RolePayrollController::class, 'update'])->name('update');
+    Route::delete('/{id}', [RolePayrollController::class, 'destroy'])->name('destroy');
 });
 
 

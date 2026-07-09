@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\RolePayroll;
+use App\Services\PayrollRoleFilterService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -40,42 +43,105 @@ class PayrollRecapController extends Controller
     ];
 
     /**
+     * Role payroll efektif user yang sedang login, sumber kebenaran dari
+     * table role_payrolls (lihat PayrollRoleFilterService::getRole()).
+     */
+    private function getRole(): ?string
+    {
+        return PayrollRoleFilterService::getRole(Auth::user());
+    }
+
+    /**
+     * Label untuk ditampilkan di UI, mis. "Staff", "Sewing", dst.
+     */
+    private function getRoleLabel(?string $role): ?string
+    {
+        if ($role === null) {
+            return null;
+        }
+
+        return RolePayroll::ROLES[$role] ?? $role;
+    }
+
+    /**
      * Halaman utama Rekap Payroll.
      */
     public function index()
     {
+        $role = $this->getRole();
+
+        // bio dipakai untuk kolom IS_STAFF (sumber filter role payroll)
+        $bioUnion = DB::table('BIODATA')
+            ->select('NPK', 'IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')->select('NPK', 'IS_STAFF')
+            );
+
         // employee_dept di payroll_run_details adalah FK ke DEPT.ID_DEPT
-        $departments = DB::table('payroll_run_details as prd')
+        $departmentsQuery = DB::table('payroll_run_details as prd')
             ->join('DEPT', 'DEPT.ID_DEPT', '=', 'prd.employee_dept')
+            ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'));
+
+        $departmentsQuery = PayrollRoleFilterService::applyToQuery(
+            $departmentsQuery,
+            $role,
+            'bio.IS_STAFF',
+            'DEPT.IS_SEWING'
+        );
+
+        $departments = $departmentsQuery
             ->select('DEPT.ID_DEPT as id', 'DEPT.DEPARTEMENT as name')
             ->distinct()
             ->orderBy('DEPT.DEPARTEMENT')
             ->get();
 
         return view('payroll_recap.index', [
-            'departments' => $departments,
-            'components'  => $this->components,
+            'departments'    => $departments,
+            'components'     => $this->components,
+            'payrollRole'    => $role,
+            'payrollRoleLabel' => $this->getRoleLabel($role),
         ]);
     }
 
     /**
      * AJAX: autocomplete pencarian karyawan (by NPK / nama) untuk Select2.
      * GET /payroll/recap/search-employee?q=xxxx
+     *
+     * Ikut difilter role_payrolls supaya user tidak bisa mencari/memilih
+     * NPK di luar cakupan role-nya.
      */
     public function searchEmployee(Request $request)
     {
-        $q = trim((string) $request->get('q'));
+        $role = $this->getRole();
+        $q    = trim((string) $request->get('q'));
 
-        $employees = DB::table('payroll_run_details')
-            ->select('employee_npk', 'employee_name')
+        $bioUnion = DB::table('BIODATA')
+            ->select('NPK', 'IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')->select('NPK', 'IS_STAFF')
+            );
+
+        $query = DB::table('payroll_run_details as prd')
+            ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
+            ->leftJoin('DEPT as dept_main', 'dept_main.ID_DEPT', '=', 'prd.employee_dept')
+            ->select('prd.employee_npk', 'prd.employee_name')
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($sub) use ($q) {
-                    $sub->where('employee_npk', 'like', "%{$q}%")
-                        ->orWhere('employee_name', 'like', "%{$q}%");
+                    $sub->where('prd.employee_npk', 'like', "%{$q}%")
+                        ->orWhere('prd.employee_name', 'like', "%{$q}%");
                 });
-            })
+            });
+
+        $query = PayrollRoleFilterService::applyToQuery(
+            $query,
+            $role,
+            'bio.IS_STAFF',
+            'dept_main.IS_SEWING'
+        );
+
+        $employees = $query
             ->distinct()
-            ->orderBy('employee_name')
+            ->orderBy('prd.employee_name')
             ->limit(20)
             ->get()
             ->map(function ($row) {
@@ -112,33 +178,15 @@ class PayrollRecapController extends Controller
      *  - dept        (nullable string/int, ID_DEPT)
      *  - component   (nullable string) default: total_salary
      *
-     * Catatan: penjumlahan nilai komponen JSON dilakukan di PHP (bukan JSON_VALUE
-     * di SQL) karena JSON_VALUE butuh SQL Server 2016+ / compatibility level 130+,
-     * dan tidak tersedia di semua environment. Pendekatan ini juga lebih aman
-     * (tidak menyisipkan nama komponen ke dalam raw SQL).
-     *
-     * Status Aktif / Keluar per bulan ditentukan dari PKWT.TKK:
-     *  - TKK kosong                       -> selalu Aktif
-     *  - bulan-tahun TKK > bulan periode  -> Aktif di bulan itu
-     *  - bulan-tahun TKK <= bulan periode -> Keluar di bulan itu
-     * Contoh: TKK = Juli, payroll bulan Juni -> Aktif di Juni, baru
-     * terhitung Keluar mulai payroll bulan Juli.
-     *
-     * Overtime / Lembur:
-     *  - Diambil dari table `overtimes_payroll`, kolom JUMLAH_JAM_LEMBUR.
-     *  - Hari Senin-Jumat (dan bukan hari libur nasional)  -> Overtime biasa.
-     *  - Hari Sabtu/Minggu ATAU tanggal ada di table `holidays`
-     *    (is_national = 1)                                  -> Overtime khusus.
-     *  - Dept diambil dengan join NPK -> payroll_run_details (baris terbaru
-     *    per NPK) -> DEPT.ID_DEPT, agar konsisten dengan filter Department
-     *    lainnya di halaman ini.
-     *  - `overtime_dates` & `overtime_matrix` menyediakan rincian jam lembur
-     *    per Department per tanggal (OVERTIME_DATE), dipakai untuk
-     *    menampilkan tabel "Rincian Overtime per Dept" dengan kolom per
-     *    tanggal di frontend.
+     * Semua sumber data (rekap bulanan, rekap karyawan, rekap dept, rekap
+     * overtime) difilter berdasarkan payroll_role user login lewat
+     * PayrollRoleFilterService::applyToQuery() -- aturan deny-by-default:
+     * role null / tidak terdaftar di role_payrolls -> data kosong.
      */
     public function chartData(Request $request)
     {
+        $role = $this->getRole();
+
         $endMonth = $request->filled('end_month')
             ? Carbon::createFromFormat('Y-m', $request->end_month)->endOfMonth()
             : Carbon::now()->endOfMonth();
@@ -163,15 +211,16 @@ class PayrollRecapController extends Controller
 
         // Union data biodata karyawan aktif & yang sudah keluar, digabung by NPK.
         // Diasumsikan satu NPK hanya muncul di salah satu dari kedua tabel ini.
+        // IS_STAFF ditambahkan agar bisa dipakai untuk filter payroll_role.
         $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
             ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG')
+                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
             );
 
         // Ambil data mentah (tanpa parsing JSON di SQL), lalu agregasi di PHP.
         // Join ke bio (union) & PKWT dipakai untuk nama, bagian, dan TKK (tanggal keluar).
-        $rows = DB::table('payroll_run_details as prd')
+        $rowsQuery = DB::table('payroll_run_details as prd')
             ->join('payroll_runs as pr', 'prd.run_id', '=', 'pr.id')
             ->join('payroll_periods as pp', 'pr.period_id', '=', 'pp.id')
             ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
@@ -179,7 +228,16 @@ class PayrollRecapController extends Controller
             ->leftJoin('DEPT as dept_main', 'dept_main.ID_DEPT', '=', 'prd.employee_dept')
             ->whereBetween('pp.start_date', [$startMonth->toDateString(), $endMonth->toDateString()])
             ->when($npk, fn($q) => $q->where('prd.employee_npk', $npk))
-            ->when($dept, fn($q) => $q->where('prd.employee_dept', $dept))
+            ->when($dept, fn($q) => $q->where('prd.employee_dept', $dept));
+
+        $rowsQuery = PayrollRoleFilterService::applyToQuery(
+            $rowsQuery,
+            $role,
+            'bio.IS_STAFF',
+            'dept_main.IS_SEWING'
+        );
+
+        $rows = $rowsQuery
             ->select(
                 'pp.id as period_id',
                 'pp.name as period_name',
@@ -323,12 +381,22 @@ class PayrollRecapController extends Controller
             ->select('prd.employee_npk', 'prd.employee_dept')
             ->whereRaw('prd.id = (SELECT MAX(prd2.id) FROM payroll_run_details prd2 WHERE prd2.employee_npk = prd.employee_npk)');
 
-        $overtimeRows = DB::table('overtimes_payroll as ot')
+        $overtimeRowsQuery = DB::table('overtimes_payroll as ot')
             ->leftJoinSub($latestDeptPerNpk, 'ndept', fn($join) => $join->on('ndept.employee_npk', '=', 'ot.NPK'))
             ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'ndept.employee_dept')
+            ->leftJoinSub($bioUnion, 'bio_ot', fn($join) => $join->on('bio_ot.NPK', '=', 'ot.NPK'))
             ->whereBetween('ot.OVERTIME_DATE', [$startMonth->toDateString(), $endMonth->toDateString()])
             ->when($npk, fn($q) => $q->where('ot.NPK', $npk))
-            ->when($dept, fn($q) => $q->where('DEPT.ID_DEPT', $dept))
+            ->when($dept, fn($q) => $q->where('DEPT.ID_DEPT', $dept));
+
+        $overtimeRowsQuery = PayrollRoleFilterService::applyToQuery(
+            $overtimeRowsQuery,
+            $role,
+            'bio_ot.IS_STAFF',
+            'DEPT.IS_SEWING'
+        );
+
+        $overtimeRows = $overtimeRowsQuery
             ->select(
                 'ot.NPK',
                 'ot.NAMA_KARYAWAN',

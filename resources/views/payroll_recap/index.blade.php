@@ -62,6 +62,23 @@
                                 <i class="fas fa-filter mr-1"></i> Filter
                             </h6>
                         </div>
+                        {{-- ===================== INFO FILTER ROLE PAYROLL ===================== --}}
+                        @if($payrollRole === null)
+                            <div class="alert alert-danger py-2 px-3 mb-3">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                Akun Anda belum terdaftar di <strong>role_payrolls</strong>, sehingga data pada halaman ini kosong.
+                                Silakan hubungi Admin untuk pengaturan akses.
+                            </div>
+                        @elseif($payrollRole !== \App\Services\PayrollRoleFilterService::ROLE_ALL)
+                            <div class="alert alert-info py-2 px-3 mb-3">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Data pada halaman ini ditampilkan sesuai akses role payroll Anda: <strong>{{ $payrollRoleLabel }}</strong>
+                            </div>
+                        @endif
+
+                        {{-- ===================== FILTER PANEL ===================== --}}
+
+                        {{-- ===================== FILTER PANEL ===================== --}}
                         <div class="card-body">
                             <form id="filterForm">
                                 <div class="row align-items-start">

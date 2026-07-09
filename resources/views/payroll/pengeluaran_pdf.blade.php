@@ -63,7 +63,7 @@
       </tr>
       <tr>
         <td>Keterangan</td>
-        <td>: KARYAWAN AKTIF</td>
+        <td>: KARYAWAN AKTIF {{ $folderName }}</td>
       </tr>
     </table>
     <br>
@@ -209,7 +209,7 @@ $total_potongan = 0;
 </tr>
 <tr>
   <td>Keterangan</td>
-  <td>: KARYAWAN RESIGN</td>
+  <td>: KARYAWAN RESIGN {{ $folderName }}</td>
 </tr>
 </table>
 
@@ -356,7 +356,7 @@ $total_potongan = 0;
     </tr>
     <tr>
         <td>Keterangan</td>
-        <td>: KARYAWAN MANGKIR</td>
+        <td>: KARYAWAN MANGKIR {{ $folderName }}</td>
     </tr>
 </table>
 

@@ -20,6 +20,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
+use App\Services\PayrollRoleFilterService;
 
 class GeneratePayrollProcess implements ShouldQueue
 {
@@ -702,7 +704,7 @@ END AS special_overtime_hours
             ->where('period_id', $period->id)
             ->groupBy('npk');
 
-        $employees = DB::connection('cii')
+        $employeesQuery = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
 
@@ -805,7 +807,38 @@ END AS special_overtime_hours
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
-            )
+            );
+        /*
+        |--------------------------------------------------------------------------
+        | FILTER BY payroll_role -- HANYA UNTUK MODE CHECK/SIMULATION
+        |--------------------------------------------------------------------------
+        | $isCheck = false  -> generate payroll SUNGGUHAN, dijalankan di queue
+        |                      worker (tanpa session user), dan HARUS mencakup
+        |                      SEMUA karyawan tanpa kecuali. TIDAK BOLEH difilter.
+        |
+        | $isCheck = true   -> dipanggil SINKRON dari
+        |                      PayrollProcessController::checkPayroll(), pada
+        |                      request yang sama dengan user yang login, sehingga
+        |                      Auth::user() valid. Di sinilah kita batasi hasil
+        |                      simulasi sesuai role_payrolls user (Admin bypass).
+        |--------------------------------------------------------------------------
+        */
+        if ($isCheck) {
+            $checkUser    = Auth::user();
+            $checkRole    = PayrollRoleFilterService::getRole($checkUser);
+            $checkIsAdmin = $checkUser ? $checkUser->hasRole('Admin') : false;
+
+            if (!$checkIsAdmin) {
+                PayrollRoleFilterService::applyToQuery(
+                    $employeesQuery,
+                    $checkRole,
+                    'emp.IS_STAFF',
+                    'd.IS_SEWING'
+                );
+            }
+        }
+
+        $employees = $employeesQuery
             ->orderBy('emp.ID_DEPT', 'asc')
             ->orderBy('emp.NPK', 'asc')
             ->get();

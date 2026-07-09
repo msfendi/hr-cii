@@ -21,7 +21,22 @@
                     </small>
                 </div>
 
+                {{-- ===================== INFO ROLE PAYROLL ===================== --}}
+                @if($noRoleAssigned)
+                    <div class="alert alert-danger py-2 px-3 mb-3 mt-3">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Akun Anda belum terdaftar di <strong>role_payrolls</strong>, sehingga tidak ada periode payroll yang bisa diproses/dicek dari halaman ini.
+                        Silakan hubungi Admin untuk pengaturan akses.
+                    </div>
+                @elseif($payrollRoleLabel && $payrollRoleLabel !== 'Semua (Tidak Difilter)')
+                    <div class="alert alert-info py-2 px-3 mb-3 mt-3">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Hasil "Check Payroll" ditampilkan sesuai akses role payroll Anda: <strong>{{ $payrollRoleLabel }}</strong>
+                    </div>
+                @endif
+
             </div>
+            @if(!$noRoleAssigned)
             <div class="card border-left-primary shadow-lg mb-4">
                <div class="card-header py-3 bg-white">
 
@@ -137,43 +152,42 @@
                   </form>
                </div>
             </div>
-            
-
             <div id="payroll-detail-container"
             style="display:none;"
             class="mt-4">
+            @endif
 
+@if(!$noRoleAssigned)
             <div class="card shadow-lg border-left-success">
 
-    <div class="card-header bg-white">
+                <div class="card-header bg-white">
 
-        <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center">
 
-    <div>
+                <div>
 
-        <h5 id="detail-title"
-            class="m-0 font-weight-bold text-primary">
+                <h5 id="detail-title"
+                    class="m-0 font-weight-bold text-primary">
 
-            Data Payroll Details
+                    Data Payroll Details
 
-        </h5>
+                </h5>
 
-        <small class="text-muted">
-            Payroll simulation result for selected payroll period.
-        </small>
+                <small class="text-muted">
+                    Payroll simulation result for selected payroll period.
+                </small>
 
-    </div>
+            </div>
 
-    <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center">
 
-        <div id="export-button-container"
-             class="mr-3">
-        </div>
+                <div id="export-button-container"
+                    class="mr-3">
+                </div>
 
-        <i class="fas fa-file-invoice-dollar fa-2x text-success"></i>
+                <i class="fas fa-file-invoice-dollar fa-2x text-success"></i>
 
-    </div>
-
+            </div>
 </div>
 
     </div>
@@ -269,6 +283,7 @@
             </div>
 
         </div>
+@endif
 
          </div>
       </div>
@@ -1561,17 +1576,13 @@ $(document).on('change', '#filterDept', function(){
 </script>
 <script>
 
-const userRole = @json(optional(Auth::user()->roles->first())->name);
+const canSeeSalary = @json(
+    \App\Services\PayrollRoleFilterService::canSeeSalary(
+        \App\Services\PayrollRoleFilterService::getRole(Auth::user())
+    )
+);
 
-// console.log('USER ROLE =', userRole);
-
-const canSeeSalary =
-    userRole === 'Admin' ||
-    userRole === 'Audit' ||
-    userRole === 'Payroll_STAFF' ||
-    userRole === 'Payroll_NONSTAFF' ||
-    userRole === 'Payroll_SEWING' ||
-    userRole === 'Payroll_NONSEWING';
+// console.log('CAN SEE SALARY =', canSeeSalary);
 
 function salaryMask(value){
 

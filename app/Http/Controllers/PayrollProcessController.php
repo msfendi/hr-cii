@@ -24,12 +24,55 @@ use Yajra\DataTables\DataTables;
 use App\Models\InsentifRoleFormula;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use App\Services\PayrollRoleFilterService;
+use App\Models\RolePayroll;
 
 class PayrollProcessController extends Controller
 {
 
+    private function scopePeriodsByRole($periods, ?string $role)
+    {
+        if (PayrollRoleFilterService::isAll($role)) {
+            return $periods;
+        }
+
+        if (!PayrollRoleFilterService::isRegistered($role)) {
+            return collect(); // belum terdaftar di role_payrolls -> kosong
+        }
+
+        $bioUnion = DB::table('BIODATA')
+            ->select('NPK', 'IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')->select('NPK', 'IS_STAFF')
+            );
+
+        return $periods->map(function ($period) use ($role, $bioUnion) {
+
+            $query = DB::table('payroll_run_details as prd')
+                ->leftJoinSub($bioUnion, 'bio', fn($j) => $j->on('bio.NPK', '=', 'prd.employee_npk'))
+                ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
+                ->where('prd.run_id', $period->id);
+
+            PayrollRoleFilterService::applyToQuery($query, $role, 'bio.IS_STAFF', 'd.IS_SEWING');
+
+            $scoped = $query
+                ->selectRaw('COUNT(DISTINCT prd.employee_npk) as employee_count')
+                ->selectRaw('COALESCE(SUM(prd.total_salary), 0) as total_payroll')
+                ->first();
+
+            $period->employee_count = $scoped->employee_count ?? 0;
+            $period->total_payroll  = $scoped->total_payroll ?? 0;
+
+            return $period;
+        })->values();
+    }
+
     public function index(Request $request)
     {
+        $user    = Auth::user();
+        $role    = PayrollRoleFilterService::getRole($user);
+        // $isAdmin = $user->hasRole('Admin');
+
         // =========================
         // FILTER STATUS PERIOD
         // =========================
@@ -48,7 +91,7 @@ class PayrollProcessController extends Controller
                 'payroll_exports.file_bank_active',
                 'payroll_exports.file_bank_resign',
                 'payroll_exports.file_peng',
-                'payroll_approve.status as approve_status' // 🔥 penting
+                'payroll_approve.status as approve_status'
             );
 
         if ($filter === 'open') {
@@ -59,19 +102,62 @@ class PayrollProcessController extends Controller
             $query->where('payroll_periods.is_closed', true);
         }
 
-        $periods = $query
-            ->latest('payroll_runs.id')
-            ->get();
+        $periods = $query->latest('payroll_runs.id')->get();
 
-        // dd($periods);
+        // Batasi/hitung ulang sesuai payroll_role user login
+        $periods = $this->scopePeriodsByRole($periods, $role);
 
-        return view('payroll.index', compact('periods', 'filter'));
+        $noRoleAssigned  = !PayrollRoleFilterService::isRegistered($role);
+        $payrollRoleLabel = $role ? (RolePayroll::ROLES[$role] ?? $role) : null;
+
+        return view('payroll.index', compact(
+            'periods',
+            'filter',
+            'noRoleAssigned',
+            'payrollRoleLabel'
+        ));
     }
 
     public function generate()
     {
-        $periods = PayrollPeriod::orderBy('start_date')->where('is_closed', 0)->get();
-        return view('payroll.process', compact('periods'));
+        $user    = Auth::user();
+        $role    = PayrollRoleFilterService::getRole($user);
+        // $isAdmin = $user->hasRole('Admin');
+
+        // $noRoleAssigned = !$isAdmin && !PayrollRoleFilterService::isRegistered($role);
+        $noRoleAssigned = !PayrollRoleFilterService::isRegistered($role);
+
+        // Kalau user belum terdaftar di role_payrolls (dan bukan Admin),
+        // halaman generate payroll tidak menampilkan periode apapun --
+        // form pilih periode / check / process jadi tidak bisa dipakai.
+        $periods = $noRoleAssigned
+            ? collect()
+            : PayrollPeriod::orderBy('start_date')->where('is_closed', 0)->get();
+
+        $payrollRoleLabel = $role ? (RolePayroll::ROLES[$role] ?? $role) : null;
+
+        return view('payroll.process', compact(
+            'periods',
+            'noRoleAssigned',
+            'payrollRoleLabel'
+        ));
+    }
+
+    public function checkPayroll($period_id)
+    {
+        $period = PayrollPeriod::findOrFail($period_id);
+
+        // Filter payroll_role sudah dilakukan DI DALAM job (mode simulation),
+        // karena job dijalankan sinkron di request yang sama sehingga
+        // Auth::user() valid di sana. Tidak perlu filter ulang di sini.
+        $service = new GeneratePayrollProcess($period->id);
+        $raw     = $service->simulation();
+
+        $payrollResults = collect($raw['data'] ?? $raw);
+
+        return response()->json([
+            'data' => $payrollResults->values()
+        ]);
     }
 
     public function approvalStatus($periodId)
@@ -82,7 +168,8 @@ class PayrollProcessController extends Controller
         ============================================
         */
         $user = Auth::user();
-        $role = optional($user->roles->first())->name;
+        $role = \App\Services\PayrollRoleFilterService::getRole($user);
+        // $isAdmin = $user->hasRole('Admin');
 
         $data = InsentifApproval::where('period_id', $periodId)
             ->orderBy('payroll_component')
@@ -346,31 +433,7 @@ ATTACH NAMA_KARYAWAN KE APPROVAL PROGRESS
                 ->get();
 
             $filterByRole = function ($rows) use ($role) {
-
-                return collect($rows)
-                    ->filter(function ($row) use ($role) {
-
-                        if ($role === 'Payroll_STAFF') {
-                            return (int) $row->IS_STAFF === 1;
-                        }
-
-                        if ($role === 'Payroll_NONSTAFF') {
-                            return (int) $row->IS_STAFF === 0;
-                        }
-
-                        if ($role === 'Payroll_SEWING') {
-                            return (int) $row->IS_STAFF === 0
-                                && (int) $row->IS_SEWING === 0;
-                        }
-
-                        if ($role === 'Payroll_NONSEWING') {
-                            return (int) $row->IS_STAFF === 0
-                                && (int) $row->IS_SEWING === 1;
-                        }
-
-                        return true; // Admin
-                    })
-                    ->values();
+                return \App\Services\PayrollRoleFilterService::filterCollection($rows, $role, 'IS_STAFF', 'IS_SEWING');
             };
 
             $invalidContracts = $filterByRole($invalidContracts);
@@ -483,48 +546,6 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
         return redirect('payroll-process/index');
     }
 
-    public function checkPayroll($period_id)
-    {
-        $period = PayrollPeriod::findOrFail($period_id);
-
-        $service = new GeneratePayrollProcess($period->id, 'check');
-        $raw = $service->simulation();
-
-        // ✅ IMPORTANT FIX
-        $payrollResults = collect($raw['data'] ?? $raw);
-
-        $user = Auth::user();
-        $role = optional($user->roles->first())->name;
-
-        if ($role === 'Payroll_STAFF') {
-
-            $payrollResults = $payrollResults->filter(function ($row) {
-                return ($row['is_staff'] ?? 0) == 1;
-            });
-        } elseif ($role === 'Payroll_NONSTAFF') {
-
-            $payrollResults = $payrollResults->filter(function ($row) {
-                return ($row['is_staff'] ?? 0) == 0;
-            });
-        } elseif ($role === 'Payroll_SEWING') {
-
-            $payrollResults = $payrollResults->filter(function ($row) {
-                return (($row['is_staff'] ?? 0) == 0)
-                    && (($row['is_sewing'] ?? 0) == 0);
-            });
-        } elseif ($role === 'Payroll_NONSEWING') {
-
-            $payrollResults = $payrollResults->filter(function ($row) {
-                return (($row['is_staff'] ?? 0) == 0)
-                    && (($row['is_sewing'] ?? 0) == 1);
-            });
-        }
-
-        return response()->json([
-            'data' => $payrollResults->values()
-        ]);
-    }
-
     public function details($id)
     {
         /*
@@ -535,15 +556,10 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
         $user = Auth::user();
 
-        $canSeeSalary = $user->hasRole([
-            'Admin',
-            'Audit',
-            'Management',
-            'Payroll_STAFF',
-            'Payroll_NONSTAFF',
-            'Payroll_SEWING',
-            'Payroll_NONSEWING'
-        ]);
+        $payrollRole = \App\Services\PayrollRoleFilterService::getRole($user);
+
+        $canSeeSalary = $user->hasRole(['Admin', 'Audit', 'Management'])
+            || \App\Services\PayrollRoleFilterService::canSeeSalary($payrollRole);
 
         $period = DB::table('payroll_runs')->leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')->where('payroll_runs.id', $id)->first();
         // dd($period);
@@ -979,22 +995,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
     */
 
         if (!$user->hasRole('Admin')) {
-
-            if ($user->hasRole('Payroll_STAFF')) {
-                $query->where('emp.IS_STAFF', 1);
-            }
-
-            if ($user->hasRole('Payroll_NONSTAFF')) {
-                $query->where('emp.IS_STAFF', 0);
-            }
-
-            if ($user->hasRole('Payroll_SEWING')) {
-                $query->where('d.IS_SEWING', 0)->where('emp.IS_STAFF', 0);
-            }
-
-            if ($user->hasRole('Payroll_NONSEWING')) {
-                $query->where('d.IS_SEWING', 1)->where('emp.IS_STAFF', 0);
-            }
+            \App\Services\PayrollRoleFilterService::applyToQuery($query, $payrollRole, 'emp.IS_STAFF', 'd.IS_SEWING');
         }
 
         /*

@@ -132,7 +132,7 @@
     </div>
 
     {{-- ================= KARYAWAN AKTIF ================= --}}
-    <div class="section-title">KARYAWAN AKTIF</div>
+    <div class="section-title">KARYAWAN AKTIF {{ $folderName }}</div>
 
     @forelse($groupedActive as $dept => $employees)
 
@@ -235,7 +235,7 @@
     {{-- ================= RESIGN ================= --}}
     @if($groupedResign->count())
     <div class="page-break"></div>
-    <div class="section-title">KARYAWAN RESIGN</div>
+    <div class="section-title">KARYAWAN RESIGN {{ $folderName }}</div>
 
     @foreach($groupedResign as $dept => $employees)
 
@@ -336,7 +336,7 @@
     @if($groupedMangkir->count())
 
     <div class="page-break"></div>
-    <div class="section-title">KARYAWAN MANGKIR</div>
+    <div class="section-title">KARYAWAN MANGKIR {{ $folderName }}</div>
 
     @foreach($groupedMangkir as $dept => $employees)
 

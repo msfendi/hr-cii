@@ -23,14 +23,29 @@
                     <a href="{{ route('payroll-process.generate') }}" class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Generate Payroll</a>
                     @endcanRoute
-                    
+
                     @canRoute('payroll-periods.create')
                     <a href="{{ route('payroll-periods.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Period</a>
                     @endcanRoute
                     </div>
                 </div>
-                
+
+                {{-- ===================== INFO ROLE PAYROLL ===================== --}}
+                @if($noRoleAssigned)
+                    <div class="alert alert-danger py-2 px-3 mb-3">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Akun Anda belum terdaftar di <strong>role_payrolls</strong>, sehingga daftar payroll di halaman ini kosong.
+                        Silakan hubungi Admin untuk pengaturan akses.
+                    </div>
+                @elseif($payrollRoleLabel && $payrollRoleLabel !== 'Semua (Tidak Difilter)')
+                    <div class="alert alert-info py-2 px-3 mb-3">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Total payroll dan jumlah karyawan pada tabel di bawah ini ditampilkan sesuai akses role payroll Anda:
+                        <strong>{{ $payrollRoleLabel }}</strong>
+                    </div>
+                @endif
+
                 <!-- DataTales Example -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
@@ -142,17 +157,9 @@
                                                 </span>
                                             @else
                                                 @php
-                                                    $roleFolder = '';
-
-                                                    if(auth()->user()->hasRole('Payroll_STAFF')){
-                                                        $roleFolder = 'STAFF/';
-                                                    } elseif(auth()->user()->hasRole('Payroll_NONSTAFF')){
-                                                        $roleFolder = 'NON_STAFF/';
-                                                    } elseif(auth()->user()->hasRole('Payroll_SEWING')){
-                                                        $roleFolder = 'SEWING/';
-                                                    } elseif(auth()->user()->hasRole('Payroll_NONSEWING')){
-                                                        $roleFolder = 'NON_SEWING/';
-                                                    }
+                                                    $roleFolder = \App\Services\PayrollRoleFilterService::folder(
+                                                        \App\Services\PayrollRoleFilterService::getRole(auth()->user())
+                                                    );
                                                 @endphp
 
 

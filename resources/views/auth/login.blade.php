@@ -96,10 +96,10 @@
                                 <div class="mb-3">
                                     <button type="submit" class="btn btn-primary btn-user btn-block">Login</button>
                                 </div>
-                                <hr>
+                                <!-- <hr> -->
                             </form>
                             <div class="text-center">
-                                <a class="small" href="{{ route('register') }}">Don't have account? Register!</a>
+                                <!-- <a class="small" href="{{ route('register') }}">Don't have account? Register!</a> -->
                             </div>
                         </div>
                     </div>
@@ -169,8 +169,14 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
         // ❗ JANGAN reset kamera dulu
         setTimeout(() => {
 
-            window.location.href =
-                "{{ route('login.qrauth') }}?qrcode=" + encodeURIComponent(npk);
+            fetch("{{ route('login.qrauth') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ qrcode: npk })
+            }).then(res => res.redirected ? window.location = res.url : location.reload());
 
         }, 1000);
     }
