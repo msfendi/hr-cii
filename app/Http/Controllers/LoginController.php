@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\QrAuthorizedDevice;
+use App\Models\QrScanLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -111,23 +113,80 @@ class LoginController extends Controller
 
     public function qrauth(Request $request)
     {
-        $npk = $request->qrcode;
+        $request->validate([
+            'qrcode'      => ['required', 'string'],
+            'device_uuid' => ['required', 'string', 'max:64'],
+            'device_name' => ['nullable', 'string', 'max:100'],
+            'device_type' => ['nullable', 'string', 'max:20'],
+            'platform'    => ['nullable', 'string', 'max:100'],
+            'browser'     => ['nullable', 'string', 'max:100'],
+        ]);
 
+        $npk        = trim($request->qrcode);
+        $deviceUuid = $request->device_uuid;
+
+        $log = [
+            'npk_scanned' => $npk,
+            'device_uuid' => $deviceUuid,
+            'device_name' => $request->device_name,
+            'device_type' => $request->device_type ?? 'unknown',
+            'platform'    => $request->platform,
+            'browser'     => $request->browser,
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
+        ];
+
+        // 1. Validasi format NPK
         if (!preg_match('/^C-\d{5}$/', $npk)) {
+            QrScanLog::create($log + ['status' => 'failed_invalid_format']);
             return back()->with('error', 'Format NPK salah');
         }
 
+        // 2. Cari user
         $user = User::where('npk', $npk)->first();
 
         if (!$user) {
+            QrScanLog::create($log + ['status' => 'failed_user_not_found']);
             return back()->with('error', 'User tidak ditemukan');
         }
+
+        $log['user_id'] = $user->id;
+
+        // 3. Cek device sudah diassign admin untuk user ini
+        $device = QrAuthorizedDevice::where('user_id', $user->id)
+            ->where('device_uuid', $deviceUuid)
+            ->first();
+
+        if (!$device) {
+            QrScanLog::create($log + ['status' => 'failed_device_not_registered']);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Device ini belum terdaftar untuk akun Anda. Silakan hubungi admin HRIS.'
+            ], 403);
+        }
+
+        if (!$device->is_active) {
+            QrScanLog::create($log + ['status' => 'failed_device_inactive']);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Device ini dinonaktifkan oleh admin.'
+            ], 403);
+        }
+
+        // 4. Sukses
+        QrScanLog::create($log + ['status' => 'success']);
+        $device->update(['last_used_at' => now()]);
 
         Auth::login($user);
         $request->session()->regenerate();
 
         Alert::success('Login Successfully!', 'Welcome To Chutex HRIS');
 
-        return redirect()->intended('/home');
+        return response()->json([
+            'success' => true,
+            'redirect' => url('/home')
+        ]);
     }
 }

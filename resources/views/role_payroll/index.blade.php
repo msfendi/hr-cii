@@ -59,6 +59,7 @@
             <!-- /.container-fluid -->
         </div>
         <!-- End of Main Content -->
+@include('layout.footer')
     </div>
     <!-- End of Content Wrapper -->
 </div>
@@ -110,7 +111,6 @@
     </div>
 </div>
 
-@include('layout.footer')
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

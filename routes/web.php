@@ -89,6 +89,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\RolePayrollController;
+use App\Http\Controllers\QrDeviceController;
 
 /*
 |--------------------------------------------------------------------------
@@ -933,6 +934,16 @@ Route::prefix('role-payroll')->name('role-payroll.')->middleware(['auth', 'permi
     Route::delete('/{id}', [RolePayrollController::class, 'destroy'])->name('destroy');
 });
 
+Route::middleware(['auth', 'permission']) // ganti/tambahkan middleware role admin sesuai project Anda
+    ->group(function () {
+        Route::get('/admin/qr-devices', [QrDeviceController::class, 'index'])->name('qr-devices.index');
+        Route::post('/admin/qr-devices', [QrDeviceController::class, 'store'])->name('qr-devices.store');
+        Route::put('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'update'])->name('qr-devices.update');
+        Route::patch('/admin/qr-devices/{qrDevice}/toggle', [QrDeviceController::class, 'toggle'])->name('qr-devices.toggle');
+        Route::delete('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'destroy'])->name('qr-devices.destroy');
+        Route::patch('/admin/qr-devices/{qrDevice}/rename', [QrDeviceController::class, 'rename'])->name('qr-devices.rename');
+    });
+
 
 Route::get('/employee-late', [EmployeeLateController::class, 'index'])->name('employee-late.index')->middleware(['auth', 'permission']);
 Route::get('/employee-late/create', [EmployeeLateController::class, 'create'])->name('employee-late.create')->middleware(['auth', 'permission']);
@@ -972,6 +983,7 @@ Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class,
 Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cbt'])->name('evaluation-employee.cbt');
 Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
 Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');
+
 
 Route::get('/test-reverb', function () {
     event(new NotificationEvent(

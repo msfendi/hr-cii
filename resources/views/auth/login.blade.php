@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <body class="bg-gradient-primary">
     @include('sweetalert::alert')
 
@@ -126,61 +127,93 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-
 let scanned = false;
-
 const codeReader = new ZXing.BrowserQRCodeReader();
 
+// Ambil / generate identitas device (persisten di localStorage)
+function getDeviceInfo() {
+    let deviceUuid = localStorage.getItem('hris_device_uuid');
+    if (!deviceUuid) {
+        deviceUuid = (crypto.randomUUID)
+            ? crypto.randomUUID()
+            : 'dev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 10);
+        localStorage.setItem('hris_device_uuid', deviceUuid);
+    }
+
+    const ua = navigator.userAgent;
+    let deviceType = 'desktop';
+    if (/Mobi|Android/i.test(ua)) deviceType = 'mobile';
+    else if (/Tablet|iPad/i.test(ua)) deviceType = 'tablet';
+    else if (/Macintosh|Windows NT/i.test(ua) && navigator.maxTouchPoints === 0) deviceType = 'desktop';
+
+    let browser = 'Unknown';
+    if (ua.includes('Edg')) browser = 'Edge';
+    else if (ua.includes('Chrome')) browser = 'Chrome';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Safari')) browser = 'Safari';
+
+    const platform = navigator.platform || navigator.userAgentData?.platform || 'Unknown';
+    const deviceName = `${deviceType} - ${platform} - ${browser}`;
+
+    return { device_uuid: deviceUuid, device_type: deviceType, platform, browser, device_name: deviceName };
+}
+
 codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-
     if (result && !scanned) {
-
         scanned = true;
-
         let rawText = result.text.trim();
-
-        console.log("QR RESULT:", rawText);
-
         let npk = rawText.split('_')[0];
-
         let regexNpk = /^C-\d{5}$/;
 
         if (!regexNpk.test(npk)) {
-
             scanned = false;
-
-            Swal.fire({
-                icon: 'error',
-                title: 'QR Tidak Valid',
-                text: 'Format NPK Tidak Valid'
-            });
-
+            Swal.fire({ icon: 'error', title: 'QR Tidak Valid', text: 'Format NPK Tidak Valid' });
             return;
         }
 
         Swal.fire({
             icon: 'success',
             title: 'QR Code Terbaca',
-            text: 'Login...',
+            text: 'Memverifikasi...',
             showConfirmButton: false,
             timer: 1000
         });
 
-        // ❗ JANGAN reset kamera dulu
         setTimeout(() => {
+            const device = getDeviceInfo();
 
             fetch("{{ route('login.qrauth') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 },
-                body: JSON.stringify({ qrcode: npk })
-            }).then(res => res.redirected ? window.location = res.url : location.reload());
+                body: JSON.stringify({
+                    qrcode: npk,
+                    ...device
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
 
+                if (!data.success) {
+
+                    scanned = false;
+
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Akses Ditolak',
+                        text: data.message
+                    });
+
+                    return;
+                }
+
+                window.location = data.redirect;
+
+            });
         }, 1000);
     }
-
 });
 </script>
 <script>
