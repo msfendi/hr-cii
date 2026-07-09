@@ -398,4 +398,81 @@ class JobVacancyController extends Controller
 
         return $counts;
     }
+
+    public function applicants(JobVacancy $jobVacancy)
+    {
+        try {
+            if (!$jobVacancy->position || !$jobVacancy->open_date || !$jobVacancy->close_date) {
+                return response()->json([
+                    'summary' => [
+                        'total' => 0,
+                        'position' => $jobVacancy->position,
+                        'open_date' => optional($jobVacancy->open_date)->translatedFormat('d M Y'),
+                        'close_date' => optional($jobVacancy->close_date)->translatedFormat('d M Y'),
+                    ],
+                    'applicants' => [],
+                ]);
+            }
+
+            $start = $jobVacancy->open_date->copy()->startOfDay();
+            $end = $jobVacancy->close_date->copy()->endOfDay();
+
+            $applicants = DB::connection('cii')
+                ->table('PELAMAR')
+                ->join('pelamar_details', 'pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
+                ->where('pelamar_details.jabatan', $jobVacancy->position)
+                ->select(
+                    'PELAMAR.ID as id',
+                    'PELAMAR.NAMA as name',
+                    'PELAMAR.HP as phone',
+                    'PELAMAR.JENIS_KELAMIN as gender',
+                    'PELAMAR.ALAMAT_LENGKAP as address',
+                    'pelamar_details.jabatan as position',
+                    'PELAMAR.PENDIDIKAN as education',
+                    'pelamar_details.created_at as applied_at'
+                )
+                ->get()
+                ->filter(function ($a) use ($start, $end) {
+                    if (!$a->applied_at) {
+                        return false;
+                    }
+                    return Carbon::parse($a->applied_at)->between($start, $end);
+                })
+                ->values();
+
+            $rows = $applicants->map(function ($a, $index) {
+                $appliedAt = $a->applied_at ? Carbon::parse($a->applied_at) : null;
+
+                return [
+                    'no' => $index + 1,
+                    'id' => $a->id,
+                    'name' => $a->name,
+                    'email' => $a->email,
+                    'phone' => $a->phone,
+                    'gender' => $a->gender,
+                    'address' => $a->address,
+                    'position' => $a->position,
+                    'education' => $a->education,
+                    'applied_at' => optional($appliedAt)->format('Y-m-d H:i'),
+                    'applied_at_formatted' => optional($appliedAt)->translatedFormat('d M Y, H:i'),
+                ];
+            })->values();
+
+            return response()->json([
+                'summary' => [
+                    'total' => $rows->count(),
+                    'position' => $jobVacancy->position,
+                    'open_date' => $jobVacancy->open_date->translatedFormat('d M Y'),
+                    'close_date' => $jobVacancy->close_date->translatedFormat('d M Y'),
+                ],
+                'applicants' => $rows,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], 500);
+        }
+    }
 }

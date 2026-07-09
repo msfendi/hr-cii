@@ -688,6 +688,7 @@ Route::group(['middleware' => 'auth'], function () {
             Route::put('/{jobVacancy}', [JobVacancyController::class, 'update'])->name('update');
             Route::delete('/{jobVacancy}', [JobVacancyController::class, 'destroy'])->name('destroy');
             Route::patch('/{jobVacancy}/toggle-status', [JobVacancyController::class, 'toggleStatus'])->name('toggle-status');
+            Route::get('/{jobVacancy}/applicants', [JobVacancyController::class, 'applicants'])->name('applicants');
         });
 
 

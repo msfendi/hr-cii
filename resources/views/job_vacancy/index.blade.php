@@ -2,6 +2,7 @@
 <html lang="en">
 @include('layout.header')
 <style>
+#applicantsSummary .detail-stat-item{ width:100%; }
 
 .vacancy-card{
     border:none;
@@ -580,12 +581,51 @@
         </div>
     </div>
 
+    {{-- ===================== MODAL DETAIL PELAMAR ===================== --}}
+    <div class="modal fade" id="applicantsModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title font-weight-bold mb-0">Daftar Pelamar</h5>
+                        <div class="small text-muted" id="applicantsPositionTitle"></div>
+                    </div>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3" id="applicantsSummary"></div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="applicantsTable" style="width:100%">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width:40px;">#</th>
+                                    <th>Nama</th>
+                                    <th>No. HP</th>
+                                    <th>Pendidikan</th>
+                                    <th>Tanggal Melamar</th>
+                                    <th style="width:60px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css">
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js"></script>
 
     <script>
         const routes = {
@@ -595,6 +635,7 @@
             update: (id) => `{{ url('job-vacancy') }}/${id}`,
             destroy: (id) => `{{ url('job-vacancy') }}/${id}`,
             toggleStatus: (id) => `{{ url('job-vacancy') }}/${id}/toggle-status`,
+            applicants: (id) => `{{ url('job-vacancy') }}/${id}/applicants`,
         };
 
         const csrfToken = "{{ csrf_token() }}";
@@ -696,8 +737,11 @@
                                 <i class="fas fa-users text-gray-400 mr-2"></i>
                                 <span class="small font-weight-bold text-gray-700">${v.total_needed} orang dibutuhkan</span>
                             </div>
-                            <span class="tag-pill mb-2" style="background:#eef2ff;color:#4e73df;border-color:#dce3fc;">
+                            <span class="tag-pill mb-2" data-action="applicants" role="button"
+                                style="background:#eef2ff;color:#4e73df;border-color:#dce3fc;cursor:pointer;"
+                                title="Lihat detail pelamar">
                                 <i class="fas fa-user-friends mr-1"></i>${v.applicant_count} orang sudah melamar
+                                <i class="fas fa-chevron-right ml-1" style="font-size:.65rem;"></i>
                             </span>
                         </div>
 
@@ -737,6 +781,116 @@
 
         let vacancyStore = [];
         let quillDescription;
+        let applicantsDataTable;
+        let applicantsStore = [];
+
+        function escapeHtml(str) {
+            return $('<div>').text(str == null ? '' : str).html();
+        }
+
+        function initApplicantsTable() {
+            if ($.fn.DataTable.isDataTable('#applicantsTable')) {
+                applicantsDataTable.clear().destroy();
+                $('#applicantsTable tbody').empty();
+            }
+            applicantsDataTable = $('#applicantsTable').DataTable({
+                pageLength: 10,
+                lengthMenu: [5, 10, 25, 50],
+                order: [[5, 'desc']],
+                language: {
+                    search: 'Cari:',
+                    lengthMenu: 'Tampilkan _MENU_ data',
+                    info: 'Menampilkan _START_-_END_ dari _TOTAL_ pelamar',
+                    infoEmpty: 'Tidak ada data',
+                    zeroRecords: 'Tidak ditemukan pelamar yang cocok',
+                    emptyTable: 'Belum ada pelamar untuk posisi ini.',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' },
+                },
+            });
+        }
+
+        function renderApplicantsSummary(summary) {
+            $('#applicantsSummary').html(`
+                <div class="col-md-4 mb-2">
+                    <div class="detail-stat-item">
+                        <div class="detail-stat-icon"><i class="fas fa-user-friends"></i></div>
+                        <div>
+                            <div class="detail-stat-label">Total Pelamar</div>
+                            <div class="detail-stat-value">${summary.total} orang</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <div class="detail-stat-item">
+                        <div class="detail-stat-icon"><i class="fas fa-calendar-day"></i></div>
+                        <div>
+                            <div class="detail-stat-label">Periode Lamar</div>
+                            <div class="detail-stat-value" style="font-size:.8rem;">${summary.open_date} - ${summary.close_date}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <div class="detail-stat-item">
+                        <div class="detail-stat-icon"><i class="fas fa-briefcase"></i></div>
+                        <div>
+                            <div class="detail-stat-label">Posisi</div>
+                            <div class="detail-stat-value" style="font-size:.85rem;">${escapeHtml(summary.position)}</div>
+                        </div>
+                    </div>
+                </div>
+            `);
+        }
+
+        function loadApplicants(id, vacancy) {
+            $('#applicantsPositionTitle').text(vacancy.position + ' • ' + vacancy.department);
+            $('#applicantsSummary').html('<div class="col-12 text-center py-3 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i>Memuat data pelamar...</div>');
+
+            if (applicantsDataTable) {
+                applicantsDataTable.clear().destroy();
+                $('#applicantsTable tbody').empty();
+            }
+            applicantsStore = [];
+
+            fetch(routes.applicants(id))
+                .then(async res => {
+                    const body = await res.json();
+                    if (!res.ok) throw body;
+                    return body;
+                })
+                .then(data => {
+                    renderApplicantsSummary(data.summary);
+                    initApplicantsTable();
+
+                    applicantsStore = data.applicants;
+
+                    if (!data.applicants.length) {
+                        applicantsDataTable.draw();
+                        return;
+                    }
+
+                    data.applicants.forEach(a => {
+                        applicantsDataTable.row.add([
+                            a.no,
+                            `<div class="font-weight-bold">${escapeHtml(a.name || '-')}</div>
+                            <div class="small text-muted">${escapeHtml(a.gender || '-')}</div>`,
+                            escapeHtml(a.email || '-'),
+                            escapeHtml(a.phone || '-'),
+                            escapeHtml(a.education || '-'),
+                            escapeHtml(a.applied_at_formatted || '-'),
+                            `<button type="button" class="btn btn-sm btn-light" data-detail-id="${a.id}" title="Detail Lengkap">
+                                <i class="fas fa-eye"></i>
+                            </button>`,
+                        ]);
+                    });
+
+                    applicantsDataTable.draw();
+                })
+                .catch(err => {
+                    $('#applicantsSummary').html('');
+                    const detail = err && err.message ? err.message : 'Terjadi kesalahan saat memuat data pelamar.';
+                    Swal.fire('Gagal', detail, 'error');
+                });
+        }
 
         function loadVacancies() {
             const params = {
@@ -1012,6 +1166,26 @@
             $(document).on('click', '.btn-remove-row', function () {
                 $(this).closest('.criteria-row, .document-row').remove();
             });
+            $(document).on('click', '[data-detail-id]', function () {
+                const id = $(this).data('detail-id');
+                const a = applicantsStore.find(x => String(x.id) === String(id));
+                if (!a) return;
+
+                Swal.fire({
+                    title: a.name || 'Detail Pelamar',
+                    html: `
+                        <div class="text-left small">
+                            <p class="mb-1"><strong>No. HP:</strong> ${escapeHtml(a.phone || '-')}</p>
+                            <p class="mb-1"><strong>Jenis Kelamin:</strong> ${escapeHtml(a.gender || '-')}</p>
+                            <p class="mb-1"><strong>Pendidikan Terakhir:</strong> ${escapeHtml(a.education || '-')}</p>
+                            <p class="mb-1"><strong>Alamat:</strong> ${escapeHtml(a.address || '-')}</p>
+                            <p class="mb-1"><strong>Posisi Dilamar:</strong> ${escapeHtml(a.position || '-')}</p>
+                            <p class="mb-0"><strong>Tanggal Melamar:</strong> ${escapeHtml(a.applied_at_formatted || '-')}</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'Tutup',
+                });
+            });
 
             $(document).on('click', '[data-action]', function () {
                 const card = $(this).closest('[data-id]');
@@ -1022,6 +1196,9 @@
 
                 if (action === 'detail') {
                     showDetail(vacancy);
+                } else if (action === 'applicants') {
+                    $('#applicantsModal').modal('show');
+                    loadApplicants(id, vacancy);
                 } else if (action === 'edit') {
                     fetch(routes.edit(id))
                         .then(res => res.json())
