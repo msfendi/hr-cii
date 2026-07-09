@@ -55,6 +55,14 @@
                             <i class="fas fa-check"></i>
                         </button>
                         @endcanRoute
+                        @canRoute('qr-devices.pending.destroy')
+                        <button
+                            class="btn btn-danger btn-circle btn-sm btn-delete-pending"
+                            data-uuid="{{ $attempt->device_uuid }}"
+                            title="Hapus Percobaan">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        @endcanRoute
                         </td>
                     </tr>
                     @endforeach
@@ -245,6 +253,28 @@
           action: link,
           method: 'POST'
         }).append('@csrf').append('@method("DELETE")').appendTo('body').submit();
+      });
+    });
+
+    // Hapus percobaan scan dari device yang belum terdaftar (panel Menunggu Persetujuan)
+    $('.btn-delete-pending').click(function() {
+      let uuid = $(this).data('uuid');
+      Swal.fire({
+        icon: 'warning',
+        title: 'Hapus percobaan ini?',
+        text: 'Log percobaan scan untuk device ini akan dihapus dari daftar menunggu persetujuan.',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, hapus',
+        cancelButtonText: 'Batal'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          $('<form>', {
+            action: "{{ url('qr-devices/pending') }}/" + uuid,
+            method: 'POST'
+          })
+          .append('@csrf').append('@method("DELETE")')
+          .appendTo('body').submit();
+        }
       });
     });
 

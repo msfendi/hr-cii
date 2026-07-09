@@ -77,6 +77,16 @@ class QrDeviceController extends Controller
         return back();
     }
 
+    public function destroyPendingAttempt($uuid)
+    {
+        QrScanLog::where('device_uuid', $uuid)
+            ->where('status', 'failed_device_not_registered')
+            ->delete();
+
+        Alert::success('Berhasil', 'Percobaan device dihapus dari daftar menunggu persetujuan');
+        return back();
+    }
+
     public function toggle(QrAuthorizedDevice $qrDevice)
     {
         $qrDevice->update(['is_active' => !$qrDevice->is_active]);

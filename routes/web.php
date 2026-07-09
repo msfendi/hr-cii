@@ -942,6 +942,7 @@ Route::middleware(['auth', 'permission']) // ganti/tambahkan middleware role adm
         Route::patch('/admin/qr-devices/{qrDevice}/toggle', [QrDeviceController::class, 'toggle'])->name('qr-devices.toggle');
         Route::delete('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'destroy'])->name('qr-devices.destroy');
         Route::patch('/admin/qr-devices/{qrDevice}/rename', [QrDeviceController::class, 'rename'])->name('qr-devices.rename');
+        Route::delete('qr-devices/pending/{uuid}', [QrDeviceController::class, 'destroyPendingAttempt'])->name('qr-devices.pending.destroy');
     });
 
 

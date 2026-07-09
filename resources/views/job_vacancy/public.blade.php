@@ -821,10 +821,17 @@
         }
 
         $(document).ready(function () {
-            // Tampilkan peringatan penipuan setiap kali halaman dibuka.
-            $('#scamWarningModal').modal('show');
+            // Tampilkan peringatan penipuan hanya 1x per hari
+            const SCAM_WARNING_KEY = 'chutex_scam_warning_last_shown';
+            const todayStr = new Date().toISOString().slice(0, 10); // format YYYY-MM-DD
+            const lastShown = localStorage.getItem(SCAM_WARNING_KEY);
+
+            if (lastShown !== todayStr) {
+                $('#scamWarningModal').modal('show');
+            }
 
             $('#btnUnderstandWarning').on('click', function () {
+                localStorage.setItem(SCAM_WARNING_KEY, todayStr);
                 $('#scamWarningModal').modal('hide');
             });
 
