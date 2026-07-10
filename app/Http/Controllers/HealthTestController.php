@@ -46,6 +46,8 @@ class HealthTestController extends Controller
             'nik' => $request->nik,
 
             'cacat' => $request->cacat ?? 0,
+            'tinggi' => $request->tinggi ?? 0,
+            'berat' => $request->berat ?? 0,
             'buta_warna' => $request->buta_warna ?? 0,
             'visus_mata_od' => $request->visus_mata_od,
             'visus_mata_os' => $request->visus_mata_os,
@@ -72,6 +74,8 @@ class HealthTestController extends Controller
             'kesimpulan' => $request->kesimpulan ?? 0,
             'remark' => $request->remark
         ]);
+
+        // dd($healthTest);
 
         /*
         |--------------------------------------------------------------------------

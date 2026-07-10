@@ -38,11 +38,11 @@
                                  <!-- AUTO BODY -->
                                  <div class="form-group">
                                     <label>Tinggi Badan</label>
-                                    <input type="text" id="tinggi" class="form-control" readonly>
+                                    <input type="text" name="tinggi" id="tinggi" class="form-control" readonly>
                                  </div>
                                  <div class="form-group">
                                     <label>Berat Badan</label>
-                                    <input type="text" id="berat" class="form-control" readonly>
+                                    <input type="text" name="berat" id="berat" class="form-control" readonly>
                                  </div>
                                  @php
                                  $kondisiFisik=[
