@@ -129,7 +129,7 @@
                       <input type="text" name="tekanan_darah" class="form-control mb-2" placeholder="Tekanan Darah" value="{{ $data->tekanan_darah }}">
                       <input type="number" name="respirasi" class="form-control mb-2" placeholder="Respirasi" value="{{ $data->respirasi }}">
                       <input type="number" name="denyut" class="form-control mb-2" placeholder="Denyut" value="{{ $data->denyut }}">
-                      <input type="number" name="suhu" class="form-control" placeholder="Suhu" value="{{ $data->suhu }}">
+                      <input type="number" name="suhu" class="form-control" placeholder="Suhu" value="{{ $data->suhu }}" step="any">
                     </div>
                   </div>
                 </div>
