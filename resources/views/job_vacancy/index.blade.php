@@ -3,6 +3,94 @@
 @include('layout.header')
 <style>
 #applicantsSummary .detail-stat-item{ width:100%; }
+.applicant-avatar{
+    width:44px;
+    height:44px;
+    min-width:44px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:1rem;
+    color:#fff;
+}
+.avatar-L{ background:#4e73df; }
+.avatar-P{ background:#e84393; }
+.avatar-default{ background:#858796; }
+
+#applicantsTable td{ vertical-align:middle; font-size:.8rem; }
+#applicantsTable .cell-title{ font-weight:700; color:#2e2f45; }
+#applicantsTable .cell-sub{ color:#858796; }
+#applicantsTable tbody tr{ cursor:pointer; }
+#applicantsTable tbody tr:hover{ background:#f8f9fc; }
+
+.badge-pendidikan{ font-size:.7rem; font-weight:700; background:#eef2ff; color:#4e73df; }
+
+/* ===== Modal Detail Pelamar ===== */
+#applicantDetailModal .modal-dialog{ max-width:900px; }
+.applicant-hero{
+    display:flex;
+    align-items:center;
+    gap:1rem;
+    background:linear-gradient(135deg,#4e73df,#6f86e6);
+    color:#fff;
+    border-radius:.9rem;
+    padding:1.25rem 1.5rem;
+    margin-bottom:1.25rem;
+}
+.applicant-hero .applicant-avatar{ width:64px; height:64px; font-size:1.5rem; background:rgba(255,255,255,.25); }
+.applicant-hero-name{ font-size:1.2rem; font-weight:700; }
+.applicant-hero-meta{ font-size:.82rem; opacity:.9; }
+
+.detail-group-title{
+    font-size:.75rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    color:#4e73df;
+    margin:1rem 0 .5rem;
+    display:flex;
+    align-items:center;
+    gap:.4rem;
+}
+.detail-group-title:first-child{ margin-top:0; }
+
+.detail-kv{
+    display:grid;
+    grid-template-columns:170px 1fr;
+    gap:.35rem .75rem;
+    font-size:.83rem;
+}
+.detail-kv dt{ color:#96999f; font-weight:600; }
+.detail-kv dd{ margin:0; color:#2e2f45; }
+
+.process-step{
+    display:flex;
+    align-items:center;
+    gap:.6rem;
+    padding:.5rem .75rem;
+    border-radius:.6rem;
+    background:#f8f9fc;
+    border:1px solid #eaecf4;
+    margin-bottom:.5rem;
+}
+.process-step-icon{ width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.8rem; color:#fff; }
+.process-pass{ background:#1cc88a; }
+.process-fail{ background:#e74a3b; }
+.process-pending{ background:#d1d3e2; }
+
+.file-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+    font-size:.75rem;
+    background:#f4f6fb;
+    border:1px solid #e3e6f0;
+    padding:.3rem .6rem;
+    border-radius:.5rem;
+    margin:0 .35rem .35rem 0;
+}
 
 .vacancy-card{
     border:none;
@@ -598,12 +686,15 @@
                         <table class="table table-bordered table-hover" id="applicantsTable" style="width:100%">
                             <thead class="thead-light">
                                 <tr>
-                                    <th style="width:40px;">#</th>
-                                    <th>Nama</th>
-                                    <th>No. HP</th>
-                                    <th>Pendidikan</th>
-                                    <th>Tanggal Melamar</th>
-                                    <th style="width:60px;">Aksi</th>
+                                    <th style="width:35px;">#</th>
+                                    <th style="min-width:200px;">Nama Pelamar</th>
+                                    <th style="min-width:170px;">NIK / TTL</th>
+                                    <th style="min-width:150px;">Pendidikan</th>
+                                    <th style="min-width:100px;">Fisik</th>
+                                    <th style="min-width:170px;">Kontak</th>
+                                    <th style="min-width:140px;">Agama / Status</th>
+                                    <th style="min-width:140px;">Departemen / Posisi</th>
+                                    <th style="min-width:110px;">Tanggal Apply</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -616,6 +707,23 @@
             </div>
         </div>
     </div>
+    {{-- ===================== MODAL DETAIL PELAMAR (serinci mungkin) ===================== --}}
+<div class="modal fade" id="applicantDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title font-weight-bold">Detail Pelamar</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body" id="applicantDetailBody" style="max-height:75vh;overflow-y:auto;">
+                <!-- diisi via JS -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -787,6 +895,78 @@
         function escapeHtml(str) {
             return $('<div>').text(str == null ? '' : str).html();
         }
+        function genderAvatarClass(gender) {
+            const g = (gender || '').toUpperCase();
+            if (g.startsWith('L')) return 'avatar-L';
+            if (g.startsWith('P')) return 'avatar-P';
+            return 'avatar-default';
+        }
+
+        function genderLabel(gender) {
+            const g = (gender || '').toUpperCase();
+            if (g.startsWith('L')) return 'Laki-laki';
+            if (g.startsWith('P')) return 'Perempuan';
+            return '-';
+        }
+
+        function genderIcon(gender) {
+            const g = (gender || '').toUpperCase();
+            if (g.startsWith('L')) return 'fa-mars';
+            if (g.startsWith('P')) return 'fa-venus';
+            return 'fa-genderless';
+        }
+
+        function initials(name) {
+            if (!name) return '?';
+            return name.trim().charAt(0).toUpperCase();
+        }
+
+        function renderApplicantRow(a) {
+            const avatarClass = genderAvatarClass(a.gender);
+
+            const nameCell = `
+                <div class="d-flex align-items-center">
+                    <div class="applicant-avatar ${avatarClass}">${initials(a.name)}</div>
+                    <div class="ml-2">
+                        <div class="cell-title">${escapeHtml(a.name || '-')}</div>
+                        <div class="cell-sub"><i class="fas ${genderIcon(a.gender)} mr-1"></i>${genderLabel(a.gender)}</div>
+                        <div class="cell-sub text-primary"><i class="fas fa-briefcase mr-1"></i>${escapeHtml(a.position || '-')}</div>
+                    </div>
+                </div>`;
+
+            const nikCell = `
+                <div class="cell-title">${escapeHtml(a.nik || '-')}</div>
+                <div class="cell-sub"><i class="fas fa-map-marker-alt mr-1"></i>${escapeHtml(a.birth_place || '-')}</div>
+                <div class="cell-sub"><i class="fas fa-birthday-cake mr-1"></i>${escapeHtml(a.birth_date_formatted || '-')}</div>
+                <div class="cell-sub">${escapeHtml(a.age || '-')}</div>`;
+
+            const eduCell = `
+                <span class="badge badge-pendidikan">${escapeHtml(a.education || '-')}</span>
+                <div class="cell-sub mt-1">${escapeHtml(a.school_name || '-')}</div>
+                ${a.major ? `<div class="cell-sub">Jurusan: ${escapeHtml(a.major)}</div>` : ''}`;
+
+            const fisikCell = `
+                <div class="cell-sub"><i class="fas fa-ruler-vertical text-info mr-1"></i>${a.height ? a.height + ' cm' : '-'}</div>
+                <div class="cell-sub"><i class="fas fa-weight text-warning mr-1"></i>${a.weight ? a.weight + ' kg' : '-'}</div>`;
+
+            const kontakCell = `
+                <div class="cell-title"><i class="fas fa-phone-alt text-success mr-1"></i>${escapeHtml(a.phone || '-')}</div>
+                <div class="cell-sub"><i class="fas fa-map-marker-alt mr-1"></i>${escapeHtml(a.kabupaten || '-')}</div>
+                <div class="cell-sub">Domisili: ${escapeHtml(a.domisili || '-')}</div>`;
+
+            const agamaCell = `
+                <div class="cell-title">${escapeHtml(a.religion || '-')}</div>
+                <div class="cell-sub">${escapeHtml(a.marital_status || '-')}</div>
+                <div class="cell-sub">${a.dependents ?? 0} tanggungan</div>`;
+
+            const deptCell = `
+                <div class="cell-sub">${escapeHtml(a.department || '-')}</div>
+                <div class="cell-sub text-primary">${escapeHtml(a.position || '-')}</div>`;
+
+            const tglCell = `<div class="cell-title">${escapeHtml(a.applied_at_formatted || '-')}</div>`;
+
+            return [a.no, nameCell, nikCell, eduCell, fisikCell, kontakCell, agamaCell, deptCell, tglCell];
+        }
 
         function initApplicantsTable() {
             if ($.fn.DataTable.isDataTable('#applicantsTable')) {
@@ -869,17 +1049,15 @@
                     }
 
                     data.applicants.forEach(a => {
-                        applicantsDataTable.row.add([
-                            a.no,
-                            `<div class="font-weight-bold">${escapeHtml(a.name || '-')}</div>
-                            <div class="small text-muted">${escapeHtml(a.gender || '-')}</div>`,
-                            escapeHtml(a.phone || '-'),
-                            escapeHtml(a.education || '-'),
-                            escapeHtml(a.applied_at_formatted || '-'),
-                            `<button type="button" class="btn btn-sm btn-light" data-detail-id="${a.id}" title="Detail Lengkap">
-                                <i class="fas fa-eye"></i>
-                            </button>`,
-                        ]);
+                        applicantsDataTable.row.add(renderApplicantRow(a)).node().dataset.id = a.id;
+                    });
+                    applicantsDataTable.draw();
+
+                    // klik baris untuk buka detail lengkap
+                    $('#applicantsTable tbody').off('click', 'tr').on('click', 'tr', function () {
+                        const id = $(this).data('id');
+                        const a = applicantsStore.find(x => String(x.id) === String(id));
+                        if (a) showApplicantDetail(a);
                     });
 
                     applicantsDataTable.draw();
@@ -889,6 +1067,173 @@
                     const detail = err && err.message ? err.message : 'Terjadi kesalahan saat memuat data pelamar.';
                     Swal.fire('Gagal', detail, 'error');
                 });
+        }
+
+        function processStepHtml(label, icon, step) {
+            const status = (step.status || '').toString().toLowerCase();
+            let stateClass = 'process-pending';
+            let stateLabel = 'Belum diproses';
+
+            if (status === '1' || status === 'lulus' || status === 'pass' || status === 'ya') {
+                stateClass = 'process-pass';
+                stateLabel = 'Lulus';
+            } else if (status === '0' || status === 'gagal' || status === 'fail' || status === 'tidak') {
+                stateClass = 'process-fail';
+                stateLabel = 'Tidak Lulus';
+            }
+
+            return `
+                <div class="process-step">
+                    <div class="process-step-icon ${stateClass}"><i class="fas ${icon}"></i></div>
+                    <div class="flex-grow-1">
+                        <div class="font-weight-bold small">${label}</div>
+                        <div class="cell-sub">${stateLabel}${step.date ? ' • ' + escapeHtml(step.date) : ''}</div>
+                        ${step.comment ? `<div class="cell-sub font-italic">"${escapeHtml(step.comment)}"</div>` : ''}
+                    </div>
+                </div>`;
+        }
+
+        function fileChip(label, filename) {
+            if (!filename) {
+                return `<span class="file-chip text-muted"><i class="fas fa-times-circle"></i>${label}: belum diupload</span>`;
+            }
+            // Sesuaikan base URL storage kamu di sini, contoh: `/storage/pelamar/${filename}`
+            const url = `/storage/${filename}`;
+            return `<a href="${url}" target="_blank" class="file-chip" style="color:#4e73df;">
+                <i class="fas fa-paperclip"></i>${label}
+            </a>`;
+        }
+
+        function renderPersonList(label, data) {
+            if (!data) return '';
+            if (typeof data === 'string') {
+                return `<div class="detail-group-title"><i class="fas fa-users"></i>${label}</div><p class="cell-sub">${escapeHtml(data)}</p>`;
+            }
+            const list = Array.isArray(data) ? data : [data];
+            const rows = list.map(item => {
+                if (typeof item === 'object' && item !== null) {
+                    const parts = Object.entries(item).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(' • ');
+                    return `<li class="cell-sub">${parts}</li>`;
+                }
+                return `<li class="cell-sub">${escapeHtml(item)}</li>`;
+            }).join('');
+            return `<div class="detail-group-title"><i class="fas fa-users"></i>${label}</div><ul class="pl-3 mb-0">${rows}</ul>`;
+        }
+
+        function showApplicantDetail(a) {
+            const avatarClass = genderAvatarClass(a.gender);
+
+            const html = `
+                <div class="applicant-hero">
+                    <div class="applicant-avatar ${avatarClass}">${initials(a.name)}</div>
+                    <div>
+                        <div class="applicant-hero-name">${escapeHtml(a.name || '-')}</div>
+                        <div class="applicant-hero-meta">
+                            <i class="fas ${genderIcon(a.gender)} mr-1"></i>${genderLabel(a.gender)}
+                            &middot; <i class="fas fa-briefcase mr-1"></i>${escapeHtml(a.position || '-')}
+                            &middot; <i class="fas fa-building mr-1"></i>${escapeHtml(a.department || '-')}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-group-title"><i class="fas fa-id-card"></i>Data Diri</div>
+                <dl class="detail-kv">
+                    <dt>NIK</dt><dd>${escapeHtml(a.nik || '-')}</dd>
+                    <dt>NPK</dt><dd>${escapeHtml(a.npk || '-')}</dd>
+                    <dt>No. KK</dt><dd>${escapeHtml(a.no_kk || '-')}</dd>
+                    <dt>Tempat, Tgl Lahir</dt><dd>${escapeHtml(a.birth_place || '-')}, ${escapeHtml(a.birth_date_formatted || '-')}</dd>
+                    <dt>Usia</dt><dd>${escapeHtml(a.age || '-')}</dd>
+                    <dt>Agama</dt><dd>${escapeHtml(a.religion || '-')}</dd>
+                    <dt>Status Pernikahan</dt><dd>${escapeHtml(a.marital_status || '-')}</dd>
+                    <dt>Jumlah Tanggungan</dt><dd>${a.dependents ?? '-'}</dd>
+                    <dt>Nama Ibu</dt><dd>${escapeHtml(a.mother_name || '-')}</dd>
+                    <dt>Kewarganegaraan</dt><dd>${escapeHtml(a.nationality || '-')}</dd>
+                    <dt>No. SIM</dt><dd>${escapeHtml(a.sim_number || '-')}</dd>
+                    <dt>Ikut KB</dt><dd>${a.ikut_kb ? 'Ya' : 'Tidak'}</dd>
+                    <dt>Hobi / Bakat</dt><dd>${escapeHtml(a.hobby || '-')}</dd>
+                    <dt>Moda Transportasi</dt><dd>${escapeHtml(a.transportation || '-')}</dd>
+                </dl>
+
+                <div class="detail-group-title"><i class="fas fa-ruler-combined"></i>Fisik</div>
+                <dl class="detail-kv">
+                    <dt>Tinggi Badan</dt><dd>${a.height ? a.height + ' cm' : '-'}</dd>
+                    <dt>Berat Badan</dt><dd>${a.weight ? a.weight + ' kg' : '-'}</dd>
+                </dl>
+
+                <div class="detail-group-title"><i class="fas fa-map-marked-alt"></i>Alamat & Domisili</div>
+                <dl class="detail-kv">
+                    <dt>Alamat KTP</dt><dd>${escapeHtml(a.address || '-')}</dd>
+                    <dt>Kabupaten (KTP)</dt><dd>${escapeHtml(a.kabupaten || '-')}</dd>
+                    <dt>Alamat Domisili</dt><dd>${escapeHtml(a.domisili || '-')}</dd>
+                    <dt>Alamat Saat Ini</dt><dd>${escapeHtml(a.current_address || '-')}</dd>
+                    <dt>Kabupaten Saat Ini</dt><dd>${escapeHtml(a.current_kabupaten || '-')}</dd>
+                    <dt>Status Domisili</dt><dd>${escapeHtml(a.domisili_status || '-')}</dd>
+                </dl>
+
+                <div class="detail-group-title"><i class="fas fa-graduation-cap"></i>Pendidikan</div>
+                <dl class="detail-kv">
+                    <dt>Jenjang</dt><dd>${escapeHtml(a.education || '-')}</dd>
+                    <dt>Nama Sekolah</dt><dd>${escapeHtml(a.school_name || '-')}</dd>
+                    <dt>Kabupaten Sekolah</dt><dd>${escapeHtml(a.school_kabupaten || '-')}</dd>
+                    <dt>Jurusan</dt><dd>${escapeHtml(a.major || '-')}</dd>
+                </dl>
+                ${renderPersonList('Riwayat Pendidikan Lengkap', a.education_history)}
+
+                <div class="detail-group-title"><i class="fas fa-phone-alt"></i>Kontak & Kontak Darurat</div>
+                <dl class="detail-kv">
+                    <dt>No. HP</dt><dd>${escapeHtml(a.phone || '-')}</dd>
+                    <dt>BPJS Ketenagakerjaan</dt><dd>${escapeHtml(a.bpjs_tk || '-')}</dd>
+                    <dt>BPJS Kesehatan</dt><dd>${escapeHtml(a.bpjs_kes || '-')}</dd>
+                    <dt>Nama Kontak Darurat</dt><dd>${escapeHtml(a.emergency_name || '-')}</dd>
+                    <dt>Hubungan</dt><dd>${escapeHtml(a.emergency_relation || '-')}</dd>
+                    <dt>No. Telp Darurat</dt><dd>${escapeHtml(a.emergency_phone || '-')}</dd>
+                </dl>
+
+                ${renderPersonList('Data Ayah', a.father_data)}
+                ${renderPersonList('Data Ibu', a.mother_data)}
+                ${renderPersonList('Saudara Kandung', a.siblings_data)}
+                ${renderPersonList('Data Anak', a.children_data)}
+
+                <div class="detail-group-title"><i class="fas fa-briefcase"></i>Pengalaman Kerja & Motivasi</div>
+                ${a.motivation ? `<p class="cell-sub mb-2"><strong>Motivasi:</strong> ${escapeHtml(a.motivation)}</p>` : ''}
+                ${a.extracurricular ? `<p class="cell-sub mb-2"><strong>Kegiatan Ekstra:</strong> ${escapeHtml(a.extracurricular)}</p>` : ''}
+                ${renderPersonList('Riwayat Pekerjaan', a.work_experience)}
+
+                <div class="detail-group-title"><i class="fas fa-tasks"></i>Proses Rekrutmen</div>
+                ${processStepHtml('Tes', 'fa-file-alt', a.process.test)}
+                ${processStepHtml('Kesehatan', 'fa-heartbeat', a.process.kesehatan)}
+                ${processStepHtml('Interview', 'fa-comments', a.process.interview)}
+                ${a.process.user.result || a.process.user.comment ? `
+                    <div class="process-step">
+                        <div class="process-step-icon process-pending"><i class="fas fa-user-check"></i></div>
+                        <div class="flex-grow-1">
+                            <div class="font-weight-bold small">Keputusan User / HR</div>
+                            <div class="cell-sub">${escapeHtml(a.process.user.result || '-')}</div>
+                            ${a.process.user.comment ? `<div class="cell-sub font-italic">"${escapeHtml(a.process.user.comment)}"</div>` : ''}
+                        </div>
+                    </div>` : ''}
+                <dl class="detail-kv mt-2">
+                    <dt>Status Apply</dt><dd>${escapeHtml(a.status_apply || '-')}</dd>
+                    <dt>Tanggal Diterima</dt><dd>${escapeHtml(a.process.accepted_at || '-')}</dd>
+                    <dt>Tanggal Melamar</dt><dd>${escapeHtml(a.applied_at_formatted || '-')}</dd>
+                </dl>
+
+                <div class="detail-group-title"><i class="fas fa-paperclip"></i>Dokumen</div>
+                <div>
+                    ${fileChip('Surat Lamaran', a.files.cover_letter)}
+                    ${fileChip('CV', a.files.cv)}
+                    ${fileChip('KTP', a.files.ktp)}
+                    ${fileChip('KK', a.files.kk)}
+                    ${fileChip('Ijazah', a.files.ijazah)}
+                    ${fileChip('Akta Kelahiran', a.files.akta)}
+                    ${fileChip('SKCK', a.files.skck)}
+                    ${fileChip('Surat Sehat', a.files.surat_sehat)}
+                    ${fileChip('Pas Foto', a.files.photo)}
+                </div>
+            `;
+
+            $('#applicantDetailBody').html(html);
+            $('#applicantDetailModal').modal('show');
         }
 
         function loadVacancies() {
@@ -1165,26 +1510,26 @@
             $(document).on('click', '.btn-remove-row', function () {
                 $(this).closest('.criteria-row, .document-row').remove();
             });
-            $(document).on('click', '[data-detail-id]', function () {
-                const id = $(this).data('detail-id');
-                const a = applicantsStore.find(x => String(x.id) === String(id));
-                if (!a) return;
+            // $(document).on('click', '[data-detail-id]', function () {
+            //     const id = $(this).data('detail-id');
+            //     const a = applicantsStore.find(x => String(x.id) === String(id));
+            //     if (!a) return;
 
-                Swal.fire({
-                    title: a.name || 'Detail Pelamar',
-                    html: `
-                        <div class="text-left small">
-                            <p class="mb-1"><strong>No. HP:</strong> ${escapeHtml(a.phone || '-')}</p>
-                            <p class="mb-1"><strong>Jenis Kelamin:</strong> ${escapeHtml(a.gender || '-')}</p>
-                            <p class="mb-1"><strong>Pendidikan Terakhir:</strong> ${escapeHtml(a.education || '-')}</p>
-                            <p class="mb-1"><strong>Alamat:</strong> ${escapeHtml(a.address || '-')}</p>
-                            <p class="mb-1"><strong>Posisi Dilamar:</strong> ${escapeHtml(a.position || '-')}</p>
-                            <p class="mb-0"><strong>Tanggal Melamar:</strong> ${escapeHtml(a.applied_at_formatted || '-')}</p>
-                        </div>
-                    `,
-                    confirmButtonText: 'Tutup',
-                });
-            });
+            //     Swal.fire({
+            //         title: a.name || 'Detail Pelamar',
+            //         html: `
+            //             <div class="text-left small">
+            //                 <p class="mb-1"><strong>No. HP:</strong> ${escapeHtml(a.phone || '-')}</p>
+            //                 <p class="mb-1"><strong>Jenis Kelamin:</strong> ${escapeHtml(a.gender || '-')}</p>
+            //                 <p class="mb-1"><strong>Pendidikan Terakhir:</strong> ${escapeHtml(a.education || '-')}</p>
+            //                 <p class="mb-1"><strong>Alamat:</strong> ${escapeHtml(a.address || '-')}</p>
+            //                 <p class="mb-1"><strong>Posisi Dilamar:</strong> ${escapeHtml(a.position || '-')}</p>
+            //                 <p class="mb-0"><strong>Tanggal Melamar:</strong> ${escapeHtml(a.applied_at_formatted || '-')}</p>
+            //             </div>
+            //         `,
+            //         confirmButtonText: 'Tutup',
+            //     });
+            // });
 
             $(document).on('click', '[data-action]', function () {
                 const card = $(this).closest('[data-id]');

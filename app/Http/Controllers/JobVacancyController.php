@@ -422,13 +422,80 @@ class JobVacancyController extends Controller
                 ->join('pelamar_details', 'pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
                 ->where('pelamar_details.jabatan', $jobVacancy->position)
                 ->select(
+                    // ===== PELAMAR =====
                     'PELAMAR.ID as id',
+                    'PELAMAR.NPK as npk',
                     'PELAMAR.NAMA as name',
-                    'PELAMAR.HP as phone',
                     'PELAMAR.JENIS_KELAMIN as gender',
+                    'PELAMAR.TMPT_LAHIR as birth_place',
+                    'PELAMAR.TGL_LAHIR as birth_date',
+                    'PELAMAR.TMK as tmk',
                     'PELAMAR.ALAMAT_LENGKAP as address',
-                    'pelamar_details.jabatan as position',
+                    'PELAMAR.KABUPATEN as kabupaten',
+                    'PELAMAR.ALAMAT_DOMISILI as domisili',
                     'PELAMAR.PENDIDIKAN as education',
+                    'PELAMAR.NAMA_SEKOLAH as school_name',
+                    'PELAMAR.KABUPATEN_SEKOLAH as school_kabupaten',
+                    'PELAMAR.JURUSAN as major',
+                    'PELAMAR.TINGGI_BADAN as height',
+                    'PELAMAR.BERAT_BADAN as weight',
+                    'PELAMAR.HP as phone',
+                    'PELAMAR.AGAMA as religion',
+                    'PELAMAR.NIK as nik',
+                    'PELAMAR.NO_KK as no_kk',
+                    'PELAMAR.IBU as mother_name',
+                    'PELAMAR.STATUS as marital_status',
+                    'PELAMAR.TANGGUNGAN as dependents',
+                    'PELAMAR.IS_KONTRAK as is_kontrak',
+                    // ===== pelamar_details =====
+                    'pelamar_details.jabatan as position',
+                    'pelamar_details.department as department',
+                    'pelamar_details.nomor_sim as sim_number',
+                    'pelamar_details.warga_negara as nationality',
+                    'pelamar_details.ikut_kb as ikut_kb',
+                    'pelamar_details.bakat_hobby as hobby',
+                    'pelamar_details.mode_transportasi as transportation',
+                    'pelamar_details.bpjs_tk as bpjs_tk',
+                    'pelamar_details.bpjs_kes as bpjs_kes',
+                    'pelamar_details.alamat_skrg as current_address',
+                    'pelamar_details.kabupaten_kota_skrg as current_kabupaten',
+                    'pelamar_details.status_domisili as domisili_status',
+                    'pelamar_details.nama_ktk_darurat as emergency_name',
+                    'pelamar_details.hubungan as emergency_relation',
+                    'pelamar_details.no_telp_darurat as emergency_phone',
+                    'pelamar_details.motivasi as motivation',
+                    'pelamar_details.kegiatan_ekstra as extracurricular',
+                    'pelamar_details.pengalaman_kerja as work_experience',
+                    'pelamar_details.data_ayah as father_data',
+                    'pelamar_details.data_ibu as mother_data',
+                    'pelamar_details.saudara_kandung as siblings_data',
+                    'pelamar_details.data_anak as children_data',
+                    'pelamar_details.riwayat_pendidikan as education_history',
+                    'pelamar_details.file_surat_lamaran as file_cover_letter',
+                    'pelamar_details.file_cv as file_cv',
+                    'pelamar_details.file_ktp as file_ktp',
+                    'pelamar_details.file_kk as file_kk',
+                    'pelamar_details.file_ijasah as file_ijazah',
+                    'pelamar_details.file_akta_kelahiran as file_akta',
+                    'pelamar_details.file_skck as file_skck',
+                    'pelamar_details.file_surat_sehat as file_surat_sehat',
+                    'pelamar_details.file_pas_foto as file_photo',
+                    'pelamar_details.status_apply as status_apply',
+                    'pelamar_details.is_test as is_test',
+                    'pelamar_details.tgl_test as tgl_test',
+                    'pelamar_details.is_kesehatan as is_kesehatan',
+                    'pelamar_details.tgl_kesehatan as tgl_kesehatan',
+                    'pelamar_details.is_interview as is_interview',
+                    'pelamar_details.tgl_interview as tgl_interview',
+                    'pelamar_details.tgl_diterima as tgl_diterima',
+                    'pelamar_details.result_test as result_test',
+                    'pelamar_details.comment_test as comment_test',
+                    'pelamar_details.result_kesehatan as result_kesehatan',
+                    'pelamar_details.comment_kesehatan as comment_kesehatan',
+                    'pelamar_details.result_interview as result_interview',
+                    'pelamar_details.comment_interview as comment_interview',
+                    'pelamar_details.result_user as result_user',
+                    'pelamar_details.comment_user as comment_user',
                     'pelamar_details.created_at as applied_at'
                 )
                 ->get()
@@ -442,18 +509,110 @@ class JobVacancyController extends Controller
 
             $rows = $applicants->map(function ($a, $index) {
                 $appliedAt = $a->applied_at ? Carbon::parse($a->applied_at) : null;
+                $birthDate = $a->birth_date ? Carbon::parse($a->birth_date) : null;
+
+                $age = null;
+                if ($birthDate) {
+                    $diff = $birthDate->diff(now());
+                    $age = "{$diff->y} Tahun {$diff->m} Bulan {$diff->d} Hari";
+                }
+
+                $decode = fn($v) => $this->tryJsonDecode($v);
 
                 return [
                     'no' => $index + 1,
                     'id' => $a->id,
+                    'npk' => $a->npk,
                     'name' => $a->name,
-                    'phone' => $a->phone,
                     'gender' => $a->gender,
+                    'birth_place' => $a->birth_place,
+                    'birth_date_formatted' => optional($birthDate)->translatedFormat('d M Y'),
+                    'age' => $age,
                     'address' => $a->address,
-                    'position' => $a->position,
+                    'kabupaten' => $a->kabupaten,
+                    'domisili' => $a->domisili,
                     'education' => $a->education,
+                    'school_name' => $a->school_name,
+                    'school_kabupaten' => $a->school_kabupaten,
+                    'major' => $a->major,
+                    'height' => $a->height,
+                    'weight' => $a->weight,
+                    'phone' => $a->phone,
+                    'religion' => $a->religion,
+                    'nik' => $a->nik,
+                    'no_kk' => $a->no_kk,
+                    'mother_name' => $a->mother_name,
+                    'marital_status' => $a->marital_status,
+                    'dependents' => $a->dependents,
+                    'is_kontrak' => $a->is_kontrak,
+
+                    'position' => $a->position,
+                    'department' => $a->department,
+                    'sim_number' => $a->sim_number,
+                    'nationality' => $a->nationality,
+                    'ikut_kb' => (bool) $a->ikut_kb,
+                    'hobby' => $a->hobby,
+                    'transportation' => $a->transportation,
+                    'bpjs_tk' => $a->bpjs_tk,
+                    'bpjs_kes' => $a->bpjs_kes,
+                    'current_address' => $a->current_address,
+                    'current_kabupaten' => $a->current_kabupaten,
+                    'domisili_status' => $a->domisili_status,
+
+                    'emergency_name' => $a->emergency_name,
+                    'emergency_relation' => $a->emergency_relation,
+                    'emergency_phone' => $a->emergency_phone,
+
+                    'motivation' => $a->motivation,
+                    'extracurricular' => $a->extracurricular,
+                    'work_experience' => $decode($a->work_experience),
+                    'father_data' => $decode($a->father_data),
+                    'mother_data' => $decode($a->mother_data),
+                    'siblings_data' => $decode($a->siblings_data),
+                    'children_data' => $decode($a->children_data),
+                    'education_history' => $decode($a->education_history),
+
+                    'files' => [
+                        'cover_letter' => $a->file_cover_letter,
+                        'cv' => $a->file_cv,
+                        'ktp' => $a->file_ktp,
+                        'kk' => $a->file_kk,
+                        'ijazah' => $a->file_ijazah,
+                        'akta' => $a->file_akta,
+                        'skck' => $a->file_skck,
+                        'surat_sehat' => $a->file_surat_sehat,
+                        'photo' => $a->file_photo,
+                    ],
+
+                    'status_apply' => $a->status_apply,
+                    'process' => [
+                        'test' => [
+                            'status' => $a->is_test,
+                            'date' => optional($a->tgl_test ? Carbon::parse($a->tgl_test) : null)->translatedFormat('d M Y'),
+                            'result' => $a->result_test,
+                            'comment' => $a->comment_test,
+                        ],
+                        'kesehatan' => [
+                            'status' => $a->is_kesehatan,
+                            'date' => optional($a->tgl_kesehatan ? Carbon::parse($a->tgl_kesehatan) : null)->translatedFormat('d M Y'),
+                            'result' => $a->result_kesehatan,
+                            'comment' => $a->comment_kesehatan,
+                        ],
+                        'interview' => [
+                            'status' => $a->is_interview,
+                            'date' => optional($a->tgl_interview ? Carbon::parse($a->tgl_interview) : null)->translatedFormat('d M Y'),
+                            'result' => $a->result_interview,
+                            'comment' => $a->comment_interview,
+                        ],
+                        'user' => [
+                            'result' => $a->result_user,
+                            'comment' => $a->comment_user,
+                        ],
+                        'accepted_at' => optional($a->tgl_diterima ? Carbon::parse($a->tgl_diterima) : null)->translatedFormat('d M Y'),
+                    ],
+
                     'applied_at' => optional($appliedAt)->format('Y-m-d H:i'),
-                    'applied_at_formatted' => optional($appliedAt)->translatedFormat('d M Y, H:i'),
+                    'applied_at_formatted' => optional($appliedAt)->translatedFormat('d M Y'),
                 ];
             })->values();
 
@@ -473,5 +632,21 @@ class JobVacancyController extends Controller
                 'line' => $e->getLine(),
             ], 500);
         }
+    }
+
+    /**
+     * Beberapa kolom nvarchar(max) di pelamar_details (data_ayah, saudara_kandung, dll)
+     * kemungkinan menyimpan JSON. Coba decode; kalau bukan JSON valid, kembalikan
+     * sebagai teks polos supaya tetap tampil di frontend.
+     */
+    private function tryJsonDecode(?string $value)
+    {
+        if (!$value) {
+            return null;
+        }
+
+        $decoded = json_decode($value, true);
+
+        return json_last_error() === JSON_ERROR_NONE ? $decoded : $value;
     }
 }
