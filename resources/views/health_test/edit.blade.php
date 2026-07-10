@@ -35,13 +35,89 @@
                             <label class="custom-control-label" for="{{$field}}"> YA </label>
                           </div>
                         </div>
-                      </div> @endforeach <div class="form-group">
-                        <label>Visus Mata</label>
-                        <select name="visus_mata" class="form-control">
-                          <option value="OD" {{ $data->visus_mata=='OD'?'selected':'' }}>OD</option>
-                          <option value="OS" {{ $data->visus_mata=='OS'?'selected':'' }}>OS</option>
-                        </select>
+                      </div> @endforeach
+                      <div class="form-group">
+                          <div class="row">
+                              <div class="col-md-6">
+                                  <label>Visus Mata OD</label>
+                                  <input
+                                      type="text"
+                                      name="visus_mata_od"
+                                      class="form-control mb-2"
+                                      placeholder="Visus Mata OD"
+                                      value="{{ $data->visus_mata_od }}">
+                              </div>
+
+                              <div class="col-md-6">
+                                  <label>Visus Mata OS</label>
+                                  <input
+                                      type="text"
+                                      name="visus_mata_os"
+                                      class="form-control mb-2"
+                                      placeholder="Visus Mata OS"
+                                      value="{{ $data->visus_mata_os }}">
+                              </div>
+                          </div>
                       </div>
+                      <div class="form-group">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label>Abdoment</label>
+                                <input
+                                    type="text"
+                                    name="abdoment"
+                                    class="form-control mb-2"
+                                    placeholder="Abdoment"
+                                    value="{{ $data->abdoment }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label>Gigi</label>
+                                <input
+                                    type="text"
+                                    name="gigi"
+                                    class="form-control mb-2"
+                                    placeholder="Gigi"
+                                    value="{{ $data->gigi }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                      <div class="row">
+                          <div class="col-md-6">
+                              <label>Abdoment</label>
+                              <input
+                                  type="text"
+                                  name="cor_pulmo"
+                                  class="form-control mb-2"
+                                  placeholder="Cor Pulmo"
+                                  value="{{ $data->cor_pulmo }}">
+                          </div>
+
+                          <div class="col-md-6">
+                              <label>THT</label>
+                              <input
+                                  type="text"
+                                  name="tht"
+                                  class="form-control mb-2"
+                                  placeholder="THT"
+                                  value="{{ $data->tht }}">
+                          </div>
+                      </div>
+                  </div>
+                  <div class="form-group">
+                      <div class="row">
+                          <div class="col-md-6">
+                              <label>Extremitas</label>
+                              <input
+                                  type="text"
+                                  name="extreme"
+                                  class="form-control mb-2"
+                                  placeholder="EXTREMITAS"
+                                  value="{{ $data->extreme }}">
+                          </div>
+                      </div>
+                  </div>
                     </div>
                   </div>
                 </div>
@@ -97,16 +173,22 @@
           <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
           <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
           <script>
-            $('.select2').select2({
-              placeholder: 'Pilih Pelamar',
-              width: '100%'
+           $('.select2').select2({
+                placeholder: 'Pilih Pelamar',
+                width: '100%'
             });
+
             /* AUTO BODY DATA */
-            $('#nik').on('change', function() {
-              let opt = $(this).find(':selected');
-              $('#tinggi').val(opt.data('tinggi') ?? '');
-              $('#berat').val(opt.data('berat') ?? '');
+            $('#nik').on('change', function () {
+
+                let opt = $(this).find(':selected');
+
+                $('#tinggi').val(opt.data('tinggi') ?? '');
+                $('#berat').val(opt.data('berat') ?? '');
+                $('#id').val(opt.data('id') ?? '');
+
             });
+
             /* LOAD DATA SAAT EDIT */
             $('#nik').trigger('change');
           </script>

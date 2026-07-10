@@ -79,6 +79,10 @@
                                                     data-tekanan_darah="{{ $row->tekanan_darah }}"
                                                     data-respirasi="{{ $row->respirasi }}"
                                                     data-denyut="{{ $row->denyut }}"
+                                                    data-abdoment="{{ $row->abdoment }}"
+                                                    data-cor_pulmo="{{ $row->cor_pulmo }}"
+                                                    data-tht="{{ $row->tht }}"
+                                                    data-extreme="{{ $row->extreme }}"
 
                                                     data-paru="{{ $row->paru }}"
                                                     data-hepatitis="{{ $row->hepatitis }}"
@@ -271,6 +275,35 @@
                                         </div>
 
                                     </div>
+                                    <hr>
+
+                                        <div class="row">
+
+                                            <div class="col-md-3">
+                                                <b>Abdoment</b>
+
+                                                <div class="border rounded p-2 text-center" id="abdoment"></div>
+                                            </div>
+
+                                            <div class="col-md-3">
+                                                <b>Cor Pulmo</b>
+
+                                                <div class="border rounded p-2 text-center" id="cor_pulmo"></div>
+                                            </div>
+
+                                            <div class="col-md-3">
+                                                <b>THT</b>
+
+                                                <div class="border rounded p-2 text-center" id="tht"></div>
+                                            </div>
+
+                                            <div class="col-md-3">
+                                                <b>Extremitas</b>
+
+                                                <div class="border rounded p-2 text-center" id="extreme"></div>
+                                            </div>
+
+                                        </div>
 
                                 </div>
                             </div>
@@ -444,6 +477,7 @@
             $('#thypoid').html(check(data.thypoid));
             $('#alergi').html(check(data.alergi));
             $('#ashma').html(check(data.ashma));
+            
 
             if (data.lain) {
                 $('#lain_wrapper').show();

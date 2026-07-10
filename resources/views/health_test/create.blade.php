@@ -81,6 +81,38 @@
                                        </div>
                                     </div>
                                  </div>
+                                 
+                                 <div class="form-group">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Abdoment</label>
+                                    <input type="text" name="abdoment" class="form-control mb-2" placeholder="Abdoment">
+                                       </div>
+                                       <div class="col-md-6">
+                                    <label>Gigi</label>
+                                    <input type="text" name="gigi" class="form-control mb-2" placeholder="Gigi">
+                                       </div>
+                                    </div>
+                                 </div><div class="form-group">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Abdoment</label>
+                                    <input type="text" name="cor_pulmo" class="form-control mb-2" placeholder="Cor Pulmo">
+                                       </div>
+                                       <div class="col-md-6">
+                                    <label>THT</label>
+                                    <input type="text" name="tht" class="form-control mb-2" placeholder="THT">
+                                       </div>
+                                    </div>
+                                 </div>
+                                 <div class="form-group">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Extremitas</label>
+                                    <input type="text" name="extreme" class="form-control mb-2" placeholder="EXTREMITAS">
+                                       </div>
+                                    </div>
+                                 </div>
                               </div>
                            </div>
                         </div>
@@ -94,7 +126,7 @@
                                  <input type="text" name="tekanan_darah" class="form-control mb-2" placeholder="Tekanan Darah">
                                  <input type="number" name="respirasi" class="form-control mb-2" placeholder="Respirasi">
                                  <input type="number" name="denyut" class="form-control mb-2" placeholder="Denyut">
-                                 <input type="number" name="suhu" class="form-control" placeholder="Suhu">
+                                 <input type="number" step="any" name="suhu" class="form-control" placeholder="Suhu">
                               </div>
                            </div>
                         </div>

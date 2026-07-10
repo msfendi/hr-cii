@@ -182,4 +182,116 @@ class HealthTestController extends Controller
 
         return $pdf->download('TEST_KESEHATAN_' . $data->NIK . '.pdf');
     }
+
+    public function update(Request $request, $id)
+    {
+        $healthTest = HealthTest::find($id);
+
+        if (!$healthTest) {
+            Alert::error('Failed', 'Health Test tidak ditemukan.');
+            return redirect()->route('health-test.index');
+        }
+
+        $healthTest->update([
+            'nik' => $request->nik,
+
+            'cacat' => $request->cacat ?? 0,
+            'buta_warna' => $request->buta_warna ?? 0,
+
+            'visus_mata_od' => $request->visus_mata_od,
+            'visus_mata_os' => $request->visus_mata_os,
+
+            'abdoment' => $request->abdoment,
+            'gigi' => $request->gigi,
+            'cor_pulmo' => $request->cor_pulmo,
+            'tht' => $request->tht,
+            'extreme' => $request->extreme,
+
+            'tekanan_darah' => $request->tekanan_darah,
+            'respirasi' => $request->respirasi,
+            'denyut' => $request->denyut,
+            'suhu' => $request->suhu,
+
+            'paru' => $request->paru ?? 0,
+            'hepatitis' => $request->hepatitis ?? 0,
+            'jantung' => $request->jantung ?? 0,
+            'thypoid' => $request->thypoid ?? 0,
+            'alergi' => $request->alergi ?? 0,
+            'ashma' => $request->ashma ?? 0,
+
+            'lain' => $request->lain,
+            'kesimpulan' => $request->kesimpulan ?? 0,
+            'remark' => $request->remark,
+        ]);
+
+        /*
+    |--------------------------------------------------------------------------
+    | Ambil Data Pelamar
+    |--------------------------------------------------------------------------
+    */
+        $pelamar = DB::table('pelamar')
+            ->where('NIK', $request->nik)
+            ->first();
+
+        if ($pelamar) {
+
+            $namaPelamar = strtolower(trim($pelamar->NAMA));
+            $namaPelamar = preg_replace('/[^a-z0-9]+/i', '_', $namaPelamar);
+            $namaPelamar = trim($namaPelamar, '_');
+
+            $namaFile = 'surat_sehat_' .
+                $namaPelamar . '_' .
+                now()->format('Ymd') .
+                '.pdf';
+
+            $relativePath = 'pelamar/surat_sehat/' . $namaFile;
+
+            /*
+        |--------------------------------------------------------------------------
+        | Ambil Data Terbaru
+        |--------------------------------------------------------------------------
+        */
+            $data = DB::table('health_tests')
+                ->join('pelamar', 'pelamar.NIK', '=', 'health_tests.nik')
+                ->where('health_tests.id', $healthTest->id)
+                ->select(
+                    'pelamar.*',
+                    'health_tests.*'
+                )
+                ->first();
+
+            /*
+        |--------------------------------------------------------------------------
+        | Generate PDF Baru
+        |--------------------------------------------------------------------------
+        */
+            $pdf = Pdf::loadView(
+                'health_test.form_medical',
+                [
+                    'data' => $data
+                ]
+            );
+
+            Storage::disk('public')->put(
+                $relativePath,
+                $pdf->output()
+            );
+
+            /*
+        |--------------------------------------------------------------------------
+        | Update pelamar_details
+        |--------------------------------------------------------------------------
+        */
+            DB::table('pelamar_details')
+                ->where('id_pelamar', $pelamar->ID)
+                ->update([
+                    'file_surat_sehat' => $relativePath,
+                    'updated_at' => now()
+                ]);
+        }
+
+        Alert::success('Success', 'Health Test berhasil diperbarui.');
+
+        return redirect()->route('health-test.index');
+    }
 }
