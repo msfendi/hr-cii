@@ -294,14 +294,16 @@ class RecruitmentFormController extends Controller
                 $uploadedFiles[$field] = $storedPath;
             }
         } catch (\Throwable $e) {
-            Log::error('[RecruitmentForm] Gagal memproses upload file: ' . $e->getMessage());
-
             $this->cleanupUploadedFiles($uploadedFiles);
 
-            return back()
-                ->withInput()
-                ->with('error', 'Terjadi kesalahan saat menyimpan dokumen. Pastikan file tidak sedang ' .
-                    'tersinkron dari Google Drive/OneDrive dan coba upload ulang dari penyimpanan lokal.');
+            $message = $this->buildSubmitErrorMessage(
+                $e,
+                'Gagal memproses upload file (step 8)',
+                'Terjadi kesalahan saat menyimpan dokumen. Pastikan file tidak sedang tersinkron dari ' .
+                    'Google Drive/OneDrive dan coba upload ulang dari penyimpanan lokal.'
+            );
+
+            return back()->withInput()->with('error', $message);
         }
 
         // ── Hitung umur dari tanggal lahir ───────────────────────────────────
@@ -365,11 +367,15 @@ class RecruitmentFormController extends Controller
                 'IS_KONTRAK'       => 'FALSE',
             ]);
         } catch (\Exception $e) {
-            Log::error('[RecruitmentForm] Gagal insert PELAMAR: ' . $e->getMessage());
-
             $this->cleanupUploadedFiles($uploadedFiles);
 
-            return back()->with('error', 'Terjadi kesalahan saat menyimpan data pribadi. Silakan coba lagi.');
+            $message = $this->buildSubmitErrorMessage(
+                $e,
+                'Gagal insert tabel PELAMAR (data dari step 1, step 2, step 4-ibu, step 5, step 7)',
+                'Terjadi kesalahan saat menyimpan data pribadi. Silakan coba lagi.'
+            );
+
+            return back()->with('error', $message);
         }
 
         // ── Insert ke tabel pelamar_details (koneksi default) ───────────────
@@ -448,8 +454,6 @@ class RecruitmentFormController extends Controller
                 'is_kesehatan'       => 'FALSE',
             ]);
         } catch (\Exception $e) {
-            Log::error('[RecruitmentForm] Gagal insert pelamar_details: ' . $e->getMessage());
-
             // Rollback: hapus baris PELAMAR yang baru dibuat & file
             try {
                 DB::connection('cii')->table('PELAMAR')->where('id', $pelamarId)->delete();
@@ -458,7 +462,13 @@ class RecruitmentFormController extends Controller
 
             $this->cleanupUploadedFiles($uploadedFiles);
 
-            return back()->with('error', 'Terjadi kesalahan saat menyimpan detail pendaftaran. Silakan coba lagi.');
+            $message = $this->buildSubmitErrorMessage(
+                $e,
+                'Gagal insert pelamar_details (data dari step 1-8, termasuk field JSON experiences/keluarga/education)',
+                'Terjadi kesalahan saat menyimpan detail pendaftaran. Silakan coba lagi.'
+            );
+
+            return back()->with('error', $message);
         }
 
         // ── Bersihkan semua session step ─────────────────────────────────────
@@ -484,6 +494,40 @@ class RecruitmentFormController extends Controller
         foreach ($uploadedFiles as $path) {
             Storage::disk('public')->delete($path);
         }
+    }
+
+    /**
+     * Bangun pesan error final submit (step 8) yang tetap membantu untuk
+     * debugging, tanpa membocorkan detail internal (nama kolom/tabel DB,
+     * struktur query) ke pelamar di lingkungan production.
+     *
+     * - APP_DEBUG=true (local/staging)  → tampilkan pesan exception asli
+     *   apa adanya, supaya langsung kelihatan di layar tanpa buka log.
+     * - APP_DEBUG=false (production)    → tampilkan pesan generik + kode
+     *   referensi singkat yang bisa dicari di log (grep ref di storage
+     *   logs), tanpa expose detail DB ke user.
+     *
+     * Di kedua kondisi, detail LENGKAP (message + trace + context) selalu
+     * ditulis ke log lewat Log::error(), jadi tim tetap bisa telusuri
+     * walau APP_DEBUG mati.
+     */
+    private function buildSubmitErrorMessage(\Throwable $e, string $context, string $genericMessage): string
+    {
+        $ref = strtoupper(Str::random(8));
+
+        Log::error("[RecruitmentForm] {$context} (ref: {$ref})", [
+            'ref'       => $ref,
+            'message'   => $e->getMessage(),
+            'exception' => get_class($e),
+            'file'      => $e->getFile() . ':' . $e->getLine(),
+            'trace'     => $e->getTraceAsString(),
+        ]);
+
+        if (config('app.debug')) {
+            return "{$genericMessage} [DEBUG] {$context}: {$e->getMessage()} (ref: {$ref})";
+        }
+
+        return "{$genericMessage} Jika masalah berlanjut, sampaikan kode berikut ke tim IT: {$ref}.";
     }
 
     /*
