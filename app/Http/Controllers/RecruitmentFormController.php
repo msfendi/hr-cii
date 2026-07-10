@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotificationEvent;
 use App\Models\Pelamar;
 use App\Models\PelamarDetails;
 use App\Models\RecruitmentPosition;
@@ -379,80 +380,82 @@ class RecruitmentFormController extends Controller
         }
 
         // ── Insert ke tabel pelamar_details (koneksi default) ───────────────
+        $detailsPayload = [
+            'id_pelamar'         => $pelamarId,
+
+            // Step 1
+            'nomor_sim'          => $step1['sim']          ?? null,
+            'warga_negara'       => $step1['warga_negara'] ?? null,
+            'ikut_kb'            => ($step1['kb'] ?? 'Tidak') === 'Ya' ? 1 : 0,
+            'bakat_hobby'        => $step1['hobby']         ?? null,
+            'mode_transportasi'  => $step1['transportasi']  ?? null,
+            'jabatan'            => $step1['jabatan']        ?? null,
+            'department'         => $step1['department']     ?? null,
+            'bpjs_tk'            => $step1['bpjs_tk']        ?? null,
+            'bpjs_kes'           => $step1['bpjs_kes']       ?? null,
+
+            // Step 2
+            'alamat_skrg'        => $step2['alamat_sekarang']          ?? $step2['alamat_asal']      ?? null,
+            'kabupaten_kota_skrg' => $step2['kab_kota_sekarang']        ?? $step2['kab_kota_asal']    ?? null,
+            'status_domisili'    => $step2['status_domisili_sekarang']  ?? $step2['status_domisili_asal'] ?? null,
+            'nama_ktk_darurat'   => $step2['nama_darurat']     ?? null,
+            'hubungan'           => $step2['hubungan_darurat']  ?? null,
+            'no_telp_darurat'    => $step2['no_telepon_darurat'] ?? null,
+
+            // Step 3 — pengalaman kerja (JSON)
+            'pengalaman_kerja'   => ! empty($step3['experiences'])
+                ? json_encode($step3['experiences'])
+                : null,
+
+            // Step 4 — keluarga (JSON)
+            'data_ayah'          => ! empty($step4['ayah'])
+                ? json_encode($step4['ayah'])
+                : null,
+            'data_ibu'           => ! empty($step4['ibu'])
+                ? json_encode($step4['ibu'])
+                : null,
+            'saudara_kandung'    => ! empty($step4['saudara'])
+                ? json_encode($step4['saudara'])
+                : null,
+            'data_anak'          => ! empty($step4['anak'])
+                ? json_encode($step4['anak'])
+                : null,
+
+            // Step 5 — riwayat pendidikan (JSON)
+            'riwayat_pendidikan' => ! empty($step5['education'])
+                ? json_encode($step5['education'])
+                : null,
+
+            // Step 6 — Motivasi & Kegiatan
+            'motivasi'           => $step6['motivasi'] ?? null,
+            'kegiatan_ekstra'    => $step6['kegiatan_ekstra'] ?? null,
+
+            // Fisik dari step7 (tinggi/berat sudah di PELAMAR)
+
+            // Step 8 — file dokumen
+            'file_surat_lamaran' => $uploadedFiles['surat_lamaran']         ?? null,
+            'file_cv'            => $uploadedFiles['cv']                     ?? null,
+            'file_ktp'           => $uploadedFiles['scan_ktp']               ?? null,
+            'file_kk'            => $uploadedFiles['scan_kk']                ?? null,
+            'file_pas_foto'      => $uploadedFiles['pas_foto']               ?? null,
+            'file_ijasah'        => $uploadedFiles['ijazah']                 ?? null,
+            'file_akta_kelahiran' => $uploadedFiles['scan_akta_kelahiran']    ?? null,
+            'file_skck'          => $uploadedFiles['scan_skck']              ?? null,
+            'file_surat_sehat'   => $uploadedFiles['scan_blanko_kesehatan']  ?? null,
+
+            // Status awal
+            'status_apply'       => 'APPLIED',
+            'is_test'            => 'FALSE',
+            'tgl_test'           => null,
+            'tgl_interview'      => null,
+            'tgl_kesehatan'      => null,
+            'tgl_diterima'       => null,
+            'is_interview'       => 'FALSE',
+            'is_kesehatan'       => 'FALSE',
+        ];
+
         try {
-            PelamarDetails::create([
-                'id_pelamar'         => $pelamarId,
-
-                // Step 1
-                'nomor_sim'          => $step1['sim']          ?? null,
-                'warga_negara'       => $step1['warga_negara'] ?? null,
-                'ikut_kb'            => ($step1['kb'] ?? 'Tidak') === 'Ya' ? 1 : 0,
-                'bakat_hobby'        => $step1['hobby']         ?? null,
-                'mode_transportasi'  => $step1['transportasi']  ?? null,
-                'jabatan'            => $step1['jabatan']        ?? null,
-                'department'         => $step1['department']     ?? null,
-                'bpjs_tk'            => $step1['bpjs_tk']        ?? null,
-                'bpjs_kes'           => $step1['bpjs_kes']       ?? null,
-
-                // Step 2
-                'alamat_skrg'        => $step2['alamat_sekarang']          ?? $step2['alamat_asal']      ?? null,
-                'kabupaten_kota_skrg' => $step2['kab_kota_sekarang']        ?? $step2['kab_kota_asal']    ?? null,
-                'status_domisili'    => $step2['status_domisili_sekarang']  ?? $step2['status_domisili_asal'] ?? null,
-                'nama_ktk_darurat'   => $step2['nama_darurat']     ?? null,
-                'hubungan'           => $step2['hubungan_darurat']  ?? null,
-                'no_telp_darurat'    => $step2['no_telepon_darurat'] ?? null,
-
-                // Step 3 — pengalaman kerja (JSON)
-                'pengalaman_kerja'   => ! empty($step3['experiences'])
-                    ? json_encode($step3['experiences'])
-                    : null,
-
-                // Step 4 — keluarga (JSON)
-                'data_ayah'          => ! empty($step4['ayah'])
-                    ? json_encode($step4['ayah'])
-                    : null,
-                'data_ibu'           => ! empty($step4['ibu'])
-                    ? json_encode($step4['ibu'])
-                    : null,
-                'saudara_kandung'    => ! empty($step4['saudara'])
-                    ? json_encode($step4['saudara'])
-                    : null,
-                'data_anak'          => ! empty($step4['anak'])
-                    ? json_encode($step4['anak'])
-                    : null,
-
-                // Step 5 — riwayat pendidikan (JSON)
-                'riwayat_pendidikan' => ! empty($step5['education'])
-                    ? json_encode($step5['education'])
-                    : null,
-
-                // Step 6 — Motivasi & Kegiatan
-                'motivasi'           => $step6['motivasi'] ?? null,
-                'kegiatan_ekstra'    => $step6['kegiatan_ekstra'] ?? null,
-
-                // Fisik dari step7 (tinggi/berat sudah di PELAMAR)
-
-                // Step 8 — file dokumen
-                'file_surat_lamaran' => $uploadedFiles['surat_lamaran']         ?? null,
-                'file_cv'            => $uploadedFiles['cv']                     ?? null,
-                'file_ktp'           => $uploadedFiles['scan_ktp']               ?? null,
-                'file_kk'            => $uploadedFiles['scan_kk']                ?? null,
-                'file_pas_foto'      => $uploadedFiles['pas_foto']               ?? null,
-                'file_ijasah'        => $uploadedFiles['ijazah']                 ?? null,
-                'file_akta_kelahiran' => $uploadedFiles['scan_akta_kelahiran']    ?? null,
-                'file_skck'          => $uploadedFiles['scan_skck']              ?? null,
-                'file_surat_sehat'   => $uploadedFiles['scan_blanko_kesehatan']  ?? null,
-
-                // Status awal
-                'status_apply'       => 'APPLIED',
-                'is_test'            => 'FALSE',
-                'tgl_test'           => null,
-                'tgl_interview'      => null,
-                'tgl_kesehatan'      => null,
-                'tgl_diterima'       => null,
-                'is_interview'       => 'FALSE',
-                'is_kesehatan'       => 'FALSE',
-            ]);
+            PelamarDetails::create($detailsPayload);
         } catch (\Exception $e) {
             // Rollback: hapus baris PELAMAR yang baru dibuat & file
             try {
@@ -462,14 +465,32 @@ class RecruitmentFormController extends Controller
 
             $this->cleanupUploadedFiles($uploadedFiles);
 
+            // "String or binary data would be truncated" (SQLSTATE 22001) berarti
+            // salah satu kolom di tabel pelamar_details lebih sempit daripada
+            // panjang data yang dikirim. Driver ODBC SQL Server versi lama tidak
+            // menyebutkan nama kolomnya di pesan error, jadi kita hitung sendiri
+            // panjang tiap field yang dikirim dan urutkan dari yang terpanjang —
+            // kolom-kolom teratas inilah kandidat paling mungkin jadi penyebabnya.
+            $extraDebugInfo = $this->isTruncationError($e)
+                ? $this->diagnoseStringTruncation($detailsPayload)
+                : null;
+
             $message = $this->buildSubmitErrorMessage(
                 $e,
                 'Gagal insert pelamar_details (data dari step 1-8, termasuk field JSON experiences/keluarga/education)',
-                'Terjadi kesalahan saat menyimpan detail pendaftaran. Silakan coba lagi.'
+                'Terjadi kesalahan saat menyimpan detail pendaftaran. Silakan coba lagi.',
+                $extraDebugInfo
             );
 
             return back()->with('error', $message);
         }
+
+        // ── Notifikasi: pelamar baru berhasil submit ──────────────────────────
+        event(new NotificationEvent(
+            'New Applicant Submitted!',
+            'Applicant: ' . ($step1['nama_lengkap'] ?? '-') . ' has applied for ' . ($step1['jabatan'] ?? '-') . ' position!',
+            'success'
+        ));
 
         // ── Bersihkan semua session step ─────────────────────────────────────
         for ($i = 1; $i <= 8; $i++) {
@@ -511,8 +532,12 @@ class RecruitmentFormController extends Controller
      * ditulis ke log lewat Log::error(), jadi tim tetap bisa telusuri
      * walau APP_DEBUG mati.
      */
-    private function buildSubmitErrorMessage(\Throwable $e, string $context, string $genericMessage): string
-    {
+    private function buildSubmitErrorMessage(
+        \Throwable $e,
+        string $context,
+        string $genericMessage,
+        ?string $extraDebugInfo = null
+    ): string {
         $ref = strtoupper(Str::random(8));
 
         Log::error("[RecruitmentForm] {$context} (ref: {$ref})", [
@@ -521,13 +546,66 @@ class RecruitmentFormController extends Controller
             'exception' => get_class($e),
             'file'      => $e->getFile() . ':' . $e->getLine(),
             'trace'     => $e->getTraceAsString(),
+            'diagnosis' => $extraDebugInfo,
         ]);
 
         if (config('app.debug')) {
-            return "{$genericMessage} [DEBUG] {$context}: {$e->getMessage()} (ref: {$ref})";
+            $detail = "{$genericMessage} [DEBUG] {$context}: {$e->getMessage()} (ref: {$ref})";
+            if ($extraDebugInfo) {
+                $detail .= ' || ' . $extraDebugInfo;
+            }
+
+            return $detail;
         }
 
         return "{$genericMessage} Jika masalah berlanjut, sampaikan kode berikut ke tim IT: {$ref}.";
+    }
+
+    /**
+     * Deteksi apakah exception adalah error "data terlalu panjang untuk kolom"
+     * (SQLSTATE 22001 di SQL Server / MySQL data too long). Dicek dari pesan
+     * karena driver ODBC lama tidak selalu mengembalikan kode SQLSTATE terpisah
+     * yang gampang diakses.
+     */
+    private function isTruncationError(\Throwable $e): bool
+    {
+        $msg = strtolower($e->getMessage());
+
+        return str_contains($msg, 'truncat')      // "String or binary data would be truncated"
+            || str_contains($msg, '22001')
+            || str_contains($msg, 'data too long'); // varian pesan MySQL
+    }
+
+    /**
+     * Hitung panjang tiap field string yang dikirim ke query, urutkan dari
+     * yang terpanjang. SQL Server ODBC driver 17 tidak selalu menyebutkan
+     * nama kolom penyebab truncation di pesan errornya, jadi kandidat paling
+     * mungkin adalah field-field di puncak daftar ini — cocokkan dengan lebar
+     * kolom aktual di tabel pelamar_details (mis. lewat `sp_help pelamar_details`
+     * atau cek migration-nya).
+     */
+    private function diagnoseStringTruncation(array $payload): string
+    {
+        $lengths = [];
+
+        foreach ($payload as $field => $value) {
+            if (is_string($value)) {
+                $lengths[$field] = mb_strlen($value);
+            }
+        }
+
+        arsort($lengths);
+        $top = array_slice($lengths, 0, 8, true);
+
+        $formatted = collect($top)
+            ->map(fn($len, $field) => "{$field}: {$len} char")
+            ->implode(' | ');
+
+        return 'Kandidat kolom overflow (urut terpanjang → cek lebar kolomnya di DB): '
+            . $formatted
+            . '. Field JSON (pengalaman_kerja, data_ayah, data_ibu, saudara_kandung, data_anak, '
+            . 'riwayat_pendidikan) dan motivasi/kegiatan_ekstra paling rawan karena tidak dibatasi '
+            . 'ketat oleh validasi form — pertimbangkan ubah tipe kolomnya ke NVARCHAR(MAX) di SQL Server.';
     }
 
     /*
