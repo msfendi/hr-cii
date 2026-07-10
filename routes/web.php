@@ -90,6 +90,9 @@ use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
+use App\Http\Controllers\CanteenController;
+use App\Http\Controllers\FoodMenuController;
+use App\Http\Controllers\FoodOrderController;
 
 /*
 |--------------------------------------------------------------------------
@@ -691,6 +694,39 @@ Route::group(['middleware' => 'auth'], function () {
             Route::get('/{jobVacancy}/applicants', [JobVacancyController::class, 'applicants'])->name('applicants');
         });
 
+    /*
+|--------------------------------------------------------------------------
+| Canteen Management
+|--------------------------------------------------------------------------
+*/
+    Route::get('/canteens', [CanteenController::class, 'index'])->middleware(['auth', 'permission'])->name('canteens.index');
+    Route::get('/canteens/create', [CanteenController::class, 'create'])->middleware(['auth', 'permission'])->name('canteens.create');
+    Route::post('/canteens', [CanteenController::class, 'store'])->middleware(['auth', 'permission'])->name('canteens.store');
+    Route::get('/canteens/{id}/edit', [CanteenController::class, 'edit'])->middleware(['auth', 'permission'])->name('canteens.edit');
+    Route::put('/canteens/{id}', [CanteenController::class, 'update'])->middleware(['auth', 'permission'])->name('canteens.update');
+    Route::delete('/canteens/{id}', [CanteenController::class, 'destroy'])->middleware(['auth', 'permission'])->name('canteens.delete');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Food Menu Management (Catering / Admin)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/food-menus', [FoodMenuController::class, 'index'])->middleware(['auth', 'permission'])->name('food-menus.index');
+    Route::get('/food-menus/create', [FoodMenuController::class, 'create'])->middleware(['auth', 'permission'])->name('food-menus.create');
+    Route::post('/food-menus', [FoodMenuController::class, 'store'])->middleware(['auth', 'permission'])->name('food-menus.store');
+    Route::get('/food-menus/{id}/edit', [FoodMenuController::class, 'edit'])->middleware(['auth', 'permission'])->name('food-menus.edit');
+    Route::put('/food-menus/{id}', [FoodMenuController::class, 'update'])->middleware(['auth', 'permission'])->name('food-menus.update');
+    Route::delete('/food-menus/{id}', [FoodMenuController::class, 'destroy'])->middleware(['auth', 'permission'])->name('food-menus.delete');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Order Recap (Catering / Admin) - lihat berapa makanan yang dipesan
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/food-orders/recap', [FoodOrderController::class, 'recap'])->middleware(['auth', 'permission'])->name('food-orders.recap');
+    Route::get('/food-orders/recap/data', [FoodOrderController::class, 'recapData'])->middleware(['auth', 'permission'])->name('food-orders.recap.data');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -1015,3 +1051,18 @@ Route::post('/portal-recruitment-status/check', [PortalRecruitmentStatusControll
 Route::get('/lowongan', [JobVacancyController::class, 'publicIndex'])->name('job-vacancy.public');
 Route::get('/lowongan/data', [JobVacancyController::class, 'publicData'])
     ->name('job-vacancy.public-data');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Food Ordering (Karyawan)
+    |--------------------------------------------------------------------------
+    */
+Route::get('/food-orders', [FoodOrderController::class, 'index'])->name('food-orders.index');
+Route::post('/food-orders', [FoodOrderController::class, 'store'])->name('food-orders.store');
+Route::delete('/food-orders/{id}', [FoodOrderController::class, 'destroy'])->name('food-orders.destroy');
+Route::get('/food-orders/scan', [FoodOrderController::class, 'showScan'])->name('food-orders.scan');
+Route::post('/food-orders/scan', [FoodOrderController::class, 'verifyScan'])
+    ->middleware('throttle:10,1') // batasi percobaan scan/manual per menit
+    ->name('food-orders.scan.verify');
+Route::post('/food-orders/logout-scan', [FoodOrderController::class, 'logoutScan'])->name('food-orders.logout-scan');
