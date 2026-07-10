@@ -54,12 +54,12 @@ class RecruitmentFormController extends Controller
 
         $extraData = [];
         if ($step === 1) {
-                $extraData['positions'] = RecruitmentPosition::where('is_aktif', 'true')
-                    ->select('dept', 'position')
-                    ->distinct()
-                    ->get()
-                    ->groupBy('dept');
-            }
+            $extraData['positions'] = RecruitmentPosition::where('is_aktif', 'true')
+                ->select('dept', 'position')
+                ->distinct()
+                ->get()
+                ->groupBy('dept');
+        }
 
         return view($this->steps[$step]['view'], array_merge([
             'currentStep' => $step,
@@ -347,7 +347,7 @@ class RecruitmentFormController extends Controller
                 'warga_negara'      => ['nullable', 'in:WNI,WNA'],
                 'golongan_darah'    => ['nullable', 'in:A,B,AB,O'],
                 'jenis_kelamin'     => ['required', 'in:L,P'],
-                'status_pernikahan' => ['nullable'],
+                'status_pernikahan' => ['nullable', 'in:Belum Kawin,Kawin,Cerai Hidup,Cerai Mati'],
                 'kb'                => ['nullable', 'in:Ya,Tidak'],
                 'tanggungan'        => ['nullable', 'integer', 'min:0', 'max:20'],
                 'nomor_hp'          => ['required', 'string', 'max:20'],
@@ -452,15 +452,15 @@ class RecruitmentFormController extends Controller
             // Step 8 — Upload Dokumen
             // ----------------------------------------------------------------
             8 => [
-                'surat_lamaran'         => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
-                'cv'                    => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
-                'scan_ktp'              => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
-                'scan_kk'               => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
-                'pas_foto'              => ['required', 'file', 'mimes:jpg,jpeg,png',     'mimetypes:image/jpeg,image/png',                 'max:2048'],
-                'ijazah'                => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
-                'scan_akta_kelahiran'   => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
-                'scan_skck'             => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
-                'scan_blanko_kesehatan' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:2048'],
+                'surat_lamaran'         => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'cv'                    => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'scan_ktp'              => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'scan_kk'               => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'pas_foto'              => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:2048'],
+                'ijazah'                => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'scan_akta_kelahiran'   => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'scan_skck'             => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
+                'scan_blanko_kesehatan' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
                 'deklarasi'             => ['required', 'accepted'],
             ],
 
