@@ -5,6 +5,8 @@ namespace App\Exceptions;
 use App\Services\ActivityLogger;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
+use Symfony\Component\HttpFoundation\Exception\PostTooLargeException;
+use Illuminate\Session\TokenMismatchException;
 
 class Handler extends ExceptionHandler
 {
@@ -42,8 +44,27 @@ class Handler extends ExceptionHandler
      */
     public function register(): void
     {
-        $this->reportable(function (Throwable $e) {
-            //
+        // $this->reportable(function (Throwable $e) {
+        //     //
+        // });
+        $this->renderable(function (PostTooLargeException $e, $request) {
+            if ($request->routeIs('recruitments.step.store')) {
+                return back()->with(
+                    'error',
+                    'Total ukuran seluruh file yang diupload terlalu besar untuk diterima server. ' .
+                        'Pastikan setiap dokumen maksimal 2MB, lalu coba upload ulang satu per satu.'
+                );
+            }
+        });
+
+        $this->renderable(function (TokenMismatchException $e, $request) {
+            if ($request->routeIs('recruitments.step.store')) {
+                return back()->with(
+                    'error',
+                    'Sesi form kadaluarsa atau ukuran upload terlalu besar sehingga sesi terputus. ' .
+                        'Silakan muat ulang halaman dan coba lagi dengan ukuran file yang lebih kecil.'
+                );
+            }
         });
     }
 
