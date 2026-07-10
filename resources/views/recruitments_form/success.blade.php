@@ -168,7 +168,7 @@
                             Ada pertanyaan? Hubungi kami di
                             <a href="mailto:hrd@chutex.co.id"
                                class="text-primary font-bold hover:underline break-all">
-                                hrd@chutex.co.id
+                                recruitment@chutex.id
                             </a>
                         </p>
                     </div>
