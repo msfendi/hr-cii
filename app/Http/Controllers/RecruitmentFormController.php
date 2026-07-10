@@ -347,7 +347,7 @@ class RecruitmentFormController extends Controller
                 'warga_negara'      => ['nullable', 'in:WNI,WNA'],
                 'golongan_darah'    => ['nullable', 'in:A,B,AB,O'],
                 'jenis_kelamin'     => ['required', 'in:L,P'],
-                'status_pernikahan' => ['nullable', 'in:Belum Kawin,Kawin,Cerai Hidup,Cerai Mati'],
+                'status_pernikahan' => ['nullable'],
                 'kb'                => ['nullable', 'in:Ya,Tidak'],
                 'tanggungan'        => ['nullable', 'integer', 'min:0', 'max:20'],
                 'nomor_hp'          => ['required', 'string', 'max:20'],
