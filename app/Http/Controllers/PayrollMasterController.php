@@ -125,7 +125,7 @@ class PayrollMasterController extends Controller
             'bank_account' => 'required',
         ]);
 
-        // Union BIODATA + BIODATA_KELUAR
+        // Data seluruh karyawan (aktif + keluar)
         $employee = DB::connection('cii')->table('BIODATA')
             ->select(
                 'NPK',
@@ -139,8 +139,17 @@ class PayrollMasterController extends Controller
                     )
             );
 
-        // Cek apakah nomor rekening sudah dipakai NPK lain
-        $duplicate = PayrollMaster::query()
+        // Ambil nama karyawan yang sedang diproses
+        $currentEmployee = DB::connection('cii')
+            ->query()
+            ->fromSub($employee, 'emp')
+            ->where('NPK', $request->npk)
+            ->first();
+
+        $currentName = strtoupper(trim($currentEmployee->NAMA_KARYAWAN ?? ''));
+
+        // Cari semua yang menggunakan rekening yang sama selain NPK saat ini
+        $duplicates = PayrollMaster::query()
             ->from('payroll_masters as pm')
             ->joinSub($employee, 'emp', function ($join) {
                 $join->on('pm.npk', '=', 'emp.NPK');
@@ -149,18 +158,23 @@ class PayrollMasterController extends Controller
             ->where('pm.npk', '<>', $request->npk)
             ->select(
                 'pm.npk',
-                'emp.NAMA_KARYAWAN',
-                'pm.bank_account'
+                'pm.bank_account',
+                DB::raw('UPPER(LTRIM(RTRIM(emp.NAMA_KARYAWAN))) as NAMA_KARYAWAN')
             )
-            ->first();
-        // dd($duplicate);
+            ->get();
+
+        // Hanya dianggap duplicate jika nama berbeda
+        $duplicate = $duplicates->first(function ($row) use ($currentName) {
+            return $row->NAMA_KARYAWAN !== $currentName;
+        });
 
         if ($duplicate) {
-            session()->flash(
-                'error',
+            Alert::error(
+                'Failed!',
                 "Nomor rekening {$duplicate->bank_account} sudah digunakan oleh {$duplicate->NAMA_KARYAWAN} ({$duplicate->npk})."
             );
-            return redirect()->back()->withInput();
+
+            return back()->withInput();
         }
 
         PayrollMaster::updateOrCreate(
