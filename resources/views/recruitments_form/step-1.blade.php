@@ -409,7 +409,7 @@
                             <div class="relative">
                                 <select class="rf-select @error('status_pernikahan') error @enderror" id="status_pernikahan" name="status_pernikahan">
                                     <option value="" disabled {{ old('status_pernikahan', $savedData['status_pernikahan'] ?? '') === '' ? 'selected' : '' }}>Pilih Status</option>
-                                    @foreach(['Belum Kawin','Kawin','Cerai Hidup','Cerai Mati'] as $sp)
+                                    @foreach(['Belum Menikah','Menikah','Cerai Hidup','Cerai Meninggal'] as $sp)
                                         <option value="{{ $sp }}" {{ old('status_pernikahan', $savedData['status_pernikahan'] ?? '') === $sp ? 'selected' : '' }}>{{ $sp }}</option>
                                     @endforeach
                                 </select>
@@ -567,6 +567,9 @@
                                         <option value="{{ $dept }}" {{ old('department', $savedData['department'] ?? '') === $dept ? 'selected' : '' }}>{{ $dept }}</option>
                                     @endforeach
                                 </select>
+                                @error('department')
+                                    <p class="rf-error">{{ $message }}</p>
+                                @enderror
                             </div>
 
                             {{-- Jabatan --}}
@@ -575,6 +578,9 @@
                                 <select class="rf-select select2-jabatan" id="jabatan" name="jabatan">
                                     <option value="" disabled selected>Pilih / Masukkan Jabatan</option>
                                 </select>
+                                @error('jabatan')
+                                    <p class="rf-error">{{ $message }}</p>
+                                @enderror
                             </div>
 
                         </div>
