@@ -329,6 +329,85 @@
 
 .detail-checklist li i{ margin-top:.2rem; }
 
+.person-card-list{ display:flex; flex-direction:column; gap:.6rem; margin-bottom:.75rem; }
+
+.person-card{
+    background:#f8f9fc;
+    border:1px solid #eaecf4;
+    border-radius:.7rem;
+    overflow:hidden;
+}
+
+.person-card-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:.4rem;
+    background:#eef2ff;
+    padding:.55rem .85rem;
+    border-bottom:1px solid #e3e6f0;
+}
+
+.person-card-title{
+    font-size:.85rem;
+    font-weight:700;
+    color:#2e2f45;
+    display:flex;
+    align-items:center;
+    gap:.4rem;
+}
+.person-card-title i{ color:#4e73df; }
+
+.person-subtitle{
+    font-size:.75rem;
+    color:#6f74b0;
+    font-weight:600;
+}
+
+.person-period{
+    font-size:.7rem;
+    font-weight:600;
+    color:#4e73df;
+    background:#fff;
+    border:1px solid #dce3fc;
+    padding:.15rem .55rem;
+    border-radius:50rem;
+    white-space:nowrap;
+}
+.person-period i{ margin-right:.25rem; }
+
+.person-card-body{
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:.5rem .9rem;
+    padding:.75rem .85rem;
+}
+@media (max-width: 576px){
+    .person-card-body{ grid-template-columns:1fr; }
+}
+
+.person-field-full{ grid-column: 1 / -1; }
+
+.pf-label{
+    font-size:.68rem;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+    color:#96999f;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    gap:.3rem;
+    margin-bottom:.1rem;
+}
+.pf-label i{ color:#b7b9c8; font-size:.7rem; }
+
+.pf-value{
+    font-size:.85rem;
+    color:#2e2f45;
+    word-break:break-word;
+}
+
 .detail-empty-note{
     font-size:.82rem;
     color:#b7b9c8;
@@ -1104,20 +1183,112 @@
             </a>`;
         }
 
+        const FIELD_LABELS = {
+            nama: 'Nama', tgl_lahir: 'Tanggal Lahir', tanggal_lahir: 'Tanggal Lahir',
+            pendidikan: 'Pendidikan', pekerjaan: 'Pekerjaan', perusahaan: 'Perusahaan',
+            dari: 'Mulai', sampai: 'Selesai', jabatan: 'Jabatan', departemen: 'Departemen',
+            alasan: 'Alasan Keluar', jenjang: 'Jenjang', sekolah: 'Nama Sekolah',
+            nama_sekolah: 'Nama Sekolah', jurusan: 'Jurusan', tahun_lulus: 'Tahun Lulus',
+            tahun_masuk: 'Tahun Masuk', hubungan: 'Hubungan', usia: 'Usia', umur: 'Usia',
+            jenis_kelamin: 'Jenis Kelamin', alamat: 'Alamat', status: 'Status', keterangan: 'Keterangan',
+        };
+
+        const FIELD_ICONS = {
+            nama: 'fa-user', tgl_lahir: 'fa-birthday-cake', tanggal_lahir: 'fa-birthday-cake',
+            pendidikan: 'fa-graduation-cap', pekerjaan: 'fa-briefcase', perusahaan: 'fa-building',
+            dari: 'fa-calendar-plus', sampai: 'fa-calendar-minus', jabatan: 'fa-id-badge',
+            departemen: 'fa-sitemap', alasan: 'fa-comment-dots', jenjang: 'fa-graduation-cap',
+            sekolah: 'fa-school', nama_sekolah: 'fa-school', jurusan: 'fa-book',
+            tahun_lulus: 'fa-calendar-check', tahun_masuk: 'fa-calendar-check',
+            hubungan: 'fa-people-arrows', usia: 'fa-hourglass-half', umur: 'fa-hourglass-half',
+            jenis_kelamin: 'fa-venus-mars', alamat: 'fa-map-marker-alt',
+            status: 'fa-info-circle', keterangan: 'fa-comment-dots',
+        };
+
+        const FULL_WIDTH_KEYS = new Set(['alasan', 'keterangan', 'alamat', 'deskripsi', 'motivasi']);
+
+        function fieldLabel(key) {
+            return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+        function fieldIcon(key) {
+            return FIELD_ICONS[key] || 'fa-circle';
+        }
+
+        function formatMaybeDate(value) {
+            if (value === null || value === undefined || value === '') return null;
+            const str = String(value);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return formatDateID(str);
+            if (/^\d{4}-\d{2}$/.test(str)) {
+                const [y, m] = str.split('-');
+                const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+                const idx = parseInt(m, 10) - 1;
+                return months[idx] ? `${months[idx]} ${y}` : str;
+            }
+            return null;
+        }
+
+        function renderPersonEntry(item) {
+            if (item === null || item === undefined || item === '') return '';
+
+            if (typeof item !== 'object') {
+                return `<div class="person-card"><div class="person-card-body"><div class="person-field person-field-full"><div class="pf-value">${escapeHtml(item)}</div></div></div></div>`;
+            }
+
+            const entries = Object.entries(item).filter(([, v]) => v !== null && v !== '' && v !== undefined);
+            if (!entries.length) return '';
+
+            const titleKey = ['nama', 'jabatan', 'jenjang'].find(k => k in item && item[k]);
+            let subtitleKey = null;
+            if (titleKey === 'jabatan') subtitleKey = ['perusahaan'].find(k => k in item && item[k]);
+            if (titleKey === 'jenjang') subtitleKey = ['sekolah', 'nama_sekolah'].find(k => k in item && item[k]);
+
+            const hasPeriod = !!(item.dari || item.sampai);
+            const skip = new Set([titleKey, subtitleKey, hasPeriod ? 'dari' : null, hasPeriod ? 'sampai' : null].filter(Boolean));
+
+            const title = titleKey ? item[titleKey] : null;
+            const subtitle = subtitleKey ? item[subtitleKey] : null;
+
+            const periodHtml = hasPeriod ? `
+                <span class="person-period">
+                    <i class="fas fa-calendar-alt"></i>${formatMaybeDate(item.dari) || escapeHtml(item.dari) || '-'}
+                    &ndash; ${item.sampai ? (formatMaybeDate(item.sampai) || escapeHtml(item.sampai)) : 'Sekarang'}
+                </span>` : '';
+
+            const rows = entries
+                .filter(([k]) => !skip.has(k))
+                .map(([k, v]) => `
+                    <div class="person-field ${FULL_WIDTH_KEYS.has(k) ? 'person-field-full' : ''}">
+                        <div class="pf-label"><i class="fas ${fieldIcon(k)}"></i>${fieldLabel(k)}</div>
+                        <div class="pf-value">${escapeHtml(formatMaybeDate(v) ?? v)}</div>
+                    </div>`).join('');
+
+            return `
+                <div class="person-card">
+                    ${title ? `
+                    <div class="person-card-header">
+                        <div class="person-card-title"><i class="fas ${fieldIcon(titleKey)}"></i>${escapeHtml(title)}</div>
+                        <div class="d-flex align-items-center" style="gap:.4rem;">
+                            ${subtitle ? `<span class="person-subtitle">${escapeHtml(subtitle)}</span>` : ''}
+                            ${periodHtml}
+                        </div>
+                    </div>` : ''}
+                    <div class="person-card-body">
+                        ${rows || '<div class="detail-empty-note mb-0">Tidak ada data tambahan.</div>'}
+                    </div>
+                </div>`;
+        }
+
         function renderPersonList(label, data) {
             if (!data) return '';
             if (typeof data === 'string') {
                 return `<div class="detail-group-title"><i class="fas fa-users"></i>${label}</div><p class="cell-sub">${escapeHtml(data)}</p>`;
             }
             const list = Array.isArray(data) ? data : [data];
-            const rows = list.map(item => {
-                if (typeof item === 'object' && item !== null) {
-                    const parts = Object.entries(item).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(' • ');
-                    return `<li class="cell-sub">${parts}</li>`;
-                }
-                return `<li class="cell-sub">${escapeHtml(item)}</li>`;
-            }).join('');
-            return `<div class="detail-group-title"><i class="fas fa-users"></i>${label}</div><ul class="pl-3 mb-0">${rows}</ul>`;
+            const cards = list.map(renderPersonEntry).filter(Boolean).join('');
+            if (!cards) {
+                return `<div class="detail-group-title"><i class="fas fa-users"></i>${label}</div><p class="detail-empty-note">Belum ada data.</p>`;
+            }
+            return `<div class="detail-group-title"><i class="fas fa-users"></i>${label}</div><div class="person-card-list">${cards}</div>`;
         }
 
         function showApplicantDetail(a) {
