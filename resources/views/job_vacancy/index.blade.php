@@ -2,6 +2,9 @@
 <html lang="en">
 @include('layout.header')
 <style>
+body.modal-open {
+    overflow: hidden;
+}
 #applicantsSummary .detail-stat-item{ width:100%; }
 .applicant-avatar{
     width:44px;
@@ -1617,6 +1620,23 @@
 
             $('#detailModal').modal('show');
         }
+
+        // 1) Naikkan z-index setiap modal & backdrop-nya berdasarkan jumlah modal yang sedang terbuka
+        $(document).on('show.bs.modal', '.modal', function () {
+            const zIndex = 1040 + (10 * $('.modal:visible').length);
+            $(this).css('z-index', zIndex);
+            setTimeout(() => {
+                $('.modal-backdrop').not('.modal-stack').css('z-index', zIndex - 1).addClass('modal-stack');
+            }, 0);
+        });
+
+        // 2) Saat modal ditutup, kalau masih ada modal lain yang terbuka,
+        //    pastikan body tetap dikunci (class modal-open dipertahankan)
+        $(document).on('hidden.bs.modal', '.modal', function () {
+            if ($('.modal:visible').length > 0) {
+                $('body').addClass('modal-open');
+            }
+        });
 
         $(document).ready(function () {
             // Select2 di luar modal (filter panel) - dropdown boleh render ke body seperti biasa
