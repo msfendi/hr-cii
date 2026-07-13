@@ -68,5 +68,6 @@ class Kernel extends HttpKernel
         // 'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
         'permission' => \App\Http\Middleware\CheckPermission::class, // BARU
         'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+        'qr.verified' => \App\Http\Middleware\EnsureQrScanned::class,
     ];
 }

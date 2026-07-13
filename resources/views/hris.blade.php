@@ -8,6 +8,22 @@
 @include('sweetalert::alert')
 
 <style>
+    .menu-wrapper .row{
+        --bs-gutter-x: 1.5rem;
+        --bs-gutter-y: 3rem;   /* tambah jarak antar baris */
+    }
+    .menu-card{
+        margin-bottom: 10px;
+    }
+
+    @media (min-width:992px){
+
+        .menu-wrapper .row{
+            row-gap:50px;
+            column-gap:0;
+        }
+
+    }
     body.bg-gradient-primary{
         background:linear-gradient(135deg,#1e3c72 0%,#2a5298 45%,#6dd5ed 100%);
         min-height:100vh;
@@ -210,8 +226,7 @@
     </div>
 
     <div class="menu-wrapper">
-
-        <div class="row g-4 justify-content-center">
+        <div class="row gx-4 gy-5 justify-content-center">
 
             <!-- Login -->
             <div class="col-lg-3 col-md-4 col-6">
@@ -295,6 +310,29 @@
                             </div>
 
                             <h5>Recruitment Announcement</h5>
+
+                        </div>
+
+                    </div>
+
+                </a>
+
+            </div>
+
+            <!-- Food Orders -->
+            <div class="col-lg-3 col-md-4 col-6">
+
+                <a href="/food-orders/scan" class="text-decoration-none">
+
+                    <div class="card menu-card shadow">
+
+                        <div class="card-body text-center">
+
+                            <div class="menu-icon-wrapper">
+                                <i class="fas fa-utensils text-primary"></i>
+                            </div>
+
+                            <h5>Food Orders</h5>
 
                         </div>
 

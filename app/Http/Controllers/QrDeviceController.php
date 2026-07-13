@@ -13,16 +13,41 @@ class QrDeviceController extends Controller
 {
     public function index()
     {
-        $devices = QrAuthorizedDevice::with(['user', 'assignedBy'])->latest()->get();
+        $devices = QrAuthorizedDevice::query()
+            ->with(['user', 'assignedBy'])
+            ->leftJoin('users', 'users.id', '=', 'qr_authorized_devices.user_id')
+            ->leftJoin('model_has_roles', function ($join) {
+                $join->on('model_has_roles.model_id', '=', 'users.id')
+                    ->where('model_has_roles.model_type', '=', \App\Models\User::class);
+            })
+            ->leftJoin('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->select(
+                'qr_authorized_devices.*',
+                'roles.name as role_name'
+            )
+            ->latest('qr_authorized_devices.created_at')
+            ->get();
+        // dd($devices);
 
         // ambil semua uuid yang SUDAH diassign, supaya tidak muncul lagi di pending
         $assignedUuids = QrAuthorizedDevice::pluck('device_uuid');
 
-        $pendingAttempts = QrScanLog::where('status', 'failed_device_not_registered')
-            ->whereNotNull('user_id')
-            ->whereNotIn('device_uuid', $assignedUuids)
+        $pendingAttempts = QrScanLog::query()
+            ->leftJoin('users', 'users.id', '=', 'qr_scan_logs.user_id')
+            ->leftJoin('model_has_roles', function ($join) {
+                $join->on('model_has_roles.model_id', '=', 'users.id')
+                    ->where('model_has_roles.model_type', '=', \App\Models\User::class);
+            })
+            ->leftJoin('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('qr_scan_logs.status', 'failed_device_not_registered')
+            ->whereNotNull('qr_scan_logs.user_id')
+            ->whereNotIn('qr_scan_logs.device_uuid', $assignedUuids)
+            ->select(
+                'qr_scan_logs.*',
+                'roles.name as role_name'
+            )
             ->with('user')
-            ->latest()
+            ->latest('qr_scan_logs.created_at')
             ->limit(100)
             ->get()
             ->unique('device_uuid')

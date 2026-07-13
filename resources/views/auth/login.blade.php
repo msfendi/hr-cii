@@ -52,7 +52,7 @@
                                 
                                 <div class="form-group">
                                     <input type="email" class="form-control form-control-user @error('email') is-invalid @enderror" id="email" name="email"
-                                        placeholder="Email" value="{{ old('email') }}">
+                                        placeholder="Email">
                                     @error('email')
                                     <div class="invalid-feedback">
                                         {{ $message }}

@@ -9,7 +9,7 @@ use App\Exports\AttendanceExport;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
-class AttendanceFingerController extends Controller
+class AttendanceFingerControllerCopy extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -455,4 +455,5 @@ class AttendanceFingerController extends Controller
 
         return Excel::download(new \App\Exports\AttendanceManualTemplateExport($month, $year, $is_sewing), $fileName);
     }
+
 }

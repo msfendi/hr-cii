@@ -26,14 +26,15 @@
                 <table class="table table-bordered table-sm" id="pendingTable">
                     <thead>
                     <tr>
-                        <th>User</th><th>NPK</th><th>Device</th><th>Tipe</th><th>IP</th><th>Waktu</th><th width="80">Aksi</th>
+                        <th>NPK</th><th>User</th><th>Role</th><th>Device</th><th>Tipe</th><th>IP</th><th>Waktu</th><th width="80">Aksi</th>
                     </tr>
                     </thead>
                     <tbody>
                     @foreach($pendingAttempts as $attempt)
                     <tr>
-                        <td>{{ $attempt->user->name ?? '-' }}</td>
                         <td>{{ $attempt->npk_scanned }}</td>
+                        <td>{{ $attempt->user->name ?? '-' }}</td>
+                        <td>{{ $attempt->role_name ?? '-' }}</td>
                         <td>
                         {{ $attempt->device_name }}<br>
                         <small class="text-muted">{{ $attempt->device_uuid }}</small>
@@ -96,8 +97,9 @@
                     <thead>
                       <tr>
                         <th width="50">ID</th>
-                        <th>User</th>
                         <th>NPK</th>
+                        <th>User</th>
+                        <th>Role</th>
                         <th>Device</th>
                         <th>Tipe</th>
                         <th>Assign Oleh</th>
@@ -110,8 +112,9 @@
                     @foreach($devices as $device)
                       <tr>
                         <td>{{ $device->id }}</td>
-                        <td>{{ $device->user->name }}</td>
                         <td>{{ $device->user->npk }}</td>
+                        <td>{{ $device->user->name }}</td>
+                        <td>{{ $device->role_name }}</td>
                         <td>
                           {{ $device->device_name }}<br>
                           <small class="text-muted">{{ $device->device_uuid }}</small>
