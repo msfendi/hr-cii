@@ -120,7 +120,9 @@ class GenerateCompensation implements ShouldQueue
                 'NPK',
                 'NAMA_KARYAWAN',
                 'ID_DEPT',
-                'BAG'
+                'BAG',
+                'IS_EXPAT',
+                'IS_STAFF'
             )
             ->unionAll(
                 DB::table('BIODATA_KELUAR')
@@ -128,7 +130,9 @@ class GenerateCompensation implements ShouldQueue
                         'NPK',
                         'NAMA_KARYAWAN',
                         'ID_DEPT',
-                        'BAG'
+                        'BAG',
+                        'IS_EXPAT',
+                        'IS_STAFF'
                     )
             );
 
@@ -168,6 +172,7 @@ class GenerateCompensation implements ShouldQueue
 
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
             // ->where('bio.NPK', '=', 'C-10000')
+            ->where('bio.IS_EXPAT', '=', '0')
 
             ->select(
                 'ec.*',
@@ -302,10 +307,10 @@ class GenerateCompensation implements ShouldQueue
                 }
 
                 /*
-    |--------------------------------------------------------------------------
-    | FORMULA ENGINE
-    |--------------------------------------------------------------------------
-    */
+                |--------------------------------------------------------------------------
+                | FORMULA ENGINE
+                |--------------------------------------------------------------------------
+                */
 
                 $inputVariables = [
                     'is_contract' => $is_contract ? 1 : 0,
@@ -396,6 +401,8 @@ class GenerateCompensation implements ShouldQueue
                         'department'    => $emp->department,
                         'contract_id'   => $emp->id,
                         'id_dept'       => $emp->ID_DEPT,
+                        'salary'        => $emp->salary,
+                        'daily_salary'  => $emp->daily_salary,
                         'amount'        => $amount,
                         'status'        => $status,
                         'end_date'      => $emp->end_date,
@@ -515,6 +522,7 @@ class GenerateCompensation implements ShouldQueue
                     'ec.start_date',
                     'ec.end_date',
                     'ec.salary',
+                    'ec.daily_salary',
                     'ec.month_duration',
 
                     'bio.NAMA_KARYAWAN as employee_name',
@@ -528,7 +536,7 @@ class GenerateCompensation implements ShouldQueue
 
                 ->groupBy(fn($row) => $row->department ?? 'NO DEPARTMENT');
 
-            // dd($rows);
+            dd($rows);
             if (!$isCheck) {
                 $approvals = [];
 

@@ -139,6 +139,7 @@
                           <th>Month Duration</th>
                           <th>Day Duration</th>
                           <th>End Date</th>
+                          <th>Salary</th>
                           <th>Amount</th>
                           <th>Status</th>
                           <th>Active</th>
@@ -147,7 +148,7 @@
                       <tbody></tbody>
                       <tfoot>
                         <tr style="font-weight:bold;background:#f8f9fc">
-                          <th colspan="6" class="text-right">TOTAL</th>
+                          <th colspan="7" class="text-right">TOTAL</th>
                           <th></th>
                           <th></th>
                           <th></th>
@@ -262,6 +263,14 @@
                       data: 'status'
                     },
                     {
+                      data: 'salary',
+                      render: data => new Intl.NumberFormat('id-ID', {
+                        style: 'currency',
+                        currency: 'IDR',
+                        minimumFractionDigits: 2
+                      }).format(data ?? 0)
+                    },
+                    {
                       data: 'amount',
                       render: data => new Intl.NumberFormat('id-ID', {
                         style: 'currency',
@@ -285,14 +294,14 @@
                       return 0;
                     }
                     let total = api
-                      .column(7, {
+                      .column(8, {
                         search: 'applied'
                       })
                       .data()
                       .reduce(function(a, b) {
                         return intVal(a) + intVal(b);
                       }, 0);
-                    $(api.column(7).footer()).html(
+                    $(api.column(8).footer()).html(
                       new Intl.NumberFormat('id-ID', {
                         style: 'currency',
                         currency: 'IDR',
@@ -383,6 +392,14 @@
                   data: 'end_date'
                 },
                 {
+                  data: 'salary',
+                  render: data => new Intl.NumberFormat('id-ID', {
+                    style: 'currency',
+                    currency: 'IDR',
+                    minimumFractionDigits: 2
+                  }).format(data ?? 0)
+                },
+                {
                   data: 'amount',
                   render: data => new Intl.NumberFormat('id-ID', {
                     style: 'currency',
@@ -458,13 +475,14 @@
                         <th>Day Duration</th>
                         <th>End Date</th>
                         <th>Status</th>
+                        <th>Salary</th>
                         <th>Amount</th>
                       </tr>
                     </thead>
                     <tbody></tbody>
                     <tfoot>
                       <tr style="font-weight:bold;background:#f8f9fc">
-                        <th colspan="7" class="text-right">
+                        <th colspan="8" class="text-right">
                           TOTAL
                         </th>
                         <th id="totalAmount">0</th>

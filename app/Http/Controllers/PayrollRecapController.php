@@ -273,16 +273,23 @@ class PayrollRecapController extends Controller
         // yang sama), berdasarkan employee_dept yang tercatat pada masing-masing periode.
         $deptRecap = [];
 
+        // Rincian per karyawan per Department, mencakup SEMUA komponen gaji
+        // (bukan hanya komponen yang sedang dipilih di filter). Dipakai untuk
+        // modal detail saat baris department di-klik pada tabel "Rincian
+        // Payroll per Department".
+        $deptEmployeeDetail = [];
+
         foreach ($rows as $row) {
             $periodKey = Carbon::parse($row->period_start)->format('Y-m');
             if (!$months->has($periodKey)) {
                 continue;
             }
 
+            $comp = json_decode($row->components, true) ?? [];
+
             if ($component === 'total_salary') {
                 $value = (float) $row->total_salary;
             } else {
-                $comp  = json_decode($row->components, true) ?? [];
                 $value = (float) ($comp[$component]['amount'] ?? 0);
             }
 
@@ -304,7 +311,7 @@ class PayrollRecapController extends Controller
                 $employees[$row->employee_npk] = [
                     'npk'          => $row->employee_npk,
                     'nama'         => $row->nama,
-                    'bagian'       => $row->bagian,
+                    'bagian'       => $row->dept_name,
                     'tkk'          => $row->tkk,
                     'total'        => 0.0,
                     'months_count' => 0,
@@ -325,6 +332,30 @@ class PayrollRecapController extends Controller
             }
             $deptRecap[$deptKey]['total'] += $value;
             $deptRecap[$deptKey]['employees'][$row->employee_npk] = true;
+
+            // Rincian per karyawan per Department -- SEMUA komponen gaji
+            if (!isset($deptEmployeeDetail[$deptKey])) {
+                $deptEmployeeDetail[$deptKey] = [];
+            }
+            if (!isset($deptEmployeeDetail[$deptKey][$row->employee_npk])) {
+                $deptEmployeeDetail[$deptKey][$row->employee_npk] = [
+                    'npk'          => $row->employee_npk,
+                    'nama'         => $row->nama,
+                    'total_salary' => 0.0,
+                    'months_count' => 0,
+                    'components'   => [],
+                ];
+            }
+            $deptEmployeeDetail[$deptKey][$row->employee_npk]['total_salary'] += (float) $row->total_salary;
+            $deptEmployeeDetail[$deptKey][$row->employee_npk]['months_count'] += 1;
+            foreach ($comp as $ck => $cv) {
+                if (!array_key_exists($ck, $flatComponents)) {
+                    continue; // hanya komponen yang terdaftar di whitelist
+                }
+                $amt = is_array($cv) ? (float) ($cv['amount'] ?? 0) : (float) $cv;
+                $current = $deptEmployeeDetail[$deptKey][$row->employee_npk]['components'][$ck] ?? 0.0;
+                $deptEmployeeDetail[$deptKey][$row->employee_npk]['components'][$ck] = $current + $amt;
+            }
         }
 
         $labels        = $months->pluck('label')->values();
@@ -363,6 +394,23 @@ class PayrollRecapController extends Controller
             })
             ->sortBy('dept_name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
+
+        // Bulatkan & rapikan rincian per karyawan per Department untuk dikirim
+        // ke frontend (dipakai oleh modal detail komponen gaji per dept).
+        $deptEmployeeDetails = collect($deptEmployeeDetail)->map(function ($employeesInDept) {
+            return collect($employeesInDept)->map(function ($e) {
+                $e['total_salary'] = round($e['total_salary'], 2);
+                foreach ($e['components'] as $ck => $cv) {
+                    $e['components'][$ck] = round($cv, 2);
+                }
+                return $e;
+            })->sortByDesc('total_salary')->values();
+        })->toArray();
+
+        // Cast ke stdClass supaya SELALU ter-encode sebagai JSON object (bukan
+        // array), terlepas dari pola ID department-nya, sehingga frontend bisa
+        // konsisten mengakses via deptEmployeeDetailsData[deptId].
+        $deptEmployeeDetails = (object) $deptEmployeeDetails;
 
         // ===================== OVERTIME / LEMBUR =====================
 
@@ -508,6 +556,7 @@ class PayrollRecapController extends Controller
             'employee_counts' => $employeeCounts,
             'employees'       => $employeeList,
             'payroll_by_dept' => $payrollByDept,
+            'dept_employee_details' => $deptEmployeeDetails,
             'component_label' => $componentLabel,
             'grand_total'     => $grandTotal,
             'avg_per_month'   => $avgPerMonth,
