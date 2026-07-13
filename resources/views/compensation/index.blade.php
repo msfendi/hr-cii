@@ -15,20 +15,23 @@
             {{-- ===================================================== --}}
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
               <h1 class="h3 mb-0 text-gray-800">Compensation</h1>
-              @canRoute('compensation.generate')
               <form method="POST" action="{{ route('compensation.generate') }}" id="generateForm" class="form-inline">
                 @csrf
                 <input type="text" name="generate_date" id="generate_date" class="form-control form-control-sm mr-2" placeholder="Select Date" required readonly>
+                
+              @canRoute('compensation.check')
                 <button type="button" id="btnCheck" class="btn btn-info btn-sm shadow-sm mr-2" disabled>
                   <i class="fas fa-search"></i>
                   Check Compensation
                 </button>
+              @endcanRoute
+              @canRoute('compensation.generate')
                 <button type="submit" id="btnGenerate" class="btn btn-primary btn-sm shadow-sm" disabled>
                   <i class="fas fa-cogs"></i>
                   Generate Compensation
                 </button>
-              </form>
               @endcanRoute
+              </form>
             </div>
             {{-- ===================================================== --}}
             {{-- DATA TABLE --}}
