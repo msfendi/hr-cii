@@ -840,12 +840,13 @@ Route::group(['middleware' => 'auth'], function () {
     });
 
     // Compensation
-    Route::get('compensation', [CompensationsController::class, 'index'])->name('compensation.index');
-    Route::post('compensation/generate', [CompensationsController::class, 'generate'])->name('compensation.generate');
-    Route::post('compensation/recap', [CompensationApproveController::class, 'createCompensationCSV'])->name('compensation.recap');
-    Route::get('/compensation/details/{date}', [CompensationsController::class, 'details'])->name('compensation.details');
-    Route::post('/compensation/check', [CompensationsController::class, 'check'])->name('compensation.check');
+    Route::get('compensation', [CompensationsController::class, 'index'])->name('compensation.index')->middleware(['auth', 'permission']);
+    Route::post('compensation/generate', [CompensationsController::class, 'generate'])->name('compensation.generate')->middleware(['auth', 'permission']);
+    Route::post('compensation/recap', [CompensationApproveController::class, 'createCompensationCSV'])->name('compensation.recap')->middleware(['auth', 'permission']);
+    Route::get('/compensation/details/{date}', [CompensationsController::class, 'details'])->name('compensation.details')->middleware(['auth', 'permission']);
+    Route::post('/compensation/check', [CompensationsController::class, 'check'])->name('compensation.check')->middleware(['auth', 'permission']);
     // Route::get('/compensation/check/{date}', [CompensationsController::class, 'check'])->name('compensation.check');
+    Route::delete('/compensation/{id}', [CompensationsController::class, 'destroy'])->name('compensation.destroy')->middleware(['auth', 'permission']);
 
     Route::prefix('health-test')->group(function () {
         Route::get('/', [HealthTestController::class, 'index'])->name('health-test.index');

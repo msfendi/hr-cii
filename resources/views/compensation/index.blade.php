@@ -15,6 +15,7 @@
             {{-- ===================================================== --}}
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
               <h1 class="h3 mb-0 text-gray-800">Compensation</h1>
+              @if(!$noRoleAssigned)
               <form method="POST" action="{{ route('compensation.generate') }}" id="generateForm" class="form-inline">
                 @csrf
                 <input type="text" name="generate_date" id="generate_date" class="form-control form-control-sm mr-2" placeholder="Select Date" required readonly>
@@ -32,7 +33,21 @@
                 </button>
               @endcanRoute
               </form>
+              @endif
             </div>
+            {{-- ===================== INFO ROLE PAYROLL ===================== --}}
+            @if($noRoleAssigned)
+              <div class="alert alert-danger py-2 px-3 mb-3">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
+                Akun Anda belum terdaftar di <strong>role_payrolls</strong>, sehingga tidak ada data compensation yang bisa ditampilkan/diproses dari halaman ini.
+                Silakan hubungi Admin untuk pengaturan akses.
+              </div>
+            @elseif($payrollRoleLabel && $payrollRoleLabel !== 'Semua (Tidak Difilter)')
+              <div class="alert alert-info py-2 px-3 mb-3">
+                <i class="fas fa-info-circle mr-1"></i>
+                Data compensation ditampilkan sesuai akses role payroll Anda: <strong>{{ $payrollRoleLabel }}</strong>
+              </div>
+            @endif
             {{-- ===================================================== --}}
             {{-- DATA TABLE --}}
             {{-- ===================================================== --}}
@@ -66,6 +81,7 @@
                         <th>Total Compensation</th>
                         <th>Employee Count</th>
                         <th>File</th>
+                        <th>Excel</th>
                         <th>Bank Format</th>
                         <th>Approval Status</th>
                         <th>Action</th>
@@ -74,12 +90,46 @@
                     <tbody>
                       @foreach($compensations as $comp)
                       @php
-                      $folder = \Carbon\Carbon::parse($comp->cutoff_date)->translatedFormat('F_Y');
+                        $folder = \Carbon\Carbon::parse($comp->cutoff_date)->translatedFormat('F_Y');
+                        $day = \Carbon\Carbon::parse($comp->cutoff_date)->day; // 7 atau 20
+
+                        // file_pdf / file_csv / file_excel disimpan sebagai JSON {ROLE_KEY: filename}
+                        // sejak 1 periode/tanggal bisa punya beberapa file (per role_payroll), dan
+                        // file-nya berada di subfolder .../{period}/{ROLE}/{day}/.
+                        $pdfFiles = json_decode($comp->file_pdf ?? '', true) ?: [];
+                        $csvFiles = json_decode($comp->file_csv ?? '', true) ?: [];
+                        $excelFiles = json_decode($comp->file_excel ?? '', true) ?: [];
+
+                        // flag data lama sebelum migrasi ke JSON (masih string 1 file, disimpan
+                        // FLAT di root folder period, TANPA subfolder role & TANPA subfolder hari)
+                        $legacyPdf = false;
+                        $legacyCsv = false;
+                        $legacyExcel = false;
+
+                        if (empty($pdfFiles) && !empty($comp->file_pdf) && !str_starts_with(trim($comp->file_pdf), '{')) {
+                            $pdfFiles = [\App\Services\PayrollRoleFilterService::ROLE_ALL => $comp->file_pdf];
+                            $legacyPdf = true;
+                        }
+                        if (empty($csvFiles) && !empty($comp->file_csv) && !str_starts_with(trim($comp->file_csv), '{')) {
+                            $csvFiles = [\App\Services\PayrollRoleFilterService::ROLE_ALL => $comp->file_csv];
+                            $legacyCsv = true;
+                        }
+                        if (empty($excelFiles) && !empty($comp->file_excel) && !str_starts_with(trim($comp->file_excel), '{')) {
+                            $excelFiles = [\App\Services\PayrollRoleFilterService::ROLE_ALL => $comp->file_excel];
+                            $legacyExcel = true;
+                        }
+
+                        // $fileRoleKey dikirim dari controller: null hanya utk Admin (lihat semua),
+                        // selain itu di-scope PERSIS ke role_payroll user login (termasuk Payroll_ALL
+                        // -> cuma lihat key "Payroll_ALL" saja, bukan semua kategori).
+                        $visiblePdfKeys   = empty($fileRoleKey) ? array_keys($pdfFiles)   : [$fileRoleKey];
+                        $visibleCsvKeys   = empty($fileRoleKey) ? array_keys($csvFiles)   : [$fileRoleKey];
+                        $visibleExcelKeys = empty($fileRoleKey) ? array_keys($excelFiles) : [$fileRoleKey];
                       @endphp
                       <tr>
                         <td>{{ $comp->id }}</td>
                         <td>
-                          {{ \Carbon\Carbon::parse($comp->cutoff_date)->translatedFormat('F Y') }}
+                          {{ \Carbon\Carbon::parse($comp->cutoff_date)->translatedFormat('d F Y') }}
                         </td>
                         <td>{{ $comp->created_at }}</td>
                         <td>
@@ -87,19 +137,60 @@
                         </td>
                         <td>{{ $comp->total_employee ?? 0 }}</td>
                         <td class="text-center">
-                          @if($comp->file_pdf)
-                          <a class="btn btn-danger btn-sm" href="{{ Storage::url('compensations/' . $folder . '/' .$comp->file_pdf) }}" target="_blank">
-                            <i class="fas fa-file-pdf"></i> PDF
-                          </a>
-                          @endif
+                          @foreach($pdfFiles as $roleKey => $fileName)
+                            @if(in_array($roleKey, $visiblePdfKeys) && $fileName)
+                            @php
+                              $roleLabel = str_replace('Payroll_', '', $roleKey);
+                              if ($legacyPdf) {
+                                  $fileUrl = Storage::url('compensations/' . $folder . '/' . $fileName);
+                              } else {
+                                  $subFolder = \App\Services\PayrollRoleFilterService::folder($roleKey);
+                                  $fileUrl = Storage::url('compensations/' . $folder . '/' . $subFolder . $day . '/' . $fileName);
+                              }
+                            @endphp
+                            <a class="btn btn-danger btn-sm mb-1" href="{{ $fileUrl }}" target="_blank">
+                              <i class="fas fa-file-pdf"></i> PDF {{ $roleLabel }}
+                            </a><br>
+                            @endif
+                          @endforeach
                         </td>
                         <td class="text-center">
-                          @if($comp->file_csv)
-                          <a class="btn btn-primary btn-sm" href="{{ Storage::url('compensations/' . $folder . '/' .$comp->file_csv) }}" target="_blank">
-                            <i class="fas fa-university"> CSV</i>
-                          </a>
-                          @endif
+                          @foreach($excelFiles as $roleKey => $fileName)
+                            @if(in_array($roleKey, $visibleExcelKeys) && $fileName)
+                            @php
+                              $roleLabel = str_replace('Payroll_', '', $roleKey);
+                              if ($legacyExcel) {
+                                  $fileUrl = Storage::url('compensations/' . $folder . '/' . $fileName);
+                              } else {
+                                  $subFolder = \App\Services\PayrollRoleFilterService::folder($roleKey);
+                                  $fileUrl = Storage::url('compensations/' . $folder . '/' . $subFolder . $day . '/' . $fileName);
+                              }
+                            @endphp
+                            <a class="btn btn-success btn-sm mb-1" href="{{ $fileUrl }}" target="_blank">
+                              <i class="fas fa-file-excel"></i> Excel {{ $roleLabel }} (zip)
+                            </a><br>
+                            @endif
+                          @endforeach
                         </td>
+                        <td class="text-center">
+                          @foreach($csvFiles as $roleKey => $fileName)
+                            @if(in_array($roleKey, $visibleCsvKeys) && $fileName)
+                            @php
+                              $roleLabel = str_replace('Payroll_', '', $roleKey);
+                              if ($legacyCsv) {
+                                  $fileUrl = Storage::url('compensations/' . $folder . '/' . $fileName);
+                              } else {
+                                  $subFolder = \App\Services\PayrollRoleFilterService::folder($roleKey);
+                                  $fileUrl = Storage::url('compensations/' . $folder . '/' . $subFolder . $day . '/' . $fileName);
+                              }
+                            @endphp
+                            <a class="btn btn-primary btn-sm mb-1" href="{{ $fileUrl }}" target="_blank">
+                              <i class="fas fa-university"></i> CSV {{ $roleLabel }}
+                            </a><br>
+                            @endif
+                          @endforeach
+                        </td>
+
                         <td class="text-center">
                           @if($comp->approve_status == 'finish')
                           <span class="badge badge-success">Approved</span>
@@ -110,9 +201,16 @@
                           @endif
                         </td>
                         <td class="text-center">
+                          @canRoute('compensation.details')
                           <button class="btn btn-info btn-circle btn-sm btn-detail" data-date="{{ $comp->cutoff_date }}" data-period="{{ \Carbon\Carbon::parse($comp->cutoff_date)->translatedFormat('F_Y') }}">
                             <i class="fas fa-eye"></i>
                           </button>
+                          @endcanRoute
+                          @canRoute('compensation.destroy')
+                          <button class="btn btn-danger btn-circle btn-sm btn-delete" data-id="{{ $comp->id }}" data-period="{{ \Carbon\Carbon::parse($comp->cutoff_date)->translatedFormat('d F Y') }}">
+                            <i class="fas fa-trash"></i>
+                          </button>
+                          @endcanRoute
                         </td>
                       </tr>
                       @endforeach
@@ -139,6 +237,7 @@
                           <th>ID</th>
                           <th>NPK</th>
                           <th>Department</th>
+                          <th>TMK</th>
                           <th>Month Duration</th>
                           <th>Day Duration</th>
                           <th>End Date</th>
@@ -151,7 +250,7 @@
                       <tbody></tbody>
                       <tfoot>
                         <tr style="font-weight:bold;background:#f8f9fc">
-                          <th colspan="7" class="text-right">TOTAL</th>
+                          <th colspan="8" class="text-right">TOTAL</th>
                           <th></th>
                           <th></th>
                           <th></th>
@@ -184,21 +283,23 @@
         {{-- DATE PICKER --}}
         {{-- ===================================================== --}}
         <script>
-          flatpickr("#generate_date", {
-            dateFormat: "Y-m-d",
-            disableMobile: true,
-            enable: [
-              function(date) {
-                return date.getDate() === 7 || date.getDate() === 20;
+          if (document.getElementById('generate_date')) {
+            flatpickr("#generate_date", {
+              dateFormat: "Y-m-d",
+              disableMobile: true,
+              enable: [
+                function(date) {
+                  return date.getDate() === 7 || date.getDate() === 20;
+                }
+              ],
+              onChange: function(selectedDates, dateStr) {
+                if (dateStr) {
+                  $('#btnGenerate').prop('disabled', false);
+                  $('#btnCheck').prop('disabled', false);
+                }
               }
-            ],
-            onChange: function(selectedDates, dateStr) {
-              if (dateStr) {
-                $('#btnGenerate').prop('disabled', false);
-                $('#btnCheck').prop('disabled', false);
-              }
-            }
-          });
+            });
+          }
         </script>
         <script>
           let checkTable = null;
@@ -339,17 +440,35 @@
           $(document).ready(function() {
             $('#generateForm').on('submit', function(e) {
               e.preventDefault(); // stop submit dulu
+              const form = this;
+              const date = $('#generate_date').val();
+
               Swal.fire({
-                title: 'Generating Compensation...',
-                html: 'Please wait, system is processing data',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                didOpen: () => {
-                  Swal.showLoading();
+                title: 'Generate Compensation?',
+                html: 'Anda akan generate compensation untuk periode <strong>' + (date || '-') + '</strong>.<br>Proses ini tidak bisa dibatalkan setelah dijalankan.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Generate',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#4e73df',
+                cancelButtonColor: '#858796',
+                reverseButtons: true
+              }).then((result) => {
+                if (result.isConfirmed) {
+                  Swal.fire({
+                    title: 'Generating Compensation...',
+                    html: 'Please wait, system is processing data',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: () => {
+                      Swal.showLoading();
+                    }
+                  });
+                  // submit setelah swal loading tampil
+                  form.submit();
                 }
+                // kalau cancel/dismiss, tidak ada aksi apapun (form tidak submit)
               });
-              // submit setelah swal tampil
-              this.submit();
             });
           });
         </script>
@@ -384,6 +503,9 @@
                 },
                 {
                   data: 'dept'
+                },
+                {
+                  data: 'TMK'
                 },
                 {
                   data: 'month_duration'
@@ -437,14 +559,14 @@
                   return 0;
                 }
                 let total = api
-                  .column(6, {
+                  .column(8, {
                     search: 'applied'
                   })
                   .data()
                   .reduce(function(a, b) {
                     return intVal(a) + intVal(b);
                   }, 0);
-                $(api.column(6).footer()).html(
+                $(api.column(8).footer()).html(
                   new Intl.NumberFormat('id-ID', {
                     style: 'currency',
                     currency: 'IDR',
@@ -452,6 +574,63 @@
                   }).format(total)
                 );
               }
+            });
+          });
+        </script>
+        {{-- ===================================================== --}}
+        {{-- DELETE COMPENSATION --}}
+        {{-- ===================================================== --}}
+        <script>
+          $(document).on('click', '.btn-delete', function() {
+            let id = $(this).data('id');
+            let period = $(this).data('period');
+
+            Swal.fire({
+              title: 'Delete Compensation?',
+              html: 'Data compensation periode <strong>' + period + '</strong> beserta seluruh <strong>detail</strong> dan <strong>approval</strong>-nya akan dihapus permanen.<br>Tindakan ini tidak bisa dibatalkan.',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonText: 'Ya, Hapus',
+              cancelButtonText: 'Batal',
+              confirmButtonColor: '#e74a3b',
+              cancelButtonColor: '#858796',
+              reverseButtons: true
+            }).then((result) => {
+              if (result.isConfirmed) {
+                Swal.fire({
+                  title: 'Deleting...',
+                  html: 'Please wait, system is removing data',
+                  allowOutsideClick: false,
+                  allowEscapeKey: false,
+                  didOpen: () => {
+                    Swal.showLoading();
+                  }
+                });
+
+                $.ajax({
+                  url: '/compensation/' + id,
+                  type: 'DELETE',
+                  data: {
+                    _token: '{{ csrf_token() }}'
+                  },
+                  success: function(res) {
+                    Swal.fire({
+                      title: 'Deleted!',
+                      text: res.message || 'Compensation data has been deleted.',
+                      icon: 'success'
+                    }).then(() => {
+                      location.reload();
+                    });
+                  },
+                  error: function(xhr) {
+                    let msg = xhr.responseJSON && xhr.responseJSON.message
+                      ? xhr.responseJSON.message
+                      : 'Failed to delete compensation data.';
+                    Swal.fire('Error', msg, 'error');
+                  }
+                });
+              }
+              // kalau cancel/dismiss, tidak ada aksi apapun
             });
           });
         </script>

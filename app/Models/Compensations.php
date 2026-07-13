@@ -13,6 +13,7 @@ class Compensations extends Model
         'total_employee',
         'total_amount',
         'file_pdf',
+        'file_excel',
         'file_csv',
         'progress',
         'status',

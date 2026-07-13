@@ -19,7 +19,11 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use App\Services\PdfService;
+use App\Services\ExcelZipEncryptService;
+use App\Exports\Compensation\CompensationExportExcel;
 use Illuminate\Support\Str;
+use App\Services\PayrollRoleFilterService;
+use Illuminate\Support\Facades\Auth;
 
 class GenerateCompensation implements ShouldQueue
 {
@@ -178,10 +182,13 @@ class GenerateCompensation implements ShouldQueue
                 'ec.*',
                 'ec.type',
                 'p.TKK',
+                'p.TMK',
 
                 'bio.NAMA_KARYAWAN as employee_name',
                 'bio.ID_DEPT',
-                'd.DEPARTEMENT as department'
+                'bio.IS_STAFF',
+                'd.DEPARTEMENT as department',
+                'd.IS_SEWING'
             )
 
             ->orderBy('ec.end_date', 'desc')
@@ -319,6 +326,7 @@ class GenerateCompensation implements ShouldQueue
                     'allowance' => $emp->allowance ?? 0,
                     'daily_salary' => $emp->salary,
                     'month_duration' => $emp->month_duration,
+                    'day_duration' => $emp->day_duration,
                     'difference_days' => $difference_days,
                     'count_days' => $count_days,
                 ];
@@ -409,7 +417,9 @@ class GenerateCompensation implements ShouldQueue
                         'month_duration'      => $emp->month_duration,
                         'day_duration'      => $emp->day_duration,
                         'is_active'     => $is_active,
-                        'cutoff_date'   => $today->format('Y-m-d')
+                        'cutoff_date'   => $today->format('Y-m-d'),
+                        'IS_STAFF'      => $emp->IS_STAFF ?? 0,
+                        'IS_SEWING'     => $emp->IS_SEWING ?? 0,
                     ];
                 }
             }
@@ -417,9 +427,23 @@ class GenerateCompensation implements ShouldQueue
 
                 DB::rollBack();
 
+                $user = Auth::user();
+                $role = PayrollRoleFilterService::getRole($user);
+
+                // Sama seperti payroll: kalau Admin, tidak difilter.
+                // Selain itu, ikuti aturan role_payrolls (deny by default).
+                $filteredResults = ($user && $user->hasRole('Admin'))
+                    ? collect($compensationResults)
+                    : PayrollRoleFilterService::filterCollection(
+                        $compensationResults,
+                        $role,
+                        'IS_STAFF',
+                        'IS_SEWING'
+                    );
+
                 return response()->json([
                     'success' => true,
-                    'data'    => $compensationResults
+                    'data'    => $filteredResults->values()
                 ]);
             }
 
@@ -489,8 +513,51 @@ class GenerateCompensation implements ShouldQueue
 
             $period = $today->format('F_Y');
             $folder = "public/compensations/$period";
+
+            /*
+            |--------------------------------------------------------------------------
+            | ROLE_PAYROLL CATEGORY SPLIT
+            |--------------------------------------------------------------------------
+            | Pakai konstanta & konvensi folder dari PayrollRoleFilterService supaya
+            | selalu sinkron dengan applyToQuery()/filterCollection()/folder() yang
+            | sudah dipakai di CompensationsController. ROLE_ALL sengaja TIDAK punya
+            | subfolder sendiri (folder() mengembalikan '' untuk ALL) -> filenya
+            | disimpan langsung di root folder period, sama seperti pola
+            | GeneratePayrollExport (REKAP_xxx.xlsx untuk ALL ada di folder period,
+            | sedangkan STAFF/NON_STAFF/SEWING/NON_SEWING punya subfolder sendiri).
+            */
+
+            $categories = [
+                PayrollRoleFilterService::ROLE_ALL       => fn($r) => true, // gabungan staff + non staff
+                PayrollRoleFilterService::ROLE_STAFF     => fn($r) => ($r->IS_STAFF ?? 0) == 1,
+                PayrollRoleFilterService::ROLE_NONSTAFF  => fn($r) => ($r->IS_STAFF ?? 0) == 0,
+                PayrollRoleFilterService::ROLE_SEWING    => fn($r) => ($r->IS_STAFF ?? 0) == 0 && ($r->IS_SEWING ?? 0) == 0,
+                PayrollRoleFilterService::ROLE_NONSEWING => fn($r) => ($r->IS_STAFF ?? 0) == 0 && ($r->IS_SEWING ?? 0) == 1,
+            ];
+
+            // folder per role_payroll DAN per tanggal cutoff (7 / 20) di dalam folder
+            // period, contoh:
+            // public/compensations/July_2026/7/            -> Payroll_ALL, cutoff tgl 7
+            // public/compensations/July_2026/20/            -> Payroll_ALL, cutoff tgl 20
+            // public/compensations/July_2026/STAFF/7/
+            // public/compensations/July_2026/STAFF/20/
+            // public/compensations/July_2026/NON_STAFF/7/
+            // ...dst
+            // Wajib dipisah per tanggal karena 1 folder period (satu bulan) dipakai
+            // bersama oleh 2 master compensations (cutoff tgl 7 & tgl 20) -> tanpa
+            // subfolder tanggal, file compensations tgl 7 akan ketimpa oleh tgl 20.
+            $roleFolders = [];
+            foreach (array_keys($categories) as $roleKey) {
+                $sub = PayrollRoleFilterService::folder($roleKey); // '' untuk ALL, 'STAFF/' dst untuk lainnya
+                $base = $sub ? rtrim("$folder/$sub", '/') : $folder;
+                $roleFolders[$roleKey] = "$base/$day";
+            }
+
             if (!$isCheck) {
                 Storage::makeDirectory($folder, 0777, true);
+                foreach ($roleFolders as $roleFolder) {
+                    Storage::makeDirectory($roleFolder, 0777, true);
+                }
             }
 
             /*
@@ -513,6 +580,8 @@ class GenerateCompensation implements ShouldQueue
 
                 ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
 
+                ->leftJoin('PKWT as p', 'p.NPK', '=', 'ec.npk')
+
                 ->select(
                     'cd.amount',
                     'cd.status',
@@ -526,17 +595,17 @@ class GenerateCompensation implements ShouldQueue
                     'ec.month_duration',
 
                     'bio.NAMA_KARYAWAN as employee_name',
-                    'd.DEPARTEMENT as department'
+                    'bio.IS_STAFF',
+                    'd.DEPARTEMENT as department',
+                    'd.IS_SEWING',
+                    'p.TMK'
                 )
 
                 ->orderBy('d.DEPARTEMENT')
                 ->orderBy('ec.npk')
 
-                ->get()
+                ->get();
 
-                ->groupBy(fn($row) => $row->department ?? 'NO DEPARTMENT');
-
-            dd($rows);
             if (!$isCheck) {
                 $approvals = [];
 
@@ -575,57 +644,131 @@ class GenerateCompensation implements ShouldQueue
 
                 $suffix = $this->type === 'process' ? '' : '_APPROVED';
 
-                $html = View::make(
-                    'compensation.rekap_pdf',
-                    [
-                        'groups' => $rows,
-                        'totalAmount' => $totalAmount,
-                        'totalEmployee' => $totalEmployee,
-                        'date' => $today,
-                        'approvals' => $approvals
-                    ]
-                )->render();
-
                 /*
             |--------------------------------------------------------------------------
-            | GENERATE PDF
+            | GENERATE PDF + EXCEL PER ROLE_PAYROLL
             |--------------------------------------------------------------------------
+            | Untuk setiap kategori (Payroll_ALL, Payroll_STAFF, Payroll_NONSTAFF,
+            | Payroll_SEWING, Payroll_NONSEWING) file disimpan terpisah di folder
+            | role masing-masing. Kategori Payroll_ALL berisi gabungan staff + non
+            | staff dan disimpan di root folder period (lihat PayrollRoleFilterService::folder()).
+            | Nama file disimpan sebagai JSON {role => filename} di kolom file_pdf / file_excel.
             */
 
-                $pdf = App::make('snappy.pdf.wrapper');
+                $filePdfMap = [];
+                $fileExcelMap = [];
+                $zipService = app(ExcelZipEncryptService::class);
 
-                $pdf->loadHTML($html)
-                    ->setPaper('a4')
-                    ->setOrientation('landscape')
-                    ->setOption('enable-local-file-access', true);
+                foreach ($categories as $key => $filter) {
 
+                    // slug pendek buat nama file & password, mis. Payroll_NONSTAFF -> nonstaff
+                    $roleSlug = strtolower(str_replace('Payroll_', '', $key));
 
-                $pdfPath = "$folder/REKAP COMPENSATION_{$period}{$suffix}.pdf";
-                $pdfPathTemp = "$folder/REKAP_{$period}{$suffix}_temp.pdf";
-                $tempPath = storage_path("app/$pdfPathTemp");
-                $finalPath = storage_path("app/$pdfPath");
+                    $master->update([
+                        'status' => "Building Rekap PDF ($roleSlug)",
+                        'progress' => 60
+                    ]);
 
-                if (File::exists($tempPath)) File::delete($tempPath);
-                if (File::exists($finalPath)) File::delete($finalPath);
+                    $filteredRows = $rows->filter($filter)->values();
 
-                $pdf->save($tempPath);
+                    // lewati kategori yang tidak punya data sama sekali
+                    if ($filteredRows->isEmpty()) {
+                        continue;
+                    }
 
-                /*
-            |--------------------------------------------------------------------------
-            | ENCRYPT PDF
-            |--------------------------------------------------------------------------
-            */
+                    $groupedRows = $filteredRows->groupBy(fn($row) => $row->department ?? 'NO DEPARTMENT');
 
-                $master->update([
-                    'status' => 'Encrypting PDF',
-                    'progress' => 85
-                ]);
+                    $categoryTotalAmount   = $filteredRows->sum('amount');
+                    $categoryTotalEmployee = $filteredRows->count();
 
-                $password = PdfPassword::generate('staff', $today);
+                    $roleFolder = $roleFolders[$key];
 
-                PdfService::protect($tempPath, $finalPath, $password);
+                    $html = View::make(
+                        'compensation.rekap_pdf',
+                        [
+                            'groups' => $groupedRows,
+                            'totalAmount' => $categoryTotalAmount,
+                            'totalEmployee' => $categoryTotalEmployee,
+                            'date' => $today,
+                            'approvals' => $approvals,
+                            'roleLabel' => strtoupper($roleSlug),
+                        ]
+                    )->render();
 
-                if (File::exists($tempPath)) File::delete($tempPath);
+                    $pdf = App::make('snappy.pdf.wrapper');
+
+                    $pdf->loadHTML($html)
+                        ->setPaper('a4')
+                        ->setOrientation('landscape')
+                        ->setOption('enable-local-file-access', true);
+
+                    $fileName = "REKAP_COMPENSATION_{$period}_{$roleSlug}{$suffix}.pdf";
+                    $fileNameTemp = "REKAP_{$period}_{$roleSlug}{$suffix}_temp.pdf";
+
+                    $pdfPath = "$roleFolder/$fileName";
+                    $pdfPathTemp = "$roleFolder/$fileNameTemp";
+                    $tempPath = storage_path("app/$pdfPathTemp");
+                    $finalPath = storage_path("app/$pdfPath");
+
+                    if (File::exists($tempPath)) File::delete($tempPath);
+                    if (File::exists($finalPath)) File::delete($finalPath);
+
+                    $pdf->save($tempPath);
+
+                    /*
+                |--------------------------------------------------------------------------
+                | ENCRYPT PDF (password berbeda per role)
+                |--------------------------------------------------------------------------
+                */
+
+                    $master->update([
+                        'status' => "Encrypting PDF ($roleSlug)",
+                        'progress' => 85
+                    ]);
+
+                    $password = PdfPassword::generate($roleSlug, $today);
+
+                    PdfService::protect($tempPath, $finalPath, $password);
+
+                    if (File::exists($tempPath)) File::delete($tempPath);
+
+                    $filePdfMap[$key] = $fileName;
+
+                    /*
+                |--------------------------------------------------------------------------
+                | EXCEL (mengikuti pola PayrollExportNonStaffExcel / PayrollDetailNonStaffSheet)
+                | + ENCRYPT jadi ZIP pakai ExcelZipEncryptService (sama seperti GeneratePayrollExport)
+                |--------------------------------------------------------------------------
+                */
+
+                    $master->update([
+                        'status' => "Building Excel ($roleSlug)",
+                        'progress' => 90
+                    ]);
+
+                    // ROLE_ALL -> tidak difilter (null), role lain -> difilter sesuai role_payroll
+                    $roleForExport = PayrollRoleFilterService::isAll($key) ? null : $key;
+
+                    $excelFileName = "REKAP_COMPENSATION_{$period}_{$roleSlug}{$suffix}.xlsx";
+                    $excelFullPath = storage_path("app/$roleFolder/$excelFileName");
+                    $excelZipPath  = storage_path("app/$roleFolder/" . pathinfo($excelFileName, PATHINFO_FILENAME) . '.zip');
+
+                    if (File::exists($excelFullPath)) File::delete($excelFullPath);
+                    if (File::exists($excelZipPath)) File::delete($excelZipPath);
+
+                    (new CompensationExportExcel($today, $roleForExport))
+                        ->export($excelFullPath);
+
+                    $master->update([
+                        'status' => "Encrypting Excel ($roleSlug)",
+                        'progress' => 95
+                    ]);
+
+                    // password sama dengan PDF supaya user cukup ingat 1 password per role
+                    $zipService->encrypt($excelFullPath, $password);
+
+                    $fileExcelMap[$key] = pathinfo($excelFileName, PATHINFO_FILENAME) . '.zip';
+                }
 
                 /*
             |--------------------------------------------------------------------------
@@ -634,7 +777,8 @@ class GenerateCompensation implements ShouldQueue
             */
 
                 $master->update([
-                    'file_pdf' => str_replace('public/', '', "REKAP COMPENSATION_{$period}{$suffix}.pdf"),
+                    'file_pdf' => json_encode($filePdfMap),
+                    'file_excel' => json_encode($fileExcelMap),
                     'status' => 'finished',
                     'progress' => 100
                 ]);
