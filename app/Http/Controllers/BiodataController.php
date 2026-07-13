@@ -484,4 +484,55 @@ class BiodataController extends Controller
             ->get();
         return view('biodata.gender', compact('data'));
     }
+
+    public function getSoftFiles($npk)
+    {
+        $pkwt = DB::connection('cii')
+            ->table('PKWT')
+            ->where('NPK', $npk)
+            ->select('KTP')
+            ->first();
+
+        $labels = [
+            'file_surat_lamaran'  => 'Surat Lamaran',
+            'file_cv'             => 'CV',
+            'file_ktp'            => 'KTP',
+            'file_kk'             => 'KK',
+            'file_ijasah'         => 'Ijazah',
+            'file_akta_kelahiran' => 'Akta Kelahiran',
+            'file_skck'           => 'SKCK',
+            'file_surat_sehat'    => 'Surat Sehat',
+            'file_pas_foto'       => 'Pas Foto',
+        ];
+
+        $docs = [];
+
+        if ($pkwt && $pkwt->KTP) {
+            $pelamar = DB::table('PELAMAR')
+                ->where('NIK', $pkwt->KTP)
+                ->select('id')
+                ->first();
+
+            if ($pelamar) {
+                $detail = DB::table('pelamar_details')
+                    ->where('id_pelamar', $pelamar->id)
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($detail) {
+                    foreach ($labels as $field => $label) {
+                        if (!empty($detail->$field)) {
+                            $docs[$label] = asset('storage/' . $detail->$field);
+                        }
+                    }
+                }
+            }
+        }
+
+        return response()->json([
+            'npk'   => $npk,
+            'count' => count($docs),
+            'docs'  => $docs,
+        ]);
+    }
 }

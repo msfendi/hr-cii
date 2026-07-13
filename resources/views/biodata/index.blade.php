@@ -1179,11 +1179,49 @@
                             <a class="btn btn-primary btn-sm btn-show" data-npk="${row.NPK}">Show</a>
                             <a class="btn btn-warning btn-sm btn-edit" data-npk="${row.NPK}">Update Karyawan</a>
                             <a class="btn btn-info btn-sm btn-kontrak" data-npk="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}"><i class="fas fa-file-contract mr-1"></i>Kontrak</a>
+                            <div class="dropdown d-inline-block">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle doc-fold-btn"
+                                        type="button" data-toggle="dropdown" data-npk="${row.NPK}">
+                                    <i class="fas fa-folder-open text-warning"></i>
+                                    <span class="badge badge-primary doc-count" style="font-size:9px;">…</span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-right shadow-sm doc-menu" style="min-width:180px;">
+                                    <span class="dropdown-item text-muted small">Loading...</span>
+                                </div>
+                            </div>
                             <a class="btn btn-danger btn-sm btn-exit" data-id="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}">Exit</a>
                         `;
                     }
                 }
-            ]
+            ],
+            drawCallback: function () {
+                $('.doc-fold-btn').off('click').on('click', function () {
+                    var $btn = $(this);
+                    var $menu = $btn.closest('.dropdown').find('.doc-menu');
+                    var npk = $btn.data('npk');
+
+                    $menu.html('<span class="dropdown-item text-muted small">Loading...</span>');
+
+                    $.get('/biodata/soft-files/' + npk, function (res) {
+                        if (!res.count) {
+                            $menu.html('<span class="dropdown-item text-muted small">No documents</span>');
+                            return;
+                        }
+
+                        var html = '';
+                        $.each(res.docs, function (label, url) {
+                            var ext = url.split('.').pop().toLowerCase();
+                            var icon = ['jpg', 'jpeg', 'png', 'webp'].indexOf(ext) !== -1
+                                ? 'fa-image text-purple'
+                                : 'fa-file-pdf text-danger';
+                            html += '<a class="dropdown-item d-flex align-items-center" style="font-size:12.5px; gap:8px;" href="' + url + '" target="_blank"><i class="fas ' + icon + '"></i> ' + label + '</a>';
+                        });
+
+                        $btn.find('.doc-count').text(res.count);
+                        $menu.html(html);
+                    });
+                });
+            }
         });
 
         // Event listener for department filter
