@@ -755,6 +755,7 @@
                                             <th style="min-width:160px">Departemen / Posisi</th>
                                             <th style="min-width:120px">Tanggal Apply</th>
                                             <th style="min-width:160px">Status Apply</th>
+                                            <th style="min-width:170px">Hasil Test</th>
                                             <th width="70" class="text-center">Dok.</th>
                                             <th width="120" class="text-center">Aksi</th>
                                         </tr>
@@ -884,6 +885,54 @@
                                                     <span class="s-pill {{ $sClass }}">
                                                         <i class="fas {{ $sIcon }}"></i>{{ $recruitment->status_apply ?? $sa ?? '-' }}
                                                     </span>
+                                                </td>
+                                                
+                                                {{-- Hasil Test --}}
+                                                <td>
+                                                    @php
+                                                        $stepResults = [
+                                                            'Interview'  => $recruitment->result_interview ?? null,
+                                                            'Kesehatan'  => $recruitment->result_kesehatan ?? null,
+                                                            'Teknis'     => $recruitment->result_test ?? null,
+                                                            'User'       => $recruitment->result_user ?? null,
+                                                        ];
+                                                        $hasAnyResult = collect($stepResults)->filter(fn($v) => !is_null($v) && $v !== '')->isNotEmpty();
+                                                    @endphp
+                                                    @if($hasAnyResult)
+                                                        <div style="display:flex; flex-direction:column; gap:3px;">
+                                                        @foreach($stepResults as $label => $val)
+                                                            @if(!is_null($val) && $val !== '')
+                                                                @php
+                                                                    $rStyle = match(strtoupper($val)) {
+                                                                        'TRUE'  => 'background:#dcfce7; color:#166534; border:1px solid #bbf7d0;',
+                                                                        'FALSE' => 'background:#fee2e2; color:#991b1b; border:1px solid #fecaca;',
+                                                                        'SKIP'  => 'background:#fef9c3; color:#854d0e; border:1px solid #fef08a;',
+                                                                        default => 'background:#f1f5f9; color:#475569; border:1px solid #e2e8f0;',
+                                                                    };
+                                                                    $rIcon = match(strtoupper($val)) {
+                                                                        'TRUE'  => 'fa-check-circle',
+                                                                        'FALSE' => 'fa-times-circle',
+                                                                        'SKIP'  => 'fa-forward',
+                                                                        default => 'fa-circle',
+                                                                    };
+                                                                    $rText = match(strtoupper($val)) {
+                                                                        'TRUE'  => 'LOLOS',
+                                                                        'FALSE' => 'TIDAK LOLOS',
+                                                                        'SKIP'  => 'DILEWATI',
+                                                                        default => $val,
+                                                                    };
+                                                                @endphp
+                                                                <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; {{ $rStyle }}">
+                                                                    <i class="fas {{ $rIcon }}" style="font-size:10px;"></i>
+                                                                    <span style="flex:1;">{{ $label }}</span>
+                                                                    <span>{{ $rText }}</span>
+                                                                </div>
+                                                            @endif
+                                                        @endforeach
+                                                        </div>
+                                                    @else
+                                                        <span class="text-muted" style="font-size:12px;">—</span>
+                                                    @endif
                                                 </td>
 
                                                 {{-- Dokumen --}}
