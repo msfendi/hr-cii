@@ -663,6 +663,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'permission']);
     Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'permission']);
     Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'permission']);
+    Route::get('/recruitment/edit/{id}', [RecruitmentController::class, 'edit'])->name('recruitment.edit')->middleware(['auth', 'permission']);
+    Route::put('/recruitment/update/{id}', [RecruitmentController::class, 'update'])->name('recruitment.update')->middleware(['auth', 'permission']);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -1053,7 +1056,7 @@ Route::get('/lowongan/data', [JobVacancyController::class, 'publicData'])
     ->name('job-vacancy.public-data');
 
 
-    /*
+/*
     |--------------------------------------------------------------------------
     | Food Ordering (Karyawan)
     |--------------------------------------------------------------------------

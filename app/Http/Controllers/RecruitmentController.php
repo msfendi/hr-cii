@@ -7,7 +7,9 @@ use App\Models\HealthTest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Services\FonnteService;
+use Carbon\Carbon;
 use RealRashid\SweetAlert\Facades\Alert;
+use Illuminate\Support\Str;
 
 class RecruitmentController extends Controller
 {
@@ -250,5 +252,139 @@ class RecruitmentController extends Controller
 
         Alert::error('Whatsapp Failed!', 'Gagal mengirim pesan WhatsApp.');
         return back()->with('error', 'Failed to send WhatsApp message: ' . ($response['reason'] ?? 'Unknown error'));
+    }
+
+    
+    public function edit($id)
+    {
+        $pelamar = DB::connection('cii')->table('PELAMAR')
+            ->leftJoin('pelamar_details as pd', 'pd.id_pelamar', '=', 'PELAMAR.ID')
+            ->where('PELAMAR.ID', $id)
+            ->select('PELAMAR.*', 'pd.*', 'PELAMAR.ID as id', 'pd.id as detail_id')
+            ->first();
+
+        if (!$pelamar) {
+            Alert::error('Error', 'Data pelamar tidak ditemukan');
+            return redirect()->route('recruitment.index');
+        }
+
+        // Decode JSON fields if needed for view
+        $pelamar->pengalaman_kerja = $pelamar->pengalaman_kerja ? json_decode($pelamar->pengalaman_kerja, true) : null;
+        $pelamar->data_ayah = $pelamar->data_ayah ? json_decode($pelamar->data_ayah, true) : null;
+        $pelamar->data_ibu = $pelamar->data_ibu ? json_decode($pelamar->data_ibu, true) : null;
+        $pelamar->saudara_kandung = $pelamar->saudara_kandung ? json_decode($pelamar->saudara_kandung, true) : null;
+        $pelamar->data_anak = $pelamar->data_anak ? json_decode($pelamar->data_anak, true) : null;
+        $pelamar->riwayat_pendidikan = $pelamar->riwayat_pendidikan ? json_decode($pelamar->riwayat_pendidikan, true) : null;
+
+        return view('recruitment.edit', compact('pelamar'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'nama_lengkap' => 'required|string|max:255',
+            'nik' => 'required|string|max:16',
+            'no_kk' => 'required|string|max:16',
+        ]);
+
+        try {
+            DB::connection('cii')->beginTransaction();
+
+            $umur = null;
+            if ($request->filled('tanggal_lahir')) {
+                $diff = Carbon::parse($request->tanggal_lahir)->diff(Carbon::now());
+                $umur = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
+            }
+
+            // Update PELAMAR
+            DB::connection('cii')->table('PELAMAR')
+                ->where('ID', $id)
+                ->update([
+                    'NAMA' => strtoupper($request->nama_lengkap ?? '-'),
+                    'NIK' => $request->nik,
+                    'NO_KK' => $request->no_kk,
+                    'JENIS_KELAMIN' => strtoupper($request->jenis_kelamin ?? '-'),
+                    'TMPT_LAHIR' => strtoupper($request->tempat_lahir ?? '-'),
+                    'TGL_LAHIR' => $request->tanggal_lahir,
+                    'UMUR' => $umur ?? '-',
+                    'STATUS' => $request->status_pernikahan ?? '-',
+                    'TANGGUNGAN' => $request->tanggungan ?? 0,
+                    'AGAMA' => strtoupper($request->agama ?? '-'),
+                    'HP' => $request->nomor_hp ?? '-',
+                    'ALAMAT_LENGKAP' => strtoupper($request->alamat_asal ?? '-'),
+                    'KABUPATEN' => strtoupper($request->kab_kota_asal ?? '-'),
+                    'ALAMAT_DOMISILI' => strtoupper($request->status_domisili_asal ?? '-'),
+                    'PENDIDIKAN' => strtoupper($request->pendidikan ?? '-'),
+                    'JURUSAN' => strtoupper($request->jurusan ?? '-'),
+                    'NAMA_SEKOLAH' => strtoupper($request->nama_sekolah ?? '-'),
+                    'TINGGI_BADAN' => $request->tinggi_badan ?? 0,
+                    'BERAT_BADAN' => $request->berat_badan ?? 0,
+                ]);
+
+            // Handle Files
+            $fileFields = [
+                'surat_lamaran' => 'file_surat_lamaran',
+                'cv' => 'file_cv',
+                'scan_ktp' => 'file_ktp',
+                'scan_kk' => 'file_kk',
+                'pas_foto' => 'file_pas_foto',
+                'ijazah' => 'file_ijasah',
+                'scan_akta_kelahiran' => 'file_akta_kelahiran',
+                'scan_skck' => 'file_skck',
+                'scan_blanko_kesehatan' => 'file_surat_sehat'
+            ];
+
+            $namaPelamar = Str::slug($request->nama_lengkap ?? 'pelamar', '_');
+            $timestamp = Carbon::now()->format('Ymd-His');
+            $detailUpdates = [
+                'nomor_sim' => $request->sim,
+                'warga_negara' => $request->warga_negara,
+                'ikut_kb' => ($request->kb ?? 'Tidak') === 'Ya' ? 1 : 0,
+                'bakat_hobby' => $request->hobby,
+                'mode_transportasi' => $request->transportasi,
+                'jabatan' => $request->jabatan,
+                'department' => $request->department,
+                'bpjs_tk' => $request->bpjs_tk,
+                'bpjs_kes' => $request->bpjs_kes,
+                'alamat_skrg' => $request->alamat_sekarang ?? $request->alamat_asal,
+                'kabupaten_kota_skrg' => $request->kab_kota_sekarang ?? $request->kab_kota_asal,
+                'status_domisili' => $request->status_domisili_sekarang ?? $request->status_domisili_asal,
+                'nama_ktk_darurat' => $request->nama_darurat,
+                'hubungan' => $request->hubungan_darurat,
+                'no_telp_darurat' => $request->no_telepon_darurat,
+                'motivasi' => $request->motivasi,
+                'kegiatan_ekstra' => $request->kegiatan_ekstra,
+                'data_ayah' => $request->filled('data_ayah') ? json_encode($request->data_ayah) : null,
+                'data_ibu' => $request->filled('data_ibu') ? json_encode($request->data_ibu) : null,
+                'saudara_kandung' => $request->filled('saudara_kandung') ? json_encode(array_values(array_filter($request->saudara_kandung, fn($v) => !empty(array_filter($v))))) : null,
+                'data_anak' => $request->filled('data_anak') ? json_encode(array_values(array_filter($request->data_anak, fn($v) => !empty(array_filter($v))))) : null,
+                'riwayat_pendidikan' => $request->filled('riwayat_pendidikan') ? json_encode(array_values(array_filter($request->riwayat_pendidikan, fn($v) => !empty(array_filter($v))))) : null,
+                'pengalaman_kerja' => $request->filled('pengalaman_kerja') ? json_encode(array_values(array_filter($request->pengalaman_kerja, fn($v) => !empty(array_filter($v))))) : null,
+            ];
+
+            foreach ($fileFields as $inputName => $dbField) {
+                if ($request->hasFile($inputName)) {
+                    $file = $request->file($inputName);
+                    $ext = $file->extension();
+                    $filename = "{$inputName}_{$namaPelamar}_{$timestamp}.{$ext}";
+                    $folder = "pelamar/{$inputName}";
+                    $detailUpdates[$dbField] = $file->storeAs($folder, $filename, 'public');
+                }
+            }
+
+            DB::connection('cii')->table('pelamar_details')
+                ->where('id_pelamar', $id)
+                ->update($detailUpdates);
+
+            DB::connection('cii')->commit();
+
+            Alert::success('Berhasil', 'Data pelamar berhasil diperbarui!');
+            return redirect()->route('recruitment.index');
+
+        } catch (\Exception $e) {
+            DB::connection('cii')->rollBack();
+            Alert::error('Gagal', 'Terjadi kesalahan: ' . $e->getMessage());
+            return back()->withInput();
+        }
     }
 }

@@ -165,6 +165,18 @@
             color: #fff;
         }
 
+        .act-edit {
+            background: #ffedd5;
+            color: #ea580c;
+            text-decoration: none;
+        }
+
+        .act-edit:hover {
+            background: #ea580c;
+            color: #fff;
+            text-decoration: none;
+        }
+
         /* Doc folder btn */
         .doc-fold-btn {
             display: inline-flex;
@@ -913,6 +925,11 @@
                                                             data-toggle="modal" data-target="#whatsappModal">
                                                             <i class="fab fa-whatsapp"></i> WA
                                                         </button>
+                                                        @canRoute('recruitment.edit')
+                                                            <a href="{{ route('recruitment.edit', $recruitment->ID) }}" class="act-btn act-edit">
+                                                                <i class="fas fa-edit"></i> Edit
+                                                            </a>
+                                                        @endcanRoute
                                                         <button type="button" class="act-btn act-det btn-detail"
                                                             data-recruitment="{{ json_encode($recruitment) }}"
                                                             data-toggle="modal" data-target="#detailModal">
