@@ -157,8 +157,11 @@
                     <div class="su-info-row">
                         <span class="material-symbols-outlined">phone_iphone</span>
                         <p>
-                            Tim HRD akan menghubungi Anda melalui <strong>nomor HP yang terdaftar</strong>.
-                            Pastikan nomor HP Anda aktif dan dapat dihubungi.
+                            Harap Screenshot Halaman Ini dan <strong>Kirimkan ke Nomor HRD berikut
+                                <br><li>085198514858</li>
+                                <li>085111229639</li>
+                            </strong><br>
+                            <strong>Jika Tidak Konfirmasi ke Nomor Tersebut, Maka Lamaran Anda Tidak Akan Di Proses Lebih Lanjut.</strong>
                         </p>
                     </div>
 
