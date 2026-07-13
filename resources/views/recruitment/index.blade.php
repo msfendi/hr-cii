@@ -1235,6 +1235,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1262,6 +1263,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1289,6 +1291,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-2">
@@ -1323,6 +1326,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1558,21 +1562,26 @@
             const isIntvw = d.is_interview === 'TRUE' || d.is_interview === true;
             const isHlth  = d.is_kesehatan === 'TRUE' || d.is_kesehatan === true;
             const isOnb   = d.STATUS_APPLY === 'ONBOARDING';
-            const intvStatus = d.result_interview === 'TRUE' ? 'done' : (d.result_interview === 'FALSE' ? 'failed' : 'active');
+            const intvStatus = d.result_interview === 'TRUE' ? 'done' : 
+                               (d.result_interview === 'FALSE' ? 'failed' : 
+                               (d.result_interview === 'SKIP' ? 'active' : 'active'));
             
             const hlthStatus = d.result_kesehatan === 'TRUE' ? 'done' : 
                                (d.result_kesehatan === 'FALSE' ? 'failed' : 
-                               (d.result_interview === 'TRUE' ? 'active' : ''));
+                               (d.result_kesehatan === 'SKIP' ? 'active' : 
+                               ((d.result_interview === 'TRUE' || d.result_interview === 'SKIP') ? 'active' : '')));
 
             const testStatus = d.result_test === 'TRUE' ? 'done' : 
                                (d.result_test === 'FALSE' ? 'failed' : 
-                               (d.result_kesehatan === 'TRUE' ? 'active' : ''));
+                               (d.result_test === 'SKIP' ? 'active' : 
+                               ((d.result_kesehatan === 'TRUE' || d.result_kesehatan === 'SKIP') ? 'active' : '')));
 
             const userStatus = d.result_user === 'TRUE' ? 'done' : 
                                (d.result_user === 'FALSE' ? 'failed' : 
-                               (d.result_test === 'TRUE' ? 'active' : ''));
+                               (d.result_user === 'SKIP' ? 'active' : 
+                               ((d.result_test === 'TRUE' || d.result_test === 'SKIP') ? 'active' : '')));
 
-            const onboardStatus = isOnb ? 'done' : (d.result_user === 'TRUE' ? 'active' : '');
+            const onboardStatus = isOnb ? 'done' : ((d.result_user === 'TRUE' || d.result_user === 'SKIP') ? 'active' : '');
 
 
             setTl('tl_apply',     null,            'done',              null);
@@ -1604,7 +1613,7 @@
             // Rule: step unlocks only if previous step has a result of 'LOLOS' in database
             function applyLock(stepId, prevResult) {
                 const $step = $('#' + stepId);
-                const unlocked = prevResult === 'TRUE';
+                const unlocked = prevResult === 'TRUE' || prevResult === 'SKIP';
                 $step.toggleClass('locked', !unlocked);
             }
             applyLock('step_kesehatan', d.result_interview);
@@ -1622,6 +1631,9 @@
                 } else if (result === 'FALSE') {
                     $dot.css({'background':'#fee2e2','color':'#991b1b'});
                     $lbl.css('color','#991b1b');
+                } else if (result === 'SKIP') {
+                    $dot.css({'background':'#e0f2fe','color':'#0369a1'});
+                    $lbl.css('color','#0369a1');
                 } else {
                     $dot.css({'background':'#f1f3f5','color':'#adb5bd'});
                     $lbl.css('color','#adb5bd');
