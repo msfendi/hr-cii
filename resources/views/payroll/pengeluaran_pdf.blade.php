@@ -39,7 +39,21 @@
       }
     </style>
   </head>
-  <body> @php $periode = '-'; if($groupedActive->count()){ $firstDept = $groupedActive->first(); if($firstDept->count()){ $periode = $firstDept->first()->period_name; } } @endphp {{-- ===================================== --}}
+  <body> 
+    @php 
+    $periode = '-'; 
+    if($groupedActive->count()){ 
+        $firstDept = $groupedActive->first(); 
+        if($firstDept->count()){ 
+            $periode = $firstDept->first()->period_name; 
+        } 
+    }
+
+    $totalOrangAktif   = $groupedActive->sum(fn($g) => $g->count());
+    $totalOrangResign  = $groupedResign->sum(fn($g) => $g->count());
+    $totalOrangMangkir = $groupedMangkir->sum(fn($g) => $g->count());
+    @endphp
+    {{-- ===================================== --}}
     {{-- HALAMAN 1 - KARYAWAN AKTIF --}}
     {{-- ===================================== --}} @php $total_bruto = 0; $total_potongan = 0; @endphp <div>
       <strong>PT. CHUTEX INTERNATIONAL INDONESIA</strong>
@@ -62,8 +76,12 @@
         <td>: {{ $periode }}</td>
       </tr>
       <tr>
-        <td>Keterangan</td>
-        <td>: KARYAWAN AKTIF {{ $folderName }}</td>
+          <td>Keterangan</td>
+          <td>: KARYAWAN AKTIF {{ $folderName }}</td>
+      </tr>
+      <tr>
+          <td>Jumlah Karyawan</td>
+          <td>: {{ number_format($totalOrangAktif,0,',','.') }} Orang</td>
       </tr>
     </table>
     <br>
@@ -211,6 +229,10 @@ $total_potongan = 0;
   <td>Keterangan</td>
   <td>: KARYAWAN RESIGN {{ $folderName }}</td>
 </tr>
+<tr>
+  <td>Jumlah Karyawan</td>
+  <td>: {{ number_format($totalOrangResign,0,',','.') }} Orang</td>
+</tr>
 </table>
 
 <br>
@@ -357,6 +379,10 @@ $total_potongan = 0;
     <tr>
         <td>Keterangan</td>
         <td>: KARYAWAN MANGKIR {{ $folderName }}</td>
+    </tr>
+    <tr>
+        <td>Jumlah Karyawan</td>
+        <td>: {{ number_format($totalOrangMangkir,0,',','.') }} Orang</td>
     </tr>
 </table>
 

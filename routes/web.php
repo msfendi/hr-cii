@@ -93,6 +93,7 @@ use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
+use App\Http\Controllers\MonitoringController;
 
 /*
 |--------------------------------------------------------------------------
@@ -988,6 +989,11 @@ Route::middleware(['auth', 'permission']) // ganti/tambahkan middleware role adm
         Route::patch('/admin/qr-devices/{qrDevice}/rename', [QrDeviceController::class, 'rename'])->name('qr-devices.rename');
         Route::delete('qr-devices/pending/{uuid}', [QrDeviceController::class, 'destroyPendingAttempt'])->name('qr-devices.pending.destroy');
     });
+
+Route::prefix('monitoring')->middleware(['auth', 'permission'])->group(function () {
+    Route::get('/', [MonitoringController::class, 'index'])->name('monitoring.index');
+    Route::get('/api/stats', [MonitoringController::class, 'stats'])->name('monitoring.stats');
+});
 
 
 Route::get('/employee-late', [EmployeeLateController::class, 'index'])->name('employee-late.index')->middleware(['auth', 'permission']);

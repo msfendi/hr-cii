@@ -404,7 +404,7 @@
                 </div>
             </div>
         </div>
-
+<br>
 @include('layout.footer')
 </body>
 <!-- Page level plugins -->

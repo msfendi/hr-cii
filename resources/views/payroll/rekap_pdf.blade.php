@@ -434,6 +434,11 @@
     @endforeach
     @endif
 <div class="page-break"></div>
+@php
+$totalOrangAktif  = $groupedActive->sum(fn($g) => $g->count());
+$totalOrangResign = $groupedResign->sum(fn($g) => $g->count());
+$totalOrangMangkir = $groupedMangkir->sum(fn($g) => $g->count());
+@endphp
     <h3>REKAP PAYROLL</h3>
     <table class="summary-table">
       <thead>
@@ -510,6 +515,26 @@
         {{ number_format($mangkirEarning+$mangkirDeduction,0,',','.') }}
     </td>
 </tr>
+
+<tr>
+    <th>Total Karyawan</th>
+
+    <td align="center" style="font-weight:bold">
+        Aktif :
+        {{ number_format($totalOrangAktif,0,',','.') }} Orang
+    </td>
+
+    <td align="center" style="font-weight:bold">
+        Resign :
+        {{ number_format($totalOrangResign,0,',','.') }} Orang
+    </td>
+
+    <td align="center" style="font-weight:bold">
+        Mangkir :
+        {{ number_format($totalOrangMangkir,0,',','.') }} Orang
+    </td>
+</tr>
+    </table>
     </table>
     {{-- ================= APPROVAL ================= --}}
     @if(!empty($approvals))
