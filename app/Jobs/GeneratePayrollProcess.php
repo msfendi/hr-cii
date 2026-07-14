@@ -146,7 +146,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-04133')
+            // ->where('p.NPK', '=', 'C-04554')
 
             ->select(
                 'p.NPK',
@@ -175,7 +175,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-04133')
+            // ->where('ec1.npk', '=', 'C-04554')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)

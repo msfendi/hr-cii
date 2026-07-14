@@ -788,24 +788,45 @@ body{
                                 </form>
                             </div>
                         </div>
-                        {{-- KPI: Rata-rata Lembur per Minggu --}}
+                        {{-- RINCIAN LEMBUR PER MINGGU --}}
                         <div class="row">
-                            <div class="col-xl-6 col-md-6 mb-4">
-                                <div class="kpi-card kpi-primary shadow h-100">
-                                    <div class="kpi-label">Rata-rata Lembur Biasa / Minggu</div>
-                                    <div class="kpi-value" id="kpiAvgRegularWeek">0 Jam</div>
-                                    <i class="fas fa-business-time kpi-icon"></i>
-                                </div>
-                            </div>
-                            <div class="col-xl-6 col-md-6 mb-4">
-                                <div class="kpi-card kpi-info shadow h-100">
-                                    <div class="kpi-label">Rata-rata Lembur Khusus / Minggu</div>
-                                    <div class="kpi-value" id="kpiAvgSpecialWeek">0 Jam</div>
-                                    <i class="fas fa-calendar-week kpi-icon"></i>
+                            <div class="col-lg-12 mb-4">
+                                <div class="card shadow h-100">
+                                    <div class="card-header py-3">
+                                        <h6 class="m-0 font-weight-bold text-primary">
+                                            <i class="fas fa-calendar-week mr-1"></i> Rincian Lembur per Minggu
+                                        </h6>
+                                        <small class="section-hint">
+                                            Minggu dihitung mulai dari tanggal awal periode payroll (7 hari per minggu).
+                                        </small>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered mb-0 small">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width:90px;">Minggu</th>
+                                                        <th>Rentang Tanggal</th>
+                                                        <th class="text-right">Lembur Biasa (Jam)</th>
+                                                        <th class="text-right">Lembur Khusus (Jam)</th>
+                                                        <th class="text-right">Total (Jam)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="overtimeByWeekTableBody"></tbody>
+                                                <tfoot>
+                                                    <tr class="font-weight-bold">
+                                                        <td colspan="2">Rata-rata / Minggu</td>
+                                                        <td class="text-right" id="footerAvgRegularWeek">0 Jam</td>
+                                                        <td class="text-right" id="footerAvgSpecialWeek">0 Jam</td>
+                                                        <td class="text-right" id="footerAvgTotalWeek">0 Jam</td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-
                         {{-- TOP 5 DEPARTMENT OVERTIME --}}
                         <div class="row">
                             <div class="col-lg-12 mb-4">
@@ -1449,9 +1470,34 @@ body{
             $('#top5DeptTableBody').html(rows);
         }
 
-        function renderAvgPerWeek(avg) {
-            $('#kpiAvgRegularWeek').text(jamFormat(avg.regular || 0) + ' Jam');
-            $('#kpiAvgSpecialWeek').text(jamFormat(avg.special || 0) + ' Jam');
+        function formatDateShort(dateStr) {
+            // dateStr format YYYY-MM-DD -> dd/mm
+            const [, m, d] = dateStr.split('-');
+            return `${d}/${m}`;
+        }
+
+        function renderOvertimeByWeek(weeks) {
+            let rows = '';
+            if (!weeks.length) {
+                rows = `<tr><td colspan="5" class="text-center text-muted">Tidak ada data.</td></tr>`;
+            } else {
+                weeks.forEach(w => {
+                    rows += `<tr>
+                        <td>Minggu ${w.week}</td>
+                        <td>${formatDateShort(w.start_date)} - ${formatDateShort(w.end_date)}</td>
+                        <td class="text-right">${jamFormat(w.regular_jam)}</td>
+                        <td class="text-right">${jamFormat(w.special_jam)}</td>
+                        <td class="text-right font-weight-bold">${jamFormat(w.total_jam)}</td>
+                    </tr>`;
+                });
+            }
+            $('#overtimeByWeekTableBody').html(rows);
+
+            const avgRegular = weeks.length ? weeks.reduce((a, b) => a + b.regular_jam, 0) / weeks.length : 0;
+            const avgSpecial = weeks.length ? weeks.reduce((a, b) => a + b.special_jam, 0) / weeks.length : 0;
+            $('#footerAvgRegularWeek').text(jamFormat(avgRegular) + ' Jam');
+            $('#footerAvgSpecialWeek').text(jamFormat(avgSpecial) + ' Jam');
+            $('#footerAvgTotalWeek').text(jamFormat(avgRegular + avgSpecial) + ' Jam');
         }
 
         function renderOvertimeChart(overtimeByDate) {
@@ -1746,7 +1792,8 @@ body{
                         data.overtime_matrix || {}
                     );
                     renderTop5Dept(data.top5_dept || []);
-                    renderAvgPerWeek(data.avg_per_week || { regular: 0, special: 0 });
+                    renderTop5Dept(data.top5_dept || []);
+                    renderOvertimeByWeek(data.overtime_by_week || []);
                 })
                 .catch(err => {
                     // console.error('Error fetching overtime data:', err);

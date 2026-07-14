@@ -702,11 +702,48 @@ class PayrollRecapController extends Controller
         $totalRegularJam = round(collect($overtimeByDate)->sum('regular_jam'), 2);
         $totalSpecialJam = round(collect($overtimeByDate)->sum('special_jam'), 2);
 
-        $avgPerWeek = [
-            'regular' => round($totalRegularJam / $totalWeeksInPeriod, 2),
-            'special' => round($totalSpecialJam / $totalWeeksInPeriod, 2),
-            'weeks'   => round($totalWeeksInPeriod, 2),
-        ];
+        // Rincian jam lembur per minggu dalam periode terpilih (Week 1 = 7 hari
+        // pertama sejak periodStart, dst — bukan minggu kalender Senin-Minggu)
+        $overtimeByWeek = [];
+        $weekCursor = $periodStart->copy();
+        $weekNumber = 1;
+
+        while ($weekCursor->lte($periodEnd)) {
+            $weekEndCursor = (clone $weekCursor)->addDays(6);
+            if ($weekEndCursor->gt($periodEnd)) {
+                $weekEndCursor = $periodEnd->copy();
+            }
+
+            $overtimeByWeek[] = [
+                'week'        => $weekNumber,
+                'start_date'  => $weekCursor->format('Y-m-d'),
+                'end_date'    => $weekEndCursor->format('Y-m-d'),
+                'regular_jam' => 0.0,
+                'special_jam' => 0.0,
+            ];
+
+            $weekCursor->addDays(7);
+            $weekNumber++;
+        }
+
+        // Sebar total jam per tanggal ($overtimeByDate, sudah ada dari loop di atas)
+        // ke bucket minggu yang sesuai
+        foreach ($overtimeByDate as $dateKey => $d) {
+            $daysFromStart = $periodStart->diffInDays(Carbon::parse($dateKey));
+            $weekIndex     = (int) floor($daysFromStart / 7);
+
+            if (isset($overtimeByWeek[$weekIndex])) {
+                $overtimeByWeek[$weekIndex]['regular_jam'] += $d['regular_jam'];
+                $overtimeByWeek[$weekIndex]['special_jam'] += $d['special_jam'];
+            }
+        }
+
+        $overtimeByWeek = collect($overtimeByWeek)->map(function ($w) {
+            $w['regular_jam'] = round($w['regular_jam'], 2);
+            $w['special_jam'] = round($w['special_jam'], 2);
+            $w['total_jam']   = round($w['regular_jam'] + $w['special_jam'], 2);
+            return $w;
+        })->values();
 
         return response()->json([
             'period' => [
@@ -721,7 +758,9 @@ class PayrollRecapController extends Controller
             'overtime_matrix'        => $overtimeMatrix,
             'overtime_by_date'       => $overtimeByDateChart,
             'top5_dept'               => $top5Dept,
-            'avg_per_week'            => $avgPerWeek,
+            'total_reguler'           => $totalRegularJam,
+            'total_special'           => $totalSpecialJam,
+            'overtime_by_week'       => $overtimeByWeek,
             'overtime_total_regular' => round(collect($overtimeByDate)->sum('regular_jam'), 2),
             'overtime_total_special' => round(collect($overtimeByDate)->sum('special_jam'), 2),
         ]);
