@@ -151,6 +151,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'permission']);
     Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'permission']);
     Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'permission']);
+    Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
 
 
     // PKWT
@@ -965,6 +966,8 @@ Route::prefix('payroll/recap')->name('payroll-recap.')->middleware(['auth', 'per
     Route::get('/', [PayrollRecapController::class, 'index'])->name('index');
     Route::get('/chart-data', [PayrollRecapController::class, 'chartData'])->name('chart-data');
     Route::get('/search-employee', [PayrollRecapController::class, 'searchEmployee'])->name('search-employee');
+    Route::get('/detail-data', [PayrollRecapController::class, 'detailData'])->name('detail-data');
+    Route::get('/overtime-data', [PayrollRecapController::class, 'overtimeData'])->name('overtime-data');
 });
 
 Route::prefix('role-payroll')->name('role-payroll.')->middleware(['auth', 'permission'])->group(function () {
