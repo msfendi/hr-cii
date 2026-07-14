@@ -70,6 +70,7 @@ class PayrollRecapController extends Controller
     {
         return DB::table('payroll_periods')
             ->select('id', 'name', 'start_date', 'end_date')
+            ->where('is_closed', true)
             ->orderByDesc('start_date')
             ->get();
     }
