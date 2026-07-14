@@ -2,6 +2,27 @@
 <html lang="en">
 @include('layout.header')
 <style>
+    .legend-dot{
+    display:inline-block;
+    width:.7rem;
+    height:.7rem;
+    border-radius:50%;
+    vertical-align:middle;
+    margin-right:.25rem;
+}
+
+#deptEmployeeDetailTable tbody tr.row-status-keluar td{
+    background-color: #fff3cd !important;
+}
+#deptEmployeeDetailTable tbody tr.row-status-keluar:hover td{
+    background-color: #ffe9a8 !important;
+}
+#deptEmployeeDetailTable tbody tr.row-status-mangkir td{
+    background-color: #f8d7da !important;
+}
+#deptEmployeeDetailTable tbody tr.row-status-mangkir:hover td{
+    background-color: #f3b8bf !important;
+}
 
 :root{
     --pr-blue: #4e73df;
@@ -551,20 +572,21 @@ body{
                                             <table class="table table-sm table-bordered table-hover mb-0 small">
 
                                                 <thead>
-
                                                 <tr>
                                                     <th rowspan="2" class="align-middle">Bulan</th>
                                                     <th colspan="2" class="text-center" style="color:#17a673;">Karyawan Aktif</th>
-                                                    <th colspan="2" class="text-center" style="color:#c0293c;">Karyawan Keluar</th>
+                                                    <th colspan="2" class="text-center" style="color:#e0a800;">Karyawan Keluar</th>
+                                                    <th colspan="2" class="text-center" style="color:#c0293c;">Karyawan Mangkir</th>
                                                     <th rowspan="2" class="align-middle text-right">Total Keseluruhan</th>
                                                 </tr>
                                                 <tr>
                                                     <th class="text-right" style="color:#17a673;">Jumlah</th>
                                                     <th class="text-right" style="color:#17a673;">Total</th>
+                                                    <th class="text-right" style="color:#e0a800;">Jumlah</th>
+                                                    <th class="text-right" style="color:#e0a800;">Total</th>
                                                     <th class="text-right" style="color:#c0293c;">Jumlah</th>
                                                     <th class="text-right" style="color:#c0293c;">Total</th>
                                                 </tr>
-
                                                 </thead>
 
                                                 <tbody id="breakdownTableBody"></tbody>
@@ -576,6 +598,8 @@ body{
                                                         <td class="text-right" id="footerAktifTotal">Rp 0</td>
                                                         <td class="text-right" id="footerKeluarCount">-</td>
                                                         <td class="text-right" id="footerKeluarTotal">Rp 0</td>
+                                                        <td class="text-right" id="footerMangkirCount">-</td>
+                                                        <td class="text-right" id="footerMangkirTotal">Rp 0</td>
                                                         <td class="text-right" id="footerTotal">Rp 0</td>
                                                     </tr>
                                                 </tfoot>
@@ -969,6 +993,10 @@ body{
                         <span class="badge-deduction">&#9679;</span> Deduction &nbsp;
                         <span class="text-muted">— geser tabel ke samping untuk melihat semua komponen.</span>
                     </p>
+                    <p class="small text-muted mb-2">
+                        <span class="legend-dot" style="background-color:#ffe69c;"></span> Karyawan Keluar &nbsp;&nbsp;
+                        <span class="legend-dot" style="background-color:#f1aeb5;"></span> Karyawan Mangkir
+                    </p>
                     {{-- Thead/tbody/tfoot dibangun dinamis via JS berdasarkan
                          dept_employee_details dari response detail-data. scrollX
                          untuk kolom komponen yang banyak, scrollY supaya baris
@@ -1107,6 +1135,10 @@ body{
                     gradKeluar.addColorStop(0, 'rgba(231,74,59,0.95)');
                     gradKeluar.addColorStop(1, 'rgba(231,74,59,0.55)');
 
+                    const gradMangkir = ctx.createLinearGradient(0, 0, 0, 300);
+                    gradMangkir.addColorStop(0, 'rgba(246,169,11,0.95)');
+                    gradMangkir.addColorStop(1, 'rgba(246,169,11,0.55)');
+
                     recapChart = new Chart(ctx, {
                         data: {
                             labels: data.labels.map(e=>formatMonthIndonesia(e)),
@@ -1118,7 +1150,7 @@ body{
                                     backgroundColor: gradAktif,
                                     hoverBackgroundColor: "#17a673",
                                     borderRadius: 6,
-                                    maxBarThickness: 26,
+                                    maxBarThickness: 20,
                                     order: 2,
                                 },
                                 {
@@ -1128,7 +1160,17 @@ body{
                                     backgroundColor: gradKeluar,
                                     hoverBackgroundColor: "#d52a1a",
                                     borderRadius: 6,
-                                    maxBarThickness: 26,
+                                    maxBarThickness: 20,
+                                    order: 2,
+                                },
+                                {
+                                    type: 'bar',
+                                    label: 'Karyawan Mangkir',
+                                    data: data.mangkir_values,
+                                    backgroundColor: gradMangkir,
+                                    hoverBackgroundColor: "#dd960a",
+                                    borderRadius: 6,
+                                    maxBarThickness: 20,
                                     order: 2,
                                 },
                                 {
@@ -1184,7 +1226,8 @@ body{
                                             if (ctx.dataset.label === 'Total Keseluruhan') {
                                                 return `Total Keseluruhan: ${rupiah(ctx.parsed.y)}`;
                                             }
-                                            const count = ctx.datasetIndex === 0 ? data.aktif_counts[idx] : data.keluar_counts[idx];
+                                            const countsByDataset = [data.aktif_counts, data.keluar_counts, data.mangkir_counts];
+                                            const count = countsByDataset[ctx.datasetIndex][idx];
                                             return `${ctx.dataset.label}: ${rupiah(ctx.parsed.y)} (${count} karyawan)`;
                                         }
                                     }
@@ -1202,17 +1245,22 @@ body{
                             <td class="text-right">${rupiah(data.aktif_values[i])}</td>
                             <td class="text-right">${data.keluar_counts[i]}</td>
                             <td class="text-right">${rupiah(data.keluar_values[i])}</td>
+                            <td class="text-right">${data.mangkir_counts[i]}</td>
+                            <td class="text-right">${rupiah(data.mangkir_values[i])}</td>
                             <td class="text-right font-weight-bold">${rupiah(data.values[i])}</td>
                         </tr>`;
                     });
                     $('#breakdownTableBody').html(rows);
 
-                    const totalAktif  = data.aktif_values.reduce((a, b) => a + b, 0);
-                    const totalKeluar = data.keluar_values.reduce((a, b) => a + b, 0);
+                    const totalAktif   = data.aktif_values.reduce((a, b) => a + b, 0);
+                    const totalKeluar  = data.keluar_values.reduce((a, b) => a + b, 0);
+                    const totalMangkir = data.mangkir_values.reduce((a, b) => a + b, 0);
                     $('#footerAktifCount').text(Math.max(...data.aktif_counts));
                     $('#footerAktifTotal').text(rupiah(totalAktif));
                     $('#footerKeluarCount').text(Math.max(...data.keluar_counts));
                     $('#footerKeluarTotal').text(rupiah(totalKeluar));
+                    $('#footerMangkirCount').text(Math.max(...data.mangkir_counts));
+                    $('#footerMangkirTotal').text(rupiah(totalMangkir));
                     $('#footerTotal').text(rupiah(data.grand_total));
                 })
                 .catch(err => {
@@ -1242,9 +1290,15 @@ body{
                         data: 'status',
                         title: 'Status',
                         className: 'text-center',
-                        render: (data) => data === 'keluar'
-                            ? '<span class="badge badge-danger">Keluar</span>'
-                            : '<span class="badge badge-success">Aktif</span>'
+                        render: (data) => {
+                            if (data === 'mangkir') {
+                                return '<span class="badge badge-danger">Mangkir</span>';
+                            }
+                            if (data === 'keluar') {
+                                return '<span class="badge badge-warning">Keluar</span>';
+                            }
+                            return '<span class="badge badge-success">Aktif</span>';
+                        }
                     },
                     { data: 'tkk_formatted', title: 'Tanggal Keluar', defaultContent: '-' },
                     {
@@ -1352,7 +1406,11 @@ body{
 
             let bodyHtml = '';
             sortedEmployees.forEach(emp => {
-                bodyHtml += `<tr><td>${emp.npk}</td><td>${emp.nama}</td>`;
+                const rowClass = emp.status === 'mangkir'
+                    ? 'row-status-mangkir'
+                    : (emp.status === 'keluar' ? 'row-status-keluar' : '');
+
+                bodyHtml += `<tr class="${rowClass}"><td>${emp.npk}</td><td>${emp.nama}</td>`;
                 earningKeys.forEach(key => {
                     const val = (emp.components && emp.components[key]) || 0;
                     bodyHtml += `<td class="text-right">${val ? rupiah(val) : '-'}</td>`;

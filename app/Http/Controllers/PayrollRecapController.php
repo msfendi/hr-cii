@@ -97,9 +97,9 @@ class PayrollRecapController extends Controller
 
         // bio dipakai untuk kolom IS_STAFF (sumber filter role payroll)
         $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'IS_STAFF')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
             ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'IS_STAFF')
+                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
             );
 
         // employee_dept di payroll_run_details adalah FK ke DEPT.ID_DEPT
@@ -178,6 +178,27 @@ class PayrollRecapController extends Controller
             });
 
         return response()->json(['results' => $employees]);
+    }
+
+    /**
+     * Klasifikasi status kepegawaian karyawan pada satu periode payroll.
+     * - 'aktif'   : TKK kosong, atau TKK > akhir periode (belum resign di periode ini)
+     * - 'keluar'  : TKK di dalam rentang periode, KETERANGAN != MA
+     * - 'mangkir' : TKK di dalam rentang periode, KETERANGAN == MA
+     *
+     * $tkk, $periodStart, $periodEnd dalam format 'Y-m-d'.
+     */
+    private function classifyEmploymentStatus(?string $tkk, ?string $keterangan, string $periodStart, string $periodEnd): string
+    {
+        if (empty($tkk) || $tkk > $periodEnd) {
+            return 'aktif';
+        }
+
+        if ($tkk >= $periodStart && $tkk <= $periodEnd) {
+            return strtoupper(trim($keterangan ?? '')) === 'MA' ? 'mangkir' : 'keluar';
+        }
+
+        return 'keluar'; // TKK ada tapi di luar periode (fallback)
     }
 
     /**
@@ -264,10 +285,12 @@ class PayrollRecapController extends Controller
         $rows = $rowsQuery
             ->select(
                 'pp.start_date as period_start',
+                'pp.end_date as period_end',
                 'prd.employee_npk',
                 'prd.total_salary',
                 'prd.components',
-                'pkwt.TKK as tkk'
+                'pkwt.TKK as tkk',
+                'pkwt.KETERANGAN as keterangan'
             )
             ->orderBy('pp.start_date')
             ->get();
@@ -277,11 +300,13 @@ class PayrollRecapController extends Controller
         $cursor = (clone $startMonth);
         while ($cursor->lte($endMonth)) {
             $months->put($cursor->format('Y-m'), [
-                'label'            => $cursor->translatedFormat('M Y'),
-                'aktif_total'      => 0.0,
-                'aktif_employees'  => [],
-                'keluar_total'     => 0.0,
-                'keluar_employees' => [],
+                'label'             => $cursor->translatedFormat('M Y'),
+                'aktif_total'       => 0.0,
+                'aktif_employees'   => [],
+                'keluar_total'      => 0.0,
+                'keluar_employees'  => [],
+                'mangkir_total'     => 0.0,
+                'mangkir_employees' => [],
             ]);
             $cursor->addMonth();
         }
@@ -298,11 +323,19 @@ class PayrollRecapController extends Controller
                 ? (float) $row->total_salary
                 : (float) ($comp[$component]['amount'] ?? 0);
 
-            $tkkKey  = $row->tkk ? Carbon::parse($row->tkk)->format('Y-m') : null;
-            $isKeluarThisPeriod = $tkkKey !== null && $tkkKey <= $periodKey;
+            $periodStartStr = Carbon::parse($row->period_start)->format('Y-m-d');
+            $periodEndStr   = $row->period_end
+                ? Carbon::parse($row->period_end)->format('Y-m-d')
+                : Carbon::parse($row->period_start)->endOfMonth()->format('Y-m-d');
+            $tkkStr = $row->tkk ? Carbon::parse($row->tkk)->format('Y-m-d') : null;
+
+            $status = $this->classifyEmploymentStatus($tkkStr, $row->keterangan, $periodStartStr, $periodEndStr);
 
             $bucket = $months[$periodKey];
-            if ($isKeluarThisPeriod) {
+            if ($status === 'mangkir') {
+                $bucket['mangkir_total'] += $value;
+                $bucket['mangkir_employees'][$row->employee_npk] = true;
+            } elseif ($status === 'keluar') {
                 $bucket['keluar_total'] += $value;
                 $bucket['keluar_employees'][$row->employee_npk] = true;
             } else {
@@ -315,10 +348,15 @@ class PayrollRecapController extends Controller
         $labels        = $months->pluck('label')->values();
         $aktifValues   = $months->map(fn($m) => round($m['aktif_total'], 2))->values();
         $keluarValues  = $months->map(fn($m) => round($m['keluar_total'], 2))->values();
-        $values        = $months->map(fn($m) => round($m['aktif_total'] + $m['keluar_total'], 2))->values();
+        $mangkirValues = $months->map(fn($m) => round($m['mangkir_total'], 2))->values();
+        $values        = $months->map(fn($m) => round($m['aktif_total'] + $m['keluar_total'] + $m['mangkir_total'], 2))->values();
         $aktifCounts   = $months->map(fn($m) => count($m['aktif_employees']))->values();
         $keluarCounts  = $months->map(fn($m) => count($m['keluar_employees']))->values();
-        $employeeCounts = $months->map(fn($m) => count($m['aktif_employees']) + count($m['keluar_employees']))->values();
+        $mangkirCounts = $months->map(fn($m) => count($m['mangkir_employees']))->values();
+        $employeeCounts = $months->map(
+            fn($m) =>
+            count($m['aktif_employees']) + count($m['keluar_employees']) + count($m['mangkir_employees'])
+        )->values();
 
         $grandTotal   = $values->sum();
         $activeMonths = $values->filter(fn($v) => $v > 0)->count();
@@ -330,8 +368,10 @@ class PayrollRecapController extends Controller
             'values'          => $values,
             'aktif_values'    => $aktifValues,
             'keluar_values'   => $keluarValues,
+            'mangkir_values'  => $mangkirValues,
             'aktif_counts'    => $aktifCounts,
             'keluar_counts'   => $keluarCounts,
+            'mangkir_counts'  => $mangkirCounts,
             'employee_counts' => $employeeCounts,
             'component_label' => $componentLabel,
             'grand_total'     => $grandTotal,
@@ -412,11 +452,15 @@ class PayrollRecapController extends Controller
                 'prd.components',
                 DB::raw('COALESCE(bio.NAMA_KARYAWAN, prd.employee_name) as nama'),
                 DB::raw('COALESCE(dept_main.DEPARTEMENT, \'Tanpa Dept\') as dept_name'),
-                'pkwt.TKK as tkk'
+                'pkwt.TKK as tkk',
+                'pkwt.KETERANGAN as keterangan'
             )
             ->get();
 
-        $periodKey = Carbon::parse($period->start_date)->format('Y-m');
+        $periodStart = Carbon::parse($period->start_date)->format('Y-m-d');
+        $periodEnd   = !empty($period->end_date)
+            ? Carbon::parse($period->end_date)->format('Y-m-d')
+            : Carbon::parse($period->start_date)->endOfMonth()->format('Y-m-d');
 
         $employees          = [];
         $deptRecap          = [];
@@ -429,8 +473,8 @@ class PayrollRecapController extends Controller
                 ? (float) $row->total_salary
                 : (float) ($comp[$component]['amount'] ?? 0);
 
-            $tkkKey = $row->tkk ? Carbon::parse($row->tkk)->format('Y-m') : null;
-            $status = ($tkkKey !== null && $tkkKey <= $periodKey) ? 'keluar' : 'aktif';
+            $tkkStr = $row->tkk ? Carbon::parse($row->tkk)->format('Y-m-d') : null;
+            $status = $this->classifyEmploymentStatus($tkkStr, $row->keterangan, $periodStart, $periodEnd);
 
             // Satu karyawan = satu baris payroll_run_details per periode,
             // jadi tidak perlu akumulasi lintas baris di sini.
@@ -470,6 +514,7 @@ class PayrollRecapController extends Controller
                 $deptEmployeeDetail[$deptKey][$row->employee_npk] = [
                     'npk'          => $row->employee_npk,
                     'nama'         => $row->nama,
+                    'status'       => $status, // 'aktif' | 'keluar' | 'mangkir'
                     'total_salary' => round((float) $row->total_salary, 2),
                     'components'   => $components,
                 ];
@@ -540,9 +585,9 @@ class PayrollRecapController extends Controller
         $dept = $request->get('dept');
 
         $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'IS_STAFF')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
             ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'IS_STAFF')
+                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
             );
 
         // Hari libur nasional dalam rentang periode terpilih
