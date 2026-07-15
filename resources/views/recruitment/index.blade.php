@@ -1301,7 +1301,7 @@
                                         {{-- Step 1: Interview --}}
                                         <div class="col-md-6 mb-3">
                                             <div class="penilaian-step" id="step_interview">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-yellow">
                                                         <span class="step-number">1</span>
@@ -1328,8 +1328,8 @@
 
                                         {{-- Step 2: Kesehatan --}}
                                         <div class="col-md-6 mb-3">
-                                            <div class="penilaian-step locked" id="step_kesehatan">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                            <div class="penilaian-step" id="step_kesehatan">
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-green">
                                                         <span class="step-number">2</span>
@@ -1356,8 +1356,8 @@
 
                                         {{-- Step 3: Tes Teknis --}}
                                         <div class="col-md-6 mb-3">
-                                            <div class="penilaian-step locked" id="step_teknis">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                            <div class="penilaian-step" id="step_teknis">
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-blue">
                                                         <span class="step-number">3</span>
@@ -1391,8 +1391,8 @@
 
                                         {{-- Step 4: Tes User --}}
                                         <div class="col-md-6 mb-3">
-                                            <div class="penilaian-step locked" id="step_user">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                            <div class="penilaian-step" id="step_user">
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-purple">
                                                         <span class="step-number">4</span>
@@ -1777,14 +1777,14 @@
 
             // Sequential lock logic
             // Rule: step unlocks only if previous step has a result of 'LOLOS' in database
-            function applyLock(stepId, prevResult) {
-                const $step = $('#' + stepId);
-                const unlocked = prevResult === 'TRUE' || prevResult === 'SKIP';
-                $step.toggleClass('locked', !unlocked);
-            }
-            applyLock('step_kesehatan', d.result_interview);
-            applyLock('step_teknis',    d.result_kesehatan);
-            applyLock('step_user',      d.result_test);
+            //function applyLock(stepId, prevResult) {
+            //   const $step = $('#' + stepId);
+           //    const unlocked = prevResult === 'TRUE' || prevResult === 'SKIP';
+           //     $step.toggleClass('locked', !unlocked);
+            //}
+            //applyLock('step_kesehatan', d.result_interview);
+            //applyLock('step_teknis',    d.result_kesehatan);
+            //applyLock('step_user',      d.result_test);
 
             // Update step indicators
             function updateStepInd(indId, result) {
