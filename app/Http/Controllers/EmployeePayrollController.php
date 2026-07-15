@@ -51,16 +51,27 @@ class EmployeePayrollController extends Controller
 
     public function verifyPassword(Request $request)
     {
-        $birth = DB::table('PKWT')
+        // Ambil data lengkap (bukan hanya TGLLAHIR) supaya bisa cek KETERANGAN
+        $data = DB::table('PKWT')
             ->where('NPK', $request->npk)
-            ->value('TGLLAHIR');
+            ->first();
 
-        if (!$birth) {
+        if (!$data) {
             return response()->json([
                 'status' => false,
                 'message' => 'Data tanggal lahir tidak ditemukan'
             ]);
         }
+
+        // ⭐ Cek status Mangkir sebelum lanjut validasi password
+        if ($data->KETERANGAN === 'MA') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Anda keluar sebagai Mangkir'
+            ]);
+        }
+
+        $birth = $data->TGLLAHIR;
 
         $password = date('ymd', strtotime($birth));
 
@@ -82,24 +93,28 @@ class EmployeePayrollController extends Controller
 
     public function qrLogin(Request $request)
     {
-
         $npk = $request->npk;
-        $run_id = $request->run_id;
+        $runId = $request->run_id;
 
         $data = DB::table('PKWT')
             ->where('NPK', $npk)
             ->first();
 
         if (!$data) {
-            return redirect()->back()->with('error', 'Data tidak ditemukan');
+            return redirect()->back()->with('error', 'Data tidak ditemukan.');
+        }
+
+        // Cek status mangkir
+        if ($data->KETERANGAN === 'MA') {
+            return redirect()->back()->with('error', 'Anda keluar sebagai Mangkir.');
         }
 
         $password = date('ymd', strtotime($data->TGLLAHIR));
 
         return redirect()->route('employee-payroll.verify-password', [
-            'npk' => $npk,
+            'npk'      => $npk,
             'password' => $password,
-            'run_id' => $run_id
+            'run_id'   => $runId,
         ]);
     }
 

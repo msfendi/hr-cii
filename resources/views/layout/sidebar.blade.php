@@ -20,6 +20,24 @@
    </a>
    <hr class="sidebar-divider my-0">
 
+   {{-- SEARCH MENU --}}
+   <li class="nav-item px-3 mb-2" id="sidebarSearchWrapper">
+        <div style="position:relative;">
+            <input
+                type="text"
+                id="sidebarMenuSearch"
+                class="form-control form-control-sm"
+                placeholder="Cari menu..."
+                autocomplete="off"
+                style="border-radius:20px;padding-left:14px;padding-right:32px;font-size:13px;"
+            >
+            <i class="fas fa-search" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;"></i>
+        </div>
+        <div id="sidebarSearchEmpty" class="text-center small text-white-50 mt-2 d-none">
+            Menu tidak ditemukan
+        </div>
+   </li>
+
    {{-- DASHBOARD (selalu tampil, tidak butuh permission) --}}
    <!-- <li class="nav-item active">
       <a class="nav-link" href="{{ route('home') }}">
@@ -39,7 +57,7 @@
 
     @if ($menu->children->isEmpty())
         {{-- Parent tanpa child tetapi punya route --}}
-        <li class="nav-item">
+        <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
             <a class="nav-link" href="{{ route($menu->route_name) }}">
                 <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
                 <span>{{ $menu->name }}</span>
@@ -47,7 +65,7 @@
         </li>
     @else
         {{-- Parent dengan child --}}
-        <li class="nav-item">
+        <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
             <a class="nav-link collapsed"
                href="#"
                data-toggle="collapse"
@@ -65,6 +83,8 @@
                 <div class="collapse-inner bg-white rounded">
                     @foreach ($menu->children as $child)
                         <a class="collapse-item"
+                           data-menu-child
+                           data-menu-name="{{ strtolower($child->name) }}"
                            href="{{ $child->route_name ? route($child->route_name) : '#' }}">
                             {{ $child->name }}
                         </a>
@@ -78,6 +98,93 @@
 
    <hr class="sidebar-divider d-none d-md-block">
 </ul>
+
+<script>
+(function () {
+    const searchInput = document.getElementById('sidebarMenuSearch');
+    const emptyState  = document.getElementById('sidebarSearchEmpty');
+    if (!searchInput) return;
+
+    // Simpan state collapse asli (yang sedang 'show') supaya bisa dikembalikan saat search dikosongkan
+    const originallyOpen = new Set();
+    document.querySelectorAll('#accordionSidebar .collapse.show').forEach(el => originallyOpen.add(el.id));
+
+    function normalize(str) {
+        return (str || '').toLowerCase().trim();
+    }
+
+    function resetSidebar() {
+        document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
+            li.classList.remove('d-none');
+        });
+        document.querySelectorAll('#accordionSidebar [data-menu-child]').forEach(child => {
+            child.classList.remove('d-none');
+        });
+        document.querySelectorAll('#accordionSidebar .collapse').forEach(el => {
+            if (originallyOpen.has(el.id)) {
+                el.classList.add('show');
+            } else {
+                el.classList.remove('show');
+            }
+        });
+        emptyState.classList.add('d-none');
+    }
+
+    function filterSidebar(query) {
+        const q = normalize(query);
+
+        if (!q) {
+            resetSidebar();
+            return;
+        }
+
+        let anyVisible = false;
+
+        document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
+            const parentName = normalize(li.getAttribute('data-menu-name'));
+            const parentMatch = parentName.includes(q);
+
+            const childLinks = li.querySelectorAll('[data-menu-child]');
+            const collapseEl = li.querySelector('.collapse');
+
+            if (childLinks.length === 0) {
+                // Item tanpa child
+                const show = parentMatch;
+                li.classList.toggle('d-none', !show);
+                if (show) anyVisible = true;
+                return;
+            }
+
+            // Item dengan child
+            let anyChildMatch = false;
+            childLinks.forEach(child => {
+                const childName = normalize(child.getAttribute('data-menu-name'));
+                const childMatch = parentMatch || childName.includes(q);
+                child.classList.toggle('d-none', !childMatch);
+                if (childMatch) anyChildMatch = true;
+            });
+
+            const showParent = parentMatch || anyChildMatch;
+            li.classList.toggle('d-none', !showParent);
+
+            if (collapseEl) {
+                collapseEl.classList.toggle('show', showParent);
+            }
+
+            if (showParent) anyVisible = true;
+        });
+
+        emptyState.classList.toggle('d-none', anyVisible);
+    }
+
+    let debounceTimer;
+    searchInput.addEventListener('input', function (e) {
+        clearTimeout(debounceTimer);
+        const value = e.target.value;
+        debounceTimer = setTimeout(() => filterSidebar(value), 150);
+    });
+})();
+</script>
 
 {{-- Bagian notifikasi realtime (Pusher/Reverb) di bawah ini TIDAK berubah,
      biarkan persis seperti file sidebar lama Anda --}}
