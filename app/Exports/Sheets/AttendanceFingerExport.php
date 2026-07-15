@@ -173,7 +173,7 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
 
         // ================================= new query =================================
         $yesterday = \Carbon\Carbon::parse($this->date)->subDay()->format('Y-m-d');
-        $tomorrow  = \Carbon\Carbon::parse($this->date)->addDay()->format('Y-m-d'); // baru
+        $tomorrow  = \Carbon\Carbon::parse($this->date)->addDay()->format('Y-m-d');
 
         $data = DB::connection('cii')->select("
             SELECT
@@ -185,7 +185,6 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                 b.BAG                   AS jabatan,
                 b.STATUS                AS status,
 
-                -- jam_masuk: scan pertama jika > 1, atau single scan di paruh awal shift
                 CASE
                     WHEN COUNT(a.scan_date) > 1
                         THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
@@ -197,7 +196,6 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                     ELSE 'not scanned'
                 END                                             AS jam_masuk,
 
-                -- jam_pulang: scan terakhir jika > 1, atau single scan di paruh akhir shift
                 CASE
                     WHEN COUNT(a.scan_date) > 1
                         THEN CONVERT(varchar(8), MAX(a.scan_date), 108)
@@ -216,13 +214,11 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
             FROM BIODATA b
             LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
 
-            -- Shift hari ini
             LEFT JOIN employee_shifts es
                 ON es.npk = b.NPK
                 AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
             LEFT JOIN shifts s ON s.id = es.shift_id
 
-            -- Shift kemarin (untuk filter overflow night shift)
             LEFT JOIN employee_shifts prev_es
                 ON prev_es.npk = b.NPK
                 AND CAST(prev_es.shift_date AS DATE) = CAST(? AS DATE)
@@ -236,22 +232,21 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                     CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
                 )
 
-                -- upper bound baru: pakai jam pulang shift + toleransi lembur,
-                -- fallback ke window lama (+14 jam) kalau karyawan tidak punya shift/work_end
+                /* upper bound: jam pulang shift + toleransi lembur, fallback ke window lama (+14 jam) kalau tidak ada shift/work_end */
                 AND a.scan_date <= COALESCE(
                     DATEADD(
-                        hour, 3, -- toleransi lembur, silakan sesuaikan
+                        hour, 3,
                         CASE
                             WHEN s.work_end < s.work_start
-                                THEN CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME) -- $tomorrow
+                                THEN CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME)
                             ELSE
-                                CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME)      -- $this->date
+                                CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME)
                         END
                     ),
                     DATEADD(
                         hour, 14,
                         CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                    ) -- $this->date, fallback lama
+                    )
                 )
 
                 AND a.scan_date > COALESCE(
