@@ -172,6 +172,7 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
 
 
         $yesterday = \Carbon\Carbon::parse($this->date)->subDay()->format('Y-m-d');
+        $tomorrow  = \Carbon\Carbon::parse($this->date)->addDay()->format('Y-m-d');
 
         $data = DB::connection('cii')->select("
             WITH emp AS (
@@ -187,7 +188,8 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                     COALESCE(s.work_start, '08:00:00')  AS work_start,
                     COALESCE(s.work_end, '17:00:00')    AS work_end,
                     COALESCE(ps.work_start, '08:00:00') AS prev_work_start,
-                    COALESCE(ps.work_end, '17:00:00')   AS prev_work_end
+                    COALESCE(ps.work_end, '17:00:00')   AS prev_work_end,
+                    COALESCE(ns.work_start, '08:00:00') AS next_work_start
                 FROM BIODATA b
                 LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
 
@@ -197,11 +199,17 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                     AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
                 LEFT JOIN shifts s ON s.id = es.shift_id
 
-                -- shift kemarin (untuk exclusion window)
+                -- shift kemarin (untuk exclusion window bawah)
                 LEFT JOIN employee_shifts pes
                     ON pes.npk = b.NPK
                     AND CAST(pes.shift_date AS DATE) = CAST(? AS DATE)
                 LEFT JOIN shifts ps ON ps.id = pes.shift_id
+
+                -- shift besok (untuk exclusion window atas)
+                LEFT JOIN employee_shifts nes
+                    ON nes.npk = b.NPK
+                    AND CAST(nes.shift_date AS DATE) = CAST(? AS DATE)
+                LEFT JOIN shifts ns ON ns.id = nes.shift_id
             ),
             emp_bounds AS (
                 SELECT
@@ -216,21 +224,32 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                         WHEN e.prev_work_end < e.prev_work_start
                             THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME))
                         ELSE CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME)
-                    END AS prev_shift_end_dt
+                    END AS prev_shift_end_dt,
+                    CAST(? + ' ' + CONVERT(varchar(8), e.next_work_start, 108) AS DATETIME) AS next_shift_start_dt
                 FROM emp e
+            ),
+            emp_window AS (
+                SELECT
+                    eb.*,
+                    CASE
+                        WHEN DATEADD(hour, 6, eb.shift_end_dt) < DATEADD(minute, -60, eb.next_shift_start_dt)
+                            THEN DATEADD(hour, 6, eb.shift_end_dt)
+                        ELSE DATEADD(minute, -60, eb.next_shift_start_dt)
+                    END AS scan_upper_bound
+                FROM emp_bounds eb
             ),
             scans AS (
                 SELECT
-                    eb.pin, eb.npk,
+                    ew.pin, ew.npk,
                     a.scan_date,
-                    eb.shift_start_dt,
-                    eb.shift_end_dt
-                FROM emp_bounds eb
+                    ew.shift_start_dt,
+                    ew.shift_end_dt
+                FROM emp_window ew
                 JOIN att_log a
-                    ON CAST(a.pin AS VARCHAR) = CAST(eb.pin AS VARCHAR)
-                    AND a.scan_date >= DATEADD(hour, -4, eb.shift_start_dt)
-                    AND a.scan_date <= DATEADD(hour, 6, eb.shift_end_dt)
-                    AND a.scan_date > DATEADD(minute, 60, eb.prev_shift_end_dt)
+                    ON CAST(a.pin AS VARCHAR) = CAST(ew.pin AS VARCHAR)
+                    AND a.scan_date >= DATEADD(hour, -4, ew.shift_start_dt)
+                    AND a.scan_date <= ew.scan_upper_bound
+                    AND a.scan_date > DATEADD(minute, 60, ew.prev_shift_end_dt)
             ),
             scan_ranked AS (
                 SELECT
@@ -261,7 +280,7 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                 eb.shift_name,
                 CONVERT(varchar(8), eb.work_start, 108) AS shift_start
 
-            FROM emp_bounds eb
+            FROM emp_window eb
             LEFT JOIN scan_ranked m ON m.npk = eb.npk AND m.rn_masuk = 1
             LEFT JOIN scan_ranked p ON p.npk = eb.npk AND p.rn_pulang = 1
             WHERE m.scan_date IS NOT NULL
@@ -269,11 +288,13 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
         ", [
             $this->date,    // emp: shift hari ini (es.shift_date)
             $yesterday,     // emp: shift kemarin (pes.shift_date)
+            $tomorrow,      // emp: shift besok (nes.shift_date)
             $this->date,    // emp_bounds: shift_start_dt
             $this->date,    // emp_bounds: shift_end_dt (overnight)
             $this->date,    // emp_bounds: shift_end_dt (normal)
             $yesterday,     // emp_bounds: prev_shift_end_dt (overnight)
             $yesterday,     // emp_bounds: prev_shift_end_dt (normal)
+            $tomorrow,      // emp_bounds: next_shift_start_dt
         ]);
 
         return collect($data);
