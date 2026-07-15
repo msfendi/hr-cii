@@ -1759,25 +1759,47 @@
             $('#df_ibu_nama').text(v(ibu&&ibu.nama)); $('#df_ibu_tgl').text(fmtD(ibu&&ibu.tgl_lahir));
             $('#df_ibu_pend').text(v(ibu&&ibu.pendidikan)); $('#df_ibu_kerja').text(v(ibu&&ibu.pekerjaan));
 
-            const sdr = toArr(d.saudara_kandung);
-            $('#tbl_saudara_wrap').html(stbl(['Nama','Tgl Lahir','Gender','Pendidikan','Pekerjaan'],
-                sdr.map(s=>[s.nama,fmtD(s.tgl_lahir),s.gender,s.pendidikan,s.pekerjaan])));
+            // const sdr = toArr(d.saudara_kandung);
+            // $('#tbl_saudara_wrap').html(stbl(['Nama','Tgl Lahir','Gender','Pendidikan','Pekerjaan'],
+            //     sdr.map(s=>[s.nama,fmtD(s.tgl_lahir),s.gender,s.pendidikan,s.pekerjaan])));
 
-            const ank = toArr(d.data_anak);
+            // const ank = toArr(d.data_anak);
+            // $('#tbl_anak_wrap').html(stbl(['Nama','Tempat Lahir','Tgl Lahir','Gender','Pendidikan','Status'],
+            //     ank.map(a=>[a.nama,a.tempat_lahir,fmtD(a.tgl_lahir),a.gender,a.pendidikan,a.status])));
+
+            // // Pendidikan
+            // $('#dpd_pend').text(v(d.PENDIDIKAN)); $('#dpd_jurusan').text(v(d.JURUSAN));
+            // $('#dpd_sekolah').text(v(d.NAMA_SEKOLAH)); $('#dpd_kabsekolah').text(v(d.KABUPATEN_SEKOLAH));
+            // $('#dpd_ekstra').text(v(d.kegiatan_ekstra));
+            // const rp = toArr(d.riwayat_pendidikan);
+            // $('#tbl_pendidikan_wrap').html(stbl(['Tingkat','Institusi','Jurusan','Dari','Sampai','Lulus'],
+            //     rp.map(r=>[r.tingkat,r.institusi,r.jurusan,r.dari,r.sampai,r.lulus=='1'?'✓ Lulus':'–'])));
+
+            // const pg = toArr(d.pengalaman_kerja);
+            // $('#tbl_pengalaman_wrap').html(stbl(['Perusahaan','Dari','Sampai','Jabatan','Departemen','Alasan Keluar'],
+            //     pg.map(p=>[p.perusahaan,p.dari,p.sampai,p.jabatan,p.departemen,p.alasan])));
+
+            const sdr = pj(d.saudara_kandung);
+            $('#tbl_saudara_wrap').html(stbl(['Nama','Tgl Lahir','Gender','Pendidikan','Pekerjaan'],
+                sdr && Object.values(sdr).map(s=>[s.nama,fmtD(s.tgl_lahir),s.gender,s.pendidikan,s.pekerjaan])));
+
+            const ank = pj(d.data_anak);
             $('#tbl_anak_wrap').html(stbl(['Nama','Tempat Lahir','Tgl Lahir','Gender','Pendidikan','Status'],
-                ank.map(a=>[a.nama,a.tempat_lahir,fmtD(a.tgl_lahir),a.gender,a.pendidikan,a.status])));
+                ank && Object.values(ank).map(a=>[a.nama,a.tempat_lahir,fmtD(a.tgl_lahir),a.gender,a.pendidikan,a.status])));
 
             // Pendidikan
             $('#dpd_pend').text(v(d.PENDIDIKAN)); $('#dpd_jurusan').text(v(d.JURUSAN));
             $('#dpd_sekolah').text(v(d.NAMA_SEKOLAH)); $('#dpd_kabsekolah').text(v(d.KABUPATEN_SEKOLAH));
             $('#dpd_ekstra').text(v(d.kegiatan_ekstra));
-            const rp = toArr(d.riwayat_pendidikan);
+            const rp = pj(d.riwayat_pendidikan);
             $('#tbl_pendidikan_wrap').html(stbl(['Tingkat','Institusi','Jurusan','Dari','Sampai','Lulus'],
-                rp.map(r=>[r.tingkat,r.institusi,r.jurusan,r.dari,r.sampai,r.lulus=='1'?'✓ Lulus':'–'])));
+                rp && Object.values(rp).map(r=>[r.tingkat,r.institusi,r.jurusan,r.dari,r.sampai,r.lulus=='1'?'✓ Lulus':'–'])));
 
-            const pg = toArr(d.pengalaman_kerja);
+            // Karir
+            const pg = pj(d.pengalaman_kerja);
             $('#tbl_pengalaman_wrap').html(stbl(['Perusahaan','Dari','Sampai','Jabatan','Departemen','Alasan Keluar'],
-                pg.map(p=>[p.perusahaan,p.dari,p.sampai,p.jabatan,p.departemen,p.alasan])));
+                pg && Object.values(pg).map(p=>[p.perusahaan,p.dari,p.sampai,p.jabatan,p.departemen,p.alasan])));
+            $('#dpk_motivasi').text(v(d.motivasi));
 
             // Dokumen
             const docMap = [
