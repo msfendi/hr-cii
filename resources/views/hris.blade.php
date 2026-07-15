@@ -320,7 +320,7 @@
             </div>
 
             <!-- Food Orders -->
-            <div class="col-lg-3 col-md-4 col-6">
+            <!-- <div class="col-lg-3 col-md-4 col-6">
 
                 <a href="/food-orders/scan" class="text-decoration-none">
 
@@ -340,12 +340,10 @@
 
                 </a>
 
-            </div>
+            </div> -->
 
             <!-- Tambahkan menu berikutnya di sini -->
-            {{--
-
-            <div class="col-lg-3 col-md-4 col-6">
+            <!-- <div class="col-lg-3 col-md-4 col-6">
 
                 <a href="#" class="text-decoration-none">
 
@@ -365,9 +363,7 @@
 
                 </a>
 
-            </div>
-
-            --}}
+            </div> -->
 
         </div>
 
