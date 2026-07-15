@@ -171,9 +171,7 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
         // return collect($data);
 
 
-        // ================================= new query =================================
-        $yesterday = \Carbon\Carbon::parse($this->date)->subDay()->format('Y-m-d');
-        $tomorrow  = \Carbon\Carbon::parse($this->date)->addDay()->format('Y-m-d');
+        $date = $this->date;
 
         $data = DB::connection('cii')->select("
             SELECT
@@ -185,29 +183,19 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                 b.BAG                   AS jabatan,
                 b.STATUS                AS status,
 
-                CASE
-                    WHEN COUNT(a.scan_date) > 1
-                        THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
-                    WHEN MIN(a.scan_date) <= DATEADD(
-                        hour, 4,
-                        CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                    )
-                        THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
+                CASE WHEN masuk.scan_date IS NOT NULL
+                    THEN CONVERT(varchar(8), masuk.scan_date, 108)
                     ELSE 'not scanned'
                 END                                             AS jam_masuk,
 
-                CASE
-                    WHEN COUNT(a.scan_date) > 1
-                        THEN CONVERT(varchar(8), MAX(a.scan_date), 108)
-                    WHEN MIN(a.scan_date) > DATEADD(
-                        hour, 4,
-                        CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                    )
-                        THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
+                CASE WHEN pulang.scan_date IS NOT NULL
+                    THEN CONVERT(varchar(8), pulang.scan_date, 108)
                     ELSE 'not scanned'
                 END                                             AS jam_pulang,
 
-                COUNT(a.scan_date)                              AS total_scan,
+                (CASE WHEN masuk.scan_date IS NOT NULL THEN 1 ELSE 0 END
+            + CASE WHEN pulang.scan_date IS NOT NULL THEN 1 ELSE 0 END)  AS total_scan,
+
                 COALESCE(s.name, 'Normal Shift')                AS shift_name,
                 CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS shift_start
 
@@ -219,69 +207,42 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
                 AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
             LEFT JOIN shifts s ON s.id = es.shift_id
 
-            LEFT JOIN employee_shifts prev_es
-                ON prev_es.npk = b.NPK
-                AND CAST(prev_es.shift_date AS DATE) = CAST(? AS DATE)
-            LEFT JOIN shifts prev_s ON prev_s.id = prev_es.shift_id
+            /* hitung datetime start & end shift hari ini (overnight-aware) */
+            CROSS APPLY (
+                SELECT
+                    CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME) AS shift_start_dt,
+                    CASE
+                        WHEN COALESCE(s.work_end, '17:00:00') < COALESCE(s.work_start, '08:00:00')
+                            THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_end, '17:00:00'), 108) AS DATETIME))
+                        ELSE CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_end, '17:00:00'), 108) AS DATETIME)
+                    END AS shift_end_dt
+            ) sw
 
-            JOIN att_log a
-                ON CAST(a.pin AS VARCHAR) = CAST(b.BARCODE AS VARCHAR)
+            /* scan terdekat ke shift_start = jam masuk */
+            OUTER APPLY (
+                SELECT TOP 1 a.scan_date
+                FROM att_log a
+                WHERE CAST(a.pin AS VARCHAR) = CAST(b.BARCODE AS VARCHAR)
+                AND a.scan_date BETWEEN DATEADD(hour, -2, sw.shift_start_dt) AND DATEADD(hour, 3, sw.shift_start_dt)
+                ORDER BY ABS(DATEDIFF(second, a.scan_date, sw.shift_start_dt))
+            ) masuk
 
-                AND a.scan_date >= DATEADD(
-                    hour, -4,
-                    CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                )
+            /* scan terdekat ke shift_end = jam pulang (exclude scan yang sudah dipakai jadi masuk) */
+            OUTER APPLY (
+                SELECT TOP 1 a.scan_date
+                FROM att_log a
+                WHERE CAST(a.pin AS VARCHAR) = CAST(b.BARCODE AS VARCHAR)
+                AND a.scan_date BETWEEN DATEADD(hour, -1, sw.shift_end_dt) AND DATEADD(hour, 6, sw.shift_end_dt)
+                AND (masuk.scan_date IS NULL OR a.scan_date <> masuk.scan_date)
+                ORDER BY ABS(DATEDIFF(second, a.scan_date, sw.shift_end_dt))
+            ) pulang
 
-                /* upper bound: jam pulang shift + toleransi lembur, fallback ke window lama (+14 jam) kalau tidak ada shift/work_end */
-                AND a.scan_date <= COALESCE(
-                    DATEADD(
-                        hour, 3,
-                        CASE
-                            WHEN s.work_end < s.work_start
-                                THEN CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME)
-                            ELSE
-                                CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME)
-                        END
-                    ),
-                    DATEADD(
-                        hour, 14,
-                        CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                    )
-                )
-
-                AND a.scan_date > COALESCE(
-                    DATEADD(minute, 60,
-                        CASE
-                            WHEN prev_s.work_end < prev_s.work_start
-                            THEN CAST(? + ' ' + CONVERT(varchar(8), prev_s.work_end, 108) AS DATETIME)
-                            ELSE CAST(? + ' ' + CONVERT(varchar(8), prev_s.work_end, 108) AS DATETIME)
-                        END
-                    ),
-                    CAST('1900-01-01 00:00:00' AS DATETIME)
-                )
-
-            GROUP BY
-                b.BARCODE,
-                b.NAMA_KARYAWAN,
-                b.NPK,
-                d.DEPARTEMENT,
-                b.SECTION,
-                b.BAG,
-                b.STATUS,
-                s.name,
-                s.work_start
             ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
         ", [
-            $this->date,        // jam_masuk midpoint
-            $this->date,        // jam_pulang midpoint
-            $this->date,        // es.shift_date
-            $yesterday,         // prev_es.shift_date
-            $this->date,        // scan_date lower bound
-            $tomorrow,          // upper bound: shift overnight -> work_end jatuh besok
-            $this->date,        // upper bound: shift normal -> work_end hari ini
-            $this->date,        // upper bound fallback (+14h lama)
-            $this->date,        // prev night shift work_end
-            $yesterday,         // prev normal shift work_end
+            $date,   // es.shift_date
+            $date,   // shift_start_dt
+            $date,   // shift_end_dt (overnight branch)
+            $date,   // shift_end_dt (else branch)
         ]);
 
         return collect($data);
