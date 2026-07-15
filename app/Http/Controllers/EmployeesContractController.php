@@ -295,6 +295,7 @@ class EmployeesContractController extends Controller
                 'allowance'       => $data['allowance']    ?? $old->allowance,
                 'pph21'           => $data['pph21']        ?? $old->pph21,
                 'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
+                'type'            => $old->type,
             ]);
 
             DB::commit();
@@ -389,6 +390,7 @@ class EmployeesContractController extends Controller
                 'allowance'       => $data['allowance'] ?? $old->allowance,
                 'pph21'           => $data['pph21'] ?? $old->pph21,
                 'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
+                'type'            => $old->type,
             ]);
 
             DB::commit();
