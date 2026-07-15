@@ -93,17 +93,13 @@
     </div>
 </body>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css" rel="stylesheet" />
-
-@if (!isset($jqueryAlreadyLoaded))
 <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
-@endif
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js"></script>
-
+  <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
 <script>
     $("#npk").select2({
-        allowClear: true,
-        placeholder: 'Choose Employee'
+    allowClear:true,
+    placeholder:'Choose Employee'
     });
 </script>
 </html>
