@@ -10,12 +10,15 @@ class MonitoringController extends Controller
 {
     protected string $exporterUrl;
     protected int $timeout;
+    protected string $sslHost;
 
     public function __construct()
     {
         // Diambil dari config/services.php -> env NODE_EXPORTER_URL
         $this->exporterUrl = config('services.node_exporter.url', 'http://192.168.1.240:9100/metrics');
         $this->timeout     = (int) config('services.node_exporter.timeout', 3);
+        $this->sslHost = config('services.ssl_monitor.host')
+            ?: (parse_url(config('app.url'), PHP_URL_HOST) ?: 'hris.chutex.id');
     }
 
     public function index()
@@ -32,6 +35,7 @@ class MonitoringController extends Controller
             'ram'          => $this->getRamUsage($metrics),
             'disk'         => $this->getDiskUsage($metrics),
             'network'      => $this->getNetworkTraffic($metrics),
+            'ssl'          => $this->getSslInfo(),
             'server_time'  => now()->format('H:i:s'),
             'exporter_ok'  => $metrics !== null,
             'exporter_url' => $this->exporterUrl,
@@ -282,5 +286,69 @@ class MonitoringController extends Controller
             }
         }
         return false;
+    }
+
+    protected function getSslInfo(): array
+    {
+        return Cache::remember('monitoring_ssl_info', 3600, function () {
+            $host = $this->sslHost;
+            $port = 443;
+
+            try {
+                $context = stream_context_create([
+                    'ssl' => [
+                        'capture_peer_cert' => true,
+                        'verify_peer'       => false,
+                        'verify_peer_name'  => false,
+                    ],
+                ]);
+
+                $socket = @stream_socket_client(
+                    "ssl://{$host}:{$port}",
+                    $errno,
+                    $errstr,
+                    5,
+                    STREAM_CLIENT_CONNECT,
+                    $context
+                );
+
+                if (!$socket) {
+                    Log::warning("Gagal konek SSL ke {$host}: {$errstr}");
+                    return [
+                        'valid' => false,
+                        'host'  => $host,
+                        'error' => $errstr ?: 'Tidak bisa konek ke port 443',
+                    ];
+                }
+
+                $params = stream_context_get_params($socket);
+                fclose($socket);
+
+                $cert = $params['options']['ssl']['peer_certificate'] ?? null;
+                if (!$cert) {
+                    return ['valid' => false, 'host' => $host, 'error' => 'Sertifikat tidak ditemukan'];
+                }
+
+                $certInfo = openssl_x509_parse($cert);
+
+                $validFrom = $certInfo['validFrom_time_t'] ?? null;
+                $validTo   = $certInfo['validTo_time_t'] ?? null;
+                $daysLeft  = $validTo ? (int) floor(($validTo - time()) / 86400) : null;
+
+                return [
+                    'valid'       => true,
+                    'host'        => $host,
+                    'common_name' => $certInfo['subject']['CN'] ?? $host,
+                    'issuer'      => $certInfo['issuer']['O'] ?? ($certInfo['issuer']['CN'] ?? '-'),
+                    'valid_from'  => $validFrom ? date('Y-m-d', $validFrom) : null,
+                    'valid_to'    => $validTo ? date('Y-m-d', $validTo) : null,
+                    'days_left'   => $daysLeft,
+                    'expired'     => $daysLeft !== null && $daysLeft < 0,
+                ];
+            } catch (\Throwable $e) {
+                Log::warning('Gagal cek SSL certificate: ' . $e->getMessage());
+                return ['valid' => false, 'host' => $host, 'error' => $e->getMessage()];
+            }
+        });
     }
 }

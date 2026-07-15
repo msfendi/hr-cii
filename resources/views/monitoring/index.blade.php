@@ -11,6 +11,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/css/sb-admin-2.min.css">
 
     <style>
+    /* ... style lama tetap ... */
+    .ssl-ok   { color: #1cc88a; }
+    .ssl-warn { color: #f6c23e; }
+    .ssl-danger { color: #e74a3b; }
         .chart-area { position: relative; height: 260px; }
         .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
         .status-live { background: #1cc88a; box-shadow: 0 0 0 3px rgba(28,200,138,.25); animation: pulse 1.5s infinite; }
@@ -125,18 +129,40 @@
                         </div>
                     </div>
 
-                    <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="col-xl-2 col-md-6 mb-4">
                         <div class="card border-left-info shadow h-100 py-2">
                             <div class="card-body">
                                 <div class="row no-gutters align-items-center">
                                     <div class="col mr-2">
                                         <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Network Traffic</div>
                                         <div class="h6 mb-0 font-weight-bold text-gray-800">
-                                            &#8595; <span id="rxMbps">0</span> Mbps &nbsp;
+                                            &#8595; <span id="rxMbps">0</span> Mbps<br>
                                             &#8593; <span id="txMbps">0</span> Mbps
                                         </div>
                                     </div>
                                     <div class="col-auto"><i class="fas fa-network-wired fa-2x text-gray-300"></i></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4 col-md-6 mb-4">
+                        <div class="card border-left-warning shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                            SSL Certificate
+                                            <span class="status-dot" id="sslDot" style="width:8px;height:8px;"></span>
+                                        </div>
+                                        <div class="h6 mb-0 font-weight-bold text-gray-800" id="sslDomain">-</div>
+                                        <div class="text-xs text-gray-600 mt-1">
+                                            Issuer: <span id="sslIssuer">-</span><br>
+                                            Berlaku s/d: <span id="sslExpiry">-</span>
+                                            &middot; <span id="sslDaysLeft">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto"><i class="fas fa-lock fa-2x text-gray-300"></i></div>
                                 </div>
                             </div>
                         </div>
@@ -221,6 +247,56 @@ let pollTimer = null;
 
 function nowLabel() {
     return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function renderSsl(ssl) {
+    const dot = document.getElementById('sslDot');
+    const domainEl = document.getElementById('sslDomain');
+    const issuerEl = document.getElementById('sslIssuer');
+    const expiryEl = document.getElementById('sslExpiry');
+    const daysEl = document.getElementById('sslDaysLeft');
+
+    if (!ssl) {
+        dot.className = 'status-dot status-down';
+        domainEl.textContent = '-';
+        issuerEl.textContent = '-';
+        expiryEl.textContent = '-';
+        daysEl.textContent = '-';
+        return;
+    }
+
+    domainEl.textContent = ssl.host || '-';
+
+    if (!ssl.valid) {
+        dot.className = 'status-dot status-down';
+        issuerEl.textContent = '-';
+        expiryEl.textContent = '-';
+        daysEl.innerHTML = `<span class="ssl-danger">${escapeHtml(ssl.error || 'Gagal cek sertifikat')}</span>`;
+        return;
+    }
+
+    issuerEl.textContent = ssl.issuer || '-';
+    expiryEl.textContent = ssl.valid_to || '-';
+
+    const days = ssl.days_left;
+    let cls = 'ssl-ok';
+    let label = `${days} hari lagi`;
+
+    if (ssl.expired || days < 0) {
+        cls = 'ssl-danger';
+        label = 'Kadaluarsa';
+        dot.className = 'status-dot status-down';
+    } else if (days <= 7) {
+        cls = 'ssl-danger';
+        dot.className = 'status-dot status-live';
+    } else if (days <= 30) {
+        cls = 'ssl-warn';
+        dot.className = 'status-dot status-live';
+    } else {
+        dot.className = 'status-dot status-live';
+    }
+
+    daysEl.innerHTML = `<span class="${cls} font-weight-bold">${label}</span>`;
 }
 
 function makeLineChart(ctx, label, color) {
@@ -376,6 +452,7 @@ async function fetchStats() {
             document.getElementById('diskLeft').textContent = m.avail_gb;
         }
         renderDiskTable(data.disk ? data.disk.filesystems : []);
+        renderSsl(data.ssl);
 
         // Status koneksi node_exporter (bukan error Laravel, tapi node_exporter yang unreachable)
         const dot = document.getElementById('statusDot');

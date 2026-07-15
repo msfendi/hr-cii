@@ -40,4 +40,8 @@ return [
         'timeout' => env('NODE_EXPORTER_TIMEOUT', 3), // detik
     ],
 
+    'ssl_monitor' => [
+        'host' => env('SSL_MONITOR_HOST'),
+    ],
+
 ];
