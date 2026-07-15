@@ -319,7 +319,7 @@ class RecruitmentFormController extends Controller
         $namaSekolah        = null;
         $jurusan            = null;
         if (! empty($step5['education'])) {
-            $urutan = ['SD', 'SMP', 'SMA/SMK', 'Akademi/D3', 'D3', 'S1', 'S2', 'S3'];
+            $urutan = ['SD', 'SMP', 'SMA', 'SMK', 'D1', 'D2', 'D3', 'D4', 'S1', 'S2', 'S3'];
             $sorted = collect($step5['education'])
                 ->sortByDesc(fn($e) => array_search($e['tingkat'] ?? '', $urutan))
                 ->first();
@@ -630,14 +630,14 @@ class RecruitmentFormController extends Controller
                 'warga_negara'      => ['nullable', 'in:WNI,WNA'],
                 'golongan_darah'    => ['nullable', 'in:A,B,AB,O'],
                 'jenis_kelamin'     => ['required', 'in:L,P'],
-                'status_pernikahan' => ['nullable'],
+                'status_pernikahan' => ['required', 'in:BM,M,CH,CM'],
                 'kb'                => ['nullable', 'in:Ya,Tidak'],
                 'tanggungan'        => ['nullable', 'integer', 'min:0', 'max:20'],
                 'nomor_hp'          => ['required', 'string', 'max:20'],
                 'agama'             => ['nullable', 'in:Islam,Kristen,Katolik,Hindu,Buddha,Khonghucu'],
                 'hobby'             => ['nullable', 'string', 'max:255'],
                 'transportasi'      => ['nullable', 'string', 'max:100'],
-                'pendidikan'        => ['nullable', 'in:SD,SMP,SMA/SMK,D3,S1,S2,S3'],
+                'pendidikan'        => ['required', 'in:SD,SMP,SMA,SMK,D1,D2,D3,D4,S1,S2,S3'],
                 'jabatan'           => ['required', 'string', 'max:100'],
                 'department'        => ['required', 'string', 'max:100'],
                 'bpjs_tk'           => ['nullable', 'string', 'max:30'],
@@ -707,7 +707,7 @@ class RecruitmentFormController extends Controller
             // ----------------------------------------------------------------
             5 => [
                 'education'             => ['nullable', 'array'],
-                'education.*.tingkat'   => ['required_with:education.*', 'in:SD,SMP,SMA/SMK,Akademi/D3,S1,S2,S3'],
+                'education.*.tingkat'   => ['required_with:education.*', 'in:SD,SMP,SMA,SMK,D1,D2,D3,D4,S1,S2,S3'],
                 'education.*.institusi' => ['required_with:education.*', 'string', 'max:255'],
                 'education.*.jurusan'   => ['nullable', 'string', 'max:100'],
                 'education.*.dari'      => ['nullable', 'integer', 'min:1950', 'max:' . (date('Y') + 6)],

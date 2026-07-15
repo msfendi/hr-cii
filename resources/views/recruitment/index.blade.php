@@ -1711,19 +1711,29 @@
             updateStepInd('step_ind_4', d.result_user);
 
             // Pribadi
-            $('#dp_nik').text(v(d.NIK)); $('#dp_kk').text(v(d.NO_KK));
+            $('#dp_nik').text(v(d.NIK)); 
+            $('#dp_kk').text(v(d.NO_KK));
             $('#dp_jk').text(d.JENIS_KELAMIN === 'L' ? '♂ Laki-laki' : '♀ Perempuan');
-            $('#dp_agama').text(v(d.AGAMA)); $('#dp_tmpt').text(v(d.TMPT_LAHIR));
-            $('#dp_tgl').text(fmtD(d.TGL_LAHIR)); $('#dp_umur').text(v(d.UMUR));
-            $('#dp_wn').text(v(d.warga_negara)); $('#dp_status').text(v(d.STATUS));
+            $('#dp_agama').text(v(d.AGAMA)); 
+            $('#dp_tmpt').text(v(d.TMPT_LAHIR));
+            $('#dp_tgl').text(fmtD(d.TGL_LAHIR)); 
+            $('#dp_umur').text(v(d.UMUR));
+            $('#dp_wn').text(v(d.warga_negara)); 
+            const statusMap = { 'BM': 'Belum Menikah', 'M': 'Menikah', 'CH': 'Cerai Hidup', 'CM': 'Cerai Mati' };
+            $('#dp_status').text(statusMap[d.STATUS] || v(d.STATUS));
             $('#dp_tang').text(v(d.TANGGUNGAN,'0') + ' orang');
             $('#dp_kb').text(d.ikut_kb == 1 ? 'Ya' : (d.ikut_kb == 0 ? 'Tidak' : '–'));
             $('#dp_sim').text(v(d.nomor_sim));
-            $('#dp_tb').text(v(d.TINGGI_BADAN) + ' cm'); $('#dp_bb').text(v(d.BERAT_BADAN) + ' kg');
-            $('#dp_transport').text(v(d.mode_transportasi)); $('#dp_bakat').text(v(d.bakat_hobby));
-            $('#dp_bpjstk').text(v(d.bpjs_tk)); $('#dp_bpjskes').text(v(d.bpjs_kes));
-            $('#dp_jabatan').text(v(d.jabatan)); $('#dp_dept').text(v(d.department));
-            $('#dp_ekstra').text(v(d.kegiatan_ekstra)); $('#dp_motivasi').text(v(d.motivasi));
+            $('#dp_tb').text(v(d.TINGGI_BADAN) + ' cm'); 
+            $('#dp_bb').text(v(d.BERAT_BADAN) + ' kg');
+            $('#dp_transport').text(v(d.mode_transportasi)); 
+            $('#dp_bakat').text(v(d.bakat_hobby));
+            $('#dp_bpjstk').text(v(d.bpjs_tk)); 
+            $('#dp_bpjskes').text(v(d.bpjs_kes));
+            $('#dp_jabatan').text(v(d.jabatan)); 
+            $('#dp_dept').text(v(d.department));
+            $('#dp_ekstra').text(v(d.kegiatan_ekstra)); 
+            $('#dp_motivasi').text(v(d.motivasi));
 
             // Kontak
             $('#dk_hp').text(v(d.HP)); $('#dk_alamat_ktp').text(v(d.ALAMAT_LENGKAP));

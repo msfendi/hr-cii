@@ -409,8 +409,8 @@
                             <div class="relative">
                                 <select class="rf-select @error('status_pernikahan') error @enderror" id="status_pernikahan" name="status_pernikahan">
                                     <option value="" disabled {{ old('status_pernikahan', $savedData['status_pernikahan'] ?? '') === '' ? 'selected' : '' }}>Pilih Status</option>
-                                    @foreach(['Belum Menikah','Menikah','Cerai Hidup','Cerai Meninggal'] as $sp)
-                                        <option value="{{ $sp }}" {{ old('status_pernikahan', $savedData['status_pernikahan'] ?? '') === $sp ? 'selected' : '' }}>{{ $sp }}</option>
+                                    @foreach(['BM' => 'Belum Menikah', 'M' => 'Menikah', 'CH' => 'Cerai Hidup', 'CM' => 'Cerai Mati'] as $code => $label)
+                                        <option value="{{ $code }}" {{ old('status_pernikahan', $savedData['status_pernikahan'] ?? '') === $code ? 'selected' : '' }}>{{ $label }}</option>
                                     @endforeach
                                 </select>
                                 <div class="rf-icon-suffix">
@@ -548,7 +548,7 @@
                                 <div class="relative">
                                     <select class="rf-select" id="pendidikan" name="pendidikan">
                                         <option value="" disabled {{ old('pendidikan', $savedData['pendidikan'] ?? '') === '' ? 'selected' : '' }}>Pilih Pendidikan</option>
-                                        @foreach(['SD','SMP','SMA/SMK','D3','S1','S2','S3'] as $p)
+                                        @foreach(['SD','SMP','SMA', 'SMK', 'D1', 'D2', 'D3', 'D4','S1','S2','S3'] as $p)
                                             <option value="{{ $p }}" {{ old('pendidikan', $savedData['pendidikan'] ?? '') === $p ? 'selected' : '' }}>{{ $p }}</option>
                                         @endforeach
                                     </select>

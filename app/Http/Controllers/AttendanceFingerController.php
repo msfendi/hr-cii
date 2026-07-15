@@ -98,79 +98,136 @@ class AttendanceFingerController extends Controller
 
 
 
-                
 
+
+                // $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
+                // $data = DB::connection('cii')->select("
+                //     SELECT
+                //         b.BARCODE               AS pin,
+                //         b.NAMA_KARYAWAN         AS nama,
+                //         b.NPK                   AS npk,
+                //         d.DEPARTEMENT           AS bagian,
+                //         b.SECTION               AS section,
+                //         b.BAG                   AS jabatan,
+                //         b.STATUS                AS status,
+
+                //         -- jam_masuk: scan pertama jika > 1, atau single scan di paruh awal shift
+                //         CASE
+                //             WHEN COUNT(a.scan_date) > 1
+                //                 THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
+                //             WHEN MIN(a.scan_date) <= DATEADD(
+                //                 hour, 4,
+                //                 CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                //             )
+                //                 THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
+                //             ELSE 'not scanned'
+                //         END                                             AS jam_masuk,
+
+                //         -- jam_pulang: scan terakhir jika > 1, atau single scan di paruh akhir shift
+                //         CASE
+                //             WHEN COUNT(a.scan_date) > 1
+                //                 THEN CONVERT(varchar(8), MAX(a.scan_date), 108)
+                //             WHEN MIN(a.scan_date) > DATEADD(
+                //                 hour, 4,
+                //                 CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                //             )
+                //                 THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
+                //             ELSE 'not scanned'
+                //         END                                             AS jam_pulang,
+
+                //         COUNT(a.scan_date)                              AS total_scan,
+                //         COALESCE(s.name, 'Normal Shift')                AS shift_name,
+                //         CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS shift_start,
+
+                //         -- is_late: toleransi 10 menit, hanya jika ada scan masuk
+                //         CASE
+                //             WHEN (
+                //                 COUNT(a.scan_date) > 1
+                //                 OR MIN(a.scan_date) <= DATEADD(
+                //                     hour, 4,
+                //                     CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                //                 )
+                //             )
+                //             AND MIN(a.scan_date) > DATEADD(
+                //                 minute, 10,
+                //                 CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                //             )
+                //             THEN 1
+                //             ELSE 0
+                //         END AS is_late
+
+                //     FROM BIODATA b
+                //     LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
+
+                //     -- Shift hari ini
+                //     LEFT JOIN employee_shifts es
+                //         ON es.npk = b.NPK
+                //         AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
+                //     LEFT JOIN shifts s ON s.id = es.shift_id
+
+                //     -- Shift kemarin (untuk filter overflow night shift)
+                //     LEFT JOIN employee_shifts prev_es
+                //         ON prev_es.npk = b.NPK
+                //         AND CAST(prev_es.shift_date AS DATE) = CAST(? AS DATE)
+                //     LEFT JOIN shifts prev_s ON prev_s.id = prev_es.shift_id
+
+                //     JOIN att_log a
+                //         ON CAST(a.pin AS VARCHAR) = CAST(b.BARCODE AS VARCHAR)
+
+                //         AND a.scan_date >= DATEADD(
+                //             hour, -4,
+                //             CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                //         )
+                //         AND a.scan_date <= DATEADD(
+                //             hour, 14,
+                //             CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                //         )
+                //         AND a.scan_date > COALESCE(
+                //             DATEADD(minute, 60,
+                //                 CASE
+                //                     WHEN prev_s.work_end < prev_s.work_start
+                //                         THEN CAST(? + ' ' + CONVERT(varchar(8), prev_s.work_end, 108) AS DATETIME)
+                //                     ELSE
+                //                         CAST(? + ' ' + CONVERT(varchar(8), prev_s.work_end, 108) AS DATETIME)
+                //                 END
+                //             ),
+                //             CAST('1900-01-01 00:00:00' AS DATETIME)
+                //         )
+
+
+
+                //     GROUP BY
+                //         b.BARCODE,
+                //         b.NAMA_KARYAWAN,
+                //         b.NPK,
+                //         d.DEPARTEMENT,
+                //         b.SECTION,
+                //         b.BAG,
+                //         b.STATUS,
+                //         s.name,
+                //         s.work_start
+                //     ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
+                // ", [
+                //     $date,          // jam_masuk midpoint
+                //     $date,          // jam_pulang midpoint
+                //     $date,          // is_late masuk check
+                //     $date,          // is_late 10 min tolerance
+                //     $date,          // es.shift_date
+                //     $yesterday,     // prev_es.shift_date
+                //     $date,          // scan_date lower bound
+                //     $date,          // scan_date upper bound
+                //     $date,          // prev night shift work_end
+                //     $yesterday,     // prev normal shift work_end
+                // ]);
+
+
+
+
+                // ==================================== new query with shift and late calculation ====================================
                 $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
+                $tomorrow  = \Carbon\Carbon::parse($date)->addDay()->format('Y-m-d'); // baru
+
                 $data = DB::connection('cii')->select("
-                    SELECT
-                        b.BARCODE               AS pin,
-                        b.NAMA_KARYAWAN         AS nama,
-                        b.NPK                   AS npk,
-                        d.DEPARTEMENT           AS bagian,
-                        b.SECTION               AS section,
-                        b.BAG                   AS jabatan,
-                        b.STATUS                AS status,
-
-                        -- jam_masuk: scan pertama jika > 1, atau single scan di paruh awal shift
-                        CASE
-                            WHEN COUNT(a.scan_date) > 1
-                                THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
-                            WHEN MIN(a.scan_date) <= DATEADD(
-                                hour, 4,
-                                CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                            )
-                                THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
-                            ELSE 'not scanned'
-                        END                                             AS jam_masuk,
-
-                        -- jam_pulang: scan terakhir jika > 1, atau single scan di paruh akhir shift
-                        CASE
-                            WHEN COUNT(a.scan_date) > 1
-                                THEN CONVERT(varchar(8), MAX(a.scan_date), 108)
-                            WHEN MIN(a.scan_date) > DATEADD(
-                                hour, 4,
-                                CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                            )
-                                THEN CONVERT(varchar(8), MIN(a.scan_date), 108)
-                            ELSE 'not scanned'
-                        END                                             AS jam_pulang,
-
-                        COUNT(a.scan_date)                              AS total_scan,
-                        COALESCE(s.name, 'Normal Shift')                AS shift_name,
-                        CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS shift_start,
-
-                        -- is_late: toleransi 10 menit, hanya jika ada scan masuk
-                        CASE
-                            WHEN (
-                                COUNT(a.scan_date) > 1
-                                OR MIN(a.scan_date) <= DATEADD(
-                                    hour, 4,
-                                    CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                                )
-                            )
-                            AND MIN(a.scan_date) > DATEADD(
-                                minute, 10,
-                                CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
-                            )
-                            THEN 1
-                            ELSE 0
-                        END AS is_late
-
-                    FROM BIODATA b
-                    LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
-
-                    -- Shift hari ini
-                    LEFT JOIN employee_shifts es
-                        ON es.npk = b.NPK
-                        AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
-                    LEFT JOIN shifts s ON s.id = es.shift_id
-
-                    -- Shift kemarin (untuk filter overflow night shift)
-                    LEFT JOIN employee_shifts prev_es
-                        ON prev_es.npk = b.NPK
-                        AND CAST(prev_es.shift_date AS DATE) = CAST(? AS DATE)
-                    LEFT JOIN shifts prev_s ON prev_s.id = prev_es.shift_id
-
                     JOIN att_log a
                         ON CAST(a.pin AS VARCHAR) = CAST(b.BARCODE AS VARCHAR)
 
@@ -178,10 +235,25 @@ class AttendanceFingerController extends Controller
                             hour, -4,
                             CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
                         )
-                        AND a.scan_date <= DATEADD(
-                            hour, 14,
-                            CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+
+                        -- upper bound baru: pakai jam pulang shift + toleransi lembur,
+                        -- fallback ke window lama (+14 jam) kalau karyawan tidak punya shift/work_end
+                        AND a.scan_date <= COALESCE(
+                            DATEADD(
+                                hour, 3, -- toleransi lembur, silakan sesuaikan
+                                CASE
+                                    WHEN s.work_end < s.work_start
+                                        THEN CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME) -- $tomorrow
+                                    ELSE
+                                        CAST(? + ' ' + CONVERT(varchar(8), s.work_end, 108) AS DATETIME)      -- $date
+                                END
+                            ),
+                            DATEADD(
+                                hour, 14,
+                                CAST(? + ' ' + CONVERT(varchar(8), COALESCE(s.work_start, '08:00:00'), 108) AS DATETIME)
+                            ) -- $date, fallback lama
                         )
+
                         AND a.scan_date > COALESCE(
                             DATEADD(minute, 60,
                                 CASE
@@ -193,32 +265,20 @@ class AttendanceFingerController extends Controller
                             ),
                             CAST('1900-01-01 00:00:00' AS DATETIME)
                         )
-
-                    
-
-                    GROUP BY
-                        b.BARCODE,
-                        b.NAMA_KARYAWAN,
-                        b.NPK,
-                        d.DEPARTEMENT,
-                        b.SECTION,
-                        b.BAG,
-                        b.STATUS,
-                        s.name,
-                        s.work_start
-                    ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
-                ", [
-                    $date,          // jam_masuk midpoint
-                    $date,          // jam_pulang midpoint
-                    $date,          // is_late masuk check
-                    $date,          // is_late 10 min tolerance
-                    $date,          // es.shift_date
-                    $yesterday,     // prev_es.shift_date
-                    $date,          // scan_date lower bound
-                    $date,          // scan_date upper bound
-                    $date,          // prev night shift work_end
-                    $yesterday,     // prev normal shift work_end
-                ]);
+                    ", [
+                $date,          // jam_masuk midpoint
+                $date,          // jam_pulang midpoint
+                $date,          // is_late masuk check
+                $date,          // is_late 10 min tolerance
+                $date,          // es.shift_date
+                $yesterday,     // prev_es.shift_date
+                $date,          // scan_date lower bound
+                $tomorrow,      // upper bound: shift overnight -> work_end jatuh besok
+                $date,          // upper bound: shift normal -> work_end hari ini
+                $date,          // upper bound fallback (+14h lama)
+                $date,          // prev night shift work_end
+                $yesterday,     // prev normal shift work_end
+            ]);
 
                 return datatables()->of($data)->addIndexColumn()->make(true);
             } catch (\Exception $e) {
@@ -449,7 +509,7 @@ class AttendanceFingerController extends Controller
         $year = $dateParts[0];
         $month = $dateParts[1];
         $is_sewing = $request->is_sewing;
-        
+
         $sewingLabel = $is_sewing == '0' ? 'Sewing' : 'Non_Sewing';
         $fileName = "Template_Manual_Attendance_{$sewingLabel}_{$year}_{$month}.xlsx";
 

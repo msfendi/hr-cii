@@ -91,6 +91,7 @@ use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
+use App\Http\Controllers\DoorprizeController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
@@ -989,6 +990,27 @@ Route::middleware(['auth', 'permission']) // ganti/tambahkan middleware role adm
         Route::patch('/admin/qr-devices/{qrDevice}/rename', [QrDeviceController::class, 'rename'])->name('qr-devices.rename');
         Route::delete('qr-devices/pending/{uuid}', [QrDeviceController::class, 'destroyPendingAttempt'])->name('qr-devices.pending.destroy');
     });
+
+Route::prefix('doorprize')
+    ->name('doorprize.')
+    ->middleware(['auth', 'permission'])
+    ->group(function () {
+
+        // Scan QR NPK
+        Route::get('/scan', [DoorprizeController::class, 'scanPage'])->name('scan');
+        Route::post('/scan', [DoorprizeController::class, 'storeScan'])->name('scan.store');
+
+        // Undian doorprize
+        Route::get('/draw', [DoorprizeController::class, 'drawPage'])->name('draw');
+        Route::post('/draw', [DoorprizeController::class, 'draw'])->name('draw.run');
+        Route::get('/winners', [DoorprizeController::class, 'winnersList'])->name('winners');
+        Route::post('/winners/{winner}/void', [DoorprizeController::class, 'voidWinner'])->name('winners.void');
+
+        // Reset data (sebaiknya dibatasi role admin saja)
+        Route::post('/reset-scans', [DoorprizeController::class, 'resetScans'])->name('reset-scans');
+        Route::post('/reset-winners', [DoorprizeController::class, 'resetWinners'])->name('reset-winners');
+    });
+
 
 Route::prefix('monitoring')->middleware(['auth', 'permission'])->group(function () {
     Route::get('/', [MonitoringController::class, 'index'])->name('monitoring.index');
