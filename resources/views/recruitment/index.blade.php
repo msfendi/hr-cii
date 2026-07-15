@@ -652,7 +652,13 @@
             background: rgba(255, 255, 255, .25);
             color: #fff;
         }
+
+        /* Image viewer trigger cursor */
+        .img-viewer-link {
+            cursor: zoom-in;
+        }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.6/viewer.min.css">
 </head>
 
 <body id="page-top">
@@ -946,10 +952,17 @@
                                                             <div class="dropdown-menu dropdown-menu-right shadow-sm" style="min-width:160px;">
                                                                 @foreach ($docs as $label => $path)
                                                                     @if ($path)
-                                                                        @php $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION)); @endphp
-                                                                        <a class="dropdown-item d-flex align-items-center" style="font-size:12.5px; gap:8px;"
-                                                                            href="{{ asset('storage/' . $path) }}" target="_blank">
-                                                                            <i class="fas {{ in_array($ext, ['jpg', 'jpeg', 'png', 'webp']) ? 'fa-image text-purple' : 'fa-file-pdf text-danger' }}"></i>
+                                                                        @php
+                                                                            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                                                                            $isImgExt = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp']);
+                                                                            $fileUrl = asset('storage/' . $path);
+                                                                        @endphp
+                                                                        <a class="dropdown-item d-flex align-items-center {{ $isImgExt ? 'img-viewer-link' : '' }}" style="font-size:12.5px; gap:8px;"
+                                                                            href="{{ $fileUrl }}"
+                                                                            data-url="{{ $fileUrl }}"
+                                                                            data-label="{{ $label }}"
+                                                                            @if(!$isImgExt) target="_blank" @endif>
+                                                                            <i class="fas {{ $isImgExt ? 'fa-image text-purple' : 'fa-file-pdf text-danger' }}"></i>
                                                                             {{ $label }}
                                                                         </a>
                                                                     @endif
@@ -1249,7 +1262,7 @@
                                 <div class="sec-card">
                                     <div class="sec-card-hd hd-red"><i class="fas fa-folder-open"></i> Dokumen Pelamar</div>
                                     <div class="sec-card-body">
-                                        <p class="text-muted mb-2" style="font-size:12px;">Klik dokumen untuk membuka di tab baru.</p>
+                                        <p class="text-muted mb-2" style="font-size:12px;">Klik dokumen gambar untuk membuka dengan image viewer (bisa rotate). Dokumen non-gambar akan dibuka di tab baru.</p>
                                         <div id="doc_grid_modal" style="display:flex; flex-wrap:wrap;"></div>
                                     </div>
                                 </div>
@@ -1513,6 +1526,7 @@
 
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.6/viewer.min.js"></script>
 
     <script>
     $(document).ready(function () {
@@ -1542,6 +1556,82 @@
             $(this).addClass('active');
             $('.det-pane').removeClass('active');
             $('#pane-' + tab).addClass('active');
+        });
+
+        /* ══════════════════════════════════════════════
+           IMAGE VIEWER (Viewer.js) — opens image attachments
+           with zoom, drag, and ROTATE (left/right) + flip.
+        ══════════════════════════════════════════════ */
+        let __imgViewerInstance = null;
+        let __imgViewerEl = null;
+
+        function openImageViewer(url, label) {
+            if (!url) return;
+
+            // Clean up any previous instance
+            if (__imgViewerInstance) {
+                try { __imgViewerInstance.destroy(); } catch (e) {}
+                __imgViewerInstance = null;
+            }
+            if (__imgViewerEl) {
+                $(__imgViewerEl).remove();
+                __imgViewerEl = null;
+            }
+
+            // Build a detached image element for Viewer.js to bind to
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = label || 'Dokumen';
+            img.style.display = 'none';
+            document.body.appendChild(img);
+            __imgViewerEl = img;
+
+            __imgViewerInstance = new Viewer(img, {
+                inline: false,
+                navbar: false,
+                title: [1, (image) => label || 'Dokumen'],
+                toolbar: {
+                    zoomIn: 1,
+                    zoomOut: 1,
+                    oneToOne: 1,
+                    reset: 1,
+                    prev: 0,
+                    play: 0,
+                    next: 0,
+                    rotateLeft: 1,
+                    rotateRight: 1,
+                    flipHorizontal: 1,
+                    flipVertical: 1,
+                },
+                movable: true,
+                zoomable: true,
+                rotatable: true,
+                scalable: true,
+                transition: true,
+                keyboard: true,
+                hidden: function () {
+                    // Clean up when the viewer is closed
+                    if (__imgViewerInstance) {
+                        try { __imgViewerInstance.destroy(); } catch (e) {}
+                        __imgViewerInstance = null;
+                    }
+                    if (__imgViewerEl) {
+                        $(__imgViewerEl).remove();
+                        __imgViewerEl = null;
+                    }
+                }
+            });
+
+            __imgViewerInstance.show();
+        }
+
+        // Bind to any current/future .img-viewer-link element (table dropdown + modal doc pills)
+        $(document).on('click', '.img-viewer-link', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const url = $(this).data('url');
+            const label = $(this).data('label') || $(this).text().trim();
+            openImageViewer(url, label);
         });
 
         /* ── WA Templates ── */
@@ -1759,26 +1849,6 @@
             $('#df_ibu_nama').text(v(ibu&&ibu.nama)); $('#df_ibu_tgl').text(fmtD(ibu&&ibu.tgl_lahir));
             $('#df_ibu_pend').text(v(ibu&&ibu.pendidikan)); $('#df_ibu_kerja').text(v(ibu&&ibu.pekerjaan));
 
-            // const sdr = toArr(d.saudara_kandung);
-            // $('#tbl_saudara_wrap').html(stbl(['Nama','Tgl Lahir','Gender','Pendidikan','Pekerjaan'],
-            //     sdr.map(s=>[s.nama,fmtD(s.tgl_lahir),s.gender,s.pendidikan,s.pekerjaan])));
-
-            // const ank = toArr(d.data_anak);
-            // $('#tbl_anak_wrap').html(stbl(['Nama','Tempat Lahir','Tgl Lahir','Gender','Pendidikan','Status'],
-            //     ank.map(a=>[a.nama,a.tempat_lahir,fmtD(a.tgl_lahir),a.gender,a.pendidikan,a.status])));
-
-            // // Pendidikan
-            // $('#dpd_pend').text(v(d.PENDIDIKAN)); $('#dpd_jurusan').text(v(d.JURUSAN));
-            // $('#dpd_sekolah').text(v(d.NAMA_SEKOLAH)); $('#dpd_kabsekolah').text(v(d.KABUPATEN_SEKOLAH));
-            // $('#dpd_ekstra').text(v(d.kegiatan_ekstra));
-            // const rp = toArr(d.riwayat_pendidikan);
-            // $('#tbl_pendidikan_wrap').html(stbl(['Tingkat','Institusi','Jurusan','Dari','Sampai','Lulus'],
-            //     rp.map(r=>[r.tingkat,r.institusi,r.jurusan,r.dari,r.sampai,r.lulus=='1'?'✓ Lulus':'–'])));
-
-            // const pg = toArr(d.pengalaman_kerja);
-            // $('#tbl_pengalaman_wrap').html(stbl(['Perusahaan','Dari','Sampai','Jabatan','Departemen','Alasan Keluar'],
-            //     pg.map(p=>[p.perusahaan,p.dari,p.sampai,p.jabatan,p.departemen,p.alasan])));
-
             const sdr = pj(d.saudara_kandung);
             $('#tbl_saudara_wrap').html(stbl(['Nama','Tgl Lahir','Gender','Pendidikan','Pekerjaan'],
                 sdr && Object.values(sdr).map(s=>[s.nama,fmtD(s.tgl_lahir),s.gender,s.pendidikan,s.pekerjaan])));
@@ -1813,12 +1883,22 @@
                 { label:'SKCK',          path: d.file_skck,          icon:'fa-shield-alt',     color:'#6366f1' },
                 { label:'Surat Sehat',   path: d.file_surat_sehat,   icon:'fa-heartbeat',      color:'#e91e63' },
             ];
+            const IMG_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
             let dh = '';
             docMap.forEach(doc => {
                 if (doc.path) {
-                    dh += `<a href="/storage/${doc.path}" target="_blank" class="doc-pill">
-                        <i class="fas ${doc.icon}" style="color:${doc.color}"></i>${doc.label}
-                    </a>`;
+                    const ext = (doc.path.split('.').pop() || '').toLowerCase();
+                    const isImg = IMG_EXT.includes(ext);
+                    const url = '/storage/' + doc.path;
+                    if (isImg) {
+                        dh += `<a href="#" data-url="${url}" data-label="${doc.label}" class="doc-pill img-viewer-link">
+                            <i class="fas ${doc.icon}" style="color:${doc.color}"></i>${doc.label}
+                        </a>`;
+                    } else {
+                        dh += `<a href="${url}" target="_blank" class="doc-pill">
+                            <i class="fas ${doc.icon}" style="color:${doc.color}"></i>${doc.label}
+                        </a>`;
+                    }
                 }
             });
             $('#doc_grid_modal').html(dh || '<span class="text-muted"><i class="fas fa-folder-open mr-1"></i>Tidak ada dokumen tersedia</span>');
