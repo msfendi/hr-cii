@@ -642,7 +642,7 @@ body{
                                             <select id="detailPeriodSelect" class="form-control" style="width:100%">
                                                 @foreach ($periods as $p)
                                                     <option value="{{ $p->id }}">
-                                                        {{ $p->name }}{{ !$p->is_closed ? ' — Live/Belum Closed' : '' }}
+                                                        {{ $p->name }}{{ !$p->is_closed ? ' — Live' : '' }}
                                                     </option>
                                                 @endforeach
                                             </select>
@@ -787,7 +787,7 @@ body{
                                             <select id="overtimePeriodSelect" class="form-control" style="width:100%">
                                                 @foreach ($periods as $p)
                                                     <option value="{{ $p->id }}">
-                                                        {{ $p->name }}{{ !$p->is_closed ? ' — Live/Belum Closed' : '' }}
+                                                        {{ $p->name }}{{ !$p->is_closed ? ' — Live' : '' }}
                                                     </option>
                                                 @endforeach
                                             </select>
