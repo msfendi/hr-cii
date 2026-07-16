@@ -44,4 +44,9 @@ return [
         'host' => env('SSL_MONITOR_HOST'),
     ],
 
+    'ga4' => [
+        'property_id' => env('GA4_PROPERTY_ID'),
+        'credentials' => env('GA4_CREDENTIALS_PATH', storage_path('app/ga4-service-account.json')),
+    ],
+
 ];

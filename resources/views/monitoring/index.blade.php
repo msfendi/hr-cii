@@ -167,6 +167,27 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="col-xl-2 col-md-6 mb-4">
+                        <div class="card border-left-danger shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                            Visitor Aktif (GA4)
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            <span id="ga4ActiveNow">-</span>
+                                        </div>
+                                        <div class="text-xs text-gray-500 mt-1" id="ga4Today">
+                                            Hari ini: - users
+                                        </div>
+                                    </div>
+                                    <div class="col-auto"><i class="fas fa-users fa-2x text-gray-300"></i></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                 </div>
                 <!-- End Cards Ringkasan -->
@@ -196,6 +217,46 @@
                     </div>
                 </div>
                 <!-- End Charts -->
+
+                <!-- GA4 Visitor Analytics -->
+                <div class="row">
+                    <div class="col-lg-7 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                                <h6 class="m-0 font-weight-bold text-danger">Trend Visitor (7 Hari) - GA4</h6>
+                                <div class="small text-gray-600">
+                                    Sesi: <span id="ga4Sessions">-</span> &middot;
+                                    Pageviews: <span id="ga4PageViews">-</span> &middot;
+                                    Bounce: <span id="ga4Bounce">-</span>%
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="ga4Unavailable" class="text-center text-muted py-5" style="display:none;">
+                                    <i class="fas fa-chart-line fa-2x mb-2"></i><br>
+                                    GA4 belum tersedia: <span id="ga4ErrorText"></span>
+                                </div>
+                                <div class="chart-area" id="ga4ChartWrap"><canvas id="ga4Chart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-danger">Halaman Paling Aktif Sekarang</h6></div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover" width="100%">
+                                        <thead class="thead-light">
+                                            <tr><th>Halaman</th><th class="text-right">Active Users</th></tr>
+                                        </thead>
+                                        <tbody id="ga4TopPagesTable">
+                                            <tr><td colspan="2" class="text-center text-muted">Memuat data...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Tabel Detail Storage -->
                 <div class="row">
@@ -239,6 +300,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
 <script>
+const ga4Chart = makeLineChart(document.getElementById('ga4Chart'), 'Total Users', '#e74a3b');
 const STATS_URL = "{{ route('monitoring.stats') }}";
 const POLL_MS = 5000; // interval polling live, ubah sesuai kebutuhan
 const MAX_POINTS = 20;
@@ -361,6 +423,48 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function renderGa4(ga4) {
+    const unavailableEl = document.getElementById('ga4Unavailable');
+    const chartWrap = document.getElementById('ga4ChartWrap');
+
+    if (!ga4 || !ga4.available) {
+        document.getElementById('ga4ActiveNow').textContent = '-';
+        document.getElementById('ga4Today').textContent = 'GA4 tidak tersedia';
+        document.getElementById('ga4ErrorText').textContent = (ga4 && ga4.error) ? ga4.error : 'tidak diketahui';
+        unavailableEl.style.display = 'block';
+        chartWrap.style.display = 'none';
+        document.getElementById('ga4TopPagesTable').innerHTML =
+            '<tr><td colspan="2" class="text-center text-muted">Data tidak tersedia</td></tr>';
+        return;
+    }
+
+    unavailableEl.style.display = 'none';
+    chartWrap.style.display = 'block';
+
+    document.getElementById('ga4ActiveNow').textContent = ga4.active_now;
+    document.getElementById('ga4Today').textContent = `Hari ini: ${ga4.today.total_users} users`;
+    document.getElementById('ga4Sessions').textContent = ga4.today.sessions;
+    document.getElementById('ga4PageViews').textContent = ga4.today.page_views;
+    document.getElementById('ga4Bounce').textContent = ga4.today.bounce_rate;
+
+    // Trend chart - replace seluruh dataset tiap polling (bukan push incremental)
+    ga4Chart.data.labels = ga4.trend.map(t => t.date);
+    ga4Chart.data.datasets[0].data = ga4.trend.map(t => t.users);
+    ga4Chart.update();
+
+    // Top pages table
+    const tbody = document.getElementById('ga4TopPagesTable');
+    if (!ga4.top_pages || ga4.top_pages.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Tidak ada visitor aktif</td></tr>';
+    } else {
+        tbody.innerHTML = ga4.top_pages.map(p => `
+            <tr>
+                <td>${escapeHtml(p.page)}</td>
+                <td class="text-right"><span class="badge badge-danger">${p.active}</span></td>
+            </tr>`).join('');
+    }
+}
+
 function renderDiskTable(filesystems) {
     const tbody = document.getElementById('diskTable');
     if (!filesystems || filesystems.length === 0) {
@@ -453,6 +557,7 @@ async function fetchStats() {
         }
         renderDiskTable(data.disk ? data.disk.filesystems : []);
         renderSsl(data.ssl);
+        renderGa4(data.ga4);
 
         // Status koneksi node_exporter (bukan error Laravel, tapi node_exporter yang unreachable)
         const dot = document.getElementById('statusDot');

@@ -5,6 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Google\Analytics\Data\V1beta\BetaAnalyticsDataClient;
+use Google\Analytics\Data\V1beta\DateRange;
+use Google\Analytics\Data\V1beta\Dimension;
+use Google\Analytics\Data\V1beta\Metric;
+use Google\Analytics\Data\V1beta\OrderBy;
+use Google\Analytics\Data\V1beta\OrderBy\DimensionOrderBy;
 
 class MonitoringController extends Controller
 {
@@ -36,10 +42,111 @@ class MonitoringController extends Controller
             'disk'         => $this->getDiskUsage($metrics),
             'network'      => $this->getNetworkTraffic($metrics),
             'ssl'          => $this->getSslInfo(),
+            'ga4'          => $this->getGa4Analytics(),
             'server_time'  => now()->format('H:i:s'),
             'exporter_ok'  => $metrics !== null,
             'exporter_url' => $this->exporterUrl,
         ]);
+    }
+
+    protected function getGa4Analytics(): array
+    {
+        return Cache::remember('monitoring_ga4_info', 60, function () {
+            $propertyId  = config('services.ga4.property_id');
+            $credentials = config('services.ga4.credentials');
+
+            if (!$propertyId || !file_exists($credentials)) {
+                return [
+                    'available' => false,
+                    'error'     => 'GA4 belum dikonfigurasi (property_id / credentials tidak ditemukan)',
+                ];
+            }
+
+            try {
+                $client = new BetaAnalyticsDataClient([
+                    'credentials' => $credentials,
+                ]);
+
+                $property = "properties/{$propertyId}";
+
+                // --- Realtime: active users per halaman ---
+                $realtime = $client->runRealtimeReport([
+                    'property'   => $property,
+                    'dimensions' => [new Dimension(['name' => 'unifiedScreenName'])],
+                    'metrics'    => [new Metric(['name' => 'activeUsers'])],
+                ]);
+
+                $activeNow = 0;
+                $topPages  = [];
+                foreach ($realtime->getRows() as $row) {
+                    $count = (int) $row->getMetricValues()[0]->getValue();
+                    $activeNow += $count;
+                    $topPages[] = [
+                        'page'   => $row->getDimensionValues()[0]->getValue() ?: '(not set)',
+                        'active' => $count,
+                    ];
+                }
+                usort($topPages, fn($a, $b) => $b['active'] <=> $a['active']);
+                $topPages = array_slice($topPages, 0, 5);
+
+                // --- Ringkasan hari ini ---
+                $today = $client->runReport([
+                    'property'   => $property,
+                    'dateRanges' => [new DateRange(['start_date' => 'today', 'end_date' => 'today'])],
+                    'metrics'    => [
+                        new Metric(['name' => 'totalUsers']),
+                        new Metric(['name' => 'sessions']),
+                        new Metric(['name' => 'screenPageViews']),
+                        new Metric(['name' => 'averageSessionDuration']),
+                        new Metric(['name' => 'bounceRate']),
+                    ],
+                ]);
+
+                $row = $today->getRows()[0] ?? null;
+                $todayStats = [
+                    'total_users'     => $row ? (int) $row->getMetricValues()[0]->getValue() : 0,
+                    'sessions'        => $row ? (int) $row->getMetricValues()[1]->getValue() : 0,
+                    'page_views'      => $row ? (int) $row->getMetricValues()[2]->getValue() : 0,
+                    'avg_session_sec' => $row ? (int) round((float) $row->getMetricValues()[3]->getValue()) : 0,
+                    'bounce_rate'     => $row ? round((float) $row->getMetricValues()[4]->getValue() * 100, 1) : 0,
+                ];
+
+                // --- Trend 7 hari terakhir (total users per hari) ---
+                $trend = $client->runReport([
+                    'property'   => $property,
+                    'dateRanges' => [new DateRange(['start_date' => '6daysAgo', 'end_date' => 'today'])],
+                    'dimensions' => [new Dimension(['name' => 'date'])],
+                    'metrics'    => [new Metric(['name' => 'totalUsers'])],
+                    'orderBys'   => [
+                        new OrderBy([
+                            'dimension' => new DimensionOrderBy(['dimension_name' => 'date']),
+                        ]),
+                    ],
+                ]);
+
+                $trendData = [];
+                foreach ($trend->getRows() as $r) {
+                    $raw = $r->getDimensionValues()[0]->getValue(); // format YYYYMMDD
+                    $trendData[] = [
+                        'date'  => \Carbon\Carbon::createFromFormat('Ymd', $raw)->format('d/m'),
+                        'users' => (int) $r->getMetricValues()[0]->getValue(),
+                    ];
+                }
+
+                $client->close();
+
+                return [
+                    'available'  => true,
+                    'active_now' => $activeNow,
+                    'top_pages'  => $topPages,
+                    'today'      => $todayStats,
+                    'trend'      => $trendData,
+                ];
+            } catch (\Throwable $e) {
+                Log::warning('Gagal ambil data GA4: ' . $e->getMessage());
+                return ['available' => false, 'error' => $e->getMessage()];
+            }
+        });
     }
 
     /**
