@@ -5,12 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Google\Analytics\Data\V1beta\BetaAnalyticsDataClient;
-use Google\Analytics\Data\V1beta\DateRange;
-use Google\Analytics\Data\V1beta\Dimension;
-use Google\Analytics\Data\V1beta\Metric;
-use Google\Analytics\Data\V1beta\OrderBy;
-use Google\Analytics\Data\V1beta\OrderBy\DimensionOrderBy;
+use Google\Auth\Credentials\ServiceAccountCredentials;
 
 class MonitoringController extends Controller
 {
@@ -49,6 +44,10 @@ class MonitoringController extends Controller
         ]);
     }
 
+    /**
+     * Ambil data visitor GA4 via REST API (Google Analytics Data API v1beta),
+     * tidak butuh ekstensi grpc. Di-cache 60 detik karena kuota Realtime API ketat.
+     */
     protected function getGa4Analytics(): array
     {
         return Cache::remember('monitoring_ga4_info', 60, function () {
@@ -63,26 +62,34 @@ class MonitoringController extends Controller
             }
 
             try {
-                $client = new BetaAnalyticsDataClient([
-                    'credentials' => $credentials,
-                ]);
+                $token = $this->getGa4AccessToken($credentials);
 
-                $property = "properties/{$propertyId}";
+                $base = "https://analyticsdata.googleapis.com/v1beta/properties/{$propertyId}";
+                $headers = [
+                    'Authorization' => "Bearer {$token}",
+                    'Content-Type'  => 'application/json',
+                ];
 
                 // --- Realtime: active users per halaman ---
-                $realtime = $client->runRealtimeReport([
-                    'property'   => $property,
-                    'dimensions' => [new Dimension(['name' => 'unifiedScreenName'])],
-                    'metrics'    => [new Metric(['name' => 'activeUsers'])],
-                ]);
+                $realtimeRes = Http::withHeaders($headers)
+                    ->timeout(10)
+                    ->post("{$base}:runRealtimeReport", [
+                        'dimensions' => [['name' => 'unifiedScreenName']],
+                        'metrics'    => [['name' => 'activeUsers']],
+                    ]);
 
+                if (!$realtimeRes->ok()) {
+                    throw new \Exception('Realtime API error: ' . $realtimeRes->body());
+                }
+
+                $realtimeJson = $realtimeRes->json();
                 $activeNow = 0;
                 $topPages  = [];
-                foreach ($realtime->getRows() as $row) {
-                    $count = (int) $row->getMetricValues()[0]->getValue();
+                foreach (($realtimeJson['rows'] ?? []) as $row) {
+                    $count = (int) ($row['metricValues'][0]['value'] ?? 0);
                     $activeNow += $count;
                     $topPages[] = [
-                        'page'   => $row->getDimensionValues()[0]->getValue() ?: '(not set)',
+                        'page'   => $row['dimensionValues'][0]['value'] ?? '(not set)',
                         'active' => $count,
                     ];
                 }
@@ -90,50 +97,57 @@ class MonitoringController extends Controller
                 $topPages = array_slice($topPages, 0, 5);
 
                 // --- Ringkasan hari ini ---
-                $today = $client->runReport([
-                    'property'   => $property,
-                    'dateRanges' => [new DateRange(['start_date' => 'today', 'end_date' => 'today'])],
-                    'metrics'    => [
-                        new Metric(['name' => 'totalUsers']),
-                        new Metric(['name' => 'sessions']),
-                        new Metric(['name' => 'screenPageViews']),
-                        new Metric(['name' => 'averageSessionDuration']),
-                        new Metric(['name' => 'bounceRate']),
-                    ],
-                ]);
+                $todayRes = Http::withHeaders($headers)
+                    ->timeout(10)
+                    ->post("{$base}:runReport", [
+                        'dateRanges' => [['startDate' => 'today', 'endDate' => 'today']],
+                        'metrics'    => [
+                            ['name' => 'totalUsers'],
+                            ['name' => 'sessions'],
+                            ['name' => 'screenPageViews'],
+                            ['name' => 'averageSessionDuration'],
+                            ['name' => 'bounceRate'],
+                        ],
+                    ]);
 
-                $row = $today->getRows()[0] ?? null;
-                $todayStats = [
-                    'total_users'     => $row ? (int) $row->getMetricValues()[0]->getValue() : 0,
-                    'sessions'        => $row ? (int) $row->getMetricValues()[1]->getValue() : 0,
-                    'page_views'      => $row ? (int) $row->getMetricValues()[2]->getValue() : 0,
-                    'avg_session_sec' => $row ? (int) round((float) $row->getMetricValues()[3]->getValue()) : 0,
-                    'bounce_rate'     => $row ? round((float) $row->getMetricValues()[4]->getValue() * 100, 1) : 0,
-                ];
-
-                // --- Trend 7 hari terakhir (total users per hari) ---
-                $trend = $client->runReport([
-                    'property'   => $property,
-                    'dateRanges' => [new DateRange(['start_date' => '6daysAgo', 'end_date' => 'today'])],
-                    'dimensions' => [new Dimension(['name' => 'date'])],
-                    'metrics'    => [new Metric(['name' => 'totalUsers'])],
-                    'orderBys'   => [
-                        new OrderBy([
-                            'dimension' => new DimensionOrderBy(['dimension_name' => 'date']),
-                        ]),
-                    ],
-                ]);
-
-                $trendData = [];
-                foreach ($trend->getRows() as $r) {
-                    $raw = $r->getDimensionValues()[0]->getValue(); // format YYYYMMDD
-                    $trendData[] = [
-                        'date'  => \Carbon\Carbon::createFromFormat('Ymd', $raw)->format('d/m'),
-                        'users' => (int) $r->getMetricValues()[0]->getValue(),
-                    ];
+                if (!$todayRes->ok()) {
+                    throw new \Exception('Report API error: ' . $todayRes->body());
                 }
 
-                $client->close();
+                $todayJson = $todayRes->json();
+                $row = $todayJson['rows'][0]['metricValues'] ?? null;
+
+                $todayStats = [
+                    'total_users'     => $row ? (int) $row[0]['value'] : 0,
+                    'sessions'        => $row ? (int) $row[1]['value'] : 0,
+                    'page_views'      => $row ? (int) $row[2]['value'] : 0,
+                    'avg_session_sec' => $row ? (int) round((float) $row[3]['value']) : 0,
+                    'bounce_rate'     => $row ? round((float) $row[4]['value'] * 100, 1) : 0,
+                ];
+
+                // --- Trend 7 hari terakhir ---
+                $trendRes = Http::withHeaders($headers)
+                    ->timeout(10)
+                    ->post("{$base}:runReport", [
+                        'dateRanges' => [['startDate' => '6daysAgo', 'endDate' => 'today']],
+                        'dimensions' => [['name' => 'date']],
+                        'metrics'    => [['name' => 'totalUsers']],
+                        'orderBys'   => [['dimension' => ['dimensionName' => 'date']]],
+                    ]);
+
+                if (!$trendRes->ok()) {
+                    throw new \Exception('Trend API error: ' . $trendRes->body());
+                }
+
+                $trendJson = $trendRes->json();
+                $trendData = [];
+                foreach (($trendJson['rows'] ?? []) as $r) {
+                    $raw = $r['dimensionValues'][0]['value']; // YYYYMMDD
+                    $trendData[] = [
+                        'date'  => \Carbon\Carbon::createFromFormat('Ymd', $raw)->format('d/m'),
+                        'users' => (int) $r['metricValues'][0]['value'],
+                    ];
+                }
 
                 return [
                     'available'  => true,
@@ -146,6 +160,28 @@ class MonitoringController extends Controller
                 Log::warning('Gagal ambil data GA4: ' . $e->getMessage());
                 return ['available' => false, 'error' => $e->getMessage()];
             }
+        });
+    }
+
+    /**
+     * Ambil OAuth2 access token dari service account JSON via google/auth,
+     * di-cache terpisah karena token berlaku ~1 jam (cache 50 menit untuk aman).
+     */
+    protected function getGa4AccessToken(string $credentialsPath): string
+    {
+        return Cache::remember('monitoring_ga4_token', 3000, function () use ($credentialsPath) {
+            $creds = new ServiceAccountCredentials(
+                'https://www.googleapis.com/auth/analytics.readonly',
+                $credentialsPath
+            );
+
+            $token = $creds->fetchAuthToken();
+
+            if (!isset($token['access_token'])) {
+                throw new \Exception('Gagal fetch access token dari service account');
+            }
+
+            return $token['access_token'];
         });
     }
 
