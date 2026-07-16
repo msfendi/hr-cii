@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/fontawesome-free/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/css/sb-admin-2.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 
     <style>
     /* ... style lama tetap ... */
@@ -387,7 +388,7 @@
 <script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/js/sb-admin-2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-<script src="https://maps.googleapis.com/maps/api/js?key={{ config('services.google_maps.key') }}"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <script>
 const ga4Chart = makeLineChart(document.getElementById('ga4Chart'), 'Total Users', '#4e73df');
@@ -497,31 +498,31 @@ const netChart = new Chart(document.getElementById('netChart'), {
     }
 });
 
-/* ---------- Peta geografis GA4 (Google Maps JavaScript API) ----------
-   Zoom HANYA lewat tombol +/- (zoomControl), scroll wheel & double-click
-   yang bisa memicu zoom sengaja dimatikan. */
-const ga4Map = new google.maps.Map(document.getElementById('ga4Map'), {
-    center: { lat: -2.5, lng: 118 },
-    zoom: 5,
-    disableDefaultUI: true,        // matikan semua kontrol bawaan dulu...
-    zoomControl: true,             // ...lalu aktifkan lagi khusus tombol +/-
-    scrollwheel: false,            // zoom via scroll mouse dimatikan
-    disableDoubleClickZoom: true,  // zoom via double click dimatikan
-    gestureHandling: 'greedy',     // drag/pan tetap boleh (bukan zoom)
-    clickableIcons: false,
-});
+/* ---------- Peta geografis GA4 (Leaflet + OpenStreetMap) ----------
+   Zoom HANYA lewat tombol +/- (zoomControl), scroll wheel & interaksi
+   lain yang bisa memicu zoom sengaja dimatikan semua. */
+const ga4Map = L.map('ga4Map', {
+    zoomControl: true,          // tombol +/- tetap aktif
+    scrollWheelZoom: false,     // zoom via scroll mouse dimatikan
+    doubleClickZoom: false,     // zoom via double click dimatikan
+    touchZoom: false,           // zoom via pinch/touch dimatikan
+    boxZoom: false              // zoom via drag-select dimatikan
+}).setView([-2.5, 118], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(ga4Map);
 let ga4MapMarkers = [];
-let ga4MapInfoWindow = new google.maps.InfoWindow();
 let ga4MapSizedOnce = false;
 
 function renderGa4Map(byCity) {
-    // Google Maps butuh event 'resize' setelah container-nya pertama kali terlihat (sebelumnya display:none)
+    // Leaflet butuh invalidateSize() setelah container-nya pertama kali terlihat (sebelumnya display:none)
     if (!ga4MapSizedOnce) {
-        setTimeout(() => google.maps.event.trigger(ga4Map, 'resize'), 50);
+        setTimeout(() => ga4Map.invalidateSize(), 50);
         ga4MapSizedOnce = true;
     }
 
-    ga4MapMarkers.forEach(m => m.setMap(null));
+    ga4MapMarkers.forEach(m => ga4Map.removeLayer(m));
     ga4MapMarkers = [];
 
     if (!byCity || byCity.length === 0) return;
@@ -532,22 +533,14 @@ function renderGa4Map(byCity) {
     const max = Math.max(1, ...plottable.map(c => c.value));
     plottable.forEach(c => {
         const radius = 6 + (c.value / max) * 16;
-        const marker = new google.maps.Marker({
-            position: { lat: c.lat, lng: c.lng },
-            map: ga4Map,
-            icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: radius,
-                fillColor: '#4e73df',
-                fillOpacity: 0.6,
-                strokeColor: '#224abe',
-                strokeWeight: 1,
-            },
-        });
-        marker.addListener('click', () => {
-            ga4MapInfoWindow.setContent(`<strong>${escapeHtml(c.city)}${c.country ? ', ' + escapeHtml(c.country) : ''}</strong><br>${c.value} active users`);
-            ga4MapInfoWindow.open(ga4Map, marker);
-        });
+        const marker = L.circleMarker([c.lat, c.lng], {
+            radius: radius,
+            fillColor: '#4e73df',
+            color: '#224abe',
+            weight: 1,
+            fillOpacity: 0.6
+        }).bindPopup(`<strong>${escapeHtml(c.city)}${c.country ? ', ' + escapeHtml(c.country) : ''}</strong><br>${c.value} active users`);
+        marker.addTo(ga4Map);
         ga4MapMarkers.push(marker);
     });
 }
