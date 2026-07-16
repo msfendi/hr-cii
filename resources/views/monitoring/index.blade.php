@@ -34,6 +34,28 @@
         }
         .error-banner.show { display: flex; }
         .error-banner .retry-btn { margin-left: auto; white-space: nowrap; }
+
+        /* --- GA4 Realtime overview style (tema biru, mengikuti warna utama dashboard) --- */
+        .ga4-rt-card { border-radius: .5rem; }
+        .ga4-rt-number { font-size: 2.2rem; font-weight: 700; line-height: 1; color: #3a3b45; }
+        .ga4-rt-number-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #858796; font-weight: 700; }
+        .ga4-rt-minibar-wrap { display: flex; align-items: flex-end; gap: 2px; height: 90px; }
+        .ga4-rt-minibar { flex: 1 1 0; background: #a6c0f5; border-radius: 2px 2px 0 0; min-height: 2px; transition: height .3s ease; }
+        .ga4-rt-minibar.is-now { background: #4e73df; }
+        .ga4-rt-axis { display: flex; justify-content: space-between; font-size: .65rem; color: #b7b9cc; margin-top: 4px; }
+        .ga4-rt-list-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #eaecf4; font-size: .85rem; }
+        .ga4-rt-list-row:last-child { border-bottom: none; }
+        .ga4-rt-list-name { color: #3a3b45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+        .ga4-rt-list-value { font-weight: 700; color: #3a3b45; }
+        .ga4-rt-bar-track { background: #eaecf4; height: 5px; border-radius: 3px; margin-top: 3px; overflow: hidden; }
+        .ga4-rt-bar-fill { background: #4e73df; height: 100%; border-radius: 3px; }
+        .ga4-rt-panel-title { font-size: .8rem; font-weight: 700; color: #4e4f5a; text-transform: uppercase; letter-spacing: .03em; }
+        .ga4-rt-rank { color: #b7b9cc; font-weight: 700; margin-right: 6px; }
+        .ga4-rt-empty { text-align: center; color: #b7b9cc; padding: 30px 0; font-size: .85rem; }
+
+        /* --- GA4 geographic map --- */
+        #ga4Map { height: 320px; border-radius: .35rem; z-index: 1; }
+        .ga4-map-legend { max-height: 320px; overflow-y: auto; }
     </style>
 </head>
 <body id="page-top">
@@ -146,7 +168,7 @@
                         </div>
                     </div>
 
-                    <div class="col-xl-2 col-md-6 mb-2">
+                    <div class="col-xl-2 col-md-6 mb-4">
                         <div class="card border-left-warning shadow h-100 py-2">
                             <div class="card-body">
                                 <div class="row no-gutters align-items-center">
@@ -167,7 +189,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="col-xl-2 col-md-6 mb-4">
                         <div class="card border-left-danger shadow h-100 py-2">
                             <div class="card-body">
@@ -218,15 +240,21 @@
                 </div>
                 <!-- End Charts -->
 
-                <!-- GA4 Visitor Analytics -->
+                <!-- ============================================================ -->
+                <!-- GA4 Realtime Overview (dipisah dari card Active users by city) -->
+                <!-- ============================================================ -->
                 <div class="row">
-                    <div class="col-lg-7 mb-4">
-                        <div class="card shadow">
-                            <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                                <h6 class="m-0 font-weight-bold text-danger">Trend Visitor (7 Hari) - GA4</h6>
+                    <!-- Card 1: Realtime overview (angka + bar per menit) -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow ga4-rt-card h-100">
+                            <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap">
+                                <h6 class="m-0 font-weight-bold text-primary">
+                                    <i class="fas fa-circle text-success" style="font-size:.5rem; vertical-align:middle;"></i>
+                                    &nbsp;Realtime overview
+                                </h6>
                                 <div class="small text-gray-600">
-                                    Sesi: <span id="ga4Sessions">-</span> &middot;
-                                    Pageviews: <span id="ga4PageViews">-</span> &middot;
+                                    Sesi hari ini: <span id="ga4Sessions">-</span> &middot;
+                                    Pageviews hari ini: <span id="ga4PageViews">-</span> &middot;
                                     Bounce: <span id="ga4Bounce">-</span>%
                                 </div>
                             </div>
@@ -235,28 +263,89 @@
                                     <i class="fas fa-chart-line fa-2x mb-2"></i><br>
                                     GA4 belum tersedia: <span id="ga4ErrorText"></span>
                                 </div>
-                                <div class="chart-area" id="ga4ChartWrap"><canvas id="ga4Chart"></canvas></div>
+
+                                <div id="ga4RealtimeWrap" style="display:none;">
+                                    <div class="d-flex" style="gap: 40px;">
+                                        <div>
+                                            <div class="ga4-rt-number-label">Active users in last 30 minutes</div>
+                                            <div class="ga4-rt-number" id="ga4Active30">0</div>
+                                        </div>
+                                        <div>
+                                            <div class="ga4-rt-number-label">Active users in last 5 minutes</div>
+                                            <div class="ga4-rt-number" id="ga4Active5">0</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ga4-rt-number-label mt-4 mb-2">Active users per minute</div>
+                                    <div class="ga4-rt-minibar-wrap" id="ga4MinuteBars"></div>
+                                    <div class="ga4-rt-axis">
+                                        <span>-30 min</span>
+                                        <span>-15 min</span>
+                                        <span>-1 min</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-5 mb-4">
-                        <div class="card shadow">
-                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-danger">Halaman Paling Aktif Sekarang</h6></div>
+
+                    <!-- Card 2: Active users by city (peta + legend), terpisah dari card Realtime overview -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow ga4-rt-card h-100">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary">Active users by city</h6>
+                            </div>
                             <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-hover" width="100%">
-                                        <thead class="thead-light">
-                                            <tr><th>Halaman</th><th class="text-right">Active Users</th></tr>
-                                        </thead>
-                                        <tbody id="ga4TopPagesTable">
-                                            <tr><td colspan="2" class="text-center text-muted">Memuat data...</td></tr>
-                                        </tbody>
-                                    </table>
+                                <div id="ga4MapUnavailable" class="text-center text-muted py-5" style="display:none;">
+                                    <i class="fas fa-map-marked-alt fa-2x mb-2"></i><br>
+                                    GA4 belum tersedia: <span id="ga4MapErrorText"></span>
+                                </div>
+
+                                <div id="ga4MapWrap" style="display:none;">
+                                    <div class="ga4-rt-panel-title mb-2">Active users by city</div>
+                                    <div id="ga4Map"></div>
+                                    <div class="ga4-map-legend mt-2" id="ga4ByCity"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <div class="row" id="ga4BreakdownRow" style="display:none;">
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Active users by First user source</h6></div>
+                            <div class="card-body"><div id="ga4BySource"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Active users by Audience</h6></div>
+                            <div class="card-body"><div id="ga4ByAudience"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Views by Page title and screen name</h6></div>
+                            <div class="card-body"><div id="ga4ByPageViews"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Event count by Event name</h6></div>
+                            <div class="card-body"><div id="ga4ByEvent"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-12 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Trend Visitor (7 Hari) - GA4</h6></div>
+                            <div class="card-body"><div class="chart-area"><canvas id="ga4Chart"></canvas></div></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- End GA4 Realtime Overview -->
 
                 <!-- Tabel Detail Storage -->
                 <div class="row">
@@ -298,9 +387,10 @@
 <script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/js/sb-admin-2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ config('services.google_maps.key') }}"></script>
 
 <script>
-const ga4Chart = makeLineChart(document.getElementById('ga4Chart'), 'Total Users', '#e74a3b');
+const ga4Chart = makeLineChart(document.getElementById('ga4Chart'), 'Total Users', '#4e73df');
 const STATS_URL = "{{ route('monitoring.stats') }}";
 const POLL_MS = 5000; // interval polling live, ubah sesuai kebutuhan
 const MAX_POINTS = 20;
@@ -407,6 +497,61 @@ const netChart = new Chart(document.getElementById('netChart'), {
     }
 });
 
+/* ---------- Peta geografis GA4 (Google Maps JavaScript API) ----------
+   Zoom HANYA lewat tombol +/- (zoomControl), scroll wheel & double-click
+   yang bisa memicu zoom sengaja dimatikan. */
+const ga4Map = new google.maps.Map(document.getElementById('ga4Map'), {
+    center: { lat: -2.5, lng: 118 },
+    zoom: 5,
+    disableDefaultUI: true,        // matikan semua kontrol bawaan dulu...
+    zoomControl: true,             // ...lalu aktifkan lagi khusus tombol +/-
+    scrollwheel: false,            // zoom via scroll mouse dimatikan
+    disableDoubleClickZoom: true,  // zoom via double click dimatikan
+    gestureHandling: 'greedy',     // drag/pan tetap boleh (bukan zoom)
+    clickableIcons: false,
+});
+let ga4MapMarkers = [];
+let ga4MapInfoWindow = new google.maps.InfoWindow();
+let ga4MapSizedOnce = false;
+
+function renderGa4Map(byCity) {
+    // Google Maps butuh event 'resize' setelah container-nya pertama kali terlihat (sebelumnya display:none)
+    if (!ga4MapSizedOnce) {
+        setTimeout(() => google.maps.event.trigger(ga4Map, 'resize'), 50);
+        ga4MapSizedOnce = true;
+    }
+
+    ga4MapMarkers.forEach(m => m.setMap(null));
+    ga4MapMarkers = [];
+
+    if (!byCity || byCity.length === 0) return;
+
+    const plottable = byCity.filter(c => c.lat != null && c.lng != null);
+    if (plottable.length === 0) return;
+
+    const max = Math.max(1, ...plottable.map(c => c.value));
+    plottable.forEach(c => {
+        const radius = 6 + (c.value / max) * 16;
+        const marker = new google.maps.Marker({
+            position: { lat: c.lat, lng: c.lng },
+            map: ga4Map,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: radius,
+                fillColor: '#4e73df',
+                fillOpacity: 0.6,
+                strokeColor: '#224abe',
+                strokeWeight: 1,
+            },
+        });
+        marker.addListener('click', () => {
+            ga4MapInfoWindow.setContent(`<strong>${escapeHtml(c.city)}${c.country ? ', ' + escapeHtml(c.country) : ''}</strong><br>${c.value} active users`);
+            ga4MapInfoWindow.open(ga4Map, marker);
+        });
+        ga4MapMarkers.push(marker);
+    });
+}
+
 function pushPoint(chart, label, values) {
     chart.data.labels.push(label);
     chart.data.datasets.forEach((ds, i) => ds.data.push(values[i]));
@@ -423,23 +568,89 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+/* ---------- GA4 Realtime overview helpers ---------- */
+
+function renderMinuteBars(perMinute) {
+    const wrap = document.getElementById('ga4MinuteBars');
+    if (!perMinute || perMinute.length === 0) {
+        wrap.innerHTML = '';
+        return;
+    }
+    const max = Math.max(1, ...perMinute.map(p => p.value));
+    wrap.innerHTML = perMinute.map((p, idx) => {
+        const heightPct = Math.max(3, Math.round((p.value / max) * 100));
+        const isNow = idx === perMinute.length - 1;
+        return `<div class="ga4-rt-minibar${isNow ? ' is-now' : ''}" style="height:${heightPct}%" title="${escapeHtml(p.label)}: ${p.value}"></div>`;
+    }).join('');
+}
+
+function renderRankedList(containerId, items, opts = {}) {
+    const el = document.getElementById(containerId);
+    if (!items || items.length === 0) {
+        el.innerHTML = '<div class="ga4-rt-empty">No data available</div>';
+        return;
+    }
+    const max = Math.max(1, ...items.map(i => i.value));
+    const limited = items.slice(0, opts.limit || 6);
+    el.innerHTML = limited.map((item, idx) => `
+        <div class="ga4-rt-list-row" style="display:block;">
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="ga4-rt-list-name"><span class="ga4-rt-rank">#${idx + 1}</span>${escapeHtml(item.name)}</span>
+                <span class="ga4-rt-list-value">${item.value}</span>
+            </div>
+            <div class="ga4-rt-bar-track"><div class="ga4-rt-bar-fill" style="width:${Math.round((item.value / max) * 100)}%"></div></div>
+        </div>
+    `).join('');
+}
+
+function renderByCity(byCity) {
+    const el = document.getElementById('ga4ByCity');
+    if (!byCity || byCity.length === 0) {
+        el.innerHTML = '<div class="ga4-rt-empty">No data available</div>';
+        return;
+    }
+    const max = Math.max(1, ...byCity.map(c => c.value));
+    el.innerHTML = byCity.map((c, idx) => {
+        const label = c.city && c.city !== '(not set)' ? `${c.city}${c.country ? ', ' + c.country : ''}` : (c.country || '(not set)');
+        return `
+        <div class="ga4-rt-list-row" style="display:block;">
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="ga4-rt-list-name"><span class="ga4-rt-rank">#${idx + 1}</span>${escapeHtml(label)}</span>
+                <span class="ga4-rt-list-value">${c.value}</span>
+            </div>
+            <div class="ga4-rt-bar-track"><div class="ga4-rt-bar-fill" style="width:${Math.round((c.value / max) * 100)}%"></div></div>
+        </div>`;
+    }).join('');
+}
+
 function renderGa4(ga4) {
     const unavailableEl = document.getElementById('ga4Unavailable');
-    const chartWrap = document.getElementById('ga4ChartWrap');
+    const realtimeWrap = document.getElementById('ga4RealtimeWrap');
+    const mapUnavailableEl = document.getElementById('ga4MapUnavailable');
+    const mapWrap = document.getElementById('ga4MapWrap');
+    const breakdownRow = document.getElementById('ga4BreakdownRow');
 
     if (!ga4 || !ga4.available) {
         document.getElementById('ga4ActiveNow').textContent = '-';
         document.getElementById('ga4Today').textContent = 'GA4 tidak tersedia';
-        document.getElementById('ga4ErrorText').textContent = (ga4 && ga4.error) ? ga4.error : 'tidak diketahui';
+
+        const errMsg = (ga4 && ga4.error) ? ga4.error : 'tidak diketahui';
+        document.getElementById('ga4ErrorText').textContent = errMsg;
+        document.getElementById('ga4MapErrorText').textContent = errMsg;
+
         unavailableEl.style.display = 'block';
-        chartWrap.style.display = 'none';
-        document.getElementById('ga4TopPagesTable').innerHTML =
-            '<tr><td colspan="2" class="text-center text-muted">Data tidak tersedia</td></tr>';
+        realtimeWrap.style.display = 'none';
+        mapUnavailableEl.style.display = 'block';
+        mapWrap.style.display = 'none';
+        breakdownRow.style.display = 'none';
         return;
     }
 
     unavailableEl.style.display = 'none';
-    chartWrap.style.display = 'block';
+    realtimeWrap.style.display = 'block';
+    mapUnavailableEl.style.display = 'none';
+    mapWrap.style.display = 'block';
+    breakdownRow.style.display = 'flex';
 
     document.getElementById('ga4ActiveNow').textContent = ga4.active_now;
     document.getElementById('ga4Today').textContent = `Hari ini: ${ga4.today.total_users} users`;
@@ -447,22 +658,25 @@ function renderGa4(ga4) {
     document.getElementById('ga4PageViews').textContent = ga4.today.page_views;
     document.getElementById('ga4Bounce').textContent = ga4.today.bounce_rate;
 
+    // Angka besar: active users last 30 min / last 5 min
+    document.getElementById('ga4Active30').textContent = ga4.active_last_30 ?? 0;
+    document.getElementById('ga4Active5').textContent = ga4.active_last_5 ?? 0;
+
+    // Bar chart active users per minute
+    renderMinuteBars(ga4.per_minute);
+
+    // Breakdown panels
+    renderByCity(ga4.by_city);
+    renderGa4Map(ga4.by_city);
+    renderRankedList('ga4BySource', ga4.by_source, { limit: 6 });
+    renderRankedList('ga4ByAudience', ga4.by_audience, { limit: 6 });
+    renderRankedList('ga4ByPageViews', ga4.by_page_views, { limit: 6 });
+    renderRankedList('ga4ByEvent', ga4.by_event, { limit: 6 });
+
     // Trend chart - replace seluruh dataset tiap polling (bukan push incremental)
     ga4Chart.data.labels = ga4.trend.map(t => t.date);
     ga4Chart.data.datasets[0].data = ga4.trend.map(t => t.users);
     ga4Chart.update();
-
-    // Top pages table
-    const tbody = document.getElementById('ga4TopPagesTable');
-    if (!ga4.top_pages || ga4.top_pages.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Tidak ada visitor aktif</td></tr>';
-    } else {
-        tbody.innerHTML = ga4.top_pages.map(p => `
-            <tr>
-                <td>${escapeHtml(p.page)}</td>
-                <td class="text-right"><span class="badge badge-danger">${p.active}</span></td>
-            </tr>`).join('');
-    }
 }
 
 function renderDiskTable(filesystems) {
