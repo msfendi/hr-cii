@@ -19,13 +19,33 @@
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Daftar Payroll Process</h1>
                     <div>
+                    @canRoute('payroll-process.generate')
                     <a href="{{ route('payroll-process.generate') }}" class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Generate Payroll</a>
+                    @endcanRoute
+
+                    @canRoute('payroll-periods.create')
                     <a href="{{ route('payroll-periods.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Period</a>
+                    @endcanRoute
                     </div>
                 </div>
-                
+
+                {{-- ===================== INFO ROLE PAYROLL ===================== --}}
+                @if($noRoleAssigned)
+                    <div class="alert alert-danger py-2 px-3 mb-3">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Akun Anda belum terdaftar di <strong>role_payrolls</strong>, sehingga daftar payroll di halaman ini kosong.
+                        Silakan hubungi Admin untuk pengaturan akses.
+                    </div>
+                @elseif($payrollRoleLabel && $payrollRoleLabel !== 'Semua (Tidak Difilter)')
+                    <div class="alert alert-info py-2 px-3 mb-3">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Total payroll dan jumlah karyawan pada tabel di bawah ini ditampilkan sesuai akses role payroll Anda:
+                        <strong>{{ $payrollRoleLabel }}</strong>
+                    </div>
+                @endif
+
                 <!-- DataTales Example -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
@@ -137,15 +157,9 @@
                                                 </span>
                                             @else
                                                 @php
-                                                    $roleFolder = '';
-
-                                                    if(auth()->user()->hasRole('Payroll_STAFF')){
-                                                        $roleFolder = 'STAFF/';
-                                                    } elseif(auth()->user()->hasRole('Payroll_SEWING')){
-                                                        $roleFolder = 'SEWING/';
-                                                    } elseif(auth()->user()->hasRole('Payroll_NONSEWING')){
-                                                        $roleFolder = 'NON_SEWING/';
-                                                    }
+                                                    $roleFolder = \App\Services\PayrollRoleFilterService::folder(
+                                                        \App\Services\PayrollRoleFilterService::getRole(auth()->user())
+                                                    );
                                                 @endphp
 
 
@@ -166,7 +180,7 @@
                                                     target="_blank">
                                                         <i class="fas fa-file-pdf mr-1"></i> PDF
                                                     </a>
-                                                @endif
+                                                @endif  
 
 
                                                 {{-- DOWNLOAD PDF PENGELUARAN --}}
@@ -210,28 +224,62 @@
                                             @endif
                                         </td>
                                         <td class="text-center">
-
+                                            @canRoute('payroll-process.details')
                                             <button class="btn btn-info btn-circle btn-sm btn-detail"
                                                 data-id="{{ $period->id }}"
                                                 data-period="{{ $period->period_name }}">
                                                 <i class="fas fa-eye"></i>
                                             </button>
+                                            @endcanRoute
+
+                                            
+                                            @if($period->export_status == 'finished' || $period->export_status == 'approved')
+
+                                            @canRoute('payroll-process.update-pph21')
+                                            <button
+                                                class="btn btn-warning btn-circle btn-sm btn-update-pph"
+                                                data-id="{{ $period->id }}"
+                                                title="Update PPH21"
+                                            >
+                                                <i class="fas fa-percent"></i>
+                                            </button>
+                                            @endcanRoute
+                                            @canRoute('payroll-process.recreate-document')
+                                            <button
+                                                class="btn btn-secondary btn-circle btn-sm btn-recreate"
+                                                data-id="{{ $period->id }}"
+                                                title="Recreate Document"
+                                            >
+                                                <i class="fas fa-sync"></i>
+                                            </button>
+                                            @endcanRoute
+
+                                            @endif
 
                                             @if(!$period->export_status)
+                                            <!-- <a class="btn btn-warning btn-circle btn-sm"
+                                                href="{{ route('payroll.export.export', $period->id) }}"
+                                                title="Generate Export">
+                                                    <i class="fas fa-database"></i>
+                                            </a> -->
+                                            @canRoute('payroll.export.export')
                                                 <a class="btn btn-warning btn-circle btn-sm btn-export"
                                                     href="#"
                                                     data-url="{{ route('payroll.export.export', $period->id) }}"
                                                     title="Generate Export">
                                                     <i class="fas fa-database"></i>
                                                 </a>
+                                            @endcanRoute
                                             @endif
+                                            @canRoute('payroll-process.destroy')
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll"
-                                            data-id="{{ $period->id }}"
-                                            data-period="{{ $period->period_name }}"
-                                            data-toggle="modal"
-                                            data-target="#deleteModal">
-                                            <i class="fas fa-trash"></i>
+                                                data-id="{{ $period->id }}"
+                                                data-period="{{ $period->period_name }}"
+                                                data-toggle="modal"
+                                                data-target="#deleteModal">
+                                                <i class="fas fa-trash"></i>
                                             </a>
+                                            @endcanRoute
                                         </td>
                                     </tr>
                                     @endforeach
@@ -252,7 +300,11 @@
                     </div>
 
                     <div class="card-body">
-
+<div id="dept-filter-container" style="display:none;">
+    <select id="filterDept" class="form-control form-control-sm">
+        <option value="">All Department</option>
+    </select>
+</div>
                         <div class="table-responsive">
                             <table class="table table-bordered table-sm" id="table-details">
                                 <thead>
@@ -271,13 +323,15 @@
                                         <th>Pad Print Insentif</th>
                                         <th>Cutting Insentif</th>
                                         <th>Heat Insentif</th>
+                                        <th>6S Insentif</th>
                                         <th>Adjusments</th>
                                         <th>BPJS Kes</th>
                                         <th>BPJS TK</th>
                                         <th>PPh21</th>
                                         <th>PPh21 Deduction</th>
-                                        <th>Absence</th>
-                                        <th>Late</th>
+                                        <th>Absence Deduction</th>
+                                        <th>Late Deduction</th>
+                                        <th>Work Leave Deduction</th>
                                         <th>Total Salary</th>
                                         <th>Status</th>
                                         <th>Slip</th>
@@ -287,6 +341,9 @@
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -347,25 +404,239 @@
                 </div>
             </div>
         </div>
-
+<br>
 @include('layout.footer')
 </body>
 <!-- Page level plugins -->
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-      <script>
-        $(document).ready(function(){
+<script>
+$(document).ready(function(){
 
-            $('#dataTable').DataTable({
-                order: [[0,'desc']], // pakai urutan ID dari Laravel
-                pageLength: 10,
-                responsive: true,
-                autoWidth:false
+    $('#dataTable').DataTable({
+        order: [[0,'desc']], // pakai urutan ID dari Laravel
+        pageLength: 10,
+        responsive: true,
+        autoWidth:false
+    });
+
+});
+</script>
+
+<!-- <script>
+
+$(document).on('change','.input-pph21',function(){
+
+    let id = $(this).data('id');
+    let pph21 = $(this).val();
+
+    $.ajax({
+        url: "{{ route('payroll-process.update-pph21') }}",
+        type: "POST",
+        data: {
+            _token: "{{ csrf_token() }}",
+            id: id,
+            pph21: pph21
+        },
+
+        success:function(res){
+
+            if(res.success){
+
+                Swal.fire({
+                    icon:'success',
+                    title:'Success',
+                    text:'PPh21 updated successfully',
+                    timer:1200,
+                    showConfirmButton:false
+                });
+
+                tableDetails.ajax.reload(null,false);
+
+            }else{
+
+                Swal.fire({
+                    icon:'error',
+                    title:'Error',
+                    text:res.message
+                });
+
+            }
+
+        },
+
+        error:function(xhr){
+
+            Swal.fire({
+                icon:'error',
+                title:'Error',
+                text:'Failed update PPh21'
             });
 
+        }
+
+    });
+
+});
+
+</script> -->
+
+<script>
+
+$(document).on('click','.btn-update-pph',function(){
+
+    let id = $(this).data('id');
+
+    Swal.fire({
+        title:'Update PPH21?',
+        text:'PPH21 akan diambil dari employee contract sesuai payroll period',
+        icon:'warning',
+        showCancelButton:true,
+        confirmButtonText:'Yes Update'
+    }).then((result)=>{
+
+        if(!result.isConfirmed){
+            return;
+        }
+
+        Swal.fire({
+            title:'Processing...',
+            text:'Updating PPH21 payroll',
+            allowOutsideClick:false,
+            didOpen:()=>{
+                Swal.showLoading();
+            }
         });
-        </script>
+
+        $.ajax({
+
+            url:'/payroll-process/update-pph-by-contract/' + id,
+            type:'POST',
+
+            data:{
+                _token:"{{ csrf_token() }}"
+            },
+
+            success:function(res){
+
+                if(res.success){
+
+                    Swal.fire({
+                        icon:'success',
+                        title:'Success',
+                        text:res.message
+                    }).then(()=>{
+                        location.reload();
+                    });
+
+                }else{
+
+                    Swal.fire({
+                        icon:'error',
+                        title:'Error',
+                        text:res.message
+                    });
+
+                }
+
+            },
+
+            error:function(){
+
+                Swal.fire({
+                    icon:'error',
+                    title:'Error',
+                    text:'Failed update PPH21'
+                });
+
+            }
+
+        });
+
+    });
+
+});
+
+</script>
+
+<script>
+
+$(document).on('click','.btn-recreate',function(){
+
+    let id = $(this).data('id');
+
+    Swal.fire({
+        title:'Recreate Payroll Document?',
+        text:'Document payroll akan dibuat ulang',
+        icon:'warning',
+        showCancelButton:true,
+        confirmButtonText:'Yes Recreate'
+    }).then((result)=>{
+
+        if(!result.isConfirmed){
+            return;
+        }
+
+        Swal.fire({
+            title:'Processing...',
+            text:'Please wait, recreating the document is in progress',
+            allowOutsideClick:false,
+            didOpen:()=>{
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+
+            url:'/payroll-process/recreate-document/' + id,
+            type:'POST',
+
+            data:{
+                _token:"{{ csrf_token() }}"
+            },
+
+            success:function(res){
+
+                if(res.success){
+
+                    Swal.fire({
+                        icon:'success',
+                        title:'Success',
+                        text:res.message
+                    }).then(()=>{
+                        location.reload();
+                    });
+
+                }else{
+
+                    Swal.fire({
+                        icon:'error',
+                        title:'Error',
+                        text:res.message
+                    });
+
+                }
+
+            },
+
+            error:function(){
+
+                Swal.fire({
+                    icon:'error',
+                    title:'Error',
+                    text:'Failed recreate document'
+                });
+
+            }
+
+        });
+
+    });
+
+});
+
+</script>
 
 <script>
 function formatRupiah(number){
@@ -399,8 +670,17 @@ function formatRupiah(number){
     return new Intl.NumberFormat('id-ID',{
         style:'currency',
         currency:'IDR',
-        minimumFractionDigits:0
+        minimumFractionDigits:2
     }).format(number);
+}
+
+function componentColor(componentType){
+    return componentType === 'deduction' ? '#dc3545' : '#212529';
+}
+
+function formatRupiahColored(amount, componentType){
+    let masked = formatRupiah(amount ?? 0);
+    return `<span style="color:${componentColor(componentType)}">${masked}</span>`;
 }
 </script>
 <script>
@@ -576,13 +856,94 @@ $(document).on('click','.btn-export',function(e){
         responsive: true,
         ajax: url,
 
-        createdRow:function(row,data,dataIndex){
+        createdRow: function (row, data) {
 
-            // jika tkk tidak null / tidak kosong
-            if(data.tkk !== null && data.tkk !== '' && data.tkk !== 0){
+            const ket = (data.employment_status || '').toString();
 
-                $(row).addClass('table-danger'); // bootstrap merah
+            $(row).removeClass('table-warning table-danger');
+
+            if (data.tkk !== null && data.tkk !== '') {
+
+                if (ket === 'Mangkir') {
+                    $(row).addClass('table-danger');
+                } else {
+                    $(row).addClass('table-warning');
+                }
             }
+        },
+        initComplete:function(){
+
+            let api = this.api();
+
+            let deptColumn = api.column(3);
+
+            if($('#filterDept').hasClass('select2-hidden-accessible')){
+                $('#filterDept').select2('destroy');
+            }
+
+            $('#filterDept').empty().append(
+                '<option value="">All Department</option>'
+            );
+
+            let depts = [];
+
+            deptColumn.data().each(function(value){
+
+                if(value){
+                    depts.push(value);
+                }
+
+            });
+
+            depts = [...new Set(depts)].sort();
+
+            depts.forEach(function(dept){
+
+                $('#filterDept').append(
+                    `<option value="${dept}">${dept}</option>`
+                );
+
+            });
+
+            $('#filterDept').select2({
+                placeholder:'Department',
+                allowClear:true,
+                width:'220px'
+            });
+
+            /*
+            ============================
+            PINDAH KE KANAN SEARCH
+            ============================
+            */
+
+            $('#table-details_filter').addClass(
+            'd-flex align-items-center justify-content-end'
+        );
+
+        if(!$('#dept-filter-wrapper').length){
+
+            $('#table-details_filter').prepend(`
+                <div id="dept-filter-wrapper"
+                    class="mr-2"
+                    style="width:220px;">
+                </div>
+            `);
+
+        }
+
+        $('#filterDept').appendTo('#dept-filter-wrapper');
+
+        if($('#filterDept').hasClass('select2-hidden-accessible')){
+            $('#filterDept').select2('destroy');
+        }
+
+        $('#filterDept').select2({
+            placeholder:'Department',
+            allowClear:true,
+            width:'100%'
+        });
+
         },
 
         columns: [
@@ -591,110 +952,103 @@ $(document).on('click','.btn-export',function(e){
             { data: 'employee_name' },
             { data: 'dept' },
 
-            { data:'basic_salary',defaultContent:0,render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.basic_salary.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.basic_salary?.type);
                 }
             },
-            { data:'overtime_pay', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.overtime_pay.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.overtime_pay?.type);
                 }
             },
-            { data:'special_overtime_pay', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.special_overtime_pay.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.special_overtime_pay?.type);
                 }
             },
-            { data:'monthly_premi', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.monthly_premi.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.monthly_premi?.type);
                 }
             },
-            { data:'long_service_allowance', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.long_service_allowance.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.long_service_allowance?.type);
                 }
             },
-            { data:'allowance', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.allowance.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.allowance?.type);
                 }
             },
 
-            { data:'sewing_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.sewing_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.sewing_insentif?.type);
                 }
             },
-            { data:'pad_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.pad_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.pad_insentif?.type);
                 }
             },
-            { data:'cutting_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.cutting_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.cutting_insentif?.type);
                 }
             },
-            { data:'heat_insentif', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.heat_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.heat_insentif?.type);
                 }
             },
-
-            { data:'adjusment', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.sixs_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.sixs_insentif?.type);
                 }
             },
 
-            { data:'bpjs_kesehatan', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
-                }
-            },
-            { data:'bpjs_ketenagakerjaan', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.adjusment.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.adjusment?.type);
                 }
             },
 
-            { data:'pph_21', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.bpjs_kesehatan.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.bpjs_kesehatan?.type);
                 }
             },
-            { data:'pph_21_deduction', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.bpjs_ketenagakerjaan.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.bpjs_ketenagakerjaan?.type);
                 }
             },
-            { data:'absence_deduction', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.pph_21.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.pph_21?.type);
                 }
             },
-            { data:'late_deduction', defaultContent:0, render:function(data,type){
-                    return type === 'display'
-                        ? formatRupiah(data ?? 0)
-                        : data ?? 0;
+            { data:'components.pph_21_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.pph_21_deduction?.type);
+                }
+            },
+            { data:'components.absence_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.absence_deduction?.type);
+                }
+            },
+            { data:'components.late_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.late_deduction?.type);
+                }
+            },
+
+            { data:'components.work_leave_deduction.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.work_leave_deduction?.type);
                 }
             },
 
@@ -706,19 +1060,22 @@ $(document).on('click','.btn-export',function(e){
             },
             {
                 data: 'employment_status',
-                render: function(data, type){
+                defaultContent: '',
+                render: function (data) {
 
-                    if(type !== 'display') return data;
+                    switch ((data || '').toLowerCase()) {
+                        case 'baru':
+                            return `<span class="badge badge-primary">Baru</span>`;
 
-                    return `
-                        <span class="badge ${
-                            data === 'Resign'
-                                ? 'bg-danger text-white'
-                                : 'bg-success text-white'
-                        }">
-                            ${data}
-                        </span>
-                    `;
+                        case 'mangkir':
+                            return `<span class="badge badge-danger">Mangkir</span>`;
+
+                        case 'resign':
+                            return `<span class="badge badge-warning">Resign</span>`;
+
+                        default:
+                            return `<span class="badge badge-success">Active</span>`;
+                    }
                 }
             },
 
@@ -732,11 +1089,20 @@ $(document).on('click','.btn-export',function(e){
                         "/employee-payroll/show/"
                         + row.run_id + "/" + row.employee_npk;
 
+                    let viewUrlAudit =
+                        "/employee-payroll/show-audit/"
+                        + row.run_id + "/" + row.employee_npk;
+
                     return `
                         <a href="${viewUrl}" 
-                        class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
+                        class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center mb-1"
                         title="View Slip">
                             <i class="fa fa-eye"></i>
+                        </a>
+                        <a href="${viewUrlAudit}" 
+                        class="btn btn-warning btn-circle btn-sm d-flex align-items-center justify-content-center"
+                        title="View Slip Audit">
+                            <i class="fa fa-clipboard-check"></i>
                         </a>
                     `;
                 }
@@ -782,7 +1148,7 @@ $(document).on('click','.btn-export',function(e){
                 13,
                 14,15,
                 16,17,18,19,
-                20,21
+                20,21,22,23
             ];
 
             cols.forEach(function(colIndex){
@@ -801,5 +1167,83 @@ $(document).on('click','.btn-export',function(e){
     });
 
 });
+
+$(document).on('change', '#filterDept', function(){
+
+    let value = $(this).val();
+
+    if(value){
+
+        tableDetails
+            .column(3)
+            .search('^' + $.fn.dataTable.util.escapeRegex(value) + '$', true, false)
+            .draw();
+
+    }else{
+
+        tableDetails
+            .column(3)
+            .search('')
+            .draw();
+
+    }
+
+});
 </script>
+<style>
+    .dept-filter-wrapper{
+    min-width:220px;
+}
+
+.dept-filter-wrapper .select2-container{
+    width:220px !important;
+}
+
+.dept-filter-wrapper .select2-selection--single{
+    height:31px !important;
+    border-radius:6px !important;
+}
+
+.dept-filter-wrapper .select2-selection__rendered{
+    line-height:29px !important;
+    font-size:12px;
+}
+
+.dept-filter-wrapper .select2-selection__arrow{
+    height:29px !important;
+}
+
+#table-details_filter label{
+    margin-bottom:0;
+}
+    #filterDept + .select2-container .select2-selection--single{
+    height:34px;
+    border-radius:8px;
+    border:1px solid #d1d3e2;
+}
+
+#filterDept + .select2-container .select2-selection__rendered{
+    line-height:32px;
+    font-size:13px;
+}
+
+#filterDept + .select2-container .select2-selection__arrow{
+    height:32px;
+}
+
+.select2-dropdown{
+    border-radius:8px;
+    overflow:hidden;
+}
+
+.select2-results__option{
+    font-size:13px;
+}
+    .btn-late-detail{
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+</style>
 </html>

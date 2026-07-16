@@ -16,6 +16,7 @@ class PdfPassword
         $prefix = [
             'all'        => '1325',
             'staff'      => '0513',
+            'nonstaff'   => '1000',
             'sewing'     => '2000',
             'nonsewing'  => '3000',
         ];

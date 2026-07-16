@@ -35,7 +35,7 @@
                   <br>
                   <div>
                     <label>Bank Account :</label>
-                    <input type="text" class="form-control" name="bank_account" value="{{ $data->bank_account }}" required readonly>
+                    <input type="text" class="form-control" name="bank_account" value="{{ $data->bank_account }}" required>
                   </div>
                   <br>
                   <div class="row">

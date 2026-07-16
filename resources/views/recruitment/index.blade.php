@@ -165,6 +165,18 @@
             color: #fff;
         }
 
+        .act-edit {
+            background: #ffedd5;
+            color: #ea580c;
+            text-decoration: none;
+        }
+
+        .act-edit:hover {
+            background: #ea580c;
+            color: #fff;
+            text-decoration: none;
+        }
+
         /* Doc folder btn */
         .doc-fold-btn {
             display: inline-flex;
@@ -640,7 +652,13 @@
             background: rgba(255, 255, 255, .25);
             color: #fff;
         }
+
+        /* Image viewer trigger cursor */
+        .img-viewer-link {
+            cursor: zoom-in;
+        }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.6/viewer.min.css">
 </head>
 
 <body id="page-top">
@@ -664,7 +682,17 @@
                             </h1>
                             <p class="mb-0 text-muted small">Kelola pipeline pelamar &amp; status rekrutmen</p>
                         </div>
-                        <div class="d-flex align-items-center" style="gap:10px;">
+                        <div class="d-flex align-items-center" style="gap:10px;">                 
+                            {{-- Tgl Pendaftaran Filter --}}
+                            <div>
+                                <label class="d-block mb-1" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#6b7280;">
+                                    <i class="fas fa-calendar-alt mr-1"></i>Tgl Pendaftaran
+                                </label>
+                                <input type="date" class="form-control form-control-sm" id="filter_tgl"
+                                    value="{{ request('tgl_pendaftaran') }}"
+                                    style="min-width:140px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
+                                    onchange="filterTgl(this.value)">
+                            </div>
                             {{-- Pipeline Filter --}}
                             <div>
                                 <label class="d-block mb-1" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#6b7280;">
@@ -673,10 +701,10 @@
                                 <select class="form-control form-control-sm" id="filter_pipeline"
                                     style="min-width:160px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
                                     onchange="if(this.value) window.location.href=this.value;">
-                                    <option value="{{ route('recruitment.index') }}" {{ is_null($status) ? 'selected' : '' }}>Semua Pelamar</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'never_confirm']) }}" {{ $status === 'never_confirm' ? 'selected' : '' }}>Applied</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'onboarding']) }}" {{ $status === 'onboarding' ? 'selected' : '' }}>Onboarding</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'decline']) }}" {{ $status === 'decline' ? 'selected' : '' }}>Decline</option>
+                                    <option value="{{ route('recruitment.index', request()->except('status')) }}" {{ is_null($status) ? 'selected' : '' }}>Semua Pelamar</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'never_confirm'])) }}" {{ $status === 'never_confirm' ? 'selected' : '' }}>Applied</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'onboarding'])) }}" {{ $status === 'onboarding' ? 'selected' : '' }}>Onboarding</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'decline'])) }}" {{ $status === 'decline' ? 'selected' : '' }}>Decline</option>
                                 </select>
                             </div>
 
@@ -688,11 +716,11 @@
                                 <select class="form-control form-control-sm" id="filter_penilaian"
                                     style="min-width:180px; font-size:13px; font-weight:600; border-radius:6px; border:1.5px solid #d1d5db; cursor:pointer;"
                                     onchange="if(this.value) window.location.href=this.value;">
-                                    <option value="" {{ !in_array($status, ['step_interview','step_kesehatan','step_teknis','step_user']) ? 'selected' : '' }}>— Semua Tahap —</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_interview']) }}" {{ $status === 'step_interview' ? 'selected' : '' }}>Tes Interview</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_kesehatan']) }}" {{ $status === 'step_kesehatan' ? 'selected' : '' }}>Tes Kesehatan</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_teknis']) }}" {{ $status === 'step_teknis' ? 'selected' : '' }}>Tes Teknis</option>
-                                    <option value="{{ route('recruitment.index', ['status' => 'step_user']) }}" {{ $status === 'step_user' ? 'selected' : '' }}>Tes User</option>
+                                    <option value="{{ route('recruitment.index', request()->except('status')) }}" {{ !in_array($status, ['step_interview','step_kesehatan','step_teknis','step_user']) ? 'selected' : '' }}>— Semua Tahap —</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_interview'])) }}" {{ $status === 'step_interview' ? 'selected' : '' }}>Tes Interview</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_kesehatan'])) }}" {{ $status === 'step_kesehatan' ? 'selected' : '' }}>Tes Kesehatan</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_teknis'])) }}" {{ $status === 'step_teknis' ? 'selected' : '' }}>Tes Teknis</option>
+                                    <option value="{{ route('recruitment.index', array_merge(request()->query(), ['status' => 'step_user'])) }}" {{ $status === 'step_user' ? 'selected' : '' }}>Tes User</option>
                                 </select>
                             </div>
                         </div>
@@ -730,7 +758,10 @@
                                             <th style="min-width:100px">Fisik</th>
                                             <th style="min-width:120px">Kontak</th>
                                             <th style="min-width:90px">Agama / Status</th>
+                                            <th style="min-width:160px">Departemen / Posisi</th>
+                                            <th style="min-width:120px">Tanggal Apply</th>
                                             <th style="min-width:160px">Status Apply</th>
+                                            <th style="min-width:170px">Hasil Test</th>
                                             <th width="70" class="text-center">Dok.</th>
                                             <th width="120" class="text-center">Aksi</th>
                                         </tr>
@@ -838,12 +869,76 @@
                                                     <div class="name-sub">{{ $recruitment->STATUS ?? '-' }}</div>
                                                     <div class="name-sub">{{ $recruitment->TANGGUNGAN ?? '0' }} tanggungan</div>
                                                 </td>
+                                                
+                                                {{-- Departemen / Posisi --}}
+                                                <td>
+                                                    <div class="name-main" style="font-size:13px;">{{ $recruitment->dept ?? '-' }}</div>
+                                                    <div class="name-sub">{{ $recruitment->jabatan ?? '-' }}</div>
+                                                </td>
+
+                                                {{-- Tanggal Apply --}}
+                                                <td>
+                                                    <div class="name-main" style="font-size:13px;">
+                                                        {{ 
+                                                            $recruitment->created_at 
+                                                            ? \Carbon\Carbon::parse($recruitment->created_at)->format('d F Y') 
+                                                            : '-' 
+                                                        }}</div>
+                                                </td>
 
                                                 {{-- Status Apply --}}
                                                 <td>
                                                     <span class="s-pill {{ $sClass }}">
                                                         <i class="fas {{ $sIcon }}"></i>{{ $recruitment->status_apply ?? $sa ?? '-' }}
                                                     </span>
+                                                </td>
+                                                
+                                                {{-- Hasil Test --}}
+                                                <td>
+                                                    @php
+                                                        $stepResults = [
+                                                            'Interview'  => $recruitment->result_interview ?? null,
+                                                            'Kesehatan'  => $recruitment->result_kesehatan ?? null,
+                                                            'Teknis'     => $recruitment->result_test ?? null,
+                                                            'User'       => $recruitment->result_user ?? null,
+                                                        ];
+                                                        $hasAnyResult = collect($stepResults)->filter(fn($v) => !is_null($v) && $v !== '')->isNotEmpty();
+                                                    @endphp
+                                                    @if($hasAnyResult)
+                                                        <div style="display:flex; flex-direction:column; gap:3px;">
+                                                        @foreach($stepResults as $label => $val)
+                                                            @if(!is_null($val) && $val !== '')
+                                                                @php
+                                                                    $rStyle = match(strtoupper($val)) {
+                                                                        'TRUE'  => 'background:#dcfce7; color:#166534; border:1px solid #bbf7d0;',
+                                                                        'FALSE' => 'background:#fee2e2; color:#991b1b; border:1px solid #fecaca;',
+                                                                        'SKIP'  => 'background:#fef9c3; color:#854d0e; border:1px solid #fef08a;',
+                                                                        default => 'background:#f1f5f9; color:#475569; border:1px solid #e2e8f0;',
+                                                                    };
+                                                                    $rIcon = match(strtoupper($val)) {
+                                                                        'TRUE'  => 'fa-check-circle',
+                                                                        'FALSE' => 'fa-times-circle',
+                                                                        'SKIP'  => 'fa-forward',
+                                                                        default => 'fa-circle',
+                                                                    };
+                                                                    $rText = match(strtoupper($val)) {
+                                                                        'TRUE'  => 'LOLOS',
+                                                                        'FALSE' => 'TIDAK LOLOS',
+                                                                        'SKIP'  => 'DILEWATI',
+                                                                        default => $val,
+                                                                    };
+                                                                @endphp
+                                                                <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; {{ $rStyle }}">
+                                                                    <i class="fas {{ $rIcon }}" style="font-size:10px;"></i>
+                                                                    <span style="flex:1;">{{ $label }}</span>
+                                                                    <span>{{ $rText }}</span>
+                                                                </div>
+                                                            @endif
+                                                        @endforeach
+                                                        </div>
+                                                    @else
+                                                        <span class="text-muted" style="font-size:12px;">—</span>
+                                                    @endif
                                                 </td>
 
                                                 {{-- Dokumen --}}
@@ -857,10 +952,17 @@
                                                             <div class="dropdown-menu dropdown-menu-right shadow-sm" style="min-width:160px;">
                                                                 @foreach ($docs as $label => $path)
                                                                     @if ($path)
-                                                                        @php $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION)); @endphp
-                                                                        <a class="dropdown-item d-flex align-items-center" style="font-size:12.5px; gap:8px;"
-                                                                            href="{{ asset('storage/' . $path) }}" target="_blank">
-                                                                            <i class="fas {{ in_array($ext, ['jpg', 'jpeg', 'png', 'webp']) ? 'fa-image text-purple' : 'fa-file-pdf text-danger' }}"></i>
+                                                                        @php
+                                                                            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                                                                            $isImgExt = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp']);
+                                                                            $fileUrl = asset('storage/' . $path);
+                                                                        @endphp
+                                                                        <a class="dropdown-item d-flex align-items-center {{ $isImgExt ? 'img-viewer-link' : '' }}" style="font-size:12.5px; gap:8px;"
+                                                                            href="{{ $fileUrl }}"
+                                                                            data-url="{{ $fileUrl }}"
+                                                                            data-label="{{ $label }}"
+                                                                            @if(!$isImgExt) target="_blank" @endif>
+                                                                            <i class="fas {{ $isImgExt ? 'fa-image text-purple' : 'fa-file-pdf text-danger' }}"></i>
                                                                             {{ $label }}
                                                                         </a>
                                                                     @endif
@@ -885,6 +987,11 @@
                                                             data-toggle="modal" data-target="#whatsappModal">
                                                             <i class="fab fa-whatsapp"></i> WA
                                                         </button>
+                                                        @canRoute('recruitment.edit')
+                                                            <a href="{{ route('recruitment.edit', $recruitment->ID) }}" class="act-btn act-edit">
+                                                                <i class="fas fa-edit"></i> Edit
+                                                            </a>
+                                                        @endcanRoute
                                                         <button type="button" class="act-btn act-det btn-detail"
                                                             data-recruitment="{{ json_encode($recruitment) }}"
                                                             data-toggle="modal" data-target="#detailModal">
@@ -1155,7 +1262,7 @@
                                 <div class="sec-card">
                                     <div class="sec-card-hd hd-red"><i class="fas fa-folder-open"></i> Dokumen Pelamar</div>
                                     <div class="sec-card-body">
-                                        <p class="text-muted mb-2" style="font-size:12px;">Klik dokumen untuk membuka di tab baru.</p>
+                                        <p class="text-muted mb-2" style="font-size:12px;">Klik dokumen gambar untuk membuka dengan image viewer (bisa rotate). Dokumen non-gambar akan dibuka di tab baru.</p>
                                         <div id="doc_grid_modal" style="display:flex; flex-wrap:wrap;"></div>
                                     </div>
                                 </div>
@@ -1194,7 +1301,7 @@
                                         {{-- Step 1: Interview --}}
                                         <div class="col-md-6 mb-3">
                                             <div class="penilaian-step" id="step_interview">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-yellow">
                                                         <span class="step-number">1</span>
@@ -1207,6 +1314,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1220,8 +1328,8 @@
 
                                         {{-- Step 2: Kesehatan --}}
                                         <div class="col-md-6 mb-3">
-                                            <div class="penilaian-step locked" id="step_kesehatan">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                            <div class="penilaian-step" id="step_kesehatan">
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-green">
                                                         <span class="step-number">2</span>
@@ -1234,6 +1342,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1247,8 +1356,8 @@
 
                                         {{-- Step 3: Tes Teknis --}}
                                         <div class="col-md-6 mb-3">
-                                            <div class="penilaian-step locked" id="step_teknis">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                            <div class="penilaian-step" id="step_teknis">
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-blue">
                                                         <span class="step-number">3</span>
@@ -1261,6 +1370,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-2">
@@ -1281,8 +1391,8 @@
 
                                         {{-- Step 4: Tes User --}}
                                         <div class="col-md-6 mb-3">
-                                            <div class="penilaian-step locked" id="step_user">
-                                                <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span>
+                                            <div class="penilaian-step" id="step_user">
+                                                {{-- <span class="step-lock-badge"><i class="fas fa-lock mr-1"></i>Terkunci</span> --}}
                                                 <div class="sec-card h-100">
                                                     <div class="sec-card-hd hd-purple">
                                                         <span class="step-number">4</span>
@@ -1295,6 +1405,7 @@
                                                                 <option value="">Belum Dinilai</option>
                                                                 <option value="TRUE">✅ Lolos</option>
                                                                 <option value="FALSE">❌ Tidak Lolos</option>
+                                                                <option value="SKIP">⏭️ Lewati</option>
                                                             </select>
                                                         </div>
                                                         <div class="form-group mb-0">
@@ -1391,11 +1502,17 @@
                                     <textarea name="message" id="wa_message" class="form-control" rows="9" required style="font-size:14.5px; line-height:1.65;"></textarea>
                                     <small class="form-text text-muted">Pesan dapat diedit secara manual sebelum dikirim.</small>
                                 </div>
+                                <div class="form-group mb-0 custom-control custom-checkbox">
+                                    <input type="checkbox" name="send_wa" id="send_wa_check" class="custom-control-input" value="1" checked>
+                                    <label class="custom-control-label font-weight-bold text-primary" for="send_wa_check" style="cursor:pointer">
+                                        Kirim pesan WhatsApp ke pelamar ini
+                                    </label>
+                                </div>
                             </div>
                             <div class="modal-footer bg-light border-top py-2">
                                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Batal</button>
                                 <button type="submit" class="btn btn-success btn-sm font-weight-bold px-4">
-                                    <i class="fab fa-whatsapp mr-1"></i>Kirim WhatsApp
+                                    <i class="fab fa-send mr-1"></i>Submit
                                 </button>
                             </div>
                         </form>
@@ -1409,6 +1526,7 @@
 
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.6/viewer.min.js"></script>
 
     <script>
     $(document).ready(function () {
@@ -1438,6 +1556,82 @@
             $(this).addClass('active');
             $('.det-pane').removeClass('active');
             $('#pane-' + tab).addClass('active');
+        });
+
+        /* ══════════════════════════════════════════════
+           IMAGE VIEWER (Viewer.js) — opens image attachments
+           with zoom, drag, and ROTATE (left/right) + flip.
+        ══════════════════════════════════════════════ */
+        let __imgViewerInstance = null;
+        let __imgViewerEl = null;
+
+        function openImageViewer(url, label) {
+            if (!url) return;
+
+            // Clean up any previous instance
+            if (__imgViewerInstance) {
+                try { __imgViewerInstance.destroy(); } catch (e) {}
+                __imgViewerInstance = null;
+            }
+            if (__imgViewerEl) {
+                $(__imgViewerEl).remove();
+                __imgViewerEl = null;
+            }
+
+            // Build a detached image element for Viewer.js to bind to
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = label || 'Dokumen';
+            img.style.display = 'none';
+            document.body.appendChild(img);
+            __imgViewerEl = img;
+
+            __imgViewerInstance = new Viewer(img, {
+                inline: false,
+                navbar: false,
+                title: [1, (image) => label || 'Dokumen'],
+                toolbar: {
+                    zoomIn: 1,
+                    zoomOut: 1,
+                    oneToOne: 1,
+                    reset: 1,
+                    prev: 0,
+                    play: 0,
+                    next: 0,
+                    rotateLeft: 1,
+                    rotateRight: 1,
+                    flipHorizontal: 1,
+                    flipVertical: 1,
+                },
+                movable: true,
+                zoomable: true,
+                rotatable: true,
+                scalable: true,
+                transition: true,
+                keyboard: true,
+                hidden: function () {
+                    // Clean up when the viewer is closed
+                    if (__imgViewerInstance) {
+                        try { __imgViewerInstance.destroy(); } catch (e) {}
+                        __imgViewerInstance = null;
+                    }
+                    if (__imgViewerEl) {
+                        $(__imgViewerEl).remove();
+                        __imgViewerEl = null;
+                    }
+                }
+            });
+
+            __imgViewerInstance.show();
+        }
+
+        // Bind to any current/future .img-viewer-link element (table dropdown + modal doc pills)
+        $(document).on('click', '.img-viewer-link', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const url = $(this).data('url');
+            const label = $(this).data('label') || $(this).text().trim();
+            openImageViewer(url, label);
         });
 
         /* ── WA Templates ── */
@@ -1479,6 +1673,16 @@
         const v    = (x, fb) => (x !== null && x !== undefined && x !== '') ? x : (fb || '–');
         const fmtD = d => { if (!d) return '–'; try { return new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); } catch(e){ return d; } };
         const pj   = r => { if (!r) return null; if (typeof r === 'object') return r; try { return JSON.parse(r); } catch(e){ return null; } };
+
+        // tambahkan helper ini
+        const toArr = r => {
+            let parsed = r;
+            if (parsed && typeof parsed !== 'object') {
+                try { parsed = JSON.parse(parsed); } catch(e) { parsed = null; }
+            }
+            if (!parsed) return [];
+            return Array.isArray(parsed) ? parsed : Object.values(parsed);
+        };
 
         function stbl(headers, rows) {
             if (!rows || !rows.length) return '<div class="stbl-empty"><i class="fas fa-minus mr-1"></i>Tidak ada data</div>';
@@ -1524,21 +1728,27 @@
             const isIntvw = d.is_interview === 'TRUE' || d.is_interview === true;
             const isHlth  = d.is_kesehatan === 'TRUE' || d.is_kesehatan === true;
             const isOnb   = d.STATUS_APPLY === 'ONBOARDING';
-            const intvStatus = d.result_interview === 'TRUE' ? 'done' : (d.result_interview === 'FALSE' ? 'failed' : 'active');
+            const intvStatus = d.result_interview === 'TRUE' ? 'done' : 
+                               (d.result_interview === 'FALSE' ? 'failed' : 
+                               (d.result_interview === 'SKIP' ? 'active' : 'active'));
             
             const hlthStatus = d.result_kesehatan === 'TRUE' ? 'done' : 
                                (d.result_kesehatan === 'FALSE' ? 'failed' : 
-                               (d.result_interview === 'TRUE' ? 'active' : ''));
+                               (d.result_kesehatan === 'SKIP' ? 'active' : 
+                               ((d.result_interview === 'TRUE' || d.result_interview === 'SKIP') ? 'active' : '')));
 
             const testStatus = d.result_test === 'TRUE' ? 'done' : 
                                (d.result_test === 'FALSE' ? 'failed' : 
-                               (d.result_kesehatan === 'TRUE' ? 'active' : ''));
+                               (d.result_test === 'SKIP' ? 'active' : 
+                               ((d.result_kesehatan === 'TRUE' || d.result_kesehatan === 'SKIP') ? 'active' : '')));
 
             const userStatus = d.result_user === 'TRUE' ? 'done' : 
                                (d.result_user === 'FALSE' ? 'failed' : 
-                               (d.result_test === 'TRUE' ? 'active' : ''));
+                               (d.result_user === 'SKIP' ? 'active' : 
+                               ((d.result_test === 'TRUE' || d.result_test === 'SKIP') ? 'active' : '')));
 
-            const onboardStatus = isOnb ? 'done' : (d.result_user === 'TRUE' ? 'active' : '');
+            const onboardStatus = isOnb ? 'done' : ((d.result_user === 'TRUE' || d.result_user === 'SKIP') ? 'active' : '');
+
 
             setTl('tl_apply',     null,            'done',              null);
             setTl('tl_interview', 'tl_interview',  intvStatus,          d.tgl_interview);
@@ -1567,14 +1777,14 @@
 
             // Sequential lock logic
             // Rule: step unlocks only if previous step has a result of 'LOLOS' in database
-            function applyLock(stepId, prevResult) {
-                const $step = $('#' + stepId);
-                const unlocked = prevResult === 'TRUE';
-                $step.toggleClass('locked', !unlocked);
-            }
-            applyLock('step_kesehatan', d.result_interview);
-            applyLock('step_teknis',    d.result_kesehatan);
-            applyLock('step_user',      d.result_test);
+            //function applyLock(stepId, prevResult) {
+            //   const $step = $('#' + stepId);
+           //    const unlocked = prevResult === 'TRUE' || prevResult === 'SKIP';
+           //     $step.toggleClass('locked', !unlocked);
+            //}
+            //applyLock('step_kesehatan', d.result_interview);
+            //applyLock('step_teknis',    d.result_kesehatan);
+            //applyLock('step_user',      d.result_test);
 
             // Update step indicators
             function updateStepInd(indId, result) {
@@ -1587,6 +1797,9 @@
                 } else if (result === 'FALSE') {
                     $dot.css({'background':'#fee2e2','color':'#991b1b'});
                     $lbl.css('color','#991b1b');
+                } else if (result === 'SKIP') {
+                    $dot.css({'background':'#e0f2fe','color':'#0369a1'});
+                    $lbl.css('color','#0369a1');
                 } else {
                     $dot.css({'background':'#f1f3f5','color':'#adb5bd'});
                     $lbl.css('color','#adb5bd');
@@ -1598,19 +1811,29 @@
             updateStepInd('step_ind_4', d.result_user);
 
             // Pribadi
-            $('#dp_nik').text(v(d.NIK)); $('#dp_kk').text(v(d.NO_KK));
+            $('#dp_nik').text(v(d.NIK)); 
+            $('#dp_kk').text(v(d.NO_KK));
             $('#dp_jk').text(d.JENIS_KELAMIN === 'L' ? '♂ Laki-laki' : '♀ Perempuan');
-            $('#dp_agama').text(v(d.AGAMA)); $('#dp_tmpt').text(v(d.TMPT_LAHIR));
-            $('#dp_tgl').text(fmtD(d.TGL_LAHIR)); $('#dp_umur').text(v(d.UMUR));
-            $('#dp_wn').text(v(d.warga_negara)); $('#dp_status').text(v(d.STATUS));
+            $('#dp_agama').text(v(d.AGAMA)); 
+            $('#dp_tmpt').text(v(d.TMPT_LAHIR));
+            $('#dp_tgl').text(fmtD(d.TGL_LAHIR)); 
+            $('#dp_umur').text(v(d.UMUR));
+            $('#dp_wn').text(v(d.warga_negara)); 
+            const statusMap = { 'BM': 'Belum Menikah', 'M': 'Menikah', 'CH': 'Cerai Hidup', 'CM': 'Cerai Mati' };
+            $('#dp_status').text(statusMap[d.STATUS] || v(d.STATUS));
             $('#dp_tang').text(v(d.TANGGUNGAN,'0') + ' orang');
             $('#dp_kb').text(d.ikut_kb == 1 ? 'Ya' : (d.ikut_kb == 0 ? 'Tidak' : '–'));
             $('#dp_sim').text(v(d.nomor_sim));
-            $('#dp_tb').text(v(d.TINGGI_BADAN) + ' cm'); $('#dp_bb').text(v(d.BERAT_BADAN) + ' kg');
-            $('#dp_transport').text(v(d.mode_transportasi)); $('#dp_bakat').text(v(d.bakat_hobby));
-            $('#dp_bpjstk').text(v(d.bpjs_tk)); $('#dp_bpjskes').text(v(d.bpjs_kes));
-            $('#dp_jabatan').text(v(d.jabatan)); $('#dp_dept').text(v(d.department));
-            $('#dp_ekstra').text(v(d.kegiatan_ekstra)); $('#dp_motivasi').text(v(d.motivasi));
+            $('#dp_tb').text(v(d.TINGGI_BADAN) + ' cm'); 
+            $('#dp_bb').text(v(d.BERAT_BADAN) + ' kg');
+            $('#dp_transport').text(v(d.mode_transportasi)); 
+            $('#dp_bakat').text(v(d.bakat_hobby));
+            $('#dp_bpjstk').text(v(d.bpjs_tk)); 
+            $('#dp_bpjskes').text(v(d.bpjs_kes));
+            $('#dp_jabatan').text(v(d.jabatan)); 
+            $('#dp_dept').text(v(d.department));
+            $('#dp_ekstra').text(v(d.kegiatan_ekstra)); 
+            $('#dp_motivasi').text(v(d.motivasi));
 
             // Kontak
             $('#dk_hp').text(v(d.HP)); $('#dk_alamat_ktp').text(v(d.ALAMAT_LENGKAP));
@@ -1628,11 +1851,11 @@
 
             const sdr = pj(d.saudara_kandung);
             $('#tbl_saudara_wrap').html(stbl(['Nama','Tgl Lahir','Gender','Pendidikan','Pekerjaan'],
-                sdr && sdr.map(s=>[s.nama,fmtD(s.tgl_lahir),s.gender,s.pendidikan,s.pekerjaan])));
+                sdr && Object.values(sdr).map(s=>[s.nama,fmtD(s.tgl_lahir),s.gender,s.pendidikan,s.pekerjaan])));
 
             const ank = pj(d.data_anak);
             $('#tbl_anak_wrap').html(stbl(['Nama','Tempat Lahir','Tgl Lahir','Gender','Pendidikan','Status'],
-                ank && ank.map(a=>[a.nama,a.tempat_lahir,fmtD(a.tgl_lahir),a.gender,a.pendidikan,a.status])));
+                ank && Object.values(ank).map(a=>[a.nama,a.tempat_lahir,fmtD(a.tgl_lahir),a.gender,a.pendidikan,a.status])));
 
             // Pendidikan
             $('#dpd_pend').text(v(d.PENDIDIKAN)); $('#dpd_jurusan').text(v(d.JURUSAN));
@@ -1640,12 +1863,12 @@
             $('#dpd_ekstra').text(v(d.kegiatan_ekstra));
             const rp = pj(d.riwayat_pendidikan);
             $('#tbl_pendidikan_wrap').html(stbl(['Tingkat','Institusi','Jurusan','Dari','Sampai','Lulus'],
-                rp && rp.map(r=>[r.tingkat,r.institusi,r.jurusan,r.dari,r.sampai,r.lulus=='1'?'✓ Lulus':'–'])));
+                rp && Object.values(rp).map(r=>[r.tingkat,r.institusi,r.jurusan,r.dari,r.sampai,r.lulus=='1'?'✓ Lulus':'–'])));
 
             // Karir
             const pg = pj(d.pengalaman_kerja);
             $('#tbl_pengalaman_wrap').html(stbl(['Perusahaan','Dari','Sampai','Jabatan','Departemen','Alasan Keluar'],
-                pg && pg.map(p=>[p.perusahaan,p.dari,p.sampai,p.jabatan,p.departemen,p.alasan])));
+                pg && Object.values(pg).map(p=>[p.perusahaan,p.dari,p.sampai,p.jabatan,p.departemen,p.alasan])));
             $('#dpk_motivasi').text(v(d.motivasi));
 
             // Dokumen
@@ -1660,12 +1883,22 @@
                 { label:'SKCK',          path: d.file_skck,          icon:'fa-shield-alt',     color:'#6366f1' },
                 { label:'Surat Sehat',   path: d.file_surat_sehat,   icon:'fa-heartbeat',      color:'#e91e63' },
             ];
+            const IMG_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
             let dh = '';
             docMap.forEach(doc => {
                 if (doc.path) {
-                    dh += `<a href="/storage/${doc.path}" target="_blank" class="doc-pill">
-                        <i class="fas ${doc.icon}" style="color:${doc.color}"></i>${doc.label}
-                    </a>`;
+                    const ext = (doc.path.split('.').pop() || '').toLowerCase();
+                    const isImg = IMG_EXT.includes(ext);
+                    const url = '/storage/' + doc.path;
+                    if (isImg) {
+                        dh += `<a href="#" data-url="${url}" data-label="${doc.label}" class="doc-pill img-viewer-link">
+                            <i class="fas ${doc.icon}" style="color:${doc.color}"></i>${doc.label}
+                        </a>`;
+                    } else {
+                        dh += `<a href="${url}" target="_blank" class="doc-pill">
+                            <i class="fas ${doc.icon}" style="color:${doc.color}"></i>${doc.label}
+                        </a>`;
+                    }
                 }
 
 
@@ -1684,6 +1917,17 @@
             $('#doc_grid_modal').html(dh || '<span class="text-muted"><i class="fas fa-folder-open mr-1"></i>Tidak ada dokumen tersedia</span>');
         });
     });
+
+    
+    function filterTgl(val) {
+        let url = new URL(window.location.href);
+        if(val) {
+            url.searchParams.set('tgl_pendaftaran', val);
+        } else {
+            url.searchParams.delete('tgl_pendaftaran');
+        }
+        window.location.href = url.toString();
+    }
     </script>
 
     <script src="{{ asset('js/demo/datatables-demo.js') }}"></script>

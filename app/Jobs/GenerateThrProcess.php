@@ -15,6 +15,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class GenerateThrProcess implements ShouldQueue
 {
@@ -30,10 +31,25 @@ class GenerateThrProcess implements ShouldQueue
 
     public function handle()
     {
-        ini_set('memory_limit', '2048M');
+        $this->processThr(false);
+    }
 
-        $run = ThrRun::findOrFail($this->runId);
-        $period = ThrPeriod::findOrFail($run->period_id);
+    public function simulation()
+    {
+        return $this->processThr(true);
+    }
+
+    private function processThr($isCheck = false)
+    {
+        ini_set('memory_limit', '2048M');
+        $thrResults = [];
+
+        if (!$isCheck) {
+            $run = ThrRun::findOrFail($this->runId);
+            $period = ThrPeriod::findOrFail($run->period_id);
+        } else {
+            $period = ThrPeriod::findOrFail($this->runId);
+        }
 
         /*
     ============================
@@ -48,33 +64,76 @@ class GenerateThrProcess implements ShouldQueue
     GET ACTIVE EMPLOYEES
     ============================
     */
-        $run->update([
-            'status' => 'Get Employee Biodata',
-            'progress' => 5,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Get Employee Biodata',
+                'progress' => 5,
+            ]);
+        }
+
+        $latestContract = DB::table('employees_contract as ec1')
+            ->select(
+                'ec1.npk',
+                'ec1.salary',
+                'ec1.allowance',
+                'ec1.pph21',
+                'ec1.type',
+                'ec1.daily_salary'
+            )
+            ->where('ec1.npk', '!=', 'C-00017')
+            // ->where('ec1.npk', '=', 'C-01510')
+
+            // ✅ contract harus masuk range periode
+            ->whereDate('ec1.start_date', '<=', $cutoff)
+            ->whereDate('ec1.end_date', '>=', $cutoff)
+            // ->where('ec1.status_contract', '=', 'AKTIF')
+
+            // ✅ ambil contract terbaru
+            ->whereRaw("
+        ec1.id = (
+            SELECT TOP 1 ec2.id
+            FROM employees_contract ec2
+            WHERE ec2.npk = ec1.npk
+              AND ec2.start_date <= ?
+              AND ec2.end_date >= ?
+            ORDER BY ec2.contract_ke DESC,
+                     ec2.start_date DESC
+        )
+    ", [$cutoff, $cutoff]);
+
         $employees = DB::connection('cii')
             ->table('PKWT as p')
             ->join('BIODATA as b', 'p.NPK', '=', 'b.NPK')
-            ->join('payroll_masters as pm', 'pm.npk', '=', 'p.NPK')
+            ->leftJoinSub($latestContract, 'ec', function ($join) {
+                $join->on('p.NPK', '=', 'ec.npk');
+            })
+            ->where('p.NPK', '!=', 'C-00017')
+            // ->where('p.npk', '=', 'C-01510')
+            ->where('p.TMK', '<', $cutoff)
             ->whereNull('p.TKK')
             ->select(
                 'p.NPK',
                 'b.NAMA_KARYAWAN',
-                'pm.salary',
-                'pm.allowance',
-                'p.TMK'
-            )
+                'ec.salary',
+                'ec.allowance',
+                'p.TMK',
+                'ec.type'
+            )->orderBy('p.NPK')
             ->get();
+
+        // dd($latestContract->get());
 
         /*
     ============================
     GET THR FORMULA FROM DB
     ============================
     */
-        $run->update([
-            'status' => 'Get THR Component',
-            'progress' => 10,
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'status' => 'Get THR Component',
+                'progress' => 10,
+            ]);
+        }
         $thrComponent = PayrollComponent::where('code', 'thr')->first();
         $formula = $thrComponent->formula;
 
@@ -87,13 +146,17 @@ class GenerateThrProcess implements ShouldQueue
     */
         foreach ($employees as $emp) {
 
-            $run->update([
-                'status' => 'Calculation for ' . $emp->NPK . ' - ' . $thrComponent->name,
-                'progress' => 50,
-            ]);
+            if (!$isCheck) {
+                $run->update([
+                    'status' => 'Calculation for ' . $emp->NPK . ' - ' . $thrComponent->name,
+                    'progress' => 50,
+                ]);
+            }
 
             $basic_salary = $emp->salary ?? 0;
             $allowance    = $emp->allowance ?? 0;
+            $is_contract = Str::ucfirst(Str::lower($emp->type)) === 'Contract' ? 1 : 0;
+            $is_daily    = Str::ucfirst(Str::lower($emp->type)) === 'Daily' ? 1 : 0;
 
             /*
         ============================
@@ -113,8 +176,8 @@ class GenerateThrProcess implements ShouldQueue
             try {
                 // Ganti variabel formula sesuai DB: working_months, basic_salary, allowance
                 $evalFormula = str_replace(
-                    ['basic_salary', 'allowance', 'working_months'],
-                    [$basic_salary, $allowance, $working_months],
+                    ['basic_salary', 'allowance', 'working_months', 'is_contract', 'is_daily'],
+                    [$basic_salary, $allowance, $working_months, $is_contract, $is_daily],
                     $formula
                 );
                 eval('$thr = ' . $evalFormula . ';');
@@ -128,6 +191,7 @@ class GenerateThrProcess implements ShouldQueue
         ============================
         */
             $thrRounded = round($thr, 0);
+            // dd($emp->salary, $emp->NPK, $working_months, $evalFormula, $thr);
 
             /*
         ============================
@@ -146,13 +210,24 @@ class GenerateThrProcess implements ShouldQueue
         SAVE DETAIL
         ============================
         */
-            ThrRunDetail::create([
-                'run_id'        => $run->id,
-                'employee_npk'  => $emp->NPK,
-                'employee_name' => $emp->NAMA_KARYAWAN,
-                'components'    => json_encode($components),
-                'total_salary'  => $thrRounded
-            ]);
+            if (!$isCheck) {
+                ThrRunDetail::create([
+                    'run_id'        => $run->id,
+                    'employee_npk'  => $emp->NPK,
+                    'employee_name' => $emp->NAMA_KARYAWAN,
+                    'components'    => json_encode($components),
+                    'total_salary'  => $thrRounded
+                ]);
+            } else {
+
+                $thrResults[] = [
+                    'run_id'        => $this->runId,
+                    'employee_npk'  => $emp->NPK,
+                    'employee_name' => $emp->NAMA_KARYAWAN,
+                    'components'    => json_encode($components),
+                    'total_salary'  => $thrRounded
+                ];
+            }
 
             $totalTHR += $thrRounded;
         }
@@ -162,45 +237,51 @@ class GenerateThrProcess implements ShouldQueue
     UPDATE RUN SUMMARY
     ============================
     */
-        $run->update([
-            'employee_count' => $employees->count(),
-            'total_thr'      => $totalTHR,
-            'status'         => 'THR calculation completed',
-            'progress'       => 100
-        ]);
+        if (!$isCheck) {
+            $run->update([
+                'employee_count' => $employees->count(),
+                'total_thr'      => $totalTHR,
+                'status'         => 'THR calculation completed',
+                'progress'       => 100
+            ]);
+        } else {
+            return $thrResults;
+        }
 
         /*
     ============================
     AUTO CREATE APPROVAL
     ============================
     */
-        $existsApprove = ThrApprove::where('thr_run_id', $run->id)->exists();
+        if (!$isCheck) {
+            $existsApprove = ThrApprove::where('thr_run_id', $run->id)->exists();
 
-        if (!$existsApprove) {
+            if (!$existsApprove) {
 
-            $settings = PayrollSetting::where('component', 'thr')->get();
+                $settings = PayrollSetting::where('component', 'thr')->get();
 
-            if ($settings->count() > 0) {
+                if ($settings->count() > 0) {
 
-                $approvals = $settings->pluck('approval')->toArray();
+                    $approvals = $settings->pluck('approval')->toArray();
 
-                $progress = collect($approvals)->map(function ($npk) {
-                    $npkList = is_array($npk) ? $npk : json_decode($npk, true);
-                    if (!is_array($npkList)) $npkList = [$npk];
-                    $statusList = array_fill(0, count($npkList), 'waiting');
-                    return [
-                        'npk' => json_encode($npkList),
-                        'status' => json_encode($statusList)
-                    ];
-                })->values();
+                    $progress = collect($approvals)->map(function ($npk) {
+                        $npkList = is_array($npk) ? $npk : json_decode($npk, true);
+                        if (!is_array($npkList)) $npkList = [$npk];
+                        $statusList = array_fill(0, count($npkList), 'waiting');
+                        return [
+                            'npk' => json_encode($npkList),
+                            'status' => json_encode($statusList)
+                        ];
+                    })->values();
 
-                ThrApprove::create([
-                    'thr_run_id'     => $run->id,
-                    'approval'       => $approvals,
-                    'progress'       => $progress,
-                    'approved_at'    => [],
-                    'status'         => 'pending'
-                ]);
+                    ThrApprove::create([
+                        'thr_run_id'     => $run->id,
+                        'approval'       => $approvals,
+                        'progress'       => $progress,
+                        'approved_at'    => [],
+                        'status'         => 'pending'
+                    ]);
+                }
             }
         }
     }

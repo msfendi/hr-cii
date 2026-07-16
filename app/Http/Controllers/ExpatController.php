@@ -27,14 +27,26 @@ class ExpatController extends Controller
 
     public function indexMaster()
     {
-        $data = ExpatMaster::latest()->get();
+        $data = ExpatMaster::select('expat_master.*', 'PKWT.TGLLAHIR')->leftJoin('PKWT', 'expat_master.npk', '=', 'PKWT.NPK')->get();
         return view('expat_master.index', compact('data'));
     }
 
 
     public function createMaster()
     {
-        return view('expat_master.create');
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
+        return view('expat_master.create', compact('employees'));
     }
 
     public function storeMaster(Request $request)
@@ -51,7 +63,10 @@ class ExpatController extends Controller
 
     public function indexOnleave()
     {
-        $data = ExpatOnleave::latest()->get();
+        $data = ExpatOnleave::leftJoin('BIODATA', 'expat_onleave.npk', '=', 'BIODATA.NPK')
+            ->select('expat_onleave.*', 'BIODATA.NAMA_KARYAWAN')
+            ->latest('expat_onleave.created_at')
+            ->get();
 
         $components = DB::table('expat_cost_components')
             ->pluck('component', 'id');
@@ -91,8 +106,20 @@ class ExpatController extends Controller
     public function createOnLeave()
     {
         $components = ExpatCostComponent::orderBy('component')->get();
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
 
-        return view('expat_onleave.create', compact('components'));
+        return view('expat_onleave.create', compact('components', 'employees'));
     }
 
     public function storeOnleave(Request $request)
@@ -135,9 +162,16 @@ class ExpatController extends Controller
                 '=',
                 'expat_cost_components.id'
             )
+            ->leftJoin(
+                'BIODATA',
+                'expat_cost.npk',
+                '=',
+                'BIODATA.NPK'
+            )
             ->select(
                 'expat_cost.*',
-                'expat_cost_components.component as component_name'
+                'expat_cost_components.component as component_name',
+                'BIODATA.NAMA_KARYAWAN as NAMA_KARYAWAN'
             )
             ->get();
 
@@ -148,9 +182,21 @@ class ExpatController extends Controller
 
     public function createCost()
     {
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
         $components = ExpatCostComponent::orderBy('component')->get();
 
-        return view('expat_cost.create', compact('components'));
+        return view('expat_cost.create', compact('components', 'employees'));
     }
 
     public function storeCost(Request $request)
@@ -171,8 +217,9 @@ class ExpatController extends Controller
             'remark' => $request->remark,
         ]);
 
+
         return redirect()
-            ->route('expat.cost.create')
+            ->route('expat.cost.index')
             ->with('success', 'Expat Cost saved successfully');
     }
 
@@ -238,6 +285,22 @@ class ExpatController extends Controller
         return back();
     }
 
+    public function deleteOnleave($id)
+    {
+        ExpatOnleave::findOrFail($id)->delete();
+
+        Alert::success('Expat On Leave deleted successfully!');
+        return back();
+    }
+
+    public function deleteCost($id)
+    {
+        ExpatCost::findOrFail($id)->delete();
+
+        Alert::success('Expat Cost deleted successfully!');
+        return back();
+    }
+
     /*
     |--------------------------------------------------------------------------
     | EDIT
@@ -246,9 +309,115 @@ class ExpatController extends Controller
 
     public function editMaster($id)
     {
-        $data = DB::table('expat_master')->where('id', $id)->first();
+        $data = ExpatMaster::findOrFail($id);
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
 
-        return view('expat_master.edit', compact('data'));
+        return view('expat_master.edit', compact('data', 'employees'));
+    }
+
+    public function editOnLeave($id)
+    {
+        $data = ExpatOnleave::findOrFail($id);
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
+        $components = ExpatCostComponent::orderBy('component')->get();
+
+        return view('expat_onleave.edit', compact('data', 'employees', 'components'));
+    }
+
+
+    public function editCost($id)
+    {
+        $data = ExpatCost::findOrFail($id);
+        $employees = DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
+        $components = ExpatCostComponent::orderBy('component')->get();
+
+        return view('expat_cost.edit', compact('data', 'employees', 'components'));
+    }
+
+    public function updateCost(Request $request, $id)
+    {
+        $request->validate([
+            'npk' => 'required',
+            'component' => 'required',
+            'amount' => 'required|numeric',
+            'transactions_date' => 'required|date',
+            'remark' => 'nullable'
+        ]);
+
+        $data = ExpatCost::findOrFail($id);
+        $data->update([
+            'npk' => $request->npk,
+            'component' => $request->component,
+            'amount' => $request->amount,
+            'transactions_date' => $request->transactions_date,
+            'remark' => $request->remark,
+        ]);
+
+        return redirect()
+            ->route('expat.cost.index')
+            ->with('success', 'Expat Cost updated successfully');
+    }
+
+    public function updateOnleave(Request $request, $id)
+    {
+        $request->validate([
+            'npk' => 'required',
+            'component' => 'required|array',
+            'amount' => 'required|array',
+            'onleave_start' => 'required|date',
+            'onleave_end' => 'required|date',
+            'leave_type' => 'required',
+            'transactions_date' => 'required|array',
+        ]);
+
+        $data = ExpatOnleave::findOrFail($id);
+        $data->update([
+            'npk' => $request->npk,
+            'onleave_start' => $request->onleave_start,
+            'onleave_end' => $request->onleave_end,
+            'leave_type' => $request->leave_type,
+            'component' => $request->component,
+            'amount' => $request->amount,
+            'transactions_date' => $request->transactions_date,
+            'remark' => $request->remark,
+        ]);
+
+        return redirect()
+            ->route('expat.onleave.index')
+            ->with('success', 'Expat On Leave updated successfully');
     }
 
     /*

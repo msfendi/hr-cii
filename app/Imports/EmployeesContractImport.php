@@ -40,7 +40,8 @@ class EmployeesContractImport implements ToModel, WithHeadingRow
         return EmployeesContract::updateOrCreate(
             [
                 'npk'             => strtoupper(trim($row['npk'])),
-                'contract_ke'     => (int) ($row['contract_ke'] ?? 1)
+                'contract_ke'     => (int) ($row['contract_ke'] ?? 1),
+                'start_date'      => $startDate,
             ],
             [
                 'npk'             => strtoupper(trim($row['npk'])),

@@ -23,27 +23,35 @@ class PadInsentifMasterController extends Controller
 {
     public function index()
     {
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+
         $data = DB::table('pad_efficiencies as p')
-            ->join('BIODATA as b', function ($join) {
-                $join->on('p.npk', '=', 'b.NPK');
+            ->join('payroll_periods as pp', 'p.period_id', '=', 'pp.id')
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('p.NPK', '=', 'bio.NPK');
             })
-            ->join('DEPT as d', function ($join) {
-                $join->on('b.ID_DEPT', '=', 'd.ID_DEPT');
-            })->join('payroll_periods as pp', function ($join) {
-                $join->on('p.period_id', '=', 'pp.id');
-            })
+
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
             ->select(
                 'p.id',
-                'b.npk',
-                'b.NAMA_KARYAWAN as name',
-                'pp.name as period',
+                'p.npk',
+                'bio.NAMA_KARYAWAN as name',
                 'd.DEPARTEMENT as dept',
+                'p.role',
+                'pp.name as period',
                 'p.efficiency',
                 'p.piece',
                 'p.date'
             )
             ->where('pp.is_closed', 0)
-            ->orderBy('p.npk')
             ->orderBy('p.date')
             ->get();
         $periods = PayrollPeriod::select('id', 'name')
@@ -52,6 +60,75 @@ class PadInsentifMasterController extends Controller
             ->get();
         // dd($data);
         return view('pad_insentif_master.index', compact('data', 'periods'));
+    }
+
+    public function getData($period)
+    {
+        $periods = PayrollPeriod::findOrFail($period);
+        $periodEnd = $periods->end_date;
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
+
+        $data = DB::table('pad_efficiencies as p')
+            ->join('payroll_periods as pp', 'p.period_id', '=', 'pp.id')
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('p.NPK', '=', 'bio.NPK');
+            })
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('bio.NPK', '=', 'em.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE bio.ID_DEPT
+            END
+        ")
+                );
+            })
+
+            ->select(
+                'p.id',
+                'p.npk',
+                'bio.NAMA_KARYAWAN as name',
+                'd.DEPARTEMENT as dept',
+                'p.role',
+                'pp.name as period',
+                'p.efficiency',
+                'p.piece',
+                'p.date'
+            )
+            ->where('p.period_id', $period)
+            ->orderBy('p.date')
+            ->get();
+
+        return response()->json($data);
     }
 
     public function create()
@@ -136,7 +213,7 @@ class PadInsentifMasterController extends Controller
     JIKA INSENTIF → IMPORT EXCEL
     =====================================
     */
-        PadEfficiency::where('period_id', $period->id)->delete();
+        // PadEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
             Excel::import(
@@ -224,19 +301,12 @@ class PadInsentifMasterController extends Controller
         */
 
         $assignmentNpk = DB::table(DB::raw("
-    (
-        SELECT NPK, ID_DEPT FROM BIODATA
-        UNION ALL
-        SELECT NPK, ID_DEPT FROM BIODATA_KELUAR
-    ) emp
-"))
-            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
-            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
-            ->where('irf.dept', 'pad')
-            ->distinct()
-            ->pluck('emp.NPK');
+        (
+            SELECT * FROM pad_efficiencies
+        ) pe
+    "))->where('pe.period_id', $period->id);
 
-        // dd($assignmentNpk->toArray());
+        // dd($assignmentNpk->get());
 
 
         /*
@@ -244,24 +314,61 @@ class PadInsentifMasterController extends Controller
     | EMPLOYEE SOURCE (TETAP SAMA LOGIC)
     |--------------------------------------------------------------------------
     */
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
 
         $employeeBase = DB::connection('cii')
             ->table('PKWT as p')
 
             ->join(DB::raw("
-        (
-            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
-            UNION ALL
-            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
-        ) emp
-    "), 'p.NPK', '=', 'emp.NPK')
+            (
+                SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
+                UNION ALL
+                SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
+            ) emp
+        "), 'p.NPK', '=', 'emp.NPK')
 
-            ->leftJoin('DEPT as d', 'emp.ID_DEPT', '=', 'd.ID_DEPT')
-            ->join('dept_insentif_role as lir', 'emp.ID_DEPT', '=', 'lir.id_dept')
-            ->join('insentif_role_formulas as irf', 'lir.role', '=', 'irf.id')
+            ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
+                $join->on('p.NPK', '=', 'anpk.npk');
+            })
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('emp.NPK', '=', 'em.npk');
+            })
 
-            ->whereIn('p.NPK', $assignmentNpk)
-            // ->where('p.NPK', '=', 'C-00795')
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE emp.ID_DEPT
+            END
+        ")
+                );
+            })
+            ->joinSub(
+                DB::table('insentif_role_formulas')
+                    ->select('role')
+                    ->distinct(),
+                'irf',
+                function ($join) {
+                    $join->on('anpk.role', '=', 'irf.role');
+                }
+            )
             ->where(function ($q) use ($periodStart, $periodEnd) {
                 $q->whereNull('p.TKK')
                     ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
@@ -270,20 +377,20 @@ class PadInsentifMasterController extends Controller
             ->select(
                 'p.NPK',
                 'emp.NAMA_KARYAWAN',
+                'anpk.role',
                 'p.TMK',
                 'p.TKK as tkk',
                 'emp.ID_DEPT',
                 'd.DEPARTEMENT as DEPARTEMENT',
-                'irf.role as role',
-                'emp.SECTION as SECTION'
             );
 
         $employees = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
+            ->distinct()
             ->get();
 
-        // dd($employees);
+        // dd($employees); 
 
 
         /*
@@ -477,8 +584,13 @@ class PadInsentifMasterController extends Controller
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
         */ else {
-
-            // dd($employee);
+            $employeeDates = DB::table('pad_efficiencies')
+                ->where('period_id', $period->id)
+                ->where('npk', $employee->NPK)
+                ->pluck('date')
+                ->unique()
+                ->toArray();
+            // dd($employeeDates);
 
             /*
             |----------------------------------
@@ -491,7 +603,9 @@ class PadInsentifMasterController extends Controller
 
             $operators = DB::table('pad_efficiencies')
                 ->where('period_id', $period->id)
+                ->where('role', '=', 'operator')
                 ->whereBetween('date', [$period->start_date, $period->end_date])
+                ->whereIn('date', $employeeDates)
                 ->get();
 
             // dd($operators);
@@ -528,9 +642,13 @@ class PadInsentifMasterController extends Controller
                 */
             $jumlahOperator = DB::table('pad_efficiencies as pe')
                 ->where('pe.period_id', $period->id)
+                ->whereIn('pe.date', $employeeDates)
+                ->where('pe.role', '=', 'operator')
                 ->pluck('pe.npk')
                 ->unique()
                 ->count();
+
+            // dd($totalDeptInsentif, $jumlahOperator);
 
             $amount += $this->calculateRolePadInsentif(
                 $role,

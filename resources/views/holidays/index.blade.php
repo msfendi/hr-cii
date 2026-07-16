@@ -13,11 +13,13 @@
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <h1 class="h3 mb-0 text-gray-800">Holiday Master</h1>
                         <div>
+                            @canRoute('holidays.create')
                             <a href="{{ route('holidays.create') }}"
                                 class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
                                 <i class="fas fa-plus fa-sm text-white-50"></i>
                                 Create Holiday
                             </a>
+                            @endcanRoute
                         </div>
                     </div>
                     <div class="card shadow mb-4">
@@ -27,10 +29,13 @@
                                     Data Master Holiday
                                 </h6>
                                 <div class="d-flex align-items-center">
+                                    @canRoute('holidays.sync')
                                     <a href="{{ route('holidays.sync') }}" class="btn btn-info btn-sm mr-2">
                                         <i class="fas fa-download"></i>
                                         Sync from API
                                     </a>
+                                    @endcanRoute
+                                    @canRoute('holidays.import')
                                     <form id="importForm" action="{{ route('holidays.import') }}" method="POST"
                                         enctype="multipart/form-data">
                                         @csrf
@@ -53,6 +58,7 @@
                                             </div>
                                         </div>
                                     </form>
+                                    @endcanRoute
                                 </div>
                             </div>
                             <div class="progress mt-3" style="height:18px; display:none;" id="uploadProgress">
@@ -82,16 +88,21 @@
                                                 </td>
                                                 <td>{{ $row->name }}</td>
                                                 <td class="text-center">
+                                                    @canRoute('holidays.edit')
                                                     <a href="{{ route('holidays.edit', $row->id) }}"
                                                         class="btn btn-primary btn-circle btn-sm">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
+                                                    @endcanRoute
+                                                    
+                                                    @canRoute('holidays.delete')
                                                     <a class="btn btn-danger btn-circle btn-sm btn-delete-holiday"
                                                         data-delete-link="{{ route('holidays.delete', $row->id) }}"
                                                         data-name="{{ $row->name }}" data-toggle="modal"
                                                         data-target="#deleteModal">
                                                         <i class="fas fa-trash"></i>
                                                     </a>
+                                                    @endcanRoute
                                                 </td>
                                             </tr>
                                         @endforeach

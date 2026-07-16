@@ -61,15 +61,19 @@
                               </td>
                               {{-- ================= ACTION ================= --}}
                               <td class="text-center">
+                                 @canRoute('payroll-setting.edit')
                                  <a href="{{ route('payroll-setting.edit',$row->id) }}"
                                     class="btn btn-warning btn-sm">
                                  <i class="fas fa-edit"></i>
                                  </a>
+                                 @endcanRoute
+                                 @canRoute('payroll-setting.delete')
                                  <button
                                     class="btn btn-danger btn-sm btn-delete"
                                     data-id="{{ $row->id }}">
                                  <i class="fas fa-trash"></i>
                                  </button>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @endforeach

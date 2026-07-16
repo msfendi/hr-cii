@@ -13,8 +13,11 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
                   <h6 class="m-0 font-weight-bold text-primary"> Expat On Leave Data </h6>
                   <div class="d-flex align-items-center">
+                          @canRoute('expat.template.onleave')
                     <a href="{{ route('expat.template.onleave') }}" class="btn btn-info btn-sm mr-2">
                       <i class="fas fa-download"></i> Download Template </a>
+                      @endcanRoute
+                          @canRoute('expat.import.onleave')
                     <form id="importForm" action="{{ route('expat.import.onleave') }}" method="POST" enctype="multipart/form-data"> @csrf <div class="input-group input-group-sm">
                         <input type="file" name="file" id="fileInput" class="d-none" accept=".xlsx,.xls,.csv">
                         <button type="button" class="btn btn-primary btn-sm" id="btnUpload">
@@ -26,6 +29,7 @@
                         </div>
                       </div>
                     </form>
+                    @endcanRoute
                   </div>
                 </div>
                 <div class="progress mt-3" style="height:18px; display:none;" id="uploadProgress">
@@ -40,7 +44,7 @@
                     <thead class="thead-light">
                       <tr>
                         <th width="50">ID</th>
-                        <th>NPK</th>
+                        <th>Nama Karyawan</th>
                         <th>On Leave Period</th>
                         <th>Leave Type</th>
                         <th>Component</th>
@@ -54,9 +58,9 @@
                     <tbody> @foreach($data as $row) <tr>
                         <td>{{ $row->id }}</td>
                         <td>
-                          <span class="badge badge-dark">
-                            {{ $row->npk }}
-                          </span>
+                          <strong>{{ $row->NAMA_KARYAWAN ?? '-' }}</strong>
+                          <br>
+                          <small class="text-muted">NPK: {{ $row->npk }}</small>
                         </td>
                         <td>
                           {{ $row->onleave_start }}
@@ -72,12 +76,16 @@
                         <td>Rp {{ number_format($row->total_amount,0,',','.') }}</td>
                         <td>{{ $row->remark }}</td>
                         <td class="text-center">
+                          @canRoute('expat.onleave.edit')
                           <a href="{{ route('expat.onleave.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>
                           </a>
+                          @endcanRoute
+                          @canRoute('expat.onleave.delete')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('expat.onleave.delete',$row->id) }}" data-npk="{{ $row->npk }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                          @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

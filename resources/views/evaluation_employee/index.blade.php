@@ -61,6 +61,7 @@
                             </td>
                           <td>{{ $row->score }}</td>
                           <td class="text-center">
+                                 @canRoute('evaluation-questionnaire.delete')
                               <button class="btn btn-danger btn-circle btn-sm btn-delete"
                                   data-link="{{ route('evaluation-questionnaire.delete',$row->id) }}"
                                   data-question="{{ $row->id }}"
@@ -68,6 +69,7 @@
                                   data-target="#deleteModal">
                                   <i class="fas fa-trash"></i>
                               </button>
+                              @endcanRoute
                           </td>
 
                       </tr>

@@ -65,6 +65,7 @@
                                  {{ \Carbon\Carbon::parse($log->created_at)->format('d M Y H:i:s') }}
                               </td>
                               <td class="text-center">
+                                 @canRoute('activity-logs.data')
                                  <button
                                     class="btn btn-info btn-sm btn-detail"
                                     data-old='@json($log->old_data)'
@@ -72,6 +73,7 @@
                                     >
                                  <i class="fas fa-eye"></i>
                                  </button>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @endforeach

@@ -24,7 +24,8 @@ class PayrollExportSewingExcel
 
         $this->addSheet($spreadsheet, 0, new PayrollDetailSewingSheet($this->run_id));
         $this->addSheet($spreadsheet, 1, new PayrollOutDetailSewingSheet($this->run_id));
-        $this->addSheet($spreadsheet, 2, new PayrollSummarySewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 2, new PayrollMADetailSewingSheet($this->run_id));
+        $this->addSheet($spreadsheet, 3, new PayrollSummarySewingSheet($this->run_id));
 
         $dir = dirname($filePath);
 

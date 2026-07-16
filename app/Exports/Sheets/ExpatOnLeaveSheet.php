@@ -2,6 +2,7 @@
 
 namespace App\Exports\Sheets;
 
+use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
@@ -15,7 +16,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class ExpatOnleaveSheet implements
+class ExpatOnLeaveSheet implements
     FromCollection,
     WithTitle,
     WithHeadings,
@@ -79,9 +80,9 @@ class ExpatOnleaveSheet implements
                 'l.onleave_start',
                 'l.onleave_end',
                 'l.leave_type',
-                'l.component',
-                'l.amount',
-                'l.transactions_date',
+                // 'l.component',
+                // 'l.amount',
+                // 'l.transactions_date',
                 'l.remark'
             )
             ->orderByDesc('l.id')
@@ -91,24 +92,15 @@ class ExpatOnleaveSheet implements
 
         foreach ($data as $row) {
 
-            $componentArray = $this->decodeJson($row->component);
-            $amountArray    = $this->decodeJson($row->amount);
-            $dateArray      = $this->decodeJson($row->transactions_date);
-
-            foreach ($componentArray as $i => $componentId) {
-
-                $rows->push([
-                    'npk' => $row->npk,
-                    'name' => $row->name,
-                    'leave_start' => $row->onleave_start,
-                    'leave_end' => $row->onleave_end,
-                    'leave_type' => $row->leave_type,
-                    'component' => $components[$componentId] ?? $componentId,
-                    'amount' => $amountArray[$i] ?? 0,
-                    'transactions_date' => $dateArray[$i] ?? null,
-                    'remark' => $row->remark,
-                ]);
-            }
+            $rows->push([
+                'npk' => $row->npk,
+                'name' => $row->name,
+                'leave_start' => $row->onleave_start,
+                'leave_end' => $row->onleave_end,
+                'leave_type' => $row->leave_type,
+                'leave_days' => Carbon::parse($row->onleave_end)->diffInDays(Carbon::parse($row->onleave_start)) + 1,
+                'remark' => $row->remark,
+            ]);
         }
 
         return new Collection($rows);
@@ -122,9 +114,7 @@ class ExpatOnleaveSheet implements
             'Leave Start',
             'Leave End',
             'Leave Type',
-            'Component',
-            'Amount',
-            'Transaction Date',
+            'Leave Days',
             'Remark'
         ];
     }
@@ -141,7 +131,7 @@ class ExpatOnleaveSheet implements
         /*
         | HEADER STYLE
         */
-        $sheet->getStyle('A1:I1')->applyFromArray([
+        $sheet->getStyle('A1:G1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 11,
@@ -180,7 +170,7 @@ class ExpatOnleaveSheet implements
         /*
         | BORDER TABLE
         */
-        $sheet->getStyle("A1:I{$highestRow}")
+        $sheet->getStyle("A1:G{$highestRow}")
             ->applyFromArray([
                 'borders' => [
                     'allBorders' => [

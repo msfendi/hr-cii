@@ -21,7 +21,7 @@ class PadEfficiencyImport implements ToModel, WithHeadingRow
         return PadEfficiency::updateOrCreate(
             [
                 'npk' => $row['npk'],
-                'dept' => $row['dept'],
+                'role' => $row['role'],
                 'date' =>
                 !empty($row['date'])
                     ? Date::excelToDateTimeObject($row['date'])

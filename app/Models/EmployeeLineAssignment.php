@@ -15,7 +15,8 @@ class EmployeeLineAssignment extends Model
         'line_number',
         'role',
         'start_date',
-        'end_date'
+        'end_date',
+        'work_hours',
     ];
 
     protected $casts = [

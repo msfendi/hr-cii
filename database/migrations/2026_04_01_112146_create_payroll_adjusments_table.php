@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('npk');
             $table->unsignedBigInteger('period_id');
             $table->decimal('adjusment', 15, 2)->default(0);
+            $table->string('keterangan');
             $table->timestamps();
 
             // optional foreign key

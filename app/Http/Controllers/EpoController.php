@@ -52,6 +52,7 @@ class EpoController extends Controller
     {
         $epo->delete();
 
+        Alert::success('Success', 'EPO has been deleted!');
         return back()->with('success', 'EPO deleted');
     }
 

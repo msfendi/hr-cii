@@ -41,7 +41,7 @@
                                  <label>Birth Date</label>
                                  <input type="date" name="date_of_birth"
                                     class="form-control"
-                                    value="{{$data->date_of_birth}}">
+                                    value="{{ $data->date_of_birth ? $data->date_of_birth->format('Y-m-d') : '' }}">
                               </div>
                               <div class="form-group">
                                  <label>Nationality</label>
@@ -67,13 +67,13 @@
                                  <label>Termination Date</label>
                                  <input type="date" name="termination_date"
                                     class="form-control"
-                                    value="{{$data->termination_date}}">
+                                    value="{{ $data->termination_date ? $data->termination_date->format('Y-m-d') : '' }}">
                               </div>
                               <div class="form-group">
                                  <label>Must Leave Indonesia</label>
                                  <input type="date" name="must_leave_date"
                                     class="form-control"
-                                    value="{{$data->must_leave_date}}">
+                                    value="{{ $data->must_leave_date ? $data->must_leave_date->format('Y-m-d') : '' }}">
                               </div>
                               <div class="form-group">
                                  <label>EPO Cost</label>

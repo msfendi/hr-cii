@@ -11,10 +11,12 @@
       <div class="container-fluid">
          <div class="d-sm-flex align-items-center justify-content-between mb-4">
             <h1 class="h3 mb-0 text-gray-800">Insentif Role Formula</h1>
+            @canRoute('insentif-role-formulas.create')
             <a href="{{ route('insentif-role-formulas.create') }}"
                class="btn btn-sm btn-primary shadow-sm">
             <i class="fas fa-plus"></i> Create Formula
             </a>
+            @endcanRoute
          </div>
          <div class="card shadow mb-4">
             <div class="card-header py-3">
@@ -63,10 +65,13 @@
                               @endif
                            </td>
                            <td class="text-center">
+                              @canRoute('insentif-role-formulas.edit')
                               <a href="{{ route('insentif-role-formulas.edit',$row->id) }}"
                                  class="btn btn-primary btn-circle btn-sm">
                               <i class="fas fa-edit"></i>
                               </a>
+                              @endcanRoute
+                              @canRoute('insentif-role-formulas.delete')
                               <button
                                  class="btn btn-danger btn-circle btn-sm btn-delete"
                                  data-link="{{ route('insentif-role-formulas.delete',$row->id) }}"
@@ -75,6 +80,7 @@
                                  data-target="#deleteModal">
                               <i class="fas fa-trash"></i>
                               </button>
+                              @endcanRoute
                            </td>
                         </tr>
                         @endforeach

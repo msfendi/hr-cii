@@ -22,9 +22,10 @@ class PelamarController extends Controller
     public function index()
     {
         $pelamars = DB::connection('cii')->table('PELAMAR')
-            ->select('ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
+            ->select('PELAMAR.ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
+            ->leftJoin('pelamar_details', 'pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
             ->where('IS_KONTRAK', 'FALSE')
-            // ->where('STATUS_APPLY', 'ONBOARDING')
+            ->where('pelamar_details.status_apply', 'ONBOARDING')
             ->orderBy('NPK', 'ASC')
             ->get();
 
@@ -112,7 +113,6 @@ class PelamarController extends Controller
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
 
         $last_barcode = DB::connection('cii')->table('BIODATA')->orderBy('NPK', 'DESC')->orderBy('BARCODE', 'DESC')->first()->BARCODE + 1;
-        
         DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->update(
             [
                 'NPK' => strtoupper($request->npk),
@@ -201,7 +201,7 @@ class PelamarController extends Controller
             'month_duration'  => (string) $actualMonthDuration,
             'day_duration'    => $dayDuration,
             'status_contract' => 'AKTIF',
-            'type'            => 'CONTRACT',    
+            'type'            => 'CONTRACT',
             'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
             'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
             'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
@@ -293,11 +293,18 @@ class PelamarController extends Controller
 
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : $closestDate;
 
-        // Hitung hari kerja (Senin–Jumat) antara start_date dan end_date
-        $dayDuration = $this->countWorkingDays($startDate, $endDate);
-
-        // Hitung durasi bulan aktual (bukan dari input user, tapi dari tanggal nyata)
+        // Hitung durasi bulan penuh aktual (floor) dari startDate ke endDate
+        // Misal: startDate=25/09, endDate=20/12 → 2 bulan (25/09→25/11)
         $actualMonthDuration = (int) $startDate->copy()->diffInMonths($endDate);
+
+        // Batas akhir bulan penuh terakhir
+        $fullMonthEnd = $startDate->copy()->addMonths($actualMonthDuration);
+
+        // Hitung sisa hari kerja (Senin–Jumat) setelah bulan penuh tersebut hingga endDate
+        // Misal: startDate=25/09, endDate=20/12 → dayDuration = hari kerja 26/11 s.d. 20/12
+        $dayDuration = $fullMonthEnd->lt($endDate)
+            ? $this->countWorkingDays($fullMonthEnd->copy()->addDay(), $endDate)
+            : 0;
 
         return [$endDate, $dayDuration, $actualMonthDuration];
     }

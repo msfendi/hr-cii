@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
 use App\Exports\PKWTExport;
+use App\Models\EmployeeMutation;
 use App\Models\PayrollMaster;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
@@ -29,11 +30,21 @@ class BiodataController extends Controller
     {
         $query = DB::connection('cii')
             ->table('BIODATA')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'employees_contract.end_date')
+            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'BIODATA.BARCODE', 'sections.name as section', 'sections.line_start', 'sections.line_end', 'DEPT.DEPARTEMENT', 'employees_contract.status_contract', 'PKWT.TMK', 'employees_contract.end_date')
             ->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
-            ->leftJoin('employees_contract', function($join) {
+
+            ->leftJoin('sections', function ($join) {
+                $join->on(
+                    DB::raw('TRY_CAST(BIODATA.SECTION AS BIGINT)'),
+                    '=',
+                    'sections.id'
+                );
+            })
+            // ->join('sections', 'BIODATA.SECTION', 'sections.id')
+            ->join('PKWT', 'BIODATA.NPK', 'PKWT.NPK')
+            ->leftJoin('employees_contract', function ($join) {
                 $join->on('BIODATA.NPK', '=', 'employees_contract.npk')
-                     ->where('employees_contract.status_contract', 'AKTIF');
+                    ->where('employees_contract.status_contract', 'AKTIF');
             });
 
         if ($request->has('department_id') && $request->department_id != '') {
@@ -104,7 +115,6 @@ class BiodataController extends Controller
         ]);
 
         // insert to BIODATA completed above.
-        
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
         $diff = $tgl_lahir->diff($request->tmk);
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
@@ -139,8 +149,10 @@ class BiodataController extends Controller
         if ($request->filled('bank_account')) {
             PayrollMaster::updateOrCreate(
                 ['npk' => strtoupper($request->npk)],
-                ['bank_name' => 'PERMATA BANK',
-                'bank_account' => $request->bank_account],
+                [
+                    'bank_name' => 'PERMATA BANK',
+                    'bank_account' => $request->bank_account
+                ],
             );
         }
 
@@ -197,8 +209,10 @@ class BiodataController extends Controller
         if ($request->filled('bank_account')) {
             PayrollMaster::updateOrCreate(
                 ['npk' => strtoupper($request->npk)],
-                ['bank_name' => 'PERMATA BANK',
-                'bank_account' => $request->bank_account],
+                [
+                    'bank_name' => 'PERMATA BANK',
+                    'bank_account' => $request->bank_account
+                ],
             );
         }
 
@@ -240,6 +254,7 @@ class BiodataController extends Controller
                 'BARCODE' => $biodata->BARCODE,
                 'SECTION' => $biodata->SECTION,
                 'STATUS' => $biodata->STATUS,
+                'IS_STAFF' => $biodata->IS_STAFF,
             ]);
 
             DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();
@@ -247,7 +262,10 @@ class BiodataController extends Controller
             if ($pkwt) {
                 DB::connection('cii')->table('PKWT')
                     ->where('NPK', $NPK)
-                    ->update(['TKK' => $request->tkk]);
+                    ->update([
+                        'TKK' => $request->tkk,
+                        'KETERANGAN' => $request->status_keluar,
+                    ]);
             }
 
             // Update employees_contract status berdasarkan TKK vs end_date
@@ -289,19 +307,16 @@ class BiodataController extends Controller
      */
     public function show($NPK)
     {
-        $pkwt    = DB::connection('cii')->table('PKWT')->select('*')->where('NPK', $NPK)->first();
-        $biodata = DB::connection('cii')->table('BIODATA')->select('IS_STAFF', 'SECTION')->where('NPK', $NPK)->first();
+        $pkwt = DB::connection('cii')->table('PKWT')
+            ->leftJoin('BIODATA', 'PKWT.NPK', '=', 'BIODATA.NPK')
+            ->leftJoin('sections', 'BIODATA.SECTION', 'sections.id')
+            ->select('PKWT.*', 'BIODATA.IS_STAFF', 'BIODATA.SECTION', 'sections.name as section_name', 'sections.line_start', 'sections.line_end')
+            ->where('PKWT.NPK', $NPK)
+            ->first();
 
-        if ($pkwt && $biodata) {
-            $pkwt->IS_STAFF = $biodata->IS_STAFF ?? 0;
-            $pkwt->section = $biodata->SECTION;
-        }
-
-
-        // Ambil bank_account dari payroll_masters
-        $payroll = PayrollMaster::where('npk', $NPK)->first();
         if ($pkwt) {
-            $pkwt->bank_account = $payroll->bank_account ?? null;
+            $pkwt->IS_STAFF = $pkwt->IS_STAFF ?? 0;
+            $pkwt->bank_account = PayrollMaster::where('npk', $NPK)->value('bank_account');
         }
 
         return response()->json($pkwt);
@@ -318,6 +333,7 @@ class BiodataController extends Controller
         try {
             DB::connection('cii')->beginTransaction();
 
+            $oldIdDept = DB::connection('cii')->table('BIODATA')->select('ID_DEPT')->where('NPK', $NPK)->first();
             $dept = DB::connection('cii')->table('DEPT')->select('DEPARTEMENT')->where('ID_DEPT', $request->id_dept)->first();
 
             // UBAH FOTO KARYAWAN
@@ -375,12 +391,19 @@ class BiodataController extends Controller
                 'JURUSAN' => strtoupper($request->jurusan)
             ]);
 
+            EmployeeMutation::create([
+                'npk' => $NPK,
+                'from_dept' => $oldIdDept->ID_DEPT,
+                'to_dept' => $request->id_dept,
+                'date' => now(),
+            ]);
+
             // Update bank_account di payroll_masters
             if ($request->filled('bank_account')) {
                 PayrollMaster::updateOrCreate(
                     ['npk' => $NPK],
                     [
-                        'bank_name' => 'PERMATA BANK',
+                        'bank_name' => 'Permata Bank',
                         'bank_account' => $request->bank_account
                     ]
                 );
@@ -441,7 +464,8 @@ class BiodataController extends Controller
         return Excel::download(new PKWTExport, 'data_karyawan_pkwt_' . date('Y-m-d_H-i-s') . '.xlsx');
     }
 
-    public function viewGender() {
+    public function viewGender()
+    {
         $data = DB::connection('cii')->table('dept as d')
             ->leftJoin('biodata as b', 'b.ID_DEPT', '=', 'd.ID_DEPT')
             ->select(
@@ -456,5 +480,56 @@ class BiodataController extends Controller
             ->orderBy('d.DEPARTEMENT', 'ASC')
             ->get();
         return view('biodata.gender', compact('data'));
+    }
+
+    public function getSoftFiles($npk)
+    {
+        $pkwt = DB::connection('cii')
+            ->table('PKWT')
+            ->where('NPK', $npk)
+            ->select('KTP')
+            ->first();
+
+        $labels = [
+            'file_surat_lamaran'  => 'Surat Lamaran',
+            'file_cv'             => 'CV',
+            'file_ktp'            => 'KTP',
+            'file_kk'             => 'KK',
+            'file_ijasah'         => 'Ijazah',
+            'file_akta_kelahiran' => 'Akta Kelahiran',
+            'file_skck'           => 'SKCK',
+            'file_surat_sehat'    => 'Surat Sehat',
+            'file_pas_foto'       => 'Pas Foto',
+        ];
+
+        $docs = [];
+
+        if ($pkwt && $pkwt->KTP) {
+            $pelamar = DB::table('PELAMAR')
+                ->where('NIK', $pkwt->KTP)
+                ->select('id')
+                ->first();
+
+            if ($pelamar) {
+                $detail = DB::table('pelamar_details')
+                    ->where('id_pelamar', $pelamar->id)
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($detail) {
+                    foreach ($labels as $field => $label) {
+                        if (!empty($detail->$field)) {
+                            $docs[$label] = asset('storage/' . $detail->$field);
+                        }
+                    }
+                }
+            }
+        }
+
+        return response()->json([
+            'npk'   => $npk,
+            'count' => count($docs),
+            'docs'  => $docs,
+        ]);
     }
 }

@@ -16,7 +16,14 @@
                     <div class="col-md-6">
                       <div class="form-group">
                         <label>NPK</label>
-                        <input type="text" name="npk" class="form-control" required>
+                        <select class="form-control select2" name="npk" required>
+                          <option value="">-- Select Employee --</option>
+                          @foreach($employees as $emp)
+                              <option value="{{ $emp->NPK }}" {{ old('npk') == $emp->NPK ? 'selected' : '' }}>
+                                  {{ $emp->NPK }} - {{ $emp->NAMA_KARYAWAN }}
+                              </option>
+                          @endforeach
+                        </select>
                       </div>
                       <div class="form-group">
                         <label>On Leave Start</label>

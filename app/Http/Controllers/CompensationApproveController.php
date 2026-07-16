@@ -15,12 +15,31 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use RealRashid\SweetAlert\Facades\Alert;
+use App\Services\PayrollRoleFilterService;
 
 class CompensationApproveController extends Controller
 {
+    /**
+     * Ambil payroll_role user login LANGSUNG dari tabel role_payrolls
+     * (bukan dari role auth/spatie). Jika user tidak terdaftar di
+     * role_payrolls, return null.
+     */
+    private function getUserPayrollRole($user): ?string
+    {
+        if (!$user) {
+            return null;
+        }
+
+        return DB::table('role_payrolls')
+            ->where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->value('payroll_role');
+    }
 
     public function index(Request $request)
     {
+        $user = Auth::user();
+        $role = $this->getUserPayrollRole($user);
 
         // =========================
         // FILTER STATUS PERIOD
@@ -35,8 +54,7 @@ class CompensationApproveController extends Controller
                 'compensation_approve.progress',
                 'compensation_approve.approved_at',
                 'compensation_approve.status as approval_status'
-            )
-            ->where('compensations.is_closed', '=', '0');
+            );
 
 
         if ($filter === 'open') {
@@ -95,7 +113,12 @@ class CompensationApproveController extends Controller
             return $row;
         });
 
-        return view('compensation_approve.index', compact('data', 'filter'));
+        // Admin -> null (lihat semua file/role). Role lain (termasuk Payroll_ALL)
+        // di-scope ke role key-nya masing-masing, supaya Payroll_ALL cuma lihat
+        // file berkategori Payroll_ALL saja (bukan semua kategori).
+        $fileRoleKey = $role;
+
+        return view('compensation_approve.index', compact('data', 'filter', 'fileRoleKey'));
     }
     // 🔹 Create approval dari setting
     public function store($run_id)
@@ -231,116 +254,143 @@ class CompensationApproveController extends Controller
         if (!$generate_date) {
             Alert::warning('Warning', 'Date Must be Filled!');
             return back();
-        } else {
-            $cutoff = Carbon::parse($generate_date);
+        }
 
-            $folderTarget = $cutoff->format('F_Y'); // contoh: May_2026
-            $periodName   = $cutoff->translatedFormat('F_Y');
-            $fileName     = 'Compensations ' . $cutoff->format('d M Y') . '.csv';
+        $cutoff     = Carbon::parse($generate_date);
+        $day        = $cutoff->day; // 7 atau 20
+        $period     = $cutoff->format('F_Y'); // contoh: July_2026
+        $periodName = $cutoff->translatedFormat('F_Y');
+        $folder     = "public/compensations/$period";
 
-            $path = "public/compensations/$folderTarget/$fileName";
-
-            /*
+        /*
     |--------------------------------------------------------------------------
-    | UNION BIODATA + BIODATA_KELUAR
-    |--------------------------------------------------------------------------
-    */
-            $employeeUnion = DB::table('BIODATA')
-                ->select('NPK', 'NAMA_KARYAWAN')
-                ->unionAll(
-                    DB::table('BIODATA_KELUAR')
-                        ->select('NPK', 'NAMA_KARYAWAN')
-                );
-
-            /*
-    |--------------------------------------------------------------------------
-    | QUERY DATA KOMPENSASI
+    | UNION BIODATA + BIODATA_KELUAR (nama + IS_STAFF utk role mapping)
     |--------------------------------------------------------------------------
     */
-            $data = DB::table('compensation_details as cd')
-                ->join('payroll_masters as pm', 'pm.npk', '=', 'cd.npk')
-
-                ->joinSub($employeeUnion, 'emp', function ($join) {
-                    $join->on('emp.NPK', '=', 'cd.npk');
-                })
-
-                ->whereDate('cd.cutoff_date', $cutoff->toDateString())
-
-                ->select(
-                    'cd.npk',
-                    'cd.amount',
-                    'pm.bank_name',
-                    'pm.bank_account',
-                    'emp.NAMA_KARYAWAN',
-                    'cd.is_active'
-                )
-                ->where('cd.is_active', '=', '1')
-                ->orderBy('emp.NAMA_KARYAWAN')
-                ->get();
-
-            /*
-    |--------------------------------------------------------------------------
-    | CREATE CSV STREAM
-    |--------------------------------------------------------------------------
-    */
-            $handle = fopen('php://temp', 'r+');
-
-            /*
-    |--------------------------------------------------------------------------
-    | HEADER
-    |--------------------------------------------------------------------------
-    */
-            fputcsv($handle, [
-                'No Rekening Tujuan',
-                'Nama Penerima',
-                'Bank',
-                'Kode Bank',
-                'Nominal',
-                'Keterangan'
-            ]);
-
-            /*
-    |--------------------------------------------------------------------------
-    | DATA
-    |--------------------------------------------------------------------------
-    */
-            foreach ($data as $row) {
-
-                if (empty($row->bank_account) || $row->amount <= 0) {
-                    continue;
-                }
-
-                fputcsv($handle, [
-                    $row->bank_account,
-                    strtoupper($row->NAMA_KARYAWAN),
-                    strtoupper($row->bank_name ?? 'PERMATA'),
-                    '013',
-                    number_format($row->amount, 0, '', ''),
-                    'KOMPENSASI ' . strtoupper($periodName)
-                ]);
-            }
-
-            /*
-    |--------------------------------------------------------------------------
-    | SAVE FILE
-    |--------------------------------------------------------------------------
-    */
-            rewind($handle);
-            $content = stream_get_contents($handle);
-            fclose($handle);
-
-            Storage::put($path, $content);
-
-            DB::table('compensations')->updateOrInsert(
-                ['cutoff_date' => $generate_date],
-                [
-                    'file_csv' => $fileName,
-                    'is_closed' => 1,
-                ]
+        $bioUnion = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'IS_STAFF')
             );
 
-            Alert::success('Success', 'Compensations Recap Succesfully Generated!');
+        /*
+    |--------------------------------------------------------------------------
+    | QUERY DATA KOMPENSASI + REKENING DARI payroll_masters
+    |--------------------------------------------------------------------------
+    */
+        $data = DB::table('compensation_details as cd')
+            ->leftJoinSub($bioUnion, 'bio', fn($j) => $j->on('bio.NPK', '=', 'cd.npk'))
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'cd.id_dept')
+            ->leftJoin('payroll_masters as pm', 'pm.npk', '=', 'cd.npk')
+            ->whereDate('cd.cutoff_date', $cutoff->toDateString())
+            ->where('cd.is_active', '=', '1')
+            ->select(
+                'cd.npk',
+                'cd.amount',
+                'pm.bank_account',
+                'bio.NAMA_KARYAWAN',
+                'bio.IS_STAFF',
+                'd.IS_SEWING'
+            )
+            ->orderBy('bio.NAMA_KARYAWAN')
+            ->get();
+
+        if ($data->isEmpty()) {
+            Alert::warning('Warning', 'No compensation data to export!');
             return back();
         }
+
+        /*
+    |--------------------------------------------------------------------------
+    | GROUP BY ROLE_PAYROLL
+    | Sama seperti split PDF/Excel di GenerateCompensation, supaya file_csv
+    | punya struktur JSON {ROLE_KEY: filename} & folder yang konsisten dgn
+    | file_pdf / file_excel (.../{period}/{ROLE}/{day}/...).
+    |--------------------------------------------------------------------------
+    */
+        $categories = [
+            PayrollRoleFilterService::ROLE_ALL       => fn($r) => true,
+            PayrollRoleFilterService::ROLE_STAFF     => fn($r) => ($r->IS_STAFF ?? 0) == 1,
+            PayrollRoleFilterService::ROLE_NONSTAFF  => fn($r) => ($r->IS_STAFF ?? 0) == 0,
+            PayrollRoleFilterService::ROLE_SEWING    => fn($r) => ($r->IS_STAFF ?? 0) == 0 && ($r->IS_SEWING ?? 0) == 0,
+            PayrollRoleFilterService::ROLE_NONSEWING => fn($r) => ($r->IS_STAFF ?? 0) == 0 && ($r->IS_SEWING ?? 0) == 1,
+        ];
+
+        $csvFileMap = [];
+
+        foreach ($categories as $roleKey => $filter) {
+
+            $rows = $data->filter($filter)->values();
+
+            if ($rows->isEmpty()) {
+                continue; // skip, tidak buat file kosong
+            }
+
+            $roleSlug  = strtolower(str_replace('Payroll_', '', $roleKey));
+            $subFolder = PayrollRoleFilterService::folder($roleKey); // '' utk ALL, 'STAFF/' dst
+            $roleBase  = $subFolder ? rtrim("$folder/$subFolder", '/') : $folder;
+            $roleFolder = "$roleBase/$day";
+
+            $fileName = "COMPENSATION_{$period}_{$roleSlug}.csv";
+            $path     = "$roleFolder/$fileName";
+
+            $this->createCompensationBankCSV($rows, $periodName, $path);
+
+            $csvFileMap[$roleKey] = $fileName;
+        }
+
+        DB::table('compensations')->updateOrInsert(
+            ['cutoff_date' => $generate_date],
+            [
+                'file_csv'  => json_encode($csvFileMap),
+                'is_closed' => 1,
+            ]
+        );
+
+        Alert::success('Success', 'Compensations Recap Succesfully Generated!');
+        return back();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | GENERATE CSV BANK PER ROLE
+    | Format kolom disamakan persis dengan createBankCSV() di
+    | PayrollApproveController supaya bisa langsung dipakai upload bank.
+    |--------------------------------------------------------------------------
+    */
+    private function createCompensationBankCSV($rows, $periodName, $path)
+    {
+        $handle = fopen('php://temp', 'r+');
+
+        foreach ($rows as $row) {
+
+            if (empty($row->bank_account) || $row->amount <= 0) {
+                continue;
+            }
+
+            fputcsv($handle, [
+                'PERMATA',                                              // A
+                '',                                                     // B
+                '',                                                     // C
+                '',                                                     // D
+                strtoupper(trim($row->NAMA_KARYAWAN ?? '-')),            // E
+                $row->bank_account ?? '',                                // F
+                'IDR',                                                   // G
+                number_format($row->amount ?? 0, 0, '', ''),             // H
+                'KOMPENSASI ' . strtoupper($periodName),                 // I
+                '',                                                     // J
+                '',                                                     // K
+                'OVB',                                                   // L
+                0,                                                      // M
+                0,                                                      // N
+            ]);
+        }
+
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        fclose($handle);
+
+        Storage::put($path, $content);
     }
 }

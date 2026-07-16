@@ -234,7 +234,7 @@
                 {{-- ================================================
                      Editable Table
                      ================================================ --}}
-                <div class="rounded-xl border border-outline-variant overflow-hidden mb-5 edu-table-wrapper">
+                <div class="rounded-xl border border-outline-variant overflow-x-auto mb-5 edu-table-wrapper">
                     <table class="edu-table" id="edu-table">
                         <thead>
                             <tr>
@@ -267,7 +267,7 @@
                                         <div class="relative">
                                             <select class="rf-select" name="education[{{ $i }}][tingkat]">
                                                 <option value="" disabled {{ empty($edu['tingkat']) ? 'selected' : '' }}>Pilih...</option>
-                                                @foreach(['SD','SMP','SMA/SMK','Akademi/D3','S1','S2','S3'] as $t)
+                                                @foreach(['SD','SMP','SMA', 'SMK', 'D1', 'D2', 'D3', 'D4', 'S1','S2','S3'] as $t)
                                                     <option value="{{ $t }}" {{ ($edu['tingkat'] ?? '') === $t ? 'selected' : '' }}>{{ $t }}</option>
                                                 @endforeach
                                             </select>
@@ -359,7 +359,7 @@
 <script>
 (function () {
 
-    const TINGKAT_OPTIONS = ['SD','SMP','SMA/SMK','Akademi/D3','S1','S2','S3'];
+    const TINGKAT_OPTIONS = ['SD','SMP','SMA','SMK','D1','D2','D3','D4','S1','S2','S3'];
     const MAX_YEAR = {{ date('Y') + 6 }};
 
     let counter = document.querySelectorAll('#edu-tbody tr[data-index]').length;

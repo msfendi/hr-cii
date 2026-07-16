@@ -11,20 +11,25 @@
           <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
               <h1 class="h3 mb-0 text-gray-800">Payroll Master</h1>
+              @canRoute('payroll-master.create')
               <a href="{{ route('payroll-master.create') }}" class="btn btn-sm btn-primary shadow-sm">
                 <i class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Master </a>
+              @endcanRoute
             </div>
             <div class="card shadow mb-4">
               <div class="card-header py-3">
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
                   <!-- KIRI -->
-                  <h6 class="m-0 font-weight-bold text-primary"> Data Line Insentif Master </h6>
+                  <h6 class="m-0 font-weight-bold text-primary"> Data Payroll Master </h6>
                   <!-- KANAN -->
                   <div class="d-flex align-items-center">
                     <!-- DOWNLOAD TEMPLATE -->
+                    @canRoute('payroll-master.template')
                     <a href="{{ route('payroll-master.template') }}" class="btn btn-info btn-sm mr-2">
                       <i class="fas fa-download"></i> Download Template </a>
+                      @endcanRoute
                     <!-- IMPORT FORM -->
+                    @canRoute('payroll-master.import')
                     <form id="importForm" action="{{ route('payroll-master.import') }}" method="POST" enctype="multipart/form-data"> @csrf <div class="input-group input-group-sm">
                         <input type="file" name="file" id="fileInput" class="d-none" accept=".xlsx,.xls,.csv">
                         <button type="button" class="btn btn-primary btn-sm" id="btnUpload">
@@ -36,6 +41,7 @@
                         </div>
                       </div>
                     </form>
+                    @endcanRoute
                   </div>
                 </div>
                 <!-- PROGRESS BAR -->
@@ -72,12 +78,16 @@
                         </td>
                         <td>{{ $row->bank_account }}</td>
                         <td class="text-center">
+                          @canRoute('payroll-master.edit')
                           <a href="{{ route('payroll-master.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>
                           </a>
+                          @endcanRoute
+                          @canRoute('payroll-master.delete')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('payroll-master.delete',$row->id) }}" data-npk="{{ $row->npk }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                          @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

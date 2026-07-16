@@ -20,12 +20,14 @@
                               </div>
                               <div class="card-body">
                                  <!-- NIK SELECT2 -->
+                                 <input type="hidden" id="id" class="form-control" readonly>
                                  <div class="form-group">
                                     <label>NIK</label>
                                     <select name="nik" id="nik" class="form-control select2" required>
                                        <option value="">Pilih Pelamar</option>
                                        @foreach($pelamar as $p)
                                        <option value="{{$p->NIK}}"
+                                          data-id="{{$p->ID}}"
                                           data-tinggi="{{$p->TINGGI_BADAN}}"
                                           data-berat="{{$p->BERAT_BADAN}}">
                                           {{$p->NAMA}} ({{$p->NIK}})
@@ -36,11 +38,11 @@
                                  <!-- AUTO BODY -->
                                  <div class="form-group">
                                     <label>Tinggi Badan</label>
-                                    <input type="text" id="tinggi" class="form-control" readonly>
+                                    <input type="text" name="tinggi" id="tinggi" class="form-control" readonly>
                                  </div>
                                  <div class="form-group">
                                     <label>Berat Badan</label>
-                                    <input type="text" id="berat" class="form-control" readonly>
+                                    <input type="text" name="berat" id="berat" class="form-control" readonly>
                                  </div>
                                  @php
                                  $kondisiFisik=[
@@ -68,11 +70,48 @@
                                  </div>
                                  @endforeach
                                  <div class="form-group">
-                                    <label>Visus Mata</label>
-                                    <select name="visus_mata" class="form-control">
-                                       <option value="OD">OD</option>
-                                       <option value="OS">OS</option>
-                                    </select>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Visus Mata OD</label>
+                                    <input type="text" name="visus_mata_od" class="form-control mb-2" placeholder="Visus Mata OD">
+                                       </div>
+                                       <div class="col-md-6">
+                                    <label>Visus Mata OS</label>
+                                    <input type="text" name="visus_mata_os" class="form-control mb-2" placeholder="Visus Mata OS">
+                                       </div>
+                                    </div>
+                                 </div>
+                                 
+                                 <div class="form-group">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Abdoment</label>
+                                    <input type="text" name="abdoment" class="form-control mb-2" placeholder="Abdoment">
+                                       </div>
+                                       <div class="col-md-6">
+                                    <label>Gigi</label>
+                                    <input type="text" name="gigi" class="form-control mb-2" placeholder="Gigi">
+                                       </div>
+                                    </div>
+                                 </div><div class="form-group">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Abdoment</label>
+                                    <input type="text" name="cor_pulmo" class="form-control mb-2" placeholder="Cor Pulmo">
+                                       </div>
+                                       <div class="col-md-6">
+                                    <label>THT</label>
+                                    <input type="text" name="tht" class="form-control mb-2" placeholder="THT">
+                                       </div>
+                                    </div>
+                                 </div>
+                                 <div class="form-group">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                    <label>Extremitas</label>
+                                    <input type="text" name="extreme" class="form-control mb-2" placeholder="EXTREMITAS">
+                                       </div>
+                                    </div>
                                  </div>
                               </div>
                            </div>
@@ -87,7 +126,12 @@
                                  <input type="text" name="tekanan_darah" class="form-control mb-2" placeholder="Tekanan Darah">
                                  <input type="number" name="respirasi" class="form-control mb-2" placeholder="Respirasi">
                                  <input type="number" name="denyut" class="form-control mb-2" placeholder="Denyut">
-                                 <input type="number" name="suhu" class="form-control" placeholder="Suhu">
+                                 <input
+                                    type="number"
+                                    name="suhu"
+                                    class="form-control"
+                                    placeholder="Suhu"
+                                    step="any">
                               </div>
                            </div>
                         </div>
@@ -157,6 +201,7 @@
                      Save Data
                      </button>
                   </form>
+                  <br>
                </div>
                @include('layout.footer')
                <!-- SELECT2 -->
@@ -175,6 +220,7 @@
                   
                   $('#tinggi').val(opt.data('tinggi') ?? '');
                   $('#berat').val(opt.data('berat') ?? '');
+                  $('#id').val(opt.data('id') ?? '');
                   
                   });
                   

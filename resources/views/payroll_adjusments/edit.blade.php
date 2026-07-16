@@ -26,10 +26,15 @@
                       </option> @endforeach </select>
                   </div>
                   <br>
-                  {{-- ================= ALLOWANCE ================= --}}
+                  {{-- ================= ADJUSMENT ================= --}}
                   <div>
                     <label>Adjusment :</label>
                     <input type="number" name="adjusment" class="form-control" value="{{ $data->adjusment }}" required>
+                  </div>
+                  <br>
+                  <div>
+                    <label>Keterangan :</label>
+                    <input type="text" name="keterangan" class="form-control" value="{{ $data->keterangan }}" required>
                   </div>
                   <br>
                   <div class="row">

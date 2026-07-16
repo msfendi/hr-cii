@@ -1,5 +1,34 @@
 <!DOCTYPE html>
 <html>
+  @php
+
+  $deptTotal = function($rows,$components){
+
+  $totals = [];
+
+  foreach($components as $code=>$component){
+  $totals[$code] = 0;
+  }
+
+  $grandTotal = 0;
+
+  foreach($rows as $row){
+
+  foreach($components as $code=>$component){
+  $totals[$code] += ($row->$code ?? 0);
+  }
+
+  $grandTotal += ($row->total_salary ?? 0);
+  }
+
+  return [
+  'components'=>$totals,
+  'salary'=>$grandTotal
+  ];
+  };
+
+  @endphp
+
   <head>
     <meta charset="utf-8">
     <style>
@@ -44,11 +73,6 @@
         margin-bottom: 15px;
       }
 
-      .logo {
-        text-align: center;
-        margin-bottom: 10px;
-      }
-
       .section-title {
         margin-top: 25px;
         font-size: 14px;
@@ -76,64 +100,345 @@
         width: 75px;
       }
 
+      .col-details {
+        width: 45px;
+      }
+
       .summary-table {
         width: 100%;
         margin-top: 20px;
       }
     </style>
   </head>
+
   <body>
-    {{-- ================= HEADER ================= --}}
+
     <div>
-      <strong>PT. CHUTEX INTERNATIONAL INDONESIA</strong>
-      <br> SUKOHARJO
+      <strong>PT. CHUTEX INTERNATIONAL INDONESIA</strong><br>
+      SUKOHARJO
     </div>
+
     <br>
-    <div class="center bold"> REKAP PAYROLL </div>
+
+    <div class="center bold">REKAP PAYROLL</div>
+
     <br>
-    <div class="center">Periode : {{ optional($groupedActive->first())->first()->period_name
-    ?? optional($groupedResign->first())->first()->period_name
-    ?? '-' }}</div>
+
+    <div class="center">
+      Periode :
+      {{ optional($groupedActive->first())->first()->period_name
+?? optional($groupedResign->first())->first()->period_name
+?? '-' }}
+    </div>
+
     {{-- ================= KARYAWAN AKTIF ================= --}}
-    <div class="section-title">KARYAWAN AKTIF</div> @forelse($groupedActive as $dept => $employees) <div class="dept-block">
+    <div class="section-title">KARYAWAN AKTIF {{ $folderName }}</div>
+
+    @forelse($groupedActive as $dept => $employees)
+
+    <div class="dept-block">
       <h4>Department : {{ $dept }}</h4>
+
       <table>
         <thead>
           <tr>
             <th class="col-npk">NPK</th>
-            <th class="col-name">Name</th> @foreach($allComponents as $component) <th class="col-component">{{ $component->name }}</th> @endforeach <th class="col-component">Total Salary</th>
+            <th class="col-name">Name</th>
+
+            {{-- 🔥 OVERTIME (DITAMBAH DI SINI) --}}
+            <th class="col-details">MA</th>
+            <th class="col-details">P1</th>
+            <th class="col-details">CT</th>
+            <th class="col-details">SD</th>
+            <th class="col-details">BR</th>
+            <th class="col-details">OUT</th>
+            <th class="col-details">Ijin (Menit)</th>
+
+            @foreach($allComponents as $component)
+            <th class="col-component">{{ $component->name }}</th>
+            @endforeach
+
+            <th class="col-component">Total Salary</th>
           </tr>
         </thead>
-        <tbody> @foreach($employees as $item) <tr>
-            <td>{{ $item->employee_npk }}</td>
-            <td>{{ $item->employee_name }}</td> @foreach($allComponents as $code => $component) <td align="right">
-              {{ number_format($item->$code ?? 0,0,',','.') }}
-            </td> @endforeach <td align="right">
-              {{ number_format($item->total_salary,0,',','.') }}
-            </td>
-          </tr> @endforeach </tbody>
-      </table>
-    </div> @empty <p>Tidak ada karyawan aktif</p> @endforelse {{-- ================= KARYAWAN RESIGN ================= --}} @if($groupedResign->count()) <div class="page-break"></div>
-    <div class="section-title">KARYAWAN RESIGN</div> @foreach($groupedResign as $dept => $employees) <div class="dept-block">
-      <h4>Department : {{ $dept }}</h4>
-      <table>
-        <thead>
+
+        <tbody>
+
+          @foreach($employees as $item)
           <tr>
-            <th class="col-npk">NPK</th>
-            <th class="col-name">Name</th> @foreach($allComponents as $component) <th class="col-component">{{ $component->name }}</th> @endforeach <th class="col-component">Total Salary</th>
-          </tr>
-        </thead>
-        <tbody> @foreach($employees as $item) <tr>
             <td>{{ $item->employee_npk }}</td>
-            <td>{{ $item->employee_name }}</td> @foreach($allComponents as $code => $component) <td align="right">
+            <td>{{ $item->employee_name }}</td>
+
+            {{-- 🔥 OVERTIME VALUE --}}
+            <td align="center">{{ number_format($item->MA ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->P1 ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->CT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->SD ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->BR ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->OUT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->total_ijin_minutes ?? 0,0,',','.') }}</td>
+
+            @foreach($allComponents as $code => $component)
+            <td align="right">
               {{ number_format($item->$code ?? 0,0,',','.') }}
-            </td> @endforeach <td align="right">
+            </td>
+            @endforeach
+
+            <td align="right">
               {{ number_format($item->total_salary,0,',','.') }}
             </td>
-          </tr> @endforeach </tbody>
+          </tr>
+          @endforeach
+
+          @php
+          $totDept = $deptTotal($employees,$allComponents);
+
+          $totMA  = $employees->sum(fn($x) => $x->MA  ?? 0);
+          $totP1  = $employees->sum(fn($x) => $x->P1  ?? 0);
+          $totCT  = $employees->sum(fn($x) => $x->CT  ?? 0);
+          $totSD  = $employees->sum(fn($x) => $x->SD  ?? 0);
+          $totBR  = $employees->sum(fn($x) => $x->BR  ?? 0);
+          $totOUT = $employees->sum(fn($x) => $x->OUT ?? 0);
+          $totIjin = $employees->sum(fn($x) => $x->total_ijin_minutes ?? 0);
+          @endphp
+
+          <tr style="background:#f5f5f5;font-weight:bold">
+            <td colspan="2" align="center">TOTAL {{ strtoupper($dept) }}</td>
+
+            <td align="center">{{ number_format($totMA,0,',','.') }}</td>
+            <td align="center">{{ number_format($totP1,0,',','.') }}</td>
+            <td align="center">{{ number_format($totCT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totSD,0,',','.') }}</td>
+            <td align="center">{{ number_format($totBR,0,',','.') }}</td>
+            <td align="center">{{ number_format($totOUT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totIjin,0,',','.') }}</td>
+
+            @foreach($allComponents as $code=>$component)
+            <td align="right">
+                {{ number_format($totDept['components'][$code] ?? 0,0,',','.') }}
+            </td>
+            @endforeach
+
+            <td align="right">
+                {{ number_format($totDept['salary'],0,',','.') }}
+            </td>
+        </tr>
+
+        </tbody>
       </table>
-    </div> @endforeach @endif {{-- ================= REKAP (SELALU MUNCUL) ================= --}}
+    </div>
+
+    @empty
+    <p>Tidak ada karyawan aktif</p>
+    @endforelse
+
+    {{-- ================= RESIGN ================= --}}
+    @if($groupedResign->count())
     <div class="page-break"></div>
+    <div class="section-title">KARYAWAN RESIGN {{ $folderName }}</div>
+
+    @foreach($groupedResign as $dept => $employees)
+
+    <div class="dept-block">
+      <h4>Department : {{ $dept }}</h4>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="col-npk">NPK</th>
+            <th class="col-name">Name</th>
+
+            <th class="col-details">MA</th>
+            <th class="col-details">P1</th>
+            <th class="col-details">CT</th>
+            <th class="col-details">SD</th>
+            <th class="col-details">BR</th>
+            <th class="col-details">OUT</th>
+            <th class="col-details">Ijin (Menit)</th>
+
+            @foreach($allComponents as $component)
+            <th class="col-component">{{ $component->name }}</th>
+            @endforeach
+
+            <th class="col-component">Total Salary</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          @foreach($employees as $item)
+          <tr>
+            <td>{{ $item->employee_npk }}</td>
+            <td>{{ $item->employee_name }}</td>
+
+            <td align="center">{{ number_format($item->MA ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->P1 ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->CT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->SD ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->BR ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->OUT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->total_ijin_minutes ?? 0,0,',','.') }}</td>
+
+            @foreach($allComponents as $code => $component)
+            <td align="right">
+              {{ number_format($item->$code ?? 0,0,',','.') }}
+            </td>
+            @endforeach
+
+            <td align="right">
+              {{ number_format($item->total_salary,0,',','.') }}
+            </td>
+          </tr>
+          @endforeach
+
+          @php
+          $totDept = $deptTotal($employees,$allComponents);
+
+          $totMA  = $employees->sum(fn($x) => $x->MA  ?? 0);
+          $totP1  = $employees->sum(fn($x) => $x->P1  ?? 0);
+          $totCT  = $employees->sum(fn($x) => $x->CT  ?? 0);
+          $totSD  = $employees->sum(fn($x) => $x->SD  ?? 0);
+          $totBR  = $employees->sum(fn($x) => $x->BR  ?? 0);
+          $totOUT = $employees->sum(fn($x) => $x->OUT ?? 0);
+          $totIjin = $employees->sum(fn($x) => $x->total_ijin_minutes ?? 0);
+          @endphp
+
+          <tr style="background:#f5f5f5;font-weight:bold">
+            <td colspan="2" align="center">TOTAL {{ strtoupper($dept) }}</td>
+
+            <td align="center">{{ number_format($totMA,0,',','.') }}</td>
+            <td align="center">{{ number_format($totP1,0,',','.') }}</td>
+            <td align="center">{{ number_format($totCT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totSD,0,',','.') }}</td>
+            <td align="center">{{ number_format($totBR,0,',','.') }}</td>
+            <td align="center">{{ number_format($totOUT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totIjin,0,',','.') }}</td>
+
+            @foreach($allComponents as $code=>$component)
+            <td align="right">
+                {{ number_format($totDept['components'][$code] ?? 0,0,',','.') }}
+            </td>
+            @endforeach
+
+            <td align="right">
+                {{ number_format($totDept['salary'],0,',','.') }}
+            </td>
+        </tr>
+
+        </tbody>
+      </table>
+
+    </div>
+    @endforeach
+    @endif
+
+    {{-- ================= MANGKIR ================= --}}
+    @if($groupedMangkir->count())
+
+    <div class="page-break"></div>
+    <div class="section-title">KARYAWAN MANGKIR {{ $folderName }}</div>
+
+    @foreach($groupedMangkir as $dept => $employees)
+
+    <div class="dept-block">
+      <h4>Department : {{ $dept }}</h4>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="col-npk">NPK</th>
+            <th class="col-name">Name</th>
+
+            <th class="col-details">MA</th>
+            <th class="col-details">P1</th>
+            <th class="col-details">CT</th>
+            <th class="col-details">SD</th>
+            <th class="col-details">BR</th>
+            <th class="col-details">OUT</th>
+            <th class="col-details">Ijin (Menit)</th>
+
+            @foreach($allComponents as $component)
+            <th class="col-component">{{ $component->name }}</th>
+            @endforeach
+
+            <th class="col-component">Total Salary</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          @foreach($employees as $item)
+          <tr>
+            <td>{{ $item->employee_npk }}</td>
+            <td>{{ $item->employee_name }}</td>
+
+            <td align="center">{{ number_format($item->MA ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->P1 ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->CT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->SD ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->BR ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->OUT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->total_ijin_minutes ?? 0,0,',','.') }}</td>
+
+            @foreach($allComponents as $code=>$component)
+            <td align="right">
+              {{ number_format($item->$code ?? 0,0,',','.') }}
+            </td>
+            @endforeach
+
+            <td align="right">
+              {{ number_format($item->total_salary,0,',','.') }}
+            </td>
+          </tr>
+          @endforeach
+
+          @php
+          $totDept = $deptTotal($employees,$allComponents);
+
+          $totMA  = $employees->sum(fn($x) => $x->MA  ?? 0);
+          $totP1  = $employees->sum(fn($x) => $x->P1  ?? 0);
+          $totCT  = $employees->sum(fn($x) => $x->CT  ?? 0);
+          $totSD  = $employees->sum(fn($x) => $x->SD  ?? 0);
+          $totBR  = $employees->sum(fn($x) => $x->BR  ?? 0);
+          $totOUT = $employees->sum(fn($x) => $x->OUT ?? 0);
+          $totIjin = $employees->sum(fn($x) => $x->total_ijin_minutes ?? 0);
+          @endphp
+
+          <tr style="background:#f5f5f5;font-weight:bold">
+            <td colspan="2" align="center">TOTAL {{ strtoupper($dept) }}</td>
+
+            <td align="center">{{ number_format($totMA,0,',','.') }}</td>
+            <td align="center">{{ number_format($totP1,0,',','.') }}</td>
+            <td align="center">{{ number_format($totCT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totSD,0,',','.') }}</td>
+            <td align="center">{{ number_format($totBR,0,',','.') }}</td>
+            <td align="center">{{ number_format($totOUT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totIjin,0,',','.') }}</td>
+
+            @foreach($allComponents as $code=>$component)
+            <td align="right">
+                {{ number_format($totDept['components'][$code] ?? 0,0,',','.') }}
+            </td>
+            @endforeach
+
+            <td align="right">
+                {{ number_format($totDept['salary'],0,',','.') }}
+            </td>
+        </tr>
+
+        </tbody>
+      </table>
+
+    </div>
+
+    @endforeach
+    @endif
+<div class="page-break"></div>
+@php
+$totalOrangAktif  = $groupedActive->sum(fn($g) => $g->count());
+$totalOrangResign = $groupedResign->sum(fn($g) => $g->count());
+$totalOrangMangkir = $groupedMangkir->sum(fn($g) => $g->count());
+@endphp
     <h3>REKAP PAYROLL</h3>
     <table class="summary-table">
       <thead>
@@ -142,37 +447,94 @@
           <th>Type</th>
           <th>Total Aktif</th>
           <th>Total Resign</th>
-        </tr>
+          <th>Total Mangkir</th>
+      </tr>
       </thead>
-      <tbody> @php $activeEarning=0; $activeDeduction=0; $resignEarning=0; $resignDeduction=0; @endphp @foreach($allComponents as $code=>$component) @php $activeValue = $activeTotals[$code] ?? 0; $resignValue = $resignTotals[$code] ?? 0; $type = $component->type ?? 'earning'; if($type=='deduction'){ $activeValue *= -1; $resignValue *= -1; $activeDeduction += $activeValue; $resignDeduction += $resignValue; }else{ $activeEarning += $activeValue; $resignEarning += $resignValue; } @endphp <tr>
+      <tbody> @php $activeEarning=0; $activeDeduction=0; $resignEarning=0; $resignDeduction=0;$mangkirEarning=0;$mangkirDeduction=0; @endphp @foreach($allComponents as $code=>$component) @php $activeValue = $activeTotals[$code] ?? 0; $resignValue = $resignTotals[$code] ?? 0;$mangkirValue = $mangkirTotals[$code] ?? 0; $type = $component->type ?? 'earning'; if($type=='deduction'){ $activeValue *= -1; $resignValue *= -1;$mangkirValue *= -1; $mangkirDeduction += $mangkirValue; $activeDeduction += $activeValue; $resignDeduction += $resignValue; }else{ $activeEarning += $activeValue; $resignEarning += $resignValue; $mangkirEarning += $mangkirValue; } @endphp <tr>
           <td>{{ $component->name }}</td>
           <td align="center"> @if($type=='earning') <span style="color:green;font-weight:bold">EARNING</span> @else <span style="color:red;font-weight:bold">DEDUCTION</span> @endif </td>
           <td align="right">{{ number_format($activeValue,0,',','.') }}</td>
           <td align="right">{{ number_format($resignValue,0,',','.') }}</td>
+          <td align="right">{{ number_format($mangkirValue,0,',','.') }}</td>
         </tr> @endforeach </tbody>
     </table>
     <table class="summary-table">
       <tr>
-        <th width="40%">Total Earning</th>
-        <td align="right" style="color:green;font-weight:bold"> Aktif : {{ number_format($activeEarning,0,',','.') }}
-        </td>
-        <td align="right" style="color:green;font-weight:bold"> Resign : {{ number_format($resignEarning,0,',','.') }}
-        </td>
-      </tr>
-      <tr>
-        <th>Total Deduction</th>
-        <td align="right" style="color:red;font-weight:bold"> Aktif : {{ number_format($activeDeduction,0,',','.') }}
-        </td>
-        <td align="right" style="color:red;font-weight:bold"> Resign : {{ number_format($resignDeduction,0,',','.') }}
-        </td>
-      </tr>
-      <tr>
-        <th>Net Payroll</th>
-        <td align="right" style="font-weight:bold"> Aktif : {{ number_format($activeEarning+$activeDeduction,0,',','.') }}
-        </td>
-        <td align="right" style="font-weight:bold"> Resign : {{ number_format($resignEarning+$resignDeduction,0,',','.') }}
-        </td>
-      </tr>
+    <th width="40%">Total Earning</th>
+
+    <td align="right" style="color:green;font-weight:bold">
+        Aktif :
+        {{ number_format($activeEarning,0,',','.') }}
+    </td>
+
+    <td align="right" style="color:green;font-weight:bold">
+        Resign :
+        {{ number_format($resignEarning,0,',','.') }}
+    </td>
+
+    <td align="right" style="color:green;font-weight:bold">
+        Mangkir :
+        {{ number_format($mangkirEarning,0,',','.') }}
+    </td>
+</tr>
+
+<tr>
+    <th>Total Deduction</th>
+
+    <td align="right" style="color:red;font-weight:bold">
+        Aktif :
+        {{ number_format($activeDeduction,0,',','.') }}
+    </td>
+
+    <td align="right" style="color:red;font-weight:bold">
+        Resign :
+        {{ number_format($resignDeduction,0,',','.') }}
+    </td>
+
+    <td align="right" style="color:red;font-weight:bold">
+        Mangkir :
+        {{ number_format($mangkirDeduction,0,',','.') }}
+    </td>
+</tr>
+
+<tr>
+    <th>Net Payroll</th>
+
+    <td align="right" style="font-weight:bold">
+        Aktif :
+        {{ number_format($activeEarning+$activeDeduction,0,',','.') }}
+    </td>
+
+    <td align="right" style="font-weight:bold">
+        Resign :
+        {{ number_format($resignEarning+$resignDeduction,0,',','.') }}
+    </td>
+
+    <td align="right" style="font-weight:bold">
+        Mangkir :
+        {{ number_format($mangkirEarning+$mangkirDeduction,0,',','.') }}
+    </td>
+</tr>
+
+<tr>
+    <th>Total Karyawan</th>
+
+    <td align="center" style="font-weight:bold">
+        Aktif :
+        {{ number_format($totalOrangAktif,0,',','.') }} Orang
+    </td>
+
+    <td align="center" style="font-weight:bold">
+        Resign :
+        {{ number_format($totalOrangResign,0,',','.') }} Orang
+    </td>
+
+    <td align="center" style="font-weight:bold">
+        Mangkir :
+        {{ number_format($totalOrangMangkir,0,',','.') }} Orang
+    </td>
+</tr>
+    </table>
     </table>
     {{-- ================= APPROVAL ================= --}}
     @if(!empty($approvals))
@@ -184,12 +546,19 @@
 
           <div style="height:80px">
 
-              @if($approve['status']=='approve' && !empty($approve['signature_img']))
-                  <img
-                      src="{{ storage_path('app/public/signature/'.$approve['signature_img']) }}"
-                      style="height:70px"
-                  >
-              @endif
+              @php
+                  $sigPath = storage_path('app/public/signature/'.($approve['signature_img'] ?? ''));
+                  $sigUrl = 'file:///' . str_replace('\\', '/', $sigPath);
+              @endphp
+
+              <div style="height:80px">
+                  @if($approve['status']=='approve' && !empty($approve['signature_img']) && file_exists($sigPath))
+                      <img
+                          src="{{ $sigUrl }}"
+                          style="height:70px"
+                      >
+                  @endif
+              </div>
 
           </div>
 

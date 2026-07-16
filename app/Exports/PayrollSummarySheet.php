@@ -9,6 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class PayrollSummarySheet
 {
@@ -21,10 +22,16 @@ class PayrollSummarySheet
         'active_staff' => [],
         'active_sewing' => [],
         'active_non_sewing' => [],
+
         'resign_all' => [],
         'resign_staff' => [],
         'resign_sewing' => [],
         'resign_non_sewing' => [],
+
+        'mangkir_all' => [],
+        'mangkir_staff' => [],
+        'mangkir_sewing' => [],
+        'mangkir_non_sewing' => [],
     ];
 
     protected $earning = [];
@@ -64,10 +71,10 @@ class PayrollSummarySheet
         // =========================
         // HEADER
         // =========================
-        $rows = $this->headings();
+        $headingRows = $this->headings();
 
         $rowNum = 1;
-        foreach ($rows as $row) {
+        foreach ($headingRows as $row) {
             $col = 1;
             foreach ($row as $value) {
                 $sheet->setCellValueByColumnAndRow($col, $rowNum, $value);
@@ -76,7 +83,7 @@ class PayrollSummarySheet
             $rowNum++;
         }
 
-        $lastCol = chr(64 + count($rows[0]));
+        $lastCol = Coordinate::stringFromColumnIndex(count($headingRows[0]));
 
         // =========================
         // HEADER STYLE
@@ -99,9 +106,9 @@ class PayrollSummarySheet
         // =========================
         // QUERY + MAP (TETAP)
         // =========================
-        $rows = $this->query()->get();
+        $dataRows = $this->query()->get();
 
-        foreach ($rows as $row) {
+        foreach ($dataRows as $row) {
             $this->map($row);
         }
 
@@ -158,16 +165,17 @@ class PayrollSummarySheet
         // =========================
         // NUMBER FORMAT
         // =========================
-        foreach (range('B', 'Z') as $colLetter) {
+        foreach (range('B', $lastCol) as $colLetter) {
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
-                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+                ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
         }
 
         // =========================
         // AUTO SIZE COLUMN
         // =========================
-        foreach (range('A', $lastCol) as $colLetter) {
+        for ($i = 1; $i <= count($headingRows[0]); $i++) {
+            $colLetter = Coordinate::stringFromColumnIndex($i);
             $sheet->getColumnDimension($colLetter)->setAutoSize(true);
         }
 
@@ -186,25 +194,28 @@ class PayrollSummarySheet
     {
         $aktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $keluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $union = $aktif->union($keluar);
 
-        return DB::query()
-            ->fromSub($union, 'bio')
-            ->join('payroll_run_details as prd', 'prd.employee_npk', '=', 'bio.NPK')
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.id_dept')
+        return DB::table('payroll_run_details as prd')
+            ->leftJoinSub($union, 'bio', function ($join) {
+                $join->on('bio.NPK', '=', 'prd.employee_npk');
+            })
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->where('prd.run_id', $this->run_id)
             ->select(
                 'bio.NPK',
                 'prd.components',
                 'bio.TKK',
+                'bio.TMK',
                 'bio.IS_STAFF',
-                'd.IS_SEWING'
+                'd.IS_SEWING',
+                'bio.KETERANGAN',
             );
     }
 
@@ -217,35 +228,95 @@ class PayrollSummarySheet
     {
         $items = json_decode($row->components, true) ?? [];
 
+        $keterangan = strtoupper(trim($row->KETERANGAN ?? ''));
+        $tkk = $row->TKK ? \Carbon\Carbon::parse($row->TKK) : null;
+        $tmk = !empty($row->TMK) ? \Carbon\Carbon::parse($row->TMK) : null;
+
+        $periodStart = \Carbon\Carbon::parse($this->period->start_date);
+        $periodEnd   = \Carbon\Carbon::parse($this->period->end_date);
+
+        $isTMKInPeriod = $tmk && $tmk->betweenIncluded($periodStart, $periodEnd);
+
+        $isMangkir =
+            !is_null($tkk) &&
+            $keterangan === 'MA' &&
+            $tkk->betweenIncluded($periodStart, $periodEnd);
+
         $isResign =
-            $row->TKK &&
-            $row->TKK >= $this->period->start_date &&
-            $row->TKK <= $this->period->end_date;
+            !is_null($tkk) &&
+            $keterangan !== 'MA' &&
+            $tkk->betweenIncluded($periodStart, $periodEnd);
+
+        $isActive =
+            is_null($tkk) || $tkk->greaterThan($periodEnd);
 
         $isStaff = $row->IS_STAFF == 1;
         $isSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 0;
         $isNonSewing = $row->IS_STAFF == 0 && $row->IS_SEWING == 1;
 
-        $targets = [];
+        $groups = [];
 
-        if ($isResign) {
-            $targets[] = 'resign_all';
-            if ($isStaff) $targets[] = 'resign_staff';
-            if ($isSewing) $targets[] = 'resign_sewing';
-            if ($isNonSewing) $targets[] = 'resign_non_sewing';
-        } else {
-            $targets[] = 'active_all';
-            if ($isStaff) $targets[] = 'active_staff';
-            if ($isSewing) $targets[] = 'active_sewing';
-            if ($isNonSewing) $targets[] = 'active_non_sewing';
+        if ($isMangkir) {
+
+            $groups[] = 'mangkir_all';
+
+            if ($isStaff) {
+                $groups[] = 'mangkir_staff';
+            }
+
+            if ($isSewing) {
+                $groups[] = 'mangkir_sewing';
+            }
+
+            if ($isNonSewing) {
+                $groups[] = 'mangkir_non_sewing';
+            }
+        } elseif ($isResign) {
+
+            $groups[] = 'resign_all';
+
+            if ($isStaff) {
+                $groups[] = 'resign_staff';
+            }
+
+            if ($isSewing) {
+                $groups[] = 'resign_sewing';
+            }
+
+            if ($isNonSewing) {
+                $groups[] = 'resign_non_sewing';
+            }
+        } elseif ($isActive) {
+
+            $groups[] = 'active_all';
+
+            if ($isStaff) {
+                $groups[] = 'active_staff';
+            }
+
+            if ($isSewing) {
+                $groups[] = 'active_sewing';
+            }
+
+            if ($isNonSewing) {
+                $groups[] = 'active_non_sewing';
+            }
         }
 
         foreach ($this->components as $component) {
 
             $code = $component->code;
-            $value = (float)($items[$code] ?? 0);
+            $item = $items[$code] ?? null;
 
-            foreach ($targets as $grp) {
+            if (is_array($item)) {
+                // Format baru: {"amount": ..., "type": "earning|deduction"}
+                $value = (float)($item['amount'] ?? 0);
+            } else {
+                // Fallback untuk format lama: nilai langsung berupa angka
+                $value = (float)($item ?? 0);
+            }
+
+            foreach ($groups as $grp) {
                 $this->groups[$grp][$code] =
                     ($this->groups[$grp][$code] ?? 0) + $value;
             }
@@ -260,23 +331,45 @@ class PayrollSummarySheet
 
         $header = [
             'Component',
+
             'Active All',
             'Active Staff',
             'Active Sewing',
             'Active Non Sewing',
+
             'Resign All',
             'Resign Staff',
             'Resign Sewing',
             'Resign Non Sewing',
+
+            'Mangkir All',
+            'Mangkir Staff',
+            'Mangkir Sewing',
+            'Mangkir Non Sewing',
         ];
 
         $rows[] = $header;
 
         foreach ($this->components as $c) {
-            $rows[] = [$c->name, '', '', '', '', '', '', '', ''];
+            $rows[] = [
+                $c->name,
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+            ];
         }
 
         $rows[] = array_fill(0, count($header), '');
+
         $rows[] = ['Total Earning'];
         $rows[] = ['Total Deduction'];
         $rows[] = ['Net Payroll'];
@@ -287,14 +380,20 @@ class PayrollSummarySheet
     private function getColumnIndex($group)
     {
         return [
-            'active_all' => 'B',
-            'active_staff' => 'C',
-            'active_sewing' => 'D',
-            'active_non_sewing' => 'E',
-            'resign_all' => 'F',
-            'resign_staff' => 'G',
-            'resign_sewing' => 'H',
-            'resign_non_sewing' => 'I',
+            'active_all'         => 'B',
+            'active_staff'       => 'C',
+            'active_sewing'      => 'D',
+            'active_non_sewing'  => 'E',
+
+            'resign_all'         => 'F',
+            'resign_staff'       => 'G',
+            'resign_sewing'      => 'H',
+            'resign_non_sewing'  => 'I',
+
+            'mangkir_all'        => 'J',
+            'mangkir_staff'      => 'K',
+            'mangkir_sewing'     => 'L',
+            'mangkir_non_sewing' => 'M',
         ][$group] ?? 'B';
     }
 }

@@ -19,6 +19,11 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use App\Services\PdfService;
+use App\Services\ExcelZipEncryptService;
+use App\Exports\Compensation\CompensationExportExcel;
+use Illuminate\Support\Str;
+use App\Services\PayrollRoleFilterService;
+use Illuminate\Support\Facades\Auth;
 
 class GenerateCompensation implements ShouldQueue
 {
@@ -40,8 +45,22 @@ class GenerateCompensation implements ShouldQueue
 
     public function handle()
     {
+        $this->processCompensation(false);
+    }
+
+    public function simulation()
+    {
+        return $this->processCompensation(true);
+    }
+
+    private function processCompensation($isCheck = false)
+    {
+
         ini_set('memory_limit', '4096M');
         set_time_limit(0);
+
+        $results = [];
+        $compensationResults = [];
 
         $today = Carbon::parse($this->generate_date);
         $day   = $today->day;
@@ -55,13 +74,14 @@ class GenerateCompensation implements ShouldQueue
         if (!in_array($day, [7, 20])) {
             return;
         }
+        if (!$isCheck) {
+            $master = Compensations::find($this->compensation_id);
 
-        $master = Compensations::find($this->compensation_id);
-
-        $master->update([
-            'status' => 'Start Processing',
-            'progress' => 5
-        ]);
+            $master->update([
+                'status' => 'Start Processing',
+                'progress' => 5
+            ]);
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -80,29 +100,33 @@ class GenerateCompensation implements ShouldQueue
         | LOAD EMPLOYEE
         |--------------------------------------------------------------------------
         */
-
-        $master->update([
-            'status' => 'Collecting Employees',
-            'progress' => 15
-        ]);
+        if (!$isCheck) {
+            $master->update([
+                'status' => 'Collecting Employees',
+                'progress' => 15
+            ]);
+        }
 
         /*
         |--------------------------------------------------------------------------
         | SIGNATURE CACHE
         |--------------------------------------------------------------------------
         */
-        $signatures = DB::table('users as u')
-            ->leftJoin('signatures as s', 's.user_id', '=', 'u.id')
-            ->select('u.npk', 's.signature_img')
-            ->get()
-            ->keyBy('npk');
-
+        if (!$isCheck) {
+            $signatures = DB::table('users as u')
+                ->leftJoin('signatures as s', 's.user_id', '=', 'u.id')
+                ->select('u.npk', 's.signature_img')
+                ->get()
+                ->keyBy('npk');
+        }
         $employeeUnion = DB::table('BIODATA')
             ->select(
                 'NPK',
                 'NAMA_KARYAWAN',
                 'ID_DEPT',
-                'BAG'
+                'BAG',
+                'IS_EXPAT',
+                'IS_STAFF'
             )
             ->unionAll(
                 DB::table('BIODATA_KELUAR')
@@ -110,7 +134,9 @@ class GenerateCompensation implements ShouldQueue
                         'NPK',
                         'NAMA_KARYAWAN',
                         'ID_DEPT',
-                        'BAG'
+                        'BAG',
+                        'IS_EXPAT',
+                        'IS_STAFF'
                     )
             );
 
@@ -125,6 +151,7 @@ class GenerateCompensation implements ShouldQueue
             ->whereYear('end_date', $today->year)
             // ->where('npk', '=', 'C-00827')
             ->select('npk', 'contract_ke');
+        // dd($baseContracts->get());
 
         /*
 |--------------------------------------------------------------------------
@@ -148,16 +175,20 @@ class GenerateCompensation implements ShouldQueue
             })
 
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
-            ->where('bio.NPK', '=', 'C-10000')
+            // ->where('bio.NPK', '=', 'C-10000')
+            ->where('bio.IS_EXPAT', '=', '0')
 
             ->select(
                 'ec.*',
-                'pm.type',
+                'ec.type',
                 'p.TKK',
+                'p.TMK',
 
                 'bio.NAMA_KARYAWAN as employee_name',
                 'bio.ID_DEPT',
-                'd.DEPARTEMENT as department'
+                'bio.IS_STAFF',
+                'd.DEPARTEMENT as department',
+                'd.IS_SEWING'
             )
 
             ->orderBy('ec.end_date', 'desc')
@@ -189,10 +220,12 @@ class GenerateCompensation implements ShouldQueue
         DB::beginTransaction();
 
         try {
-            $master->update([
-                'status' => 'Calculating Compensation',
-                'progress' => 35
-            ]);
+            if (!$isCheck) {
+                $master->update([
+                    'status' => 'Calculating Compensation',
+                    'progress' => 35
+                ]);
+            }
 
             /*
 |--------------------------------------------------------------------------
@@ -215,8 +248,10 @@ class GenerateCompensation implements ShouldQueue
 
             foreach ($employees as $emp) {
 
-                $is_contract = $emp->type === 'Contract';
-                $is_daily    = $emp->type === 'Daily';
+                $is_contract = Str::ucfirst(Str::lower($emp->type)) === 'Contract';
+                $is_daily    = Str::ucfirst(Str::lower($emp->type)) === 'Daily';
+
+                // dd($emp, $is_contract);
 
                 $endDate = Carbon::parse($emp->end_date);
 
@@ -279,10 +314,10 @@ class GenerateCompensation implements ShouldQueue
                 }
 
                 /*
-    |--------------------------------------------------------------------------
-    | FORMULA ENGINE
-    |--------------------------------------------------------------------------
-    */
+                |--------------------------------------------------------------------------
+                | FORMULA ENGINE
+                |--------------------------------------------------------------------------
+                */
 
                 $inputVariables = [
                     'is_contract' => $is_contract ? 1 : 0,
@@ -291,15 +326,19 @@ class GenerateCompensation implements ShouldQueue
                     'allowance' => $emp->allowance ?? 0,
                     'daily_salary' => $emp->salary,
                     'month_duration' => $emp->month_duration,
+                    'day_duration' => $emp->day_duration,
                     'difference_days' => $difference_days,
                     'count_days' => $count_days,
                 ];
 
                 $amount = $this->evaluateFormula(
                     $formula,
-                    [],
+                    $results,
                     $inputVariables
                 );
+
+                // dd($inputVariables);
+                // dd($inputVariables, $amount);
 
                 /*
     |--------------------------------------------------------------------------
@@ -316,6 +355,8 @@ class GenerateCompensation implements ShouldQueue
                 }
 
                 $contractAccumulator[$key]['amount'] += $amount;
+
+                // dd($contractAccumulator);
             }
 
             /*
@@ -342,20 +383,68 @@ class GenerateCompensation implements ShouldQueue
 
                     $is_active = 0;
                 }
+                if (!$isCheck) {
 
-                CompensationDetails::updateOrCreate(
-                    [
-                        'npk' => $emp->npk,
-                        'id_dept' => $emp->ID_DEPT,
-                        'contract_id' => $emp->id,
-                        'cutoff_date' => $today
-                    ],
-                    [
-                        'amount' => $amount,
-                        'status' => $status,
-                        'is_active' => $is_active
-                    ]
-                );
+                    CompensationDetails::updateOrCreate(
+                        [
+                            'npk' => $emp->npk,
+                            'id_dept' => $emp->ID_DEPT,
+                            'contract_id' => $emp->id,
+                            'cutoff_date' => $today
+                        ],
+                        [
+                            'amount'            => $amount,
+                            'status'            => $status,
+                            'is_active'         => $is_active,
+                            'end_date'          => $emp->end_date,
+                            'month_duration'    => $emp->month_duration,
+                            'day_duration'      => $emp->day_duration,
+                        ]
+                    );
+                } else {
+
+                    $compensationResults[] = [
+                        'npk'           => $emp->npk,
+                        'employee_name' => $emp->employee_name,
+                        'department'    => $emp->department,
+                        'contract_id'   => $emp->id,
+                        'id_dept'       => $emp->ID_DEPT,
+                        'salary'        => $emp->salary,
+                        'daily_salary'  => $emp->daily_salary,
+                        'amount'        => $amount,
+                        'status'        => $status,
+                        'end_date'      => $emp->end_date,
+                        'month_duration'      => $emp->month_duration,
+                        'day_duration'      => $emp->day_duration,
+                        'is_active'     => $is_active,
+                        'cutoff_date'   => $today->format('Y-m-d'),
+                        'IS_STAFF'      => $emp->IS_STAFF ?? 0,
+                        'IS_SEWING'     => $emp->IS_SEWING ?? 0,
+                    ];
+                }
+            }
+            if ($isCheck) {
+
+                DB::rollBack();
+
+                $user = Auth::user();
+                $role = PayrollRoleFilterService::getRole($user);
+
+                // Sama seperti payroll: kalau Admin, tidak difilter.
+                // Selain itu, ikuti aturan role_payrolls (deny by default).
+                $filteredResults = ($user && $user->hasRole('Admin'))
+                    ? collect($compensationResults)
+                    : PayrollRoleFilterService::filterCollection(
+                        $compensationResults,
+                        $role,
+                        'IS_STAFF',
+                        'IS_SEWING'
+                    );
+
+                return response()->json([
+                    'success' => true,
+                    'data'    => $filteredResults->values()
+                ]);
             }
 
             /*
@@ -363,35 +452,35 @@ class GenerateCompensation implements ShouldQueue
             | CREATE APPROVAL PAYROLL
             |--------------------------------------------------------------------------
             */
+            if (!$isCheck) {
+                $existsApprove = CompensationApprove::where('run_id', $this->compensation_id)->exists();
 
-            $existsApprove = CompensationApprove::where('run_id', $this->compensation_id)->exists();
+                if (!$existsApprove) {
+                    $settings = PayrollSetting::where('component', 'compensation')->get();
 
-            if (!$existsApprove) {
-                $settings = PayrollSetting::where('component', 'compensation')->get();
+                    if ($settings->count() > 0) {
+                        $approvals = $settings->pluck('approval')->toArray();
 
-                if ($settings->count() > 0) {
-                    $approvals = $settings->pluck('approval')->toArray();
+                        $progress = collect($approvals)->map(function ($npk) {
+                            $npkList = is_array($npk) ? $npk : json_decode($npk, true);
+                            if (!is_array($npkList)) $npkList = [$npk];
+                            $statusList = array_fill(0, count($npkList), 'waiting');
+                            return [
+                                'npk' => json_encode($npkList),
+                                'status' => json_encode($statusList)
+                            ];
+                        })->values();
 
-                    $progress = collect($approvals)->map(function ($npk) {
-                        $npkList = is_array($npk) ? $npk : json_decode($npk, true);
-                        if (!is_array($npkList)) $npkList = [$npk];
-                        $statusList = array_fill(0, count($npkList), 'waiting');
-                        return [
-                            'npk' => json_encode($npkList),
-                            'status' => json_encode($statusList)
-                        ];
-                    })->values();
-
-                    CompensationApprove::create([
-                        'run_id'         => $this->compensation_id,
-                        'approval'       => $approvals,
-                        'progress'       => $progress,
-                        'approved_at'    => [],
-                        'status'         => 'pending'
-                    ]);
+                        CompensationApprove::create([
+                            'run_id'         => $this->compensation_id,
+                            'approval'       => $approvals,
+                            'progress'       => $progress,
+                            'approved_at'    => [],
+                            'status'         => 'pending'
+                        ]);
+                    }
                 }
             }
-            // return response()->json($payrollResults);
 
 
             /*
@@ -406,12 +495,15 @@ class GenerateCompensation implements ShouldQueue
             $totalAmount   = $query->sum('amount');
             $totalEmployee = $query->count();
 
-            $master->update([
-                'total_amount' => $totalAmount,
-                'total_employee' => $totalEmployee,
-                'progress' => 60,
-                'status' => 'Building Rekap PDF'
-            ]);
+            // dd($totalAmount, $totalEmployee);
+            if (!$isCheck) {
+                $master->update([
+                    'total_amount' => $totalAmount,
+                    'total_employee' => $totalEmployee,
+                    'progress' => 60,
+                    'status' => 'Building Rekap PDF'
+                ]);
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -422,7 +514,51 @@ class GenerateCompensation implements ShouldQueue
             $period = $today->format('F_Y');
             $folder = "public/compensations/$period";
 
-            Storage::makeDirectory($folder, 0777, true);
+            /*
+            |--------------------------------------------------------------------------
+            | ROLE_PAYROLL CATEGORY SPLIT
+            |--------------------------------------------------------------------------
+            | Pakai konstanta & konvensi folder dari PayrollRoleFilterService supaya
+            | selalu sinkron dengan applyToQuery()/filterCollection()/folder() yang
+            | sudah dipakai di CompensationsController. ROLE_ALL sengaja TIDAK punya
+            | subfolder sendiri (folder() mengembalikan '' untuk ALL) -> filenya
+            | disimpan langsung di root folder period, sama seperti pola
+            | GeneratePayrollExport (REKAP_xxx.xlsx untuk ALL ada di folder period,
+            | sedangkan STAFF/NON_STAFF/SEWING/NON_SEWING punya subfolder sendiri).
+            */
+
+            $categories = [
+                PayrollRoleFilterService::ROLE_ALL       => fn($r) => true, // gabungan staff + non staff
+                PayrollRoleFilterService::ROLE_STAFF     => fn($r) => ($r->IS_STAFF ?? 0) == 1,
+                PayrollRoleFilterService::ROLE_NONSTAFF  => fn($r) => ($r->IS_STAFF ?? 0) == 0,
+                PayrollRoleFilterService::ROLE_SEWING    => fn($r) => ($r->IS_STAFF ?? 0) == 0 && ($r->IS_SEWING ?? 0) == 0,
+                PayrollRoleFilterService::ROLE_NONSEWING => fn($r) => ($r->IS_STAFF ?? 0) == 0 && ($r->IS_SEWING ?? 0) == 1,
+            ];
+
+            // folder per role_payroll DAN per tanggal cutoff (7 / 20) di dalam folder
+            // period, contoh:
+            // public/compensations/July_2026/7/            -> Payroll_ALL, cutoff tgl 7
+            // public/compensations/July_2026/20/            -> Payroll_ALL, cutoff tgl 20
+            // public/compensations/July_2026/STAFF/7/
+            // public/compensations/July_2026/STAFF/20/
+            // public/compensations/July_2026/NON_STAFF/7/
+            // ...dst
+            // Wajib dipisah per tanggal karena 1 folder period (satu bulan) dipakai
+            // bersama oleh 2 master compensations (cutoff tgl 7 & tgl 20) -> tanpa
+            // subfolder tanggal, file compensations tgl 7 akan ketimpa oleh tgl 20.
+            $roleFolders = [];
+            foreach (array_keys($categories) as $roleKey) {
+                $sub = PayrollRoleFilterService::folder($roleKey); // '' untuk ALL, 'STAFF/' dst untuk lainnya
+                $base = $sub ? rtrim("$folder/$sub", '/') : $folder;
+                $roleFolders[$roleKey] = "$base/$day";
+            }
+
+            if (!$isCheck) {
+                Storage::makeDirectory($folder, 0777, true);
+                foreach ($roleFolders as $roleFolder) {
+                    Storage::makeDirectory($roleFolder, 0777, true);
+                }
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -434,7 +570,8 @@ class GenerateCompensation implements ShouldQueue
 
                 ->join('compensation_details as cd', function ($join) use ($today) {
                     $join->on('cd.contract_id', '=', 'ec.id')
-                        ->whereDate('cd.cutoff_date', $today);
+                        ->whereDate('cd.cutoff_date', $today)
+                        ->where('is_active', 1);
                 })
 
                 ->leftJoinSub($employeeUnion, 'bio', function ($join) {
@@ -442,6 +579,8 @@ class GenerateCompensation implements ShouldQueue
                 })
 
                 ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
+
+                ->leftJoin('PKWT as p', 'p.NPK', '=', 'ec.npk')
 
                 ->select(
                     'cd.amount',
@@ -452,121 +591,198 @@ class GenerateCompensation implements ShouldQueue
                     'ec.start_date',
                     'ec.end_date',
                     'ec.salary',
+                    'ec.daily_salary',
                     'ec.month_duration',
 
                     'bio.NAMA_KARYAWAN as employee_name',
-                    'd.DEPARTEMENT as department'
+                    'bio.IS_STAFF',
+                    'd.DEPARTEMENT as department',
+                    'd.IS_SEWING',
+                    'p.TMK'
                 )
 
                 ->orderBy('d.DEPARTEMENT')
                 ->orderBy('ec.npk')
 
-                ->get()
+                ->get();
 
-                ->groupBy(fn($row) => $row->department ?? 'NO DEPARTMENT');
+            if (!$isCheck) {
+                $approvals = [];
 
-            // dd($rows);
+                $approve = DB::table('compensation_approve')
+                    ->where('run_id', $this->compensation_id)
+                    ->first();
 
-            $approvals = [];
+                if ($approve && $approve->progress) {
 
-            $approve = DB::table('compensation_approve')
-                ->where('run_id', $this->compensation_id)
-                ->first();
+                    foreach (json_decode($approve->progress, true) as $row) {
 
-            if ($approve && $approve->progress) {
+                        $npks = json_decode($row['npk'], true) ?? [];
 
-                foreach (json_decode($approve->progress, true) as $row) {
+                        $statuses = json_decode($row['status'], true);
+                        if (!is_array($statuses)) {
+                            $statuses = array_fill(0, count($npks), $row['status']);
+                        }
 
-                    $npks = json_decode($row['npk'], true) ?? [];
-
-                    $statuses = json_decode($row['status'], true);
-                    if (!is_array($statuses)) {
-                        $statuses = array_fill(0, count($npks), $row['status']);
-                    }
-
-                    $empApprove = DB::query()
-                        ->fromSub($employeeUnion, 'emp')
-                        ->get()
-                        ->keyBy('NPK');
-                    foreach ($npks as $i => $npk) {
-                        $approvals[] = [
-                            'npk' => $npk,
-                            'nama_karyawan' => $empApprove[$npk]->NAMA_KARYAWAN ?? '-',
-                            'bagian' => $empApprove[$npk]->BAG ?? '-',
-                            'status' => strtolower($statuses[$i] ?? 'waiting'),
-                            'signature_img' => $signatures[$npk]->signature_img ?? null
-                        ];
+                        $empApprove = DB::query()
+                            ->fromSub($employeeUnion, 'emp')
+                            ->get()
+                            ->keyBy('NPK');
+                        foreach ($npks as $i => $npk) {
+                            $approvals[] = [
+                                'npk' => $npk,
+                                'nama_karyawan' => $empApprove[$npk]->NAMA_KARYAWAN ?? '-',
+                                'bagian' => $empApprove[$npk]->BAG ?? '-',
+                                'status' => strtolower($statuses[$i] ?? 'waiting'),
+                                'signature_img' => $signatures[$npk]->signature_img ?? null
+                            ];
+                        }
                     }
                 }
-            }
 
-            // dd($approvals);
+                // dd($approvals);
 
-            $suffix = $this->type === 'process' ? '' : '_APPROVED';
+                $suffix = $this->type === 'process' ? '' : '_APPROVED';
 
-            $html = View::make(
-                'compensation.rekap_pdf',
-                [
-                    'groups' => $rows,
-                    'totalAmount' => $totalAmount,
-                    'totalEmployee' => $totalEmployee,
-                    'date' => $today,
-                    'approvals' => $approvals
-                ]
-            )->render();
-
-            /*
+                /*
             |--------------------------------------------------------------------------
-            | GENERATE PDF
+            | GENERATE PDF + EXCEL PER ROLE_PAYROLL
             |--------------------------------------------------------------------------
+            | Untuk setiap kategori (Payroll_ALL, Payroll_STAFF, Payroll_NONSTAFF,
+            | Payroll_SEWING, Payroll_NONSEWING) file disimpan terpisah di folder
+            | role masing-masing. Kategori Payroll_ALL berisi gabungan staff + non
+            | staff dan disimpan di root folder period (lihat PayrollRoleFilterService::folder()).
+            | Nama file disimpan sebagai JSON {role => filename} di kolom file_pdf / file_excel.
             */
 
-            $pdf = App::make('snappy.pdf.wrapper');
+                $filePdfMap = [];
+                $fileExcelMap = [];
+                $zipService = app(ExcelZipEncryptService::class);
 
-            $pdf->loadHTML($html)
-                ->setPaper('a4')
-                ->setOrientation('landscape')
-                ->setOption('enable-local-file-access', true);
+                foreach ($categories as $key => $filter) {
 
+                    // slug pendek buat nama file & password, mis. Payroll_NONSTAFF -> nonstaff
+                    $roleSlug = strtolower(str_replace('Payroll_', '', $key));
 
-            $pdfPath = "$folder/REKAP COMPENSATION_{$period}{$suffix}.pdf";
-            $pdfPathTemp = "$folder/REKAP_{$period}{$suffix}_temp.pdf";
-            $tempPath = storage_path("app/$pdfPathTemp");
-            $finalPath = storage_path("app/$pdfPath");
+                    $master->update([
+                        'status' => "Building Rekap PDF ($roleSlug)",
+                        'progress' => 60
+                    ]);
 
-            if (File::exists($tempPath)) File::delete($tempPath);
-            if (File::exists($finalPath)) File::delete($finalPath);
+                    $filteredRows = $rows->filter($filter)->values();
 
-            $pdf->save($tempPath);
+                    // lewati kategori yang tidak punya data sama sekali
+                    if ($filteredRows->isEmpty()) {
+                        continue;
+                    }
 
-            /*
-            |--------------------------------------------------------------------------
-            | ENCRYPT PDF
-            |--------------------------------------------------------------------------
-            */
+                    $groupedRows = $filteredRows->groupBy(fn($row) => $row->department ?? 'NO DEPARTMENT');
 
-            $master->update([
-                'status' => 'Encrypting PDF',
-                'progress' => 85
-            ]);
+                    $categoryTotalAmount   = $filteredRows->sum('amount');
+                    $categoryTotalEmployee = $filteredRows->count();
 
-            $password = PdfPassword::generate('staff', $today);
+                    $roleFolder = $roleFolders[$key];
 
-            PdfService::protect($tempPath, $finalPath, $password);
+                    $html = View::make(
+                        'compensation.rekap_pdf',
+                        [
+                            'groups' => $groupedRows,
+                            'totalAmount' => $categoryTotalAmount,
+                            'totalEmployee' => $categoryTotalEmployee,
+                            'date' => $today,
+                            'approvals' => $approvals,
+                            'roleLabel' => strtoupper($roleSlug),
+                        ]
+                    )->render();
 
-            if (File::exists($tempPath)) File::delete($tempPath);
+                    $pdf = App::make('snappy.pdf.wrapper');
 
-            /*
+                    $pdf->loadHTML($html)
+                        ->setPaper('a4')
+                        ->setOrientation('landscape')
+                        ->setOption('enable-local-file-access', true);
+
+                    $fileName = "REKAP_COMPENSATION_{$period}_{$roleSlug}{$suffix}.pdf";
+                    $fileNameTemp = "REKAP_{$period}_{$roleSlug}{$suffix}_temp.pdf";
+
+                    $pdfPath = "$roleFolder/$fileName";
+                    $pdfPathTemp = "$roleFolder/$fileNameTemp";
+                    $tempPath = storage_path("app/$pdfPathTemp");
+                    $finalPath = storage_path("app/$pdfPath");
+
+                    if (File::exists($tempPath)) File::delete($tempPath);
+                    if (File::exists($finalPath)) File::delete($finalPath);
+
+                    $pdf->save($tempPath);
+
+                    /*
+                |--------------------------------------------------------------------------
+                | ENCRYPT PDF (password berbeda per role)
+                |--------------------------------------------------------------------------
+                */
+
+                    $master->update([
+                        'status' => "Encrypting PDF ($roleSlug)",
+                        'progress' => 85
+                    ]);
+
+                    $password = PdfPassword::generate($roleSlug, $today);
+
+                    PdfService::protect($tempPath, $finalPath, $password);
+
+                    if (File::exists($tempPath)) File::delete($tempPath);
+
+                    $filePdfMap[$key] = $fileName;
+
+                    /*
+                |--------------------------------------------------------------------------
+                | EXCEL (mengikuti pola PayrollExportNonStaffExcel / PayrollDetailNonStaffSheet)
+                | + ENCRYPT jadi ZIP pakai ExcelZipEncryptService (sama seperti GeneratePayrollExport)
+                |--------------------------------------------------------------------------
+                */
+
+                    $master->update([
+                        'status' => "Building Excel ($roleSlug)",
+                        'progress' => 90
+                    ]);
+
+                    // ROLE_ALL -> tidak difilter (null), role lain -> difilter sesuai role_payroll
+                    $roleForExport = PayrollRoleFilterService::isAll($key) ? null : $key;
+
+                    $excelFileName = "REKAP_COMPENSATION_{$period}_{$roleSlug}{$suffix}.xlsx";
+                    $excelFullPath = storage_path("app/$roleFolder/$excelFileName");
+                    $excelZipPath  = storage_path("app/$roleFolder/" . pathinfo($excelFileName, PATHINFO_FILENAME) . '.zip');
+
+                    if (File::exists($excelFullPath)) File::delete($excelFullPath);
+                    if (File::exists($excelZipPath)) File::delete($excelZipPath);
+
+                    (new CompensationExportExcel($today, $roleForExport))
+                        ->export($excelFullPath);
+
+                    $master->update([
+                        'status' => "Encrypting Excel ($roleSlug)",
+                        'progress' => 95
+                    ]);
+
+                    // password sama dengan PDF supaya user cukup ingat 1 password per role
+                    $zipService->encrypt($excelFullPath, $password);
+
+                    $fileExcelMap[$key] = pathinfo($excelFileName, PATHINFO_FILENAME) . '.zip';
+                }
+
+                /*
             |--------------------------------------------------------------------------
             | FINISH
             |--------------------------------------------------------------------------
             */
 
-            $master->update([
-                'file_pdf' => str_replace('public/', '', "REKAP COMPENSATION_{$period}{$suffix}.pdf"),
-                'status' => 'finished',
-                'progress' => 100
-            ]);
+                $master->update([
+                    'file_pdf' => json_encode($filePdfMap),
+                    'file_excel' => json_encode($fileExcelMap),
+                    'status' => 'finished',
+                    'progress' => 100
+                ]);
+            }
 
             DB::commit();
         } catch (\Throwable $e) {

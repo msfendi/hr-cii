@@ -17,7 +17,9 @@ return new class extends Migration
             $table->string('NAMA_KARYAWAN');
             $table->string('BAGIAN');
             $table->date('OVERTIME_DATE');
-            $table->integer('JUMLAH_JAM_LEMBUR');
+            $table->string('JUMLAH_JAM_LEMBUR');
+            $table->string('DAY');
+            $table->string('DEPT_GROUP');
             $table->timestamps();
         });
     }

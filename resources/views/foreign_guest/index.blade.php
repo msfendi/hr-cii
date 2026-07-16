@@ -11,11 +11,13 @@
       <div class="container-fluid">
          {{-- TITLE --}}
          <div class="d-sm-flex align-items-center justify-content-between mb-4">
-            <h1 class="h3 mb-0 text-gray-800">Foreign Guest</h1>
+               <h1 class="h3 mb-0 text-gray-800">Foreign Guest</h1>
+               @canRoute('foreign-guest.create')
             <a href="{{ route('foreign-guest.create') }}"
                class="btn btn-sm btn-primary shadow-sm">
             <i class="fas fa-plus"></i> Create Guest
             </a>
+            @endcanRoute
          </div>
          <div class="card shadow mb-4">
             {{-- HEADER --}}
@@ -39,11 +41,15 @@
                            <th>Name</th>
                            <th>Bank</th>
                            <th>Visa Type</th>
+                           <th>Visa Invoice</th>
                            <th>Visa Status</th>
+                           <th>Flight ETA</th>
+                           <th>Rent Invoice</th>
                            <th>ETA</th>
                            <th>Return</th>
                            <th>Hotel</th>
-                           <th>Attachment</th>
+                           <th>Hotel Invoice</th>
+                           <th>Document</th>
                            <th>Status</th>
                            <th width="120">Action</th>
                         </tr>
@@ -65,6 +71,7 @@
                               </span>
                               @endif
                            </td>
+                           <td>{{ $row->visa_invoice }}</td>
                            <td>
                               @if($row->visa_status)
                               <span class="badge badge-info">
@@ -72,6 +79,14 @@
                               </span>
                               @endif
                            </td>
+                           <td>
+                              @if($row->flight_eta)
+                              <span class="badge badge-secondary">
+                              {{ $row->flight_eta }}
+                              </span>
+                              @endif
+                           </td>
+                           <td>{{ $row->rent_invoice }}</td>
                            <td>
                               @if($row->eta)
                               <span class="badge badge-secondary">
@@ -87,6 +102,7 @@
                               @endif
                            </td>
                            <td>{{ $row->hotel }}</td>
+                           <td>{{ $row->hotel_invoice }}</td>
                            {{-- ================= ATTACHMENT ================= --}}
                            <td>
                               {{-- PHOTO --}}
@@ -131,10 +147,13 @@
                               @endif
                            </td>
                            <td class="text-center">
+                              @canRoute('foreign-guest.delete')
                               <a href="{{ route('foreign-guest.edit',$row->id) }}"
                                  class="btn btn-primary btn-circle btn-sm">
                               <i class="fas fa-edit"></i>
                               </a>
+                              @endcanRoute
+                              @canRoute('foreign-guest.delete')
                               <button
                                  class="btn btn-danger btn-circle btn-sm btn-delete"
                                  data-link="{{ route('foreign-guest.delete',$row->id) }}"
@@ -143,6 +162,7 @@
                                  data-target="#deleteModal">
                               <i class="fas fa-trash"></i>
                               </button>
+                              @endcanRoute
                            </td>
                         </tr>
                         @endforeach

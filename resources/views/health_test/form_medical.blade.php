@@ -109,7 +109,7 @@
       </tr>
       <tr>
         <td> 3. VISUS MATA <br> &nbsp;&nbsp;- OD <br> &nbsp;&nbsp;- OS </td>
-        <td class="center">{{ $data->visus_mata }}</td>
+        <td class="center">{{ $data->visus_mata_od }} <br> {{ $data->visus_mata_os }}</td>
       </tr>
       <tr>
         <td>4. TINGGI BADAN</td>

@@ -1,6 +1,15 @@
 @php
-$role = $roleusers[0]->rolename;
+    use App\Models\Menu;
+
+    $role = $roleusers[0]->rolename;
+    $currentRole = \App\Models\Role::where('name', $role)->first();
+    $sidebarMenus = $currentRole ? Menu::buildSidebarFor($currentRole) : collect();
 @endphp
+
+<!-- <script>
+    const currentRole = @json($currentRole);
+    console.log(currentRole);
+</script> -->
 <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
    {{-- BRAND --}}
    <a class="sidebar-brand d-flex align-items-center justify-content-center">
@@ -10,212 +19,175 @@ $role = $roleusers[0]->rolename;
       <div class="sidebar-brand-text mx-3">Chutex <sup>Sys</sup></div>
    </a>
    <hr class="sidebar-divider my-0">
-   {{-- DASHBOARD --}}
-   <li class="nav-item active">
+
+   {{-- SEARCH MENU --}}
+   <li class="nav-item px-3 mb-2" id="sidebarSearchWrapper">
+        <div style="position:relative;">
+            <input
+                type="text"
+                id="sidebarMenuSearch"
+                class="form-control form-control-sm"
+                placeholder="Cari menu..."
+                autocomplete="off"
+                style="border-radius:20px;padding-left:14px;padding-right:32px;font-size:13px;"
+            >
+            <i class="fas fa-search" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;"></i>
+        </div>
+        <div id="sidebarSearchEmpty" class="text-center small text-white-50 mt-2 d-none">
+            Menu tidak ditemukan
+        </div>
+   </li>
+
+   {{-- DASHBOARD (selalu tampil, tidak butuh permission) --}}
+   <!-- <li class="nav-item active">
       <a class="nav-link" href="{{ route('home') }}">
-      <i class="fas fa-tachometer-alt"></i>
-      <span>Dashboard</span>
+         <i class="fas fa-tachometer-alt"></i>
+         <span>Dashboard</span>
       </a>
-   </li>
-   {{-- ================= MANAGEMENT ================= --}}
-   @if(in_array($role,['Admin','HRD', 'Payroll_STAFF','Payroll_SEWING','Payroll_NONSEWING']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#management">
-      <i class="fas fa-users-cog"></i>
-      <span>Management</span>
-      </a>
-      <div id="management" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            @if(in_array($role,['Admin','HRD']))
-            <a class="collapse-item" href="{{ route('devices.index') }}">Whatsapp Device</a>
-            <a class="collapse-item" href="{{ route('recruitment.index') }}">Recruitment</a>
-            <a class="collapse-item" href="{{ route('pelamar.index') }}">Pelamar</a>
-            <a class="collapse-item" href="{{ route('parent-dept.index') }}">Parent Departement</a>
-            <a class="collapse-item" href="{{ route('dept.index') }}">Departement</a>
-            <a class="collapse-item" href="{{ route('biodata.index') }}">Biodata</a>
-            <a class="collapse-item" href="{{ route('biodata_keluar.index') }}">Biodata Keluar</a>
-            <a class="collapse-item" href="{{ route('employees-contract.index') }}">Kontrak Karyawan</a>
-            @endif
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= APPROVAL ================= --}}
-   @if(in_array($role,['Admin','Management']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#approval">
-      <i class="fas fa-check"></i>
-      <span>Approval</span>
-      </a>
-      <div id="approval" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('insentif-approve.index') }}">Insentif Approval</a>
-            <a class="collapse-item" href="{{ route('payroll-approve.index') }}">Payroll Approval</a>
-            <a class="collapse-item" href="{{ route('thr-approve.index') }}">THR Approval</a>
-            <a class="collapse-item" href="{{ route('compensation-approve.index') }}">Compensation Approval</a>
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= EXPAT ================= --}}
-   @if(in_array($role,['Admin','GA']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#expat">
-      <i class="fas fa-globe"></i>
-      <span>Expat & Foreign Guest</span>
-      </a>
-      <div id="expat" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('chu-family.index') }}">Chu Family</a>
-            <hr>
-            <a class="collapse-item" href="{{ route('expat.master.index') }}">Master</a>
-            <a class="collapse-item" href="{{ route('expat.onleave.index') }}">On Leave</a>
-            <a class="collapse-item" href="{{ route('expat.cost.index') }}">Cost</a>
-            <a class="collapse-item" href="{{ route('epo.index') }}">EPO</a>
-            <hr>
-            <a class="collapse-item" href="{{ route('foreign-guest.index') }}">Foreign Guest</a>
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= ATTENDANCE ================= --}}
-   @if(in_array($role,['Admin','HRD']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#attendance">
-      <i class="fas fa-clock"></i>
-      <span>Attendance</span>
-      </a>
-      <div id="attendance" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('attendance.index') }}">Attendance</a>
-            <a class="collapse-item" href="{{ route('attendance.checkMasterData') }}">Check Master</a>
-            <a class="collapse-item" href="{{ route('attendance-finger.index') }}">Sync Finger</a>
-            <a class="collapse-item" href="{{ route('overtime.index') }}">Overtime</a>
-            <a class="collapse-item" href="{{ route('overtime.calendar') }}">Calendar</a>
-            <a class="collapse-item" href="{{ route('shift.index') }}">Shift</a>
-            <a class="collapse-item" href="{{ route('employee-shift.index') }}">Employee Shift</a>
-            <a class="collapse-item" href="{{ route('late-compensation.index') }}">Late Compensation</a>
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= LEAVE & HOLIDAY ================= --}}
-   @if(in_array($role,['Admin','HRD', 'Payroll_STAFF','Payroll_SEWING','Payroll_NONSEWING']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#leave">
-      <i class="fas fa-plane"></i>
-      <span>Leave & Holiday</span>
-      </a>
-      <div id="leave" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('leave-balances.index') }}">Leave Balance</a>
-            <a class="collapse-item" href="{{ route('leave-recap.index') }}">Leave Recap</a>
-            <a class="collapse-item" href="{{ route('approval.index') }}">Approval</a>
-            <a class="collapse-item" href="{{ route('holidays.index') }}">Holiday</a>
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= POLIKLINIK ================= --}}
-   @if(in_array($role,['Admin','Dokter']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#clinic">
-      <i class="fas fa-medkit"></i>
-      <span>Poliklinik</span>
-      </a>
-      <div id="clinic" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('kunjungan.index') }}">Kunjungan</a>
-            <a class="collapse-item" href="{{ route('dokter.antrian') }}">Antrian</a>
-            <a class="collapse-item" href="{{ route('report.rekap') }}">Rekap</a>
-            <a class="collapse-item" href="{{ route('health-test.index') }}">Test Kesehatan</a>
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= PAYROLL ================= --}}
-   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#payroll">
-      <i class="fas fa-calculator"></i>
-      <span>Payroll</span>
-      </a>
-      <div id="payroll" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('payroll-setting.index') }}">Setting</a>
-            <a class="collapse-item" href="{{ route('payroll-master.index') }}">Master</a>
-            <a class="collapse-item" href="{{ route('payroll-adjusments.index') }}">Payroll Adjusments</a>
-            <a class="collapse-item" href="{{ route('payroll-components.index') }}">Components</a>
-            <a class="collapse-item" href="{{ route('payroll-periods.index') }}">Period</a>
-            <a class="collapse-item" href="{{ route('payroll-process.index') }}">Process</a>
-            <a class="collapse-item" href="{{ route('employee-payroll.index') }}">Employee Payroll</a>
-            <hr>
-            <a class="collapse-item" href="{{ route('thr-periods.index') }}">THR Period</a>
-            <a class="collapse-item" href="{{ route('thr-process.index') }}">THR Process</a>
-            <hr>
-            @if(in_array($role,['Admin']))
-            <a class="collapse-item" href="{{ route('compensation.index') }}">Compensation</a>
-            @endif
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= INSENTIF ================= --}}
-   @if(in_array($role,['Admin','Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#insentif">
-      <i class="fas fa-hand-holding-usd"></i>
-      <span>Insentif</span>
-      </a>
-      <div id="insentif" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('insentif.threshold.index') }}">Insentif Threshold</a>
-            <a class="collapse-item" href="{{ route('dept-insentif-role.index') }}">Insentif Mapping</a>
-            <a class="collapse-item" href="{{ route('insentif-role-formulas.index') }}">Insentif Formula</a>
-            <hr>
-            <a class="collapse-item" href="{{ route('line-insentif-master.index') }}">Line Insentif</a>
-            <a class="collapse-item" href="{{ route('pad-insentif-master.index') }}">Pad Print Insentif</a>
-            <a class="collapse-item" href="{{ route('cutting-insentif-master.index') }}">Cutting Insentif</a>
-            <a class="collapse-item" href="{{ route('heat-insentif-master.index') }}">Heat Seal Insentif</a>
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= EVALUATION ================= --}}
-   @if(in_array($role,['Admin','HRD']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#evaluation">
-      <i class="fas fa-clipboard-check"></i>
-      <span>Evaluation</span>
-      </a>
-      <div id="evaluation" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-                <a class="collapse-item" href="{{ route('evaluation-jobscope.index') }}">Evaluation Jobscope</a>
-                <a class="collapse-item" href="{{ route('evaluation-questionnaire.index') }}">Evaluation
-                    Questionnaire</a>
-                <a class="collapse-item" href="{{ route('evaluation-employee.index') }}">Employee Evaluation</a>
-         </div>
-      </div>
-   </li>
-   @endif
-   {{-- ================= SYSTEM ================= --}}
-   @if(in_array($role,['Admin','HRD']))
-   <li class="nav-item">
-      <a class="nav-link collapsed" data-toggle="collapse" data-target="#system">
-      <i class="fas fa-cog"></i>
-      <span>System</span>
-      </a>
-      <div id="system" class="collapse" data-parent="#accordionSidebar">
-         <div class="collapse-inner bg-white rounded">
-            <a class="collapse-item" href="{{ route('user.index') }}">User</a>
-            <a class="collapse-item" href="{{ route('role.index') }}">Role</a>
-            <a class="collapse-item" href="{{ route('activity-logs.index') }}">Activity Logs</a>
-         </div>
-      </div>
-   </li>
-   @endif
+   </li> -->
+
+   {{-- MENU DINAMIS DARI DATABASE --}}
+@foreach ($sidebarMenus as $menu)
+
+    {{-- Hide jika parent kosong (tidak punya route dan tidak punya child) --}}
+    @if (!$menu->route_name && $menu->children->isEmpty())
+        @continue
+    @endif
+
+    @if ($menu->children->isEmpty())
+        {{-- Parent tanpa child tetapi punya route --}}
+        <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
+            <a class="nav-link" href="{{ route($menu->route_name) }}">
+                <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
+                <span>{{ $menu->name }}</span>
+            </a>
+        </li>
+    @else
+        {{-- Parent dengan child --}}
+        <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
+            <a class="nav-link collapsed"
+               href="#"
+               data-toggle="collapse"
+               data-target="#menu-{{ $menu->id }}"
+               aria-expanded="false"
+               aria-controls="menu-{{ $menu->id }}">
+                <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
+                <span>{{ $menu->name }}</span>
+            </a>
+
+            <div id="menu-{{ $menu->id }}"
+                 class="collapse"
+                 data-parent="#accordionSidebar">
+
+                <div class="collapse-inner bg-white rounded">
+                    @foreach ($menu->children as $child)
+                        <a class="collapse-item"
+                           data-menu-child
+                           data-menu-name="{{ strtolower($child->name) }}"
+                           href="{{ $child->route_name ? route($child->route_name) : '#' }}">
+                            {{ $child->name }}
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        </li>
+    @endif
+
+@endforeach
+
    <hr class="sidebar-divider d-none d-md-block">
 </ul>
+
+<script>
+(function () {
+    const searchInput = document.getElementById('sidebarMenuSearch');
+    const emptyState  = document.getElementById('sidebarSearchEmpty');
+    if (!searchInput) return;
+
+    // Simpan state collapse asli (yang sedang 'show') supaya bisa dikembalikan saat search dikosongkan
+    const originallyOpen = new Set();
+    document.querySelectorAll('#accordionSidebar .collapse.show').forEach(el => originallyOpen.add(el.id));
+
+    function normalize(str) {
+        return (str || '').toLowerCase().trim();
+    }
+
+    function resetSidebar() {
+        document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
+            li.classList.remove('d-none');
+        });
+        document.querySelectorAll('#accordionSidebar [data-menu-child]').forEach(child => {
+            child.classList.remove('d-none');
+        });
+        document.querySelectorAll('#accordionSidebar .collapse').forEach(el => {
+            if (originallyOpen.has(el.id)) {
+                el.classList.add('show');
+            } else {
+                el.classList.remove('show');
+            }
+        });
+        emptyState.classList.add('d-none');
+    }
+
+    function filterSidebar(query) {
+        const q = normalize(query);
+
+        if (!q) {
+            resetSidebar();
+            return;
+        }
+
+        let anyVisible = false;
+
+        document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
+            const parentName = normalize(li.getAttribute('data-menu-name'));
+            const parentMatch = parentName.includes(q);
+
+            const childLinks = li.querySelectorAll('[data-menu-child]');
+            const collapseEl = li.querySelector('.collapse');
+
+            if (childLinks.length === 0) {
+                // Item tanpa child
+                const show = parentMatch;
+                li.classList.toggle('d-none', !show);
+                if (show) anyVisible = true;
+                return;
+            }
+
+            // Item dengan child
+            let anyChildMatch = false;
+            childLinks.forEach(child => {
+                const childName = normalize(child.getAttribute('data-menu-name'));
+                const childMatch = parentMatch || childName.includes(q);
+                child.classList.toggle('d-none', !childMatch);
+                if (childMatch) anyChildMatch = true;
+            });
+
+            const showParent = parentMatch || anyChildMatch;
+            li.classList.toggle('d-none', !showParent);
+
+            if (collapseEl) {
+                collapseEl.classList.toggle('show', showParent);
+            }
+
+            if (showParent) anyVisible = true;
+        });
+
+        emptyState.classList.toggle('d-none', anyVisible);
+    }
+
+    let debounceTimer;
+    searchInput.addEventListener('input', function (e) {
+        clearTimeout(debounceTimer);
+        const value = e.target.value;
+        debounceTimer = setTimeout(() => filterSidebar(value), 150);
+    });
+})();
+</script>
+
+{{-- Bagian notifikasi realtime (Pusher/Reverb) di bawah ini TIDAK berubah,
+     biarkan persis seperti file sidebar lama Anda --}}
+
 
 
 

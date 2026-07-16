@@ -15,7 +15,8 @@ return new class extends Migration
 
             $table->boolean('cacat')->default(0);
             $table->boolean('buta_warna')->default(0);
-            $table->enum('visus_mata', ['OD', 'OS'])->nullable();
+            $table->string('visus_mata_od')->nullable();
+            $table->string('visus_mata_os')->nullable();
             $table->integer('tinggi')->nullable();
             $table->integer('berat')->nullable();
 

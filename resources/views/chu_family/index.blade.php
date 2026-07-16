@@ -25,14 +25,19 @@
                         Chu Family Data
                      </h6>
                      <div class="d-flex">
+                        @canRoute('chu-family.export')
                         <a href="{{ route('chu-family.export') }}"
                             class="btn btn-success btn-sm mr-2">
                             <i class="fas fa-file-excel"></i> Download Excel
                         </a>
+                        @endcanRoute
+                        @canRoute('chu-family.template')
                         <a href="{{ route('chu-family.template') }}"
                            class="btn btn-info btn-sm mr-2">
                         <i class="fas fa-download"></i> Download Template
                         </a>
+                        @endcanRoute
+                        @canRoute('chu-family.import')
                         <form id="importForm"
                            action="{{ route('chu-family.import') }}"
                            method="POST"
@@ -61,6 +66,7 @@
                               </div>
                            </div>
                         </form>
+                        @endcanRoute
                      </div>
                   </div>
                   <div class="progress mt-3"
@@ -165,10 +171,13 @@
                                  @endif
                               </td>
                               <td class="text-center">
+                                 @canRoute('chu-family.edit')
                                  <a href="{{ route('chu-family.edit',$row->id) }}"
                                     class="btn btn-primary btn-circle btn-sm">
                                  <i class="fas fa-edit"></i>
                                  </a>
+                                 @endcanRoute
+                                 @canRoute('chu-family.delete')
                                  <button
                                     class="btn btn-danger btn-circle btn-sm btn-delete"
                                     data-link="{{ route('chu-family.delete',$row->id) }}"
@@ -177,6 +186,7 @@
                                     data-target="#deleteModal">
                                  <i class="fas fa-trash"></i>
                                  </button>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @endforeach

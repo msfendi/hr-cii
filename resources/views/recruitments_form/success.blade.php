@@ -156,10 +156,22 @@
 
                     <div class="su-info-row">
                         <span class="material-symbols-outlined">phone_iphone</span>
-                        <p>
-                            Tim HRD akan menghubungi Anda melalui <strong>nomor HP yang terdaftar</strong>.
-                            Pastikan nomor HP Anda aktif dan dapat dihubungi.
-                        </p>
+                        <div class="w-full">
+                            <p class="mb-2">
+                                Harap Screenshot Halaman Ini dan <strong>Kirimkan ke Nomor HRD berikut:</strong>
+                            </p>
+                            <div class="flex flex-row items-center gap-3 mb-2 w-full">
+                                <span class="inline-flex items-center gap-1.5 font-bold text-primary bg-white px-3 py-1.5 rounded border border-primary/20 shadow-sm" style="font-size: 0.8125rem;">
+                                    <i class="fab fa-whatsapp text-green-600" style="font-size: 1rem;"></i> 0851-9851-4858
+                                </span>
+                                <span class="inline-flex items-center gap-1.5 font-bold text-primary bg-white px-3 py-1.5 rounded border border-primary/20 shadow-sm" style="font-size: 0.8125rem;">
+                                    <i class="fab fa-whatsapp text-green-600" style="font-size: 1rem;"></i> 0851-1122-9639
+                                </span>
+                            </div>
+                            <p class="font-semibold" style="color: #ba1a1a;">
+                                *Jika Tidak Konfirmasi ke Nomor Tersebut, Maka Lamaran Anda Tidak Akan Di Proses Lebih Lanjut.
+                            </p>
+                        </div>
                     </div>
 
                     <div class="su-info-row">

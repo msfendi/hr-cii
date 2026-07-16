@@ -35,4 +35,13 @@ return [
         'master_key' => env('FONNTE_MASTER_KEY'),
     ],
 
+    'node_exporter' => [
+        'url'     => env('NODE_EXPORTER_URL', 'http://192.168.1.240:9100/metrics'),
+        'timeout' => env('NODE_EXPORTER_TIMEOUT', 3), // detik
+    ],
+
+    'ssl_monitor' => [
+        'host' => env('SSL_MONITOR_HOST'),
+    ],
+
 ];

@@ -23,5 +23,7 @@ class DatabaseSeeder extends Seeder
         // $this->call(LeavesBalancesSeeder::class);
         // $this->call(InsentifRoleFormulaSeeder::class);
         // $this->call(InsentifThresholdSeeder::class);
+        // $this->call(RbacMigrationSeeder::class);
+        $this->call(RolePayrollSeeder::class);
     }
 }

@@ -9,9 +9,9 @@ class CuttingInsentifTemplateExport implements WithMultipleSheets
     public function sheets(): array
     {
         return [
-            new Sheets\CuttingSheet(),
+            // new Sheets\CuttingSheet(),
             new Sheets\CuttingEfficiencySheet(),
-            // new Sheets\EmployeeCuttingAssignmentSheet(),
+            new Sheets\EmployeeCuttingAssignmentSheet(),
         ];
     }
 }

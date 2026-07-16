@@ -7,6 +7,7 @@ use App\Imports\EmployeeShiftImport;
 use App\Models\EmployeeShift;
 use App\Models\Shift;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
@@ -26,8 +27,9 @@ class EmployeeShiftController extends Controller
     public function create()
     {
         $shifts = Shift::all();
+        $biodatas = DB::table('BIODATA')->orderBy('NPK')->get();
 
-        return view('employee_shift.create', compact('shifts'));
+        return view('employee_shift.create', compact('shifts', 'biodatas'));
     }
 
     public function store(Request $request)
@@ -48,8 +50,8 @@ class EmployeeShiftController extends Controller
             ]
         );
 
-        return redirect()->route('employee-shift.index')
-            ->with('success', 'Shift karyawan berhasil disimpan');
+        Alert::success('Shift karyawan berhasil disimpan!');
+        return redirect()->route('employee-shift.index');
     }
 
     public function delete($id)
@@ -73,6 +75,34 @@ class EmployeeShiftController extends Controller
         Excel::import(new EmployeeShiftImport, $request->file('file'));
 
         Alert::success('Shift imported successfully!');
+        return redirect()->route('employee-shift.index');
+    }
+
+    // add edit, update, and delete 
+    public function edit($id)
+    {
+        $employeeShift = EmployeeShift::findOrFail($id);
+        $shifts = Shift::all();
+        $biodatas = DB::table('BIODATA')->where('NPK', $employeeShift->npk)->first();
+
+        return view('employee_shift.edit', compact('employeeShift', 'shifts', 'biodatas'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $employeeShift = EmployeeShift::findOrFail($id);
+
+        $employeeShift->update($request->all());
+
+        Alert::success('Shift karyawan berhasil diupdate!');
+        return redirect()->route('employee-shift.index');
+    }
+
+    public function destroy($id)
+    {
+        EmployeeShift::findOrFail($id)->delete();
+
+        Alert::success('Shift karyawan dihapus!');
         return redirect()->route('employee-shift.index');
     }
 }

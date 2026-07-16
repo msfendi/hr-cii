@@ -64,6 +64,7 @@
             <tr>
                <th width="70">NPK</th>
                <th width="200">Name</th>
+               <th>TMK</th>
                <th>Contract Duration</th>
                <th>Contract Start</th>
                <th>Contract End</th>
@@ -86,8 +87,9 @@
             <tr>
                <td>{{ $item->npk }}</td>
                <td>{{ $item->employee_name ?? '-' }}</td>
+               <td>{{ $item->TMK ?? '-' }}</td>
                <td align="center">
-                  {{ $item->month_duration ?? '-' }}
+                  {{ $item->month_duration ?? '0' }} bulan {{ $item->day_duration ?? '0' }} hari
                </td>
                <td>
                   {{ \Carbon\Carbon::parse($item->start_date)->format('d-m-Y') }}

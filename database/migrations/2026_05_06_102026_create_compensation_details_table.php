@@ -21,6 +21,9 @@ return new class extends Migration
             $table->date('cutoff_date');
 
             $table->decimal('amount', 15, 0)->default(0);
+            $table->string('month_duration');
+            $table->string('day_duration');
+            $table->date('end_date');
 
             $table->string('status');
             $table->string('is_active');

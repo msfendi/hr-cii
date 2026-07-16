@@ -59,10 +59,27 @@
                            @foreach($data as $row)
                            @php
                            $folder = \Carbon\Carbon::parse($row->cutoff_date)->translatedFormat('F_Y');
+                           $day = \Carbon\Carbon::parse($row->cutoff_date)->day; // 7 atau 20
+
+                           // file_pdf / file_csv / file_excel disimpan sebagai JSON {ROLE_KEY: filename}
+                           $pdfFiles = json_decode($row->file_pdf ?? '', true) ?: [];
+
+                           // flag data lama (masih string 1 file, disimpan FLAT di root folder
+                           // period, TANPA subfolder role & TANPA subfolder hari)
+                           $legacyPdf = false;
+                           if (empty($pdfFiles) && !empty($row->file_pdf) && !str_starts_with(trim($row->file_pdf), '{')) {
+                               $pdfFiles = [\App\Services\PayrollRoleFilterService::ROLE_ALL => $row->file_pdf];
+                               $legacyPdf = true;
+                           }
+
+                           // $fileRoleKey dikirim dari controller: null hanya utk Admin (lihat semua),
+                           // selain itu di-scope PERSIS ke role_payroll user login (termasuk Payroll_ALL
+                           // -> cuma lihat key "Payroll_ALL" saja, bukan semua kategori).
+                           $visiblePdfKeys = empty($fileRoleKey) ? array_keys($pdfFiles) : [$fileRoleKey];
                            @endphp
                            <tr>
                               <td>{{ $row->id }}</td>
-                              <td>{{ \Carbon\Carbon::parse($row->cutoff_date)->translatedFormat('F Y') }}</td>
+                              <td>{{ \Carbon\Carbon::parse($row->cutoff_date)->translatedFormat('d F Y') }}</td>
                               <td class="text-center">
                                  @if($row->status != 'finished')
                                  <span class="badge badge-warning">
@@ -70,12 +87,23 @@
                                  Finalizing Document Approved
                                  </span>
                                  @else
-                                    @if($row->status == 'finished' && $row->file_pdf)
-                                    <a class="btn btn-danger btn-sm"
-                                       href="{{ Storage::url('compensations/' . $folder . '/' .$row->file_pdf) }}" target="_blank">
-                                    <i class="fas fa-file-pdf mr-1"></i> PDF
-                                    </a>
-                                    @endif
+                                    @foreach($pdfFiles as $roleKey => $fileName)
+                                      @if(in_array($roleKey, $visiblePdfKeys) && $fileName)
+                                      @php
+                                        $roleLabel = str_replace('Payroll_', '', $roleKey);
+                                        if ($legacyPdf) {
+                                            $fileUrl = Storage::url('compensations/' . $folder . '/' . $fileName);
+                                        } else {
+                                            $subFolder = \App\Services\PayrollRoleFilterService::folder($roleKey);
+                                            $fileUrl = Storage::url('compensations/' . $folder . '/' . $subFolder . $day . '/' . $fileName);
+                                        }
+                                      @endphp
+                                      <a class="btn btn-danger btn-sm mb-1"
+                                         href="{{ $fileUrl }}" target="_blank">
+                                      <i class="fas fa-file-pdf mr-1"></i> PDF {{ $roleLabel }}
+                                      </a><br>
+                                      @endif
+                                    @endforeach
                                  @endif
                               </td>
                               <td>
@@ -133,14 +161,12 @@
                                  @endif
                               </td>
                               <td>
-                                 {{-- DETAIL BUTTON (NEW) --}}
+                                 {{-- DETAIL BUTTON --}}
                                  <button
                                     class="btn btn-info btn-sm btn-detail"
                                     data-id="{{ $row->cutoff_date }}"
-                                    data-period="{{ \Carbon\Carbon::parse($row->cutoff_date)->translatedFormat('F_Y') }}"
-                                    data-toggle="modal"
-                                    data-target="#compensationDetailModal">
-                                 <i class="fas fa-eye"></i>
+                                    data-period="{{ \Carbon\Carbon::parse($row->cutoff_date)->translatedFormat('F_Y') }}">
+                                 <i class="fas fa-eye"></i> Details
                                  </button>
                               </td>
                               {{-- ================= ACTION ================= --}}
@@ -204,64 +230,55 @@
                   </div>
                </div>
             </div>
+            {{-- ========================= DETAIL CARD ========================= --}}
+      <div class="card shadow mb-4" id="detail-card" style="display:none;">
+
+         <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary" id="detail-title">
+               Data Compensation Details
+            </h6>
          </div>
-      </div>
-      @include('layout.footer')
-      {{-- ========================= MODAL DETAIL ========================= --}}
-      <div class="modal fade" id="compensationDetailModal" tabindex="-1">
-         <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
 
-                  <div class="modal-header">
-                     <h5 id="detail-title" class="modal-title">
-                        Data Compensation Details
-                     </h5>
+         <div class="card-body">
+            <div class="table-responsive">
+               <table class="table table-bordered table-sm" id="table-details">
 
-                     <button type="button" class="close" data-dismiss="modal">
-                        <span>&times;</span>
-                     </button>
-                  </div>
+                  <thead class="thead-dark">
+                     <tr>
+                        <th>ID</th>
+                        <th>NPK</th>
+                        <th>Department</th>
+                        <th>TMK</th>
+                        <th>Month Duration</th>
+                        <th>Day Duration</th>
+                        <th>End Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Active</th>
+                     </tr>
+                  </thead>
 
-                  <div class="modal-body">
+                  <tbody></tbody>
 
-                     <div class="table-responsive">
+                  <tfoot>
+                     <tr style="font-weight:bold;background:#f8f9fc">
+                        <th colspan="7" class="text-right">
+                              TOTAL
+                        </th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                     </tr>
+                  </tfoot>
 
-                        <table class="table table-bordered table-sm" id="table-details">
-
-                              <thead class="thead-dark">
-                                 <tr>
-                                    <th>ID</th>
-                                    <th>NPK</th>
-                                    <th>Department</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Active</th>
-                                 </tr>
-                              </thead>
-
-                              <tbody></tbody>
-
-                              <tfoot>
-                                 <tr style="font-weight:bold;background:#f8f9fc">
-                                    <th colspan="3" class="text-right">
-                                          TOTAL
-                                    </th>
-
-                                    <th></th>
-                                    <th></th>
-                                    <th></th>
-                                 </tr>
-                              </tfoot>
-
-                        </table>
-
-                     </div>
-
-                  </div>
-
+               </table>
             </div>
          </div>
       </div>
+         </div>
+      </div>
+      @include('layout.footer')
+      
       {{-- ========================= SCRIPT ========================= --}}
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
@@ -286,7 +303,7 @@
          return new Intl.NumberFormat('id-ID',{
          style:'currency',
          currency:'IDR',
-         minimumFractionDigits:0
+         minimumFractionDigits:2
          }).format(number);
          }
       </script>
@@ -314,7 +331,7 @@ function formatRupiah(number){
     return new Intl.NumberFormat('id-ID',{
         style:'currency',
         currency:'IDR',
-        minimumFractionDigits:0
+        minimumFractionDigits:2
     }).format(number);
 }
 
@@ -326,6 +343,12 @@ $('.btn-detail').click(function(){
     $('#detail-title').text(
         'Data Compensation Details ('+period+')'
     );
+
+    $('#detail-card').show();
+
+    $('html, body').animate({
+        scrollTop: $('#detail-card').offset().top - 20
+    }, 500);
 
     /*
     |--------------------------------------------------------------------------
@@ -366,13 +389,9 @@ $('.btn-detail').click(function(){
     type:'GET',
     dataSrc:function(json){
 
-        console.log(json);
-
         return json.data;
     },
     error:function(xhr){
-
-        console.log(xhr.responseText);
 
         Swal.fire(
             'Error',
@@ -381,6 +400,11 @@ $('.btn-detail').click(function(){
         );
     }
 },
+              createdRow: function(row, data) {
+                if (data.is_active == 0) {
+                  $(row).addClass('table-danger');
+                }
+              },
 
         columns:[
 
@@ -396,6 +420,24 @@ $('.btn-detail').click(function(){
 
             {
                 data:'dept',
+                defaultContent:'-'
+            },
+
+            {
+                data:'TMK',
+                defaultContent:'-'
+            },
+
+            {
+                data: 'month_duration',
+                defaultContent:'-'
+            },
+            {
+                data: 'day_duration',
+                defaultContent:'-'
+            },
+            {
+                data: 'end_date',
                 defaultContent:'-'
             },
 
@@ -497,7 +539,7 @@ $('.btn-detail').click(function(){
             */
 
             let total = api
-                .column(3,{search:'applied'})
+                .column(7,{search:'applied'})
                 .data()
                 .reduce(function(a,b){
 
@@ -505,7 +547,7 @@ $('.btn-detail').click(function(){
 
                 },0);
 
-            $(api.column(3).footer())
+            $(api.column(7).footer())
                 .html(formatRupiah(total));
 
         }

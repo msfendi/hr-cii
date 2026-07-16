@@ -12,11 +12,13 @@
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
                <h1 class="h3 mb-0 text-gray-800">Daftar Shift</h1>
                <div>
+                  @canRoute('shift.create')
                   <a href="{{ route('shift.create') }}"
                      class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
                   <i class="fas fa-plus fa-sm text-white-50"></i>
                   Create Shift
                   </a>
+                  @endcanRoute
                </div>
             </div>
             <div class="card shadow mb-4">
@@ -49,10 +51,13 @@
                               <td>{{ $shift->start_date }}</td>
                               <td>{{ $shift->end_date }}</td>
                               <td class="text-center">
+                                 @canRoute('shift.edit')
                                  <a href="{{ route('shift.edit',$shift->id) }}"
                                     class="btn btn-primary btn-circle btn-sm">
                                  <i class="fas fa-edit"></i>
                                  </a>
+                                 @endcanRoute
+                                 @canRoute('shift.delete')
                                  <a class="btn btn-danger btn-circle btn-sm btn-delete"
                                     data-delete-link="{{ route('shift.delete',$shift->id) }}"
                                     data-name="{{ $shift->name }}"
@@ -60,6 +65,7 @@
                                     data-target="#deleteModal">
                                  <i class="fas fa-trash"></i>
                                  </a>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @endforeach

@@ -30,6 +30,14 @@ class PortalRecruitmentStatusController extends Controller
             return back()->with('error', 'Aplikasi Anda dengan NIK dan tanggal pendaftaran tersebut belum ditemukan dalam sistem kami.');
         }
 
+
+        if ($detail->created_at) {
+            $createdAt = \Carbon\Carbon::parse($detail->created_at);
+            if ($createdAt->diffInDays(now()) < 1) {
+                return view('portal_recruitment_status.wait');
+            }
+        }
+
         return view('portal_recruitment_status.detail_application', compact('detail'));
     }
 }

@@ -9,8 +9,11 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
                   <h6 class="m-0 font-weight-bold text-primary"> Data Questionnaire </h6>
                   <div class="d-flex align-items-center">
+                        @canRoute('evaluation-questionnaire.template')
                     <a href="{{ route('evaluation-questionnaire.template') }}" class="btn btn-info btn-sm mr-2">
                       <i class="fas fa-download"></i> Download Template </a>
+                      @endcanRoute
+                        @canRoute('evaluation-questionnaire.import')
                     <form id="importForm" action="{{ route('evaluation-questionnaire.import') }}" method="POST" enctype="multipart/form-data"> @csrf <div class="input-group input-group-sm">
                         <input type="file" name="file" id="fileInput" class="d-none" accept=".xlsx,.xls,.csv">
                         <button type="button" class="btn btn-primary btn-sm" id="btnUpload">
@@ -22,6 +25,7 @@
                         </div>
                       </div>
                     </form>
+                    @endcanRoute
                   </div>
                 </div>
                 <div class="progress mt-3" style="height:18px; display:none;" id="uploadProgress">
@@ -53,9 +57,11 @@
                         <td>{{ $row->optiond }}</td>
                         <td>{{ $row->correct_answer }}</td>
                         <td class="text-center">
+                        @canRoute('evaluation-questionnaire.delete')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('evaluation-questionnaire.delete',$row->id) }}" data-question="{{ $row->question }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                          @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

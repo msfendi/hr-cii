@@ -36,7 +36,7 @@ class PayrollMasterController extends Controller
                 'payroll_masters.*',
                 'biodata.NAMA_KARYAWAN',
                 'DEPT.DEPARTEMENT',
-            );
+            )->orderBy('payroll_masters.npk', 'asc');
 
         if (!$canViewSalary) {
             $query->select(
@@ -120,16 +120,70 @@ class PayrollMasterController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'npk' => 'required',
-            'bank_name' => 'required',
+            'npk'          => 'required',
+            'bank_name'    => 'required',
             'bank_account' => 'required',
         ]);
 
+        // Data seluruh karyawan (aktif + keluar)
+        $employee = DB::connection('cii')->table('BIODATA')
+            ->select(
+                'NPK',
+                DB::raw('LTRIM(RTRIM(NAMA_KARYAWAN)) as NAMA_KARYAWAN')
+            )
+            ->unionAll(
+                DB::connection('cii')->table('BIODATA_KELUAR')
+                    ->select(
+                        'NPK',
+                        DB::raw('LTRIM(RTRIM(NAMA_KARYAWAN)) as NAMA_KARYAWAN')
+                    )
+            );
+
+        // Ambil nama karyawan yang sedang diproses
+        $currentEmployee = DB::connection('cii')
+            ->query()
+            ->fromSub($employee, 'emp')
+            ->where('NPK', $request->npk)
+            ->first();
+
+        $currentName = strtoupper(trim($currentEmployee->NAMA_KARYAWAN ?? ''));
+
+        // Cari semua yang menggunakan rekening yang sama selain NPK saat ini
+        $duplicates = PayrollMaster::query()
+            ->from('payroll_masters as pm')
+            ->joinSub($employee, 'emp', function ($join) {
+                $join->on('pm.npk', '=', 'emp.NPK');
+            })
+            ->where('pm.bank_account', trim($request->bank_account))
+            ->where('pm.npk', '<>', $request->npk)
+            ->select(
+                'pm.npk',
+                'pm.bank_account',
+                DB::raw('UPPER(LTRIM(RTRIM(emp.NAMA_KARYAWAN))) as NAMA_KARYAWAN')
+            )
+            ->get();
+
+        // Hanya dianggap duplicate jika nama berbeda
+        $duplicate = $duplicates->first(function ($row) use ($currentName) {
+            return $row->NAMA_KARYAWAN !== $currentName;
+        });
+
+        if ($duplicate) {
+            Alert::error(
+                'Failed!',
+                "Nomor rekening {$duplicate->bank_account} sudah digunakan oleh {$duplicate->NAMA_KARYAWAN} ({$duplicate->npk})."
+            );
+
+            return back()->withInput();
+        }
+
         PayrollMaster::updateOrCreate(
-            ['npk' => $request->npk], // kondisi pencarian
             [
-                'bank_name' => $request->bank_name,
-                'bank_account' => $request->bank_account,
+                'npk' => $request->npk,
+            ],
+            [
+                'bank_name'    => $request->bank_name,
+                'bank_account' => trim($request->bank_account),
             ]
         );
 

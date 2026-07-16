@@ -19,12 +19,22 @@
                   <form method="POST" action="{{ route('employee-shift.store') }}">
                      @csrf
                      <div class="form-group">
-                        <label>NPK</label>
-                        <input type="text" name="npk" class="form-control" required>
-                     </div>
+                    <label>NPK</label>
+
+                    <select name="npk" class="form-control select2" required>
+                      <option value="">Pilih Karyawan</option>
+
+                      @foreach($biodatas as $biodata)
+                      <option value="{{ $biodata->NPK }}">
+                        {{ $biodata->NPK }} - {{ $biodata->NAMA_KARYAWAN }}
+                      </option>
+                      @endforeach
+
+                    </select>
+                  </div>
                      <div class="form-group">
                         <label>Shift</label>
-                        <select name="shift_id" class="form-control" required>
+                        <select name="shift_id" class="form-control select2" required>
                            <option value="">-- Select Shift --</option>
                            @foreach($shifts as $shift)
                            <option value="{{ $shift->id }}">{{ $shift->name }}</option>
@@ -45,4 +55,12 @@
       </div>
       @include('layout.footer')
    </body>
+
+      <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+      <script>
+        $('.select2').select2({
+          width: '100%'
+        });
+      </script>
 </html>

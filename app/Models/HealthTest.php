@@ -11,6 +11,8 @@ class HealthTest extends Model
         'cacat',
         'buta_warna',
         'visus_mata',
+        'visus_mata_od',
+        'visus_mata_os',
         'tinggi',
         'berat',
         'abdoment',

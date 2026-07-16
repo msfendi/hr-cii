@@ -38,4 +38,9 @@ class Pelamar extends Model
         'TANGGUNGAN',
         'IS_KONTRAK'
     ];
+
+    public function details()
+    {
+        return $this->hasOne(PelamarDetails::class, 'id_pelamar', 'id');
+    }
 }

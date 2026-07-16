@@ -28,6 +28,22 @@
                            required>
                      </div>
                      <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date"
+                           name="start_date"
+                           value="{{ $shift->start_date }}"
+                           class="form-control"
+                           required>
+                     </div>
+                     <div class="form-group">
+                        <label>End Date</label>
+                        <input type="date"
+                           name="end_date"
+                           value="{{ $shift->end_date }}"
+                           class="form-control"
+                           required>
+                     </div>
+                     <div class="form-group">
                         <label>Start Time</label>
                         <input type="time"
                            name="work_start"

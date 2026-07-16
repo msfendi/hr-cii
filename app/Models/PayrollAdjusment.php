@@ -11,7 +11,8 @@ class PayrollAdjusment extends Model
     protected $fillable = [
         'npk',
         'period_id',
-        'adjusment'
+        'adjusment',
+        'keterangan',
     ];
 
     /*

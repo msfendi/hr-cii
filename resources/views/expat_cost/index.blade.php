@@ -13,11 +13,11 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
                   <h6 class="m-0 font-weight-bold text-primary"> Expat Cost Data </h6>
                   <div class="d-flex align-items-center">
-                    <!-- DOWNLOAD TEMPLATE -->
+                    <!-- DOWNLOAD TEMPLATE
                     <a href="{{ route('expat.template.cost') }}" class="btn btn-info btn-sm mr-2">
-                      <i class="fas fa-download"></i> Download Template </a>
+                      <i class="fas fa-download"></i> Download Template </a> -->
                     <!-- IMPORT -->
-                    <form id="importForm" action="{{ route('expat.import.cost') }}" method="POST" enctype="multipart/form-data"> @csrf <div class="input-group input-group-sm">
+                    <!-- <form id="importForm" action="{{ route('expat.import.cost') }}" method="POST" enctype="multipart/form-data"> @csrf <div class="input-group input-group-sm">
                         <input type="file" name="file" id="fileInput" class="d-none" accept=".xlsx,.xls,.csv">
                         <button type="button" class="btn btn-primary btn-sm" id="btnUpload">
                           <i class="fas fa-upload"></i> Upload Excel </button>
@@ -27,7 +27,7 @@
                             <i class="fas fa-file-excel"></i> Import </button>
                         </div>
                       </div>
-                    </form>
+                    </form> -->
                   </div>
                 </div>
                 <!-- PROGRESS BAR -->
@@ -44,10 +44,11 @@
                       <tr>
                         <th width="50">ID</th>
                         <th>NPK</th>
+                        <th>Name</th>
                         <th>Component</th>
                         <th>Amount</th>
                         <th>Transaction Date</th>
-                        <th>Remark</th>
+                        <th>Remark</th> 
                         <th width="120">Action</th>
                       </tr>
                     </thead>
@@ -58,18 +59,23 @@
                             {{ $row->npk }}
                           </span>
                         </td>
+                        <td>{{ $row->NAMA_KARYAWAN }}</td>
                         <td>{{ $row->component_name }}</td>
                         <td> Rp {{ number_format($row->amount,0,',','.') }}
                         </td>
                         <td>{{ $row->transactions_date }}</td>
                         <td>{{ $row->remark }}</td>
                         <td class="text-center">
+                        @canRoute('expat.cost.edit')
                           <a href="{{ route('expat.cost.edit',$row->id) }}" class="btn btn-primary btn-circle btn-sm">
                             <i class="fas fa-edit"></i>
                           </a>
+                        @endcanRoute
+                        @canRoute('expat.cost.delete')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('expat.cost.delete',$row->id) }}" data-npk="{{ $row->npk }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                          @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

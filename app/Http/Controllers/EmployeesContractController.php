@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\EmployeesContractAllExport;
 use App\Exports\EmployeesContractExport;
 use App\Imports\EmployeesContractImport;
 use App\Models\EmployeesContract;
@@ -63,6 +64,7 @@ class EmployeesContractController extends Controller
                 'c.salary',
                 'c.allowance',
                 'c.pph21',
+                'c.daily_salary',
                 DB::raw("DATEDIFF(DAY, CAST(GETDATE() AS DATE), c.end_date) AS sisa_hari"),
                 DB::raw("DAY(c.end_date) AS end_day"),
             ]);
@@ -137,10 +139,11 @@ class EmployeesContractController extends Controller
                     $canSeeSalary = true;
                 }
 
-                $row->salary    = $canSeeSalary ? (float) $row->salary : '***';
-                $row->allowance = $canSeeSalary ? (float) $row->allowance : '***';
-                $row->pph21     = $canSeeSalary ? (float) $row->pph21 : '***';
-                $row->can_edit  = $canSeeSalary;
+                $row->salary       = $canSeeSalary ? (float) $row->salary : '***';
+                $row->allowance    = $canSeeSalary ? (float) $row->allowance : '***';
+                $row->pph21        = $canSeeSalary ? (float) $row->pph21 : '***';
+                $row->daily_salary = $canSeeSalary ? (float) $row->daily_salary : '***';
+                $row->can_edit     = $canSeeSalary;
 
                 return $row;
             });
@@ -185,10 +188,11 @@ class EmployeesContractController extends Controller
                     $canSeeSalary = true;
                 }
 
-                $row->salary    = $canSeeSalary ? (float) $row->salary : '***********';
-                $row->allowance = $canSeeSalary ? (float) $row->allowance : '***********';
-                $row->pph21     = $canSeeSalary ? (float) $row->pph21 : '***********';
-                $row->can_edit  = $canSeeSalary;
+                $row->salary       = $canSeeSalary ? (float) $row->salary : '***********';
+                $row->allowance    = $canSeeSalary ? (float) $row->allowance : '***********';
+                $row->pph21        = $canSeeSalary ? (float) $row->pph21 : '***********';
+                $row->daily_salary = $canSeeSalary ? (float) $row->daily_salary : '***********';
+                $row->can_edit     = $canSeeSalary;
 
                 return $row;
             });
@@ -340,15 +344,15 @@ class EmployeesContractController extends Controller
 
             // Hitung ulang durasi untuk adjustment lama
             $oldStart = \Carbon\Carbon::parse($old->start_date)->startOfDay();
-            
+
             // Normalisasi start_date ke awal siklus (tanggal 8) agar penghitungan bulan genap
             // Contoh: 14 Mei dihitung dari 8 Mei. 5 Mei dihitung dari 8 April.
-            $normalizedStart = $oldStart->day <= 7 
-                ? $oldStart->copy()->subMonth()->day(8) 
+            $normalizedStart = $oldStart->day <= 7
+                ? $oldStart->copy()->subMonth()->day(8)
                 : $oldStart->copy()->day(8);
 
             $oldEnd = $splitMonth->copy();
-            
+
             // Tambahkan 1 hari ke end_date saat menghitung bulan agar 8 s/d 7 terhitung pas 1 bulan penuh
             $oldMonthDuration = $normalizedStart->diffInMonths($oldEnd->copy()->addDay());
             $oldExactEndForDuration = $normalizedStart->copy()->addMonths($oldMonthDuration)->subDay();
@@ -367,7 +371,6 @@ class EmployeesContractController extends Controller
 
             // End date adjustment baru meneruskan sisa dari kontrak lama
             $newEnd = $originalEnd;
-            
             // Hitung durasi sisa untuk adjustment baru
             $newMonthDuration = $newStart->diffInMonths($newEnd->copy()->addDay());
             $newExactEnd = $newStart->copy()->addMonths($newMonthDuration)->subDay();
@@ -409,6 +412,8 @@ class EmployeesContractController extends Controller
             'allowance'    => 'nullable|numeric|min:0',
             'pph21'        => 'nullable|numeric|min:0',
             'daily_salary' => 'nullable|numeric|min:0',
+            'start_date'   => 'nullable|date',
+            'end_date'     => 'nullable|date',
         ]);
 
         $contract = EmployeesContract::findOrFail($id);
@@ -418,6 +423,18 @@ class EmployeesContractController extends Controller
                 'success' => false,
                 'message' => 'Hanya kontrak AKTIF yang bisa diupdate.',
             ], 422);
+        }
+
+
+        // Calculate duration if dates are updated
+        if (isset($data['start_date']) || isset($data['end_date'])) {
+            $start = \Carbon\Carbon::parse($data['start_date'] ?? $contract->start_date);
+            $end   = \Carbon\Carbon::parse($data['end_date']   ?? $contract->end_date);
+
+            $fullMonths           = $start->diffInMonths($end);
+            $afterFullMonths      = $start->copy()->addMonths($fullMonths);
+            $data['month_duration'] = $fullMonths;
+            $data['day_duration']   = $afterFullMonths->diffInDays($end); // sisa hari setelah bulan penuh
         }
 
         // Hanya update field yang dikirim (bukan null)
@@ -487,5 +504,26 @@ class EmployeesContractController extends Controller
         $filename = 'kontrak-berakhir_' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . $year . '.xlsx';
 
         return Excel::download(new EmployeesContractExport($month, $year), $filename);
+    }
+
+    /**
+     * GET — Export SEMUA kontrak ke Excel, difilter berdasarkan role user.
+     * Sort: NPK → contract_ke → start_date
+     */
+    public function exportAll()
+    {
+        $user = Auth::user();
+
+        $roleAdmin     = $user ? $user->hasRole('Admin') : false;
+        $roleStaff     = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleSewing    = $user ? $user->hasRole('Payroll_SEWING') : false;
+        $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+
+        $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
+
+        return Excel::download(
+            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing),
+            $filename
+        );
     }
 }

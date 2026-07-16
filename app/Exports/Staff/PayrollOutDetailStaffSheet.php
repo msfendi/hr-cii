@@ -101,10 +101,10 @@ class PayrollOutDetailStaffSheet
         // ======================
         // NUMBER FORMAT
         // ======================
-        foreach (range('D', 'Z') as $colLetter) {
+        foreach (range('D', $lastCol) as $colLetter) {
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
-                ->setFormatCode(NumberFormat::FORMAT_NUMBER);
+                ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
         }
 
         // ======================
@@ -119,11 +119,11 @@ class PayrollOutDetailStaffSheet
     {
         $biodataAktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         $biodataKeluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.id_dept', 'p.TKK', 'b.IS_STAFF');
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.ID_DEPT', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
 
         return $biodataAktif->union($biodataKeluar);
     }
@@ -142,12 +142,19 @@ class PayrollOutDetailStaffSheet
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-            ->leftJoin('DEPT as d', 'd.id_dept', '=', 'bio.id_dept')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
             ->where('bio.IS_STAFF', 1)
-            ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
+            ->where(function ($query) use ($period) {
+                $query->whereNotNull('bio.TKK')
+                    ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
+                    ->where(function ($q) {
+                        $q->whereNull('bio.KETERANGAN')
+                          ->orWhereRaw('UPPER(LTRIM(RTRIM(bio.KETERANGAN))) <> ?', ['MA']);
+                    });
+            })
             ->select(
                 'prd.*',
                 'bio.NAMA_KARYAWAN',
@@ -173,20 +180,31 @@ class PayrollOutDetailStaffSheet
             'pad_insentif',
             'cutting_insentif',
             'heat_insentif',
+            'sixs_insentif',
             'adjusment',
             'bpjs_kesehatan',
             'bpjs_ketenagakerjaan',
             'pph_21',
             'pph_21_deduction',
             'absence_deduction',
-            'late_deduction'
+            'late_deduction',
+            'work_leave_deduction'
         ];
 
         $values = [];
 
         foreach ($fields as $field) {
-            $value = array_key_exists($field, $components) ? (float)$components[$field] : 0;
-            $type  = $this->componentTypes[$field] ?? 'earning';
+            $component = $components[$field] ?? null;
+
+            if (is_array($component)) {
+                // Format baru: {"amount": ..., "type": "earning|deduction"}
+                $value = (float)($component['amount'] ?? 0);
+                $type  = $component['type'] ?? ($this->componentTypes[$field] ?? 'earning');
+            } else {
+                // Fallback untuk format lama: nilai langsung berupa angka
+                $value = (float)($component ?? 0);
+                $type  = $this->componentTypes[$field] ?? 'earning';
+            }
 
             if ($type === 'deduction') {
                 $value = -abs($value);
@@ -221,6 +239,7 @@ class PayrollOutDetailStaffSheet
             'Pad Print Insentif',
             'Cutting Insentif',
             'Heat Seal Insentif',
+            'Six S Insentif',
             'Adjusment',
 
             'BPJS Kesehatan',
@@ -230,6 +249,7 @@ class PayrollOutDetailStaffSheet
             'PPH21 Deduction',
             'Absence Deduction',
             'Late Deduction',
+            'Work Leave Deduction',
 
             'Total Salary'
         ];

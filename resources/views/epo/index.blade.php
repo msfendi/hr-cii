@@ -11,10 +11,12 @@
          <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
                <h1 class="h3 text-gray-800">EPO Master</h1>
+               @canRoute('epo.create')
                <a href="{{ route('epo.create') }}"
                   class="btn btn-primary btn-sm shadow-sm">
                <i class="fas fa-plus"></i> Create Data
                </a>
+               @endcanRoute
             </div>
             <div class="card shadow mb-4">
                <div class="card-header py-3">
@@ -23,10 +25,13 @@
                         EPO Data
                      </h6>
                      <div class="d-flex">
+                        @canRoute('epo.template')
                         <a href="{{ route('epo.template') }}"
                            class="btn btn-info btn-sm mr-2">
                         <i class="fas fa-download"></i> Download Template
                         </a>
+                        @endcanRoute
+                        @canRoute('epo.import')
                         <form id="importForm"
                            action="{{ route('epo.import') }}"
                            method="POST"
@@ -55,6 +60,7 @@
                               </div>
                            </div>
                         </form>
+                        @endcanRoute
                      </div>
                   </div>
                   <div class="progress mt-3"
@@ -108,10 +114,13 @@
                               <td>Rp {{ number_format($row->rptka_cancellation_cost,0,',','.') }}</td>
                               <td>{{ $row->remarks }}</td>
                               <td class="text-center">
+                                 @canRoute('epo.edit')
                                  <a href="{{ route('epo.edit',$row->id) }}"
                                     class="btn btn-primary btn-circle btn-sm">
                                  <i class="fas fa-edit"></i>
                                  </a>
+                                 @endcanRoute
+                                 @canRoute('epo.delete')
                                  <button
                                     class="btn btn-danger btn-circle btn-sm btn-delete"
                                     data-link="{{ route('epo.delete',$row->id) }}"
@@ -120,6 +129,7 @@
                                     data-target="#deleteModal">
                                  <i class="fas fa-trash"></i>
                                  </button>
+                                 @endcanRoute
                               </td>
                            </tr>
                            @endforeach

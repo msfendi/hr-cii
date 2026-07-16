@@ -23,7 +23,14 @@
                     <div class="col-md-6">
                       <div class="form-group">
                         <label>NPK</label>
-                        <input type="text" name="npk" class="form-control" value="{{ old('npk') }}" required>
+                        <select name="npk" class="form-control select2" required>
+                          <option value="">-- Select Employee --</option>
+                          @foreach($employees as $emp)
+                            <option value="{{ $emp->NPK }}" {{ old('npk') == $emp->NPK ? 'selected' : '' }}>
+                              {{ $emp->NPK }} - {{ $emp->NAMA_KARYAWAN }}
+                            </option>
+                          @endforeach
+                        </select>
                       </div>
                       <div class="form-group">
                         <label>Name</label>
@@ -60,10 +67,10 @@
                         <label>RPTKA Expiry</label>
                         <input type="date" name="rptka_expiry" class="form-control" value="{{ old('rptka_expiry') }}">
                       </div>
-                      <div class="form-group">
+                      <!-- <div class="form-group">
                         <label>MERP Expiry</label>
                         <input type="date" name="merp_expiry" class="form-control" value="{{ old('merp_expiry') }}">
-                      </div>
+                      </div> -->
                       <div class="form-group">
                         <label>House Address</label>
                         <textarea name="house_address" class="form-control" rows="3">{{ old('house_address') }}</textarea>
@@ -90,5 +97,17 @@
         </div> @include('layout.footer')
       </div>
     </div>
+    {{-- ================= SELECT2 ================= --}}
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+      $(document).ready(function() {
+        $('.select2').select2({
+          width: '100%',
+          placeholder: 'Select Data',
+          allowClear: true
+        });
+      });
+    </script>
   </body>
 </html>

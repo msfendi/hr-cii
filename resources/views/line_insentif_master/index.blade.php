@@ -5,6 +5,23 @@
 .select-period + .select2-container{
     width:200px !important;
 }
+.dataTables_wrapper .d-flex {
+    justify-content: flex-end !important;
+}
+
+.dept-filter {
+    margin-right: 10px;
+}
+
+.dataTables_filter {
+    margin-left: 10px;
+}
+.select2-container {
+    min-width: 200px !important;
+}
+.dataTables_wrapper .d-flex.mb-2 {
+    width: 100%;
+}
 </style>
 
 <body id="page-top">
@@ -29,12 +46,6 @@
     <h1 class="h3 mb-0 text-gray-800">
         Line Insentif Master
     </h1>
-
-    <a href="{{ route('line-insentif-master.create') }}"
-       class="btn btn-sm btn-primary shadow-sm">
-        <i class="fas fa-plus"></i>
-        Create Line Insentif Master
-    </a>
 </div>
 
 
@@ -80,11 +91,7 @@ Detail Insentif Karyawan
     <th>NPK</th>
     <th>Name</th>
     <th>
-    Department<br>
-    <input type="text"
-           id="searchDept"
-           class="form-control form-control-sm"
-           placeholder="Search Dept">
+    Department
     </th>
     <th>Insentif</th>
 </tr>
@@ -152,10 +159,12 @@ Import Excel Insentif
 <tr>
     <th>ID</th>
     <th>Period</th>
-    <th>Line Number</th>
+    <th>NPK</th>
+    <th>Nama Karyawan</th>
+    <th>Dept</th>
+    <th>Insentif Line</th>
     <th>Efficiency</th>
     <th>Tanggal</th>
-    <th>Action</th>
 </tr>
 </thead>
 
@@ -165,25 +174,12 @@ Import Excel Insentif
 <tr>
 <td>{{ $row->id }}</td>
 <td>{{ $row->period }}</td>
+<td>{{ $row->npk }}</td>
+<td>{{ $row->nama }}</td>
+<td>{{ $row->dept }}</td>
 <td>{{ $row->line_number }}</td>
 <td>{{ number_format($row->efficiency,0,',','.') }}</td>
 <td>{{ $row->date }}</td>
-
-<td class="text-center">
-
-<a href="{{ route('line-insentif-master.edit',$row->id) }}"
-   class="btn btn-primary btn-circle btn-sm">
-<i class="fas fa-edit"></i>
-</a>
-
-<a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
-   data-delete-link="{{ route('line-insentif-master.delete',$row->id) }}"
-   data-toggle="modal"
-   data-target="#deleteModal">
-<i class="fas fa-trash"></i>
-</a>
-
-</td>
 
 </tr>
 @endforeach
@@ -349,12 +345,13 @@ Import Excel Insentif
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
       <script>
+let masterTable;
         $(document).ready(function(){
 
-            $('#dataTable').DataTable({
-                order: [[0,'desc']], // pakai urutan ID dari Laravel
-                pageLength: 10,
-                responsive: true,
+            masterTable = $('#dataTable').DataTable({
+                order:[[0,'desc']],
+                pageLength:10,
+                responsive:true,
                 autoWidth:false
             });
 
@@ -398,7 +395,7 @@ function formatRupiah(number){
     return new Intl.NumberFormat('id-ID',{
         style:'currency',
         currency:'IDR',
-        minimumFractionDigits:0
+        minimumFractionDigits:2
     }).format(number);
 }
 </script>
@@ -504,36 +501,10 @@ $('#importForm').submit(function(e){
 </script>
 
 <script>
-
 let insentifTable;
-
-/*
-|--------------------------------------------------------------------------
-| INIT PAGE
-|--------------------------------------------------------------------------
-*/
-$(document).ready(function(){
-
+    $(document).ready(function(){
     /*
-    | SELECT2
-    */
-    $('#checkPeriod').select2({
-        placeholder:'Pilih Payroll Period',
-        allowClear:true,
-        width:'100%'
-    });
-
-    $('#searchDept').on('keyup change', function () {
-
-        insentifTable
-            .column(2) // kolom Department
-            .search(this.value)
-            .draw();
-
-    });
-
-    /*
-    | DATATABLE INIT (EMPTY FIRST)
+    | DATATABLE INIT (WAJIB DI ATAS)
     */
     insentifTable = $('#insentifTable').DataTable({
 
@@ -544,16 +515,19 @@ $(document).ready(function(){
         autoWidth:true,
         data:[],
 
-        /* =========================
-        GLOBAL SEARCH ALL COLUMN
-        ==========================*/
+        dom:
+            "<'d-flex justify-content-end align-items-center mb-2 gap-2'" +
+                "<'dept-filter'>" +
+                "<'ml-2'f>" +
+            ">" +
+            "rtip",
+
         search:{ smart:true },
 
         columns:[
             {data:'npk'},
             {data:'name'},
             {data:'dept'},
-
             {
                 data:'sewing_insentif',
                 defaultContent:0,
@@ -563,55 +537,73 @@ $(document).ready(function(){
             },
         ],
 
-        /* =========================
-        ROW COLOR TKK
-        ==========================*/
-        createdRow:function(row,data){
-
-            if(data.tkk == null && data.tkk == '' && data.tkk == 0){
-                $(row).addClass('table-danger');
-            }
-
-        },
-
-        /* =========================
-        AUTO TOTAL (FOLLOW SEARCH)
-        ==========================*/
         footerCallback:function(row,data,start,end,display){
 
             let api = this.api();
 
             function intVal(i){
-
-                if(i === null || i === undefined || i === '') return 0;
-
+                if(!i) return 0;
                 if(typeof i === 'number') return i;
-
-                if(typeof i === 'string'){
-                    i = i.replace(/[Rp\s]/g,'');
-                    i = i.replace(/\./g,'').replace(',', '.');
-                    let num = parseFloat(i);
-                    return isNaN(num) ? 0 : num;
-                }
-
-                return 0;
+                return parseFloat(String(i).replace(/[^\d-]/g,'')) || 0;
             }
 
-            let total = api
-                .column(3,{search:'applied'})
+            let total = api.column(3,{search:'applied'})
                 .data()
-                .reduce(function(a,b){
-                    return intVal(a)+intVal(b);
-                },0);
+                .reduce((a,b)=>intVal(a)+intVal(b),0);
 
-            $(api.column(3).footer())
-                .html(formatRupiah(total));
+            $(api.column(3).footer()).html(formatRupiah(total));
+        }
+    });
+
+
+    /*
+    | DEPT DROPDOWN (SETELAH TABLE READY)
+    */
+    let deptDropdown = `
+        <select id="filterDept" class="form-control form-control-sm select2-dept" style="width:200px">
+            <option value="">Department</option>
+        </select>
+    `;
+
+    $('.dept-filter').html(deptDropdown);
+    $('#filterDept').select2({
+        placeholder: 'Department',
+        allowClear: true,
+        width: '200px'
+    });
+
+
+    /*
+    | FILTER EVENT
+    */
+   
+    $(document).on('change', '#filterDept', function () {
+
+        let val = $(this).val();
+
+        if (!val) {
+            insentifTable.column(2).search('').draw();
+            return;
         }
 
+        insentifTable
+            .column(2)
+            .search('^' + val + '$', true, false) // exact match
+            .draw();
+    });
+
+    /*
+    | CHECK PERIOD
+    */
+    $('#checkPeriod').select2({
+        placeholder:'Pilih Payroll Period',
+        allowClear:true,
+        width:'100%'
     });
 
 });
-
+</script>
+<script>
 
 /*
 |--------------------------------------------------------------------------
@@ -622,18 +614,12 @@ $('#checkPeriod').on('change',function(){
 
     let period = $(this).val();
 
-    /*
-    | CLEAR TABLE IF EMPTY
-    */
     if(!period){
         insentifTable.clear().draw();
+
+        masterTable.clear().draw();
         return;
     }
-
-    /*
-    | LOADING STATE
-    */
-    insentifTable.clear().draw();
 
     Swal.fire({
         title:'Loading insentif...',
@@ -642,36 +628,78 @@ $('#checkPeriod').on('change',function(){
         didOpen:()=>Swal.showLoading()
     });
 
-    /*
-    | AJAX LOAD
-    */
+    // AJAX INSENTIF (existing)
     $.ajax({
-
         url:'/line-insentif-master/'+period+'/check',
         type:'GET',
-        dataType:'json',
-
         success:function(res){
-
-            console.log('DATA:',res);
 
             insentifTable.clear();
             insentifTable.rows.add(res.data);
             insentifTable.draw();
+            // =========================
+            // BUILD DEPT DROPDOWN
+            // =========================
+            let deptMap = {};
 
+            res.data.forEach(item => {
+
+                let deptDisplay = item.dept;
+
+                if(item.line_start && item.line_end){
+                    deptDisplay += ` (${item.line_start}-${item.line_end})`;
+                }
+
+                deptMap[deptDisplay] = item.dept; // simpan dept asli
+            });
+
+            let options = `<option value="">Department</option>`;
+
+            Object.keys(deptMap).forEach(display => {
+                options += `<option value="${deptMap[display]}">${display}</option>`;
+            });
+
+            $('#filterDept')
+            .html(options)
+            .val('')
+            .trigger('change.select2');
             Swal.close();
         },
 
         error:function(xhr){
-
-            console.log(xhr.responseText);
 
             Swal.fire({
                 icon:'error',
                 title:'Gagal load data'
             });
         }
+    });
 
+    // AJAX MASTER TABLE
+    $.ajax({
+        url:'/line-insentif-master/'+period+'/data',
+        type:'GET',
+        success:function(res){
+
+            masterTable.clear();
+
+            res.forEach(function(row){
+
+                masterTable.row.add([
+                    row.id,
+                    row.period,
+                    row.npk,
+                    row.nama,
+                    row.dept,
+                    row.line_number,
+                    Number(row.efficiency).toLocaleString('id-ID'),
+                    row.date,
+                ]);
+
+            });
+
+            masterTable.draw();
+        }
     });
 
 });

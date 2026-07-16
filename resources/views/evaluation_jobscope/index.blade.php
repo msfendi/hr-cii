@@ -50,9 +50,11 @@
 
                         </td>
                         <td class="text-center">
+                        @canRoute('evaluation-jobscope.delete')
                           <button class="btn btn-danger btn-circle btn-sm btn-delete" data-link="{{ route('evaluation-jobscope.delete',$row->id) }}" data-job_name="{{ $row->job_name }}" data-toggle="modal" data-target="#deleteModal">
                             <i class="fas fa-trash"></i>
                           </button>
+                        @endcanRoute
                         </td>
                       </tr> @endforeach </tbody>
                   </table>

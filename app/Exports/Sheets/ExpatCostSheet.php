@@ -44,13 +44,16 @@ class ExpatCostSheet implements
 
     public function collection()
     {
+
         return DB::table('expat_cost as c')
             ->join('expat_master as m', 'm.npk', '=', 'c.npk')
+            ->join('expat_cost_components as cc', 'cc.id', '=', 'c.component')
+            ->where('cc.component_type', '!=', 'meal')
             ->whereBetween('c.transactions_date', [$this->start, $this->end])
             ->select(
                 'c.npk',
                 'm.name',
-                'c.component',
+                'cc.component',
                 'c.amount',
                 'c.transactions_date',
                 'c.remark'

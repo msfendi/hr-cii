@@ -1,6 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
    @include('layout.header')
+   <style>
+.select2-container {
+    z-index: 99999 !important;
+}
+.dataTables_wrapper .row {
+    align-items: center !important;
+}
+</style>
+<style>
+.dept-filter-modal {
+    display: flex;
+    align-items: center;
+}
+
+#filterDeptModal {
+    width: 250px !important;
+    min-width: 250px;
+}
+
+.dataTables_filter {
+    margin-left: auto;
+}
+</style>
    <body id="page-top">
       @include('sweetalert::alert')
       <div id="wrapper">
@@ -113,8 +136,43 @@
                                  <i class="fas fa-search"></i>
                                  </button>
                               </td>
+                              {{-- ================= ACTION ================= --}}
                               <td class="text-center">
-                                 @if($row->status=='finish')
+                                 @php
+                                 $progress=collect($row->progress);
+                                 $currentIndex=$progress->search(fn($i)=>$i['status']!=='approve');
+                                 $canApprove=false;
+                                 if($currentIndex!==false){
+                                 $current=$progress[$currentIndex];
+                                 $npkList=is_array($current['npk'])
+                                 ? $current['npk']
+                                 : json_decode($current['npk'],true);
+                                 $statusList=$current['status']=='pending'
+                                 ? array_fill(0,count($npkList),'waiting')
+                                 : (json_decode($current['status'],true)
+                                 ?? array_fill(0,count($npkList),'waiting'));
+                                 foreach($npkList as $idx=>$npk){
+                                 $beforeApproved=true;
+                                 for($i=0;$i<$idx;$i++){
+                                 if($statusList[$i]!=='approve')
+                                 $beforeApproved=false;
+                                 }
+                                 if(
+                                 $npk==auth()->user()->npk &&
+                                 $statusList[$idx]!='approve' &&
+                                 $beforeApproved
+                                 ){
+                                 $canApprove=true;
+                                 }
+                                 }
+                                 }
+                                 @endphp
+                                 @if($canApprove)
+                                 <button class="btn btn-success btn-sm btn-approve"
+                                    data-id="{{ $row->id }}">
+                                 <i class="fas fa-check"></i> Approve
+                                 </button>
+                                 @elseif($row->status=='finish')
                                  <span class="badge badge-success">Done</span>
                                  @else
                                  <span class="badge badge-secondary">Waiting</span>
@@ -151,14 +209,7 @@
                            <tr>
                               <th>NPK</th>
                               <th>Name</th>
-                              <th>
-                                 Department
-                                 <br>
-                                 <input type="text"
-                                    id="searchDept"
-                                    class="form-control form-control-sm mt-1"
-                                    placeholder="Search Dept">
-                              </th>
+                              <th>Departement</th>
                               <th>Insentif</th>
                               <th>TKK</th>
                               <th>Status</th>
@@ -181,6 +232,8 @@
       </div>
       <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
+      <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
+      <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
       <script>
          let insentifTable;
          
@@ -191,12 +244,45 @@
          return new Intl.NumberFormat('id-ID',{
          style:'currency',
          currency:'IDR',
-         minimumFractionDigits:0
+         minimumFractionDigits:2
          }).format(number);
          
          }
          
          $(document).ready(function(){
+            let deptDropdownModal = `
+    <select id="filterDeptModal"
+            class="form-control form-control-sm"
+            style="min-width:250px; width:auto">
+        <option value="">Department</option>
+    </select>
+`;
+
+$('.dept-filter-modal').html(deptDropdownModal);
+
+$('#filterDeptModal').select2({
+    placeholder: 'Department',
+    allowClear: true,
+    width: '100%',
+});
+
+/*
+| FILTER DEPT (EXACT MATCH)
+*/
+$(document).on('change', '#filterDeptModal', function () {
+
+    let val = $(this).val();
+
+    if (!val) {
+        insentifTable.column(2).search('').draw();
+        return;
+    }
+
+    insentifTable
+        .column(2)
+        .search('^' + val + '$', true, false)
+        .draw();
+});
          
          $('#dataTable').DataTable({
          order:[[0,'desc']],
@@ -207,66 +293,99 @@
          
          
          insentifTable = $('#insentifTable').DataTable({
-         
-         processing:true,
-         searching:true,
-         paging:true,
-         info:false,
-         autoWidth:true,
-         data:[],
-         
-         language:{
-         processing:
-         '<div class="text-center p-3">'+
-         '<i class="fas fa-spinner fa-spin fa-2x"></i>'+
-         '<div>Loading data...</div>'+
-         '</div>'
-         },
-         
-         columns:[
-         {data:'npk'},
-         {data:'name'},
-         {data:'dept'},
-         {
-         data:null,
-         render:function(row){
-         
-         let value =
-         row.sewing_insentif ??
-         row.pad_insentif ??
-         row.cutting_insentif ??
-         row.heat_insentif ??
-         0;
-         
-         return formatRupiah(value);
-         }
-         },
-         
-         {
-         data:'tkk',
-         render:function(data){
-         return data ?? '-';
-         }
-         },
 
-         {
-         data:'status',
-         render:function(data){
+    processing:true,
+    searching:true,
+    paging:true,
+    info:false,
+    autoWidth:true,
+    data:[],
 
-         if(data==='Resign'){
-         return `
-         <span class="badge bg-danger text-white">
-         Resign
-         </span>`;
-         }
+    dom:
+    "<'row mb-2 align-items-center px-2'" +
+        "<'col-auto dept-filter-modal'>" +
+        "<'col text-end'f>" +
+    ">" +
+    "rtip",
 
-         return `
-         <span class="badge bg-success text-white">
-         Active
-         </span>`;
-         }
-         },
-         ],
+    initComplete: function () {
+
+        // =========================
+        // CREATE SELECT DEPT
+        // =========================
+        let deptDropdownModal = `
+        <select id="filterDeptModal"
+                class="form-control form-control-sm"
+                style="width:250px">
+            <option value="">Department</option>
+        </select>
+    `;
+
+    $('.dept-filter-modal').html(deptDropdownModal);
+
+    $('#filterDeptModal').select2({
+        placeholder: 'Department',
+        allowClear: true,
+        width: '250px',
+        dropdownParent: $('#detailModal')
+    });
+
+        // =========================
+        // FILTER EVENT
+        // =========================
+        $(document).on('change', '#filterDeptModal', function () {
+
+            let val = $(this).val();
+
+            if (!val) {
+                insentifTable.column(2).search('').draw();
+                return;
+            }
+
+            insentifTable
+                .column(2)
+                .search('^' + val + '$', true, false)
+                .draw();
+        });
+    },
+
+    columns:[
+        {data:'npk'},
+        {data:'name'},
+        {data:'dept'},
+        {
+            data:null,
+            render:function(row){
+
+                let value =
+                row.sewing_insentif ??
+                row.pad_insentif ??
+                row.cutting_insentif ??
+                row.heat_insentif ??
+                row.sixs_insentif ??
+                0;
+
+                return formatRupiah(value);
+            }
+        },
+        {
+            data:'tkk',
+            render:function(data){
+                return data ?? '-';
+            }
+        },
+        {
+            data:'status',
+            render:function(data){
+
+                if(data==='Resign'){
+                    return `<span class="badge bg-danger text-white">Resign</span>`;
+                }
+
+                return `<span class="badge bg-success text-white">Active</span>`;
+            }
+        },
+    ],
 
          createdRow:function(row,data){
 
@@ -290,6 +409,7 @@
          row.pad_insentif ??
          row.cutting_insentif ??
          row.heat_insentif ??
+         row.sixs_insentif ??
          0;
          
          return sum + Number(val);
@@ -301,18 +421,6 @@
          
          }
          
-         });
-         
-         
-         /* ✅ SEARCH DEPT */
-         
-         $('#searchDept').on('keyup change', function () {
-
-            insentifTable
-                  .column(2) // kolom Department
-                  .search(this.value)
-                  .draw();
-
          });
          
          });
@@ -343,6 +451,9 @@
          else if(component==='heat_insentif'){
          url='/heat-insentif-master/'+period+'/check';
          }
+         else if(component==='sixs_insentif'){
+         url='/employee-6s-assignment/'+period+'/check';
+         }
          
          $('#insentifTable_processing').show();
          
@@ -357,6 +468,30 @@
          insentifTable.clear();
          insentifTable.rows.add(res.data);
          insentifTable.draw();
+         // BUILD DEPT OPTIONS
+let deptMap = {};
+
+            res.data.forEach(item => {
+
+                let deptDisplay = item.dept;
+
+                if(item.line_start && item.line_end){
+                    deptDisplay += ` (${item.line_start}-${item.line_end})`;
+                }
+
+                deptMap[deptDisplay] = item.dept; // simpan dept asli
+            });
+
+            let options = `<option value="">Department</option>`;
+
+            Object.keys(deptMap).forEach(display => {
+                options += `<option value="${deptMap[display]}">${display}</option>`;
+            });
+
+$('#filterDeptModal')
+    .html(options)
+    .val('')
+    .trigger('change.select2');
          
          $('#insentifTable_processing').hide();
          
@@ -373,6 +508,58 @@
          
          });
          
+      </script>
+      <script>
+         /* ======================================
+         APPROVE
+         ====================================== */
+         
+         $('.btn-approve').click(function(){
+         
+         let btn=$(this);
+         btn.prop('disabled',true);
+         
+         let id=$(this).data('id');
+         
+         Swal.fire({
+         title:'Approve Insentif?',
+         icon:'question',
+         showCancelButton:true
+         }).then((result)=>{
+         
+         if(result.isConfirmed){
+         
+         $.ajax({
+         url:'/insentif-approve/'+id+'/approve',
+         type:'POST',
+         data:{
+         _token:'{{ csrf_token() }}',
+         npk:'{{ auth()->user()->npk }}'
+         },
+         success:function(res){
+         
+         Swal.fire({
+         icon:'success',
+         title:res.message,
+         timer:1200,
+         showConfirmButton:false
+         });
+         
+         setTimeout(()=>location.reload(),1200);
+         },
+         error:function(err){
+         
+         Swal.fire({
+         icon:'error',
+         title:err.responseJSON.message,
+         timer:2000,
+         showConfirmButton:false
+         });
+         }
+         });
+         }
+         });
+         });
       </script>
    </body>
 </html>

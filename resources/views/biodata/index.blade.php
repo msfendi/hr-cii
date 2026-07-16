@@ -40,9 +40,9 @@
                                 <a href="{{ route('biodata.gender') }}" class="btn btn-info btn-sm text-white">
                                     <i class="fas fa-chart-pie"></i> Rekap Gender
                                 </a>
-                                <button type="button" class="btn btn-primary btn-sm btn-add">
+                                {{-- <button type="button" class="btn btn-primary btn-sm btn-add">
                                     <i class="fas fa-plus"></i> Add Employee
-                                </button>
+                                </button> --}}
                             </div>
                         </div>
                         <div class="card-body">
@@ -56,7 +56,10 @@
                                             <th>NAMA_KARYAWAN</th>
                                             <th>BARCODE</th>
                                             <th>DEPARTMENT</th>
+                                            <th>SECTION</th>
                                             <th>STATUS CONTRACT</th>
+                                            <th>TMK</th>
+                                            <th>KONTRAK BERAKHIR</th>
                                             <th>ACTION</th>
                                         </tr>
                                     </thead>
@@ -261,10 +264,11 @@
                                                                 <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
                                                                 <select class="form-control px-3" id="edit_section" name="section" required>
                                                                     <option value="">-- Pilih --</option>
-                                                                    <option value="CHUTEX">CHUTEX</option>
                                                                     @foreach($sections as $section)
-                                                                        <option value="{{ $section->name }}">
-                                                                            {{ $section->name }} - ( {{ $section->line_start }} - {{ $section->line_end }} )
+                                                                        <option value="{{ $section->id }}">
+                                                                            {{ $section->name }} - (
+                                                                            {{ $section->line_start }} -
+                                                                            {{ $section->line_end }} )
                                                                         </option>
                                                                     @endforeach
                                                                 </select>
@@ -537,10 +541,11 @@
                                                                 <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
                                                                 <select class="form-control px-3" name="section" required>
                                                                     <option value="">-- Pilih --</option>
-                                                                    <option value="CHUTEX">CHUTEX</option>
                                                                     @foreach($sections as $section)
-                                                                        <option value="{{ $section->name }}">
-                                                                            {{ $section->name }} - ( {{ $section->line_start }} - {{ $section->line_end }} )
+                                                                        <option value="{{ $section->id }}">
+                                                                            {{ $section->name }} - (
+                                                                            {{ $section->line_start }} -
+                                                                            {{ $section->line_end }} )
                                                                         </option>
                                                                     @endforeach
                                                                 </select>
@@ -1035,7 +1040,7 @@
                                                                     id="exit_tmk" readonly>
                                                             </div>
                                                             <!-- TKK Field Added Here -->
-                                                            <div class="col-md-12 mb-3">
+                                                            <div class="col-md-6 mb-3">
                                                                 <label
                                                                     class="small font-weight-bold text-danger ml-2">Tanggal
                                                                     Keluar (TKK) <span
@@ -1043,6 +1048,17 @@
                                                                 <input type="date"
                                                                     class="form-control px-3 border-danger text-danger font-weight-bold"
                                                                     name="tkk" id="exit_tkk">
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="small font-weight-bold text-danger ml-2">Status
+                                                                    Keluar<span class="text-danger">*</span></label>
+                                                                <select name="status_keluar" id="status_keluar"
+                                                                    class="form-control px-3 border-danger text-danger font-weight-bold">
+                                                                    <option value="" disabled selected>Pilih Status Keluar</option>
+                                                                    <option value="SPD">Resign</option>
+                                                                    <option value="HK">Habis Kontrak</option>
+                                                                    <option value="MA">Mangkir</option>
+                                                                </select>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
                                                                 <label
@@ -1121,6 +1137,12 @@
                 {
                     data: null,
                     render: function (data, type, row) {
+                        return row.section + ' (' + row.line_start + ' - ' + row.line_end + ')';
+                    }
+                },
+                {
+                    data: null,
+                    render: function (data, type, row) {
                         if (!row.end_date) {
                             return '<span class="badge badge-secondary px-2 py-1">BELUM ADA KONTRAK</span>';
                         }
@@ -1137,17 +1159,69 @@
                     }
                 },
                 {
+                    data: null, render: function (data, type, row) {
+                        if (!row.TMK) return '';
+                        var d = new Date(row.TMK);
+                        return [d.getDate(), d.getMonth() + 1, d.getFullYear()].map(n => String(n).padStart(2, '0')).join('-');
+                    }
+                },
+                {
+                    data: null, render: function (data, type, row) {
+                        if (!row.end_date) return '';
+                        var d = new Date(row.end_date);
+                        return [d.getDate(), d.getMonth() + 1, d.getFullYear()].map(n => String(n).padStart(2, '0')).join('-');
+                    }
+                },
+                {
                     data: null,
                     render: function (data, type, row) {
                         return `
                             <a class="btn btn-primary btn-sm btn-show" data-npk="${row.NPK}">Show</a>
                             <a class="btn btn-warning btn-sm btn-edit" data-npk="${row.NPK}">Update Karyawan</a>
                             <a class="btn btn-info btn-sm btn-kontrak" data-npk="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}"><i class="fas fa-file-contract mr-1"></i>Kontrak</a>
+                            <div class="dropdown d-inline-block">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle doc-fold-btn"
+                                        type="button" data-toggle="dropdown" data-npk="${row.NPK}">
+                                    <i class="fas fa-folder-open text-warning"></i>
+                                    <span class="badge badge-primary doc-count" style="font-size:9px;">…</span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-right shadow-sm doc-menu" style="min-width:180px;">
+                                    <span class="dropdown-item text-muted small">Loading...</span>
+                                </div>
+                            </div>
                             <a class="btn btn-danger btn-sm btn-exit" data-id="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}">Exit</a>
                         `;
                     }
                 }
-            ]
+            ],
+            drawCallback: function () {
+                $('.doc-fold-btn').off('click').on('click', function () {
+                    var $btn = $(this);
+                    var $menu = $btn.closest('.dropdown').find('.doc-menu');
+                    var npk = $btn.data('npk');
+
+                    $menu.html('<span class="dropdown-item text-muted small">Loading...</span>');
+
+                    $.get('/biodata/soft-files/' + npk, function (res) {
+                        if (!res.count) {
+                            $menu.html('<span class="dropdown-item text-muted small">No documents</span>');
+                            return;
+                        }
+
+                        var html = '';
+                        $.each(res.docs, function (label, url) {
+                            var ext = url.split('.').pop().toLowerCase();
+                            var icon = ['jpg', 'jpeg', 'png', 'webp'].indexOf(ext) !== -1
+                                ? 'fa-image text-purple'
+                                : 'fa-file-pdf text-danger';
+                            html += '<a class="dropdown-item d-flex align-items-center" style="font-size:12.5px; gap:8px;" href="' + url + '" target="_blank"><i class="fas ' + icon + '"></i> ' + label + '</a>';
+                        });
+
+                        $btn.find('.doc-count').text(res.count);
+                        $menu.html(html);
+                    });
+                });
+            }
         });
 
         // Event listener for department filter
@@ -1204,7 +1278,7 @@
                     $('#show_pendidikan').val(response.PDDK ?? 'PENDIDIKAN TIDAK DIISI');
                     $('#show_sekolah').val(response.NAMA_SEKOLAH ?? 'SEKOLAH TIDAK DIISI');
                     $('#show_jurusan').val(response.JURUSAN ?? 'JURUSAN TIDAK DIISI');
-                    $('#show_section').val(response.section ?? 'SECTION TIDAK DIISI');
+                    $('#show_section').val(response.section_name + ' (' + response.line_start + ' - ' + response.line_end + ')' ?? 'SECTION TIDAK DIISI');
                     $('#show_id_dept').val(response.BAGIAN ?? 'DEPT TIDAK DIISI');
                     $('#show_tmk').val(response.TMK ?? 'TMK TIDAK DIISI');
                     $('#show_tanggungan').val(response.TANGGUNGAN ?? 'TANGGUNGAN TIDAK DIISI');
@@ -1261,6 +1335,7 @@
 
             // Clear previous TKK
             $('#exit_tkk').val('');
+            $('#status_keluar').val('');
 
             // Store NPK for submission
             $('#confirmExitBtn').data('id', npk);
@@ -1311,10 +1386,16 @@
             e.preventDefault();
             var npk = $('#confirmExitBtn').data('id');
             var tkk = $('#exit_tkk').val();
+            var status_keluar = $('#status_keluar').val();
             var btn = $('#confirmExitBtn');
 
             if (!tkk) {
                 Swal.fire('Error', 'Harap isi Tanggal Keluar Kerja (TKK)', 'warning');
+                return;
+            }
+
+            if (!status_keluar) {
+                Swal.fire('Error', 'Harap pilih Status Keluar', 'warning');
                 return;
             }
 
@@ -1323,7 +1404,7 @@
             $.ajax({
                 url: '/biodata/exit/' + npk,
                 type: 'GET',
-                data: { tkk: tkk },
+                data: { tkk: tkk, status_keluar: status_keluar },
                 success: function (response) {
                     $('#exitModal').modal('hide');
                     if (response.original && response.original.status === 'success' || response.status === 'success') {
@@ -1456,7 +1537,9 @@
                     $('#edit_pendidikan').val(response.PDDK);
                     $('#edit_sekolah').val(response.NAMA_SEKOLAH ?? '');
                     $('#edit_jurusan').val(response.JURUSAN);
-                    $('#edit_section').val(response.section);
+                    $("#edit_section option").filter(function () {
+                        return $.trim($(this).val()) === $.trim(response.SECTION);
+                    }).prop('selected', true);
 
                     $("#edit_id_dept option").filter(function () {
                         return $.trim($(this).text()) === $.trim(response.BAGIAN);

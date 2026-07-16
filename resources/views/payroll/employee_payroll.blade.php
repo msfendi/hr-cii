@@ -17,11 +17,11 @@
                      QR Code Login
                      </a>
                   </li>
-                  <li class="nav-item">
+                  <!-- <li class="nav-item">
                      <a class="nav-link" data-toggle="tab" href="#manual">
                      Manual Login
                      </a>
-                  </li>
+                  </li> -->
                </ul>
                <div class="tab-content mt-4">
                   {{-- ================= MANUAL LOGIN ================= --}}

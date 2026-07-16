@@ -19,8 +19,10 @@
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Daftar User</h1>
                     <div>
+                    @canRoute('register.create')
                     <a href="{{ route('register.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Create User</a>
+                        @endcanRoute
                     </div>
                 </div>
                 
@@ -82,15 +84,21 @@
                                         <td>{{ $user->created_at }}</td>
                                         <td>{{ $user->updated_at }}</td>
                                         <td class="text-center">
+                                            @canRoute('user.assign')
                                             <a href="{{ route('user.assign', ['id' => $user->id])  }}" class="btn btn-primary btn-circle btn-sm">
                                                 <i class="fas fa-key"></i>
                                             </a>
+                                            @endcanRoute
+                                            @canRoute('user.detail')
                                             <a href="{{ route('user.detail', ['id' => $user->id]) }}" class="btn btn-primary btn-circle btn-sm">
                                                 <i class="fas fa-edit"></i>
                                             </a>
+                                            @endcanRoute
+                                            @canRoute('user.delete')
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete-user" data-delete-link="{{ route('user.delete', ['id' => $user->id]) }}" data-user-name="{{ $user->name }}" data-toggle="modal" data-target="#deleteModal">
                                                 <i class="fas fa-trash"></i>
                                             </a>
+                                            @endcanRoute
                                         </td>
                                     </tr>
                                     @endforeach

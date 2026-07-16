@@ -15,11 +15,13 @@
             @include('layout.navbar')
             <div class="container-fluid">
                <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                  <h1 class="h3 mb-0 text-gray-800">Heat Print Insentif Master</h1>
+                  <h1 class="h3 mb-0 text-gray-800">Heat Seal Insentif Master</h1>
                   <div>
-                     <a href="{{ route('heat-insentif-master.create') }}" class="d-none d-sm-inheat-block btn btn-sm btn-primary shadow-sm">
-                        <i class="fas fa-plus fa-sm text-white-50"></i> Create Heat Print Insentif Master
+                    @canRoute('heat-insentif-master.create')
+                     <a href="{{ route('heat-insentif-master.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
+                        <i class="fas fa-plus fa-sm text-white-50"></i> Create Heat Seal Insentif Master
                      </a>
+                     @endcanRoute
                   </div>
                </div>
                
@@ -53,8 +55,6 @@ Detail Insentif Karyawan
 </div>
 
 <div class="card-body">
-
-<div class="table-responsive">
 
 <div class="table-responsive">
 
@@ -102,22 +102,26 @@ Detail Insentif Karyawan
                     <div class="d-flex justify-content-between align-items-center flex-wrap">
                         <!-- KIRI -->
                         <h6 class="m-0 font-weight-bold text-primary">
-                            Data Heat Print Insentif Master
+                            Data Heat Seal Insentif Master
                         </h6>
                         <!-- KANAN -->
                         <div class="d-flex align-items-center">
                             <!-- DOWNLOAD TEMPLATE -->
+                            @canRoute('heat-insentif-master.template')
                             <a href="{{ route('heat-insentif-master.template') }}"
                                 class="btn btn-info btn-sm mr-2">
                             <i class="fas fa-download"></i> Download Template
                             </a>
+                            @endcanRoute
                             <!-- IMPORT FORM -->
+                            @canRoute('heat-insentif-master.import')
                             <button class="btn btn-success btn-sm"
                                  data-toggle="modal"
                                  data-target="#importModal">
                               <i class="fas fa-file-excel"></i>
                               Import Excel Insentif
                            </button>
+                           @endcanRoute
                         </div>
                     </div>
                     <!-- PROGRESS BAR -->
@@ -154,11 +158,10 @@ Detail Insentif Karyawan
                                 <th>Period</th>
                                  <th>NPK</th>
                                  <th>Name</th>
-                                 <th>Dept</th>
+                                 <th>Role</th>
                                  <th>Efficiency</th>
                                  <th>Piece</th>
                                  <th>Tanggal</th>
-                                 <th>Action</th>
                               </tr>
                            </thead>
                            <tbody>
@@ -168,19 +171,10 @@ Detail Insentif Karyawan
                                  <td>{{ $row->period }}</td>
                                  <td>{{ $row->npk }}</td>
                                  <td>{{ $row->name }}</td>
-                                 <td>{{ $row->dept }}</td>
+                                 <td>{{ $row->role }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
                                  <td>{{ $row->piece }}</td>
                                  <td>{{ $row->date }}</td>
-                                 <td class="text-center">
-                                    <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
-                                       data-delete-link="{{ route('heat-insentif-master.delete',$row->id) }}"
-                                       data-npk="{{ $row->npk }}"
-                                       data-toggle="modal"
-                                       data-target="#deleteModal">
-                                    <i class="fas fa-trash"></i>
-                                    </a>
-                                 </td>
                               </tr>
                               @endforeach
                            </tbody>
@@ -328,13 +322,15 @@ Detail Insentif Karyawan
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 
+      
       <script>
+let masterTable;
         $(document).ready(function(){
 
-            $('#dataTable').DataTable({
-                order: [[0,'desc']], // pakai urutan ID dari Laravel
-                pageLength: 10,
-                responsive: true,
+            masterTable = $('#dataTable').DataTable({
+                order:[[0,'desc']],
+                pageLength:10,
+                responsive:true,
                 autoWidth:false
             });
 
@@ -361,7 +357,7 @@ function formatRupiah(number){
     return new Intl.NumberFormat('id-ID',{
         style:'currency',
         currency:'IDR',
-        minimumFractionDigits:0
+        minimumFractionDigits:2
     }).format(number);
 }
 </script>
@@ -490,6 +486,7 @@ $('#checkPeriod').on('change',function(){
     */
     if(!period){
         insentifTable.clear().draw();
+        masterTable.clear().draw();
         return;
     }
 
@@ -535,6 +532,32 @@ $('#checkPeriod').on('change',function(){
             });
         }
 
+    });
+    // AJAX MASTER TABLE
+    $.ajax({
+        url:'/heat-insentif-master/'+period+'/data',
+        type:'GET',
+        success:function(res){
+
+            masterTable.clear();
+
+            res.forEach(function(row){
+
+                masterTable.row.add([
+                    row.id,
+                    row.period,
+                    row.npk,
+                    row.name,
+                    row.role,
+                    Number(row.efficiency).toLocaleString('id-ID'),
+                    Number(row.piece).toLocaleString('id-ID'),
+                    row.date,
+                ]);
+
+            });
+
+            masterTable.draw();
+        }
     });
 
 });

@@ -121,9 +121,42 @@
         </tr>
         @php $totalEarning = 0; @endphp
         @foreach($earnings as $name => $value)
+            @php
+                $labels = [
+                    'sixs_insentif' => '6S Insentif',
+                ];
+                $label = $labels[$name] ?? ucwords(str_replace('_', ' ', $name));
+            @endphp
             <tr>
-                <td>{{ ucwords(str_replace('_', ' ', $name)) }}</td>
-                <td class="right">{{ number_format($value, 0, ',', '.') }}</td>
+                <td>
+                    {{ $label }}
+
+                    @if($name === 'adjusment' && count($adjusment_details))
+
+                        <div style="
+                            font-size:10px;
+                            color:#666;
+                            margin-top:4px;
+                            padding-left:12px;
+                        ">
+                            @foreach($adjusment_details as $index => $detail)
+                                ({{ $index + 1 }})
+                                {{ $detail->keterangan }}
+                                :
+                                {{ number_format($detail->adjusment,0,',','.') }}
+
+                                @if(!$loop->last)
+                                    <br>
+                                @endif
+                            @endforeach
+                        </div>
+
+                    @endif
+                </td>
+
+                <td class="right">
+                    {{ number_format($value, 0, ',', '.') }}
+                </td>
             </tr>
             @php $totalEarning += $value; @endphp
         @endforeach
@@ -198,7 +231,16 @@
         @foreach($attendance as $row)
             @php
             $date = \Carbon\Carbon::parse($row->tanggal);
-            $day = $date->translatedFormat('l');
+            $hariIndo = [
+                'Sunday' => 'Minggu',
+                'Monday' => 'Senin',
+                'Tuesday' => 'Selasa',
+                'Wednesday' => 'Rabu',
+                'Thursday' => 'Kamis',
+                'Friday' => 'Jumat',
+                'Saturday' => 'Sabtu',
+            ];
+            $day = $hariIndo[$date->format('l')];
             $isWeekend = $date->isWeekend();
             $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []);
                $rowClass = '';
@@ -249,7 +291,90 @@
             <td>Total Terlambat</td>
             <td class="right">{{ $late_minutes }} Menit</td>
         </tr>
+
+        <tr>
+            <td>Total Ijin Meninggalkan Pekerjaan</td>
+            <td class="right">{{ $total_ijin }} Menit</td>
+        </tr>
     </table>
+    <div class="page-break"></div>
+
+<h3 style="text-align:center;">DETAIL IJIN MENINGGALKAN PEKERJAAN</h3>
+
+<table width="100%" style="margin-bottom:20px;">
+    <tr>
+        <td width="120">NPK</td>
+        <td>: {{ $employee->employee_npk }}</td>
+    </tr>
+    <tr>
+        <td>Nama</td>
+        <td>: {{ $employee->employee_name }}</td>
+    </tr>
+    <tr>
+        <td>Departement</td>
+        <td>: {{ $employee->DEPARTEMENT ?? '-' }}</td>
+    </tr>
+    <tr>
+        <td>Total Ijin</td>
+        <td>: {{ $total_ijin }} Menit</td>
+    </tr>
+</table>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th width="90">Tanggal</th>
+            <th width="70">Keluar</th>
+            <th width="90">Rencana Kembali</th>
+            <th width="70">Kembali</th>
+            <th>Alasan</th>
+            <th width="70">Menit</th>
+        </tr>
+    </thead>
+    <tbody>
+        @forelse($ijin_details as $item)
+            <tr>
+                <td class="center">
+                    {{ \Carbon\Carbon::parse($item->tanggal)->format('d-m-Y') }}
+                </td>
+                <td class="center">
+                    {{ $item->jam_keluar }}
+                </td>
+                <td class="center">
+                    {{ $item->rencana_kembali }}
+                </td>
+                <td class="center">
+                    {{ $item->jam_kembali ?? '-' }}
+                </td>
+                <td>
+                    {{ $item->reason }}
+                </td>
+                <td class="right">
+                    {{ $item->ijin_minutes }}
+                </td>
+            </tr>
+        @empty
+            <tr>
+                <td colspan="6" class="center">
+                    Tidak ada data ijin meninggalkan pekerjaan pada periode ini.
+                </td>
+            </tr>
+        @endforelse
+    </tbody>
+
+    @if(count($ijin_details))
+        <tfoot>
+            <tr>
+                <th colspan="5" class="right">
+                    Total
+                </th>
+                <th class="right">
+                    {{ $total_ijin }}
+                </th>
+            </tr>
+        </tfoot>
+    @endif
+</table>
 </body>
 
 </html>

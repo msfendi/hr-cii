@@ -14,6 +14,7 @@ class ChuFamilyTemplateExport implements FromArray
             'place',
             'birth_date',
             'nationality',
+            'npwp',
             'passport_number',
             'passport_expiry',
             'visa_type',

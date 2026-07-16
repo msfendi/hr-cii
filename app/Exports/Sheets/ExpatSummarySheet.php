@@ -51,22 +51,76 @@ class ExpatSummarySheet implements
             ->leftJoin(DB::raw("
             (
                 SELECT npk,
-                       SUM(amount) total_living_cost
-                FROM expat_cost
+                       SUM(amount) total_apartment_cost
+                FROM expat_cost LEFT JOIN expat_cost_components ON expat_cost.component = expat_cost_components.id
                 WHERE transactions_date BETWEEN '{$this->start}' AND '{$this->end}'
+                AND expat_cost_components.id IN (7)
                 GROUP BY npk
-            ) c
-        "), 'm.npk', '=', 'c.npk')
+            ) ac
+        "), 'm.npk', '=', 'ac.npk')
 
             ->leftJoin(DB::raw("
             (
                 SELECT npk,
-                       COUNT(id) total_onleave
+                       SUM(amount) total_depo_apartment_cost
+                FROM expat_cost LEFT JOIN expat_cost_components ON expat_cost.component = expat_cost_components.id
+                WHERE transactions_date BETWEEN '{$this->start}' AND '{$this->end}'
+                AND expat_cost_components.id IN (15)
+                GROUP BY npk
+            ) dac
+        "), 'm.npk', '=', 'dac.npk')
+
+            ->leftJoin(DB::raw("
+            (
+                SELECT npk,
+                       SUM(amount) total_living_cost
+                FROM expat_cost LEFT JOIN expat_cost_components ON expat_cost.component = expat_cost_components.id
+                WHERE transactions_date BETWEEN '{$this->start}' AND '{$this->end}'
+                AND expat_cost_components.component_type != 'meal'
+                AND expat_cost_components.component_type != 'legal'
+                AND expat_cost_components.id not IN (7,15)
+                GROUP BY npk
+            ) c
+        "), 'm.npk', '=', 'c.npk')
+            ->leftJoin(DB::raw("
+            (
+                SELECT npk,
+                       SUM(amount) total_legal_cost
+                FROM expat_cost LEFT JOIN expat_cost_components ON expat_cost.component = expat_cost_components.id
+                WHERE transactions_date BETWEEN '{$this->start}' AND '{$this->end}'
+                AND expat_cost_components.component_type = 'legal'
+                AND expat_cost_components.id not IN (7,15)
+                GROUP BY npk
+            ) lglc
+        "), 'm.npk', '=', 'lglc.npk')
+
+            ->leftJoin(DB::raw("
+            (
+                SELECT npk,
+                       SUM(amount) total_meal_cost
+                FROM expat_cost LEFT JOIN expat_cost_components ON expat_cost.component = expat_cost_components.id
+                WHERE transactions_date BETWEEN '{$this->start}' AND '{$this->end}'
+                AND expat_cost_components.component_type = 'meal'
+                GROUP BY npk
+            ) ml
+        "), 'm.npk', '=', 'ml.npk')
+
+            ->leftJoin(DB::raw("
+            (
+                SELECT npk,
+                    COUNT(id) total_onleave,
+                    SUM(
+                        DATEDIFF(
+                            DAY,
+                            onleave_start,
+                            onleave_end
+                        ) + 1
+                    ) total_onleave_days
                 FROM expat_onleave
                 WHERE onleave_start BETWEEN '{$this->start}' AND '{$this->end}'
                 GROUP BY npk
             ) l
-        "), 'm.npk', '=', 'l.npk')
+            "), 'm.npk', '=', 'l.npk')
 
             ->select(
                 'm.npk',
@@ -78,13 +132,18 @@ class ExpatSummarySheet implements
                 'm.passport_expiry',
                 'm.kitas_expiry',
                 'm.rptka_expiry',
+                'm.house_startdate',
                 'm.lease_enddate',
 
+                DB::raw('ISNULL(ac.total_apartment_cost,0) total_apartment_cost'),
+                DB::raw('ISNULL(dac.total_depo_apartment_cost,0) total_depo_apartment_cost'),
                 DB::raw('ISNULL(c.total_living_cost,0) total_living_cost'),
-                DB::raw('ISNULL(l.total_onleave,0) total_onleave')
+                DB::raw('ISNULL(lglc.total_legal_cost,0) total_legal_cost'),
+                DB::raw('ISNULL(ml.total_meal_cost,0) total_meal_cost'),
+                DB::raw('ISNULL(l.total_onleave,0) total_onleave'),
+                DB::raw('ISNULL(l.total_onleave_days,0) total_onleave_days')
             )
             ->get();
-
 
         /*
         | TOTAL AMOUNT ONLEAVE
@@ -162,10 +221,17 @@ class ExpatSummarySheet implements
             'KITAS Status',
             'RPTKA Exp',
             'RPTKA Status',
+            'Lease Start',
             'Lease End',
+            'Total Apartment Cost',
+            'Total Depo Apartment Cost',
             'Total Living Cost',
+            'Total Legal Cost',
+            'Total Meal Cost',
             'On Leave Count',
-            'On Leave Amount'
+            'Total On Leave Days',
+            'On Leave Amount',
+            'Total Amount'
         ];
     }
 
@@ -183,10 +249,17 @@ class ExpatSummarySheet implements
             $row->kitas_status,
             $row->rptka_expiry,
             $row->rptka_status,
+            $row->house_startdate,
             $row->lease_enddate,
+            $row->total_apartment_cost,
+            $row->total_depo_apartment_cost,
             $row->total_living_cost,
+            $row->total_legal_cost,
+            $row->total_meal_cost,
             $row->total_onleave,
+            $row->total_onleave_days,
             $row->total_onleave_amount,
+            $row->total_apartment_cost + $row->total_depo_apartment_cost + $row->total_living_cost + $row->total_meal_cost + $row->total_onleave_amount + $row->total_legal_cost,
         ];
     }
 
@@ -202,7 +275,7 @@ class ExpatSummarySheet implements
         /*
         | HEADER
         */
-        $sheet->getStyle('A1:O1')->applyFromArray([
+        $sheet->getStyle('A1:V1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 11,
@@ -221,14 +294,24 @@ class ExpatSummarySheet implements
 
         /*
         | FORMAT RUPIAH
-        | M = Total Living Cost
-        | O = On Leave Amount
+        | N = Total Apartment Cost
+        | O = Total Depo Apartment Cost
+        | P = Total Living Cost
+        | Q = Total Legal Cost
+        | R = Total Meal
+        | U = On Leave Amount
+        | V = Total Amount
         */
-        $sheet->getStyle("M2:M{$highestRow}")
+        $sheet->getStyle("N2:R{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
-        $sheet->getStyle("O2:O{$highestRow}")
+        $sheet->getStyle("U2:U{$highestRow}")
+            ->getNumberFormat()
+            ->setFormatCode('"Rp" #,##0');
+
+
+        $sheet->getStyle("V2:V{$highestRow}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
@@ -244,13 +327,13 @@ class ExpatSummarySheet implements
         $sheet->getStyle("G2:L{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $sheet->getStyle("N2:N{$highestRow}")
+        $sheet->getStyle("S2:T{$highestRow}")
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         /*
         | BORDER TABLE
         */
-        $sheet->getStyle("A1:O{$highestRow}")
+        $sheet->getStyle("A1:V{$highestRow}")
             ->applyFromArray([
                 'borders' => [
                     'allBorders' => [

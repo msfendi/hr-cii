@@ -17,9 +17,11 @@
                <div class="d-sm-flex align-items-center justify-content-between mb-4">
                   <h1 class="h3 mb-0 text-gray-800">Cutting Insentif Master</h1>
                   <div>
+                    @canRoute('cutting-insentif-master.create')
                      <a href="{{ route('cutting-insentif-master.create') }}" class="d-none d-sm-incutting-block btn btn-sm btn-primary shadow-sm">
                         <i class="fas fa-plus fa-sm text-white-50"></i> Create Cutting Insentif Master
                      </a>
+                     @endcanRoute
                   </div>
                </div>
                
@@ -105,18 +107,21 @@ Detail Insentif Karyawan
                         <!-- KANAN -->
                         <div class="d-flex align-items-center">
                             <!-- DOWNLOAD TEMPLATE -->
+                            @canRoute('cutting-insentif-master.template')
                             <a href="{{ route('cutting-insentif-master.template') }}"
                                 class="btn btn-info btn-sm mr-2">
                             <i class="fas fa-download"></i> Download Template
                             </a>
+                            @endcanRoute
                             <!-- IMPORT FORM -->
-                            
+                            @canRoute('cutting-insentif-master.import')
                             <button class="btn btn-success btn-sm"
                                  data-toggle="modal"
                                  data-target="#importModal">
                               <i class="fas fa-file-excel"></i>
                               Import Excel Insentif
                            </button>
+                            @endcanRoute
                         </div>
                     </div>
                     <!-- PROGRESS BAR -->
@@ -149,28 +154,27 @@ Detail Insentif Karyawan
                            cellspacing="0">
                            <thead>
                               <tr>
-                                 <th>ID</th>
-                                 <th>Period</th>
-                                 <th>Efficiency</th>
-                                 <th>Tanggal</th>
-                                 <th>Action</th>
+                                <th>ID</th>
+                                <th>Period</th>
+                                <th>NPK</th>
+                                <th>Nama Karyawan</th>
+                                <th>Dept</th>
+                                <th>Role</th>
+                                <th>Efficiency</th>
+                                <th>Tanggal</th>
                               </tr>
                            </thead>
                            <tbody>
                               @foreach($data as $row)
                               <tr>
-                                 <td>{{ $row->id }}</td>
-                                 <td>{{ $row->period }}</td>
-                                 <td>{{ number_format($row->efficiency,0,',','.') }}</td>
-                                 <td>{{ $row->date }}</td>
-                                 <td class="text-center">
-                                    <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll_master"
-                                       data-delete-link="{{ route('cutting-insentif-master.delete',$row->id) }}"
-                                       data-toggle="modal"
-                                       data-target="#deleteModal">
-                                    <i class="fas fa-trash"></i>
-                                    </a>
-                                 </td>
+                                <td>{{ $row->id }}</td>
+                                <td>{{ $row->period }}</td>
+                                <td>{{ $row->npk }}</td>
+                                <td>{{ $row->nama }}</td>
+                                <td>{{ $row->dept }}</td>
+                                <td>{{ $row->role }}</td>
+                                <td>{{ number_format($row->efficiency,0,',','.') }}</td>
+                                <td>{{ $row->date }}</td>
                               </tr>
                               @endforeach
                            </tbody>
@@ -304,8 +308,21 @@ Detail Insentif Karyawan
    </body>
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
-<script src="{{asset('js/demo/datatables-demo.js')}}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+      <script>
+let masterTable;
+        $(document).ready(function(){
+
+            masterTable = $('#dataTable').DataTable({
+                order:[[0,'desc']],
+                pageLength:10,
+                responsive:true,
+                autoWidth:false
+            });
+
+        });
+        </script>
 <script>
 
 $('#insentifSelect').on('change', function(){
@@ -444,7 +461,7 @@ function formatRupiah(number){
     return new Intl.NumberFormat('id-ID',{
         style:'currency',
         currency:'IDR',
-        minimumFractionDigits:0
+        minimumFractionDigits:2
     }).format(number);
 }
 </script>
@@ -573,13 +590,9 @@ $('#checkPeriod').on('change',function(){
     */
     if(!period){
         insentifTable.clear().draw();
+        masterTable.clear().draw();
         return;
     }
-
-    /*
-    | LOADING STATE
-    */
-    insentifTable.clear().draw();
 
     Swal.fire({
         title:'Loading insentif...',
@@ -599,8 +612,6 @@ $('#checkPeriod').on('change',function(){
 
         success:function(res){
 
-            console.log('DATA:',res);
-
             insentifTable.clear();
             insentifTable.rows.add(res.data);
             insentifTable.draw();
@@ -610,14 +621,38 @@ $('#checkPeriod').on('change',function(){
 
         error:function(xhr){
 
-            console.log(xhr.responseText);
-
             Swal.fire({
                 icon:'error',
                 title:'Gagal load data'
             });
         }
 
+    });
+    // AJAX MASTER TABLE
+    $.ajax({
+        url:'/cutting-insentif-master/'+period+'/data',
+        type:'GET',
+        success:function(res){
+
+            masterTable.clear();
+
+            res.forEach(function(row){
+
+                masterTable.row.add([
+                    row.id,
+                    row.period,
+                    row.npk,
+                    row.nama,
+                    row.dept,
+                    row.role,
+                    Number(row.efficiency).toLocaleString('id-ID'),
+                    row.date,
+                ]);
+
+            });
+
+            masterTable.draw();
+        }
     });
 
 });

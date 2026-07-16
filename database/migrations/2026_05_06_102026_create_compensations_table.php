@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('file_csv')->nullable();
             $table->integer('progress')->nullable();
             $table->string('status')->nullable();
+            $table->integer('is_closed')->nullable();
 
             $table->timestamps();
 
