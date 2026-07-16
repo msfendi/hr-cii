@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
+@include('sweetalert::alert')
 <body id="page-top">
     <div id="wrapper">
         @include('layout.sidebar')

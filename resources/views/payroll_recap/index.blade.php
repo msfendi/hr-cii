@@ -641,7 +641,9 @@ body{
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Periode Payroll</label>
                                             <select id="detailPeriodSelect" class="form-control" style="width:100%">
                                                 @foreach ($periods as $p)
-                                                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                                    <option value="{{ $p->id }}">
+                                                        {{ $p->name }}{{ !$p->is_closed ? ' — Live/Belum Closed' : '' }}
+                                                    </option>
                                                 @endforeach
                                             </select>
                                         </div>
@@ -784,7 +786,9 @@ body{
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Periode Payroll</label>
                                             <select id="overtimePeriodSelect" class="form-control" style="width:100%">
                                                 @foreach ($periods as $p)
-                                                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                                    <option value="{{ $p->id }}">
+                                                        {{ $p->name }}{{ !$p->is_closed ? ' — Live/Belum Closed' : '' }}
+                                                    </option>
                                                 @endforeach
                                             </select>
                                         </div>
@@ -812,6 +816,29 @@ body{
                                 </form>
                             </div>
                         </div>
+                        <div class="row">
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-primary shadow h-100">
+                                    <div class="kpi-label">Biaya Lembur Biasa</div>
+                                    <div class="kpi-value" id="kpiOvertimeCostRegular">Rp 0</div>
+                                    <i class="fas fa-coins kpi-icon"></i>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-success shadow h-100">
+                                    <div class="kpi-label">Biaya Lembur Khusus</div>
+                                    <div class="kpi-value" id="kpiOvertimeCostSpecial">Rp 0</div>
+                                    <i class="fas fa-coins kpi-icon"></i>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-info shadow h-100">
+                                    <div class="kpi-label">Total Biaya Lembur</div>
+                                    <div class="kpi-value" id="kpiOvertimeCostTotal">Rp 0</div>
+                                    <i class="fas fa-money-bill-wave kpi-icon"></i>
+                                </div>
+                            </div>
+                        </div>
                         {{-- RINCIAN LEMBUR PER MINGGU --}}
                         <div class="row">
                             <div class="col-lg-12 mb-4">
@@ -834,6 +861,9 @@ body{
                                                         <th class="text-right">Lembur Biasa (Jam)</th>
                                                         <th class="text-right">Lembur Khusus (Jam)</th>
                                                         <th class="text-right">Total (Jam)</th>
+                                                        <th class="text-right">Biaya Biasa</th>
+                                                        <th class="text-right">Biaya Khusus</th>
+                                                        <th class="text-right">Biaya Total</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="overtimeByWeekTableBody"></tbody>
@@ -843,6 +873,9 @@ body{
                                                         <td class="text-right" id="footerAvgRegularWeek">0 Jam</td>
                                                         <td class="text-right" id="footerAvgSpecialWeek">0 Jam</td>
                                                         <td class="text-right" id="footerAvgTotalWeek">0 Jam</td>
+                                                        <td class="text-right" id="footerAvgCostRegularWeek">Rp 0</td>
+                                                        <td class="text-right" id="footerAvgCostSpecialWeek">Rp 0</td>
+                                                        <td class="text-right" id="footerAvgCostTotalWeek">Rp 0</td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
@@ -922,11 +955,9 @@ body{
                                     </div>
                                     <div class="card-body p-2">
                                         <div class="table-responsive">
-                                            {{-- Thead/tbody/tfoot dibangun dinamis via JS karena jumlah kolom
-                                                 tanggal tergantung data OVERTIME_DATE pada periode terpilih.
-                                                 scrollY dipakai supaya body bisa di-scroll sementara baris
-                                                 Grand Total (tfoot) tetap terlihat. --}}
-                                            <table class="table table-sm table-bordered table-hover mb-0 small" id="overtimeDeptTable" width="100%"></table>
+                                            <div id="overtimeDeptTableWrapper">
+                                                <table class="table table-sm table-bordered table-hover mb-0 small" id="overtimeDeptTable" width="100%"></table>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -966,8 +997,11 @@ body{
                     {{-- Thead/tbody/tfoot dibangun dinamis via JS sesuai tanggal overtime
                          milik department yang dipilih pada periode terpilih. scrollY dipakai
                          supaya body bisa di-scroll sementara baris Grand Total (tfoot) tetap terlihat. --}}
+                    <!-- overtimeDetailTable (di dalam modal) -->
                     <div class="table-responsive">
-                        <table class="table table-sm table-bordered mb-0 small" id="overtimeDetailTable" width="100%"></table>
+                        <div id="overtimeDetailTableWrapper">
+                            <table class="table table-sm table-bordered mb-0 small" id="overtimeDetailTable" width="100%"></table>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1001,9 +1035,12 @@ body{
                          dept_employee_details dari response detail-data. scrollX
                          untuk kolom komponen yang banyak, scrollY supaya baris
                          Grand Total tetap terlihat. --}}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered mb-0 small" id="deptEmployeeDetailTable" width="100%"></table>
-                    </div>
+                    <!-- deptEmployeeDetailTable (di dalam modal) -->
+                        <div class="table-responsive">
+                            <div id="deptEmployeeDetailTableWrapper">
+                                <table class="table table-sm table-bordered mb-0 small" id="deptEmployeeDetailTable" width="100%"></table>
+                            </div>
+                        </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
@@ -1046,6 +1083,22 @@ body{
         }
         function hideLoadingSwal() {
             Swal.close();
+        }
+
+        function resetDataTableWrapper(wrapperId, tableId, tableClass) {
+            const $wrapper = $('#' + wrapperId);
+
+            // Hancurkan instance lama kalau ada
+            if ($.fn.DataTable.isDataTable('#' + tableId)) {
+                try { $('#' + tableId).DataTable().destroy(); } catch (e) { /* noop */ }
+            }
+
+            // Buang SELURUH struktur (termasuk div scrollHead/scrollBody bawaan DataTables)
+            // dan buat <table> baru dari nol -> menghindari state korup DataTables.
+            $wrapper.empty();
+            $wrapper.html(`<table class="${tableClass}" id="${tableId}" width="100%"></table>`);
+
+            return $('#' + tableId);
         }
 
         function formatMonthIndonesia(value){
@@ -1382,6 +1435,18 @@ body{
             $('#deptPayrollFooterTotal').text(rupiah(totalAll));
         }
 
+        /*
+         * PERBAIKAN: saat tidak ada data (employees kosong), tabel modal
+         * TIDAK LAGI diinisialisasi sebagai DataTable — cukup dirender
+         * sebagai <table> HTML biasa berisi pesan "Tidak ada data".
+         *
+         * Penyebab error sebelumnya ("Cannot set properties of undefined
+         * (setting '_DT_CellIndex')"): saat kosong, tbody hanya berisi 1
+         * baris dengan 1 <td colspan="N">, padahal thead punya N kolom.
+         * Dengan scrollX/scrollY aktif, DataTables mencoba menghitung
+         * lebar tiap kolom dari sel-sel body dan mengakses index kolom
+         * yang tidak ada pada baris tsb -> undefined -> crash.
+         */
         function renderDeptEmployeeDetail(employees, deptName) {
             const earningKeys   = Object.keys(componentMeta.earning || {});
             const deductionKeys = Object.keys(componentMeta.deduction || {});
@@ -1389,7 +1454,7 @@ body{
 
             $('#deptEmployeeDetailModalLabel').html(`<i class="fas fa-building mr-1"></i> Detail Komponen Gaji - ${deptName}`);
 
-            // ---- THEAD ----
+            // ---- THEAD (selalu sama, dipakai baik ada data maupun tidak) ----
             let theadHtml = '<thead><tr><th>NPK</th><th>Nama</th>';
             earningKeys.forEach(key => {
                 theadHtml += `<th class="text-right badge-earning">${componentMeta.earning[key]}</th>`;
@@ -1399,11 +1464,29 @@ body{
             });
             theadHtml += '<th class="text-right">Total Take Home Pay</th></tr></thead>';
 
-            // ---- TBODY ----
+            const $table = resetDataTableWrapper(
+                'deptEmployeeDetailTableWrapper',
+                'deptEmployeeDetailTable',
+                'table table-sm table-bordered mb-0 small'
+            );
+
             const sortedEmployees = [...employees].sort((a, b) =>
                 String(a.nama).localeCompare(String(b.nama), 'id', { sensitivity: 'base' })
             );
 
+            const totalCols = 3 + allKeys.length;
+
+            // ---- Data kosong -> render pesan saja, JANGAN inisialisasi DataTable ----
+            if (!sortedEmployees.length) {
+                $table.html(
+                    theadHtml +
+                    `<tbody><tr><td colspan="${totalCols}" class="text-center text-muted py-4">Tidak ada data untuk department ini.</td></tr></tbody>`
+                );
+                deptEmployeeDetailTable = null;
+                return;
+            }
+
+            // ---- TBODY (ada data) ----
             let bodyHtml = '';
             sortedEmployees.forEach(emp => {
                 const rowClass = emp.status === 'mangkir'
@@ -1423,11 +1506,6 @@ body{
                 bodyHtml += '</tr>';
             });
 
-            const totalCols = 3 + allKeys.length;
-            if (!sortedEmployees.length) {
-                bodyHtml = `<tr><td colspan="${totalCols}" class="text-center text-muted">Tidak ada data untuk department ini.</td></tr>`;
-            }
-
             // ---- TFOOT (Grand Total per komponen) ----
             let footHtml = '<tfoot><tr class="font-weight-bold"><td colspan="2">Grand Total</td>';
             allKeys.forEach(key => {
@@ -1438,10 +1516,6 @@ body{
             const grandSalary = sortedEmployees.reduce((acc, e) => acc + (e.total_salary || 0), 0);
             footHtml += `<td class="text-right">${rupiah(grandSalary)}</td></tr></tfoot>`;
 
-            const $table = $('#deptEmployeeDetailTable');
-            if ($.fn.DataTable.isDataTable($table)) {
-                $table.DataTable().destroy();
-            }
             $table.html(theadHtml + '<tbody>' + bodyHtml + '</tbody>' + footHtml);
 
             deptEmployeeDetailTable = $table.DataTable({
@@ -1477,6 +1551,13 @@ body{
             }
         });
 
+        function periodLabelHtml(period) {
+            if (!period.is_closed) {
+                return `${period.name} <span class="badge badge-warning ml-1">Live / Prediksi</span>`;
+            }
+            return period.name;
+        }
+
         function loadDetailData() {
             const params = {
                 period_id: $('#detailPeriodSelect').val(),
@@ -1490,6 +1571,7 @@ body{
                 .then(res => res.json())
                 .then(data => {
                     $('#detailPeriodLabel').text(data.period.name);
+                    $('#detailPeriodLabel').html(periodLabelHtml(data.period));
                     updateEmployeeTable(data.employees);
                     updateDeptPayrollTable(data.payroll_by_dept || [], data.component_label);
                     deptEmployeeDetailsData = data.dept_employee_details || {};
@@ -1537,7 +1619,7 @@ body{
         function renderOvertimeByWeek(weeks) {
             let rows = '';
             if (!weeks.length) {
-                rows = `<tr><td colspan="5" class="text-center text-muted">Tidak ada data.</td></tr>`;
+                rows = `<tr><td colspan="8" class="text-center text-muted">Tidak ada data.</td></tr>`;
             } else {
                 weeks.forEach(w => {
                     rows += `<tr>
@@ -1546,6 +1628,9 @@ body{
                         <td class="text-right">${jamFormat(w.regular_jam)}</td>
                         <td class="text-right">${jamFormat(w.special_jam)}</td>
                         <td class="text-right font-weight-bold">${jamFormat(w.total_jam)}</td>
+                        <td class="text-right">${rupiah(w.regular_cost)}</td>
+                        <td class="text-right">${rupiah(w.special_cost)}</td>
+                        <td class="text-right font-weight-bold">${rupiah(w.total_cost)}</td>
                     </tr>`;
                 });
             }
@@ -1553,9 +1638,15 @@ body{
 
             const avgRegular = weeks.length ? weeks.reduce((a, b) => a + b.regular_jam, 0) / weeks.length : 0;
             const avgSpecial = weeks.length ? weeks.reduce((a, b) => a + b.special_jam, 0) / weeks.length : 0;
+            const avgCostRegular = weeks.length ? weeks.reduce((a, b) => a + b.regular_cost, 0) / weeks.length : 0;
+            const avgCostSpecial = weeks.length ? weeks.reduce((a, b) => a + b.special_cost, 0) / weeks.length : 0;
+
             $('#footerAvgRegularWeek').text(jamFormat(avgRegular) + ' Jam');
             $('#footerAvgSpecialWeek').text(jamFormat(avgSpecial) + ' Jam');
             $('#footerAvgTotalWeek').text(jamFormat(avgRegular + avgSpecial) + ' Jam');
+            $('#footerAvgCostRegularWeek').text(rupiah(avgCostRegular));
+            $('#footerAvgCostSpecialWeek').text(rupiah(avgCostSpecial));
+            $('#footerAvgCostTotalWeek').text(rupiah(avgCostRegular + avgCostSpecial));
         }
 
         function renderOvertimeChart(overtimeByDate) {
@@ -1616,7 +1707,12 @@ body{
                             padding: 12,
                             cornerRadius: 8,
                             callbacks: {
-                                label: (ctx) => `${ctx.dataset.label}: ${jamFormat(ctx.parsed.y)} jam`
+                                label: (ctx) => {
+                                    const idx = ctx.dataIndex;
+                                    const d = overtimeByDate[idx]; // pastikan overtimeByDate disimpan sebagai variabel scope function saat dipanggil
+                                    const cost = ctx.dataset.label === 'Lembur Biasa' ? d.regular_cost : d.special_cost;
+                                    return `${ctx.dataset.label}: ${jamFormat(ctx.parsed.y)} jam (${rupiah(cost)})`;
+                                }
                             }
                         }
                     }
@@ -1624,8 +1720,22 @@ body{
             });
         }
 
+        /*
+         * PERBAIKAN (bug pemicu error di screenshot):
+         * Sebelumnya, saat overtimeByDept kosong, tbody diisi 1 baris
+         * <td colspan="N"> sementara thead tetap punya N kolom terpisah.
+         * Karena tabel ini pakai scrollX + scrollY, DataTables menghitung
+         * lebar setiap kolom dari sel-sel body -> mengakses index kolom
+         * yang tidak ada pada baris colspan tsb -> "Cannot set properties
+         * of undefined (setting '_DT_CellIndex')".
+         *
+         * Solusi: kalau tidak ada data department overtime sama sekali,
+         * render tabel HTML biasa (pesan "Tidak ada data") TANPA memanggil
+         * .DataTable() sama sekali. DataTable baru diinisialisasi saat
+         * benar-benar ada baris data yang jumlah selnya konsisten dengan
+         * jumlah kolom header.
+         */
         function renderOvertimeByDept(overtimeByDept, overtimeDates, overtimeMatrix) {
-            const $table = $('#overtimeDeptTable');
 
             const sorted = [...overtimeByDept].sort((a, b) =>
                 String(a.dept_name).localeCompare(String(b.dept_name), 'id', { sensitivity: 'base' })
@@ -1637,7 +1747,7 @@ body{
             const dateColClass = (d) =>
                 'text-right' + ((d.is_weekend || d.is_holiday) ? ' ot-special-col' : '');
 
-            // ---- THEAD ----
+            // ---- THEAD (selalu sama, dipakai baik ada data maupun tidak) ----
             let theadHtml = '<thead><tr><th>Department</th>';
             overtimeDates.forEach(d => {
                 theadHtml += `<th class="${dateColClass(d)}">${d.label}</th>`;
@@ -1646,7 +1756,25 @@ body{
                         '<th class="text-right">Lembur Khusus (Jam)</th>' +
                         '<th class="text-right">Total (Jam)</th></tr></thead>';
 
-            // ---- TBODY ----
+            const $table = resetDataTableWrapper(
+                'overtimeDeptTableWrapper',
+                'overtimeDeptTable',
+                'table table-sm table-bordered table-hover mb-0 small'
+            );
+
+            const totalCols = 4 + overtimeDates.length;
+
+            // ---- Data kosong -> render pesan saja, JANGAN inisialisasi DataTable ----
+            if (!sorted.length) {
+                $table.html(
+                    theadHtml +
+                    `<tbody><tr><td colspan="${totalCols}" class="text-center text-muted py-4">Tidak ada data overtime.</td></tr></tbody>`
+                );
+                overtimeDeptTable = null;
+                return;
+            }
+
+            // ---- TBODY (ada data) ----
             let bodyHtml = '';
             sorted.forEach(dept => {
                 bodyHtml += `<tr class="overtime-dept-row" data-dept="${dept.dept_id}" data-dept-name="${dept.dept_name}">` +
@@ -1663,11 +1791,6 @@ body{
                             '</tr>';
             });
 
-            const totalCols = 4 + overtimeDates.length;
-            if (!sorted.length) {
-                bodyHtml = `<tr><td colspan="${totalCols}" class="text-center text-muted">Tidak ada data overtime.</td></tr>`;
-            }
-
             // ---- TFOOT (Grand Total) ----
             let footHtml = '<tfoot><tr class="font-weight-bold"><td>Grand Total</td>';
             overtimeDates.forEach(d => {
@@ -1682,9 +1805,6 @@ body{
                         `<td class="text-right">${jamFormat(grandTotal)}</td>` +
                         '</tr></tfoot>';
 
-            if ($.fn.DataTable.isDataTable($table)) {
-                $table.DataTable().destroy();
-            }
             $table.html(theadHtml + '<tbody>' + bodyHtml + '</tbody>' + footHtml);
 
             overtimeDeptTable = $table.DataTable({
@@ -1703,6 +1823,13 @@ body{
             });
         }
 
+        /*
+         * PERBAIKAN: sama seperti renderOvertimeByDept() di atas — modal
+         * "Rincian Overtime" per department juga bisa kosong (mis. dept
+         * dipilih tapi ternyata tidak ada baris overtime pada tanggal
+         * manapun di periode terpilih), jadi diberi guard yang sama:
+         * skip inisialisasi DataTable kalau tidak ada data karyawan.
+         */
         function renderOvertimeDetail(details, deptName) {
             // Kumpulkan tanggal unik (kolom) untuk department ini, urut kronologis,
             // sekaligus tandai tanggal mana yang special (weekend/libur nasional).
@@ -1744,7 +1871,7 @@ body{
                 String(a.nama).localeCompare(String(b.nama), 'id', { sensitivity: 'base' })
             );
 
-            // ---- THEAD ----
+            // ---- THEAD (selalu sama, dipakai baik ada data maupun tidak) ----
             let theadHtml = '<thead><tr><th>NPK</th><th>Nama</th>';
             dates.forEach(d => {
                 const cls = 'text-right' + (d.special ? ' ot-special-col' : '');
@@ -1753,7 +1880,27 @@ body{
             theadHtml += '<th class="text-right">Total Lembur (Jam)</th>' +
                          '<th class="text-right">Total Lembur Khusus (Jam)</th></tr></thead>';
 
-            // ---- TBODY ----
+            $('#overtimeDetailModalLabel').html('<i class="fas fa-clock mr-1"></i> Rincian Overtime - ' + deptName);
+
+            const $table = resetDataTableWrapper(
+                'overtimeDetailTableWrapper',
+                'overtimeDetailTable',
+                'table table-sm table-bordered mb-0 small'
+            );
+
+            const totalCols = 4 + dates.length;
+
+            // ---- Data kosong -> render pesan saja, JANGAN inisialisasi DataTable ----
+            if (!employees.length) {
+                $table.html(
+                    theadHtml +
+                    `<tbody><tr><td colspan="${totalCols}" class="text-center text-muted py-4">Tidak ada data.</td></tr></tbody>`
+                );
+                overtimeDetailTable = null;
+                return;
+            }
+
+            // ---- TBODY (ada data) ----
             let bodyHtml = '';
             employees.forEach(emp => {
                 bodyHtml += `<tr><td>${emp.npk}</td><td>${emp.nama}</td>`;
@@ -1766,11 +1913,6 @@ body{
                 bodyHtml += `<td class="text-right">${jamFormat(emp.totalKhusus)}</td>`;
                 bodyHtml += '</tr>';
             });
-
-            const totalCols = 4 + dates.length;
-            if (!employees.length) {
-                bodyHtml = `<tr><td colspan="${totalCols}" class="text-center text-muted">Tidak ada data.</td></tr>`;
-            }
 
             // ---- TFOOT ----
             let footHtml = '<tfoot><tr class="font-weight-bold"><td colspan="2">Grand Total</td>';
@@ -1785,13 +1927,6 @@ body{
             footHtml += `<td class="text-right">${jamFormat(grandKhusus)}</td>`;
             footHtml += '</tr></tfoot>';
 
-            $('#overtimeDetailModalLabel').html('<i class="fas fa-clock mr-1"></i> Rincian Overtime - ' + deptName);
-
-            const $table = $('#overtimeDetailTable');
-
-            if ($.fn.DataTable.isDataTable($table)) {
-                $table.DataTable().destroy();
-            }
             $table.html(theadHtml + '<tbody>' + bodyHtml + '</tbody>' + footHtml);
 
             overtimeDetailTable = $table.DataTable({
@@ -1839,22 +1974,36 @@ body{
             fetch("{{ route('payroll-recap.overtime-data') }}?" + new URLSearchParams(params))
                 .then(res => res.json())
                 .then(data => {
-                    $('#overtimePeriodLabel').text(data.period.name);
+                    $('#overtimePeriodLabel').html(periodLabelHtml(data.period));
 
-                    renderOvertimeChart(data.overtime_by_date || []);
+                    try {
+                        renderOvertimeChart(data.overtime_by_date || []);
+                    } catch (e) { console.error('[overtime] renderOvertimeChart:', e); }
+
+                    $('#kpiOvertimeCostRegular').text(rupiah(data.overtime_total_cost_regular));
+                    $('#kpiOvertimeCostSpecial').text(rupiah(data.overtime_total_cost_special));
+                    $('#kpiOvertimeCostTotal').text(rupiah(data.overtime_total_cost));
 
                     overtimeEmployeesData = data.overtime_employees || [];
-                    renderOvertimeByDept(
-                        data.overtime_by_dept || [],
-                        data.overtime_dates || [],
-                        data.overtime_matrix || {}
-                    );
-                    renderTop5Dept(data.top5_dept || []);
-                    renderTop5Dept(data.top5_dept || []);
-                    renderOvertimeByWeek(data.overtime_by_week || []);
+
+                    try {
+                        renderOvertimeByDept(
+                            data.overtime_by_dept || [],
+                            data.overtime_dates || [],
+                            data.overtime_matrix || {}
+                        );
+                    } catch (e) { console.error('[overtime] renderOvertimeByDept:', e); }
+
+                    try {
+                        renderTop5Dept(data.top5_dept || []);
+                    } catch (e) { console.error('[overtime] renderTop5Dept:', e); }
+
+                    try {
+                        renderOvertimeByWeek(data.overtime_by_week || []);
+                    } catch (e) { console.error('[overtime] renderOvertimeByWeek:', e); }
                 })
                 .catch(err => {
-                    // console.error('Error fetching overtime data:', err);
+                    console.error('[overtime] fetch error:', err);
                     Swal.fire('Gagal', 'Terjadi kesalahan saat memuat data.', 'error');
                 })
                 .finally(() => hideLoadingSwal());

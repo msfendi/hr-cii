@@ -2,20 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GeneratePayrollProcess;
 use App\Models\RolePayroll;
 use App\Services\PayrollRoleFilterService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class PayrollRecapController extends Controller
 {
-    /**
-     * Daftar component payroll yang boleh dipilih di filter.
-     * Key HARUS sama persis dengan key JSON di kolom `components`.
-     * Whitelist ini juga jadi validasi input dari client.
-     */
     private array $components = [
         'earning' => [
             'basic_salary'           => 'Gaji Pokok',
@@ -42,43 +39,27 @@ class PayrollRecapController extends Controller
         ],
     ];
 
-    /**
-     * Role payroll efektif user yang sedang login, sumber kebenaran dari
-     * table role_payrolls (lihat PayrollRoleFilterService::getRole()).
-     */
     private function getRole(): ?string
     {
         return PayrollRoleFilterService::getRole(Auth::user());
     }
 
-    /**
-     * Label untuk ditampilkan di UI, mis. "Staff", "Sewing", dst.
-     */
     private function getRoleLabel(?string $role): ?string
     {
         if ($role === null) {
             return null;
         }
-
         return RolePayroll::ROLES[$role] ?? $role;
     }
 
-    /**
-     * Ambil daftar periode payroll (untuk filter section 2 & 3), terbaru dulu.
-     */
     private function getPeriods()
     {
         return DB::table('payroll_periods')
-            ->select('id', 'name', 'start_date', 'end_date')
-            ->where('is_closed', true)
+            ->select('id', 'name', 'start_date', 'end_date', 'is_closed')
             ->orderByDesc('start_date')
             ->get();
     }
 
-    /**
-     * Resolve satu periode payroll dari request (?period_id=), default ke
-     * periode terbaru bila tidak dikirim / tidak ditemukan.
-     */
     private function resolvePeriod(?string $periodId)
     {
         $query = DB::table('payroll_periods')->orderByDesc('start_date');
@@ -88,21 +69,16 @@ class PayrollRecapController extends Controller
             : $query->first();
     }
 
-    /**
-     * Halaman utama Rekap Payroll.
-     */
     public function index()
     {
         $role = $this->getRole();
 
-        // bio dipakai untuk kolom IS_STAFF (sumber filter role payroll)
         $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
             ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
+                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
             );
 
-        // employee_dept di payroll_run_details adalah FK ke DEPT.ID_DEPT
         $departmentsQuery = DB::table('payroll_run_details as prd')
             ->join('DEPT', 'DEPT.ID_DEPT', '=', 'prd.employee_dept')
             ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'));
@@ -129,13 +105,6 @@ class PayrollRecapController extends Controller
         ]);
     }
 
-    /**
-     * AJAX: autocomplete pencarian karyawan (by NPK / nama) untuk Select2.
-     * GET /payroll/recap/search-employee?q=xxxx
-     *
-     * Ikut difilter role_payrolls supaya user tidak bisa mencari/memilih
-     * NPK di luar cakupan role-nya.
-     */
     public function searchEmployee(Request $request)
     {
         $role = $this->getRole();
@@ -170,42 +139,25 @@ class PayrollRecapController extends Controller
             ->orderBy('prd.employee_name')
             ->limit(20)
             ->get()
-            ->map(function ($row) {
-                return [
-                    'id'   => $row->employee_npk,
-                    'text' => "{$row->employee_npk} - {$row->employee_name}",
-                ];
-            });
+            ->map(fn($row) => [
+                'id'   => $row->employee_npk,
+                'text' => "{$row->employee_npk} - {$row->employee_name}",
+            ]);
 
         return response()->json(['results' => $employees]);
     }
 
-    /**
-     * Klasifikasi status kepegawaian karyawan pada satu periode payroll.
-     * - 'aktif'   : TKK kosong, atau TKK > akhir periode (belum resign di periode ini)
-     * - 'keluar'  : TKK di dalam rentang periode, KETERANGAN != MA
-     * - 'mangkir' : TKK di dalam rentang periode, KETERANGAN == MA
-     *
-     * $tkk, $periodStart, $periodEnd dalam format 'Y-m-d'.
-     */
     private function classifyEmploymentStatus(?string $tkk, ?string $keterangan, string $periodStart, string $periodEnd): string
     {
         if (empty($tkk) || $tkk > $periodEnd) {
             return 'aktif';
         }
-
         if ($tkk >= $periodStart && $tkk <= $periodEnd) {
             return strtoupper(trim($keterangan ?? '')) === 'MA' ? 'mangkir' : 'keluar';
         }
-
-        return 'keluar'; // TKK ada tapi di luar periode (fallback)
+        return 'keluar';
     }
 
-    /**
-     * Ubah nilai JUMLAH_JAM_LEMBUR (nvarchar) menjadi float dengan aman.
-     * Menangani pemisah desimal koma ("2,5" -> 2.5). Sesuaikan di sini jika
-     * format datanya ternyata berbeda (mis. "HH:MM").
-     */
     private function parseJam($value): float
     {
         if ($value === null) return 0.0;
@@ -215,23 +167,68 @@ class PayrollRecapController extends Controller
         return is_numeric($value) ? (float) $value : 0.0;
     }
 
-    /**
-     * =====================================================================
-     * SECTION 1: REKAP PAYROLL (per bulan, 12 bulan rolling)
-     * =====================================================================
-     * AJAX: data untuk chart rekap payroll.
-     * GET /payroll/recap/chart-data
-     *
-     * Query params:
-     *  - end_month   (Y-m)  default: bulan sekarang. Rentang otomatis 12 bulan ke belakang.
-     *  - npk         (nullable string)
-     *  - dept        (nullable string/int, ID_DEPT)
-     *  - component   (nullable string) default: total_salary
-     *
-     * Semua sumber data (rekap bulanan) difilter berdasarkan payroll_role
-     * user login lewat PayrollRoleFilterService::applyToQuery() -- aturan
-     * deny-by-default: role null / tidak terdaftar di role_payrolls -> data kosong.
-     */
+    private function evaluateFormula($formula, array $variables)
+    {
+        if (!$formula) {
+            return 0;
+        }
+
+        foreach ($variables as $key => $value) {
+            $formula = preg_replace('/\b' . $key . '\b/', $value, $formula);
+        }
+
+        try {
+            return eval("return $formula;");
+        } catch (\Throwable $e) {
+            return 0;
+        }
+    }
+
+    private function getOvertimeFormulas(): array
+    {
+        return [
+            'regular' => DB::table('payroll_components')->where('code', 'overtime_pay')->value('formula'),
+            'special' => DB::table('payroll_components')->where('code', 'special_overtime_pay')->value('formula'),
+        ];
+    }
+
+    private function latestContractQuery($periodStart, $periodEnd)
+    {
+        return DB::table('employees_contract as ec1')
+            ->select('ec1.npk', 'ec1.salary', 'ec1.allowance', 'ec1.daily_salary', 'ec1.type')
+            ->whereDate('ec1.start_date', '<=', $periodEnd)
+            ->whereDate('ec1.end_date', '>=', $periodStart)
+            ->whereRaw("
+                ec1.id = (
+                    SELECT TOP 1 ec2.id
+                    FROM employees_contract ec2
+                    WHERE ec2.npk = ec1.npk
+                      AND ec2.start_date <= ?
+                      AND ec2.end_date >= ?
+                    ORDER BY ec2.contract_ke DESC, ec2.start_date DESC
+                )
+            ", [$periodEnd, $periodStart]);
+    }
+
+    private function evaluateOvertimeFormula(?string $formula, $emp, float $hours, string $hoursKey, float $countDays): float
+    {
+        if (!$formula || !$emp || $hours <= 0) {
+            return 0.0;
+        }
+
+        $variables = [
+            'basic_salary' => (float) $emp->salary,
+            'allowance'    => (float) $emp->allowance,
+            'daily_salary' => (float) $emp->daily_salary,
+            'count_days'   => $countDays,
+            'is_contract'  => Str::ucfirst(Str::lower((string) $emp->type)) === 'Contract' ? 1 : 0,
+            'is_daily'     => Str::ucfirst(Str::lower((string) $emp->type)) === 'Daily' ? 1 : 0,
+            $hoursKey      => $hours,
+        ];
+
+        return (float) $this->evaluateFormula($formula, $variables);
+    }
+
     public function chartData(Request $request)
     {
         $role = $this->getRole();
@@ -240,7 +237,6 @@ class PayrollRecapController extends Controller
             ? Carbon::createFromFormat('Y-m', $request->end_month)->endOfMonth()
             : Carbon::now()->endOfMonth();
 
-        // Selalu tarik mundur 12 bulan dari bulan akhir yang dipilih
         $startMonth = (clone $endMonth)->subMonths(11)->startOfMonth();
 
         $npk       = $request->get('npk');
@@ -257,12 +253,10 @@ class PayrollRecapController extends Controller
             ? 'Total Take Home Pay'
             : $flatComponents[$component];
 
-        // Union data biodata karyawan aktif & yang sudah keluar, digabung by NPK.
-        // Diasumsikan satu NPK hanya muncul di salah satu dari kedua tabel ini.
         $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
             ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
+                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
             );
 
         $rowsQuery = DB::table('payroll_run_details as prd')
@@ -295,7 +289,6 @@ class PayrollRecapController extends Controller
             ->orderBy('pp.start_date')
             ->get();
 
-        // Susun bucket 12 bulan penuh (walau datanya kosong tetap tampil 0)
         $months = collect();
         $cursor = (clone $startMonth);
         while ($cursor->lte($endMonth)) {
@@ -384,21 +377,6 @@ class PayrollRecapController extends Controller
         ]);
     }
 
-    /**
-     * =====================================================================
-     * SECTION 2: DETAIL PAYROLL (Rincian per Karyawan & per Department)
-     * =====================================================================
-     * AJAX: GET /payroll/recap/detail-data
-     *
-     * Berbeda dengan section 1, data di sini TIDAK diakumulasi lintas bulan.
-     * Semua rincian scoped ke SATU periode payroll (period_id) saja.
-     *
-     * Query params:
-     *  - period_id  (nullable) default: periode payroll terbaru
-     *  - npk        (nullable string)
-     *  - dept       (nullable string/int, ID_DEPT)
-     *  - component  (nullable string) default: total_salary
-     */
     public function detailData(Request $request)
     {
         $role = $this->getRole();
@@ -422,40 +400,11 @@ class PayrollRecapController extends Controller
             ? 'Total Take Home Pay'
             : $flatComponents[$component];
 
-        $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
-            );
+        $isClosed = (bool) $period->is_closed;
 
-        $rowsQuery = DB::table('payroll_run_details as prd')
-            ->join('payroll_runs as pr', 'prd.run_id', '=', 'pr.id')
-            ->where('pr.period_id', $period->id)
-            ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
-            ->leftJoin('PKWT as pkwt', 'pkwt.NPK', '=', 'prd.employee_npk')
-            ->leftJoin('DEPT as dept_main', 'dept_main.ID_DEPT', '=', 'prd.employee_dept')
-            ->when($npk, fn($q) => $q->where('prd.employee_npk', $npk))
-            ->when($dept, fn($q) => $q->where('prd.employee_dept', $dept));
-
-        $rowsQuery = PayrollRoleFilterService::applyToQuery(
-            $rowsQuery,
-            $role,
-            'bio.IS_STAFF',
-            'dept_main.IS_SEWING'
-        );
-
-        $rows = $rowsQuery
-            ->select(
-                'prd.employee_npk',
-                'prd.employee_dept as dept_id',
-                'prd.total_salary',
-                'prd.components',
-                DB::raw('COALESCE(bio.NAMA_KARYAWAN, prd.employee_name) as nama'),
-                DB::raw('COALESCE(dept_main.DEPARTEMENT, \'Tanpa Dept\') as dept_name'),
-                'pkwt.TKK as tkk',
-                'pkwt.KETERANGAN as keterangan'
-            )
-            ->get();
+        $rows = $isClosed
+            ? $this->getClosedPayrollRows($period, $role, $npk, $dept)
+            : $this->getLivePayrollRows($period, $npk, $dept);
 
         $periodStart = Carbon::parse($period->start_date)->format('Y-m-d');
         $periodEnd   = !empty($period->end_date)
@@ -476,8 +425,6 @@ class PayrollRecapController extends Controller
             $tkkStr = $row->tkk ? Carbon::parse($row->tkk)->format('Y-m-d') : null;
             $status = $this->classifyEmploymentStatus($tkkStr, $row->keterangan, $periodStart, $periodEnd);
 
-            // Satu karyawan = satu baris payroll_run_details per periode,
-            // jadi tidak perlu akumulasi lintas baris di sini.
             $employees[$row->employee_npk] = [
                 'npk'           => $row->employee_npk,
                 'nama'          => $row->nama,
@@ -500,13 +447,11 @@ class PayrollRecapController extends Controller
             $deptRecap[$deptKey]['total'] += $value;
             $deptRecap[$deptKey]['employees'][$row->employee_npk] = true;
 
-            // Rincian per karyawan per Department -- SEMUA komponen gaji,
-            // dipakai modal detail saat baris department diklik.
             if (!isset($deptEmployeeDetail[$deptKey][$row->employee_npk])) {
                 $components = [];
                 foreach ($comp as $ck => $cv) {
                     if (!array_key_exists($ck, $flatComponents)) {
-                        continue; // hanya komponen yang terdaftar di whitelist
+                        continue;
                     }
                     $components[$ck] = round(is_array($cv) ? (float) ($cv['amount'] ?? 0) : (float) $cv, 2);
                 }
@@ -514,7 +459,7 @@ class PayrollRecapController extends Controller
                 $deptEmployeeDetail[$deptKey][$row->employee_npk] = [
                     'npk'          => $row->employee_npk,
                     'nama'         => $row->nama,
-                    'status'       => $status, // 'aktif' | 'keluar' | 'mangkir'
+                    'status'       => $status,
                     'total_salary' => round((float) $row->total_salary, 2),
                     'components'   => $components,
                 ];
@@ -536,7 +481,6 @@ class PayrollRecapController extends Controller
         $deptEmployeeDetails = collect($deptEmployeeDetail)
             ->map(fn($employeesInDept) => collect($employeesInDept)->sortByDesc('total_salary')->values())
             ->toArray();
-        // Cast ke stdClass supaya SELALU ter-encode sebagai JSON object.
         $deptEmployeeDetails = (object) $deptEmployeeDetails;
 
         return response()->json([
@@ -544,6 +488,7 @@ class PayrollRecapController extends Controller
                 'id'         => $period->id,
                 'name'       => $period->name,
                 'start_date' => Carbon::parse($period->start_date)->format('Y-m-d'),
+                'is_closed'  => $isClosed,
             ],
             'component_label'       => $componentLabel,
             'employees'             => $employeeList,
@@ -552,20 +497,66 @@ class PayrollRecapController extends Controller
         ]);
     }
 
-    /**
-     * =====================================================================
-     * SECTION 3: OVERTIME
-     * =====================================================================
-     * AJAX: GET /payroll/recap/overtime-data
-     *
-     * Sebelumnya rincian overtime menggabungkan tanggal dari SEMUA periode
-     * sekaligus. Sekarang di-scope ke SATU periode payroll (period_id),
-     * dan ditambah agregat per-tanggal (regular vs khusus) untuk chart.
-     *
-     * Query params:
-     *  - period_id (nullable) default: periode payroll terbaru
-     *  - dept      (nullable string/int, ID_DEPT)
-     */
+    private function getClosedPayrollRows($period, ?string $role, $npk, $dept)
+    {
+        $bioUnion = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
+            );
+
+        $rowsQuery = DB::table('payroll_run_details as prd')
+            ->join('payroll_runs as pr', 'prd.run_id', '=', 'pr.id')
+            ->where('pr.period_id', $period->id)
+            ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
+            ->leftJoin('PKWT as pkwt', 'pkwt.NPK', '=', 'prd.employee_npk')
+            ->leftJoin('DEPT as dept_main', 'dept_main.ID_DEPT', '=', 'prd.employee_dept')
+            ->when($npk, fn($q) => $q->where('prd.employee_npk', $npk))
+            ->when($dept, fn($q) => $q->where('prd.employee_dept', $dept));
+
+        $rowsQuery = PayrollRoleFilterService::applyToQuery(
+            $rowsQuery,
+            $role,
+            'bio.IS_STAFF',
+            'dept_main.IS_SEWING'
+        );
+
+        return $rowsQuery
+            ->select(
+                'prd.employee_npk',
+                'prd.employee_dept as dept_id',
+                'prd.total_salary',
+                'prd.components',
+                DB::raw('COALESCE(bio.NAMA_KARYAWAN, prd.employee_name) as nama'),
+                DB::raw('COALESCE(dept_main.DEPARTEMENT, \'Tanpa Dept\') as dept_name'),
+                'pkwt.TKK as tkk',
+                'pkwt.KETERANGAN as keterangan'
+            )
+            ->get();
+    }
+
+    private function getLivePayrollRows($period, $npk, $dept)
+    {
+        $results = (new GeneratePayrollProcess($period->id))->simulation();
+
+        return collect($results)
+            ->when($npk, fn($c) => $c->where('employee_npk', $npk))
+            ->when($dept, fn($c) => $c->where('employee_dept', $dept))
+            ->map(function ($row) {
+                return (object) [
+                    'employee_npk' => $row['employee_npk'],
+                    'dept_id'      => $row['employee_dept'],
+                    'total_salary' => $row['total_salary'],
+                    'components'   => json_encode($row['components']),
+                    'nama'         => $row['employee_name'],
+                    'dept_name'    => $row['dept'] ?: 'Tanpa Dept',
+                    'tkk'          => $row['tkk'],
+                    'keterangan'   => $row['keterangan'],
+                ];
+            })
+            ->values();
+    }
+
     public function overtimeData(Request $request)
     {
         $role = $this->getRole();
@@ -575,22 +566,30 @@ class PayrollRecapController extends Controller
             return response()->json(['message' => 'Periode payroll tidak ditemukan.'], 422);
         }
 
-        // Asumsi payroll_periods punya kolom end_date. Jika tidak tersedia,
-        // fallback ke akhir bulan dari start_date periode tsb.
+        $isClosed    = (bool) $period->is_closed;
+        $sourceTable = $isClosed ? 'overtimes_payroll' : 'overtimes';
+
         $periodStart = Carbon::parse($period->start_date)->startOfDay();
         $periodEnd   = !empty($period->end_date)
             ? Carbon::parse($period->end_date)->endOfDay()
             : (clone $periodStart)->endOfMonth()->endOfDay();
 
+        $totalDaysInPeriod  = $periodStart->diffInDays($periodEnd) + 1;
+        $totalWeeksInPeriod = max($totalDaysInPeriod / 7, 0.1);
+
         $dept = $request->get('dept');
 
+        $formulas      = $this->getOvertimeFormulas();
+        $employeeComp  = $this->latestContractQuery($periodStart->toDateString(), $periodEnd->toDateString())
+            ->get()
+            ->keyBy('npk');
+
         $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
             ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'IS_STAFF')
+                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
             );
 
-        // Hari libur nasional dalam rentang periode terpilih
         $holidaySet = DB::table('holidays')
             ->whereBetween('holiday_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
             ->where('is_national', 1)
@@ -598,17 +597,32 @@ class PayrollRecapController extends Controller
             ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
             ->flip();
 
-        // Ambil dept terbaru per NPK dari payroll_run_details, lalu join ke DEPT,
-        // supaya filter Department overtime konsisten dengan filter Department utama.
-        $latestDeptPerNpk = DB::table('payroll_run_details as prd')
-            ->select('prd.employee_npk', 'prd.employee_dept')
-            ->whereRaw('prd.id = (SELECT MAX(prd2.id) FROM payroll_run_details prd2 WHERE prd2.employee_npk = prd.employee_npk)');
+        $overtimeRowsQuery = DB::table($sourceTable . ' as ot')
+            ->leftJoinSub($bioUnion, 'bio_ot', fn($join) => $join->on('bio_ot.NPK', '=', 'ot.NPK'));
 
-        $overtimeRowsQuery = DB::table('overtimes_payroll as ot')
-            ->leftJoinSub($latestDeptPerNpk, 'ndept', fn($join) => $join->on('ndept.employee_npk', '=', 'ot.NPK'))
-            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'ndept.employee_dept')
-            ->leftJoinSub($bioUnion, 'bio_ot', fn($join) => $join->on('bio_ot.NPK', '=', 'ot.NPK'))
-            ->whereBetween('ot.OVERTIME_DATE', [$periodStart->toDateString(), $periodEnd->toDateString()])
+        if ($isClosed) {
+            $deptPerNpkThisPeriod = DB::table('payroll_run_details as prd')
+                ->join('payroll_runs as pr', 'prd.run_id', '=', 'pr.id')
+                ->where('pr.period_id', $period->id)
+                ->select('prd.employee_npk', 'prd.employee_dept')
+                ->whereRaw('prd.id = (
+            SELECT MAX(prd2.id) FROM payroll_run_details prd2
+            JOIN payroll_runs pr2 ON pr2.id = prd2.run_id
+            WHERE prd2.employee_npk = prd.employee_npk
+              AND pr2.period_id = ?
+        )', [$period->id]);
+
+            $overtimeRowsQuery = $overtimeRowsQuery
+                ->leftJoinSub($deptPerNpkThisPeriod, 'ndept', fn($join) => $join->on('ndept.employee_npk', '=', 'ot.NPK'))
+                ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'ndept.employee_dept');
+        } else {
+            $overtimeRowsQuery = $overtimeRowsQuery
+                ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'bio_ot.ID_DEPT');
+        }
+
+        $overtimeRowsQuery = $overtimeRowsQuery
+            ->whereDate('ot.OVERTIME_DATE', '>=', $periodStart->toDateString())
+            ->whereDate('ot.OVERTIME_DATE', '<=', $periodEnd->toDateString())
             ->when($dept, fn($q) => $q->where('DEPT.ID_DEPT', $dept));
 
         $overtimeRowsQuery = PayrollRoleFilterService::applyToQuery(
@@ -624,8 +638,8 @@ class PayrollRecapController extends Controller
                 'ot.NAMA_KARYAWAN',
                 'ot.OVERTIME_DATE',
                 'ot.JUMLAH_JAM_LEMBUR',
-                DB::raw('COALESCE(DEPT.ID_DEPT, ot.DEPT_GROUP, \'-\') as dept_key'),
-                DB::raw('COALESCE(DEPT.DEPARTEMENT, ot.BAGIAN, \'Tanpa Dept\') as dept_name')
+                DB::raw('COALESCE(DEPT.ID_DEPT, \'-\') as dept_key'),
+                DB::raw('COALESCE(DEPT.DEPARTEMENT, \'Tanpa Dept\') as dept_name')
             )
             ->orderBy('ot.OVERTIME_DATE')
             ->get();
@@ -634,8 +648,18 @@ class PayrollRecapController extends Controller
         $overtimeEmployees = [];
         $overtimeMatrix    = [];
         $overtimeDateKeys  = [];
-        // Agregat per tanggal (reguler vs khusus), dipakai untuk chart section 3.
         $overtimeByDate    = [];
+
+        // =====================================================================
+        // FIX: akumulasi cost mentah (float, belum dibulatkan) PER NPK, meniru
+        // persis pola GeneratePayrollProcess -- di Job, overtime_pay &
+        // special_overtime_pay dijumlahkan dulu untuk SEMUA hari lembur milik
+        // satu karyawan, baru round(..., 0) SEKALI per karyawan per komponen.
+        // Sebelumnya recap membulatkan cost per BARIS TANGGAL ke 2 desimal lalu
+        // menjumlahkannya -- beda titik & beda presisi pembulatan inilah yang
+        // menyebabkan selisih kecil (mis. Rp71) dibanding angka payroll asli.
+        // =====================================================================
+        $employeeOvertimeCost = [];
 
         foreach ($overtimeRows as $row) {
             $date      = Carbon::parse($row->OVERTIME_DATE);
@@ -660,10 +684,12 @@ class PayrollRecapController extends Controller
 
             if (!isset($overtimeByDate[$dateKey])) {
                 $overtimeByDate[$dateKey] = [
-                    'is_weekend'  => $isWeekend,
-                    'is_holiday'  => $isHoliday,
-                    'regular_jam' => 0.0,
-                    'special_jam' => 0.0,
+                    'is_weekend'   => $isWeekend,
+                    'is_holiday'   => $isHoliday,
+                    'regular_jam'  => 0.0,
+                    'special_jam'  => 0.0,
+                    'regular_cost' => 0.0,
+                    'special_cost' => 0.0,
                 ];
             }
 
@@ -674,6 +700,49 @@ class PayrollRecapController extends Controller
                 $overtimeByDept[$deptKey]['overtime_jam'] += $jam;
                 $overtimeByDate[$dateKey]['regular_jam'] += $jam;
             }
+
+            $emp = $employeeComp->get($row->NPK);
+
+            $regularHours = 0.0;
+            $specialHours = 0.0;
+
+            if ($jam > 0) {
+                if ($isSpecial) {
+                    $overThreshold = false;
+                    if ($emp) {
+                        $salaryPlusAllowance = (float) $emp->salary + (float) $emp->allowance;
+                        $dailyBasis = ((float) $emp->daily_salary * $totalDaysInPeriod) + (float) $emp->allowance;
+                        $overThreshold = $salaryPlusAllowance >= 3800000 || $dailyBasis >= 3800000;
+                    }
+                    $specialHours = $overThreshold ? min($jam, 8) : $jam;
+                } else {
+                    $regularHours = $jam;
+                }
+            }
+
+            $regularCost = $this->evaluateOvertimeFormula(
+                $formulas['regular'],
+                $emp,
+                $regularHours,
+                'overtime_hours',
+                $totalDaysInPeriod
+            );
+            $specialCost = $this->evaluateOvertimeFormula(
+                $formulas['special'],
+                $emp,
+                $specialHours,
+                'special_overtime_hours',
+                $totalDaysInPeriod
+            );
+
+            $overtimeByDate[$dateKey]['regular_cost'] += $regularCost;
+            $overtimeByDate[$dateKey]['special_cost'] += $specialCost;
+
+            if (!isset($employeeOvertimeCost[$row->NPK])) {
+                $employeeOvertimeCost[$row->NPK] = ['regular' => 0.0, 'special' => 0.0];
+            }
+            $employeeOvertimeCost[$row->NPK]['regular'] += $regularCost;
+            $employeeOvertimeCost[$row->NPK]['special'] += $specialCost;
 
             $overtimeMatrix[$deptKey][$dateKey] = ($overtimeMatrix[$deptKey][$dateKey] ?? 0) + $jam;
             $overtimeDateKeys[$dateKey] = true;
@@ -689,6 +758,8 @@ class PayrollRecapController extends Controller
                 'jenis'             => $isSpecial ? 'special_overtime' : 'overtime',
                 'is_weekend'        => $isWeekend,
                 'is_holiday'        => $isHoliday,
+                'regular_cost'      => round($regularCost, 2),
+                'special_cost'      => round($specialCost, 2),
             ];
         }
 
@@ -721,34 +792,28 @@ class PayrollRecapController extends Controller
                 ];
             });
 
-        // Data chart "Total Overtime per Tanggal" (1 periode): lembur biasa vs khusus
         $overtimeByDateChart = collect(array_keys($overtimeDateKeys))
             ->sort()
             ->values()
             ->map(function ($dateKey) use ($overtimeByDate) {
                 $d = $overtimeByDate[$dateKey];
                 return [
-                    'date'        => $dateKey,
-                    'label'       => Carbon::parse($dateKey)->format('d/m'),
-                    'is_weekend'  => $d['is_weekend'],
-                    'is_holiday'  => $d['is_holiday'],
-                    'regular_jam' => round($d['regular_jam'], 2),
-                    'special_jam' => round($d['special_jam'], 2),
+                    'date'         => $dateKey,
+                    'label'        => Carbon::parse($dateKey)->format('d/m'),
+                    'is_weekend'   => $d['is_weekend'],
+                    'is_holiday'   => $d['is_holiday'],
+                    'regular_jam'  => round($d['regular_jam'], 2),
+                    'special_jam'  => round($d['special_jam'], 2),
+                    'regular_cost' => round($d['regular_cost'], 0),
+                    'special_cost' => round($d['special_cost'], 0),
                 ];
             });
 
-        // Top 5 Department dengan total jam lembur tertinggi (biasa + khusus)
         $top5Dept = $overtimeByDept->sortByDesc('total_jam')->take(5)->values();
-
-        // Rata-rata jam lembur per minggu dalam periode terpilih
-        $totalDaysInPeriod  = $periodStart->diffInDays($periodEnd) + 1;
-        $totalWeeksInPeriod = max($totalDaysInPeriod / 7, 0.1); // hindari div by zero utk periode < 1 minggu
 
         $totalRegularJam = round(collect($overtimeByDate)->sum('regular_jam'), 2);
         $totalSpecialJam = round(collect($overtimeByDate)->sum('special_jam'), 2);
 
-        // Rincian jam lembur per minggu dalam periode terpilih (Week 1 = 7 hari
-        // pertama sejak periodStart, dst — bukan minggu kalender Senin-Minggu)
         $overtimeByWeek = [];
         $weekCursor = $periodStart->copy();
         $weekNumber = 1;
@@ -760,35 +825,53 @@ class PayrollRecapController extends Controller
             }
 
             $overtimeByWeek[] = [
-                'week'        => $weekNumber,
-                'start_date'  => $weekCursor->format('Y-m-d'),
-                'end_date'    => $weekEndCursor->format('Y-m-d'),
-                'regular_jam' => 0.0,
-                'special_jam' => 0.0,
+                'week'         => $weekNumber,
+                'start_date'   => $weekCursor->format('Y-m-d'),
+                'end_date'     => $weekEndCursor->format('Y-m-d'),
+                'regular_jam'  => 0.0,
+                'special_jam'  => 0.0,
+                'regular_cost' => 0.0,
+                'special_cost' => 0.0,
             ];
 
             $weekCursor->addDays(7);
             $weekNumber++;
         }
 
-        // Sebar total jam per tanggal ($overtimeByDate, sudah ada dari loop di atas)
-        // ke bucket minggu yang sesuai
         foreach ($overtimeByDate as $dateKey => $d) {
             $daysFromStart = $periodStart->diffInDays(Carbon::parse($dateKey));
             $weekIndex     = (int) floor($daysFromStart / 7);
 
             if (isset($overtimeByWeek[$weekIndex])) {
-                $overtimeByWeek[$weekIndex]['regular_jam'] += $d['regular_jam'];
-                $overtimeByWeek[$weekIndex]['special_jam'] += $d['special_jam'];
+                $overtimeByWeek[$weekIndex]['regular_jam']  += $d['regular_jam'];
+                $overtimeByWeek[$weekIndex]['special_jam']  += $d['special_jam'];
+                $overtimeByWeek[$weekIndex]['regular_cost'] += $d['regular_cost'];
+                $overtimeByWeek[$weekIndex]['special_cost'] += $d['special_cost'];
             }
         }
 
         $overtimeByWeek = collect($overtimeByWeek)->map(function ($w) {
-            $w['regular_jam'] = round($w['regular_jam'], 2);
-            $w['special_jam'] = round($w['special_jam'], 2);
-            $w['total_jam']   = round($w['regular_jam'] + $w['special_jam'], 2);
+            $w['regular_jam']   = round($w['regular_jam'], 2);
+            $w['special_jam']   = round($w['special_jam'], 2);
+            $w['total_jam']     = round($w['regular_jam'] + $w['special_jam'], 2);
+            $w['regular_cost']  = round($w['regular_cost'], 0);
+            $w['special_cost']  = round($w['special_cost'], 0);
+            $w['total_cost']    = round($w['regular_cost'] + $w['special_cost'], 0);
             return $w;
         })->values();
+
+        // =====================================================================
+        // TOTAL RESMI -- dihitung PERSIS seperti Job: bulatkan ke 0 desimal
+        // PER KARYAWAN PER KOMPONEN dulu (regular & special terpisah), baru
+        // dijumlahkan semua karyawan. Ini yang membuat angka di recap sama
+        // persis dengan angka hasil Generate Payroll asli.
+        // =====================================================================
+        $totalCostRegular = 0;
+        $totalCostSpecial = 0;
+        foreach ($employeeOvertimeCost as $cost) {
+            $totalCostRegular += round($cost['regular'], 0);
+            $totalCostSpecial += round($cost['special'], 0);
+        }
 
         return response()->json([
             'period' => [
@@ -796,18 +879,22 @@ class PayrollRecapController extends Controller
                 'name'       => $period->name,
                 'start_date' => $periodStart->format('Y-m-d'),
                 'end_date'   => $periodEnd->format('Y-m-d'),
+                'is_closed'  => $isClosed,
             ],
-            'overtime_by_dept'       => $overtimeByDept,
-            'overtime_employees'     => $overtimeEmployees,
-            'overtime_dates'         => $overtimeDates,
-            'overtime_matrix'        => $overtimeMatrix,
-            'overtime_by_date'       => $overtimeByDateChart,
-            'top5_dept'               => $top5Dept,
-            'total_reguler'           => $totalRegularJam,
-            'total_special'           => $totalSpecialJam,
-            'overtime_by_week'       => $overtimeByWeek,
-            'overtime_total_regular' => round(collect($overtimeByDate)->sum('regular_jam'), 2),
-            'overtime_total_special' => round(collect($overtimeByDate)->sum('special_jam'), 2),
+            'overtime_by_dept'         => $overtimeByDept,
+            'overtime_employees'       => $overtimeEmployees,
+            'overtime_dates'           => $overtimeDates,
+            'overtime_matrix'          => $overtimeMatrix,
+            'overtime_by_date'         => $overtimeByDateChart,
+            'top5_dept'                => $top5Dept,
+            'total_reguler'            => $totalRegularJam,
+            'total_special'            => $totalSpecialJam,
+            'overtime_by_week'         => $overtimeByWeek,
+            'overtime_total_regular'   => $totalRegularJam,
+            'overtime_total_special'   => $totalSpecialJam,
+            'overtime_total_cost_regular' => $totalCostRegular,
+            'overtime_total_cost_special' => $totalCostSpecial,
+            'overtime_total_cost'         => $totalCostRegular + $totalCostSpecial,
         ]);
     }
 }
