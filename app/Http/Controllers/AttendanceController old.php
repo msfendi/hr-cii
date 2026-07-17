@@ -26,10 +26,9 @@ class AttendanceController extends Controller
     {
         // Use Cache Cache for employee group
         $employeeGroupChutex = DB::connection('cii')->table('AUDIT')
-            ->select('SUBDIVISI', DB::raw('MIN(KODE_BAGIAN) AS KODE_BAGIAN'))
-            ->groupBy('SUBDIVISI')
-            ->orderBy('SUBDIVISI', 'ASC')
-            ->limit(10)
+            ->select(DB::raw('MIN(SUBDIVISI) AS SUBDIVISI'), 'KODE_BAGIAN')
+            ->groupBy('KODE_BAGIAN')
+            ->orderBy('KODE_BAGIAN', 'ASC')
             ->get();
 
         return view('attendance.index', compact('employeeGroupChutex'));
@@ -81,7 +80,7 @@ class AttendanceController extends Controller
     public function report(Request $request)
     {
         $employeeGroupChutex = DB::connection('cii')->table('AUDIT')->select('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->distinct('NPK', 'KODE_BAGIAN', 'SUBDIVISI')->whereIn('KODE_BAGIAN', $request->department);
-        $employeeGroup = $employeeGroupChutex->orderBy('SUBDIVISI', 'ASC')->orderBy('NPK', 'ASC')->get();
+        $employeeGroup = $employeeGroupChutex->orderBy('KODE_BAGIAN', 'ASC')->orderBy('NPK', 'ASC')->get();
 
         $employeesChutex = DB::connection('cii')->table('AUDIT')
             ->select(
@@ -104,7 +103,7 @@ class AttendanceController extends Controller
             })
             ->whereIn('AUDIT.KODE_BAGIAN', $request->department)
             ->whereBetween('AUDIT.TANGGAL', [$request->fromdate, $request->todate]);
-        $employees = $employeesChutex->orderBy('AUDIT.SUBDIVISI', 'ASC')->orderBy('AUDIT.NPK', 'ASC')->orderBy('AUDIT.TANGGAL', 'ASC')->get();
+        $employees = $employeesChutex->orderBy('AUDIT.KODE_BAGIAN', 'ASC')->orderBy('AUDIT.NPK', 'ASC')->orderBy('AUDIT.TANGGAL', 'ASC')->get();
 
         $days = $request->days;
         return view('template.report-final', compact('employees', 'employeeGroup', 'days'));

@@ -95,6 +95,7 @@ use App\Http\Controllers\DoorprizeController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
+use App\Http\Controllers\AuditRecapController;
 
 /*
 |--------------------------------------------------------------------------
@@ -1105,3 +1106,14 @@ Route::post('/food-orders/scan', [FoodOrderController::class, 'verifyScan'])
     ->middleware('throttle:10,1') // batasi percobaan scan/manual per menit
     ->name('food-orders.scan.verify');
 Route::post('/food-orders/logout-scan', [FoodOrderController::class, 'logoutScan'])->name('food-orders.logout-scan');
+
+/*
+    |--------------------------------------------------------------------------
+    | Audit Recap
+    |--------------------------------------------------------------------------
+    */
+Route::get('/audit-recap', [AuditRecapController::class, 'index'])->name('audit-recap.index');
+Route::post('/audit-recap/generate', [AuditRecapController::class, 'generate'])->name('audit-recap.generate');
+
+
+// 
