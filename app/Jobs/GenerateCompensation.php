@@ -142,15 +142,37 @@ class GenerateCompensation implements ShouldQueue
 
         /*
 |--------------------------------------------------------------------------
-| BASE CONTRACT (END DATE THIS MONTH)
+| LATEST CONTRACT PER (NPK, CONTRACT_KE)
+|--------------------------------------------------------------------------
+| Base contract HARUS berupa kontrak TERAKHIR (MAX end_date) di dalam
+| contract_ke-nya sendiri. Kalau tidak dicek begini, kontrak history yang
+| sudah digantikan oleh perpanjangan berikutnya (row lama di contract_ke
+| yang sama) bisa ikut ke-trigger kalau end_date-nya kebetulan jatuh di
+| bulan yang sama dengan cutoff -> seluruh chain jadi ke-hitung padahal
+| bukan giliran cutoff-nya.
 |--------------------------------------------------------------------------
 */
 
-        $baseContracts = DB::table('employees_contract')
-            ->whereMonth('end_date', $today->month)
-            ->whereYear('end_date', $today->year)
-            // ->where('npk', '=', 'C-00827')
-            ->select('npk', 'contract_ke');
+        $latestPerChain = DB::table('employees_contract')
+            ->select('npk', 'contract_ke', DB::raw('MAX(end_date) as latest_end_date'))
+            ->groupBy('npk', 'contract_ke');
+
+        /*
+|--------------------------------------------------------------------------
+| BASE CONTRACT (KONTRAK TERAKHIR PER CHAIN, END DATE THIS MONTH)
+|--------------------------------------------------------------------------
+*/
+
+        $baseContracts = DB::table('employees_contract as ec')
+            ->joinSub($latestPerChain, 'lc', function ($join) {
+                $join->on('lc.npk', '=', 'ec.npk')
+                    ->on('lc.contract_ke', '=', 'ec.contract_ke')
+                    ->on('lc.latest_end_date', '=', 'ec.end_date');
+            })
+            ->whereMonth('ec.end_date', $today->month)
+            ->whereYear('ec.end_date', $today->year)
+            // ->where('ec.npk', '=', 'C-00827')
+            ->select('ec.npk', 'ec.contract_ke');
         // dd($baseContracts->get());
 
         /*
@@ -199,22 +221,33 @@ class GenerateCompensation implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | FILTER NEAREST DATE
+        | FILTER NEAREST DATE (PER CHAIN, BUKAN PER-ROW)
+        |--------------------------------------------------------------------------
+        | Nearest-cutoff (7 vs 20) ditentukan dari kontrak TERAKHIR tiap chain
+        | (npk_contract_ke), lalu berlaku untuk SEMUA row di chain tsb -> history
+        | kontrak yang lain tidak ikut ke-filter keluar sendiri-sendiri hanya
+        | karena end_date-nya sendiri kebetulan lebih dekat ke tanggal cutoff
+        | yang lain.
         |--------------------------------------------------------------------------
         */
 
-        $employees = $employees->filter(function ($emp) use ($today, $day) {
+        $date7  = Carbon::create($today->year, $today->month, 7);
+        $date20 = Carbon::create($today->year, $today->month, 20);
 
-            $endDate = Carbon::parse($emp->end_date);
+        $qualifyingChains = $employees
+            ->groupBy(fn($emp) => $emp->npk . '_' . $emp->contract_ke)
+            ->filter(function ($contracts) use ($date7, $date20, $day) {
+                $latest  = $contracts->sortByDesc('end_date')->first();
+                $endDate = Carbon::parse($latest->end_date);
+                $diff7   = abs($endDate->diffInDays($date7, false));
+                $diff20  = abs($endDate->diffInDays($date20, false));
+                return ($diff7 <= $diff20 ? 7 : 20) === $day;
+            })
+            ->keys();
 
-            $date7  = Carbon::create($today->year, $today->month, 7);
-            $date20 = Carbon::create($today->year, $today->month, 20);
-
-            $diff7  = abs($endDate->diffInDays($date7, false));
-            $diff20 = abs($endDate->diffInDays($date20, false));
-
-            return ($diff7 <= $diff20 ? 7 : 20) === $day;
-        });
+        $employees = $employees->filter(
+            fn($emp) => $qualifyingChains->contains($emp->npk . '_' . $emp->contract_ke)
+        )->values();
         // dd($employees);
 
         DB::beginTransaction();

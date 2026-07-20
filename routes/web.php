@@ -795,6 +795,15 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export')->middleware(['auth', 'permission']);
     });
 
+    Route::prefix('expat-dashboard')->name('expat-dashboard.')->group(function () {
+        Route::get('/', [ExpatController::class, 'dashboard'])->name('index');
+        Route::get('/chart-data', [ExpatController::class, 'chartData'])->name('chart-data');
+        Route::get('/recap-data', [ExpatController::class, 'recapData'])->name('recap-data');
+        Route::get('/document-data', [ExpatController::class, 'documentData'])->name('document-data');
+        Route::get('/search-employee', [ExpatController::class, 'searchEmployee'])->name('search-employee');
+        Route::get('/transaction-detail', [ExpatController::class, 'transactionDetail'])->name('transaction-detail');
+    });
+
     Route::prefix('chu-family')->group(function () {
         Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index')->middleware(['auth', 'permission']);
         Route::get('/create', [ChuFamilyController::class, 'create'])->name('chu-family.create')->middleware(['auth', 'permission']);
