@@ -130,7 +130,6 @@ return [
 
         'smartit' => [
             'driver'          => 'sqlsrv',
-            'url'             => env('DATABASE_URL'),
             'host'            => env('SMARTIT_DB_HOST', 'localhost'),
             'port'            => env('SMARTIT_DB_PORT', '1433'),
             'database'        => env('SMARTIT_DB_DATABASE', 'forge'),
