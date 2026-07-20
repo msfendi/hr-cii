@@ -160,9 +160,13 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="month">Bulan Format (Tahun-Bulan)</label>
-                                    <input type="month" class="form-control" name="month" id="month" required
-                                        value="{{ date('Y-m') }}">
+                                    <label for="month">Periode Payroll</label>
+                                    <select class="form-control" name="month" id="month" required>
+                                        <option value="" disabled selected>-- Pilih Periode --</option>
+                                        @foreach($payrollPeriods as $period)
+                                            <option value="{{ $period->start_date }}">{{ $period->name }}</option>
+                                        @endforeach
+                                    </select>
                                 </div>
                                 <div class="form-group">
                                     <label for="file">Upload File</label>

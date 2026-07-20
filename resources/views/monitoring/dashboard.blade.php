@@ -92,14 +92,23 @@
                         <p class="mb-0 text-gray-600 small">Monitoring ORDER &middot; PO &middot; BOM &mdash; realtime dari database</p>
                     </div>
                     <div>
-                        <button id="btn-sync-bom" type="button" class="btn btn-info btn-sm mr-2">
-                            <i class="fas fa-sync-alt fa-sm"></i> Sync BOM
-                        </button>
-                        <button id="btn-sync-po" type="button" class="btn btn-secondary btn-sm mr-2">
-                            <i class="fas fa-sync-alt fa-sm"></i> Sync PO
-                        </button>
-                        <a href="{{ route('monitoring.order.import.form') }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-file-upload fa-sm"></i> Upload Sheet ORDER </a>
+                        @canRoute('monitoring.sync.bom')
+                            <button id="btn-sync-bom" type="button" class="btn btn-info btn-sm mr-2">
+                                <i class="fas fa-sync-alt fa-sm"></i> Sync BOM
+                            </button>
+                        @endcanRoute
+
+                        @canRoute('monitoring.sync.po')
+                            <button id="btn-sync-po" type="button" class="btn btn-secondary btn-sm mr-2">
+                                <i class="fas fa-sync-alt fa-sm"></i> Sync PO
+                            </button>
+                        @endcanRoute
+
+                        @canRoute('monitoring.order.import.form')
+                            <a href="{{ route('monitoring.order.import.form') }}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-file-upload fa-sm"></i> Upload Sheet ORDER
+                            </a>
+                        @endcanRoute
                     </div>
                 </div>
 
