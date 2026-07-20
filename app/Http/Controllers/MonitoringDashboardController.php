@@ -43,6 +43,46 @@ class MonitoringDashboardController extends Controller
     }
 
     /**
+     * Data kalender (jumlah order per tanggal) berdasarkan mon_orders.production_delivery,
+     * untuk satu bulan tertentu. Query: ?year=2026&month=7
+     */
+    public function calendar(Request $request)
+    {
+        $filters = $request->only(['uraian', 'buyer', 'style']);
+        $year  = (int) $request->input('year', now()->year);
+        $month = (int) $request->input('month', now()->month);
+
+        $service = MonitoringDashboardService::make($filters);
+
+        return response()->json([
+            'year'  => $year,
+            'month' => $month,
+            'days'  => $service->productionDeliveryCalendar($year, $month),
+        ]);
+    }
+
+    /**
+     * Detail order untuk satu tanggal production_delivery (dipanggil saat tanggal
+     * di kalender diklik). Query: ?date=2026-07-15
+     */
+    public function calendarDetail(Request $request)
+    {
+        $filters = $request->only(['uraian', 'buyer', 'style']);
+        $date = $request->input('date');
+
+        if (!$date) {
+            return response()->json(['message' => 'Parameter date wajib diisi.'], 422);
+        }
+
+        $service = MonitoringDashboardService::make($filters);
+
+        return response()->json([
+            'date' => $date,
+            'rows' => $service->productionDeliveryDetail($date),
+        ]);
+    }
+
+    /**
      * Tombol "Sync BOM" di dashboard -> php artisan monitoring:sync-bom --year=xxxx
      */
     public function syncBom(Request $request)

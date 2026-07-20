@@ -1,74 +1,7 @@
 <!DOCTYPE html>
 <html lang="id">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Material List Dashboard - hris.chutex.id</title>
-
-    <!-- SB Admin 2 (Bootstrap + Fonts) -->
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/css/sb-admin-2.min.css">
-
-    <!-- Select2 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
-
-    <!-- DataTables (Bootstrap 5 skin) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/css/dataTables.bootstrap5.min.css">
-
-    <style>
-        .chart-area { position: relative; height: 320px; }
-        .mon-table-box { max-height: 460px; overflow: auto; }
-        .mon-table-box-full { max-height: 560px; }
-        .mon-table td.right, .mon-table th.right { text-align: right; }
-        .kpi-warn .h5 { color: #b45309; }
-
-        /* Select2 - selaraskan tinggi & radius dengan input SB Admin 2 */
-        .select2-container .select2-selection--single {
-            height: calc(1.5em + .5rem + 2px);
-            padding: .25rem .5rem;
-            border-radius: .35rem;
-            border: 1px solid #d1d3e2;
-        }
-        .select2-container--bootstrap-5 .select2-selection__rendered { line-height: 1.6; font-size: .875rem; }
-        .select2-container .select2-selection--single .select2-selection__arrow { height: calc(1.5em + .5rem); }
-        .select2-container { width: 100% !important; }
-
-        /* Select2 - versi multiple: samakan tampilan chip/tag & tinggi minimum dengan input SB Admin 2 */
-        .select2-container--bootstrap-5 .select2-selection--multiple {
-            min-height: calc(1.5em + .5rem + 2px);
-            border-radius: .35rem;
-            border: 1px solid #d1d3e2;
-        }
-        .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice {
-            font-size: .8rem;
-        }
-        /* Tombol X hapus per-item pada select2 multiple sudah bawaan bootstrap-5 theme;
-           pastikan cursor pointer & sedikit lebih mudah di-klik di mobile */
-        .select2-container--bootstrap-5 .select2-selection__choice__remove {
-            cursor: pointer;
-        }
-
-        /* Tombol Filter & Reset - lebar sama persis, sejajar tingginya */
-        .mon-filter-actions .btn { flex: 1 1 0; white-space: nowrap; }
-
-        /* Pivot MATERIAL PURCHASE - expand/collapse */
-        .mon-toggle { cursor: pointer; width: 14px; text-align: center; }
-        .mon-detail-table { background: #f8f9fc; }
-        .mon-detail-table td { border-top: 1px dashed #e3e6f0 !important; padding: .35rem .5rem; }
-        .mon-detail-table td:first-child { padding-left: 2rem; color: #5a5c69; }
-        tr.mon-parent-row { cursor: pointer; }
-        tr.mon-parent-row:hover { background: #f8f9fc; }
-
-        /* DataTables - selaraskan ukuran font & spacing dengan tema SB Admin 2 */
-        .dataTables_wrapper { font-size: .8rem; }
-        table.dataTable thead th { background: #f8f9fc; white-space: nowrap; }
-        .dataTables_length select, .dataTables_filter input { font-size: .8rem; }
-        .dt-buttons-hidden .dataTables_filter { display: none; }
-    </style>
-</head>
+@include('layout.header')
+@include('sweetalert::alert')
 <body id="page-top">
 
 <div id="wrapper">
@@ -84,7 +17,9 @@
                  data-filters='@json($filters)'
                  data-endpoint="{{ route('monitoring.dashboard.data') }}"
                  data-sync-bom-url="{{ route('monitoring.sync.bom') }}"
-                 data-sync-po-url="{{ route('monitoring.sync.po') }}">
+                 data-sync-po-url="{{ route('monitoring.sync.po') }}"
+                 data-calendar-url="{{ route('monitoring.dashboard.calendar') }}"
+                 data-calendar-detail-url="{{ route('monitoring.dashboard.calendar.detail') }}">
 
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
@@ -199,6 +134,59 @@
                     </div>
                 </div>
 
+                <!-- Calendar: Production Delivery -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">Kalender Production Delivery</h6>
+                        <div class="d-flex align-items-center" style="gap:10px">
+                            <button id="cal-prev" type="button" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-left"></i></button>
+                            <span id="cal-label" class="font-weight-bold text-gray-700" style="min-width:140px; text-align:center;"></span>
+                            <button id="cal-next" type="button" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-lg-7 mb-3 mb-lg-0">
+                                <table class="table table-bordered table-sm mb-0" id="mon-calendar">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-center">Min</th><th class="text-center">Sen</th>
+                                            <th class="text-center">Sel</th><th class="text-center">Rab</th>
+                                            <th class="text-center">Kam</th><th class="text-center">Jum</th>
+                                            <th class="text-center">Sab</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                                <div class="small text-gray-600 mt-2 d-flex" style="gap:16px">
+                                    <span><span class="badge bg-warning" style="width:12px;height:12px;display:inline-block;padding:0;"></span> Ada order</span>
+                                    <span><span class="badge bg-danger" style="width:12px;height:12px;display:inline-block;padding:0;"></span> &le;7 hari lagi / sudah lewat</span>
+                                </div>
+                            </div>
+                            <div class="col-lg-5">
+                                <div id="cal-detail-empty" class="text-muted small">
+                                    Klik salah satu tanggal pada kalender untuk melihat detail order dengan
+                                    <em>production delivery</em> pada tanggal tersebut.
+                                </div>
+                                <div id="cal-detail-wrap" class="d-none">
+                                    <div class="small font-weight-bold text-gray-700 mb-2" id="cal-detail-title"></div>
+                                    <div class="mon-table-box" style="max-height:340px;">
+                                        <table class="table table-bordered table-sm mon-table w-100" id="table-cal-detail">
+                                            <thead>
+                                                <tr>
+                                                    <th>Uraian</th><th>Buyer</th><th>Style</th>
+                                                    <th>Destination</th><th class="right">Qty Ord</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Pivot 1: ORDER -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
@@ -214,7 +202,7 @@
                             <div class="col-lg-7">
                                 <div class="mon-table-box">
                                     <table class="table table-bordered table-sm mon-table w-100" id="table-order">
-                                        <thead><tr><th>Uraian</th><th>Buyer</th><th>Style</th><th class="right">Qty Order</th></tr></thead>
+                                        <thead><tr><th>Uraian</th><th>Buyer</th><th>Style</th><th>Destination</th><th class="right">Qty Order</th></tr></thead>
                                         <tbody></tbody>
                                     </table>
                                 </div>
@@ -309,6 +297,8 @@
     const endpoint = app.dataset.endpoint;
     const syncBomUrl = app.dataset.syncBomUrl;
     const syncPoUrl = app.dataset.syncPoUrl;
+    const calendarUrl = app.dataset.calendarUrl;
+    const calendarDetailUrl = app.dataset.calendarDetailUrl;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
     const fUraian = document.getElementById('f-uraian');
@@ -408,12 +398,13 @@
                 <td>${r.uraian ?? ''}</td>
                 <td>${r.buyer ?? ''}</td>
                 <td>${r.style ?? ''}</td>
+                <td>${r.destination ?? ''}</td>
                 <td class="right" data-order="${Number(r.qty_order) || 0}">${fmt(r.qty_order)}</td>
             </tr>`
         );
 
         dtOrder = initDataTable('#table-order', {
-            columnDefs: [{ targets: 3, className: 'text-right' }]
+            columnDefs: [{ targets: 4, className: 'text-right' }]
         });
 
         if (!chartAvailable) return;
@@ -438,7 +429,8 @@
         }
         const body = details.map(d => {
             const label = (d.spesifikasi && String(d.spesifikasi).trim()) ? d.spesifikasi : '(Tanpa Spesifikasi)';
-            return `<tr>
+            const rowClass = Number(d.sisa) > 0.00001 ? 'table-danger' : '';
+            return `<tr class="${rowClass}">
                 <td>${label}</td>
                 <td class="right">${fmtQty(d.jumlah_order)}</td>
                 <td class="right">${fmtQty(d.jumlah_diterima)}</td>
@@ -475,7 +467,14 @@
                 { data: 'jumlah_order', className: 'right', render: v => fmtQty(v) },
                 { data: 'jumlah_diterima', className: 'right', render: v => fmtQty(v) },
                 { data: 'sisa', className: 'right', render: v => fmtSisa(v) },
-            ]
+            ],
+            // Baris parent (per item) diberi warna merah kalau masih ada sisa (belum diterima penuh),
+            // supaya konsisten dengan highlight di baris detail per-spesifikasi.
+            createdRow: (row, data) => {
+                if (Number(data.sisa) > 0.00001) {
+                    row.classList.add('table-danger');
+                }
+            }
         });
 
         // Delegasikan klik ke elemen tabel (stabil lintas destroy/redraw), lalu bersihkan
@@ -665,12 +664,246 @@
     btnSyncBom.addEventListener('click', () => runSync(syncBomUrl, 'Sync BOM', btnSyncBom));
     btnSyncPo.addEventListener('click', () => runSync(syncPoUrl, 'Sync PO', btnSyncPo));
 
+    /* =========================================================
+       Kalender Production Delivery (mon_orders.production_delivery)
+       ========================================================= */
+    const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    const today = new Date();
+
+    // State kalender dikumpulkan di satu object supaya jelas apa yang berubah
+    // saat navigasi bulan / pilih tanggal (dan gampang dibaca lintas fungsi).
+    const calState = {
+        year: today.getFullYear(),
+        month: today.getMonth() + 1, // 1-12
+        selectedDate: null,
+        requestSeq: 0, // dipakai untuk menolak response fetch yang "telat" (out-of-order)
+    };
+
+    const calLabel       = document.getElementById('cal-label');
+    const calBody        = document.querySelector('#mon-calendar tbody');
+    const calPrev        = document.getElementById('cal-prev');
+    const calNext        = document.getElementById('cal-next');
+    const calDetailEmpty = document.getElementById('cal-detail-empty');
+    const calDetailWrap  = document.getElementById('cal-detail-wrap');
+    const calDetailTitle = document.getElementById('cal-detail-title');
+    let dtCalDetail;
+
+    function pad2(n){ return String(n).padStart(2, '0'); }
+
+    function toIsoDate(y, m, d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
+
+    function buildCalendarQuery(extra){
+        const params = buildQueryParams(currentFilters());
+        Object.entries(extra || {}).forEach(([k, v]) => params.append(k, v));
+        return params;
+    }
+
+    function setCalNavDisabled(disabled){
+        calPrev.disabled = disabled;
+        calNext.disabled = disabled;
+    }
+
+    function renderCalendarGrid(year, month, dayMap){
+        calLabel.textContent = `${monthNames[month - 1]} ${year}`;
+
+        const firstDow = new Date(year, month - 1, 1).getDay(); // 0=Min
+        const daysInMonth = new Date(year, month, 0).getDate();
+
+        let cells = [];
+        for (let i = 0; i < firstDow; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+        while (cells.length % 7 !== 0) cells.push(null);
+
+        let html = '';
+        for (let w = 0; w < cells.length / 7; w++) {
+            html += '<tr>';
+            for (let c = 0; c < 7; c++) {
+                const d = cells[w * 7 + c];
+                if (!d) { html += '<td class="bg-light"></td>'; continue; }
+
+                const iso = toIsoDate(year, month, d);
+                const info = dayMap[iso];
+                const isToday = iso === toIsoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+                const isSelected = iso === calState.selectedDate;
+
+                // Selisih hari dari hari ini ke tanggal production_delivery.
+                // Negatif = sudah lewat (overdue), 0-7 = mendekati deadline (dianggap urgent juga).
+                const diffDays = Math.floor((new Date(year, month - 1, d) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+                const isUrgent = !!info && diffDays <= 7;
+
+                let cls = 'text-center';
+                if (isUrgent) cls += ' bg-danger text-white';
+                else if (info) cls += ' bg-warning';
+                if (isToday) cls += ' font-weight-bold';
+
+                const style = isSelected
+                    ? 'cursor:pointer; vertical-align:middle; box-shadow: inset 0 0 0 3px #4e73df;'
+                    : 'cursor:pointer; vertical-align:middle;';
+
+                html += `<td class="${cls}" style="${style}" data-date="${iso}" title="${info ? `${info.jumlah_order} order` : ''}">
+                    <div>${d}</div>
+                    ${info ? `<span class="badge badge-pill ${isUrgent ? 'badge-light' : 'badge-secondary'}" style="font-size:.65rem;">${info.jumlah_order}</span>` : ''}
+                </td>`;
+            }
+            html += '</tr>';
+        }
+        calBody.innerHTML = html;
+
+        calBody.querySelectorAll('td[data-date]').forEach(td => {
+            td.addEventListener('click', () => selectCalendarDate(td.dataset.date));
+        });
+    }
+
+    // year/month yang dipakai untuk fetch selalu diambil eksplisit dari argumen
+    // (bukan langsung baca calState di dalam .then()), supaya kalau user klik
+    // Prev/Next berkali-kali dengan cepat, response yang datang belakangan tidak
+    // menimpa tampilan dengan data bulan yang salah (dicek lewat requestSeq).
+    function loadCalendarMonth(year, month){
+        calState.year = year;
+        calState.month = month;
+
+        const seq = ++calState.requestSeq;
+        setCalNavDisabled(true);
+
+        const params = buildCalendarQuery({ year, month });
+        fetch(`${calendarUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
+            .then(json => {
+                if (seq !== calState.requestSeq) return; // ada request lebih baru, abaikan response ini
+                const dayMap = {};
+                (json.days || []).forEach(row => { dayMap[row.tanggal] = row; });
+                renderCalendarGrid(year, month, dayMap);
+            })
+            .catch(() => {
+                if (seq !== calState.requestSeq) return;
+                renderCalendarGrid(year, month, {});
+            })
+            .finally(() => {
+                if (seq === calState.requestSeq) setCalNavDisabled(false);
+            });
+    }
+
+    function selectCalendarDate(iso){
+        calState.selectedDate = iso;
+        loadCalendarMonth(calState.year, calState.month); // redraw ulang supaya highlight tanggal terpilih update
+
+        const params = buildCalendarQuery({ date: iso });
+        calDetailTitle.textContent = `Production Delivery: ${iso}`;
+        calDetailEmpty.classList.add('d-none');
+        calDetailWrap.classList.remove('d-none');
+
+        if (dtCalDetail) { dtCalDetail.clear().draw(); }
+
+        fetch(`${calendarDetailUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(json => renderCalendarDetailTable(json.rows || []))
+            .catch(() => renderCalendarDetailTable([]));
+    }
+
+    function renderCalendarDetailTable(rows){
+        if (dtCalDetail) { dtCalDetail.destroy(); dtCalDetail = null; }
+
+        dtCalDetail = $('#table-cal-detail').DataTable({
+            language: dtLanguage,
+            data: rows,
+            pageLength: 5,
+            lengthMenu: [5, 10, 25, 50],
+            order: [],
+            responsive: false,
+            columns: [
+                { data: 'uraian', defaultContent: '' },
+                { data: 'buyer', defaultContent: '' },
+                { data: 'style', defaultContent: '' },
+                { data: 'destination', defaultContent: '' },
+                { data: 'qty_ord', className: 'right', render: v => fmt(v) },
+            ]
+        });
+    }
+
+    // Navigasi bulan: prev/next tidak pernah "terpaku" di bulan berjalan --
+    // calState.year/month selalu diupdate lebih dulu lalu langsung fetch ulang.
+    calPrev.addEventListener('click', () => {
+        let { year, month } = calState;
+        month--;
+        if (month < 1) { month = 12; year--; }
+        loadCalendarMonth(year, month);
+    });
+    calNext.addEventListener('click', () => {
+        let { year, month } = calState;
+        month++;
+        if (month > 12) { month = 1; year++; }
+        loadCalendarMonth(year, month);
+    });
+
+    if (calendarUrl) {
+        loadCalendarMonth(calState.year, calState.month);
+    }
+
+    // Filter (tombol "Filter") juga me-refresh kalender bulan yang sedang aktif.
+    fApply.addEventListener('click', () => {
+        if (calendarUrl) loadCalendarMonth(calState.year, calState.month);
+    });
+
     // render awal pakai data yang sudah dikirim server (hindari flash kosong & loading di initial load)
     renderOrderPivot(@json($orderPivot));
     renderMaterialPivot(@json($materialPivot));
     renderWorkOrderPivot(@json($workOrderPivot));
 })();
 </script>
+
+    <style>
+        .chart-area { position: relative; height: 320px; }
+        .mon-table-box { max-height: 460px; overflow: auto; }
+        .mon-table-box-full { max-height: 560px; }
+        .mon-table td.right, .mon-table th.right { text-align: right; }
+        .kpi-warn .h5 { color: #b45309; }
+
+        /* Select2 - selaraskan tinggi & radius dengan input SB Admin 2 */
+        .select2-container .select2-selection--single {
+            height: calc(1.5em + .5rem + 2px);
+            padding: .25rem .5rem;
+            border-radius: .35rem;
+            border: 1px solid #d1d3e2;
+        }
+        .select2-container--bootstrap-5 .select2-selection__rendered { line-height: 1.6; font-size: .875rem; }
+        .select2-container .select2-selection--single .select2-selection__arrow { height: calc(1.5em + .5rem); }
+        .select2-container { width: 100% !important; }
+
+        /* Select2 - versi multiple: samakan tampilan chip/tag & tinggi minimum dengan input SB Admin 2 */
+        .select2-container--bootstrap-5 .select2-selection--multiple {
+            min-height: calc(1.5em + .5rem + 2px);
+            border-radius: .35rem;
+            border: 1px solid #d1d3e2;
+        }
+        .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice {
+            font-size: .8rem;
+        }
+        /* Tombol X hapus per-item pada select2 multiple sudah bawaan bootstrap-5 theme;
+           pastikan cursor pointer & sedikit lebih mudah di-klik di mobile */
+        .select2-container--bootstrap-5 .select2-selection__choice__remove {
+            cursor: pointer;
+        }
+
+        /* Tombol Filter & Reset - lebar sama persis, sejajar tingginya */
+        .mon-filter-actions .btn { flex: 1 1 0; white-space: nowrap; }
+
+        /* Pivot MATERIAL PURCHASE - expand/collapse */
+        .mon-toggle { cursor: pointer; width: 14px; text-align: center; }
+        .mon-detail-table { background: #f8f9fc; }
+        .mon-detail-table td { border-top: 1px dashed #e3e6f0 !important; padding: .35rem .5rem; }
+        .mon-detail-table td:first-child { padding-left: 2rem; color: #5a5c69; }
+        tr.mon-parent-row { cursor: pointer; }
+        tr.mon-parent-row:hover { background: #f8f9fc; }
+
+        /* DataTables - selaraskan ukuran font & spacing dengan tema SB Admin 2 */
+        .dataTables_wrapper { font-size: .8rem; }
+        table.dataTable thead th { background: #f8f9fc; white-space: nowrap; }
+        .dataTables_length select, .dataTables_filter input { font-size: .8rem; }
+        .dt-buttons-hidden .dataTables_filter { display: none; }
+    </style>
 
 </body>
 </html>

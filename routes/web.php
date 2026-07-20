@@ -1086,6 +1086,8 @@ Route::prefix('monitoring')->name('monitoring.')->group(function () {
         ->name('order.import.progress');
     Route::post('sync-bom', [MonitoringDashboardController::class, 'syncBom'])->name('sync.bom');
     Route::post('sync-po', [MonitoringDashboardController::class, 'syncPo'])->name('sync.po');
+    Route::get('dashboard/calendar', [MonitoringDashboardController::class, 'calendar'])->name('dashboard.calendar');
+    Route::get('dashboard/calendar-detail', [MonitoringDashboardController::class, 'calendarDetail'])->name('dashboard.calendar.detail');
 });
 
 
