@@ -795,7 +795,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export')->middleware(['auth', 'permission']);
     });
 
-    Route::prefix('expat-dashboard')->name('expat-dashboard.')->group(function () {
+    Route::prefix('expat-dashboard')->name('expat-dashboard.')->middleware(['auth', 'permission'])->group(function () {
         Route::get('/', [ExpatController::class, 'dashboard'])->name('index');
         Route::get('/chart-data', [ExpatController::class, 'chartData'])->name('chart-data');
         Route::get('/recap-data', [ExpatController::class, 'recapData'])->name('recap-data');
