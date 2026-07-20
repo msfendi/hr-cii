@@ -139,7 +139,7 @@ return [
             'charset'         => 'utf8',
             'prefix'          => '',
             'prefix_indexes'  => true,
-            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            'encrypt' => 'false',
             'trust_server_certificate' => true,
             // 'trust_server_certificate' => true, // aktifkan kalau SQL Server pakai self-signed cert
         ],
