@@ -139,7 +139,7 @@ class MonitoringController extends Controller
 
     public function index()
     {
-        return view('monitoring.index');
+        return view('server.index');
     }
 
     public function stats()

@@ -45,7 +45,8 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
                                                 Total PKWT</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalpkwt">Loading...</div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalpkwt">
+                                                Loading...</div>
                                         </div>
                                         <div class="col-auto">
                                             <i class="fas fa-users fa-2x text-gray-300"></i>
@@ -63,7 +64,8 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                                                 Sewing Employees</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="sewingemployees">Loading...</div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="sewingemployees">
+                                                Loading...</div>
                                         </div>
                                         <div class="col-auto">
                                             <i class="fas fa-building fa-2x text-gray-300"></i>
@@ -81,7 +83,8 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
                                                 Non Sewing Employees</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="nonsewingemployees">Loading...</div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="nonsewingemployees">
+                                                Loading...</div>
                                         </div>
                                         <div class="col-auto">
                                             <i class="fas fa-industry fa-2x text-gray-300"></i>
@@ -99,7 +102,8 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
                                                 Dept Sewing</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="deptsewing">Loading...</div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="deptsewing">
+                                                Loading...</div>
                                         </div>
                                         <div class="col-auto">
                                             <i class="fas fa-tshirt fa-2x text-gray-300"></i>
@@ -112,25 +116,18 @@
 
                     <!-- Charts Row 1 -->
                     <div class="row">
-                        <!-- Recruitment Flow -->
+                        <!-- Recruitment Flow & PKWT Trend -->
                         <div class="col-xl-8 col-lg-7">
                             <div class="card shadow mb-4">
-                                <!-- Card Header - Dropdown -->
+                                <!-- Card Header -->
                                 <div
                                     class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                    <h6 class="m-0 font-weight-bold text-primary">Recruitment vs Attrition</h6>
-                                    <!-- <div class="dropdown no-arrow">
-                                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
-                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
-                                        </a>
-                                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
-                                            aria-labelledby="dropdownMenuLink">
-                                            <div class="dropdown-header">Options:</div>
-                                            <a class="dropdown-item" href="#">View Details</a>
-                                            <a class="dropdown-item" href="#">Download CSV</a>
-                                        </div>
-                                    </div> -->
+                                    <h6 class="m-0 font-weight-bold text-primary">PKWT Trend & Recruitment vs Attrition
+                                    </h6>
+                                    <div class="d-flex align-items-center">
+                                        <input type="month" id="monthFilter" class="form-control form-control-sm"
+                                            style="width: auto;">
+                                    </div>
                                 </div>
                                 <!-- Card Body -->
                                 <div class="card-body">
@@ -141,36 +138,8 @@
                             </div>
                         </div>
 
-                        <!-- Gender Distribution -->
-                        <div class="col-xl-4 col-lg-5">
-                            <div class="card shadow mb-4">
-                                <!-- Card Header - Dropdown -->
-                                <div
-                                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                    <h6 class="m-0 font-weight-bold text-primary">Gender Distribution</h6>
-                                </div>
-                                <!-- Card Body -->
-                                <div class="card-body">
-                                    <div class="chart-pie pt-4 pb-2" style="height: 250px;">
-                                        <canvas id="genderChart"></canvas>
-                                    </div>
-                                    <div class="mt-4 text-center small">
-                                        <span class="mr-2">
-                                            <i class="fas fa-circle text-primary"></i> Male
-                                        </span>
-                                        <span class="mr-2">
-                                            <i class="fas fa-circle text-success"></i> Female
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Charts Row 2 -->
-                    <div class="row">
                         <!-- Department Distribution -->
-                        <div class="col-xl-6 col-lg-6">
+                        <div class="col-xl-4 col-lg-5">
                             <div class="card shadow mb-4">
                                 <div class="card-header py-3">
                                     <h6 class="m-0 font-weight-bold text-primary">Employee Count by Department (Top 5)
@@ -179,6 +148,40 @@
                                 <div class="card-body">
                                     <div class="chart-bar" style="height: 300px;">
                                         <canvas id="departmentChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row 2 -->
+                    <div class="row">
+                        <!-- Gender per Department -->
+                        <div class="col-xl-6 col-lg-5">
+                            <div class="card shadow mb-4">
+                                <!-- Card Header -->
+                                <div
+                                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                                    <h6 class="m-0 font-weight-bold text-primary">Gender per Department</h6>
+                                </div>
+                                <!-- Card Body -->
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered table-hover mb-0"
+                                            id="genderDeptTable" width="100%">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th>Department</th>
+                                                    <th class="text-center"><i class="fas fa-mars text-primary"></i>
+                                                        Male</th>
+                                                    <th class="text-center"><i class="fas fa-venus text-danger"></i>
+                                                        Female</th>
+                                                    <th class="text-center"><i class="fas fa-users text-success"></i>
+                                                        Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
@@ -234,18 +237,18 @@
         Chart.defaults.font.family = 'Nunito, -apple-system,system-ui,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
         Chart.defaults.color = '#858796';
 
-        document.addEventListener("DOMContentLoaded", function() {
-            
+        document.addEventListener("DOMContentLoaded", function () {
+
             // --- 1. REAL DATA: KPI Cards ---
             fetch("{{ route('home.get-recap-count') }}")
                 .then(response => response.json())
                 .then(responseData => {
                     // Update KPI Cards
-                    if(document.getElementById('totalpkwt')) document.getElementById('totalpkwt').textContent = responseData.totalpkwt;
-                    if(document.getElementById('nonsewingemployees')) document.getElementById('nonsewingemployees').textContent = responseData.nonsewingemployees;
-                    if(document.getElementById('sewingemployees')) document.getElementById('sewingemployees').textContent = responseData.sewingemployees;
-                    if(document.getElementById('deptsewing')) document.getElementById('deptsewing').textContent = responseData.deptsewing;
-                    
+                    if (document.getElementById('totalpkwt')) document.getElementById('totalpkwt').textContent = responseData.totalpkwt;
+                    if (document.getElementById('nonsewingemployees')) document.getElementById('nonsewingemployees').textContent = responseData.nonsewingemployees;
+                    if (document.getElementById('sewingemployees')) document.getElementById('sewingemployees').textContent = responseData.sewingemployees;
+                    if (document.getElementById('deptsewing')) document.getElementById('deptsewing').textContent = responseData.deptsewing;
+
                     // Initialize DataTables for Recently Hired Employees
                     $('#recentTable').DataTable({
                         data: responseData.recentlyhired,
@@ -253,9 +256,9 @@
                             { data: 'NPK' },
                             { data: 'NAMA' },
                             { data: 'BAGIAN' },
-                            { 
+                            {
                                 data: 'TMK',
-                                render: function(data) {
+                                render: function (data) {
                                     // Format date to dd-mm-yyyy if needed
                                     if (data) {
                                         const date = new Date(data);
@@ -269,7 +272,7 @@
                             },
                             {
                                 data: 'TKK',
-                                render: function(data) {
+                                render: function (data) {
                                     if (data) {
                                         return '<span class="badge badge-danger">Not Active</span>';
                                     }
@@ -277,12 +280,13 @@
                                 }
                             }
                         ],
-                        pageLength: 5,
-                        lengthChange: false,
-                        searching: false,
-                        ordering: false,
-                        info: false,
-                        paging: false
+                        pageLength: 7,
+                        lengthMenu: [10, 25, 50],
+                        lengthChange: true,
+                        searching: true,
+                        ordering: true,
+                        info: true,
+                        paging: true
                     });
 
                     // Department Distribution (Horizontal Bar) - REAL DATA
@@ -326,88 +330,145 @@
                             },
                         });
                     }
+
+                    // Gender per Department DataTable
+                    $('#genderDeptTable').DataTable({
+                        data: responseData.genderperdept || [],
+                        columns: [
+                            { data: 'department_name' },
+                            {
+                                data: 'male_count',
+                                className: 'text-center',
+                                render: function (data) {
+                                    return '<span class="badge badge-primary">' + data + '</span>';
+                                }
+                            },
+                            {
+                                data: 'female_count',
+                                className: 'text-center',
+                                render: function (data) {
+                                    return '<span class="badge badge-danger">' + data + '</span>';
+                                }
+                            },
+                            {
+                                data: null,
+                                className: 'text-center',
+                                render: function (data, type, row) {
+                                    const total = parseInt(row.male_count || 0) + parseInt(row.female_count || 0);
+                                    return '<span class="badge badge-success">' + total + '</span>';
+                                }
+                            }
+                        ],
+                        pageLength: 10,
+                        lengthMenu: [5, 10, 25, 50],
+                        searching: true,
+                        ordering: true,
+                        order: [[0, 'asc']],
+                        info: true,
+                        paging: true
+                    });
                 })
                 .catch(error => console.error('Error fetching recap data:', error));
 
-            fetch("{{ route('home.get-pkwt-chart') }}")
-                .then(response => response.json())
-                .then(responseData => {
-                    const ctxRecruitment = document.getElementById('recruitmentChart');
-                    new Chart(ctxRecruitment, {
-                        type: 'bar',
-                        data: {
-                            labels: responseData.labels,
-                            datasets: [{
-                                label: 'PKWT Count',
-                                data: responseData.data,
-                                backgroundColor: "#4e73df",
-                                hoverBackgroundColor: "#2e59d9",
-                                borderColor: "#4e73df",
-                                borderWidth: 1
-                            }]
-                        },
-                        options: {
-                            maintainAspectRatio: false,
-                            layout: {
-                                padding: { left: 10, right: 25, top: 25, bottom: 0 }
+            let recruitmentChartInstance = null;
+
+            function loadPKWTChart(month = '') {
+                let url = "{{ route('home.get-pkwt-chart') }}";
+                if (month) {
+                    url += `?month=${month}`;
+                }
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(responseData => {
+                        const ctxRecruitment = document.getElementById('recruitmentChart');
+
+                        if (recruitmentChartInstance) {
+                            recruitmentChartInstance.destroy();
+                        }
+
+                        recruitmentChartInstance = new Chart(ctxRecruitment, {
+                            type: 'bar',
+                            data: {
+                                labels: responseData.labels,
+                                datasets: [
+                                    {
+                                        type: 'bar',
+                                        label: 'PKWT Trend',
+                                        data: responseData.data,
+                                        backgroundColor: "#4e73df",
+                                        borderColor: "#4e73df",
+                                        borderWidth: 2,
+                                        tension: 0.3,
+                                        fill: false,
+                                        yAxisID: 'y'
+                                    },
+                                    {
+                                        type: 'bar',
+                                        label: 'Joined (Masuk)',
+                                        data: responseData.joined,
+                                        backgroundColor: "#1cc88a",
+                                        hoverBackgroundColor: "#17a673",
+                                        borderColor: "#1cc88a",
+                                        borderWidth: 1
+                                    },
+                                    {
+                                        type: 'bar',
+                                        label: 'Left (Keluar)',
+                                        data: responseData.left,
+                                        backgroundColor: "#e74a3b",
+                                        hoverBackgroundColor: "#e02d1b",
+                                        borderColor: "#e74a3b",
+                                        borderWidth: 1
+                                    }
+                                ]
                             },
-                            scales: {
-                                x: {
-                                    grid: { display: false, drawBorder: false },
-                                    ticks: { maxTicksLimit: 12 }
+                            options: {
+                                maintainAspectRatio: false,
+                                layout: {
+                                    padding: { left: 10, right: 25, top: 25, bottom: 0 }
                                 },
-                                y: {
-                                    ticks: { maxTicksLimit: 5, padding: 10 },
-                                    grid: {
-                                        color: "rgb(234, 236, 244)",
-                                        zeroLineColor: "rgb(234, 236, 244)",
-                                        drawBorder: false,
-                                        borderDash: [2],
-                                        zeroLineBorderDash: [2]
+                                scales: {
+                                    x: {
+                                        grid: { display: false, drawBorder: false },
+                                        ticks: { maxTicksLimit: 12 }
+                                    },
+                                    y: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
+                                        ticks: { maxTicksLimit: 5, padding: 10 },
+                                        grid: {
+                                            color: "rgb(234, 236, 244)",
+                                            zeroLineColor: "rgb(234, 236, 244)",
+                                            drawBorder: false,
+                                            borderDash: [2],
+                                            zeroLineBorderDash: [2]
+                                        }
                                     }
                                 },
-                            },
-                            plugins: {
-                                legend: { display: true },
-                                title: { display: true, text: 'PKWT Trend (Last 5 Months)' }
+                                plugins: {
+                                    legend: { display: true },
+                                    title: { display: true, text: 'PKWT Trend vs Recruitment & Attrition (Last 12 Months)' }
+                                }
                             }
-                        }
-                    });
-                })
-                .catch(error => console.error('Error fetching chart data:', error));
+                        });
+                    })
+                    .catch(error => console.error('Error fetching chart data:', error));
+            }
 
-                const ctxGender = document.getElementById("genderChart");
-                if (ctxGender) {
-                    new Chart(ctxGender, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ["Male", "Female"],
-                            datasets: [{
-                                data: [45, 55],
-                                backgroundColor: ['#4e73df', '#1cc88a'],
-                                hoverBackgroundColor: ['#2e59d9', '#17a673'],
-                                hoverBorderColor: "rgba(234, 236, 244, 1)",
-                            }],
-                        },
-                        options: {
-                            maintainAspectRatio: false,
-                            tooltips: {
-                                backgroundColor: "rgb(255,255,255)",
-                                bodyFontColor: "#858796",
-                                borderColor: '#dddfeb',
-                                borderWidth: 1,
-                                xPadding: 15,
-                                yPadding: 15,
-                                displayColors: false,
-                                caretPadding: 10,
-                            },
-                            legend: { display: false },
-                            cutout: '80%',
-                        },
-                    });
-                }
-            });
-        </script>
+            // Initial load
+            loadPKWTChart();
+
+            // On change
+            const monthFilter = document.getElementById('monthFilter');
+            if (monthFilter) {
+                monthFilter.addEventListener('change', function () {
+                    loadPKWTChart(this.value);
+                });
+            }
+        });
+    </script>
 </body>
 
 </html>

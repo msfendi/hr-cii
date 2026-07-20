@@ -1,0 +1,92 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Services\MonitoringDashboardService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Throwable;
+
+class MonitoringDashboardController extends Controller
+{
+    public function index(Request $request)
+    {
+        $filters = $request->only(['uraian', 'buyer', 'style']);
+
+        $service = MonitoringDashboardService::make($filters);
+
+        return view('monitoring.dashboard', [
+            'filters'        => $filters,
+            'filterOptions'  => $service->filterOptions(),
+            'summary'        => $service->summary(),
+            'orderPivot'     => $service->orderPivot(),
+            'materialPivot'  => $service->materialPurchasePivot(),
+            'workOrderPivot' => $service->workOrderPivot(),
+        ]);
+    }
+
+    /**
+     * Endpoint AJAX untuk filter dashboard tanpa reload penuh.
+     */
+    public function data(Request $request)
+    {
+        $filters = $request->only(['uraian', 'buyer', 'style']);
+
+        $service = MonitoringDashboardService::make($filters);
+
+        return response()->json([
+            'summary'        => $service->summary(),
+            'orderPivot'     => $service->orderPivot(),
+            'materialPivot'  => $service->materialPurchasePivot(),
+            'workOrderPivot' => $service->workOrderPivot(),
+        ]);
+    }
+
+    /**
+     * Tombol "Sync BOM" di dashboard -> php artisan monitoring:sync-bom --year=xxxx
+     */
+    public function syncBom(Request $request)
+    {
+        return $this->runSyncCommand('monitoring:sync-bom', $request);
+    }
+
+    /**
+     * Tombol "Sync PO" di dashboard -> php artisan monitoring:sync-po --year=xxxx
+     */
+    public function syncPo(Request $request)
+    {
+        return $this->runSyncCommand('monitoring:sync-po', $request);
+    }
+
+    /**
+     * Jalankan artisan command sync (BOM/PO) untuk tahun tertentu dan kembalikan
+     * output-nya sebagai JSON, supaya bisa ditampilkan di SweetAlert frontend.
+     * Default tahun = tahun berjalan, tapi bisa dioverride lewat query/body `year`.
+     */
+    private function runSyncCommand(string $command, Request $request)
+    {
+        $year = (int) $request->input('year', now()->year);
+
+        // Sync dari SQL Server (smartit) bisa makan waktu -- longgarkan batas eksekusi PHP
+        // supaya request tidak keburu timeout sebelum artisan command selesai.
+        set_time_limit(0);
+
+        try {
+            $exitCode = Artisan::call($command, ['--year' => $year]);
+            $output = trim(Artisan::output());
+
+            return response()->json([
+                'success'   => $exitCode === 0,
+                'command'   => "{$command} --year={$year}",
+                'exit_code' => $exitCode,
+                'output'    => $output,
+            ], $exitCode === 0 ? 200 : 500);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'command' => "{$command} --year={$year}",
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+}

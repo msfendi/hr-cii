@@ -16,8 +16,11 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->hourly();
         $schedule->command('rekap:generate-harian')->everyFiveMinutes();
         $schedule->command('leave:generate-daily')->dailyAt('00:01')->appendOutputTo(storage_path('logs/leave-generate-daily.log'));
-        
-        
+
+        $schedule->command('monitoring:sync-bom')->hourly()->withoutOverlapping();
+        $schedule->command('monitoring:sync-po')->hourly()->withoutOverlapping();
+
+
         // Jalankan command check kontrak setiap hari jam 8 pagi
         $schedule->command('contract:check-expiring --days=5')
             ->daily()
@@ -51,7 +54,7 @@ class Kernel extends ConsoleKernel
      */
     protected function commands(): void
     {
-        $this->load(__DIR__.'/Commands');
+        $this->load(__DIR__ . '/Commands');
 
         require base_path('routes/console.php');
     }

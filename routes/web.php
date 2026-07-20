@@ -95,6 +95,8 @@ use App\Http\Controllers\DoorprizeController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
+use App\Http\Controllers\MonitoringDashboardController;
+use App\Http\Controllers\OrderImportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -804,6 +806,14 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/transaction-detail', [ExpatController::class, 'transactionDetail'])->name('transaction-detail');
     });
 
+    // Foreign Guest dashboard data
+    Route::get('/guest-master/dashboard-data', [ForeignGuestController::class, 'dashboardData'])->name('guest-master.dashboard-data')->middleware(['auth', 'permission']);
+    Route::get('/guest-master/dashboard-detail/{id}', [ForeignGuestController::class, 'dashboardDetail'])->name('guest-master.dashboard-detail')->middleware(['auth', 'permission']);
+
+    // Chu Family dashboard data
+    Route::get('/chu-family/dashboard-data', [ChuFamilyController::class, 'dashboardData'])->name('chu-family.dashboard-data')->middleware(['auth', 'permission']);
+    Route::get('/chu-family/dashboard-detail/{id}', [ChuFamilyController::class, 'dashboardDetail'])->name('chu-family.dashboard-detail')->middleware(['auth', 'permission']);
+
     Route::prefix('chu-family')->group(function () {
         Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index')->middleware(['auth', 'permission']);
         Route::get('/create', [ChuFamilyController::class, 'create'])->name('chu-family.create')->middleware(['auth', 'permission']);
@@ -1065,6 +1075,19 @@ Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class,
 Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cbt'])->name('evaluation-employee.cbt');
 Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
 Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');
+
+Route::prefix('monitoring')->name('monitoring.')->group(function () {
+    Route::get('/dashboard', [MonitoringDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/data', [MonitoringDashboardController::class, 'data'])->name('dashboard.data');
+
+    Route::get('/order/import', [OrderImportController::class, 'form'])->name('order.import.form');
+    Route::post('/order/import', [OrderImportController::class, 'store'])->name('order.import.store');
+    Route::get('order-import/progress/{batchId}', [OrderImportController::class, 'progress'])
+        ->name('order.import.progress');
+    Route::post('sync-bom', [MonitoringDashboardController::class, 'syncBom'])->name('sync.bom');
+    Route::post('sync-po', [MonitoringDashboardController::class, 'syncPo'])->name('sync.po');
+});
+
 
 
 Route::get('/test-reverb', function () {

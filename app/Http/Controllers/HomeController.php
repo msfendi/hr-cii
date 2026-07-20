@@ -23,73 +23,68 @@ class HomeController extends Controller
         return view('home');
     }
 
-    public function getPKWTChart()
+    public function getPKWTChart(Request $request)
     {
-        // $pkwts = DB::connection('cii')->table('PKWT')
-        //     ->select('TMK')
-        //     ->where('TMK', '>=', Carbon::now()->subMonths(5))
-        //     ->orderBy('TMK', 'asc')
-        //     ->get();
-
-        // $grouped = $pkwts->groupBy(function ($item) {
-        //     return Carbon::parse($item->TMK)->format('F'); // Group by Month name
-        // });
-
-        // $labels = $grouped->keys();
-        // $data = $grouped->map(function ($group) {
-        //     return $group->count();
-        // })->values();
-
         // ambil dari table Rekap
-        $rekap = DB::connection('cii')->table('Rekap')
+        $query = DB::connection('cii')->table('Rekap')
             ->select('PKWT', 'BULAN', 'TAHUN')
-            ->orderBy('ID', 'desc')
-            ->limit(5)
+            ->orderBy('ID', 'desc');
+
+        $selectedMonth = $request->input('month');
+        if ($selectedMonth) {
+            $year = (int) substr($selectedMonth, 0, 4);
+            $month = (int) substr($selectedMonth, 5, 2);
+
+            $query->where(function ($q) use ($year, $month) {
+                $q->where('TAHUN', '<', $year)
+                    ->orWhere(function ($q2) use ($year, $month) {
+                        $q2->where('TAHUN', '=', $year)
+                            ->where('BULAN', '<=', $month);
+                    });
+            });
+        }
+
+        $rekap = $query->limit(12)
             ->get()
             ->sortBy([['TAHUN', 'asc'], ['BULAN', 'asc']])
             ->values();
 
-        $labels = $rekap->map(function ($item) {
-            return Carbon::createFromDate($item->TAHUN, $item->BULAN, 1)->translatedFormat('F') . ' ' . $item->TAHUN;
-        });
+        $labels = [];
+        $pkwtData = [];
+        $joinedData = [];
+        $leftData = [];
 
-        $data = $rekap->pluck('PKWT');
+        foreach ($rekap as $item) {
+            $labels[] = Carbon::createFromDate($item->TAHUN, $item->BULAN, 1)->translatedFormat('M Y');
+            $pkwtData[] = $item->PKWT;
 
-        return response()->json([
-            'labels' => $labels,
-            'data' => $data,
-        ]);
-    }
+            $joinedCount = DB::connection('cii')->table('PKWT')
+                ->whereYear('TMK', $item->TAHUN)
+                ->whereMonth('TMK', $item->BULAN)
+                ->count();
 
-    // get pktw tkk != null and group by month
-    public function getPKWTTKKChart()
-    {
-        $pkwts = DB::connection('cii')->table('PKWT')
-            ->select('TKK')
-            ->where('TKK', '>=', Carbon::now()->subMonths(5))
-            ->orderBy('TKK', 'asc')
-            ->get();
+            $leftCount = DB::connection('cii')->table('PKWT')
+                ->whereYear('TKK', $item->TAHUN)
+                ->whereMonth('TKK', $item->BULAN)
+                ->count();
 
-        $grouped = $pkwts->groupBy(function ($item) {
-            return Carbon::parse($item->TMK)->format('F'); // Group by Month name
-        });
-
-        $labels = $grouped->keys();
-        $data = $grouped->map(function ($group) {
-            return $group->count();
-        })->values();
+            $joinedData[] = $joinedCount;
+            $leftData[] = $leftCount;
+        }
 
         return response()->json([
             'labels' => $labels,
-            'data' => $data,
+            'data' => $pkwtData,
+            'joined' => $joinedData,
+            'left' => $leftData,
         ]);
     }
+
+
 
     public function getRecapCount()
     {
-        $pkwtCount = DB::connection('cii')->table('PKWT')
-            ->select('NPK')
-            ->where('TKK', null)
+        $pkwtCount = DB::connection('cii')->table('BIODATA')
             ->count();
 
         $deptNonSewingCount = DB::connection('cii')->table('DEPT')
@@ -97,13 +92,21 @@ class HomeController extends Controller
             ->where('IS_SEWING', '1')
             ->count();
 
-        $deptSewingCount = DB::connection('cii')->table('DEPT')
-            ->select('IS_SEWING')
+        $deptSewingCount = DB::connection('cii')
+            ->table('DEPT')
             ->where('IS_SEWING', '0')
+            ->where('DEPARTEMENT', 'LIKE', '%LINE%')
+            ->whereNotIn('DEPARTEMENT', [
+                'LINE BARU',
+                'LINE TRAINING',
+            ])
             ->count();
 
-        $sewingEmployeesCount = DB::connection('cii')->table('BIODATA')->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
+        $sewingEmployeesCount = DB::connection('cii')
+            ->table('BIODATA')
+            ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
             ->where('DEPT.IS_SEWING', '0')
+            ->where('DEPT.DEPARTEMENT', 'LIKE', '%LINE%')
             ->count();
 
         $nonsewingEmployeesCount = DB::connection('cii')->table('BIODATA')->join('DEPT', 'BIODATA.ID_DEPT', 'DEPT.ID_DEPT')
@@ -122,7 +125,6 @@ class HomeController extends Controller
             ->select('NPK', 'NAMA', 'TMK', 'BAGIAN', 'TKK')
             ->where('TMK', '>=', Carbon::now()->subMonths(1))
             ->orderBy('TMK', 'desc')
-            ->limit(5)
             ->get();
 
         // Count employees per department (Top 5)
@@ -135,6 +137,19 @@ class HomeController extends Controller
             ->limit(5)
             ->get();
 
+        // Count male and female per department
+        $genderPerDept = DB::connection('cii')
+            ->table('BIODATA')
+            ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
+            ->select(
+                'DEPT.DEPARTEMENT as department_name',
+                DB::raw("SUM(CASE WHEN BIODATA.JENIS_KEL = 'L' THEN 1 ELSE 0 END) as male_count"),
+                DB::raw("SUM(CASE WHEN BIODATA.JENIS_KEL = 'P' THEN 1 ELSE 0 END) as female_count")
+            )
+            ->groupBy('DEPT.DEPARTEMENT', 'DEPT.ID_DEPT')
+            ->orderBy('DEPT.DEPARTEMENT', 'asc')
+            ->get();
+
         return response()->json([
             'totalpkwt' => $pkwtCount,
             'deptnonsewing' => $deptNonSewingCount,
@@ -145,6 +160,7 @@ class HomeController extends Controller
             'femaleemployees' => $femaleEmployeeCount,
             'recentlyhired' => $recentlyHired,
             'mostemployee' => $mostEmployee,
+            'genderperdept' => $genderPerDept,
         ]);
     }
 }

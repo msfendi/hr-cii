@@ -136,6 +136,16 @@ body{ background-color: #f4f6fb; }
                                 <span class="tab-number">3</span> Dokumen &amp; Kepatuhan
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="tab-link-4" data-toggle="tab" href="#section-4" role="tab">
+                                <span class="tab-number">4</span> Foreign Guest
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="tab-link-5" data-toggle="tab" href="#section-5" role="tab">
+                                <span class="tab-number">5</span> Chu Family
+                            </a>
+                        </li>
                     </ul>
 
                     <div class="tab-content" id="recapTabsContent">
@@ -497,6 +507,261 @@ body{ background-color: #f4f6fb; }
                         </div>
                     </div>
 
+                    {{-- ===================== SECTION 4: FOREIGN GUEST ===================== --}}
+                    <div class="tab-pane fade section-block" id="section-4" role="tabpanel">
+                        <div class="section-title"><span class="section-number">4</span><h2>Foreign Guest</h2></div>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-filter mr-1"></i> Filter</h6>
+                            </div>
+                            <div class="card-body">
+                                <form id="guestFilterForm" class="filter-form">
+                                    <div class="row align-items-start">
+                                        <div class="col-md-4 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Ambang Batas (Hari)</label>
+                                            <select id="guestDaysSelect" class="form-control" style="width:100%">
+                                                <option value="7">7 Hari</option>
+                                                <option value="30" selected>30 Hari</option>
+                                                <option value="60">60 Hari</option>
+                                                <option value="90">90 Hari</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Kewarganegaraan</label>
+                                            <select id="guestNationalitySelect" class="form-control" style="width:100%">
+                                                <option value="">Semua</option>
+                                                @foreach ($guestNationalities as $n)
+                                                    <option value="{{ $n }}">{{ $n }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex">
+                                        <button type="submit" class="btn btn-primary shadow-sm mr-2">
+                                            <i class="fas fa-search fa-sm mr-1"></i> Terapkan Filter
+                                        </button>
+                                        <button type="button" id="guestResetFilter" class="btn btn-outline-secondary shadow-sm">
+                                            <i class="fas fa-undo fa-sm mr-1"></i> Reset
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-primary shadow h-100">
+                                    <div class="kpi-label">Total Foreign Guest</div>
+                                    <div class="kpi-value" id="kpiTotalGuest">0</div>
+                                    <i class="fas fa-user-friends kpi-icon"></i>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-warning shadow h-100">
+                                    <div class="kpi-label">Dokumen Akan Expired</div>
+                                    <div class="kpi-value" id="kpiGuestExpiringCount">0</div>
+                                    <i class="fas fa-exclamation-triangle kpi-icon"></i>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-info shadow h-100">
+                                    <div class="kpi-label">Jenis Dokumen Terdampak</div>
+                                    <div class="kpi-value" id="kpiGuestDocTypes">0</div>
+                                    <i class="fas fa-file-alt kpi-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-lg-4 mb-4">
+                                <div class="card shadow h-100">
+                                    <div class="card-header py-3">
+                                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-bar mr-1"></i> Dokumen per Jenis</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="height:280px"><canvas id="guestDocTypeChart"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-8 mb-4">
+                                <div class="card shadow h-100">
+                                    <div class="card-header py-3">
+                                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-clock mr-1"></i> Daftar Dokumen Akan Expired</h6>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered table-hover mb-0 small" id="guestExpiringTable" width="100%">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Nama Guest</th>
+                                                        <th>Jenis Dokumen</th>
+                                                        <th>Tanggal Expired</th>
+                                                        <th class="text-right">Sisa Hari</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-users mr-1"></i> Daftar Foreign Guest</h6>
+                                <small class="section-hint">Klik baris untuk melihat detail dokumen lengkap.</small>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered table-hover mb-0 small" id="guestTable" width="100%">
+                                        <thead>
+                                            <tr>
+                                                <th>Nama</th>
+                                                <th>Kewarganegaraan</th>
+                                                <th>No. Passport</th>
+                                                <th>Visa Type</th>
+                                                <th>Status</th>
+                                                <th>Must Used Date</th>
+                                                <th>Visa Expiry</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- ===================== SECTION 5: CHU FAMILY ===================== --}}
+                    <div class="tab-pane fade section-block" id="section-5" role="tabpanel">
+                        <div class="section-title"><span class="section-number">5</span><h2>Chu Family</h2></div>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-filter mr-1"></i> Filter</h6>
+                            </div>
+                            <div class="card-body">
+                                <form id="familyFilterForm" class="filter-form">
+                                    <div class="row align-items-start">
+                                        <div class="col-md-4 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Ambang Batas (Hari)</label>
+                                            <select id="familyDaysSelect" class="form-control" style="width:100%">
+                                                <option value="7">7 Hari</option>
+                                                <option value="30" selected>30 Hari</option>
+                                                <option value="60">60 Hari</option>
+                                                <option value="90">90 Hari</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Kewarganegaraan</label>
+                                            <select id="familyNationalitySelect" class="form-control" style="width:100%">
+                                                <option value="">Semua</option>
+                                                @foreach ($familyNationalities as $n)
+                                                    <option value="{{ $n }}">{{ $n }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex">
+                                        <button type="submit" class="btn btn-primary shadow-sm mr-2">
+                                            <i class="fas fa-search fa-sm mr-1"></i> Terapkan Filter
+                                        </button>
+                                        <button type="button" id="familyResetFilter" class="btn btn-outline-secondary shadow-sm">
+                                            <i class="fas fa-undo fa-sm mr-1"></i> Reset
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-primary shadow h-100">
+                                    <div class="kpi-label">Total Chu Family</div>
+                                    <div class="kpi-value" id="kpiTotalFamily">0</div>
+                                    <i class="fas fa-people-roof kpi-icon"></i>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-warning shadow h-100">
+                                    <div class="kpi-label">Dokumen Akan Expired</div>
+                                    <div class="kpi-value" id="kpiFamilyExpiringCount">0</div>
+                                    <i class="fas fa-exclamation-triangle kpi-icon"></i>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 mb-4">
+                                <div class="kpi-card kpi-info shadow h-100">
+                                    <div class="kpi-label">Jenis Dokumen Terdampak</div>
+                                    <div class="kpi-value" id="kpiFamilyDocTypes">0</div>
+                                    <i class="fas fa-file-alt kpi-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-lg-4 mb-4">
+                                <div class="card shadow h-100">
+                                    <div class="card-header py-3">
+                                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-bar mr-1"></i> Dokumen per Jenis</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="height:280px"><canvas id="familyDocTypeChart"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-8 mb-4">
+                                <div class="card shadow h-100">
+                                    <div class="card-header py-3">
+                                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-clock mr-1"></i> Daftar Dokumen Akan Expired</h6>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered table-hover mb-0 small" id="familyExpiringTable" width="100%">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Nama</th>
+                                                        <th>Jenis Dokumen</th>
+                                                        <th>Tanggal Expired</th>
+                                                        <th class="text-right">Sisa Hari</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-friends mr-1"></i> Daftar Chu Family</h6>
+                                <small class="section-hint">Klik baris untuk melihat detail dokumen lengkap.</small>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered table-hover mb-0 small" id="familyTable" width="100%">
+                                        <thead>
+                                            <tr>
+                                                <th>Nama</th>
+                                                <th>Gender</th>
+                                                <th>Kewarganegaraan</th>
+                                                <th>No. Passport</th>
+                                                <th>Passport Expiry</th>
+                                                <th>Visa Expiry</th>
+                                                <th>KITAS Expiry</th>
+                                                <th>RPTKA Expiry</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     </div>
                     <!-- /.tab-content -->
 
@@ -534,6 +799,68 @@ body{ background-color: #f4f6fb; }
                             </thead>
                             <tbody id="modalOnleaveBody"></tbody>
                         </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===================== MODAL: DETAIL FOREIGN GUEST ===================== --}}
+    <div class="modal fade" id="guestDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="guestDetailModalLabel"><i class="fas fa-user-friends mr-1"></i> Detail Foreign Guest</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-primary small text-uppercase">Data Guest</h6>
+                            <table class="table table-sm table-borderless mb-4">
+                                <tbody id="modalGuestInfoBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-primary small text-uppercase">Dokumen &amp; Visa</h6>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody id="modalGuestDocBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===================== MODAL: DETAIL CHU FAMILY ===================== --}}
+    <div class="modal fade" id="familyDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="familyDetailModalLabel"><i class="fas fa-people-roof mr-1"></i> Detail Chu Family</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-primary small text-uppercase">Data Pribadi</h6>
+                            <table class="table table-sm table-borderless mb-4">
+                                <tbody id="modalFamilyInfoBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-primary small text-uppercase">Dokumen</h6>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody id="modalFamilyDocBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -888,6 +1215,296 @@ body{ background-color: #f4f6fb; }
             });
         }
 
+        /* =====================================================================
+        * SECTION 4: FOREIGN GUEST
+        * ===================================================================== */
+
+        let guestTable = null;
+        let guestExpiringTable = null;
+        let guestDocTypeChart = null;
+
+        function daysBadge(days) {
+            const cls = days <= 7 ? 'badge-danger' : 'badge-warning';
+            return `<span class="badge ${cls}">${days} hari</span>`;
+        }
+
+        function initGuestTables() {
+            guestTable = $('#guestTable').DataTable({
+                data: [],
+                columns: [
+                    { data: 'guest_name', title: 'Nama' },
+                    { data: 'nationality', title: 'Kewarganegaraan', defaultContent: '-' },
+                    { data: 'passport_no', title: 'No. Passport', defaultContent: '-' },
+                    { data: 'visa_type', title: 'Visa Type', defaultContent: '-' },
+                    {
+                        data: 'status', title: 'Status',
+                        render: (d) => d ? `<span class="badge badge-info">${d}</span>` : '-'
+                    },
+                    { data: 'must_used_date', title: 'Must Used Date', render: (d) => formatDateIndo(d) },
+                    { data: 'visa_expiry', title: 'Visa Expiry', render: (d) => formatDateIndo(d) },
+                ],
+                order: [[0, 'asc']],
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                createdRow: function (row, data) {
+                    $(row).addClass('guest-row').attr('data-id', data.id).attr('data-name', data.guest_name);
+                },
+                language: {
+                    search: 'Cari:', lengthMenu: 'Tampilkan _MENU_ data',
+                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ guest', infoEmpty: 'Tidak ada data',
+                    infoFiltered: '(difilter dari _MAX_ total data)', zeroRecords: 'Tidak ada guest yang cocok',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+
+            guestExpiringTable = $('#guestExpiringTable').DataTable({
+                data: [],
+                columns: [
+                    { data: 'guest_name', title: 'Nama Guest' },
+                    { data: 'doc_type', title: 'Jenis Dokumen' },
+                    { data: 'expiry_date', title: 'Tanggal Expired', render: (d) => formatDateIndo(d) },
+                    { data: 'days_left', title: 'Sisa Hari', className: 'text-right', render: (d) => daysBadge(d) },
+                ],
+                order: [[3, 'asc']],
+                pageLength: 5,
+                lengthMenu: [5, 10, 25],
+                searching: false,
+                language: {
+                    lengthMenu: 'Tampilkan _MENU_ data', info: 'Menampilkan _START_ - _END_ dari _TOTAL_ dokumen',
+                    infoEmpty: 'Tidak ada data', zeroRecords: 'Tidak ada dokumen yang akan expired',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+        }
+
+        function renderGuestDocTypeChart(countByType) {
+            if (guestDocTypeChart) guestDocTypeChart.destroy();
+            const labels = Object.keys(countByType);
+            const values = Object.values(countByType);
+
+            guestDocTypeChart = new Chart(document.getElementById('guestDocTypeChart'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Jumlah Dokumen', data: values,
+                        backgroundColor: 'rgba(78,115,223,0.85)', hoverBackgroundColor: '#2e59d9',
+                        borderRadius: 6, maxBarThickness: 32,
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false, drawBorder: false } },
+                        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgb(234, 236, 244)', drawBorder: false, borderDash: [3] } }
+                    }
+                }
+            });
+        }
+
+        function loadGuestDashboard() {
+            const params = {
+                days: $('#guestDaysSelect').val(),
+                nationality: $('#guestNationalitySelect').val(),
+            };
+            showLoadingSwal('Memuat data foreign guest...');
+
+            fetch("{{ route('guest-master.dashboard-data') }}?" + new URLSearchParams(params))
+                .then(res => res.json())
+                .then(data => {
+                    $('#kpiTotalGuest').text(data.total_guest);
+                    $('#kpiGuestExpiringCount').text(data.expiring_count);
+                    $('#kpiGuestDocTypes').text(Object.values(data.count_by_type).filter(v => v > 0).length);
+
+                    guestTable.clear(); guestTable.rows.add(data.guests); guestTable.draw();
+                    guestExpiringTable.clear(); guestExpiringTable.rows.add(data.expiring); guestExpiringTable.draw();
+
+                    renderGuestDocTypeChart(data.count_by_type);
+                })
+                .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat memuat data.', 'error'))
+                .finally(() => hideLoadingSwal());
+        }
+
+        $(document).on('click', '#guestTable tbody tr', function () {
+            const id = $(this).data('id');
+            showLoadingSwal('Memuat detail guest...');
+
+            fetch("{{ url('guest-master/dashboard-detail') }}/" + id)
+                .then(res => res.json())
+                .then(data => {
+                    const g = data.guest;
+                    const m = data.master;
+
+                    $('#guestDetailModalLabel').html(`<i class="fas fa-user-friends mr-1"></i> Detail - ${g.guest_name}`);
+
+                    $('#modalGuestInfoBody').html(`
+                        <tr><td class="text-muted" width="40%">Nama</td><td>: ${g.guest_name || '-'}</td></tr>
+                        <tr><td class="text-muted">Visa Type</td><td>: ${g.visa_type || '-'}</td></tr>
+                        <tr><td class="text-muted">Visa Status</td><td>: ${g.visa_status || '-'}</td></tr>
+                        <tr><td class="text-muted">Status</td><td>: ${g.status || '-'}</td></tr>
+                        <tr><td class="text-muted">Tanggal Kembali</td><td>: ${formatDateIndo(g.return)}</td></tr>
+                        <tr><td class="text-muted">Hotel</td><td>: ${g.hotel || '-'}</td></tr>
+                    `);
+
+                    if (m) {
+                        $('#modalGuestDocBody').html(`
+                            <tr><td class="text-muted" width="45%">Kewarganegaraan</td><td>: ${m.nationality || '-'}</td></tr>
+                            <tr><td class="text-muted">No. Passport</td><td>: ${m.passport_no || '-'}</td></tr>
+                            <tr><td class="text-muted">Tanggal Terbit</td><td>: ${formatDateIndo(m.issue_date)}</td></tr>
+                            <tr><td class="text-muted">Must Used Date</td><td>: ${formatDateIndo(m.must_used_date)}</td></tr>
+                            <tr><td class="text-muted">Tanggal Kedatangan</td><td>: ${formatDateIndo(m.arrival_date)}</td></tr>
+                            <tr><td class="text-muted">Visa Expiry</td><td>: ${formatDateIndo(m.visa_expiry)}</td></tr>
+                        `);
+                    } else {
+                        $('#modalGuestDocBody').html('<tr><td class="text-muted">Belum ada data Guest Master.</td></tr>');
+                    }
+
+                    $('#guestDetailModal').modal('show');
+                })
+                .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat memuat data.', 'error'))
+                .finally(() => hideLoadingSwal());
+        });
+
+        /* =====================================================================
+        * SECTION 5: CHU FAMILY
+        * ===================================================================== */
+
+        let familyTable = null;
+        let familyExpiringTable = null;
+        let familyDocTypeChart = null;
+
+        function initFamilyTables() {
+            familyTable = $('#familyTable').DataTable({
+                data: [],
+                columns: [
+                    { data: 'name', title: 'Nama' },
+                    { data: 'gender', title: 'Gender', defaultContent: '-' },
+                    { data: 'nationality', title: 'Kewarganegaraan', defaultContent: '-' },
+                    { data: 'passport_number', title: 'No. Passport', defaultContent: '-' },
+                    { data: 'passport_expiry', title: 'Passport Expiry', render: (d) => formatDateIndo(d) },
+                    { data: 'visa_expiry', title: 'Visa Expiry', render: (d) => formatDateIndo(d) },
+                    { data: 'kitas_expiry', title: 'KITAS Expiry', render: (d) => formatDateIndo(d) },
+                    { data: 'rptka_expiry', title: 'RPTKA Expiry', render: (d) => formatDateIndo(d) },
+                ],
+                order: [[0, 'asc']],
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                createdRow: function (row, data) {
+                    $(row).addClass('family-row').attr('data-id', data.id).attr('data-name', data.name);
+                },
+                language: {
+                    search: 'Cari:', lengthMenu: 'Tampilkan _MENU_ data',
+                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ keluarga', infoEmpty: 'Tidak ada data',
+                    infoFiltered: '(difilter dari _MAX_ total data)', zeroRecords: 'Tidak ada data yang cocok',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+
+            familyExpiringTable = $('#familyExpiringTable').DataTable({
+                data: [],
+                columns: [
+                    { data: 'name', title: 'Nama' },
+                    { data: 'doc_type', title: 'Jenis Dokumen' },
+                    { data: 'expiry_date', title: 'Tanggal Expired', render: (d) => formatDateIndo(d) },
+                    { data: 'days_left', title: 'Sisa Hari', className: 'text-right', render: (d) => daysBadge(d) },
+                ],
+                order: [[3, 'asc']],
+                pageLength: 5,
+                lengthMenu: [5, 10, 25],
+                searching: false,
+                language: {
+                    lengthMenu: 'Tampilkan _MENU_ data', info: 'Menampilkan _START_ - _END_ dari _TOTAL_ dokumen',
+                    infoEmpty: 'Tidak ada data', zeroRecords: 'Tidak ada dokumen yang akan expired',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+        }
+
+        function renderFamilyDocTypeChart(countByType) {
+            if (familyDocTypeChart) familyDocTypeChart.destroy();
+            const labels = Object.keys(countByType);
+            const values = Object.values(countByType);
+
+            familyDocTypeChart = new Chart(document.getElementById('familyDocTypeChart'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Jumlah Dokumen', data: values,
+                        backgroundColor: 'rgba(28,200,138,0.85)', hoverBackgroundColor: '#17a673',
+                        borderRadius: 6, maxBarThickness: 32,
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false, drawBorder: false } },
+                        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgb(234, 236, 244)', drawBorder: false, borderDash: [3] } }
+                    }
+                }
+            });
+        }
+
+        function loadFamilyDashboard() {
+            const params = {
+                days: $('#familyDaysSelect').val(),
+                nationality: $('#familyNationalitySelect').val(),
+            };
+            showLoadingSwal('Memuat data chu family...');
+
+            fetch("{{ route('chu-family.dashboard-data') }}?" + new URLSearchParams(params))
+                .then(res => res.json())
+                .then(data => {
+                    $('#kpiTotalFamily').text(data.total_family);
+                    $('#kpiFamilyExpiringCount').text(data.expiring_count);
+                    $('#kpiFamilyDocTypes').text(Object.values(data.count_by_type).filter(v => v > 0).length);
+
+                    familyTable.clear(); familyTable.rows.add(data.families); familyTable.draw();
+                    familyExpiringTable.clear(); familyExpiringTable.rows.add(data.expiring); familyExpiringTable.draw();
+
+                    renderFamilyDocTypeChart(data.count_by_type);
+                })
+                .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat memuat data.', 'error'))
+                .finally(() => hideLoadingSwal());
+        }
+
+        $(document).on('click', '#familyTable tbody tr', function () {
+            const id = $(this).data('id');
+            showLoadingSwal('Memuat detail keluarga...');
+
+            fetch("{{ url('chu-family/dashboard-detail') }}/" + id)
+                .then(res => res.json())
+                .then(data => {
+                    const f = data.family;
+
+                    $('#familyDetailModalLabel').html(`<i class="fas fa-people-roof mr-1"></i> Detail - ${f.name}`);
+
+                    $('#modalFamilyInfoBody').html(`
+                        <tr><td class="text-muted" width="40%">Nama</td><td>: ${f.name || '-'}</td></tr>
+                        <tr><td class="text-muted">Gender</td><td>: ${f.gender || '-'}</td></tr>
+                        <tr><td class="text-muted">Tempat Lahir</td><td>: ${f.place || '-'}</td></tr>
+                        <tr><td class="text-muted">Tanggal Lahir</td><td>: ${formatDateIndo(f.birth_date)}</td></tr>
+                        <tr><td class="text-muted">Kewarganegaraan</td><td>: ${f.nationality || '-'}</td></tr>
+                        <tr><td class="text-muted">NPWP</td><td>: ${f.npwp || '-'}</td></tr>
+                    `);
+
+                    $('#modalFamilyDocBody').html(`
+                        <tr><td class="text-muted" width="45%">No. Passport</td><td>: ${f.passport_number || '-'}</td></tr>
+                        <tr><td class="text-muted">Passport Expiry</td><td>: ${formatDateIndo(f.passport_expiry)}</td></tr>
+                        <tr><td class="text-muted">Visa Type</td><td>: ${f.visa_type || '-'}</td></tr>
+                        <tr><td class="text-muted">Visa Expiry</td><td>: ${formatDateIndo(f.visa_expiry)}</td></tr>
+                        <tr><td class="text-muted">KITAS Expiry</td><td>: ${formatDateIndo(f.kitas_expiry)}</td></tr>
+                        <tr><td class="text-muted">RPTKA Expiry</td><td>: ${formatDateIndo(f.rptka_expiry)}</td></tr>
+                    `);
+
+                    $('#familyDetailModal').modal('show');
+                })
+                .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat memuat data.', 'error'))
+                .finally(() => hideLoadingSwal());
+        });
+
         function renderDocTypeChart(countByType) {
             if (docTypeChart) docTypeChart.destroy();
             const labels = Object.keys(countByType);
@@ -949,6 +1566,8 @@ body{ background-color: #f4f6fb; }
         $(document).ready(function () {
             initExpatRecapTable();
             initDocTable();
+            initGuestTables();
+            initFamilyTables();
 
             // Section 1
             $('#yearSelect').select2({ minimumResultsForSearch: 0 });
@@ -989,8 +1608,30 @@ body{ background-color: #f4f6fb; }
                 loadDocumentData();
             });
 
+            // Section 4 - Foreign Guest
+            $('#guestDaysSelect').select2({ minimumResultsForSearch: 0 });
+            $('#guestNationalitySelect').select2({ placeholder: 'Semua', allowClear: true });
+
+            $('#guestFilterForm').on('submit', function (e) { e.preventDefault(); loadGuestDashboard(); });
+            $('#guestResetFilter').on('click', function () {
+                $('#guestDaysSelect').val('30').trigger('change');
+                $('#guestNationalitySelect').val(null).trigger('change');
+                loadGuestDashboard();
+            });
+
+            // Section 5 - Chu Family
+            $('#familyDaysSelect').select2({ minimumResultsForSearch: 0 });
+            $('#familyNationalitySelect').select2({ placeholder: 'Semua', allowClear: true });
+
+            $('#familyFilterForm').on('submit', function (e) { e.preventDefault(); loadFamilyDashboard(); });
+            $('#familyResetFilter').on('click', function () {
+                $('#familyDaysSelect').val('30').trigger('change');
+                $('#familyNationalitySelect').val(null).trigger('change');
+                loadFamilyDashboard();
+            });
+
             // Lazy-load per tab
-            const loadedTabs = { 1: false, 2: false, 3: false };
+            const loadedTabs = { 1: false, 2: false, 3: false, 4: false, 5: false }; // UPDATE
             loadChartData();
             loadedTabs[1] = true;
 
@@ -999,9 +1640,13 @@ body{ background-color: #f4f6fb; }
 
                 if (target === '#section-2' && !loadedTabs[2]) { loadDetailData(); loadedTabs[2] = true; }
                 if (target === '#section-3' && !loadedTabs[3]) { loadDocumentData(); loadedTabs[3] = true; }
+                if (target === '#section-4' && !loadedTabs[4]) { loadGuestDashboard(); loadedTabs[4] = true; } // TAMBAHAN
+                if (target === '#section-5' && !loadedTabs[5]) { loadFamilyDashboard(); loadedTabs[5] = true; } // TAMBAHAN
 
                 if (target === '#section-2') { if (expatRecapTable) expatRecapTable.columns.adjust(); if (componentChart) componentChart.resize(); if (onleaveTypeChart) onleaveTypeChart.resize(); }
                 if (target === '#section-3') { if (docTable) docTable.columns.adjust(); if (docTypeChart) docTypeChart.resize(); }
+                if (target === '#section-4') { if (guestTable) guestTable.columns.adjust(); if (guestExpiringTable) guestExpiringTable.columns.adjust(); if (guestDocTypeChart) guestDocTypeChart.resize(); } // TAMBAHAN
+                if (target === '#section-5') { if (familyTable) familyTable.columns.adjust(); if (familyExpiringTable) familyExpiringTable.columns.adjust(); if (familyDocTypeChart) familyDocTypeChart.resize(); } // TAMBAHAN
             });
         });
     </script>

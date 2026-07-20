@@ -87,4 +87,78 @@ class ChuFamilyController extends Controller
             'chu_family.xlsx'
         );
     }
+
+    /*
+|--------------------------------------------------------------------------
+| DASHBOARD (Chu Family)
+|--------------------------------------------------------------------------
+*/
+
+    public function dashboardData(Request $request)
+    {
+        $days = (int) ($request->days ?? 30);
+        $nationality = $request->nationality;
+
+        $query = ChuFamily::query();
+        if ($nationality) {
+            $query->where('nationality', $nationality);
+        }
+        $families = $query->orderBy('name')->get();
+
+        $docTypes = [
+            'passport_expiry' => 'Passport',
+            'visa_expiry'     => 'Visa',
+            'kitas_expiry'    => 'KITAS',
+            'rptka_expiry'    => 'RPTKA',
+        ];
+
+        $expiring = collect();
+        $countByType = array_fill_keys($docTypes, 0);
+
+        foreach ($families as $f) {
+            foreach ($docTypes as $field => $label) {
+                if (!$f->$field) continue;
+
+                $expiry = \Carbon\Carbon::parse($f->$field);
+                $daysLeft = now()->diffInDays($expiry, false);
+
+                if ($daysLeft >= 0 && $daysLeft <= $days) {
+                    $expiring->push([
+                        'id'          => $f->id,
+                        'name'        => $f->name,
+                        'doc_type'    => $label,
+                        'expiry_date' => $expiry->format('Y-m-d'),
+                        'days_left'   => (int) $daysLeft,
+                    ]);
+                    $countByType[$label] = ($countByType[$label] ?? 0) + 1;
+                }
+            }
+        }
+        $expiring = $expiring->sortBy('days_left')->values();
+
+        return response()->json([
+            'total_family'   => $families->count(),
+            'expiring_count' => $expiring->count(),
+            'expiring'       => $expiring,
+            'count_by_type'  => collect($docTypes)->mapWithKeys(fn($label) => [$label => $countByType[$label] ?? 0]),
+            'families'       => $families->map(fn($f) => [
+                'id'               => $f->id,
+                'name'             => $f->name,
+                'gender'           => $f->gender,
+                'nationality'      => $f->nationality,
+                'passport_number'  => $f->passport_number,
+                'passport_expiry'  => $f->passport_expiry,
+                'visa_expiry'      => $f->visa_expiry,
+                'kitas_expiry'     => $f->kitas_expiry,
+                'rptka_expiry'     => $f->rptka_expiry,
+            ])->values(),
+        ]);
+    }
+
+    public function dashboardDetail($id)
+    {
+        $family = ChuFamily::findOrFail($id);
+
+        return response()->json(['family' => $family]);
+    }
 }

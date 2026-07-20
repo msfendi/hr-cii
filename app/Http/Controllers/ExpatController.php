@@ -466,24 +466,27 @@ class ExpatController extends Controller
     {
         $years = ExpatCost::selectRaw('YEAR(transactions_date) as y')
             ->union(ExpatOnleave::selectRaw('YEAR(onleave_start) as y'))
-            ->pluck('y')
-            ->filter()
-            ->unique()
-            ->sortDesc()
-            ->values();
+            ->pluck('y')->filter()->unique()->sortDesc()->values();
 
-        if ($years->isEmpty()) {
-            $years = collect([date('Y')]);
-        }
+        if ($years->isEmpty()) $years = collect([date('Y')]);
 
-        $nationalities = ExpatMaster::whereNotNull('nationality')
-            ->distinct()
-            ->orderBy('nationality')
-            ->pluck('nationality');
-
+        $nationalities = ExpatMaster::whereNotNull('nationality')->distinct()->orderBy('nationality')->pluck('nationality');
         $components = ExpatCostComponent::orderBy('component')->get();
 
-        return view('expat_dashboard.index', compact('years', 'nationalities', 'components'));
+        // TAMBAHAN untuk section Foreign Guest & Chu Family
+        $guestNationalities = DB::table('guest_masters')
+            ->whereNotNull('nationality')->distinct()->orderBy('nationality')->pluck('nationality');
+
+        $familyNationalities = \App\Models\ChuFamily::whereNotNull('nationality')
+            ->distinct()->orderBy('nationality')->pluck('nationality');
+
+        return view('expat_dashboard.index', compact(
+            'years',
+            'nationalities',
+            'components',
+            'guestNationalities',
+            'familyNationalities'
+        ));
     }
 
     public function searchEmployee(Request $request)
