@@ -200,7 +200,7 @@
                 <!-- Pivot 1: ORDER -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Pivot ORDER &mdash; Qty Order per Uraian / Buyer / Style</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Pivot ORDER &mdash; Qty Garment per Uraian / Buyer / Style</h6>
                     </div>
                     <div class="card-body">
                         <div class="row">
