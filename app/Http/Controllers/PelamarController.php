@@ -29,7 +29,8 @@ class PelamarController extends Controller
                     ->where('pelamar_details.status_apply', 'ONBOARDING');
             })
             ->orWhere(function ($query) {
-                $query->whereNull('pelamar_details.id_pelamar')   // tidak ada baris pasangan di pelamar_details
+                $query->whereNull('pelamar_details.id_pelamar')
+                    ->where('IS_KONTRAK', 'FALSE')
                     ->whereNotNull('PELAMAR.NPK');               // tapi NPK terisi
             })
             ->orderBy('NPK', 'ASC')
