@@ -15,7 +15,7 @@ class MonitoringDashboardService
     public function __construct(protected array $filters = []) {}
 
     /**
-     * $filters bisa berisi: uraian, buyer, style
+     * $filters bisa berisi: uraian, brand, style
      */
     public static function make(array $filters): self
     {
@@ -32,16 +32,26 @@ class MonitoringDashboardService
         return Cache::remember('mon_dashboard:filter_options', self::FILTER_OPTIONS_TTL, function () {
             return [
                 'uraian' => DB::table('mon_orders')->whereNotNull('uraian')->distinct()->orderBy('uraian')->pluck('uraian'),
-                'buyer'  => DB::table('mon_orders')->whereNotNull('brand')->distinct()->orderBy('brand')->pluck('brand'),
+                'brand'  => DB::table('mon_orders')->whereNotNull('brand')->distinct()->orderBy('brand')->pluck('brand'),
                 'style'  => DB::table('mon_orders')->whereNotNull('style')->distinct()->orderBy('style')->pluck('style'),
             ];
         });
     }
 
+    /**
+     * Kombinasi uraian/brand/style yang benar-benar ada di mon_orders, dipakai HANYA
+     * untuk cascading dropdown filter (Brand -> Style -> Uraian) di blade.
+     *
+     * SENGAJA dibuat query ringan: SELECT DISTINCT 3 kolom saja, tanpa SUM/GROUP BY
+     * per destination & tanpa MIN(buyer_delivery) seperti di orderPivot(). Sebelumnya
+     * blade memakai orderPivot() (query berat, ikut dipanggil di load pertama) hanya
+     * untuk mengambil kombinasi ini -- sekarang dipisah supaya load halaman pertama
+     * tidak perlu menjalankan pivot lengkap.
+     */
     public function orderCombos(): Collection
     {
         return DB::table('mon_orders')
-            ->select('uraian', 'buyer', 'style')
+            ->select('uraian', 'brand', 'style')
             ->whereNotNull('uraian')
             ->distinct()
             ->orderBy('uraian')
@@ -52,7 +62,7 @@ class MonitoringDashboardService
     {
         $col = fn(string $c) => $prefix ? "{$prefix}.{$c}" : $c;
 
-        foreach (['uraian', 'buyer', 'style'] as $field) {
+        foreach (['uraian', 'brand', 'style'] as $field) {
             $this->applyFilterValue($query, $col($field), $field);
         }
     }
@@ -91,27 +101,27 @@ class MonitoringDashboardService
 
     private function applyUraianBridgeFilter($query, string $uraianColumn): void
     {
-        if (!$this->hasFilterValue('buyer') && !$this->hasFilterValue('style')) {
+        if (!$this->hasFilterValue('brand') && !$this->hasFilterValue('style')) {
             return;
         }
 
         $uraianSubquery = DB::table('mon_orders')->select('uraian')->distinct();
-        $this->applyFilterValue($uraianSubquery, 'buyer', 'buyer');
+        $this->applyFilterValue($uraianSubquery, 'brand', 'brand');
         $this->applyFilterValue($uraianSubquery, 'style', 'style');
 
         $query->whereIn($uraianColumn, $uraianSubquery);
     }
 
     /**
-     * Pivot ORDER: qty order per uraian / buyer / style
+     * Pivot ORDER: qty order per uraian / brand / style
      */
     public function orderPivot(): Collection
     {
         $query = DB::table('mon_orders')
-            ->select('uraian', 'buyer', 'style', 'destination')
+            ->select('uraian', 'brand', 'style', 'destination')
             ->selectRaw('SUM(qty_ord) as qty_order')
             ->selectRaw('MIN(buyer_delivery) as estimasi_shipment')
-            ->groupBy('uraian', 'buyer', 'style', 'destination')
+            ->groupBy('uraian', 'brand', 'style', 'destination')
             ->orderBy('uraian');
 
         $this->applyOrderFilters($query);
@@ -298,7 +308,7 @@ class MonitoringDashboardService
             );
 
         $this->applyFilterValue($query, 'b.uraian', 'uraian');
-        // Filter buyer/style dijembatani lewat uraian (BUKAN join langsung ke mon_orders):
+        // Filter brand/style dijembatani lewat uraian (BUKAN join langsung ke mon_orders):
         // satu uraian bisa punya banyak baris mon_orders, join langsung akan meng-gandakan
         // baris BOM sebelum SUM(b.cons) dan bikin total_cons kegedean berkali lipat.
         $this->applyUraianBridgeFilter($query, 'b.uraian');
@@ -332,7 +342,7 @@ class MonitoringDashboardService
     /**
      * Ringkasan jumlah order per tanggal `buyer_delivery`, untuk satu bulan
      * tertentu -- dipakai buat kasih tanda titik/jumlah di komponen kalender.
-     * Filter uraian/buyer/style yang aktif tetap diikutkan.
+     * Filter uraian/brand/style yang aktif tetap diikutkan.
      */
     public function productionDeliveryCalendar(int $year, int $month): Collection
     {
@@ -361,7 +371,7 @@ class MonitoringDashboardService
             ->whereDate('buyer_delivery', $date)
             ->select(
                 'uraian',
-                'buyer',
+                'brand',
                 'style',
                 'item',
                 'destination',

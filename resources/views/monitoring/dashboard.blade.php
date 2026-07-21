@@ -52,11 +52,11 @@
                     <div class="card-body">
                         <div class="row align-items-end">
                             <div class="col-md-3 mb-3 mb-md-0">
-                                <label class="small font-weight-bold text-gray-600 text-uppercase mb-1">Buyer</label>
-                                <select id="f-buyer" class="form-control form-control-sm select2-filter">
+                                <label class="small font-weight-bold text-gray-600 text-uppercase mb-1">Brand</label>
+                                <select id="f-brand" class="form-control form-control-sm select2-filter">
                                     <option value=""></option>
-                                    @foreach($filterOptions['buyer'] as $v)
-                                        <option value="{{ $v }}" @selected(($filters['buyer'] ?? null) === $v)>{{ $v }}</option>
+                                    @foreach($filterOptions['brand'] as $v)
+                                        <option value="{{ $v }}" @selected(($filters['brand'] ?? null) === $v)>{{ $v }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -184,7 +184,7 @@
                                             </colgroup>
                                             <thead>
                                                 <tr>
-                                                    <th>Uraian</th><th>Buyer</th><th>Style</th>
+                                                    <th>Uraian</th><th>Brand</th><th>Style</th>
                                                     <th>Destination</th><th class="right">Qty Ord</th>
                                                 </tr>
                                             </thead>
@@ -200,7 +200,7 @@
                 <!-- Pivot 1: ORDER (kosong awal) -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Pivot ORDER &mdash; Qty Garment per Uraian / Buyer / Style</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Pivot ORDER &mdash; Qty Garment per Uraian / Brand / Style</h6>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -222,7 +222,7 @@
                                         </colgroup>
                                         <thead>
                                             <tr>
-                                                <th>Uraian</th><th>Buyer</th><th>Style</th><th>Destination</th>
+                                                <th>Uraian</th><th>Brand</th><th>Style</th><th>Destination</th>
                                                 <th>Estimasi Shipment</th><th class="right">Qty Order</th>
                                             </tr>
                                         </thead>
@@ -359,7 +359,7 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
     const fUraian = document.getElementById('f-uraian');
-    const fBuyer  = document.getElementById('f-buyer');
+    const fBrand  = document.getElementById('f-brand');
     const fStyle  = document.getElementById('f-style');
     const fApply  = document.getElementById('f-apply');
     const fReset  = document.getElementById('f-reset');
@@ -386,13 +386,13 @@
     });
 
     /* =========================================================
-       Cascading Select2: Buyer -> Style -> Uraian (CPO)
-       Sumber data: kombinasi uraian/buyer/style yang benar-benar
+       Cascading Select2: Brand -> Style -> Uraian (CPO)
+       Sumber data: kombinasi uraian/brand/style yang benar-benar
        ada di mon_orders, diambil dari orderCombos (ringan) yang
        dikirim server (tanpa request tambahan).
        ========================================================= */
     const comboData = @json(
-        $orderCombos->map(fn($r) => ['uraian' => $r->uraian, 'buyer' => $r->buyer, 'style' => $r->style])->unique()->values()
+        $orderCombos->map(fn($r) => ['uraian' => $r->uraian, 'brand' => $r->brand, 'style' => $r->style])->unique()->values()
     );
 
     let cascadeSuppressed = false;
@@ -403,10 +403,10 @@
     }
 
     function filterCombos(opts){
-        const buyer = opts.buyer;
+        const brand = opts.brand;
         const style = opts.style;
         return comboData.filter(c => {
-            if (buyer && c.buyer !== buyer) return false;
+            if (brand && c.brand !== brand) return false;
             if (style && c.style !== style) return false;
             return true;
         });
@@ -431,19 +431,19 @@
     }
 
     function updateStyleOptions(){
-        const selectedBuyer = $(fBuyer).val() || '';
-        const styles = uniqueSorted(filterCombos({ buyer: selectedBuyer }).map(c => c.style));
+        const selectedBrand = $(fBrand).val() || '';
+        const styles = uniqueSorted(filterCombos({ brand: selectedBrand }).map(c => c.style));
         setSelect2Options($(fStyle), styles, true);
     }
 
     function updateUraianOptions(){
-        const selectedBuyer = $(fBuyer).val() || '';
+        const selectedBrand = $(fBrand).val() || '';
         const selectedStyle = $(fStyle).val() || '';
-        const uraians = uniqueSorted(filterCombos({ buyer: selectedBuyer, style: selectedStyle }).map(c => c.uraian));
+        const uraians = uniqueSorted(filterCombos({ brand: selectedBrand, style: selectedStyle }).map(c => c.uraian));
         setSelect2Options($(fUraian), uraians, true);
     }
 
-    $(fBuyer).on('change', function(){
+    $(fBrand).on('change', function(){
         if (cascadeSuppressed) return;
         updateStyleOptions();
         updateUraianOptions();
@@ -593,7 +593,7 @@
     function currentFilters(){
         return {
             uraian: $(fUraian).val() || '',
-            buyer:  $(fBuyer).val() || '',
+            brand:  $(fBrand).val() || '',
             style:  $(fStyle).val() || ''
         };
     }
@@ -677,7 +677,7 @@
         fillTable('#table-order tbody', rows, r =>
             `<tr>
                 <td>${r.uraian ?? ''}</td>
-                <td>${r.buyer ?? ''}</td>
+                <td>${r.brand ?? ''}</td>
                 <td>${r.style ?? ''}</td>
                 <td>${r.destination ?? ''}</td>
                 <td>${fmtDate(r.estimasi_shipment)}</td>
@@ -1128,7 +1128,7 @@
             autoWidth: false,
             columns: [
                 { data: 'uraian', defaultContent: '' },
-                { data: 'buyer', defaultContent: '' },
+                { data: 'brand', defaultContent: '' },
                 { data: 'style', defaultContent: '' },
                 { data: 'destination', defaultContent: '' },
                 { data: 'qty_ord', className: 'right', render: v => fmt(v) },

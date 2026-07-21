@@ -11,7 +11,7 @@ class MonitoringDashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->only(['uraian', 'buyer', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style']);
         $service = MonitoringDashboardService::make($filters);
 
         return view('monitoring.dashboard', [
@@ -26,7 +26,7 @@ class MonitoringDashboardController extends Controller
      */
     public function data(Request $request)
     {
-        $filters = $request->only(['uraian', 'buyer', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style']);
         $service = MonitoringDashboardService::make($filters);
 
         return response()->json([
@@ -43,7 +43,7 @@ class MonitoringDashboardController extends Controller
      */
     public function calendar(Request $request)
     {
-        $filters = $request->only(['uraian', 'buyer', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style']);
         $year  = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
 
@@ -62,7 +62,7 @@ class MonitoringDashboardController extends Controller
      */
     public function calendarDetail(Request $request)
     {
-        $filters = $request->only(['uraian', 'buyer', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style']);
         $date = $request->input('date');
 
         if (!$date) {
