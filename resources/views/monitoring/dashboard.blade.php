@@ -849,7 +849,6 @@
         dtWorkOrder = initDataTable('#table-workorder', {
             pageLength: 15,
             lengthMenu: [15, 25, 50, 100],
-            // columnDefs: [{ targets: 5, className: 'text-right' }]
         });
         initColumnResize('#table-workorder');
     }
