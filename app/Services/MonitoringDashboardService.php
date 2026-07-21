@@ -3,10 +3,15 @@
 namespace App\Services;
 
 use App\Models\MonPurchaseOrder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 
 class MonitoringDashboardService
 {
+    /** TTL cache untuk dropdown filter (jarang berubah, aman di-cache) */
+    private const FILTER_OPTIONS_TTL = 300; // 5 menit
+
     public function __construct(protected array $filters = []) {}
 
     /**
@@ -17,14 +22,40 @@ class MonitoringDashboardService
         return new self($filters);
     }
 
-    /** Dropdown filter options, diambil dari tabel ORDER */
+    /**
+     * Dropdown filter options, diambil dari tabel ORDER.
+     * Di-cache karena dropdown ini biasanya sama untuk semua user & jarang berubah.
+     * Hapus cache manual saat ada import/update order besar: Cache::forget('mon_dashboard:filter_options')
+     */
     public function filterOptions(): array
     {
-        return [
-            'uraian' => DB::table('mon_orders')->select('uraian')->distinct()->orderBy('uraian')->pluck('uraian'),
-            'buyer'  => DB::table('mon_orders')->whereNotNull('buyer')->select('buyer')->distinct()->orderBy('buyer')->pluck('buyer'),
-            'style'  => DB::table('mon_orders')->whereNotNull('style')->select('style')->distinct()->orderBy('style')->pluck('style'),
-        ];
+        return Cache::remember('mon_dashboard:filter_options', self::FILTER_OPTIONS_TTL, function () {
+            return [
+                'uraian' => DB::table('mon_orders')->whereNotNull('uraian')->distinct()->orderBy('uraian')->pluck('uraian'),
+                'buyer'  => DB::table('mon_orders')->whereNotNull('buyer')->distinct()->orderBy('buyer')->pluck('buyer'),
+                'style'  => DB::table('mon_orders')->whereNotNull('style')->distinct()->orderBy('style')->pluck('style'),
+            ];
+        });
+    }
+
+    /**
+     * Kombinasi uraian/buyer/style yang benar-benar ada di mon_orders, dipakai HANYA
+     * untuk cascading dropdown filter (Buyer -> Style -> Uraian) di blade.
+     *
+     * SENGAJA dibuat query ringan: SELECT DISTINCT 3 kolom saja, tanpa SUM/GROUP BY
+     * per destination & tanpa MIN(buyer_delivery) seperti di orderPivot(). Sebelumnya
+     * blade memakai orderPivot() (query berat, ikut dipanggil di load pertama) hanya
+     * untuk mengambil kombinasi ini -- sekarang dipisah supaya load halaman pertama
+     * tidak perlu menjalankan pivot lengkap.
+     */
+    public function orderCombos(): Collection
+    {
+        return DB::table('mon_orders')
+            ->select('uraian', 'buyer', 'style')
+            ->whereNotNull('uraian')
+            ->distinct()
+            ->orderBy('uraian')
+            ->get();
     }
 
     private function applyOrderFilters($query, string $prefix = ''): void
@@ -84,7 +115,7 @@ class MonitoringDashboardService
     /**
      * Pivot ORDER: qty order per uraian / buyer / style
      */
-    public function orderPivot(): \Illuminate\Support\Collection
+    public function orderPivot(): Collection
     {
         $query = DB::table('mon_orders')
             ->select('uraian', 'buyer', 'style', 'destination')
@@ -98,16 +129,63 @@ class MonitoringDashboardService
         return $query->get();
     }
 
-    public function materialPurchasePivot(int $limit = 20): \Illuminate\Support\Collection
+    /**
+     * Pivot PEMBELIAN MATERIAL, dibatasi ke top-$limit barang_code (berdasarkan
+     * total jumlah_order) TANPA fetch seluruh baris po dulu.
+     *
+     * Strategi 2 langkah:
+     *  1) Query ringan: SUM + GROUP BY barang_code + ORDER BY + LIMIT di level SQL,
+     *     supaya penentuan "top N" tidak menunggu semua baris ditarik ke PHP.
+     *  2) Baru fetch detail (per spesifikasi/valas/no_po) HANYA untuk barang_code
+     *     yang lolos langkah 1.
+     *
+     * Ini jauh lebih murah dibanding versi lama yang selalu fetch SEMUA baris po
+     * yang cocok filter (bisa ribuan baris) lalu baru grouping+sorting di PHP.
+     */
+    public function materialPurchasePivot(int $limit = 20): Collection
     {
+        $topCodesQuery = DB::table('mon_purchase_orders as po')
+            ->whereIn('po.jenis_po', MonPurchaseOrder::MATERIAL_JENIS_PO)
+            ->select('po.barang_code')
+            ->selectRaw('SUM(po.jumlah_order) as total_jumlah_order')
+            ->groupBy('po.barang_code');
+
+        $this->applyFilterValue($topCodesQuery, 'po.uraian', 'uraian');
+        $this->applyUraianBridgeFilter($topCodesQuery, 'po.uraian');
+
+        $topCodes = $limit
+            ? $topCodesQuery->orderByDesc('total_jumlah_order')->limit($limit)->pluck('barang_code')
+            : $topCodesQuery->pluck('barang_code');
+
+        if ($topCodes->isEmpty()) {
+            return collect();
+        }
+
         $query = DB::table('mon_purchase_orders as po')
             ->whereIn('po.jenis_po', MonPurchaseOrder::MATERIAL_JENIS_PO)
-            ->select('po.barang_code', 'po.barang_name', 'po.spesifikasi', 'po.valas', 'po.satuan_order', 'po.no_po')
+            ->whereIn('po.barang_code', $topCodes)
+            ->select(
+                'po.barang_code',
+                'po.barang_name',
+                'po.spesifikasi',
+                'po.valas',
+                'po.satuan_order',
+                'po.no_po',
+                'po.tgl_pengiriman' // tambahan
+            )
             ->selectRaw('SUM(po.jumlah_order) as jumlah_order')
             ->selectRaw('SUM(po.jumlah_doc) as jumlah_diterima')
             ->selectRaw('SUM(po.jumlah_order) - SUM(po.jumlah_doc) as sisa')
             ->selectRaw('SUM(po.harga_total) as harga_total')
-            ->groupBy('po.barang_code', 'po.barang_name', 'po.spesifikasi', 'po.valas', 'po.satuan_order', 'po.no_po')
+            ->groupBy(
+                'po.barang_code',
+                'po.barang_name',
+                'po.spesifikasi',
+                'po.valas',
+                'po.satuan_order',
+                'po.no_po',
+                'po.tgl_pengiriman' // tambahan
+            )
             ->orderBy('po.barang_code')
             ->orderBy('po.spesifikasi');
 
@@ -116,8 +194,6 @@ class MonitoringDashboardService
 
         $rows = $query->get();
 
-        // Group flat rows (per barang_code + spesifikasi + valas + no_po) menjadi parent (global)
-        // + details (per spesifikasi/valas/no_po), lalu urutkan parent berdasarkan jumlah_order terbesar.
         $grouped = $rows->groupBy(fn($r) => $r->barang_code . '||' . $r->barang_name);
 
         $result = $grouped->map(function ($details, $key) {
@@ -149,6 +225,7 @@ class MonitoringDashboardService
                     return [
                         'spesifikasi'     => $d->spesifikasi,
                         'no_po'           => $d->no_po,
+                        'tgl_pengiriman'  => $d->tgl_pengiriman, // tambahan
                         'jumlah_order'    => $qty,
                         'jumlah_diterima' => (float) $d->jumlah_diterima,
                         'sisa'            => (float) $d->sisa,
@@ -159,16 +236,23 @@ class MonitoringDashboardService
                     ];
                 })->values(),
             ];
-        })->sortByDesc('jumlah_order')->values();
+        });
 
-        return $limit ? $result->take($limit)->values() : $result;
+        // Urutan "top N" sudah ditentukan di langkah 1 (SQL), tinggal dipertahankan
+        // di sini -- tidak perlu sortByDesc ulang di PHP atas seluruh dataset.
+        $order = $topCodes->flip();
+
+        return $result
+            ->sortBy(fn($r) => $order[$r->barang_code] ?? PHP_INT_MAX)
+            ->values();
     }
 
     /**
-     * Pivot WORK ORDER: item BOM yang BELUM ada di PO (belum diorder).
-     * Replikasi logika STATUS ORDER = 'NOT ORDER' dari MASTER DATA.
+     * Query dasar untuk pivot WORK ORDER (item BOM yang belum ada di PO).
+     * Dipisah dari workOrderPivot() supaya bisa dipakai ulang untuk COUNT
+     * tanpa perlu fetch+limit baris (lihat workOrderCount()).
      */
-    public function workOrderPivot(int $limit = 100): \Illuminate\Support\Collection
+    private function baseWorkOrderQuery()
     {
         $poAgg = DB::table('mon_purchase_orders')
             ->select('uraian', 'barang_code')
@@ -221,8 +305,7 @@ class MonitoringDashboardService
                 'b.komponen',
                 'b.barang_jadi',
                 'satuan_agg.satuan_order'
-            )
-            ->orderBy('b.uraian');
+            );
 
         $this->applyFilterValue($query, 'b.uraian', 'uraian');
         // Filter buyer/style dijembatani lewat uraian (BUKAN join langsung ke mon_orders):
@@ -230,24 +313,47 @@ class MonitoringDashboardService
         // baris BOM sebelum SUM(b.cons) dan bikin total_cons kegedean berkali lipat.
         $this->applyUraianBridgeFilter($query, 'b.uraian');
 
-        return $query->limit($limit)->get();
+        return $query;
     }
 
     /**
-     * Ringkasan jumlah order per tanggal `production_delivery`, untuk satu bulan
+     * Pivot WORK ORDER: item BOM yang BELUM ada di PO (belum diorder).
+     * Replikasi logika STATUS ORDER = 'NOT ORDER' dari MASTER DATA.
+     */
+    public function workOrderPivot(int $limit = 100): Collection
+    {
+        return $this->baseWorkOrderQuery()
+            ->orderBy('b.uraian')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Jumlah item yang belum diorder, TANPA fetch seluruh baris ke PHP.
+     * Laravel otomatis membungkus query yang punya GROUP BY ke dalam subquery
+     * saat count() dipanggil, jadi ini hanya menghasilkan 1 angka dari DB
+     * -- bukan lagi ->get()->count() atas puluhan ribu baris seperti sebelumnya.
+     */
+    public function workOrderCount(): int
+    {
+        return $this->baseWorkOrderQuery()->count();
+    }
+
+    /**
+     * Ringkasan jumlah order per tanggal `buyer_delivery`, untuk satu bulan
      * tertentu -- dipakai buat kasih tanda titik/jumlah di komponen kalender.
      * Filter uraian/buyer/style yang aktif tetap diikutkan.
      */
-    public function productionDeliveryCalendar(int $year, int $month): \Illuminate\Support\Collection
+    public function productionDeliveryCalendar(int $year, int $month): Collection
     {
         $query = DB::table('mon_orders')
-            ->whereNotNull('production_delivery')
-            ->whereYear('production_delivery', $year)
-            ->whereMonth('production_delivery', $month)
-            ->selectRaw('CAST(production_delivery AS DATE) as tanggal')
+            ->whereNotNull('buyer_delivery')
+            ->whereYear('buyer_delivery', $year)
+            ->whereMonth('buyer_delivery', $month)
+            ->selectRaw('CAST(buyer_delivery AS DATE) as tanggal')
             ->selectRaw('COUNT(*) as jumlah_order')
             ->selectRaw('SUM(qty_ord) as total_qty')
-            ->groupBy(DB::raw('CAST(production_delivery AS DATE)'))
+            ->groupBy(DB::raw('CAST(buyer_delivery AS DATE)'))
             ->orderBy('tanggal');
 
         $this->applyOrderFilters($query);
@@ -256,13 +362,13 @@ class MonitoringDashboardService
     }
 
     /**
-     * Detail baris ORDER untuk satu tanggal `production_delivery` spesifik
+     * Detail baris ORDER untuk satu tanggal `buyer_delivery` spesifik
      * (dipanggil saat user klik tanggal di kalender). Filter aktif tetap diikutkan.
      */
-    public function productionDeliveryDetail(string $date): \Illuminate\Support\Collection
+    public function productionDeliveryDetail(string $date): Collection
     {
         $query = DB::table('mon_orders')
-            ->whereDate('production_delivery', $date)
+            ->whereDate('buyer_delivery', $date)
             ->select(
                 'uraian',
                 'buyer',
@@ -270,7 +376,7 @@ class MonitoringDashboardService
                 'item',
                 'destination',
                 'qty_ord',
-                'production_delivery',
+                'buyer_delivery',
                 'buyer_delivery'
             )
             ->orderBy('uraian');
@@ -280,16 +386,26 @@ class MonitoringDashboardService
         return $query->get();
     }
 
-    /** Ringkasan angka untuk kartu KPI di atas dashboard */
+    /**
+     * Ringkasan angka untuk kartu KPI di atas dashboard.
+     * Sebelumnya: 2 query terpisah (clone) untuk qty & style, ditambah
+     * workOrderPivot(100000)->count() yang fetch sampai 100rb baris cuma buat dihitung.
+     * Sekarang: 1 query untuk qty+style, dan workOrderCount() yang COUNT murni di DB.
+     */
     public function summary(): array
     {
         $orderQuery = DB::table('mon_orders');
         $this->applyOrderFilters($orderQuery);
 
+        $orderSummary = $orderQuery
+            ->selectRaw('SUM(qty_ord) as total_qty_order')
+            ->selectRaw('COUNT(DISTINCT style) as total_style')
+            ->first();
+
         return [
-            'total_qty_order'   => (clone $orderQuery)->sum('qty_ord'),
-            'total_style'       => (clone $orderQuery)->distinct('style')->count('style'),
-            'total_item_belum_order' => $this->workOrderPivot(100000)->count(),
+            'total_qty_order'         => $orderSummary->total_qty_order ?? 0,
+            'total_style'             => $orderSummary->total_style ?? 0,
+            'total_item_belum_order'  => $this->workOrderCount(),
         ];
     }
 }

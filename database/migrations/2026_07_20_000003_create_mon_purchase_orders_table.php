@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('jenis_po')->nullable()->index(); // PO / Material Supply / dll
             $table->string('no_po')->nullable();
             $table->date('tgl_po')->nullable()->index();
+            $table->date('tgl_pengiriman')->nullable();
             $table->string('supplier_name')->nullable();
             $table->string('barang_code')->index();
             $table->string('barang_name')->nullable();

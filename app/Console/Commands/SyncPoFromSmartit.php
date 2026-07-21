@@ -58,6 +58,7 @@ class SyncPoFromSmartit extends Command
                     h.jenis_po,
                     h.no_po,
                     h.tgl_po,
+                    h.tgl_pengiriman,
                     s.supplier_name,
                     p.barang_code,
                     b.barang_name,
@@ -174,17 +175,53 @@ class SyncPoFromSmartit extends Command
         $now = now();
         $upserted = 0;
         $updateColumns = [
-            'klaim_fsc', 'po_id', 'jenis_po', 'no_po', 'tgl_po', 'supplier_name', 'barang_code',
-            'barang_name', 'satuan_order', 'uraian', 'spesifikasi', 'jumlah_order', 'harga_satuan',
-            'harga_total', 'harga_fob', 'total_fob', 'ppn', 'pph', 'discount', 'biaya', 'valas',
-            'note', 'create_by', 'create_date', 'ncv', 'jumlah_doc', 'total_in', 'out_req',
-            'total_req', 'out_prod', 'total_prod', 'out_doc', 'total_doc', 'digit', 'total_order',
-            'total_harga', 'sisa', 'total_sisa', 'total_gudang', 'total_wip', 'updated_at',
+            'klaim_fsc',
+            'po_id',
+            'jenis_po',
+            'no_po',
+            'tgl_po',
+            'tgl_pengiriman',
+            'supplier_name',
+            'barang_code',
+            'barang_name',
+            'satuan_order',
+            'uraian',
+            'spesifikasi',
+            'jumlah_order',
+            'harga_satuan',
+            'harga_total',
+            'harga_fob',
+            'total_fob',
+            'ppn',
+            'pph',
+            'discount',
+            'biaya',
+            'valas',
+            'note',
+            'create_by',
+            'create_date',
+            'ncv',
+            'jumlah_doc',
+            'total_in',
+            'out_req',
+            'total_req',
+            'out_prod',
+            'total_prod',
+            'out_doc',
+            'total_doc',
+            'digit',
+            'total_order',
+            'total_harga',
+            'sisa',
+            'total_sisa',
+            'total_gudang',
+            'total_wip',
+            'updated_at',
         ];
 
-        // 43 kolom per baris -> hitung otomatis biar total parameter per batch
+        // 44 kolom per baris -> hitung otomatis biar total parameter per batch
         // aman di bawah limit SQL Server (2100 bound parameters per query).
-        $chunkSize = SqlServerChunk::rows(columnsPerRow: 43);
+        $chunkSize = SqlServerChunk::rows(columnsPerRow: 44);
 
         foreach (array_chunk($rows, $chunkSize) as $chunk) {
             $data = array_map(function ($r) use ($now) {
@@ -195,6 +232,7 @@ class SyncPoFromSmartit extends Command
                     'jenis_po'      => $r->jenis_po,
                     'no_po'         => $r->no_po,
                     'tgl_po'        => $r->tgl_po,
+                    'tgl_pengiriman' => $r->tgl_pengiriman ?? null,
                     'supplier_name' => $r->supplier_name,
                     'barang_code'   => $r->barang_code,
                     'barang_name'   => $r->barang_name,

@@ -329,7 +329,7 @@
                                                                 name="section" required>
                                                                 <option value="">-- Pilih --</option>
                                                                 @foreach($sections as $section)
-                                                                    <option value="{{ $section->name }}">
+                                                                    <option value="{{ $section->id }}">
                                                                         {{ $section->name }} - ( {{ $section->line_start }}
                                                                         - {{ $section->line_end }} )
                                                                     </option>

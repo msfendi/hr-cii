@@ -12,16 +12,12 @@ class MonitoringDashboardController extends Controller
     public function index(Request $request)
     {
         $filters = $request->only(['uraian', 'buyer', 'style']);
-
         $service = MonitoringDashboardService::make($filters);
 
         return view('monitoring.dashboard', [
             'filters'        => $filters,
             'filterOptions'  => $service->filterOptions(),
-            'summary'        => $service->summary(),
-            'orderPivot'     => $service->orderPivot(),
-            'materialPivot'  => $service->materialPurchasePivot(),
-            'workOrderPivot' => $service->workOrderPivot(),
+            'orderCombos'    => $service->orderCombos(), // ringan untuk cascading
         ]);
     }
 
@@ -31,7 +27,6 @@ class MonitoringDashboardController extends Controller
     public function data(Request $request)
     {
         $filters = $request->only(['uraian', 'buyer', 'style']);
-
         $service = MonitoringDashboardService::make($filters);
 
         return response()->json([

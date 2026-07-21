@@ -176,8 +176,6 @@ class BiodataController extends Controller
             'JENIS_KEL' => strtoupper($request->jk),
             'BARCODE' => strtoupper($barcode),
             'SECTION' => strtoupper($request->section),
-            'SECTION' => strtoupper($request->section),
-            'SECTION' => strtoupper($request->section),
             'STATUS' => 'A',
             'IS_STAFF' => '0',
         ]);

@@ -92,7 +92,7 @@
                     </div>
                 </div>
 
-                <!-- KPI Cards -->
+                <!-- KPI Cards (nilai awal 0) -->
                 <div class="row">
                     <div class="col-xl-4 col-md-6 mb-4">
                         <div class="card border-left-primary shadow h-100 py-2">
@@ -100,7 +100,7 @@
                                 <div class="row no-gutters align-items-center">
                                     <div class="col mr-2">
                                         <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Qty Order</div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-qty-order">{{ number_format($summary['total_qty_order']) }}</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-qty-order">0</div>
                                     </div>
                                     <div class="col-auto"><i class="fas fa-boxes fa-2x text-gray-300"></i></div>
                                 </div>
@@ -114,7 +114,7 @@
                                 <div class="row no-gutters align-items-center">
                                     <div class="col mr-2">
                                         <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total Style</div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-total-style">{{ number_format($summary['total_style']) }}</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-total-style">0</div>
                                     </div>
                                     <div class="col-auto"><i class="fas fa-tshirt fa-2x text-gray-300"></i></div>
                                 </div>
@@ -128,7 +128,7 @@
                                 <div class="row no-gutters align-items-center">
                                     <div class="col mr-2">
                                         <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Item BOM Belum Diorder</div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-belum-order">{{ number_format($summary['total_item_belum_order']) }}</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-belum-order">0</div>
                                     </div>
                                     <div class="col-auto"><i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i></div>
                                 </div>
@@ -137,13 +137,13 @@
                     </div>
                 </div>
 
-                <!-- Calendar: Production Delivery -->
+                <!-- Calendar: Production Delivery (kosong awal) -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-primary">Kalender Production Delivery</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Kalender Shipment</h6>
                         <div class="d-flex align-items-center" style="gap:10px">
                             <button id="cal-prev" type="button" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-left"></i></button>
-                            <span id="cal-label" class="font-weight-bold text-gray-700" style="min-width:140px; text-align:center;"></span>
+                            <span id="cal-label" class="font-weight-bold text-gray-700" style="min-width:140px; text-align:center;">--</span>
                             <button id="cal-next" type="button" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-right"></i></button>
                         </div>
                     </div>
@@ -159,7 +159,7 @@
                                             <th class="text-center">Sab</th>
                                         </tr>
                                     </thead>
-                                    <tbody></tbody>
+                                    <tbody><!-- akan diisi oleh JS --></tbody>
                                 </table>
                                 <div class="small text-gray-600 mt-2 d-flex" style="gap:16px">
                                     <span><span class="badge bg-warning" style="width:12px;height:12px;display:inline-block;padding:0;"></span> Ada order</span>
@@ -197,7 +197,7 @@
                     </div>
                 </div>
 
-                <!-- Pivot 1: ORDER -->
+                <!-- Pivot 1: ORDER (kosong awal) -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Pivot ORDER &mdash; Qty Garment per Uraian / Buyer / Style</h6>
@@ -226,7 +226,7 @@
                                                 <th>Estimasi Shipment</th><th class="right">Qty Order</th>
                                             </tr>
                                         </thead>
-                                        <tbody></tbody>
+                                        <tbody><!-- data akan diisi oleh JS --></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -234,7 +234,7 @@
                     </div>
                 </div>
 
-                <!-- Pivot 2: MATERIAL PURCHASE -->
+                <!-- Pivot 2: MATERIAL PURCHASE (kosong awal) -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Pivot MATERIAL PURCHASE &mdash; Jenis PO: PO / Material Supply</h6>
@@ -250,22 +250,24 @@
                                 <div class="mon-table-box">
                                     <table class="table table-bordered table-sm mon-table mon-table-fixed w-100" id="table-material">
                                         <colgroup>
-                                            <col style="width:3%">
-                                            <col style="width:16%">
-                                            <col style="width:10%">
-                                            <col style="width:7%">
-                                            <col style="width:7%">
-                                            <col style="width:13%">
-                                            <col style="width:13%">
-                                            <col style="width:11%">
-                                            <col style="width:11%">
-                                            <col style="width:9%">
+                                            <col style="width:3%">   <!-- toggle -->
+                                            <col style="width:14%">  <!-- item -->
+                                            <col style="width:9%">   <!-- no_po -->
+                                            <col style="width:9%">   <!-- tgl_pengiriman (parent kosong) -->
+                                            <col style="width:7%">   <!-- satuan -->
+                                            <col style="width:7%">   <!-- valas -->
+                                            <col style="width:12%">  <!-- harga_satuan -->
+                                            <col style="width:12%">  <!-- harga_total -->
+                                            <col style="width:10%">  <!-- jumlah_order -->
+                                            <col style="width:10%">  <!-- jumlah_diterima -->
+                                            <col style="width:7%">   <!-- sisa -->
                                         </colgroup>
                                         <thead>
                                             <tr>
                                                 <th></th>
                                                 <th>Item</th>
                                                 <th>No. PO</th>
+                                                <th>Tgl Pengiriman</th>
                                                 <th>Satuan</th>
                                                 <th>Valas</th>
                                                 <th class="right">Harga Satuan</th>
@@ -275,7 +277,7 @@
                                                 <th class="right">Sisa</th>
                                             </tr>
                                         </thead>
-                                        <tbody></tbody>
+                                        <tbody><!-- data akan diisi oleh JS --></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -283,7 +285,7 @@
                     </div>
                 </div>
 
-                <!-- Pivot 3: WORK ORDER -->
+                <!-- Pivot 3: WORK ORDER (kosong awal) -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Pivot WORK ORDER &mdash; Item BOM yang Belum Diorder (ada di BOM, belum ada di PO)</h6>
@@ -297,19 +299,15 @@
                                     <col style="width:23%">
                                     <col style="width:12%">
                                     <col style="width:12%">
-                                    <col style="width:12%">
-                                    <col style="width:8%">
-                                    <col style="width:7%">
+                                    <col style="width:27%">
                                 </colgroup>
                                 <thead>
                                     <tr>
                                         <th>Uraian</th><th>Barang Code</th><th>Nama Barang</th>
                                         <th>Departemen</th><th>Komponen</th><th>Barang Jadi</th>
-                                        <th>Satuan</th>
-                                        <th class="right">Cons/Gmt</th>
                                     </tr>
                                 </thead>
-                                <tbody></tbody>
+                                <tbody><!-- data akan diisi oleh JS --></tbody>
                             </table>
                         </div>
                     </div>
@@ -340,7 +338,7 @@
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
-<!-- Select2 -->
+<!-- Select2 JS & CSS (CSS diimpor lewat @import agar tidak perlu tambahan link) -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <!-- DataTables -->
@@ -376,10 +374,12 @@
         console.warn('Chart.js tidak berhasil dimuat, grafik dilewati. Tabel tetap ditampilkan.');
     }
 
-    // Select2 untuk 3 dropdown filter -- single select, bisa dikosongkan lagi lewat
-    // tombol "clear" (allowClear) di pojok kanan select2.
+    // ================================================================
+    // SELECT2 – gunakan theme default (tidak pakai bootstrap-5) agar
+    // tidak bergantung pada CSS tambahan. Cukup dengan select2.min.css
+    // yang diimpor via @import di dalam <style> di bawah.
+    // ================================================================
     $('.select2-filter').select2({
-        theme: 'bootstrap-5',
         width: '100%',
         placeholder: 'Semua',
         allowClear: true
@@ -388,11 +388,11 @@
     /* =========================================================
        Cascading Select2: Buyer -> Style -> Uraian (CPO)
        Sumber data: kombinasi uraian/buyer/style yang benar-benar
-       ada di mon_orders, diambil dari orderPivot yang sudah
+       ada di mon_orders, diambil dari orderCombos (ringan) yang
        dikirim server (tanpa request tambahan).
        ========================================================= */
     const comboData = @json(
-        $orderPivot->map(fn($r) => ['uraian' => $r->uraian, 'buyer' => $r->buyer, 'style' => $r->style])->unique()->values()
+        $orderCombos->map(fn($r) => ['uraian' => $r->uraian, 'buyer' => $r->buyer, 'style' => $r->style])->unique()->values()
     );
 
     let cascadeSuppressed = false;
@@ -644,15 +644,26 @@
         return code + ' ' + num.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // Format tanggal (production_delivery / buyer_delivery) dari berbagai kemungkinan
-    // format yang dikembalikan driver SQL Server (mis. "2026-07-15" atau ISO datetime penuh).
+    // ================================================================
+    // Format tanggal Indonesia: "1 Januari 1999"
+    // ================================================================
+    const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+    function formatTanggalIndonesia(iso){
+        if (!iso) return '-';
+        const parts = String(iso).slice(0,10).split('-');
+        if (parts.length !== 3) return String(iso);
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const d = parseInt(parts[2], 10);
+        if (isNaN(y) || isNaN(m) || isNaN(d)) return String(iso);
+        return `${d} ${bulanNama[m-1]} ${y}`;
+    }
+
     function fmtDate(d){
         if (!d) return '-';
         const iso = String(d).slice(0, 10);
-        const parts = iso.split('-');
-        if (parts.length !== 3) return String(d);
-        const y = parts[0], m = parts[1], day = parts[2];
-        return `${day}-${m}-${y}`;
+        return formatTanggalIndonesia(iso);
     }
 
     function fillTable(tbodySelector, rows, rowRenderer){
@@ -709,6 +720,7 @@
             return `<tr class="${rowClass}">
                 <td class="mon-item-cell" title="${escapeHtml(label)}">${label}</td>
                 <td class="mon-po-cell" title="${escapeHtml(d.no_po ?? '')}">${d.no_po ?? '-'}</td>
+                <td>${fmtDate(d.tgl_pengiriman)}</td>
                 <td>${d.satuan_order ?? '-'}</td>
                 <td>${d.valas ?? '-'}</td>
                 <td class="right">${fmtCurrency(d.harga_satuan, d.valas)}</td>
@@ -719,9 +731,7 @@
             </tr>`;
         }).join('');
 
-        // Colgroup mengikuti lebar TERKINI #table-material (bisa berubah kalau user
-        // sudah resize kolom parent) supaya child selalu lurus dengan parent, bukan
-        // lebar default yang di-hardcode.
+        // childWidths = gabungan 2 kolom pertama, sisanya sama
         const childWidths = materialWidthsToChildWidths(
             monColWidths['#table-material'] || readColWidths('#table-material')
         );
@@ -736,9 +746,7 @@
     function renderMaterialPivot(rows){
         if (dtMaterial) { dtMaterial.destroy(); dtMaterial = null; }
 
-        // Pakai DataTables "data"/"columns" (bukan HTML string manual) supaya setiap parent
-        // row bisa punya child row (row().child()) untuk breakdown per spesifikasi tanpa
-        // ikut dihitung sebagai baris tersendiri saat pagination/search.
+        // DataTables dengan kolom sesuai colgroup di blade (11 kolom)
         dtMaterial = $('#table-material').DataTable({
             language: dtLanguage,
             data: rows,
@@ -747,10 +755,6 @@
             order: [],
             responsive: false,
             autoWidth: false,
-            // Lebar kolom TIDAK di-set di sini (autoWidth:false + width per-kolom di JS bisa
-            // konflik dengan colgroup di HTML). Colgroup pada <table id="table-material"> di
-            // blade adalah satu-satunya sumber lebar kolom, dan disamakan persis dengan
-            // colgroup tabel detail (renderMaterialDetail) supaya parent & child selalu lurus.
             columns: [
                 {
                     data: null, orderable: false, className: 'mon-toggle-cell text-center',
@@ -772,6 +776,7 @@
                         return type === 'display' ? `<span title="${escapeHtml(val)}">${escapeHtml(val)}</span>` : val;
                     }
                 },
+                { data: null, defaultContent: '-', className: 'text-center', render: () => '-' }, // tgl parent kosong
                 { data: 'satuan_order', defaultContent: '-' },
                 { data: 'valas', defaultContent: '-' },
                 { data: null, className: 'right', render: r => fmtCurrency(r.harga_satuan, r.valas) },
@@ -780,8 +785,6 @@
                 { data: 'jumlah_diterima', className: 'right', render: v => fmtQty(v) },
                 { data: 'sisa', className: 'right', render: v => fmtSisa(v) },
             ],
-            // Baris parent (per item) diberi warna merah kalau masih ada sisa (belum diterima penuh),
-            // supaya konsisten dengan highlight di baris detail per-spesifikasi.
             createdRow: (row, data) => {
                 if (Number(data.sisa) > 0.00001) {
                     row.classList.add('table-danger');
@@ -791,10 +794,9 @@
 
         initColumnResize('#table-material', { onResize: syncOpenMaterialChildren });
 
-        // Delegasikan klik ke elemen tabel (stabil lintas destroy/redraw), lalu bersihkan
-        // binding lama dulu supaya tidak dobel setiap kali renderMaterialPivot dipanggil ulang.
+        // Delegasikan klik ke elemen tabel (stabil lintas destroy/redraw)
         $('#table-material').off('click.monToggle').on('click.monToggle', 'td.mon-toggle-cell, td:nth-child(2)', function(e){
-            if ($(e.target).is('.mon-col-resizer')) return; // klik di handle resize, bukan buat expand
+            if ($(e.target).is('.mon-col-resizer')) return;
             const tr = $(this).closest('tr');
             const row = dtMaterial.row(tr);
             const data = row.data();
@@ -841,15 +843,13 @@
                 <td>${r.departemen ?? ''}</td>
                 <td>${r.komponen ?? ''}</td>
                 <td>${r.barang_jadi ?? ''}</td>
-                <td>${r.satuan_order ?? '-'}</td>
-                <td class="right" data-order="${Number(r.total_cons) || 0}">${fmtQty(r.total_cons, 4)}</td>
             </tr>`
         );
 
         dtWorkOrder = initDataTable('#table-workorder', {
             pageLength: 15,
             lengthMenu: [15, 25, 50, 100],
-            columnDefs: [{ targets: 7, className: 'text-right' }]
+            // columnDefs: [{ targets: 5, className: 'text-right' }]
         });
         initColumnResize('#table-workorder');
     }
@@ -896,6 +896,11 @@
                 renderMaterialPivot(json.materialPivot);
                 renderWorkOrderPivot(json.workOrderPivot);
 
+                // Refresh kalender bulan aktif jika ada
+                if (calendarUrl) {
+                    loadCalendarMonth(calState.year, calState.month);
+                }
+
                 hideLoading();
             })
             .catch(err => {
@@ -904,9 +909,8 @@
             });
     }
 
-    // Filter sekarang eksplisit lewat tombol, bukan langsung saat dropdown berubah
+    // Filter sekarang eksplisit lewat tombol
     fApply.addEventListener('click', refresh);
-
     fReset.addEventListener('click', () => {
         $('.select2-filter').val(null).trigger('change');
         refresh();
@@ -916,8 +920,7 @@
         return String(str).replace(/[&<>"']/g, s => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[s]));
     }
 
-    // Jalankan "php artisan monitoring:sync-bom/-po --year=<tahun berjalan>" lewat AJAX,
-    // lalu refresh pivot supaya data yang baru saja disinkronkan langsung terlihat.
+    // Sync BOM/PO
     function runSync(url, label, button){
         if (!url) {
             showErrorAlert(`URL endpoint ${label} belum tersedia (cek route monitoring.sync.*).`);
@@ -982,18 +985,16 @@
     btnSyncPo.addEventListener('click', () => runSync(syncPoUrl, 'Sync PO', btnSyncPo));
 
     /* =========================================================
-       Kalender Production Delivery (mon_orders.production_delivery)
+       Kalender Shipment (mon_orders.production_delivery)
        ========================================================= */
     const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
     const today = new Date();
 
-    // State kalender dikumpulkan di satu object supaya jelas apa yang berubah
-    // saat navigasi bulan / pilih tanggal (dan gampang dibaca lintas fungsi).
     const calState = {
         year: today.getFullYear(),
         month: today.getMonth() + 1, // 1-12
         selectedDate: null,
-        requestSeq: 0, // dipakai untuk menolak response fetch yang "telat" (out-of-order)
+        requestSeq: 0,
     };
 
     const calLabel       = document.getElementById('cal-label');
@@ -1043,8 +1044,6 @@
                 const isToday = iso === toIsoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
                 const isSelected = iso === calState.selectedDate;
 
-                // Selisih hari dari hari ini ke tanggal production_delivery.
-                // Negatif = sudah lewat (overdue), 0-7 = mendekati deadline (dianggap urgent juga).
                 const diffDays = Math.floor((new Date(year, month - 1, d) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
                 const isUrgent = !!info && diffDays <= 7;
 
@@ -1071,10 +1070,6 @@
         });
     }
 
-    // year/month yang dipakai untuk fetch selalu diambil eksplisit dari argumen
-    // (bukan langsung baca calState di dalam .then()), supaya kalau user klik
-    // Prev/Next berkali-kali dengan cepat, response yang datang belakangan tidak
-    // menimpa tampilan dengan data bulan yang salah (dicek lewat requestSeq).
     function loadCalendarMonth(year, month){
         calState.year = year;
         calState.month = month;
@@ -1089,7 +1084,7 @@
                 return r.json();
             })
             .then(json => {
-                if (seq !== calState.requestSeq) return; // ada request lebih baru, abaikan response ini
+                if (seq !== calState.requestSeq) return;
                 const dayMap = {};
                 (json.days || []).forEach(row => { dayMap[row.tanggal] = row; });
                 renderCalendarGrid(year, month, dayMap);
@@ -1105,10 +1100,10 @@
 
     function selectCalendarDate(iso){
         calState.selectedDate = iso;
-        loadCalendarMonth(calState.year, calState.month); // redraw ulang supaya highlight tanggal terpilih update
+        loadCalendarMonth(calState.year, calState.month);
 
-        const params = buildCalendarQuery({ date: iso });
-        calDetailTitle.textContent = `Production Delivery: ${iso}`;
+        const params = buildQueryParams({ date: iso });
+        calDetailTitle.textContent = `Production Delivery: ${formatTanggalIndonesia(iso)}`;
         calDetailEmpty.classList.add('d-none');
         calDetailWrap.classList.remove('d-none');
 
@@ -1142,8 +1137,7 @@
         initColumnResize('#table-cal-detail');
     }
 
-    // Navigasi bulan: prev/next tidak pernah "terpaku" di bulan berjalan --
-    // calState.year/month selalu diupdate lebih dulu lalu langsung fetch ulang.
+    // Navigasi bulan
     calPrev.addEventListener('click', () => {
         let { year, month } = calState;
         month--;
@@ -1157,23 +1151,18 @@
         loadCalendarMonth(year, month);
     });
 
-    if (calendarUrl) {
-        loadCalendarMonth(calState.year, calState.month);
-    }
+    // Kalender tidak di-load otomatis di awal
+    // Hanya di-load saat refresh() dipanggil
 
-    // Filter (tombol "Filter") juga me-refresh kalender bulan yang sedang aktif.
-    fApply.addEventListener('click', () => {
-        if (calendarUrl) loadCalendarMonth(calState.year, calState.month);
-    });
-
-    // render awal pakai data yang sudah dikirim server (hindari flash kosong & loading di initial load)
-    renderOrderPivot(@json($orderPivot));
-    renderMaterialPivot(@json($materialPivot));
-    renderWorkOrderPivot(@json($workOrderPivot));
 })();
 </script>
 
     <style>
+        /* =========================================================
+           IMPOR CSS SELECT2 (tanpa tema tambahan)
+           ========================================================= */
+        @import url('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
+
         .chart-area { position: relative; height: 320px; }
         .mon-table-box { max-height: 460px; overflow: auto; }
         .mon-table-box-full { max-height: 560px; }
@@ -1212,17 +1201,6 @@
         }
         .mon-item-cell span, .mon-po-cell span { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 
-        /* Select2 - selaraskan tinggi & radius dengan input SB Admin 2 (versi single-select) */
-        .select2-container .select2-selection--single {
-            height: calc(1.5em + .5rem + 2px);
-            padding: .25rem .5rem;
-            border-radius: .35rem;
-            border: 1px solid #d1d3e2;
-        }
-        .select2-container--bootstrap-5 .select2-selection__rendered { line-height: 1.6; font-size: .875rem; }
-        .select2-container .select2-selection--single .select2-selection__arrow { height: calc(1.5em + .5rem); }
-        .select2-container { width: 100% !important; }
-
         /* Tombol Filter & Reset - lebar sama persis, sejajar tingginya */
         .mon-filter-actions .btn { flex: 1 1 0; white-space: nowrap; }
 
@@ -1258,6 +1236,59 @@
         table.dataTable thead th { background: #f8f9fc; white-space: nowrap; }
         .dataTables_length select, .dataTables_filter input { font-size: .8rem; }
         .dt-buttons-hidden .dataTables_filter { display: none; }
+
+        /* =========================================================
+           SELECT2 – minimal styling agar selaras dengan SB Admin
+           ========================================================= */
+        .select2-container .select2-selection--single {
+            height: calc(1.5em + .5rem + 2px);
+            padding: 0.25rem 0.5rem;
+            border-radius: .35rem;
+            border: 1px solid #d1d3e2;
+            display: flex;
+            align-items: center;
+        }
+        .select2-container .select2-selection__rendered {
+            padding: 0 !important;
+            line-height: 1.6;
+            font-size: .875rem;
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .select2-container .select2-selection__arrow {
+            height: 100% !important;
+            top: 0 !important;
+            right: 0 !important;
+            transform: none !important;
+            display: flex;
+            align-items: center;
+            padding-right: 6px;
+        }
+        /* Hilangkan padding berlebih pada dropdown */
+        .select2-dropdown {
+            border: 1px solid #d1d3e2;
+            border-radius: .35rem;
+        }
+        .select2-results__option {
+            padding: 0.25rem 0.75rem !important;
+            font-size: .875rem;
+        }
+        .select2-results__option--highlighted {
+            background-color: #4e73df !important;
+            color: #fff !important;
+        }
+        .select2-search--dropdown .select2-search__field {
+            padding: .25rem .5rem;
+            font-size: .875rem;
+            border: 1px solid #d1d3e2;
+            border-radius: .35rem;
+        }
+        /* Pastikan dropdown tidak terpotong (z-index) */
+        .select2-dropdown {
+            z-index: 9999;
+        }
     </style>
 
 </body>
