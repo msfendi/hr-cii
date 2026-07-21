@@ -38,16 +38,6 @@ class MonitoringDashboardService
         });
     }
 
-    /**
-     * Kombinasi uraian/buyer/style yang benar-benar ada di mon_orders, dipakai HANYA
-     * untuk cascading dropdown filter (Buyer -> Style -> Uraian) di blade.
-     *
-     * SENGAJA dibuat query ringan: SELECT DISTINCT 3 kolom saja, tanpa SUM/GROUP BY
-     * per destination & tanpa MIN(buyer_delivery) seperti di orderPivot(). Sebelumnya
-     * blade memakai orderPivot() (query berat, ikut dipanggil di load pertama) hanya
-     * untuk mengambil kombinasi ini -- sekarang dipisah supaya load halaman pertama
-     * tidak perlu menjalankan pivot lengkap.
-     */
     public function orderCombos(): Collection
     {
         return DB::table('mon_orders')
