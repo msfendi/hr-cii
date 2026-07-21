@@ -32,7 +32,7 @@ class MonitoringDashboardService
         return Cache::remember('mon_dashboard:filter_options', self::FILTER_OPTIONS_TTL, function () {
             return [
                 'uraian' => DB::table('mon_orders')->whereNotNull('uraian')->distinct()->orderBy('uraian')->pluck('uraian'),
-                'buyer'  => DB::table('mon_orders')->whereNotNull('buyer')->distinct()->orderBy('buyer')->pluck('buyer'),
+                'buyer'  => DB::table('mon_orders')->whereNotNull('brand')->distinct()->orderBy('brand')->pluck('brand'),
                 'style'  => DB::table('mon_orders')->whereNotNull('style')->distinct()->orderBy('style')->pluck('style'),
             ];
         });
@@ -376,7 +376,7 @@ class MonitoringDashboardService
                 'item',
                 'destination',
                 'qty_ord',
-                'buyer_delivery',
+                'production_delivery',
                 'buyer_delivery'
             )
             ->orderBy('uraian');
