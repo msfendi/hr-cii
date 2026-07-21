@@ -5,22 +5,6 @@ namespace App\Services;
 use App\Models\MonPurchaseOrder;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Membangun 3 pivot dashboard, mengikuti logika yang sudah ada di workbook Excel:
- *
- *  - ORDER            : SUM(qty_ord) group by uraian, buyer, style          (pivotTable3 "ORDER")
- *  - MATERIAL PURCHASE: SUM(jumlah_order) & SUM(jumlah_doc) group by item,  (pivotTable1 "MATERIAL PURCHASE")
- *                        filter jenis_po IN ('PO','Material Supply')
- *                        + harga_satuan, harga_total, valas (lihat catatan di materialPurchasePivot())
- *  - WORK ORDER        : item BOM yang belum ada PO-nya, replikasi formula
- *                        `STATUS ORDER` = IF(SUMIFS(jumlah_order, CPO-ITEM CODE)=0, 'NOT ORDER','ORDER')
- *                        dimana CPO-ITEM CODE = uraian & " - " & barang_code
- *
- * "MASTER DATA" di file Excel sebenarnya cuma Power Query yang meng-append/merge
- * ORDER + BOM + PO berdasarkan kolom `uraian`. Di sini kita tidak fisikkan tabel
- * gabungan itu (lebih berat & gampang basi) -- tiap pivot langsung JOIN on
- * demand ke tabel yang dibutuhkan saja, hasilnya sama tapi lebih ringan & selalu fresh.
- */
 class MonitoringDashboardService
 {
     public function __construct(protected array $filters = []) {}
@@ -52,11 +36,6 @@ class MonitoringDashboardService
         }
     }
 
-    /**
-     * Terapkan filter ke $query untuk kolom $column berdasarkan $this->filters[$key].
-     * Mendukung baik value tunggal (string, dari select single) maupun array
-     * (dari select2 multiple) -- otomatis pakai where() atau whereIn().
-     */
     private function applyFilterValue($query, string $column, string $key): void
     {
         $value = $this->filters[$key] ?? null;
@@ -77,6 +56,31 @@ class MonitoringDashboardService
         $query->where($column, $value);
     }
 
+    /** Apakah filter $key sedang aktif (ada nilainya)? */
+    private function hasFilterValue(string $key): bool
+    {
+        $value = $this->filters[$key] ?? null;
+
+        if (is_array($value)) {
+            return count(array_filter($value, fn($v) => $v !== null && $v !== '')) > 0;
+        }
+
+        return $value !== null && $value !== '';
+    }
+
+    private function applyUraianBridgeFilter($query, string $uraianColumn): void
+    {
+        if (!$this->hasFilterValue('buyer') && !$this->hasFilterValue('style')) {
+            return;
+        }
+
+        $uraianSubquery = DB::table('mon_orders')->select('uraian')->distinct();
+        $this->applyFilterValue($uraianSubquery, 'buyer', 'buyer');
+        $this->applyFilterValue($uraianSubquery, 'style', 'style');
+
+        $query->whereIn($uraianColumn, $uraianSubquery);
+    }
+
     /**
      * Pivot ORDER: qty order per uraian / buyer / style
      */
@@ -85,6 +89,7 @@ class MonitoringDashboardService
         $query = DB::table('mon_orders')
             ->select('uraian', 'buyer', 'style', 'destination')
             ->selectRaw('SUM(qty_ord) as qty_order')
+            ->selectRaw('MIN(buyer_delivery) as estimasi_shipment')
             ->groupBy('uraian', 'buyer', 'style', 'destination')
             ->orderBy('uraian');
 
@@ -93,50 +98,26 @@ class MonitoringDashboardService
         return $query->get();
     }
 
-    /**
-     * Pivot MATERIAL PURCHASE: item (barang), jumlah order, jumlah diterima, sisa,
-     * harga_satuan, harga_total, valas.
-     * jenis_po dibatasi ke PO / Material Supply.
-     * Filter buyer & style dijembatani lewat join ke mon_orders on uraian
-     * (satu-satunya kolom yang ada di ketiga sheet).
-     *
-     * Setiap baris item (barang_code/barang_name) adalah baris SUMMARY (global),
-     * dilengkapi `details`: breakdown per spesifikasi+valas di bawahnya,
-     * supaya bisa di-expand/collapse di frontend (total detail = total summary).
-     *
-     * Catatan harga:
-     *  - `harga_total` dijumlahkan langsung dari kolom mon_purchase_orders.harga_total.
-     *  - `harga_satuan` TIDAK dijumlahkan (menjumlahkan harga satuan antar baris PO
-     *    tidak bermakna), melainkan dihitung sebagai rata-rata tertimbang:
-     *    total harga_total / total jumlah_order.
-     *  - `valas` dikelompokkan per spesifikasi supaya nominal harga tidak
-     *    tercampur antar mata uang berbeda. Kalau satu item ternyata pernah
-     *    di-PO dengan valas berbeda-beda, baris SUMMARY akan menampilkan semua
-     *    valas yang dipakai (dipisah koma) -- rincian per valas tetap bisa
-     *    dilihat lewat expand/detail.
-     */
     public function materialPurchasePivot(int $limit = 20): \Illuminate\Support\Collection
     {
         $query = DB::table('mon_purchase_orders as po')
-            ->leftJoin('mon_orders as o', 'o.uraian', '=', 'po.uraian')
             ->whereIn('po.jenis_po', MonPurchaseOrder::MATERIAL_JENIS_PO)
-            ->select('po.barang_code', 'po.barang_name', 'po.spesifikasi', 'po.valas')
+            ->select('po.barang_code', 'po.barang_name', 'po.spesifikasi', 'po.valas', 'po.satuan_order', 'po.no_po')
             ->selectRaw('SUM(po.jumlah_order) as jumlah_order')
             ->selectRaw('SUM(po.jumlah_doc) as jumlah_diterima')
             ->selectRaw('SUM(po.jumlah_order) - SUM(po.jumlah_doc) as sisa')
             ->selectRaw('SUM(po.harga_total) as harga_total')
-            ->groupBy('po.barang_code', 'po.barang_name', 'po.spesifikasi', 'po.valas')
+            ->groupBy('po.barang_code', 'po.barang_name', 'po.spesifikasi', 'po.valas', 'po.satuan_order', 'po.no_po')
             ->orderBy('po.barang_code')
             ->orderBy('po.spesifikasi');
 
         $this->applyFilterValue($query, 'po.uraian', 'uraian');
-        $this->applyFilterValue($query, 'o.buyer', 'buyer');
-        $this->applyFilterValue($query, 'o.style', 'style');
+        $this->applyUraianBridgeFilter($query, 'po.uraian');
 
         $rows = $query->get();
 
-        // Group flat rows (per barang_code + spesifikasi + valas) menjadi parent (global)
-        // + details (per spesifikasi/valas), lalu urutkan parent berdasarkan jumlah_order terbesar.
+        // Group flat rows (per barang_code + spesifikasi + valas + no_po) menjadi parent (global)
+        // + details (per spesifikasi/valas/no_po), lalu urutkan parent berdasarkan jumlah_order terbesar.
         $grouped = $rows->groupBy(fn($r) => $r->barang_code . '||' . $r->barang_name);
 
         $result = $grouped->map(function ($details, $key) {
@@ -145,9 +126,9 @@ class MonitoringDashboardService
             $totalOrder      = (float) $details->sum('jumlah_order');
             $totalHargaTotal = (float) $details->sum('harga_total');
 
-            // Valas yang muncul untuk item ini (umumnya cuma 1, tapi ditampung sebagai
-            // daftar kalau ternyata item yang sama pernah di-PO pakai valas berbeda).
-            $valasList = $details->pluck('valas')->filter()->unique()->values();
+            $valasList  = $details->pluck('valas')->filter()->unique()->values();
+            $satuanList = $details->pluck('satuan_order')->filter()->unique()->values();
+            $poList     = $details->pluck('no_po')->filter()->unique()->values();
 
             return (object) [
                 'barang_code'     => $code,
@@ -158,18 +139,23 @@ class MonitoringDashboardService
                 'harga_total'     => $totalHargaTotal,
                 'harga_satuan'    => $totalOrder > 0 ? $totalHargaTotal / $totalOrder : 0,
                 'valas'           => $valasList->count() > 1 ? $valasList->implode(', ') : $valasList->first(),
+                'satuan_order'    => $satuanList->count() > 1 ? $satuanList->implode(', ') : $satuanList->first(),
+                'no_po'           => $poList->count() > 1 ? $poList->implode(', ') : $poList->first(),
+                'no_po_count'     => $poList->count(),
                 'details'         => $details->map(function ($d) {
                     $qty        = (float) $d->jumlah_order;
                     $hargaTotal = (float) $d->harga_total;
 
                     return [
                         'spesifikasi'     => $d->spesifikasi,
+                        'no_po'           => $d->no_po,
                         'jumlah_order'    => $qty,
                         'jumlah_diterima' => (float) $d->jumlah_diterima,
                         'sisa'            => (float) $d->sisa,
                         'harga_satuan'    => $qty > 0 ? $hargaTotal / $qty : 0,
                         'harga_total'     => $hargaTotal,
                         'valas'           => $d->valas,
+                        'satuan_order'    => $d->satuan_order,
                     ];
                 })->values(),
             ];
@@ -184,26 +170,26 @@ class MonitoringDashboardService
      */
     public function workOrderPivot(int $limit = 100): \Illuminate\Support\Collection
     {
-        // Match #1: PO dengan barang_code yang PERSIS sama dengan BOM (kasus normal).
         $poAgg = DB::table('mon_purchase_orders')
             ->select('uraian', 'barang_code')
             ->selectRaw('SUM(jumlah_order) as ordered_qty')
             ->groupBy('uraian', 'barang_code');
 
-        // Match #2: PO dengan barang_code BEDA tapi barang_name SAMA (dinormalisasi
-        // lower+trim) dengan BOM. Ini menutup celah dimana item yang sebenarnya
-        // sudah di-PO tapi kodenya beda (typo/kode lama/kode supplier) masih
-        // muncul sebagai "NOT ORDER" di pivot WORK ORDER. Item semacam ini sudah
-        // otomatis ikut tampil di pivot MATERIAL PURCHASE (dari tabel PO), jadi
-        // di sini cukup di-exclude dari WORK ORDER.
         $poNameAgg = DB::table('mon_purchase_orders')
             ->select('uraian')
             ->selectRaw('LOWER(LTRIM(RTRIM(barang_name))) as barang_name_norm')
             ->selectRaw('SUM(jumlah_order) as ordered_qty')
             ->groupBy('uraian', DB::raw('LOWER(LTRIM(RTRIM(barang_name)))'));
 
+        // Referensi satuan: diambil dari histori PO manapun untuk barang_code yang sama
+        // (item di pivot ini belum pernah di-PO untuk uraian-nya sendiri, jadi satuan
+        // diambil sebagai info referensi dari histori PO barang yang sama di uraian lain).
+        $satuanAgg = DB::table('mon_purchase_orders')
+            ->select('barang_code')
+            ->selectRaw('MAX(satuan_order) as satuan_order')
+            ->groupBy('barang_code');
+
         $query = DB::table('mon_boms as b')
-            ->leftJoin('mon_orders as o', 'o.uraian', '=', 'b.uraian')
             ->leftJoinSub($poAgg, 'po_agg', function ($join) {
                 $join->on('po_agg.uraian', '=', 'b.uraian')
                     ->on('po_agg.barang_code', '=', 'b.barang_code');
@@ -211,6 +197,9 @@ class MonitoringDashboardService
             ->leftJoinSub($poNameAgg, 'po_name_agg', function ($join) {
                 $join->on('po_name_agg.uraian', '=', 'b.uraian')
                     ->on('po_name_agg.barang_name_norm', '=', DB::raw('LOWER(LTRIM(RTRIM(b.barang_name)))'));
+            })
+            ->leftJoinSub($satuanAgg, 'satuan_agg', function ($join) {
+                $join->on('satuan_agg.barang_code', '=', 'b.barang_code');
             })
             ->whereRaw('COALESCE(po_agg.ordered_qty, 0) = 0')
             ->whereRaw('COALESCE(po_name_agg.ordered_qty, 0) = 0')
@@ -220,15 +209,26 @@ class MonitoringDashboardService
                 'b.barang_name',
                 'b.departemen',
                 'b.komponen',
-                'b.barang_jadi'
+                'b.barang_jadi',
+                'satuan_agg.satuan_order'
             )
             ->selectRaw('SUM(b.cons) as total_cons')
-            ->groupBy('b.uraian', 'b.barang_code', 'b.barang_name', 'b.departemen', 'b.komponen', 'b.barang_jadi')
+            ->groupBy(
+                'b.uraian',
+                'b.barang_code',
+                'b.barang_name',
+                'b.departemen',
+                'b.komponen',
+                'b.barang_jadi',
+                'satuan_agg.satuan_order'
+            )
             ->orderBy('b.uraian');
 
         $this->applyFilterValue($query, 'b.uraian', 'uraian');
-        $this->applyFilterValue($query, 'o.buyer', 'buyer');
-        $this->applyFilterValue($query, 'o.style', 'style');
+        // Filter buyer/style dijembatani lewat uraian (BUKAN join langsung ke mon_orders):
+        // satu uraian bisa punya banyak baris mon_orders, join langsung akan meng-gandakan
+        // baris BOM sebelum SUM(b.cons) dan bikin total_cons kegedean berkali lipat.
+        $this->applyUraianBridgeFilter($query, 'b.uraian');
 
         return $query->limit($limit)->get();
     }
