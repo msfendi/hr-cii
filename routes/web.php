@@ -24,6 +24,7 @@ use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\AuditRecapController;
 use App\Http\Controllers\BiodataKeluarController;
 use App\Http\Controllers\BpjsExceptionController;
 use App\Http\Controllers\BreakMasterController;
@@ -96,6 +97,7 @@ use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\MonitoringDashboardController;
+use App\Http\Controllers\MonitoringRekonsiliasiController;
 use App\Http\Controllers\OrderImportController;
 
 /*
@@ -1076,7 +1078,7 @@ Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cb
 Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
 Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');
 
-Route::prefix('monitoring')->name('monitoring.')->group(function () {
+Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permission'])->group(function () {
     Route::get('/dashboard', [MonitoringDashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/data', [MonitoringDashboardController::class, 'data'])->name('dashboard.data');
 
@@ -1088,7 +1090,15 @@ Route::prefix('monitoring')->name('monitoring.')->group(function () {
     Route::post('sync-po', [MonitoringDashboardController::class, 'syncPo'])->name('sync.po');
     Route::get('dashboard/calendar', [MonitoringDashboardController::class, 'calendar'])->name('dashboard.calendar');
     Route::get('dashboard/calendar-detail', [MonitoringDashboardController::class, 'calendarDetail'])->name('dashboard.calendar.detail');
+
+    Route::get('/rekonsiliasi', [MonitoringRekonsiliasiController::class, 'index'])->name('rekonsiliasi');
+    Route::get('/rekonsiliasi/data', [MonitoringRekonsiliasiController::class, 'data'])->name('rekonsiliasi.data');
+    Route::post('/rekonsiliasi/sync', [MonitoringRekonsiliasiController::class, 'syncRekonsiliasi'])->name('rekonsiliasi.sync');
+    Route::post('/rekonsiliasi/sync-prod-line', [MonitoringRekonsiliasiController::class, 'syncProdLine'])->name('rekonsiliasi.sync-prod-line');
+    Route::post('/rekonsiliasi/sync-shipment', [MonitoringRekonsiliasiController::class, 'syncShipment'])->name('rekonsiliasi.sync-shipment');
+    Route::post('/rekonsiliasi/sync-work-order', [MonitoringRekonsiliasiController::class, 'syncWorkOrder'])->name('rekonsiliasi.sync-work-order');
 });
+
 
 
 
@@ -1135,3 +1145,16 @@ Route::post('/food-orders/scan', [FoodOrderController::class, 'verifyScan'])
     ->middleware('throttle:10,1') // batasi percobaan scan/manual per menit
     ->name('food-orders.scan.verify');
 Route::post('/food-orders/logout-scan', [FoodOrderController::class, 'logoutScan'])->name('food-orders.logout-scan');
+
+
+/*
+    |--------------------------------------------------------------------------
+    | Audit Recap
+    |--------------------------------------------------------------------------
+    */
+Route::get('/audit-recap', [AuditRecapController::class, 'index'])->name('audit-recap.index');
+Route::post('/audit-recap/generate', [AuditRecapController::class, 'generate'])->name('audit-recap.generate');
+Route::post('/audit-recap/export', [AuditRecapController::class, 'export'])->name('audit-recap.export');
+Route::get('/audit-recap/report', [AuditRecapController::class, 'report'])->name('audit-recap.report');
+Route::get('/audit-recap/export-view', [AuditRecapController::class, 'export_view'])->name('audit-recap.export-view');
+Route::get('/audit-recap/export-pdf', [AuditRecapController::class, 'export_pdf'])->name('audit-recap.export-pdf');

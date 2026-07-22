@@ -158,11 +158,11 @@ class MonitoringDashboardService
             ->select(
                 'po.barang_code',
                 'po.barang_name',
+                'po.valas',                   // <-- tambahan
                 'po.spesifikasi',
-                'po.valas',
                 'po.satuan_order',
                 'po.no_po',
-                'po.tgl_pengiriman' // tambahan
+                'po.tgl_pengiriman'
             )
             ->selectRaw('SUM(po.jumlah_order) as jumlah_order')
             ->selectRaw('SUM(po.jumlah_doc) as jumlah_diterima')
@@ -171,13 +171,14 @@ class MonitoringDashboardService
             ->groupBy(
                 'po.barang_code',
                 'po.barang_name',
+                'po.valas',                   // <-- tambahan
                 'po.spesifikasi',
-                'po.valas',
                 'po.satuan_order',
                 'po.no_po',
-                'po.tgl_pengiriman' // tambahan
+                'po.tgl_pengiriman'
             )
             ->orderBy('po.barang_code')
+            ->orderBy('po.valas')
             ->orderBy('po.spesifikasi');
 
         $this->applyFilterValue($query, 'po.uraian', 'uraian');
@@ -185,27 +186,27 @@ class MonitoringDashboardService
 
         $rows = $query->get();
 
-        $grouped = $rows->groupBy(fn($r) => $r->barang_code . '||' . $r->barang_name);
+        // Grouping berdasarkan barang_code, barang_name, dan valas (tunggal)
+        $grouped = $rows->groupBy(fn($r) => $r->barang_code . '||' . $r->barang_name . '||' . $r->valas);
 
         $result = $grouped->map(function ($details, $key) {
-            [$code, $name] = explode('||', $key, 2);
+            [$code, $name, $valas] = explode('||', $key, 3);
 
             $totalOrder      = (float) $details->sum('jumlah_order');
             $totalHargaTotal = (float) $details->sum('harga_total');
 
-            $valasList  = $details->pluck('valas')->filter()->unique()->values();
             $satuanList = $details->pluck('satuan_order')->filter()->unique()->values();
             $poList     = $details->pluck('no_po')->filter()->unique()->values();
 
             return (object) [
                 'barang_code'     => $code,
                 'barang_name'     => $name,
+                'valas'           => $valas, // tunggal
                 'jumlah_order'    => $totalOrder,
                 'jumlah_diterima' => (float) $details->sum('jumlah_diterima'),
                 'sisa'            => (float) $details->sum('sisa'),
                 'harga_total'     => $totalHargaTotal,
                 'harga_satuan'    => $totalOrder > 0 ? $totalHargaTotal / $totalOrder : 0,
-                'valas'           => $valasList->count() > 1 ? $valasList->implode(', ') : $valasList->first(),
                 'satuan_order'    => $satuanList->count() > 1 ? $satuanList->implode(', ') : $satuanList->first(),
                 'no_po'           => $poList->count() > 1 ? $poList->implode(', ') : $poList->first(),
                 'no_po_count'     => $poList->count(),
@@ -216,7 +217,7 @@ class MonitoringDashboardService
                     return [
                         'spesifikasi'     => $d->spesifikasi,
                         'no_po'           => $d->no_po,
-                        'tgl_pengiriman'  => $d->tgl_pengiriman, // tambahan
+                        'tgl_pengiriman'  => $d->tgl_pengiriman,
                         'jumlah_order'    => $qty,
                         'jumlah_diterima' => (float) $d->jumlah_diterima,
                         'sisa'            => (float) $d->sisa,
