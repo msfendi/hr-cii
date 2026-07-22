@@ -11,7 +11,9 @@ class MonitoringRekonsiliasiController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->only(['uraian']);
+        // uraian = CPO spesifik; brand/style dipakai untuk search tanpa harus
+        // memilih 1 CPO (lihat MonitoringRekonsiliasiService::filterUraianList()).
+        $filters = $request->only(['uraian', 'brand', 'style']);
         $service = MonitoringRekonsiliasiService::make($filters);
 
         return view('monitoring.rekonsiliasi', [
@@ -30,13 +32,17 @@ class MonitoringRekonsiliasiController extends Controller
      */
     public function data(Request $request)
     {
-        $filters = $request->only(['uraian']);
+        // uraian = CPO spesifik. brand/style boleh dipakai sendiri-sendiri
+        // atau dikombinasikan sebagai pengganti uraian -- service akan
+        // me-resolve semua CPO yang match lalu menggabungkan datanya.
+        $filters = $request->only(['uraian', 'brand', 'style']);
 
-        // Kalau CPO belum dipilih, JANGAN jalankan query berat (full-scan
-        // tanpa scope ke satu uraian bisa menarik seluruh tabel sekaligus
-        // untuk banyak widget). Cukup balikan payload kosong; dashboard
-        // baru menarik data sesungguhnya setelah user memilih CPO.
-        if (empty($filters['uraian'])) {
+        // Kalau belum ada filter SAMA SEKALI (uraian, brand, maupun style),
+        // JANGAN jalankan query berat (full-scan tanpa scope bisa menarik
+        // seluruh tabel sekaligus untuk banyak widget). Cukup balikan payload
+        // kosong; dashboard baru menarik data sesungguhnya setelah user
+        // memilih minimal satu dari Buyer / Style / CPO.
+        if (empty($filters['uraian']) && empty($filters['brand']) && empty($filters['style'])) {
             return response()->json($this->emptyPayload());
         }
 

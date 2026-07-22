@@ -16,10 +16,19 @@ use Illuminate\Support\Collection;
  *  - mon_boms            : pivot Work Order (item BOM yang belum di-PO-kan)
  *  - mon_work_orders     : sumber `request` (NEED) untuk fabric Qty, di-scope via mon_boms
  *
- * Semua widget di-scope oleh satu filter: uraian (dipakai sebagai "CPO").
+ * Widget di-scope oleh filter Buyer / Style / CPO (uraian) -- boleh dipakai
+ * satu saja, kombinasi, atau ketiganya:
+ *  - uraian dipilih spesifik -> scope persis ke 1 CPO itu (perilaku lama).
+ *  - uraian kosong tapi Buyer dan/atau Style dipilih -> di-resolve dulu ke
+ *    SEMUA kode uraian (CPO) yang cocok lewat mon_orders, lalu semua widget
+ *    di-scope pakai whereIn() ke daftar uraian tersebut (bisa lebih dari 1
+ *    CPO sekaligus, datanya digabung/agregat).
  */
 class MonitoringRekonsiliasiService
 {
+    /** Cache hasil resolve daftar uraian (CPO) dari filter Buyer/Style/CPO. */
+    private ?array $resolvedUraian = null;
+
     public function __construct(protected array $filters = []) {}
 
     public static function make(array $filters): self
@@ -27,21 +36,53 @@ class MonitoringRekonsiliasiService
         return new self($filters);
     }
 
-    private function cpo(): ?string
+    /**
+     * Resolve filter Buyer/Style/CPO menjadi daftar kode uraian (CPO) yang
+     * dipakai untuk scope semua query di bawah.
+     *  - Kalau CPO dipilih eksplisit, itu final -- Buyer/Style diabaikan di
+     *    server (mereka cuma dipakai buat mempersempit dropdown di frontend).
+     *  - Kalau CPO belum dipilih tapi Buyer dan/atau Style ada, cari semua
+     *    uraian yang match kombinasi tsb dari mon_orders.
+     */
+    private function filterUraianList(): array
     {
-        return $this->filters['uraian'] ?? null;
+        if ($this->resolvedUraian !== null) {
+            return $this->resolvedUraian;
+        }
+
+        $uraian = trim((string) ($this->filters['uraian'] ?? ''));
+        $brand  = trim((string) ($this->filters['brand'] ?? ''));
+        $style  = trim((string) ($this->filters['style'] ?? ''));
+
+        if ($uraian !== '') {
+            return $this->resolvedUraian = [$uraian];
+        }
+
+        if ($brand === '' && $style === '') {
+            return $this->resolvedUraian = [];
+        }
+
+        $query = DB::table('mon_orders')->whereNotNull('uraian');
+        if ($brand !== '') {
+            $query->where('brand', $brand);
+        }
+        if ($style !== '') {
+            $query->where('style', $style);
+        }
+
+        return $this->resolvedUraian = $query->distinct()->pluck('uraian')->all();
     }
 
     private function hasCpo(): bool
     {
-        return !empty($this->cpo());
+        return count($this->filterUraianList()) > 0;
     }
 
     private function rekonQuery()
     {
         $query = DB::table('mon_rekonsiliasis');
         if ($this->hasCpo()) {
-            $query->where('uraian', $this->cpo());
+            $query->whereIn('uraian', $this->filterUraianList());
         }
         return $query;
     }
@@ -50,7 +91,7 @@ class MonitoringRekonsiliasiService
     {
         $query = DB::table('mon_orders');
         if ($this->hasCpo()) {
-            $query->where('uraian', $this->cpo());
+            $query->whereIn('uraian', $this->filterUraianList());
         }
         return $query;
     }
@@ -59,7 +100,7 @@ class MonitoringRekonsiliasiService
     {
         $query = DB::table('mon_shipments');
         if ($this->hasCpo()) {
-            $query->where('uraian', $this->cpo());
+            $query->whereIn('uraian', $this->filterUraianList());
         }
         return $query;
     }
@@ -94,7 +135,7 @@ class MonitoringRekonsiliasiService
                     $join->on('wo.product_code', '=', 'b.barang_jadi')
                         ->on('wo.barang_code', '=', 'b.barang_code');
                 })
-                ->where('b.uraian', $this->cpo())
+                ->whereIn('b.uraian', $this->filterUraianList())
                 ->where('wo.satuan_code', 'KGM')
                 ->sum('wo.request') ?? 0;
         }
@@ -127,7 +168,7 @@ class MonitoringRekonsiliasiService
             $query = DB::table('mon_prod_lines')
                 ->where('barang_code', '01SCRP00001')
                 ->selectRaw('SUM(jumlah) as jumlah');
-            $this->scopeByCodeProd($query, $this->cpo());
+            $this->scopeByCodeProd($query, $this->filterUraianList());
             $scrapQty = (float) ($query->value('jumlah') ?? 0);
         }
 
@@ -164,17 +205,35 @@ class MonitoringRekonsiliasiService
             ->get();
     }
 
+    /**
+     * Kalau resolve filter cuma menghasilkan 1 CPO (baik karena user memilih
+     * CPO spesifik, atau kombinasi Buyer+Style kebetulan cuma match 1 CPO),
+     * tampilkan detail brand/style-nya seperti biasa. Kalau match lebih dari
+     * 1 CPO (search by Buyer dan/atau Style saja), tampilkan jumlah CPO yang
+     * tergabung plus filter Buyer/Style yang dipakai user.
+     */
     public function header(): array
     {
-        $uraian = $this->cpo();
-        $orderInfo = $uraian
-            ? DB::table('mon_orders')->where('uraian', $uraian)->select('brand', 'style')->first()
-            : null;
+        $uraianList = $this->filterUraianList();
+        $count = count($uraianList);
+
+        if ($count === 1) {
+            $uraian = $uraianList[0];
+            $orderInfo = DB::table('mon_orders')->where('uraian', $uraian)->select('brand', 'style')->first();
+
+            return [
+                'cpo'       => $uraian,
+                'brand'     => $orderInfo->brand ?? ($this->filters['brand'] ?? null),
+                'style'     => $orderInfo->style ?? ($this->filters['style'] ?? null),
+                'cpoCount'  => 1,
+            ];
+        }
 
         return [
-            'cpo'   => $uraian,
-            'brand' => $orderInfo->brand ?? null,
-            'style' => $orderInfo->style ?? null,
+            'cpo'      => $count > 1 ? "{$count} CPO" : null,
+            'brand'    => $this->filters['brand'] ?? null,
+            'style'    => $this->filters['style'] ?? null,
+            'cpoCount' => $count,
         ];
     }
 
@@ -234,14 +293,16 @@ class MonitoringRekonsiliasiService
         $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
 
         $cuttingDeptQty = $this->prodLineSumByDepartment('Cutting');
-        $cutting        = $contract - $cuttingDeptQty;
+        // $cutting        = $contract - $cuttingDeptQty;
+        $cutting        = $cuttingDeptQty;
 
         $sewing    = $this->prodLineSumByDestination('Sewing');
         $packing   = $this->prodLineSumByDestination('Packing');
         $warehouse = $this->prodLineSumByDestination('Warehouse');
 
         $shippedActual = (float) ($this->shipmentQuery()->sum('jumlah_barang') ?? 0);
-        $shipment      = $warehouse - $shippedActual;
+        // $shipment      = $warehouse - $shippedActual;
+        $shipment      = $shippedActual;
 
         $departments = collect([
             (object) ['department_id' => 'Cutting', 'jumlah' => $cutting],
@@ -274,7 +335,7 @@ class MonitoringRekonsiliasiService
             ->groupBy('department_id', 'barang_code', 'barang_name')
             ->orderBy('barang_name');
 
-        $this->scopeByCodeProd($query, $this->cpo());
+        $this->scopeByCodeProd($query, $this->filterUraianList());
 
         return $query->get();
     }
@@ -289,7 +350,7 @@ class MonitoringRekonsiliasiService
             ->where('department_id', $departmentId)
             ->selectRaw('SUM(jumlah) as jumlah');
 
-        $this->scopeByCodeProd($query, $this->cpo());
+        $this->scopeByCodeProd($query, $this->filterUraianList());
 
         return (float) ($query->value('jumlah') ?? 0);
     }
@@ -304,16 +365,23 @@ class MonitoringRekonsiliasiService
             ->where('destination', 'like', "%{$keyword}%")
             ->selectRaw('SUM(jumlah) as jumlah');
 
-        $this->scopeByCodeProd($query, $this->cpo());
+        $this->scopeByCodeProd($query, $this->filterUraianList());
 
         return (float) ($query->value('jumlah') ?? 0);
     }
 
-    private function scopeByCodeProd($query, string $cpoCode)
+    /**
+     * `code_prod` di mon_prod_lines tidak punya kolom uraian langsung --
+     * di-match via LIKE ke setiap kode CPO di $cpoCodes (bisa lebih dari 1
+     * kalau filternya Buyer/Style yang match banyak CPO sekaligus).
+     */
+    private function scopeByCodeProd($query, array $cpoCodes)
     {
-        return $query->where(function ($q) use ($cpoCode) {
-            $q->where('code_prod', 'like', "CPO {$cpoCode} %")
-                ->orWhere('code_prod', 'like', "{$cpoCode} %");
+        return $query->where(function ($q) use ($cpoCodes) {
+            foreach ($cpoCodes as $cpoCode) {
+                $q->orWhere('code_prod', 'like', "CPO {$cpoCode} %")
+                    ->orWhere('code_prod', 'like', "{$cpoCode} %");
+            }
         });
     }
 
@@ -342,7 +410,7 @@ class MonitoringRekonsiliasiService
             ->limit($limit);
 
         if ($this->hasCpo()) {
-            $query->where('po.uraian', $this->cpo());
+            $query->whereIn('po.uraian', $this->filterUraianList());
         }
 
         return $query->get();
@@ -366,7 +434,7 @@ class MonitoringRekonsiliasiService
             ->groupBy('b.uraian', 'b.barang_code', 'b.barang_name', 'b.departemen', 'b.komponen', 'b.barang_jadi');
 
         if ($this->hasCpo()) {
-            $query->where('b.uraian', $this->cpo());
+            $query->whereIn('b.uraian', $this->filterUraianList());
         }
 
         return $query;

@@ -30,10 +30,10 @@
                         </div>
                         <div class="d-flex align-items-center flex-wrap" style="gap:16px">
                             <div class="rekon-search input-group input-group-sm">
-                                <select id="f-buyer" class="form-control select2-filter" style="min-width:150px" data-placeholder="Semua Buyer">
+                                <select id="f-buyer" class="form-control select2-filter" style="min-width:150px" data-placeholder="Cari Buyer...">
                                     <option value=""></option>
                                 </select>
-                                <select id="f-style" class="form-control select2-filter" style="min-width:150px" data-placeholder="Semua Style">
+                                <select id="f-style" class="form-control select2-filter" style="min-width:150px" data-placeholder="Cari Style...">
                                     <option value=""></option>
                                 </select>
                                 <select id="f-cpo" class="form-control select2-filter" style="min-width:220px" data-placeholder="Cari CPO...">
@@ -42,11 +42,11 @@
                                         <option value="{{ $v }}" @selected(($filters['uraian'] ?? null) === $v)>{{ $v }}</option>
                                     @endforeach
                                 </select>
-                                <div class="input-group-append">
-                                    <button id="btn-filter-cpo" type="button" class="btn btn-light" title="Tampilkan data untuk CPO terpilih">
+                                <!-- <div class="input-group-append">
+                                    <button id="btn-filter-cpo" type="button" class="btn btn-light" title="Tampilkan data untuk Buyer / Style / CPO terpilih (boleh salah satu saja)">
                                         <i class="fas fa-filter fa-sm"></i> Filter
                                     </button>
-                                </div>
+                                </div> -->
                             </div>
                             <div class="text-white small">
                                 <div class="text-uppercase" style="opacity:.75">Last Updated</div>
@@ -80,19 +80,23 @@
                         CPO : <span id="hdr-cpo">-</span>
                         &nbsp;|&nbsp; BRAND <span id="hdr-brand">-</span>
                         &nbsp;|&nbsp; STYLE <span id="hdr-style">-</span>
+                        <span id="hdr-cpo-count-wrap" style="display:none">
+                            &nbsp;|&nbsp; <span class="badge badge-light" id="hdr-cpo-count"></span>
+                        </span>
                     </div>
                 </div>
 
-                {{-- ================= EMPTY STATE: tampil sebelum CPO dipilih ================= --}}
+                {{-- ================= EMPTY STATE: tampil sebelum ada filter dipilih ================= --}}
                 <div id="rekon-empty-notice" class="card shadow mb-4" style="display:none">
                     <div class="card-body text-center text-muted py-5">
                         <i class="fas fa-filter fa-2x mb-3 d-block"></i>
-                        <div class="font-weight-bold mb-1">Belum ada CPO yang dipilih</div>
+                        <div class="font-weight-bold mb-1">Belum ada filter yang dipilih</div>
                         <div class="small">
-                            Pilih <strong>Buyer</strong> dan/atau <strong>Style</strong> untuk mempersempit pilihan,
-                            lalu pilih <strong>CPO</strong> pada kolom di atas dan klik <strong>Filter</strong>
-                            untuk menampilkan data dashboard. Data tidak dimuat otomatis saat halaman dibuka
-                            karena cukup berat kalau ditarik untuk semua CPO sekaligus.
+                            Pilih salah satu atau kombinasi dari <strong>Buyer</strong>, <strong>Style</strong>,
+                            atau <strong>CPO</strong> pada kolom di atas untuk menampilkan data dashboard.
+                            Kalau cuma Buyer dan/atau Style yang dipilih (tanpa CPO spesifik), data dari
+                            semua CPO yang cocok akan digabung. Data tidak dimuat otomatis saat halaman
+                            dibuka karena cukup berat kalau ditarik untuk semua CPO sekaligus.
                         </div>
                     </div>
                 </div>
@@ -158,44 +162,47 @@
                     </div>
                 </div>
 
-                {{-- ================= FABRIC QTY KGM (mon_rekonsiliasis + mon_work_orders) ================= --}}
-                <div class="card shadow mb-4 rekon-fabric-card">
-                    <div class="card-header py-2">
-                        <h6 class="m-0 font-weight-bold"><i class="fas fa-shopping-basket mr-1"></i> FABRIC QTY (KGM)</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row rekon-fabric-boxes">
-                            <div class="col-6 col-md-3 mb-2 mb-md-0">
-                                <div class="rekon-fabric-box">
-                                    <div class="rekon-fabric-label">Need</div>
-                                    <div class="rekon-fabric-value" id="fabric-need">0</div>
-                                </div>
+                {{-- ================= FABRIC QTY / FABRIC USAGE / FABRIC USAGE % : 1 baris, 3 card terpisah ================= --}}
+                <div class="row">
+                    {{-- FABRIC QTY KGM (mon_rekonsiliasis + mon_work_orders) --}}
+                    <div class="col-lg-4 mb-4">
+                        <div class="card shadow h-100 rekon-fabric-card">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold"><i class="fas fa-shopping-basket mr-1"></i> FABRIC QTY (KGM)</h6>
                             </div>
-                            <div class="col-6 col-md-3 mb-2 mb-md-0">
-                                <div class="rekon-fabric-box">
-                                    <div class="rekon-fabric-label">Order</div>
-                                    <div class="rekon-fabric-value" id="fabric-order">0</div>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="rekon-fabric-box">
-                                    <div class="rekon-fabric-label">Received</div>
-                                    <div class="rekon-fabric-value" id="fabric-received">0</div>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="rekon-fabric-box">
-                                    <div class="rekon-fabric-label">Out WIP</div>
-                                    <div class="rekon-fabric-value" id="fabric-out-wip">0</div>
+                            <div class="card-body">
+                                <div class="row rekon-fabric-boxes">
+                                    <div class="col-6 mb-2">
+                                        <div class="rekon-fabric-box">
+                                            <div class="rekon-fabric-label">Need</div>
+                                            <div class="rekon-fabric-value" id="fabric-need">0</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 mb-2">
+                                        <div class="rekon-fabric-box">
+                                            <div class="rekon-fabric-label">Order</div>
+                                            <div class="rekon-fabric-value" id="fabric-order">0</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="rekon-fabric-box">
+                                            <div class="rekon-fabric-label">Received</div>
+                                            <div class="rekon-fabric-value" id="fabric-received">0</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="rekon-fabric-box">
+                                            <div class="rekon-fabric-label">Out WIP</div>
+                                            <div class="rekon-fabric-value" id="fabric-out-wip">0</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {{-- ================= FABRIC USAGE (mon_rekonsiliasis.out_req - mon_prod_lines scrap) ================= --}}
-                <div class="row">
-                    <div class="col-lg-6 mb-4">
+                    {{-- FABRIC USAGE (mon_rekonsiliasis.out_req - mon_prod_lines scrap) --}}
+                    <div class="col-lg-4 mb-4">
                         <div class="card shadow h-100 rekon-fabric-card">
                             <div class="card-header py-2">
                                 <h6 class="m-0 font-weight-bold"><i class="fas fa-tshirt mr-1"></i> FABRIC USAGE</h6>
@@ -220,12 +227,14 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-6 mb-4">
+
+                    {{-- FABRIC USAGE PERCENTAGE --}}
+                    <div class="col-lg-4 mb-4">
                         <div class="card shadow h-100 rekon-fabric-card">
                             <div class="card-header py-2">
                                 <h6 class="m-0 font-weight-bold"><i class="fas fa-chart-pie mr-1"></i> FABRIC USAGE PERCENTAGE</h6>
                             </div>
-                            <div class="card-body d-flex align-items-center">
+                            <div class="card-body d-flex align-items-center justify-content-center">
                                 <div class="rekon-usage-donut-area">
                                     <canvas id="chart-fabric-usage"></canvas>
                                 </div>
@@ -510,8 +519,11 @@
     const btnSyncWorkOrder = document.getElementById('btn-sync-workorder');
 
     // Kombinasi Buyer (brand) / Style / CPO (uraian) dari mon_orders, dipakai
-    // untuk cascading select2: pilih Buyer -> Style & CPO menyempit ke Buyer
-    // itu saja; pilih Buyer + Style -> CPO menyempit ke kombinasi keduanya.
+    // untuk cascading select2 di frontend (pilih Buyer -> Style & CPO
+    // menyempit ke Buyer itu saja; pilih Buyer + Style -> CPO menyempit ke
+    // kombinasi keduanya). Tapi Buyer dan Style JUGA bisa langsung dipakai
+    // sebagai filter pencarian sendiri (lihat refresh()) -- tidak wajib
+    // sampai memilih 1 CPO spesifik.
     let filterOptions = [];
     try { filterOptions = JSON.parse(app.dataset.filterOptions || '[]'); } catch (e) { filterOptions = []; }
 
@@ -576,9 +588,22 @@
     }
 
     function renderHeader(header) {
+        header = header || {};
         document.getElementById('hdr-cpo').textContent = header.cpo || '-';
         document.getElementById('hdr-brand').textContent = header.brand || '-';
         document.getElementById('hdr-style').textContent = header.style || '-';
+
+        // Kalau search Buyer/Style match lebih dari 1 CPO, tampilkan badge
+        // penanda supaya jelas kalau angka di dashboard adalah gabungan.
+        const countWrap = document.getElementById('hdr-cpo-count-wrap');
+        const countEl = document.getElementById('hdr-cpo-count');
+        if (header.cpoCount && header.cpoCount > 1) {
+            countEl.textContent = `Gabungan ${header.cpoCount} CPO`;
+            countWrap.style.display = '';
+        } else {
+            countWrap.style.display = 'none';
+        }
+
         document.getElementById('rekon-last-updated').textContent = new Date().toLocaleString('id-ID', {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
@@ -978,8 +1003,18 @@
         renderDetail(json.detail);
     }
 
+    /**
+     * Search sekarang boleh pakai Buyer saja, Style saja, CPO saja, atau
+     * kombinasi -- tidak wajib memilih CPO spesifik lagi. Selama minimal
+     * satu dari ketiganya terisi, endpoint data dipanggil; service di
+     * backend yang meresolve jadi satu atau banyak CPO.
+     */
     function refresh() {
-        if (!fCpo.value) {
+        const buyer = fBuyer.value;
+        const style = fStyle.value;
+        const cpo = fCpo.value;
+
+        if (!buyer && !style && !cpo) {
             if (widgets) widgets.style.display = 'none';
             if (emptyNotice) emptyNotice.style.display = '';
             document.getElementById('rekon-last-updated').textContent = '-';
@@ -989,7 +1024,7 @@
         if (emptyNotice) emptyNotice.style.display = 'none';
         if (widgets) widgets.style.display = '';
 
-        const url = buildUrl(endpoint, { uraian: fCpo.value });
+        const url = buildUrl(endpoint, { uraian: cpo, brand: buyer, style: style });
         fetch(url)
             .then(r => r.json())
             .then(json => renderAll(json))
@@ -1020,20 +1055,24 @@
         });
     }
 
-    // Buyer/Style hanya menyempit pilihan CPO (cascading) -- tidak langsung
-    // memuat data dashboard. Data baru dimuat saat CPO dipilih/berganti.
-    // Dipasang di event khusus Select2 (select2:select / select2:clear),
-    // bukan 'change' biasa, supaya tidak ikut ter-trigger saat populateSelect()
-    // mengisi ulang <option> secara programatik (yang juga memicu 'change'
-    // supaya tampilan Select2 ter-refresh) -- ini mencegah loop cascading.
+    // Buyer/Style tetap mempersempit pilihan CPO (cascading di dropdown),
+    // TAPI sekarang juga langsung memicu pemuatan data dashboard sendiri --
+    // jadi user bisa search cukup dengan Buyer saja atau Style saja, tanpa
+    // wajib turun sampai pilih 1 CPO spesifik. Dipasang di event khusus
+    // Select2 (select2:select / select2:clear), bukan 'change' biasa, supaya
+    // tidak ikut ter-trigger saat populateSelect() mengisi ulang <option>
+    // secara programatik (yang juga memicu 'change' supaya tampilan Select2
+    // ter-refresh) -- ini mencegah loop cascading.
     $(fBuyer).on('select2:select select2:clear', function () {
         $(fStyle).val('').trigger('change');
         $(fCpo).val('').trigger('change');
         refreshCascade();
+        refresh();
     });
     $(fStyle).on('select2:select select2:clear', function () {
         $(fCpo).val('').trigger('change');
         refreshCascade();
+        refresh();
     });
     $(fCpo).on('select2:select select2:clear', refresh);
 
@@ -1268,17 +1307,25 @@
     .rekon-usage-donut-area {
         position: relative;
         flex: 0 0 auto;
-        width: 200px;
-        height: 200px;
+        width: 140px;
+        height: 140px;
     }
     .rekon-usage-legend {
         display: flex;
         flex-direction: column;
         gap: .6rem;
-        margin-left: 1.5rem;
-        font-size: .8rem;
+        margin-left: 1rem;
+        font-size: .78rem;
         font-weight: 700;
         color: #5a5c69;
+    }
+    /* Card FABRIC QTY/USAGE/USAGE % sekarang berbagi 1 baris (col-lg-4),
+       jadi box "Need/Order/Received/Out WIP" dipadatkan jadi 2x2 grid. */
+    .rekon-fabric-boxes .rekon-fabric-box {
+        padding: .5rem .4rem;
+    }
+    .rekon-fabric-boxes .rekon-fabric-value {
+        font-size: 1.05rem;
     }
     .rekon-usage-dot {
         display: inline-block;
