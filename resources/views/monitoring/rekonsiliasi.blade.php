@@ -53,26 +53,30 @@
                                 <div class="font-weight-bold" id="rekon-last-updated">--</div>
                             </div>
                             <div class="d-flex" style="gap:6px">
+                                @php $canSyncAny = false; @endphp
                                 @canRoute('monitoring.rekonsiliasi.sync')
-                                    <button id="btn-sync-rekon" type="button" class="btn btn-outline-light btn-sm">
-                                        <i class="fas fa-sync-alt fa-sm"></i> Sync Rekonsiliasi
-                                    </button>
+                                    @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-prod-line')
-                                    <button id="btn-sync-prodline" type="button" class="btn btn-outline-light btn-sm">
-                                        <i class="fas fa-sync-alt fa-sm"></i> Sync Production Line
-                                    </button>
+                                    @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-shipment')
-                                    <button id="btn-sync-shipment" type="button" class="btn btn-outline-light btn-sm">
-                                        <i class="fas fa-sync-alt fa-sm"></i> Sync Shipment
-                                    </button>
+                                    @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-work-order')
-                                    <button id="btn-sync-workorder" type="button" class="btn btn-outline-light btn-sm">
-                                        <i class="fas fa-sync-alt fa-sm"></i> Sync Work Order
-                                    </button>
+                                    @php $canSyncAny = true; @endphp
                                 @endcanRoute
+                                @if($canSyncAny)
+                                    {{-- Satu tombol untuk menjalankan ke-4 proses sync berurutan
+                                         (Rekonsiliasi -> Production Line -> Shipment -> Work Order).
+                                         Endpoint per-step tetap sama seperti sebelumnya (lihat
+                                         data-sync-*-url di container #rekon-app), cuma dipanggil
+                                         berantai dari JS -- kalau user tidak punya izin untuk salah
+                                         satu step, step itu akan gagal (403) tapi step lain tetap lanjut. --}}
+                                    <button id="btn-sync-all" type="button" class="btn btn-outline-light btn-sm">
+                                        <i class="fas fa-sync-alt fa-sm"></i> Sync All Data
+                                    </button>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -513,10 +517,7 @@
     const emptyNotice = document.getElementById('rekon-empty-notice');
     const widgets = document.getElementById('rekon-widgets');
     const btnFilterCpo = document.getElementById('btn-filter-cpo');
-    const btnSyncRekon = document.getElementById('btn-sync-rekon');
-    const btnSyncProdline = document.getElementById('btn-sync-prodline');
-    const btnSyncShipment = document.getElementById('btn-sync-shipment');
-    const btnSyncWorkOrder = document.getElementById('btn-sync-workorder');
+    const btnSyncAll = document.getElementById('btn-sync-all');
 
     // Kombinasi Buyer (brand) / Style / CPO (uraian) dari mon_orders, dipakai
     // untuk cascading select2 di frontend (pilih Buyer -> Style & CPO
@@ -1007,7 +1008,10 @@
      * Search sekarang boleh pakai Buyer saja, Style saja, CPO saja, atau
      * kombinasi -- tidak wajib memilih CPO spesifik lagi. Selama minimal
      * satu dari ketiganya terisi, endpoint data dipanggil; service di
-     * backend yang meresolve jadi satu atau banyak CPO.
+     * backend yang meresolve jadi satu atau banyak CPO. Selama fetch
+     * berjalan, tampilkan SweetAlert loading supaya user tahu dashboard
+     * sedang dimuat ulang (terutama kalau hasilnya gabungan banyak CPO
+     * dan query-nya agak berat).
      */
     function refresh() {
         const buyer = fBuyer.value;
@@ -1024,35 +1028,95 @@
         if (emptyNotice) emptyNotice.style.display = 'none';
         if (widgets) widgets.style.display = '';
 
+        Swal.fire({
+            title: 'Memuat data...',
+            text: 'Mengambil data dashboard untuk filter terpilih, mohon tunggu.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
         const url = buildUrl(endpoint, { uraian: cpo, brand: buyer, style: style });
         fetch(url)
             .then(r => r.json())
-            .then(json => renderAll(json))
-            .catch(() => Swal.fire('Gagal', 'Tidak bisa memuat data dashboard.', 'error'));
+            .then(json => {
+                renderAll(json);
+                Swal.close();
+            })
+            .catch(() => {
+                Swal.close();
+                Swal.fire('Gagal', 'Tidak bisa memuat data dashboard.', 'error');
+            });
     }
 
-    function runSync(url, label) {
+    /**
+     * Jalankan ke-4 proses sync secara BERURUTAN (bukan paralel) supaya
+     * bebannya ke smartit tidak numpuk sekaligus, dan supaya SweetAlert bisa
+     * menampilkan progress step-by-step yang jelas ("Sync X... (2/4)").
+     * Kalau salah satu step gagal (mis. tidak punya izin / error di
+     * smartit), proses TETAP lanjut ke step berikutnya -- baru di akhir
+     * ditampilkan ringkasan step mana saja yang gagal.
+     */
+    function runSyncAll() {
+        const steps = [
+            { url: syncRekonUrl, label: 'Sync Rekonsiliasi' },
+            { url: syncProdlineUrl, label: 'Sync Production Line' },
+            { url: syncShipmentUrl, label: 'Sync Shipment' },
+            { url: syncWorkOrderUrl, label: 'Sync Work Order' },
+        ].filter(s => !!s.url);
+
         Swal.fire({
-            title: `${label}?`,
-            text: 'Menarik data terbaru dari smartit, proses ini bisa memakan waktu.',
+            title: 'Sync semua data?',
+            html: `Proses berikut dijalankan berurutan dan bisa memakan waktu cukup lama:<br><small>${steps.map(s => s.label).join(' &rarr; ')}</small>`,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: 'Ya, sync',
+            confirmButtonText: 'Ya, sync semua',
         }).then((res) => {
             if (!res.isConfirmed) return;
-            Swal.fire({ title: 'Sync berjalan...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-            fetch(url, {
-                method: 'POST',
-                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
-            }).then(r => r.json()).then(json => {
-                if (json.success) {
-                    Swal.fire('Selesai', json.output || 'Sync berhasil.', 'success');
-                    refresh();
-                } else {
-                    Swal.fire('Gagal', json.message || json.output || 'Sync gagal.', 'error');
-                }
-            }).catch(() => Swal.fire('Gagal', 'Sync gagal dijalankan.', 'error'));
+            runSyncStep(steps, 0, []);
         });
+    }
+
+    function runSyncStep(steps, index, results) {
+        // Semua step selesai -- tampilkan ringkasan lalu muat ulang dashboard
+        // (kalau ada filter aktif) supaya angka yang tampil sudah yang terbaru.
+        if (index >= steps.length) {
+            const failed = results.filter(r => !r.success);
+            if (failed.length === 0) {
+                Swal.fire('Selesai', 'Semua proses sync berhasil dijalankan.', 'success').then(refresh);
+            } else {
+                const failedLabels = failed.map(r => r.label).join(', ');
+                Swal.fire(
+                    'Selesai dengan error',
+                    `Berhasil ${results.length - failed.length}/${results.length} proses. Gagal: ${failedLabels}.`,
+                    'warning'
+                ).then(refresh);
+            }
+            return;
+        }
+
+        const step = steps[index];
+        Swal.fire({
+            title: `${step.label}... (${index + 1}/${steps.length})`,
+            text: 'Menarik data terbaru dari smartit, mohon tunggu.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        fetch(step.url, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+        })
+            .then(r => r.json())
+            .then(json => {
+                results.push({ label: step.label, success: !!json.success, message: json.message || json.output });
+                runSyncStep(steps, index + 1, results);
+            })
+            .catch(() => {
+                results.push({ label: step.label, success: false, message: 'Request gagal dikirim.' });
+                runSyncStep(steps, index + 1, results);
+            });
     }
 
     // Buyer/Style tetap mempersempit pilihan CPO (cascading di dropdown),
@@ -1077,10 +1141,7 @@
     $(fCpo).on('select2:select select2:clear', refresh);
 
     if (btnFilterCpo) btnFilterCpo.addEventListener('click', refresh);
-    if (btnSyncRekon) btnSyncRekon.addEventListener('click', () => runSync(syncRekonUrl, 'Sync Rekonsiliasi'));
-    if (btnSyncProdline) btnSyncProdline.addEventListener('click', () => runSync(syncProdlineUrl, 'Sync Production Line'));
-    if (btnSyncShipment) btnSyncShipment.addEventListener('click', () => runSync(syncShipmentUrl, 'Sync Shipment'));
-    if (btnSyncWorkOrder) btnSyncWorkOrder.addEventListener('click', () => runSync(syncWorkOrderUrl, 'Sync Work Order'));
+    if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
 
     refresh();
 })();
