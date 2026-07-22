@@ -204,7 +204,6 @@ class MonitoringDashboardService
 
             $satuanList = $details->pluck('satuan_order')->filter()->unique()->values();
             $poList     = $details->pluck('no_po')->filter()->unique()->values();
-
             return (object) [
                 'uraian'          => $uraian, // <-- ditambahkan agar informasi uraian tetap tersedia
                 'barang_code'     => $code,
