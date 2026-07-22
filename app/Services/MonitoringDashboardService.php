@@ -130,8 +130,10 @@ class MonitoringDashboardService
      *  2) Baru fetch detail (per spesifikasi/valas/no_po) HANYA untuk barang_code
      *     yang lolos langkah 1.
      *
-     * Ini jauh lebih murah dibanding versi lama yang selalu fetch SEMUA baris po
-     * yang cocok filter (bisa ribuan baris) lalu baru grouping+sorting di PHP.
+     * Perbaikan: menambahkan po.uraian ke dalam SELECT dan GROUP BY query detail,
+     * serta menyertakan uraian dalam kunci grouping di PHP. Hal ini mencegah
+     * tercampurnya data dari uraian yang berbeda (misal no PO sama tapi uraian beda)
+     * dan memastikan hanya uraian sesuai filter yang tampil.
      */
     public function materialPurchasePivot(int $limit = 20): Collection
     {
@@ -156,9 +158,10 @@ class MonitoringDashboardService
             ->whereIn('po.jenis_po', MonPurchaseOrder::MATERIAL_JENIS_PO)
             ->whereIn('po.barang_code', $topCodes)
             ->select(
+                'po.uraian',                      // <-- ditambahkan
                 'po.barang_code',
                 'po.barang_name',
-                'po.valas',                   // <-- tambahan
+                'po.valas',
                 'po.spesifikasi',
                 'po.satuan_order',
                 'po.no_po',
@@ -169,9 +172,10 @@ class MonitoringDashboardService
             ->selectRaw('SUM(po.jumlah_order) - SUM(po.jumlah_doc) as sisa')
             ->selectRaw('SUM(po.harga_total) as harga_total')
             ->groupBy(
+                'po.uraian',                      // <-- ditambahkan
                 'po.barang_code',
                 'po.barang_name',
-                'po.valas',                   // <-- tambahan
+                'po.valas',
                 'po.spesifikasi',
                 'po.satuan_order',
                 'po.no_po',
@@ -186,11 +190,14 @@ class MonitoringDashboardService
 
         $rows = $query->get();
 
-        // Grouping berdasarkan barang_code, barang_name, dan valas (tunggal)
-        $grouped = $rows->groupBy(fn($r) => $r->barang_code . '||' . $r->barang_name . '||' . $r->valas);
+        // Grouping berdasarkan barang_code, barang_name, valas, DAN uraian
+        $grouped = $rows->groupBy(
+            fn($r) =>
+            $r->barang_code . '||' . $r->barang_name . '||' . $r->valas . '||' . $r->uraian
+        );
 
         $result = $grouped->map(function ($details, $key) {
-            [$code, $name, $valas] = explode('||', $key, 3);
+            [$code, $name, $valas, $uraian] = explode('||', $key, 4);
 
             $totalOrder      = (float) $details->sum('jumlah_order');
             $totalHargaTotal = (float) $details->sum('harga_total');
@@ -199,9 +206,10 @@ class MonitoringDashboardService
             $poList     = $details->pluck('no_po')->filter()->unique()->values();
 
             return (object) [
+                'uraian'          => $uraian, // <-- ditambahkan agar informasi uraian tetap tersedia
                 'barang_code'     => $code,
                 'barang_name'     => $name,
-                'valas'           => $valas, // tunggal
+                'valas'           => $valas,
                 'jumlah_order'    => $totalOrder,
                 'jumlah_diterima' => (float) $details->sum('jumlah_diterima'),
                 'sisa'            => (float) $details->sum('sisa'),
@@ -230,8 +238,7 @@ class MonitoringDashboardService
             ];
         });
 
-        // Urutan "top N" sudah ditentukan di langkah 1 (SQL), tinggal dipertahankan
-        // di sini -- tidak perlu sortByDesc ulang di PHP atas seluruh dataset.
+        // Urutan "top N" sudah ditentukan di langkah 1 (SQL), dipertahankan
         $order = $topCodes->flip();
 
         return $result
