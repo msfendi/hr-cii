@@ -26,25 +26,29 @@
                         <h1 class="h3 mb-1 text-gray-800">Material List Dashboard</h1>
                         <p class="mb-0 text-gray-600 small">Monitoring ORDER &middot; PO &middot; BOM &mdash; realtime dari database</p>
                     </div>
-                    <div>
                         @canRoute('monitoring.sync.bom')
+                    <div>
                             <button id="btn-sync-bom" type="button" class="btn btn-info btn-sm mr-2">
                                 <i class="fas fa-sync-alt fa-sm"></i> Sync BOM
                             </button>
+                    </div>
                         @endcanRoute
 
                         @canRoute('monitoring.sync.po')
+                    <div>
                             <button id="btn-sync-po" type="button" class="btn btn-secondary btn-sm mr-2">
                                 <i class="fas fa-sync-alt fa-sm"></i> Sync PO
                             </button>
+                    </div>
                         @endcanRoute
 
                         @canRoute('monitoring.order.import.form')
+                    <div>
                             <a href="{{ route('monitoring.order.import.form') }}" class="btn btn-primary btn-sm">
                                 <i class="fas fa-file-upload fa-sm"></i> Upload Sheet ORDER
                             </a>
-                        @endcanRoute
                     </div>
+                        @endcanRoute
                 </div>
 
                 <!-- Filters -->
@@ -92,7 +96,7 @@
                     </div>
                 </div>
 
-                <!-- KPI Cards (nilai awal 0) -->
+                <!-- KPI Cards -->
                 <div class="row">
                     <div class="col-xl-4 col-md-6 mb-4">
                         <div class="card border-left-primary shadow h-100 py-2">
@@ -137,7 +141,7 @@
                     </div>
                 </div>
 
-                <!-- Calendar: Production Delivery (kosong awal) -->
+                <!-- Calendar: Production Delivery -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary">Kalender Shipment</h6>
@@ -159,7 +163,7 @@
                                             <th class="text-center">Sab</th>
                                         </tr>
                                     </thead>
-                                    <tbody><!-- akan diisi oleh JS --></tbody>
+                                    <tbody></tbody>
                                 </table>
                                 <div class="small text-gray-600 mt-2 d-flex" style="gap:16px">
                                     <span><span class="badge bg-warning" style="width:12px;height:12px;display:inline-block;padding:0;"></span> Ada order</span>
@@ -197,7 +201,7 @@
                     </div>
                 </div>
 
-                <!-- Pivot 1: ORDER (kosong awal) -->
+                <!-- Pivot 1: ORDER -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Pivot ORDER &mdash; Qty Garment per Uraian / Brand / Style</h6>
@@ -226,7 +230,7 @@
                                                 <th>Estimasi Shipment</th><th class="right">Qty Order</th>
                                             </tr>
                                         </thead>
-                                        <tbody><!-- data akan diisi oleh JS --></tbody>
+                                        <tbody></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -234,7 +238,7 @@
                     </div>
                 </div>
 
-                <!-- Pivot 2: MATERIAL PURCHASE (kosong awal) -->
+                <!-- Pivot 2: MATERIAL PURCHASE -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Pivot MATERIAL PURCHASE &mdash; Jenis PO: PO / Material Supply</h6>
@@ -277,7 +281,7 @@
                                                 <th class="right">Sisa</th>
                                             </tr>
                                         </thead>
-                                        <tbody><!-- data akan diisi oleh JS --></tbody>
+                                        <tbody></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -285,7 +289,7 @@
                     </div>
                 </div>
 
-                <!-- Pivot 3: WORK ORDER (kosong awal) -->
+                <!-- Pivot 3: WORK ORDER -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Pivot WORK ORDER &mdash; Item BOM yang Belum Diorder (ada di BOM, belum ada di PO)</h6>
@@ -307,7 +311,7 @@
                                         <th>Departemen</th><th>Komponen</th><th>Barang Jadi</th>
                                     </tr>
                                 </thead>
-                                <tbody><!-- data akan diisi oleh JS --></tbody>
+                                <tbody></tbody>
                             </table>
                         </div>
                     </div>
@@ -637,6 +641,9 @@
         }
         if (code === 'USD') {
             return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        if (code === 'YEN') {
+            return '¥' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         if (code === 'IDR' || code === 'RP') {
             return 'Rp ' + num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -1199,6 +1206,16 @@
             white-space: nowrap;
         }
         .mon-item-cell span, .mon-po-cell span { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+
+        /* ===== PERBAIKAN UNTUK CHILD EXPAND: wrap teks, tanpa potongan/ellipsis ===== */
+        .mon-detail-table td.mon-item-cell,
+        .mon-detail-table td.mon-po-cell {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
 
         /* Tombol Filter & Reset - lebar sama persis, sejajar tingginya */
         .mon-filter-actions .btn { flex: 1 1 0; white-space: nowrap; }
