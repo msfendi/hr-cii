@@ -42,11 +42,6 @@
                                         <option value="{{ $v }}" @selected(($filters['uraian'] ?? null) === $v)>{{ $v }}</option>
                                     @endforeach
                                 </select>
-                                <!-- <div class="input-group-append">
-                                    <button id="btn-filter-cpo" type="button" class="btn btn-light" title="Tampilkan data untuk Buyer / Style / CPO terpilih (boleh salah satu saja)">
-                                        <i class="fas fa-filter fa-sm"></i> Filter
-                                    </button>
-                                </div> -->
                             </div>
                             <div class="text-white small">
                                 <div class="text-uppercase" style="opacity:.75">Last Updated</div>
@@ -67,12 +62,6 @@
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @if($canSyncAny)
-                                    {{-- Satu tombol untuk menjalankan ke-4 proses sync berurutan
-                                         (Rekonsiliasi -> Production Line -> Shipment -> Work Order).
-                                         Endpoint per-step tetap sama seperti sebelumnya (lihat
-                                         data-sync-*-url di container #rekon-app), cuma dipanggil
-                                         berantai dari JS -- kalau user tidak punya izin untuk salah
-                                         satu step, step itu akan gagal (403) tapi step lain tetap lanjut. --}}
                                     <button id="btn-sync-all" type="button" class="btn btn-outline-light btn-sm">
                                         <i class="fas fa-sync-alt fa-sm"></i> Sync All Data
                                     </button>
@@ -389,18 +378,6 @@
                             </div>
                         </div>
                     </div>
-                    <!-- <div class="col-lg-4 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">SHIPMENT BY KATEGORI BARANG</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-area" style="height:220px">
-                                    <canvas id="chart-shipment-category"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div> -->
                     <div class="col-lg-7 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-header py-3">
@@ -519,12 +496,6 @@
     const btnFilterCpo = document.getElementById('btn-filter-cpo');
     const btnSyncAll = document.getElementById('btn-sync-all');
 
-    // Kombinasi Buyer (brand) / Style / CPO (uraian) dari mon_orders, dipakai
-    // untuk cascading select2 di frontend (pilih Buyer -> Style & CPO
-    // menyempit ke Buyer itu saja; pilih Buyer + Style -> CPO menyempit ke
-    // kombinasi keduanya). Tapi Buyer dan Style JUGA bisa langsung dipakai
-    // sebagai filter pencarian sendiri (lihat refresh()) -- tidak wajib
-    // sampai memilih 1 CPO spesifik.
     let filterOptions = [];
     try { filterOptions = JSON.parse(app.dataset.filterOptions || '[]'); } catch (e) { filterOptions = []; }
 
@@ -538,7 +509,6 @@
         return [...new Set(values.filter(v => v !== null && v !== undefined && v !== ''))].sort();
     }
 
-    /** Isi ulang <option> sebuah select2, pertahankan value lama kalau masih valid. */
     function populateSelect($el, values) {
         const current = $el.val();
         $el.empty().append('<option value=""></option>');
@@ -546,10 +516,6 @@
         $el.val(values.includes(current) ? current : '').trigger('change');
     }
 
-    /**
-     * Cascading: Style mengikuti Buyer terpilih; CPO mengikuti Buyer + Style
-     * terpilih. Dipanggil ulang tiap kali Buyer/Style berganti.
-     */
     function refreshCascade() {
         const buyer = fBuyer.value;
         const style = fStyle.value;
@@ -594,8 +560,6 @@
         document.getElementById('hdr-brand').textContent = header.brand || '-';
         document.getElementById('hdr-style').textContent = header.style || '-';
 
-        // Kalau search Buyer/Style match lebih dari 1 CPO, tampilkan badge
-        // penanda supaya jelas kalau angka di dashboard adalah gabungan.
         const countWrap = document.getElementById('hdr-cpo-count-wrap');
         const countEl = document.getElementById('hdr-cpo-count');
         if (header.cpoCount && header.cpoCount > 1) {
@@ -621,7 +585,6 @@
             : '-';
     }
 
-    /** "FABRIC QTY (KGM)": Need (mon_work_orders) / Order / Received / Out WIP (mon_rekonsiliasis). */
     function renderFabricQty(fabricQty) {
         fabricQty = fabricQty || {};
         document.getElementById('fabric-need').textContent = fmtNum(fabricQty.need);
@@ -630,12 +593,6 @@
         document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
     }
 
-    /**
-     * "FABRIC USAGE": Use For GMT vs Scrap Qty (KGM).
-     *  - Use For GMT = mon_rekonsiliasis.out_req - mon_prod_lines.jumlah (barang_code = '01SCRP00001')
-     *  - Scrap Qty   = mon_prod_lines.jumlah (barang_code = '01SCRP00001')
-     *  - Donut menampilkan proporsi Use For GMT vs Scrap terhadap total out_req.
-     */
     function renderFabricUsage(fabricUsage) {
         fabricUsage = fabricUsage || {};
         document.getElementById('usage-for-gmt').textContent = fmtNum(fabricUsage.use_for_gmt);
@@ -721,15 +678,9 @@
         });
     }
 
-    // Warna berbeda per departemen untuk chart PRODUCTION RESULT (PCS)
     const DEPT_COLORS = { Cutting: '#4e73df', Sewing: '#1cc88a', Packing: '#f6a533' };
     const DEPT_ORDER = ['Cutting', 'Sewing', 'Packing'];
 
-    /**
-     * PRODUCTION RESULT (PCS): breakdown per department (Cutting/Sewing/Packing)
-     * dan per barang_code -- ditampilkan pakai barang_name, tiap departemen
-     * punya warna sendiri (grouped bar chart).
-     */
     function renderProductionResult(pipeline, materialRows, lossSteps) {
         materialRows = materialRows || [];
         lossSteps = lossSteps || [];
@@ -762,11 +713,6 @@
             });
         }
 
-        // Flow diagram: Contract -> tiap department (mon_prod_lines) -> Warehouse -> Shipment -> Total Process Loss.
-        // Tiap kartu tahapan menampilkan Output Qty + Output % (relatif ke tahap
-        // sebelumnya) dan Loss Qty + Loss % (selisih ke tahap sebelumnya), sesuai
-        // hasil pipelineLossSteps() (input/output/loss_pcs/loss_pct per pasangan
-        // tahap berurutan).
         const stages = [
             { label: 'Contract', value: pipeline.contract, theme: 'neutral' },
             ...pipeline.departments.map(d => ({
@@ -780,8 +726,6 @@
         const steps = lossSteps;
 
         const boxes = stages.map((s, i) => {
-            // Tahap pertama (Contract) tidak punya "loss masuk" karena tidak ada
-            // tahap sebelumnya -- tampilkan sebagai kartu referensi/baseline.
             const step = i > 0 ? steps[i - 1] : null;
 
             const outputPct = step && step.input > 0
@@ -1004,15 +948,6 @@
         renderDetail(json.detail);
     }
 
-    /**
-     * Search sekarang boleh pakai Buyer saja, Style saja, CPO saja, atau
-     * kombinasi -- tidak wajib memilih CPO spesifik lagi. Selama minimal
-     * satu dari ketiganya terisi, endpoint data dipanggil; service di
-     * backend yang meresolve jadi satu atau banyak CPO. Selama fetch
-     * berjalan, tampilkan SweetAlert loading supaya user tahu dashboard
-     * sedang dimuat ulang (terutama kalau hasilnya gabungan banyak CPO
-     * dan query-nya agak berat).
-     */
     function refresh() {
         const buyer = fBuyer.value;
         const style = fStyle.value;
@@ -1049,14 +984,7 @@
             });
     }
 
-    /**
-     * Jalankan ke-4 proses sync secara BERURUTAN (bukan paralel) supaya
-     * bebannya ke smartit tidak numpuk sekaligus, dan supaya SweetAlert bisa
-     * menampilkan progress step-by-step yang jelas ("Sync X... (2/4)").
-     * Kalau salah satu step gagal (mis. tidak punya izin / error di
-     * smartit), proses TETAP lanjut ke step berikutnya -- baru di akhir
-     * ditampilkan ringkasan step mana saja yang gagal.
-     */
+    // ========= PERBAIKAN UTAMA: sync all dengan timeout lebih panjang dan penanganan respons =========
     function runSyncAll() {
         const steps = [
             { url: syncRekonUrl, label: 'Sync Rekonsiliasi' },
@@ -1078,55 +1006,96 @@
     }
 
     function runSyncStep(steps, index, results) {
-        // Semua step selesai -- tampilkan ringkasan lalu muat ulang dashboard
-        // (kalau ada filter aktif) supaya angka yang tampil sudah yang terbaru.
         if (index >= steps.length) {
-            const failed = results.filter(r => !r.success);
-            if (failed.length === 0) {
-                Swal.fire('Selesai', 'Semua proses sync berhasil dijalankan.', 'success').then(refresh);
-            } else {
-                const failedLabels = failed.map(r => r.label).join(', ');
-                Swal.fire(
-                    'Selesai dengan error',
-                    `Berhasil ${results.length - failed.length}/${results.length} proses. Gagal: ${failedLabels}.`,
-                    'warning'
-                ).then(refresh);
-            }
+            // Tutup loading dengan paksa sebelum menampilkan hasil
+            Swal.close();
+            // Beri jeda agar Swal benar-benar tertutup
+            setTimeout(() => {
+                const failed = results.filter(r => !r.success);
+                if (failed.length === 0) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Selesai',
+                        text: 'Semua proses sync berhasil dijalankan.',
+                        allowOutsideClick: true,
+                        allowEscapeKey: true,
+                    }).then(refresh);
+                } else {
+                    const failedLabels = failed.map(r => r.label).join(', ');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Selesai dengan error',
+                        text: `Berhasil ${results.length - failed.length}/${results.length} proses. Gagal: ${failedLabels}.`,
+                        allowOutsideClick: true,
+                        allowEscapeKey: true,
+                    }).then(refresh);
+                }
+            }, 200);
             return;
         }
 
         const step = steps[index];
+        Swal.close(); // tutup popup sebelumnya
+
+        const startedAt = Date.now();
+        let elapsedTimer = null;
+
         Swal.fire({
             title: `${step.label}... (${index + 1}/${steps.length})`,
-            text: 'Menarik data terbaru dari smartit, mohon tunggu.',
+            html: 'Menarik data terbaru dari smartit, mohon tunggu.<br><small id="sync-elapsed" class="text-muted">0 detik berjalan</small>',
             allowOutsideClick: false,
             allowEscapeKey: false,
-            didOpen: () => Swal.showLoading(),
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+                elapsedTimer = setInterval(() => {
+                    const secs = Math.round((Date.now() - startedAt) / 1000);
+                    const el = document.getElementById('sync-elapsed');
+                    if (el) {
+                        el.textContent = secs > 30
+                            ? `${secs} detik berjalan -- proses smartit memang bisa lama, mohon tunggu`
+                            : `${secs} detik berjalan`;
+                    }
+                }, 1000);
+            },
+            willClose: () => {
+                if (elapsedTimer) clearInterval(elapsedTimer);
+            },
         });
+
+        const controller = new AbortController();
+        // Perpanjang timeout menjadi 15 menit (900.000 ms)
+        const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000);
 
         fetch(step.url, {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+            signal: controller.signal,
         })
-            .then(r => r.json())
+            .then(response => {
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
             .then(json => {
                 results.push({ label: step.label, success: !!json.success, message: json.message || json.output });
                 runSyncStep(steps, index + 1, results);
             })
-            .catch(() => {
-                results.push({ label: step.label, success: false, message: 'Request gagal dikirim.' });
+            .catch((err) => {
+                clearTimeout(timeoutId);
+                const timedOut = err && err.name === 'AbortError';
+                results.push({
+                    label: step.label,
+                    success: false,
+                    message: timedOut ? 'Timeout -- proses lebih dari 15 menit.' : 'Request gagal dikirim.',
+                });
                 runSyncStep(steps, index + 1, results);
             });
     }
 
-    // Buyer/Style tetap mempersempit pilihan CPO (cascading di dropdown),
-    // TAPI sekarang juga langsung memicu pemuatan data dashboard sendiri --
-    // jadi user bisa search cukup dengan Buyer saja atau Style saja, tanpa
-    // wajib turun sampai pilih 1 CPO spesifik. Dipasang di event khusus
-    // Select2 (select2:select / select2:clear), bukan 'change' biasa, supaya
-    // tidak ikut ter-trigger saat populateSelect() mengisi ulang <option>
-    // secara programatik (yang juga memicu 'change' supaya tampilan Select2
-    // ter-refresh) -- ini mencegah loop cascading.
+    // Event listener untuk filter (tetap sama)
     $(fBuyer).on('select2:select select2:clear', function () {
         $(fStyle).val('').trigger('change');
         $(fCpo).val('').trigger('change');
@@ -1153,10 +1122,8 @@
     .right { text-align: right; }
     .mon-table-box { max-height: 420px; overflow: auto; }
 
-    /* Cegah tabel DataTables menyusut & memicu scrollbar ganda saat kosong */
     .table-responsive table.dataTable { width: 100% !important; }
 
-    /* ===== Header bar biru ala gambar ===== */
     .rekon-hero {
         background: linear-gradient(135deg, #0b3d5c, #123f60);
         color: #fff;
@@ -1168,7 +1135,6 @@
     .rekon-search .input-group-text { background: #fff; color: #0b3d5c; font-weight: 700; font-size: .75rem; }
     #btn-filter-cpo { font-weight: 700; }
 
-    /* ===== Fix: Select2 di dalam Bootstrap input-group ===== */
     .rekon-search {
         display: flex;
         align-items: center;
@@ -1177,11 +1143,11 @@
     .rekon-search .input-group-text,
     .rekon-search .select2-container,
     .rekon-search .input-group-append {
-        height: 100%; /* agar semua sama tinggi */
+        height: 100%;
     }
     .rekon-search .input-group-append .btn {
         height: 100%;
-        border-radius: 0 0.25rem 0.25rem 0; /* atau sesuai */
+        border-radius: 0 0.25rem 0.25rem 0;
     }
     .rekon-search.input-group {
         flex-wrap: nowrap;
@@ -1219,7 +1185,6 @@
 
     .rekon-kpi .card-body { padding: 1rem .75rem; }
 
-    /* ===== Pipeline flow: kartu per tahapan (Output Qty/% + Loss Qty/%) ===== */
     .rekon-pipe-box {
         background: #fff;
         border: 1px solid #e3e6f0;
@@ -1282,7 +1247,7 @@
     }
     .rekon-pipe-dot.dot-output { background: #1f3864; }
     .rekon-pipe-dot.dot-loss   { background: #c0392b; }
-    /* ===== Fabric Qty (KGM) card ===== */
+
     .rekon-fabric-card .card-header {
         background: #1f3864;
         color: #fff;
@@ -1307,7 +1272,7 @@
         font-weight: 800;
         color: #1f3864;
     }
-    /* ===== Fabric Usage / Fabric Usage Percentage card ===== */
+
     .rekon-usage-box {
         position: relative;
         border: 1px dashed #b7b9c8;
@@ -1380,8 +1345,6 @@
         font-weight: 700;
         color: #5a5c69;
     }
-    /* Card FABRIC QTY/USAGE/USAGE % sekarang berbagi 1 baris (col-lg-4),
-       jadi box "Need/Order/Received/Out WIP" dipadatkan jadi 2x2 grid. */
     .rekon-fabric-boxes .rekon-fabric-box {
         padding: .5rem .4rem;
     }

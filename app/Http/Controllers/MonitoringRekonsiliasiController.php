@@ -141,25 +141,7 @@ class MonitoringRekonsiliasiController extends Controller
      */
     public function syncWorkOrder(Request $request)
     {
-        set_time_limit(0);
-
-        try {
-            $exitCode = Artisan::call('monitoring:sync-work-order');
-            $output = trim(Artisan::output());
-
-            return response()->json([
-                'success'   => $exitCode === 0,
-                'command'   => 'monitoring:sync-work-order',
-                'exit_code' => $exitCode,
-                'output'    => $output,
-            ], $exitCode === 0 ? 200 : 500);
-        } catch (Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'command' => 'monitoring:sync-work-order',
-                'message' => $e->getMessage(),
-            ], 500);
-        }
+        return $this->runSyncCommand('monitoring:sync-work-order', $request);
     }
 
     private function runSyncCommand(string $command, Request $request)
