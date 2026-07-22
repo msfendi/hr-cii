@@ -26,29 +26,25 @@
                         <h1 class="h3 mb-1 text-gray-800">Material List Dashboard</h1>
                         <p class="mb-0 text-gray-600 small">Monitoring ORDER &middot; PO &middot; BOM &mdash; realtime dari database</p>
                     </div>
-                        @canRoute('monitoring.sync.bom')
                     <div>
+                        @canRoute('monitoring.sync.bom')
                             <button id="btn-sync-bom" type="button" class="btn btn-info btn-sm mr-2">
                                 <i class="fas fa-sync-alt fa-sm"></i> Sync BOM
                             </button>
-                    </div>
                         @endcanRoute
 
                         @canRoute('monitoring.sync.po')
-                    <div>
                             <button id="btn-sync-po" type="button" class="btn btn-secondary btn-sm mr-2">
                                 <i class="fas fa-sync-alt fa-sm"></i> Sync PO
                             </button>
-                    </div>
                         @endcanRoute
 
                         @canRoute('monitoring.order.import.form')
-                    <div>
                             <a href="{{ route('monitoring.order.import.form') }}" class="btn btn-primary btn-sm">
                                 <i class="fas fa-file-upload fa-sm"></i> Upload Sheet ORDER
                             </a>
-                    </div>
                         @endcanRoute
+                    </div>
                 </div>
 
                 <!-- Filters -->
