@@ -48,56 +48,48 @@ class SyncProdLineFromSmartit extends Command
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
-        $upserted = 0;
-        $updateColumns = [
-            'code_prod',
-            'department_id',
-            'tgl_produksi',
-            'barang_code',
-            'barang_name',
-            'barang_category',
-            'jumlah',
-            'destination',
-            'no_surat_jalan',
-            'create_by',
-            'create_date',
-            'digit',
-            'total_nilai',
-            'updated_at',
-        ];
+        $inserted = 0;
 
         // 15 kolom per baris -> hitung otomatis biar total parameter per batch
         // aman di bawah limit SQL Server (2100 bound parameters per query).
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 15);
 
-        foreach (array_chunk($rows, $chunkSize) as $chunk) {
-            $data = array_map(function ($r) use ($now) {
-                return [
-                    'line_id'          => $r->line_id,
-                    'code_prod'        => $r->code_prod,
-                    'department_id'    => $r->department_id,
-                    'tgl_produksi'     => $r->tgl_produksi,
-                    'barang_code'      => $r->barang_code,
-                    'barang_name'      => $r->barang_name,
-                    'barang_category'  => $r->barang_category,
-                    'jumlah'           => $r->jumlah,
-                    'destination'      => $r->destination,
-                    'no_surat_jalan'   => $r->no_surat_jalan,
-                    'create_by'        => $r->create_by,
-                    'create_date'      => $r->create_date,
-                    'digit'            => $r->digit,
-                    'total_nilai'      => $r->total_nilai,
-                    'updated_at'       => $now,
-                    'created_at'       => $now,
-                ];
-            }, $chunk);
+        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
+            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
+            // disinkron (bukan truncate seluruh tabel), supaya data
+            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
+            // terhapus. Baru setelah itu insert data baru dari smartit.
+            MonProdLine::whereBetween('tgl_produksi', [$from, $to])->delete();
 
-            MonProdLine::upsert($data, uniqueBy: ['line_id'], update: $updateColumns);
+            foreach (array_chunk($rows, $chunkSize) as $chunk) {
+                $data = array_map(function ($r) use ($now) {
+                    return [
+                        'line_id'          => $r->line_id,
+                        'code_prod'        => $r->code_prod,
+                        'department_id'    => $r->department_id,
+                        'tgl_produksi'     => $r->tgl_produksi,
+                        'barang_code'      => $r->barang_code,
+                        'barang_name'      => $r->barang_name,
+                        'barang_category'  => $r->barang_category,
+                        'jumlah'           => $r->jumlah,
+                        'destination'      => $r->destination,
+                        'no_surat_jalan'   => $r->no_surat_jalan,
+                        'create_by'        => $r->create_by,
+                        'create_date'      => $r->create_date,
+                        'digit'            => $r->digit,
+                        'total_nilai'      => $r->total_nilai,
+                        'updated_at'       => $now,
+                        'created_at'       => $now,
+                    ];
+                }, $chunk);
 
-            $upserted += count($data);
-        }
+                MonProdLine::insert($data);
 
-        $this->info("Selesai. {$upserted} baris Production Line di-upsert ke mon_prod_lines.");
+                $inserted += count($data);
+            }
+        });
+
+        $this->info("Selesai. {$inserted} baris Production Line diinsert ke mon_prod_lines (data lama pada rentang tanggal ini dihapus lebih dulu).");
 
         return self::SUCCESS;
     }

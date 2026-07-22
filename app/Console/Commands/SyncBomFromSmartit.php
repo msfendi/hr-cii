@@ -45,47 +45,47 @@ class SyncBomFromSmartit extends Command
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
-        $upserted = 0;
+        $inserted = 0;
 
         // 15 kolom per baris (13 data + updated_at + created_at) -> hitung
         // otomatis biar total parameter per batch aman < limit SQL Server (2100).
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 15);
 
-        foreach (array_chunk($rows, $chunkSize) as $chunk) {
-            $data = array_map(function ($r) use ($now) {
-                return [
-                    'bom_id'        => $r->bom_id,
-                    'code_prod'     => $r->code_prod,
-                    'tgl_prod'      => $r->tgl_prod,
-                    'barang_code'   => $r->barang_code,
-                    'barang_name'   => $r->barang_name,
-                    'satuan_code'   => $r->satuan_code,
-                    'uraian'        => $r->uraian,
-                    'spesifikasi'   => $r->spesifikasi,
-                    'cons'          => $r->cons,
-                    'scrap_percent' => $r->scrap_percent,
-                    'departemen'    => $r->departemen,
-                    'komponen'      => $r->komponen,
-                    'barang_jadi'   => $r->barang_jadi,
-                    'updated_at'    => $now,
-                    'created_at'    => $now,
-                ];
-            }, $chunk);
+        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
+            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
+            // disinkron (bukan truncate seluruh tabel), supaya data
+            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
+            // terhapus. Baru setelah itu insert data baru dari smartit.
+            MonBom::whereBetween('tgl_prod', [$from, $to])->delete();
 
-            MonBom::upsert(
-                $data,
-                uniqueBy: ['bom_id'],
-                update: [
-                    'code_prod', 'tgl_prod', 'barang_code', 'barang_name', 'satuan_code',
-                    'uraian', 'spesifikasi', 'cons', 'scrap_percent', 'departemen',
-                    'komponen', 'barang_jadi', 'updated_at',
-                ]
-            );
+            foreach (array_chunk($rows, $chunkSize) as $chunk) {
+                $data = array_map(function ($r) use ($now) {
+                    return [
+                        'bom_id'        => $r->bom_id,
+                        'code_prod'     => $r->code_prod,
+                        'tgl_prod'      => $r->tgl_prod,
+                        'barang_code'   => $r->barang_code,
+                        'barang_name'   => $r->barang_name,
+                        'satuan_code'   => $r->satuan_code,
+                        'uraian'        => $r->uraian,
+                        'spesifikasi'   => $r->spesifikasi,
+                        'cons'          => $r->cons,
+                        'scrap_percent' => $r->scrap_percent,
+                        'departemen'    => $r->departemen,
+                        'komponen'      => $r->komponen,
+                        'barang_jadi'   => $r->barang_jadi,
+                        'updated_at'    => $now,
+                        'created_at'    => $now,
+                    ];
+                }, $chunk);
 
-            $upserted += count($data);
-        }
+                MonBom::insert($data);
 
-        $this->info("Selesai. {$upserted} baris BOM di-upsert ke mon_boms.");
+                $inserted += count($data);
+            }
+        });
+
+        $this->info("Selesai. {$inserted} baris BOM diinsert ke mon_boms (data lama pada rentang tanggal ini dihapus lebih dulu).");
 
         return self::SUCCESS;
     }

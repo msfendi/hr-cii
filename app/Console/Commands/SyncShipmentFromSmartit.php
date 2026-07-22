@@ -198,68 +198,68 @@ class SyncShipmentFromSmartit extends Command
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
-        $upserted = 0;
-        $updateColumns = [
-            'hs_code', 'doc_id', 'jenis_doc', 'no_aju', 'no_doc', 'tgl_doc', 'no_bukti',
-            'tgl_bukti', 'jenis_ps', 'no_ps', 'no_invoice', 'file_number', 'supplier_name',
-            'barang_code', 'barang_name', 'barang_category', 'satuan_doc', 'jumlah_doc',
-            'valas', 'nilai_barang', 'nilai_fob', 'jumlah_aktual', 'keterangan', 'ps_id',
-            'spesifikasi', 'uraian', 'berat', 'jumlah_barang', 'satuan_order', 'satuan_code',
-            'dt_so_id', 'acc_bukti', 'acc_tgl', 'updated_at',
-        ];
+        $inserted = 0;
 
         // 35 kolom per baris (termasuk row_key, created_at, updated_at) -> hitung
         // otomatis biar total parameter per batch aman di bawah limit SQL Server.
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 35);
 
-        foreach (array_chunk($rows, $chunkSize) as $chunk) {
-            $data = array_map(function ($r) use ($now) {
-                return [
-                    'row_key'        => self::rowKey($r),
-                    'hs_code'        => $r->hs_code,
-                    'doc_id'         => $r->doc_id,
-                    'jenis_doc'      => $r->jenis_doc,
-                    'no_aju'         => $r->no_aju,
-                    'no_doc'         => $r->no_doc,
-                    'tgl_doc'        => $r->tgl_doc,
-                    'no_bukti'       => $r->no_bukti,
-                    'tgl_bukti'      => $r->tgl_bukti,
-                    'jenis_ps'       => $r->jenis_ps,
-                    'no_ps'          => $r->no_ps,
-                    'no_invoice'     => $r->no_invoice,
-                    'file_number'    => $r->file_number,
-                    'supplier_name'  => $r->supplier_name,
-                    'barang_code'    => $r->barang_code,
-                    'barang_name'    => $r->barang_name,
-                    'barang_category'=> $r->barang_category,
-                    'satuan_doc'     => $r->satuan_doc,
-                    'jumlah_doc'     => $r->jumlah_doc,
-                    'valas'          => $r->valas,
-                    'nilai_barang'   => $r->nilai_barang,
-                    'nilai_fob'      => $r->nilai_fob,
-                    'jumlah_aktual'  => $r->jumlah_aktual,
-                    'keterangan'     => $r->keterangan,
-                    'ps_id'          => $r->ps_id,
-                    'spesifikasi'    => $r->spesifikasi,
-                    'uraian'         => $r->uraian,
-                    'berat'          => $r->berat,
-                    'jumlah_barang'  => $r->jumlah_barang,
-                    'satuan_order'   => $r->satuan_order,
-                    'satuan_code'    => $r->satuan_code,
-                    'dt_so_id'       => $r->dt_so_id,
-                    'acc_bukti'      => $r->acc_bukti,
-                    'acc_tgl'        => $r->acc_tgl,
-                    'updated_at'     => $now,
-                    'created_at'     => $now,
-                ];
-            }, $chunk);
+        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
+            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
+            // disinkron (bukan truncate seluruh tabel), supaya data
+            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
+            // terhapus. Baru setelah itu insert data baru dari smartit.
+            MonShipment::whereBetween('tgl_bukti', [$from, $to])->delete();
 
-            MonShipment::upsert($data, uniqueBy: ['row_key'], update: $updateColumns);
+            foreach (array_chunk($rows, $chunkSize) as $chunk) {
+                $data = array_map(function ($r) use ($now) {
+                    return [
+                        'row_key'        => self::rowKey($r),
+                        'hs_code'        => $r->hs_code,
+                        'doc_id'         => $r->doc_id,
+                        'jenis_doc'      => $r->jenis_doc,
+                        'no_aju'         => $r->no_aju,
+                        'no_doc'         => $r->no_doc,
+                        'tgl_doc'        => $r->tgl_doc,
+                        'no_bukti'       => $r->no_bukti,
+                        'tgl_bukti'      => $r->tgl_bukti,
+                        'jenis_ps'       => $r->jenis_ps,
+                        'no_ps'          => $r->no_ps,
+                        'no_invoice'     => $r->no_invoice,
+                        'file_number'    => $r->file_number,
+                        'supplier_name'  => $r->supplier_name,
+                        'barang_code'    => $r->barang_code,
+                        'barang_name'    => $r->barang_name,
+                        'barang_category'=> $r->barang_category,
+                        'satuan_doc'     => $r->satuan_doc,
+                        'jumlah_doc'     => $r->jumlah_doc,
+                        'valas'          => $r->valas,
+                        'nilai_barang'   => $r->nilai_barang,
+                        'nilai_fob'      => $r->nilai_fob,
+                        'jumlah_aktual'  => $r->jumlah_aktual,
+                        'keterangan'     => $r->keterangan,
+                        'ps_id'          => $r->ps_id,
+                        'spesifikasi'    => $r->spesifikasi,
+                        'uraian'         => $r->uraian,
+                        'berat'          => $r->berat,
+                        'jumlah_barang'  => $r->jumlah_barang,
+                        'satuan_order'   => $r->satuan_order,
+                        'satuan_code'    => $r->satuan_code,
+                        'dt_so_id'       => $r->dt_so_id,
+                        'acc_bukti'      => $r->acc_bukti,
+                        'acc_tgl'        => $r->acc_tgl,
+                        'updated_at'     => $now,
+                        'created_at'     => $now,
+                    ];
+                }, $chunk);
 
-            $upserted += count($data);
-        }
+                MonShipment::insert($data);
 
-        $this->info("Selesai. {$upserted} baris Shipment di-upsert ke mon_shipments.");
+                $inserted += count($data);
+            }
+        });
+
+        $this->info("Selesai. {$inserted} baris Shipment diinsert ke mon_shipments (data lama pada rentang tanggal ini dihapus lebih dulu).");
 
         return self::SUCCESS;
     }

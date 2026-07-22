@@ -128,82 +128,60 @@ class SyncRekonsiliasiFromSmartit extends Command
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
-        $upserted = 0;
-        $updateColumns = [
-            'valas',
-            'no_po',
-            'jenis_po',
-            'tgl_po',
-            'termin',
-            'tgl_pengiriman',
-            'supplier_name',
-            'barang_code',
-            'barang_name',
-            'satuan_order',
-            'satuan_code',
-            'klaim_fsc',
-            'uraian',
-            'spesifikasi',
-            'ncv',
-            'jumlah_order',
-            'jumlah_doc',
-            'out_req',
-            'out_prod',
-            'sisa',
-            'saldo_wip',
-            'digit',
-            'out_doc',
-            'create_by',
-            'create_date',
-            'harga_total',
-            'saldo_gudang',
-            'updated_at',
-        ];
+        $inserted = 0;
 
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 29);
 
-        foreach (array_chunk($rows, $chunkSize) as $chunk) {
-            $data = array_map(function ($r) use ($now) {
-                return [
-                    'dt_po_id'       => $r->dt_po_id,
-                    'valas'          => $r->valas,
-                    'no_po'          => $r->no_po,
-                    'jenis_po'       => $r->jenis_po,
-                    'tgl_po'         => $r->tgl_po,
-                    'termin'         => $r->termin,
-                    'tgl_pengiriman' => $r->tgl_pengiriman ?? null,
-                    'supplier_name'  => $r->supplier_name,
-                    'barang_code'    => $r->barang_code,
-                    'barang_name'    => $r->barang_name,
-                    'satuan_order'   => $r->satuan_order,
-                    'satuan_code'    => $r->satuan_code,
-                    'klaim_fsc'      => $r->klaim_fsc,
-                    'uraian'         => $r->uraian,
-                    'spesifikasi'    => $r->spesifikasi,
-                    'ncv'            => $r->ncv,
-                    'jumlah_order'   => $r->jumlah_order,
-                    'jumlah_doc'     => $r->jumlah_doc,
-                    'out_req'        => $r->out_req,
-                    'out_prod'       => $r->out_prod,
-                    'sisa'           => $r->sisa,
-                    'saldo_wip'      => $r->saldo_wip,
-                    'digit'          => $r->digit,
-                    'out_doc'        => $r->out_doc,
-                    'create_by'      => $r->create_by,
-                    'create_date'    => $r->create_date,
-                    'harga_total'    => $r->harga_total,
-                    'saldo_gudang'   => $r->saldo_gudang,
-                    'updated_at'     => $now,
-                    'created_at'     => $now,
-                ];
-            }, $chunk);
+        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
+            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
+            // disinkron (bukan truncate seluruh tabel), supaya data
+            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
+            // terhapus. Baru setelah itu insert data baru dari smartit.
+            MonRekonsiliasi::whereBetween('tgl_po', [$from, $to])->delete();
 
-            MonRekonsiliasi::upsert($data, uniqueBy: ['dt_po_id'], update: $updateColumns);
+            foreach (array_chunk($rows, $chunkSize) as $chunk) {
+                $data = array_map(function ($r) use ($now) {
+                    return [
+                        'dt_po_id'       => $r->dt_po_id,
+                        'valas'          => $r->valas,
+                        'no_po'          => $r->no_po,
+                        'jenis_po'       => $r->jenis_po,
+                        'tgl_po'         => $r->tgl_po,
+                        'termin'         => $r->termin,
+                        'tgl_pengiriman' => $r->tgl_pengiriman ?? null,
+                        'supplier_name'  => $r->supplier_name,
+                        'barang_code'    => $r->barang_code,
+                        'barang_name'    => $r->barang_name,
+                        'satuan_order'   => $r->satuan_order,
+                        'satuan_code'    => $r->satuan_code,
+                        'klaim_fsc'      => $r->klaim_fsc,
+                        'uraian'         => $r->uraian,
+                        'spesifikasi'    => $r->spesifikasi,
+                        'ncv'            => $r->ncv,
+                        'jumlah_order'   => $r->jumlah_order,
+                        'jumlah_doc'     => $r->jumlah_doc,
+                        'out_req'        => $r->out_req,
+                        'out_prod'       => $r->out_prod,
+                        'sisa'           => $r->sisa,
+                        'saldo_wip'      => $r->saldo_wip,
+                        'digit'          => $r->digit,
+                        'out_doc'        => $r->out_doc,
+                        'create_by'      => $r->create_by,
+                        'create_date'    => $r->create_date,
+                        'harga_total'    => $r->harga_total,
+                        'saldo_gudang'   => $r->saldo_gudang,
+                        'updated_at'     => $now,
+                        'created_at'     => $now,
+                    ];
+                }, $chunk);
 
-            $upserted += count($data);
-        }
+                MonRekonsiliasi::insert($data);
 
-        $this->info("Selesai. {$upserted} baris Rekonsiliasi di-upsert ke mon_rekonsiliasis.");
+                $inserted += count($data);
+            }
+        });
+
+        $this->info("Selesai. {$inserted} baris Rekonsiliasi diinsert ke mon_rekonsiliasis (data lama pada rentang tanggal ini dihapus lebih dulu).");
 
         return self::SUCCESS;
     }

@@ -173,112 +173,76 @@ class SyncPoFromSmartit extends Command
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
-        $upserted = 0;
-        $updateColumns = [
-            'klaim_fsc',
-            'po_id',
-            'jenis_po',
-            'no_po',
-            'tgl_po',
-            'tgl_pengiriman',
-            'supplier_name',
-            'barang_code',
-            'barang_name',
-            'satuan_order',
-            'uraian',
-            'spesifikasi',
-            'jumlah_order',
-            'harga_satuan',
-            'harga_total',
-            'harga_fob',
-            'total_fob',
-            'ppn',
-            'pph',
-            'discount',
-            'biaya',
-            'valas',
-            'note',
-            'create_by',
-            'create_date',
-            'ncv',
-            'jumlah_doc',
-            'total_in',
-            'out_req',
-            'total_req',
-            'out_prod',
-            'total_prod',
-            'out_doc',
-            'total_doc',
-            'digit',
-            'total_order',
-            'total_harga',
-            'sisa',
-            'total_sisa',
-            'total_gudang',
-            'total_wip',
-            'updated_at',
-        ];
+        $inserted = 0;
 
         // 44 kolom per baris -> hitung otomatis biar total parameter per batch
         // aman di bawah limit SQL Server (2100 bound parameters per query).
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 44);
 
-        foreach (array_chunk($rows, $chunkSize) as $chunk) {
-            $data = array_map(function ($r) use ($now) {
-                return [
-                    'klaim_fsc'     => $r->klaim_fsc,
-                    'dt_po_id'      => $r->dt_po_id,
-                    'po_id'         => $r->po_id,
-                    'jenis_po'      => $r->jenis_po,
-                    'no_po'         => $r->no_po,
-                    'tgl_po'        => $r->tgl_po,
-                    'tgl_pengiriman' => $r->tgl_pengiriman ?? null,
-                    'supplier_name' => $r->supplier_name,
-                    'barang_code'   => $r->barang_code,
-                    'barang_name'   => $r->barang_name,
-                    'satuan_order'  => $r->satuan_order,
-                    'uraian'        => $r->uraian,
-                    'spesifikasi'   => $r->spesifikasi,
-                    'jumlah_order'  => $r->jumlah_order,
-                    'harga_satuan'  => $r->harga_satuan,
-                    'harga_total'   => $r->harga_total,
-                    'harga_fob'     => $r->harga_fob,
-                    'total_fob'     => $r->total_fob,
-                    'ppn'           => $r->ppn,
-                    'pph'           => $r->pph,
-                    'discount'      => $r->discount,
-                    'biaya'         => $r->biaya,
-                    'valas'         => $r->valas,
-                    'note'          => $r->note,
-                    'create_by'     => $r->create_by,
-                    'create_date'   => $r->create_date,
-                    'ncv'           => $r->ncv,
-                    'jumlah_doc'    => $r->jumlah_doc,
-                    'total_in'      => $r->total_in,
-                    'out_req'       => $r->out_req,
-                    'total_req'     => $r->total_req,
-                    'out_prod'      => $r->out_prod,
-                    'total_prod'    => $r->total_prod,
-                    'out_doc'       => $r->out_doc,
-                    'total_doc'     => $r->total_doc,
-                    'digit'         => $r->digit,
-                    'total_order'   => $r->total_order,
-                    'total_harga'   => $r->total_harga,
-                    'sisa'          => $r->sisa,
-                    'total_sisa'    => $r->total_sisa,
-                    'total_gudang'  => $r->total_gudang,
-                    'total_wip'     => $r->total_wip,
-                    'updated_at'    => $now,
-                    'created_at'    => $now,
-                ];
-            }, $chunk);
+        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
+            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
+            // disinkron (bukan truncate seluruh tabel), supaya data
+            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
+            // terhapus. Baru setelah itu insert data baru dari smartit.
+            MonPurchaseOrder::whereBetween('tgl_po', [$from, $to])->delete();
 
-            MonPurchaseOrder::upsert($data, uniqueBy: ['dt_po_id'], update: $updateColumns);
+            foreach (array_chunk($rows, $chunkSize) as $chunk) {
+                $data = array_map(function ($r) use ($now) {
+                    return [
+                        'klaim_fsc'     => $r->klaim_fsc,
+                        'dt_po_id'      => $r->dt_po_id,
+                        'po_id'         => $r->po_id,
+                        'jenis_po'      => $r->jenis_po,
+                        'no_po'         => $r->no_po,
+                        'tgl_po'        => $r->tgl_po,
+                        'tgl_pengiriman' => $r->tgl_pengiriman ?? null,
+                        'supplier_name' => $r->supplier_name,
+                        'barang_code'   => $r->barang_code,
+                        'barang_name'   => $r->barang_name,
+                        'satuan_order'  => $r->satuan_order,
+                        'uraian'        => $r->uraian,
+                        'spesifikasi'   => $r->spesifikasi,
+                        'jumlah_order'  => $r->jumlah_order,
+                        'harga_satuan'  => $r->harga_satuan,
+                        'harga_total'   => $r->harga_total,
+                        'harga_fob'     => $r->harga_fob,
+                        'total_fob'     => $r->total_fob,
+                        'ppn'           => $r->ppn,
+                        'pph'           => $r->pph,
+                        'discount'      => $r->discount,
+                        'biaya'         => $r->biaya,
+                        'valas'         => $r->valas,
+                        'note'          => $r->note,
+                        'create_by'     => $r->create_by,
+                        'create_date'   => $r->create_date,
+                        'ncv'           => $r->ncv,
+                        'jumlah_doc'    => $r->jumlah_doc,
+                        'total_in'      => $r->total_in,
+                        'out_req'       => $r->out_req,
+                        'total_req'     => $r->total_req,
+                        'out_prod'      => $r->out_prod,
+                        'total_prod'    => $r->total_prod,
+                        'out_doc'       => $r->out_doc,
+                        'total_doc'     => $r->total_doc,
+                        'digit'         => $r->digit,
+                        'total_order'   => $r->total_order,
+                        'total_harga'   => $r->total_harga,
+                        'sisa'          => $r->sisa,
+                        'total_sisa'    => $r->total_sisa,
+                        'total_gudang'  => $r->total_gudang,
+                        'total_wip'     => $r->total_wip,
+                        'updated_at'    => $now,
+                        'created_at'    => $now,
+                    ];
+                }, $chunk);
 
-            $upserted += count($data);
-        }
+                MonPurchaseOrder::insert($data);
 
-        $this->info("Selesai. {$upserted} baris PO di-upsert ke mon_purchase_orders.");
+                $inserted += count($data);
+            }
+        });
+
+        $this->info("Selesai. {$inserted} baris PO diinsert ke mon_purchase_orders (data lama pada rentang tanggal ini dihapus lebih dulu).");
 
         return self::SUCCESS;
     }

@@ -120,98 +120,67 @@ class SyncWorkOrderFromSmartit extends Command
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
-        $upserted = 0;
-
-        $updateColumns = [
-            'prod_id',
-            'code_prod',
-            'product_code',
-            'jumlah_prod',
-            'tgl_prod',
-            'tgl_doc',
-            'target_hari',
-            'note',
-            'warehouse_id',
-            'status',
-            'plan_create_by',
-            'plan_create_date',
-            'plan_modify_by',
-            'plan_modify_date',
-            'flag_type',
-            'product_name',
-            'bom_prod_id',
-            'barang_code',
-            'uraian',
-            'spesifikasi',
-            'departemen',
-            'cons',
-            'scrap_percent',
-            'bom_create_by',
-            'bom_create_date',
-            'bom_modify_by',
-            'bom_modify_date',
-            'auto_create',
-            'komponen',
-            'bom_jumlah_prod',
-            'barang_name',
-            'satuan_code',
-            'request',
-            'total',
-            'actual_cons',
-            'updated_at',
-        ];
+        $inserted = 0;
 
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 38);
 
-        foreach (array_chunk($rows, $chunkSize) as $chunk) {
-            $data = array_map(function ($r) use ($now) {
-                return [
-                    'wo_id'             => $r->wo_id,
-                    'prod_id'           => $r->prod_id,
-                    'code_prod'         => $r->code_prod,
-                    'product_code'      => $r->product_code,
-                    'jumlah_prod'       => $r->jumlah_prod,
-                    'tgl_prod'          => $r->tgl_prod,
-                    'tgl_doc'           => $r->tgl_doc,
-                    'target_hari'       => $r->target_hari,
-                    'note'              => $r->note,
-                    'warehouse_id'      => $r->warehouse_id,
-                    'status'            => $r->status,
-                    'plan_create_by'    => $r->plan_create_by,
-                    'plan_create_date'  => $r->plan_create_date,
-                    'plan_modify_by'    => $r->plan_modify_by,
-                    'plan_modify_date'  => $r->plan_modify_date,
-                    'flag_type'         => $r->flag_type,
-                    'product_name'      => $r->product_name,
-                    'bom_prod_id'       => $r->bom_prod_id,
-                    'barang_code'       => $r->barang_code,
-                    'uraian'            => $r->uraian,
-                    'spesifikasi'       => $r->spesifikasi,
-                    'departemen'        => $r->departemen,
-                    'cons'              => $r->cons,
-                    'scrap_percent'     => $r->scrap_percent,
-                    'bom_create_by'     => $r->bom_create_by,
-                    'bom_create_date'   => $r->bom_create_date,
-                    'bom_modify_by'     => $r->bom_modify_by,
-                    'bom_modify_date'   => $r->bom_modify_date,
-                    'auto_create'       => $r->auto_create,
-                    'komponen'          => $r->komponen,
-                    'bom_jumlah_prod'   => $r->bom_jumlah_prod,
-                    'barang_name'       => $r->barang_name,
-                    'satuan_code'       => $r->satuan_code,
-                    'request'           => $r->request,
-                    'total'             => $r->total,
-                    'actual_cons'       => $r->actual_cons,
-                    'updated_at'        => $now,
-                    'created_at'        => $now,
-                ];
-            }, $chunk);
+        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
+            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
+            // disinkron (bukan truncate seluruh tabel), supaya data
+            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
+            // terhapus. Baru setelah itu insert data baru dari smartit.
+            MonWorkOrder::whereBetween('tgl_prod', [$from, $to])->delete();
 
-            MonWorkOrder::upsert($data, uniqueBy: ['wo_id'], update: $updateColumns);
-            $upserted += count($data);
-        }
+            foreach (array_chunk($rows, $chunkSize) as $chunk) {
+                $data = array_map(function ($r) use ($now) {
+                    return [
+                        'wo_id'             => $r->wo_id,
+                        'prod_id'           => $r->prod_id,
+                        'code_prod'         => $r->code_prod,
+                        'product_code'      => $r->product_code,
+                        'jumlah_prod'       => $r->jumlah_prod,
+                        'tgl_prod'          => $r->tgl_prod,
+                        'tgl_doc'           => $r->tgl_doc,
+                        'target_hari'       => $r->target_hari,
+                        'note'              => $r->note,
+                        'warehouse_id'      => $r->warehouse_id,
+                        'status'            => $r->status,
+                        'plan_create_by'    => $r->plan_create_by,
+                        'plan_create_date'  => $r->plan_create_date,
+                        'plan_modify_by'    => $r->plan_modify_by,
+                        'plan_modify_date'  => $r->plan_modify_date,
+                        'flag_type'         => $r->flag_type,
+                        'product_name'      => $r->product_name,
+                        'bom_prod_id'       => $r->bom_prod_id,
+                        'barang_code'       => $r->barang_code,
+                        'uraian'            => $r->uraian,
+                        'spesifikasi'       => $r->spesifikasi,
+                        'departemen'        => $r->departemen,
+                        'cons'              => $r->cons,
+                        'scrap_percent'     => $r->scrap_percent,
+                        'bom_create_by'     => $r->bom_create_by,
+                        'bom_create_date'   => $r->bom_create_date,
+                        'bom_modify_by'     => $r->bom_modify_by,
+                        'bom_modify_date'   => $r->bom_modify_date,
+                        'auto_create'       => $r->auto_create,
+                        'komponen'          => $r->komponen,
+                        'bom_jumlah_prod'   => $r->bom_jumlah_prod,
+                        'barang_name'       => $r->barang_name,
+                        'satuan_code'       => $r->satuan_code,
+                        'request'           => $r->request,
+                        'total'             => $r->total,
+                        'actual_cons'       => $r->actual_cons,
+                        'updated_at'        => $now,
+                        'created_at'        => $now,
+                    ];
+                }, $chunk);
 
-        $this->info("Selesai. {$upserted} baris Work Order/BOM di-upsert ke mon_work_orders.");
+                MonWorkOrder::insert($data);
+                $inserted += count($data);
+            }
+        });
+
+        $this->info("Selesai. {$inserted} baris Work Order/BOM diinsert ke mon_work_orders (data lama pada rentang tanggal ini dihapus lebih dulu).");
         return self::SUCCESS;
     }
 }
