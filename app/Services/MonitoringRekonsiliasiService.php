@@ -131,11 +131,7 @@ class MonitoringRekonsiliasiService
         $need = 0.0;
         if ($this->hasCpo()) {
             $need = (float) DB::table('mon_work_orders as wo')
-                ->join('mon_boms as b', function ($join) {
-                    $join->on('wo.product_code', '=', 'b.barang_jadi')
-                        ->on('wo.barang_code', '=', 'b.barang_code');
-                })
-                ->whereIn('b.uraian', $this->filterUraianList())
+                ->whereIn('wo.uraian', $this->filterUraianList())
                 ->where('wo.satuan_code', 'KGM')
                 ->sum('wo.request') ?? 0;
         }
