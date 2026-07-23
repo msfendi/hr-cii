@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\MsBarang;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 
@@ -12,9 +13,13 @@ use Illuminate\Support\Collection;
  *  - mon_prod_lines      : tahapan produksi per department (Production Result),
  *                          + tahap Warehouse (dari kolom `destination`),
  *                          + scrap qty (barang_code = '01SCRP00001') untuk Fabric Usage
- *  - mon_purchase_orders : pivot Material Purchase
- *  - mon_boms            : pivot Work Order (item BOM yang belum di-PO-kan)
- *  - mon_work_orders     : sumber `request` (NEED) untuk fabric Qty, di-scope via mon_boms
+ *  - mon_shipments       : Shipment qty & detail dokumen pengeluaran BC
+ *  - mon_work_orders     : sumber `request` (NEED) untuk fabric Qty & basis ORDER%
+ *                          pada Material Achievement
+ *  - mon_ms_barangs          : master `barang_category` (sync dari smartit ms_barang),
+ *                          dipakai untuk mengelompokkan card Material Achievement
+ *                          (Fabric/Aksesoris/Packing) dan men-scope tahap produksi
+ *                          (Cutting = Bahan Setengah Jadi, tahap lain = Barang Jadi)
  *
  * Widget di-scope oleh filter Buyer / Style / CPO (uraian) -- boleh dipakai
  * satu saja, kombinasi, atau ketiganya:
@@ -106,11 +111,12 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * "FABRIC QTY (KGM)": NEED / ORDER / RECEIVED / OUT WIP untuk material
-     * kain (satuan_code = 'KGM'), di-scope ke CPO terpilih.
+     * "FABRIC QTY (KGM)": NEED / ORDER / RECEIVED / OUT WIP / STOCK untuk
+     * material kain (satuan_code = 'KGM'), di-scope ke CPO terpilih.
      *  - ORDER    : SUM(mon_rekonsiliasis.jumlah_order) WHERE satuan_code = 'KGM'.
      *  - RECEIVED : SUM(mon_rekonsiliasis.jumlah_doc) WHERE satuan_code = 'KGM'.
      *  - OUT WIP  : SUM(mon_rekonsiliasis.out_req) WHERE satuan_code = 'KGM'.
+     *  - STOCK    : SUM(mon_rekonsiliasis.saldo_gudang) WHERE satuan_code = 'KGM'.
      *  - NEED     : SUM(mon_work_orders.request) WHERE satuan_code = 'KGM',
      *               di-scope melalui join ke mon_boms (filter uraian).
      *
@@ -122,6 +128,7 @@ class MonitoringRekonsiliasiService
         $order    = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('jumlah_order') ?? 0);
         $received = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('jumlah_doc') ?? 0);
         $outWip   = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('out_req') ?? 0);
+        $stock    = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('saldo_gudang') ?? 0);
 
         // NEED dari mon_work_orders.request (kolom `request` = NEED qty hasil
         // sinkronisasi get_ppic_bom.txt, lihat SyncWorkOrderFromSmartit),
@@ -141,6 +148,7 @@ class MonitoringRekonsiliasiService
             'order'    => $order,
             'received' => $received,
             'out_wip'  => $outWip,
+            'stock'    => $stock,
         ];
     }
 
@@ -233,18 +241,28 @@ class MonitoringRekonsiliasiService
         ];
     }
 
+    /**
+     * KPI "Achievement" & "Ship Shortage" dihitung dari Shipment dibanding
+     * hasil Cutting (bukan lagi Contract), sesuai definisi baru:
+     *  - Achievement    : mon_shipments.jumlah_barang / mon_prod_lines.jumlah
+     *                     (department_id = Cutting) * 100.
+     *  - Ship Shortage  : 100% - Achievement%.
+     */
     public function summary(): array
     {
         $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
-        $shipment = (float) ($this->shipmentQuery()->sum('jumlah_barang') ?? 0);
+        $shipment = (float) ($this->shipmentSumByCategory(MsBarang::CATEGORY_JADI) ?? 0);
         $balance  = $contract - $shipment;
+
+        $deptCutting = $this->prodLineSumByDepartment('Cutting', MsBarang::CATEGORY_WIP);
+        $achievementPct = $deptCutting > 0 ? round($shipment / $deptCutting * 100, 1) : 0;
 
         return [
             'contract_qty'    => $contract,
             'shipment_qty'    => $shipment,
             'balance_qty'     => $balance,
-            'achievement_pct' => $contract > 0 ? round($shipment / $contract * 100, 1) : 0,
-            'shortage_pct'    => $contract > 0 ? round($balance / $contract * 100, 1) : 0,
+            'achievement_pct' => $achievementPct,
+            'shortage_pct'    => round(100 - $achievementPct, 1),
         ];
     }
 
@@ -258,53 +276,126 @@ class MonitoringRekonsiliasiService
             ->pluck('tgl_bukti');
     }
 
+    /**
+     * "MATERIAL ACHIEVEMENT": persentase tiap tahap dihitung berantai
+     * (bukan lagi sama-sama dibagi ORDER):
+     *  - ORDER%    : mon_rekonsiliasis.jumlah_order / mon_work_orders.request (NEED).
+     *  - RECEIVED% : mon_rekonsiliasis.jumlah_doc / mon_rekonsiliasis.jumlah_order.
+     *  - OUT PROD% : mon_rekonsiliasis.out_req / mon_rekonsiliasis.jumlah_doc.
+     *  - STOCK%    : mon_rekonsiliasis.saldo_gudang / mon_rekonsiliasis.jumlah_doc.
+     *
+     * Setiap baris juga dibawakan `barang_category` (dari mon_ms_barangs, via
+     * barang_code) supaya frontend bisa memecah chart menjadi 3 card:
+     * Fabric (Bahan Baku Lokal/Import), Aksesoris (Bahan Penolong),
+     * Packing (Packaging).
+     */
     public function materialAchievement(): Collection
     {
         $rows = $this->rekonQuery()
-            ->select('barang_name')
+            ->select('barang_code', 'barang_name')
             ->selectRaw('SUM(jumlah_order) as jumlah_order')
             ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
-            ->selectRaw('SUM(out_prod) as out_prod')
+            ->selectRaw('SUM(out_req) as out_req')
             ->selectRaw('SUM(saldo_gudang) as saldo_gudang')
-            ->groupBy('barang_name')
+            ->groupBy('barang_code', 'barang_name')
             ->orderBy('barang_name')
             ->get();
 
-        return $rows->map(function ($r) {
+        if ($rows->isEmpty()) {
+            return $rows;
+        }
+
+        // NEED per barang_code dari mon_work_orders.request, di-scope ke CPO
+        // yang sama dengan widget lain (lihat fabricQty()).
+        $needByCode = collect();
+        if ($this->hasCpo()) {
+            $needByCode = DB::table('mon_work_orders')
+                ->whereIn('uraian', $this->filterUraianList())
+                ->select('barang_code')
+                ->selectRaw('SUM(request) as request')
+                ->groupBy('barang_code')
+                ->get()
+                ->keyBy('barang_code');
+        }
+
+        // Kategori barang (Fabric/Aksesoris/Packing) dari mon_ms_barangs.
+        $codes = $rows->pluck('barang_code')->filter()->unique()->values();
+        $categoryByCode = $codes->isEmpty()
+            ? collect()
+            : DB::table('mon_ms_barangs')->whereIn('barang_code', $codes)->pluck('barang_category', 'barang_code');
+
+        return $rows->map(function ($r) use ($needByCode, $categoryByCode) {
             $order = (float) $r->jumlah_order;
-            $pct = fn($v) => $order > 0 ? round(max(0, (float) $v) / $order * 100) : 0;
+            $doc   = (float) $r->jumlah_doc;
+            $need  = (float) ($needByCode[$r->barang_code]->request ?? 0);
+
+            $pct = fn($num, $denom) => $denom > 0 ? round(max(0, (float) $num) / $denom * 100) : 0;
 
             return (object) [
-                'barang_name'  => $r->barang_name,
-                'order_pct'    => $order > 0 ? 100 : 0,
-                'received_pct' => $pct($r->jumlah_doc),
-                'out_prod_pct' => $pct($r->out_prod),
-                'stock_pct'    => $pct($r->saldo_gudang),
+                'barang_code'     => $r->barang_code,
+                'barang_name'     => $r->barang_name,
+                'barang_category' => $categoryByCode[$r->barang_code] ?? null,
+                'material_group'  => $this->materialAchievementGroup($categoryByCode[$r->barang_code] ?? null),
+                'order_pct'       => $pct($order, $need),
+                'received_pct'    => $pct($doc, $order),
+                'out_prod_pct'    => $pct($r->out_req, $doc),
+                'stock_pct'       => $pct($r->saldo_gudang, $doc),
             ];
         });
     }
 
+    /**
+     * Kelompokkan barang_category smartit ke salah satu dari 3 card chart
+     * Material Achievement. Kategori di luar ketiga grup ini (mis. Scrap,
+     * Inventaris) ditandai 'lainnya' dan tidak ditampilkan di card manapun.
+     */
+    private function materialAchievementGroup(?string $barangCategory): string
+    {
+        return match (true) {
+            in_array($barangCategory, MsBarang::GROUP_FABRIC, true)    => 'fabric',
+            in_array($barangCategory, MsBarang::GROUP_AKSESORIS, true) => 'aksesoris',
+            in_array($barangCategory, MsBarang::GROUP_PACKING, true)   => 'packing',
+            default => 'lainnya',
+        };
+    }
+
+    /**
+     * Tahap produksi (Cutting → Sewing → Packing → Warehouse → Shipment),
+     * masing-masing di-scope ke kategori barang lewat mon_ms_barangs:
+     *  - Cutting                         : barang_category = Bahan Setengah Jadi
+     *  - Sewing / Packing / Warehouse /
+     *    Shipment (produk jadi)          : barang_category = Barang Jadi
+     *
+     * Sumber qty per tahap:
+     *  - Cutting   : mon_prod_lines.jumlah, department_id = Cutting
+     *  - Sewing    : mon_prod_lines.jumlah, department_id = Sewing
+     *  - Packing   : mon_prod_lines.jumlah, department_id = Packing
+     *  - Warehouse : mon_prod_lines.jumlah, destination   = Warehouse
+     *  - Shipment  : mon_shipments.jumlah_barang
+     *
+     * dest_sewing & dest_packing (mon_prod_lines.jumlah per kolom
+     * `destination`) juga dihitung di sini karena dipakai sebagai basis
+     * loss per tahap, lihat pipelineLossSteps().
+     */
     public function productionPipeline(): array
     {
         $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
 
-        $cuttingDeptQty = $this->prodLineSumByDepartment('Cutting');
-        // $cutting        = $contract - $cuttingDeptQty;
-        $cutting        = $cuttingDeptQty;
+        $deptCutting = $this->prodLineSumByDepartment('Cutting', MsBarang::CATEGORY_WIP);
+        $deptSewing  = $this->prodLineSumByDepartment('Sewing', MsBarang::CATEGORY_JADI);
+        $deptPacking = $this->prodLineSumByDepartment('Packing', MsBarang::CATEGORY_JADI);
 
-        $sewing    = $this->prodLineSumByDestination('Sewing');
-        $packing   = $this->prodLineSumByDestination('Packing');
-        $warehouse = $this->prodLineSumByDestination('Warehouse');
+        $destSewing    = $this->prodLineSumByDestination('Sewing', MsBarang::CATEGORY_WIP);
+        $destPacking   = $this->prodLineSumByDestination('Packing', MsBarang::CATEGORY_JADI);
+        $destWarehouse = $this->prodLineSumByDestination('Warehouse', MsBarang::CATEGORY_JADI);
 
-        $shippedActual = (float) ($this->shipmentQuery()->sum('jumlah_barang') ?? 0);
-        // $shipment      = $warehouse - $shippedActual;
-        $shipment      = $shippedActual;
+        $shipment = $this->shipmentSumByCategory(MsBarang::CATEGORY_JADI);
 
         $departments = collect([
-            (object) ['department_id' => 'Cutting', 'jumlah' => $cutting],
-            (object) ['department_id' => 'Sewing', 'jumlah' => $sewing],
-            (object) ['department_id' => 'Packing', 'jumlah' => $packing],
-            (object) ['department_id' => 'Warehouse', 'jumlah' => $warehouse],
+            (object) ['department_id' => 'Cutting', 'jumlah' => $deptCutting],
+            (object) ['department_id' => 'Sewing', 'jumlah' => $deptSewing],
+            (object) ['department_id' => 'Packing', 'jumlah' => $deptPacking],
+            (object) ['department_id' => 'Warehouse', 'jumlah' => $destWarehouse],
         ]);
 
         $totalLoss = $contract - $shipment;
@@ -315,6 +406,15 @@ class MonitoringRekonsiliasiService
             'shipment'    => $shipment,
             'total_loss'  => $totalLoss,
             'loss_pct'    => $contract > 0 ? round($totalLoss / $contract * 100, 2) : 0,
+
+            // Nilai mentah per tahap, dipakai pipelineLossSteps() untuk
+            // menghitung loss per tahap sesuai definisi masing-masing.
+            'dept_cutting'   => $deptCutting,
+            'dept_sewing'    => $deptSewing,
+            'dept_packing'   => $deptPacking,
+            'dest_sewing'    => $destSewing,
+            'dest_packing'   => $destPacking,
+            'dest_warehouse' => $destWarehouse,
         ];
     }
 
@@ -325,43 +425,82 @@ class MonitoringRekonsiliasiService
         }
 
         $query = DB::table('mon_prod_lines')
-            ->whereIn('department_id', ['Cutting', 'Sewing', 'Packing'])
-            ->select('department_id', 'barang_code', 'barang_name')
-            ->selectRaw('SUM(jumlah) as jumlah')
-            ->groupBy('department_id', 'barang_code', 'barang_name')
-            ->orderBy('barang_name');
+            ->join('mon_ms_barangs', 'mon_ms_barangs.barang_code', '=', 'mon_prod_lines.barang_code')
+            ->whereIn('mon_prod_lines.department_id', ['Cutting', 'Sewing', 'Packing'])
+            ->where(function ($q) {
+                // Cutting = barang setengah jadi (WIP); Sewing/Packing = barang jadi.
+                $q->where(function ($q2) {
+                    $q2->where('mon_prod_lines.department_id', 'Cutting')
+                        ->where('mon_ms_barangs.barang_category', MsBarang::CATEGORY_WIP);
+                })->orWhere(function ($q2) {
+                    $q2->whereIn('mon_prod_lines.department_id', ['Sewing', 'Packing'])
+                        ->where('mon_ms_barangs.barang_category', MsBarang::CATEGORY_JADI);
+                });
+            })
+            ->where('mon_prod_lines.barang_name', 'not like', 'Pot%')
+            ->where('mon_prod_lines.barang_name', 'not like', '%Potongan%')
+            ->select('mon_prod_lines.department_id', 'mon_prod_lines.barang_code', 'mon_prod_lines.barang_name')
+            ->selectRaw('SUM(mon_prod_lines.jumlah) as jumlah')
+            ->groupBy('mon_prod_lines.department_id', 'mon_prod_lines.barang_code', 'mon_prod_lines.barang_name')
+            ->orderBy('mon_prod_lines.barang_name');
 
         $this->scopeByCodeProd($query, $this->filterUraianList());
 
         return $query->get();
     }
 
-    private function prodLineSumByDepartment(string $departmentId): float
+    private function prodLineSumByDepartment(string $departmentId, ?string $barangCategory = null): float
     {
         if (!$this->hasCpo()) {
             return 0;
         }
 
         $query = DB::table('mon_prod_lines')
-            ->where('department_id', $departmentId)
-            ->selectRaw('SUM(jumlah) as jumlah');
+            ->where('mon_prod_lines.department_id', $departmentId)
+            ->selectRaw('SUM(mon_prod_lines.jumlah) as jumlah');
+
+        if ($barangCategory !== null) {
+            $query->join('mon_ms_barangs', 'mon_ms_barangs.barang_code', '=', 'mon_prod_lines.barang_code')
+                ->where('mon_ms_barangs.barang_category', $barangCategory);
+        }
 
         $this->scopeByCodeProd($query, $this->filterUraianList());
 
         return (float) ($query->value('jumlah') ?? 0);
     }
 
-    private function prodLineSumByDestination(string $keyword): float
+    private function prodLineSumByDestination(string $keyword, ?string $barangCategory = null): float
     {
         if (!$this->hasCpo()) {
             return 0;
         }
 
         $query = DB::table('mon_prod_lines')
-            ->where('destination', 'like', "%{$keyword}%")
-            ->selectRaw('SUM(jumlah) as jumlah');
+            ->where('mon_prod_lines.destination', 'like', "%{$keyword}%")
+            ->selectRaw('SUM(mon_prod_lines.jumlah) as jumlah');
+
+        if ($barangCategory !== null) {
+            $query->join('mon_ms_barangs', 'mon_ms_barangs.barang_code', '=', 'mon_prod_lines.barang_code')
+                ->where('mon_ms_barangs.barang_category', $barangCategory);
+        }
 
         $this->scopeByCodeProd($query, $this->filterUraianList());
+
+        return (float) ($query->value('jumlah') ?? 0);
+    }
+
+    /**
+     * SUM(mon_shipments.jumlah_barang), opsional di-scope ke barang_category.
+     * mon_shipments sudah punya kolom `barang_category` sendiri (lihat
+     * shipmentByCategory()), jadi difilter langsung tanpa perlu join mon_ms_barangs.
+     */
+    private function shipmentSumByCategory(?string $barangCategory = null): float
+    {
+        $query = $this->shipmentQuery()->selectRaw('SUM(jumlah_barang) as jumlah');
+
+        if ($barangCategory !== null) {
+            $query->where('barang_category', $barangCategory);
+        }
 
         return (float) ($query->value('jumlah') ?? 0);
     }
@@ -391,59 +530,6 @@ class MonitoringRekonsiliasiService
             ->orderByDesc('saldo_gudang')
             ->limit($limit)
             ->get();
-    }
-
-    public function materialPurchasePivot(int $limit = 15): Collection
-    {
-        $query = DB::table('mon_purchase_orders as po')
-            ->select('po.barang_code', 'po.barang_name', 'po.valas', 'po.satuan_order')
-            ->selectRaw('SUM(po.jumlah_order) as jumlah_order')
-            ->selectRaw('SUM(po.jumlah_doc) as jumlah_diterima')
-            ->selectRaw('SUM(po.jumlah_order) - SUM(po.jumlah_doc) as sisa')
-            ->selectRaw('SUM(po.harga_total) as harga_total')
-            ->groupBy('po.barang_code', 'po.barang_name', 'po.valas', 'po.satuan_order')
-            ->orderByDesc(DB::raw('SUM(po.jumlah_order)'))
-            ->limit($limit);
-
-        if ($this->hasCpo()) {
-            $query->whereIn('po.uraian', $this->filterUraianList());
-        }
-
-        return $query->get();
-    }
-
-    private function baseWorkOrderQuery()
-    {
-        $poAgg = DB::table('mon_purchase_orders')
-            ->select('uraian', 'barang_code')
-            ->selectRaw('SUM(jumlah_order) as ordered_qty')
-            ->groupBy('uraian', 'barang_code');
-
-        $query = DB::table('mon_boms as b')
-            ->leftJoinSub($poAgg, 'po_agg', function ($join) {
-                $join->on('po_agg.uraian', '=', 'b.uraian')
-                    ->on('po_agg.barang_code', '=', 'b.barang_code');
-            })
-            ->whereRaw('COALESCE(po_agg.ordered_qty, 0) = 0')
-            ->select('b.uraian', 'b.barang_code', 'b.barang_name', 'b.departemen', 'b.komponen', 'b.barang_jadi')
-            ->selectRaw('SUM(b.cons) as total_cons')
-            ->groupBy('b.uraian', 'b.barang_code', 'b.barang_name', 'b.departemen', 'b.komponen', 'b.barang_jadi');
-
-        if ($this->hasCpo()) {
-            $query->whereIn('b.uraian', $this->filterUraianList());
-        }
-
-        return $query;
-    }
-
-    public function workOrderPivot(int $limit = 50): Collection
-    {
-        return $this->baseWorkOrderQuery()->orderBy('b.barang_code')->limit($limit)->get();
-    }
-
-    public function workOrderCount(): int
-    {
-        return $this->baseWorkOrderQuery()->count();
     }
 
     public function detail(): Collection
@@ -506,36 +592,68 @@ class MonitoringRekonsiliasiService
             ->get();
     }
 
+    /**
+     * Loss per tahap TIDAK lagi sekadar selisih output tahap sebelumnya vs
+     * sekarang -- tiap tahap punya basis perhitungannya sendiri:
+     *  - Cutting   : dept Cutting − Contract
+     *  - Sewing    : dest Sewing − dept Sewing
+     *  - Packing   : dest Packing − dept Packing
+     *  - Warehouse : dept Packing − dest Warehouse
+     *  - Shipment  : dest Warehouse − Shipment (basis akhir ke pengiriman aktual)
+     */
     public function pipelineLossSteps(): Collection
     {
-        $pipeline = $this->productionPipeline();
-
-        $stages = collect();
-        $stages->push((object) ['label' => 'Contract', 'qty' => $pipeline['contract']]);
-        foreach ($pipeline['departments'] as $dept) {
-            $stages->push((object) [
-                'label' => $dept->department_id ?? '-',
-                'qty'   => (float) $dept->jumlah,
-            ]);
-        }
-        $stages->push((object) ['label' => 'Shipment', 'qty' => $pipeline['shipment']]);
+        $p = $this->productionPipeline();
 
         $steps = collect();
-        for ($i = 0; $i < $stages->count() - 1; $i++) {
-            $from = $stages[$i];
-            $to = $stages[$i + 1];
-            $loss = $from->qty - $to->qty;
 
-            $steps->push((object) [
-                'process'  => "{$from->label} → {$to->label}",
-                'input'    => $from->qty,
-                'output'   => $to->qty,
-                'loss_pcs' => $loss,
-                'loss_pct' => $from->qty > 0 ? round($loss / $from->qty * 100, 2) : null,
-            ]);
-        }
+        $steps->push($this->lossStep(
+            'Contract → Cutting',
+            $p['contract'],
+            $p['dept_cutting'],
+            $p['dept_cutting'] - $p['contract']
+        ));
+
+        $steps->push($this->lossStep(
+            'Cutting → Sewing',
+            $p['dept_cutting'],
+            $p['dept_sewing'],
+            $p['dest_sewing'] - $p['dept_sewing']
+        ));
+
+        $steps->push($this->lossStep(
+            'Sewing → Packing',
+            $p['dept_sewing'],
+            $p['dept_packing'],
+            $p['dest_packing'] - $p['dept_packing']
+        ));
+
+        $steps->push($this->lossStep(
+            'Packing → Warehouse',
+            $p['dept_packing'],
+            $p['dest_warehouse'],
+            $p['dept_packing'] - $p['dest_warehouse']
+        ));
+
+        $steps->push($this->lossStep(
+            'Warehouse → Shipment',
+            $p['dest_warehouse'],
+            $p['shipment'],
+            $p['dest_warehouse'] - $p['shipment']
+        ));
 
         return $steps;
+    }
+
+    private function lossStep(string $process, float $input, float $output, float $loss): object
+    {
+        return (object) [
+            'process'  => $process,
+            'input'    => $input,
+            'output'   => $output,
+            'loss_pcs' => $loss,
+            'loss_pct' => $input > 0 ? round($loss / $input * 100, 2) : null,
+        ];
     }
 
     public function shipmentByCategory(): Collection

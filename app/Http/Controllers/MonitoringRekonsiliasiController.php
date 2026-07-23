@@ -27,8 +27,8 @@ class MonitoringRekonsiliasiController extends Controller
 
     /**
      * Endpoint AJAX tunggal yang mengisi SELURUH widget dashboard (KPI,
-     * material achievement, production result, material purchase, work
-     * order/BOM, top excess, detail) -- dipanggil ulang tiap kali CPO diganti.
+     * material achievement, production result, top excess, detail) --
+     * dipanggil ulang tiap kali CPO diganti.
      */
     public function data(Request $request)
     {
@@ -57,9 +57,6 @@ class MonitoringRekonsiliasiController extends Controller
             'materialAchievement'  => $service->materialAchievement(),
             'productionPipeline'   => $service->productionPipeline(),
             'productionResultByMaterial' => $service->productionResultByMaterial(),
-            'materialPurchase'     => $service->materialPurchasePivot(),
-            'workOrder'            => $service->workOrderPivot(),
-            'workOrderCount'       => $service->workOrderCount(),
             'topMaterialExcess'    => $service->topMaterialExcess(),
             'detail'               => $service->detail(),
             'shipmentByDate'       => $service->shipmentByDate(),
@@ -87,7 +84,7 @@ class MonitoringRekonsiliasiController extends Controller
                 'shortage_pct'    => 0,
             ],
             'shipmentDates'        => [],
-            'fabricQty'            => ['need' => 0, 'order' => 0, 'received' => 0, 'out_wip' => 0],
+            'fabricQty'            => ['need' => 0, 'order' => 0, 'received' => 0, 'out_wip' => 0, 'stock' => 0],
             'fabricUsage'          => ['use_for_gmt' => 0, 'scrap_qty' => 0, 'usage_pct' => 0, 'scrap_pct' => 0, 'consumption' => 0],
             'materialAchievement'  => [],
             'productionPipeline'   => [
@@ -98,9 +95,6 @@ class MonitoringRekonsiliasiController extends Controller
                 'loss_pct'    => 0,
             ],
             'productionResultByMaterial' => [],
-            'materialPurchase'     => [],
-            'workOrder'            => [],
-            'workOrderCount'       => 0,
             'topMaterialExcess'    => [],
             'detail'               => [],
             'shipmentByDate'       => [],
@@ -142,6 +136,33 @@ class MonitoringRekonsiliasiController extends Controller
     public function syncWorkOrder(Request $request)
     {
         return $this->runSyncCommand('monitoring:sync-work-order', $request);
+    }
+
+    /**
+     * Tombol "Sync Master Barang" -> php artisan monitoring:sync-ms-barang
+     * (master data, tidak ada opsi --year, selalu upsert semua barang_code).
+     */
+    public function syncMsBarang(Request $request)
+    {
+        set_time_limit(0);
+
+        try {
+            $exitCode = Artisan::call('monitoring:sync-ms-barang');
+            $output = trim(Artisan::output());
+
+            return response()->json([
+                'success'   => $exitCode === 0,
+                'command'   => 'monitoring:sync-ms-barang',
+                'exit_code' => $exitCode,
+                'output'    => $output,
+            ], $exitCode === 0 ? 200 : 500);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'command' => 'monitoring:sync-ms-barang',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     private function runSyncCommand(string $command, Request $request)

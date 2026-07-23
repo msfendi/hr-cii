@@ -20,7 +20,8 @@
                  data-sync-rekon-url="{{ route('monitoring.rekonsiliasi.sync') }}"
                  data-sync-prodline-url="{{ route('monitoring.rekonsiliasi.sync-prod-line') }}"
                  data-sync-shipment-url="{{ route('monitoring.rekonsiliasi.sync-shipment') }}"
-                 data-sync-workorder-url="{{ route('monitoring.rekonsiliasi.sync-work-order') }}">
+                 data-sync-workorder-url="{{ route('monitoring.rekonsiliasi.sync-work-order') }}"
+                 data-sync-ms-barang-url="{{ route('monitoring.rekonsiliasi.sync-ms-barang') }}">
 
                 {{-- ================= HEADER BAR (mirip gambar) ================= --}}
                 <div class="rekon-hero shadow mb-4">
@@ -59,6 +60,9 @@
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-work-order')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.sync-ms-barang')
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @if($canSyncAny)
@@ -165,28 +169,34 @@
                             </div>
                             <div class="card-body">
                                 <div class="row rekon-fabric-boxes">
-                                    <div class="col-6 mb-2">
+                                    <div class="col-4 mb-2">
                                         <div class="rekon-fabric-box">
                                             <div class="rekon-fabric-label">Need</div>
                                             <div class="rekon-fabric-value" id="fabric-need">0</div>
                                         </div>
                                     </div>
-                                    <div class="col-6 mb-2">
+                                    <div class="col-4 mb-2">
                                         <div class="rekon-fabric-box">
                                             <div class="rekon-fabric-label">Order</div>
                                             <div class="rekon-fabric-value" id="fabric-order">0</div>
                                         </div>
                                     </div>
-                                    <div class="col-6">
+                                    <div class="col-4 mb-2">
                                         <div class="rekon-fabric-box">
                                             <div class="rekon-fabric-label">Received</div>
                                             <div class="rekon-fabric-value" id="fabric-received">0</div>
                                         </div>
                                     </div>
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <div class="rekon-fabric-box">
                                             <div class="rekon-fabric-label">Out WIP</div>
                                             <div class="rekon-fabric-value" id="fabric-out-wip">0</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="rekon-fabric-box">
+                                            <div class="rekon-fabric-label">Stock</div>
+                                            <div class="rekon-fabric-value" id="fabric-stock">0</div>
                                         </div>
                                     </div>
                                 </div>
@@ -240,43 +250,55 @@
                     </div>
                 </div>
 
-                {{-- ================= MATERIAL ACHIEVEMENT (mon_rekonsiliasis) ================= --}}
+                {{-- ================= MATERIAL ACHIEVEMENT (mon_rekonsiliasis) =================
+                     Dipecah jadi 3 card berdasarkan mon_ms_barangs.barang_category:
+                     Fabric (Bahan Baku Lokal & Import), Aksesoris (Bahan Penolong),
+                     Packing (Packaging). Lihat MonitoringRekonsiliasiService::materialAchievement(). --}}
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">MATERIAL ACHIEVEMENT</h6>
                     </div>
                     <div class="card-body">
-                        <div class="chart-area" style="height:380px">
-                            <canvas id="chart-material-achievement"></canvas>
+                        <div class="row">
+                            <div class="col-lg-4 mb-4 mb-lg-0">
+                                <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Fabric</h6>
+                                <div class="chart-area" style="height:340px">
+                                    <canvas id="chart-material-achievement-fabric"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 mb-4 mb-lg-0">
+                                <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Aksesoris</h6>
+                                <div class="chart-area" style="height:340px">
+                                    <canvas id="chart-material-achievement-aksesoris"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Packing</h6>
+                                <div class="chart-area" style="height:340px">
+                                    <canvas id="chart-material-achievement-packing"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {{-- ================= PRODUCTION RESULT (mon_prod_lines + mon_rekonsiliasis) ================= --}}
                 <div class="row">
-                    <div class="col-lg-4 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">PRODUCTION RESULT (PCS)</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-area" style="height:260px">
-                                    <canvas id="chart-production-result"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-8 mb-4">
+                    <div class="col-lg-12 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-body">
                                 <div class="rekon-pipeline" id="rekon-pipeline">
                                     <!-- diisi JS: Contract -> per-department (mon_prod_lines) -> Warehouse -> Shipment -->
                                 </div>
                                 <div class="text-muted small mt-2 mb-3">
-                                    Cutting = Contract &minus; <code>mon_prod_lines.jumlah</code> (department_id Cutting).
-                                    Sewing/Packing/Warehouse diambil dari <code>mon_prod_lines.jumlah</code> per kolom
-                                    <code>destination</code>. Shipment = Warehouse &minus; <code>mon_shipments.jumlah_barang</code>.
+                                    Cutting = <code>mon_prod_lines.jumlah</code> (department_id = Cutting, kategori
+                                    <em>Bahan Setengah Jadi</em>). Sewing/Packing = <code>mon_prod_lines.jumlah</code>
+                                    (department_id Sewing/Packing). Warehouse = <code>mon_prod_lines.jumlah</code>
+                                    (destination = Warehouse). Sewing/Packing/Warehouse/Shipment di-scope ke kategori
+                                    <em>Barang Jadi</em>. Shipment = <code>mon_shipments.jumlah_barang</code>.
                                     Semua tahap di-scope ke <code>code_prod</code> yang mengandung kode CPO (5 digit) terpilih.
+                                    Loss: Cutting = Cutting &minus; Contract; Sewing = dest.Sewing &minus; dept.Sewing;
+                                    Packing = dest.Packing &minus; dept.Packing; Warehouse = dept.Packing &minus; dest.Warehouse.
                                 </div>
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-sm w-100" id="table-loss-steps">
@@ -297,30 +319,16 @@
                     </div>
                 </div>
 
-                {{-- ================= MATERIAL PURCHASE (mon_purchase_orders) & TOP 3 EXCESS (mon_rekonsiliasis) ================= --}}
+                {{-- ================= TOP 3 EXCESS (mon_rekonsiliasis) ================= --}}
                 <div class="row">
                     <div class="col-lg-8 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">PIVOT MATERIAL PURCHASE</h6>
+                                <h6 class="m-0 font-weight-bold text-primary">PRODUCTION RESULT (PCS)</h6>
                             </div>
                             <div class="card-body">
-                                <div class="table-responsive mon-table-box">
-                                    <table class="table table-bordered table-sm w-100" id="table-material-purchase">
-                                        <thead>
-                                            <tr>
-                                                <th>Barang Code</th>
-                                                <th>Nama Barang</th>
-                                                <th>Satuan</th>
-                                                <th>Valas</th>
-                                                <th class="right">Jumlah Order</th>
-                                                <th class="right">Jumlah Diterima</th>
-                                                <th class="right">Sisa</th>
-                                                <th class="right">Harga Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody><!-- data akan diisi oleh JS --></tbody>
-                                    </table>
+                                <div class="chart-area" style="height:260px">
+                                    <canvas id="chart-production-result"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -335,31 +343,6 @@
                                     <canvas id="chart-top-excess"></canvas>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- ================= WORK ORDER / BOM BELUM DI-PO-KAN (mon_boms + mon_purchase_orders) ================= --}}
-                <div class="card shadow mb-4">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-primary">PIVOT WORK ORDER &mdash; Item BOM Belum Diorder</h6>
-                        <span class="badge badge-warning" id="badge-workorder-count">0 item</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive mon-table-box">
-                            <table class="table table-bordered table-sm w-100" id="table-workorder">
-                                <thead>
-                                    <tr>
-                                        <th>Barang Code</th>
-                                        <th>Nama Barang</th>
-                                        <th>Departemen</th>
-                                        <th>Komponen</th>
-                                        <th>Barang Jadi</th>
-                                        <th class="right">Total Consumption</th>
-                                    </tr>
-                                </thead>
-                                <tbody><!-- data akan diisi oleh JS --></tbody>
-                            </table>
                         </div>
                     </div>
                 </div>
@@ -486,6 +469,7 @@
     const syncProdlineUrl = app.dataset.syncProdlineUrl;
     const syncShipmentUrl = app.dataset.syncShipmentUrl;
     const syncWorkOrderUrl = app.dataset.syncWorkorderUrl;
+    const syncMsBarangUrl = app.dataset.syncMsBarangUrl;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
     const fBuyer = document.getElementById('f-buyer');
@@ -546,7 +530,32 @@
         }
     })();
 
-    let chartMaterial, chartProduction, chartExcess, chartShipment, chartShipCategory, chartFabricUsage, dtDetail, dtMaterialPurchase, dtWorkOrder, dtShipment;
+    let chartMaterialFabric, chartMaterialAksesoris, chartMaterialPacking, chartProduction, chartExcess, chartShipment, chartShipCategory, chartFabricUsage, dtDetail, dtShipment;
+
+    /**
+     * Pecah label panjang jadi beberapa baris (dipakai Chart.js sebagai
+     * array = multi-line tick) supaya label tetap horizontal tapi tidak
+     * kepanjangan satu baris.
+     */
+    function wrapLabel(label, maxWidth = 14) {
+        const words = String(label ?? '-').split(' ');
+        const lines = [];
+        let current = '';
+        words.forEach(w => {
+            if ((current + ' ' + w).trim().length > maxWidth) {
+                if (current) lines.push(current.trim());
+                current = w;
+            } else {
+                current = (current + ' ' + w).trim();
+            }
+        });
+        if (current) lines.push(current);
+        return lines.length ? lines : ['-'];
+    }
+
+    // Ticks horizontal (tidak miring) + label di-wrap, dipakai chart Material
+    // Achievement & Production Result (Pcs).
+    const HORIZONTAL_WRAP_X_TICKS = { autoSkip: false, maxRotation: 0, minRotation: 0 };
 
     function buildUrl(base, params) {
         const url = new URL(base, window.location.origin);
@@ -591,6 +600,7 @@
         document.getElementById('fabric-order').textContent = fmtNum(fabricQty.order);
         document.getElementById('fabric-received').textContent = fmtNum(fabricQty.received);
         document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
+        document.getElementById('fabric-stock').textContent = fmtNum(fabricQty.stock);
     }
 
     function renderFabricUsage(fabricUsage) {
@@ -619,7 +629,7 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '62%',
+                cutout: '40%',
                 plugins: {
                     legend: { display: false },
                     tooltip: { callbacks: { label: (c) => `${c.label}: ${c.parsed}%` } },
@@ -647,15 +657,23 @@
         });
     }
 
-    function renderMaterialAchievement(rows) {
-        const ctx = document.getElementById('chart-material-achievement');
+    // canvas id + variable holder untuk tiap card Material Achievement.
+    const MATERIAL_ACHIEVEMENT_CHARTS = {
+        fabric:    { canvasId: 'chart-material-achievement-fabric' },
+        aksesoris: { canvasId: 'chart-material-achievement-aksesoris' },
+        packing:   { canvasId: 'chart-material-achievement-packing' },
+    };
+
+    function buildMaterialAchievementChart(group, rows) {
+        const meta = MATERIAL_ACHIEVEMENT_CHARTS[group];
+        const ctx = document.getElementById(meta.canvasId);
         if (typeof Chart === 'undefined' || !ctx) return;
 
-        const labels = rows.map(r => r.barang_name ?? '-');
+        const labels = rows.map(r => wrapLabel(r.barang_name));
         const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
 
-        if (chartMaterial) chartMaterial.destroy();
-        chartMaterial = new Chart(ctx, {
+        if (meta.chart) meta.chart.destroy();
+        meta.chart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels,
@@ -669,13 +687,33 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' } } },
+                scales: {
+                    x: { ticks: HORIZONTAL_WRAP_X_TICKS },
+                    y: { beginAtZero: true, ticks: { callback: v => v + '%' } },
+                },
                 plugins: {
                     legend: { position: 'bottom' },
                     tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y}%` } },
                 },
             },
         });
+    }
+
+    /**
+     * Pecah baris Material Achievement (payload sudah membawa `material_group`
+     * dari service: fabric / aksesoris / packing / lainnya) jadi 3 chart
+     * terpisah. Kategori 'lainnya' tidak ditampilkan di card manapun.
+     */
+    function renderMaterialAchievement(rows) {
+        rows = rows || [];
+        const byGroup = { fabric: [], aksesoris: [], packing: [] };
+        rows.forEach(r => {
+            if (byGroup[r.material_group]) byGroup[r.material_group].push(r);
+        });
+
+        buildMaterialAchievementChart('fabric', byGroup.fabric);
+        buildMaterialAchievementChart('aksesoris', byGroup.aksesoris);
+        buildMaterialAchievementChart('packing', byGroup.packing);
     }
 
     const DEPT_COLORS = { Cutting: '#4e73df', Sewing: '#1cc88a', Packing: '#f6a533' };
@@ -700,11 +738,14 @@
             if (chartProduction) chartProduction.destroy();
             chartProduction = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: materialLabels, datasets },
+                data: { labels: materialLabels.map(wrapLabel), datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true } },
+                    scales: {
+                        x: { ticks: HORIZONTAL_WRAP_X_TICKS },
+                        y: { beginAtZero: true },
+                    },
                     plugins: {
                         legend: { position: 'bottom' },
                         tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtNum(c.parsed.y)}` } },
@@ -794,25 +835,6 @@
         `).join('');
     }
 
-    function renderMaterialPurchase(rows) {
-        const tbody = document.querySelector('#table-material-purchase tbody');
-        tbody.innerHTML = rows.map(r => `
-            <tr>
-                <td>${r.barang_code ?? '-'}</td>
-                <td>${r.barang_name ?? '-'}</td>
-                <td>${r.satuan_order ?? '-'}</td>
-                <td>${r.valas ?? '-'}</td>
-                <td class="right">${fmtNum(r.jumlah_order)}</td>
-                <td class="right">${fmtNum(r.jumlah_diterima)}</td>
-                <td class="right">${fmtNum(r.sisa)}</td>
-                <td class="right">${fmtNum(r.harga_total)}</td>
-            </tr>
-        `).join('');
-
-        if (dtMaterialPurchase) dtMaterialPurchase.destroy();
-        dtMaterialPurchase = $('#table-material-purchase').DataTable({ pageLength: 10, order: [], autoWidth: false, width: '100%' });
-    }
-
     function renderTopExcess(rows) {
         const ctx = document.getElementById('chart-top-excess');
         if (typeof Chart === 'undefined' || !ctx) return;
@@ -826,25 +848,6 @@
             data: { labels, datasets: [{ data, backgroundColor: ['#1cc88a', '#f6a533', '#4e73df'] }] },
             options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
         });
-    }
-
-    function renderWorkOrder(rows, count) {
-        document.getElementById('badge-workorder-count').textContent = fmtNum(count) + ' item';
-
-        const tbody = document.querySelector('#table-workorder tbody');
-        tbody.innerHTML = rows.map(r => `
-            <tr>
-                <td>${r.barang_code ?? '-'}</td>
-                <td>${r.barang_name ?? '-'}</td>
-                <td>${r.departemen ?? '-'}</td>
-                <td>${r.komponen ?? '-'}</td>
-                <td>${r.barang_jadi ?? '-'}</td>
-                <td class="right">${fmtNum(r.total_cons)}</td>
-            </tr>
-        `).join('');
-
-        if (dtWorkOrder) dtWorkOrder.destroy();
-        dtWorkOrder = $('#table-workorder').DataTable({ pageLength: 10, order: [], autoWidth: false, width: '100%' });
     }
 
     function renderShipmentCategory(rows) {
@@ -940,9 +943,7 @@
         renderMaterialAchievement(json.materialAchievement);
         renderProductionResult(json.productionPipeline, json.productionResultByMaterial, json.pipelineLossSteps);
         renderLossSteps(json.pipelineLossSteps);
-        renderMaterialPurchase(json.materialPurchase);
         renderTopExcess(json.topMaterialExcess);
-        renderWorkOrder(json.workOrder, json.workOrderCount);
         renderShipment(json.shipmentByDate, json.shipmentDetail);
         renderShipmentCategory(json.shipmentByCategory);
         renderDetail(json.detail);
@@ -987,6 +988,11 @@
     // ========= PERBAIKAN UTAMA: sync all dengan timeout lebih panjang dan penanganan respons =========
     function runSyncAll() {
         const steps = [
+            // Master barang disinkron duluan supaya barang_category sudah
+            // up-to-date sebelum widget-widget lain (yang di-scope via
+            // mon_ms_barangs, mis. Material Achievement & Production Pipeline)
+            // ikut disinkron.
+            { url: syncMsBarangUrl, label: 'Sync Master Barang' },
             { url: syncRekonUrl, label: 'Sync Rekonsiliasi' },
             { url: syncProdlineUrl, label: 'Sync Production Line' },
             { url: syncShipmentUrl, label: 'Sync Shipment' },

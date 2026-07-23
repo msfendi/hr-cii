@@ -1097,6 +1097,7 @@ Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permissio
     Route::post('/rekonsiliasi/sync-prod-line', [MonitoringRekonsiliasiController::class, 'syncProdLine'])->name('rekonsiliasi.sync-prod-line');
     Route::post('/rekonsiliasi/sync-shipment', [MonitoringRekonsiliasiController::class, 'syncShipment'])->name('rekonsiliasi.sync-shipment');
     Route::post('/rekonsiliasi/sync-work-order', [MonitoringRekonsiliasiController::class, 'syncWorkOrder'])->name('rekonsiliasi.sync-work-order');
+    Route::post('/rekonsiliasi/sync-ms-barang', [MonitoringRekonsiliasiController::class, 'syncMsBarang'])->name('rekonsiliasi.sync-ms-barang');
 });
 
 
