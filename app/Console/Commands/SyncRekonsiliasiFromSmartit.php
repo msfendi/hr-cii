@@ -9,28 +9,15 @@ use Illuminate\Support\Facades\DB;
 
 class SyncRekonsiliasiFromSmartit extends Command
 {
-    /**
-     * php artisan monitoring:sync-rekonsiliasi
-     * php artisan monitoring:sync-rekonsiliasi --year=2026
-     * php artisan monitoring:sync-rekonsiliasi --from=2026-01-01 --to=2026-12-31
-     */
-    protected $signature = 'monitoring:sync-rekonsiliasi
-        {--year= : Tahun tgl_po yang disinkron, default tahun berjalan}
-        {--from= : Override tanggal mulai (Y-m-d)}
-        {--to= : Override tanggal akhir (Y-m-d)}';
+    protected $signature = 'monitoring:sync-rekonsiliasi';
 
-    protected $description = 'Sinkronisasi sheet Rekonsiliasi dari database smartit (get_rekonsiliasi.txt) ke tabel mon_rekonsiliasis';
+    protected $description = 'Sinkronisasi FULL sheet Rekonsiliasi dari smartit (tanpa filter tanggal) ke tabel mon_rekonsiliasis';
 
     public function handle(): int
     {
-        $year = $this->option('year') ?: now()->year;
-        $from = $this->option('from') ?: "{$year}-01-01";
-        $to = $this->option('to') ?: "{$year}-12-31";
+        $this->info('Mengambil SEMUA data Rekonsiliasi dari smartit ...');
 
-        $this->info("Mengambil data Rekonsiliasi dari smartit, tgl_po {$from} s/d {$to} ...");
-
-        // ========== QUERY YANG SUDAH DIPERBAIKI ==========
-        // CTE dipindahkan ke awal, tidak lagi berada di dalam subquery.
+        // Query tanpa WHERE tanggal
         $sql = <<<SQL
             WITH jumlah_doc AS (
                 SELECT dt_po_id, SUM(jumlah_doc) AS jumlah_doc, SUM(jumlah_barang) AS jumlah_barang
@@ -119,11 +106,10 @@ class SyncRekonsiliasiFromSmartit extends Command
             LEFT JOIN out_req rq ON rq.dt_po_id = podt.dt_po_id
             LEFT JOIN out_prod op ON op.dt_po_id = podt.dt_po_id
             LEFT JOIN out_doc od ON od.dt_po_id = podt.dt_po_id
-            WHERE pohd.tgl_po >= ? AND pohd.tgl_po <= ?
             ORDER BY pohd.tgl_po
         SQL;
 
-        $rows = DB::connection('smartit')->select($sql, [$from, $to]);
+        $rows = DB::connection('smartit')->select($sql);
 
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
@@ -132,12 +118,9 @@ class SyncRekonsiliasiFromSmartit extends Command
 
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 29);
 
-        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
-            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
-            // disinkron (bukan truncate seluruh tabel), supaya data
-            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
-            // terhapus. Baru setelah itu insert data baru dari smartit.
-            MonRekonsiliasi::whereBetween('tgl_po', [$from, $to])->delete();
+        DB::transaction(function () use ($rows, $chunkSize, $now, &$inserted) {
+            // Hapus semua data lama sebelum insert ulang
+            MonRekonsiliasi::truncate();
 
             foreach (array_chunk($rows, $chunkSize) as $chunk) {
                 $data = array_map(function ($r) use ($now) {
@@ -176,12 +159,11 @@ class SyncRekonsiliasiFromSmartit extends Command
                 }, $chunk);
 
                 MonRekonsiliasi::insert($data);
-
                 $inserted += count($data);
             }
         });
 
-        $this->info("Selesai. {$inserted} baris Rekonsiliasi diinsert ke mon_rekonsiliasis (data lama pada rentang tanggal ini dihapus lebih dulu).");
+        $this->info("Selesai. {$inserted} baris Rekonsiliasi diinsert ke mon_rekonsiliasis (seluruh data lama dihapus).");
 
         return self::SUCCESS;
     }

@@ -9,29 +9,15 @@ use Illuminate\Support\Facades\DB;
 
 class SyncProdLineFromSmartit extends Command
 {
-    /**
-     * php artisan monitoring:sync-prod-line
-     * php artisan monitoring:sync-prod-line --year=2026
-     * php artisan monitoring:sync-prod-line --from=2026-01-01 --to=2026-12-31
-     */
-    protected $signature = 'monitoring:sync-prod-line
-        {--year= : Tahun tgl_produksi yang disinkron, default tahun berjalan}
-        {--from= : Override tanggal mulai (Y-m-d)}
-        {--to= : Override tanggal akhir (Y-m-d)}';
+    protected $signature = 'monitoring:sync-prod-line';
 
-    protected $description = 'Sinkronisasi sheet Production Line dari database smartit (get_prod_line_2026.txt) ke tabel mon_prod_lines';
+    protected $description = 'Sinkronisasi FULL data Production Line dari smartit (tanpa filter tanggal) ke tabel mon_prod_lines';
 
     public function handle(): int
     {
-        $year = $this->option('year') ?: now()->year;
-        $from = $this->option('from') ?: "{$year}-01-01";
-        $to = $this->option('to') ?: "{$year}-12-31";
+        $this->info('Mengambil SEMUA data Production Line dari smartit ...');
 
-        $this->info("Mengambil data Production Line dari smartit, tgl_produksi {$from} s/d {$to} ...");
-
-        // Query persis dari get_prod_line_2026.txt, hanya bagian WHERE tgl_produksi
-        // di akhir yang diparameterisasi (query aslinya tidak difilter tanggal sama sekali,
-        // filter ditambahkan di sini supaya sinkronisasi bisa dijalankan per-tahun/per-range).
+        // Query tanpa WHERE tanggal
         $sql = <<<SQL
             SELECT hd.line_id, phd.code_prod, hd.department_id, hd.tgl_produksi, hd.barang_code, b.barang_name, b.barang_category, hd.jumlah, hd.destination, hd.no_surat_jalan,
                    hd.create_by, FORMAT(hd.create_date, 'yyyy-MM-dd HH:mm') AS create_date
@@ -39,27 +25,20 @@ class SyncProdLineFromSmartit extends Command
             FROM line_hd hd
             inner join ms_barang b on b.barang_code = hd.barang_code
             INNER JOIN prd_plan_hd phd on hd.prod_id = phd.prod_id
-            WHERE hd.tgl_produksi >= ? AND hd.tgl_produksi <= ?
             ORDER BY hd.tgl_produksi ASC
         SQL;
 
-        $rows = DB::connection('smartit')->select($sql, [$from, $to]);
+        $rows = DB::connection('smartit')->select($sql);
 
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
         $inserted = 0;
 
-        // 15 kolom per baris -> hitung otomatis biar total parameter per batch
-        // aman di bawah limit SQL Server (2100 bound parameters per query).
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 15);
 
-        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
-            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
-            // disinkron (bukan truncate seluruh tabel), supaya data
-            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
-            // terhapus. Baru setelah itu insert data baru dari smartit.
-            MonProdLine::whereBetween('tgl_produksi', [$from, $to])->delete();
+        DB::transaction(function () use ($rows, $chunkSize, $now, &$inserted) {
+            MonProdLine::truncate();
 
             foreach (array_chunk($rows, $chunkSize) as $chunk) {
                 $data = array_map(function ($r) use ($now) {
@@ -84,12 +63,11 @@ class SyncProdLineFromSmartit extends Command
                 }, $chunk);
 
                 MonProdLine::insert($data);
-
                 $inserted += count($data);
             }
         });
 
-        $this->info("Selesai. {$inserted} baris Production Line diinsert ke mon_prod_lines (data lama pada rentang tanggal ini dihapus lebih dulu).");
+        $this->info("Selesai. {$inserted} baris Production Line diinsert ke mon_prod_lines (seluruh data lama dihapus).");
 
         return self::SUCCESS;
     }

@@ -13,7 +13,9 @@ class MonitoringRekonsiliasiController extends Controller
     {
         // uraian = CPO spesifik; brand/style dipakai untuk search tanpa harus
         // memilih 1 CPO (lihat MonitoringRekonsiliasiService::filterUraianList()).
-        $filters = $request->only(['uraian', 'brand', 'style']);
+        // negara = filter tambahan berdasarkan negara supplier shipment (lihat
+        // MonitoringRekonsiliasiService::cpoListForNegara()).
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara']);
         $service = MonitoringRekonsiliasiService::make($filters);
 
         return view('monitoring.rekonsiliasi', [
@@ -22,6 +24,8 @@ class MonitoringRekonsiliasiController extends Controller
             // Kombinasi Buyer (brand) / Style / CPO (uraian) dari mon_orders,
             // dipakai frontend untuk 3 select2 filter yang saling berkaitan.
             'filterOptions' => $service->orderFilterOptions(),
+            // Dropdown filter Negara, diambil dari mon_ms_suppliers + mon_ms_negaras.
+            'negaraOptions' => $service->negaraOptions(),
         ]);
     }
 
@@ -35,14 +39,16 @@ class MonitoringRekonsiliasiController extends Controller
         // uraian = CPO spesifik. brand/style boleh dipakai sendiri-sendiri
         // atau dikombinasikan sebagai pengganti uraian -- service akan
         // me-resolve semua CPO yang match lalu menggabungkan datanya.
-        $filters = $request->only(['uraian', 'brand', 'style']);
+        // negara = filter tambahan/berdiri sendiri berdasarkan negara supplier
+        // shipment -- boleh dipakai sendirian tanpa Buyer/Style/CPO.
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara']);
 
-        // Kalau belum ada filter SAMA SEKALI (uraian, brand, maupun style),
-        // JANGAN jalankan query berat (full-scan tanpa scope bisa menarik
-        // seluruh tabel sekaligus untuk banyak widget). Cukup balikan payload
-        // kosong; dashboard baru menarik data sesungguhnya setelah user
-        // memilih minimal satu dari Buyer / Style / CPO.
-        if (empty($filters['uraian']) && empty($filters['brand']) && empty($filters['style'])) {
+        // Kalau belum ada filter SAMA SEKALI (uraian, brand, style, maupun
+        // negara), JANGAN jalankan query berat (full-scan tanpa scope bisa
+        // menarik seluruh tabel sekaligus untuk banyak widget). Cukup balikan
+        // payload kosong; dashboard baru menarik data sesungguhnya setelah
+        // user memilih minimal satu dari Buyer / Style / CPO / Negara.
+        if (empty($filters['uraian']) && empty($filters['brand']) && empty($filters['style']) && empty($filters['negara'])) {
             return response()->json($this->emptyPayload());
         }
 
@@ -63,6 +69,48 @@ class MonitoringRekonsiliasiController extends Controller
             'shipmentDetail'       => $service->shipmentDetail(),
             'pipelineLossSteps'    => $service->pipelineLossSteps(),
             'shipmentByCategory'   => $service->shipmentByCategory(),
+        ]);
+    }
+
+    /**
+     * Data kalender (jumlah dokumen shipment per tanggal `tgl_bukti`) dari
+     * mon_shipments, untuk satu bulan tertentu -- dipakai widget "Shipment
+     * Date". Query: ?year=2026&month=7 (plus filter uraian/brand/style/negara).
+     */
+    public function calendar(Request $request)
+    {
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara']);
+        $year  = (int) $request->input('year', now()->year);
+        $month = (int) $request->input('month', now()->month);
+
+        $service = MonitoringRekonsiliasiService::make($filters);
+
+        return response()->json([
+            'year'  => $year,
+            'month' => $month,
+            'days'  => $service->shipmentCalendar($year, $month),
+        ]);
+    }
+
+    /**
+     * Detail dokumen shipment untuk satu tanggal `tgl_bukti` spesifik
+     * (dipanggil saat tanggal di kalender Shipment Date diklik).
+     * Query: ?date=2026-07-15
+     */
+    public function calendarDetail(Request $request)
+    {
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara']);
+        $date = $request->input('date');
+
+        if (!$date) {
+            return response()->json(['message' => 'Parameter date wajib diisi.'], 422);
+        }
+
+        $service = MonitoringRekonsiliasiService::make($filters);
+
+        return response()->json([
+            'date' => $date,
+            'rows' => $service->shipmentCalendarDetail($date),
         ]);
     }
 
@@ -144,22 +192,52 @@ class MonitoringRekonsiliasiController extends Controller
      */
     public function syncMsBarang(Request $request)
     {
+        return $this->runSyncCommandNoYear('monitoring:sync-ms-barang');
+    }
+
+    /**
+     * Tombol "Sync Master Negara" -> php artisan monitoring:sync-ms-negara
+     * (master data, tidak ada opsi --year, selalu kosongkan tabel lalu insert
+     * ulang semua negara_code -- bukan upsert).
+     */
+    public function syncMsNegara(Request $request)
+    {
+        return $this->runSyncCommandNoYear('monitoring:sync-ms-negara');
+    }
+
+    /**
+     * Tombol "Sync Master Supplier" -> php artisan monitoring:sync-ms-supplier
+     * (master data, tidak ada opsi --year, selalu kosongkan tabel lalu insert
+     * ulang semua supplier_code -- bukan upsert). Sebaiknya dijalankan
+     * SETELAH sync-ms-negara supaya mapping negara_id sudah lengkap.
+     */
+    public function syncMsSupplier(Request $request)
+    {
+        return $this->runSyncCommandNoYear('monitoring:sync-ms-supplier');
+    }
+
+    /**
+     * Variant runSyncCommand() untuk command master data yang TIDAK punya
+     * opsi --year (mis. sync-ms-barang, sync-ms-negara, sync-ms-supplier).
+     */
+    private function runSyncCommandNoYear(string $command)
+    {
         set_time_limit(0);
 
         try {
-            $exitCode = Artisan::call('monitoring:sync-ms-barang');
+            $exitCode = Artisan::call($command);
             $output = trim(Artisan::output());
 
             return response()->json([
                 'success'   => $exitCode === 0,
-                'command'   => 'monitoring:sync-ms-barang',
+                'command'   => $command,
                 'exit_code' => $exitCode,
                 'output'    => $output,
             ], $exitCode === 0 ? 200 : 500);
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,
-                'command' => 'monitoring:sync-ms-barang',
+                'command' => $command,
                 'message' => $e->getMessage(),
             ], 500);
         }
@@ -174,21 +252,33 @@ class MonitoringRekonsiliasiController extends Controller
         set_time_limit(0);
 
         try {
-            $exitCode = Artisan::call($command, ['--year' => $year]);
+            // $exitCode = Artisan::call($command, ['--year' => $year]);
+            $exitCode = Artisan::call($command);
             $output = trim(Artisan::output());
 
             return response()->json([
                 'success'   => $exitCode === 0,
-                'command'   => "{$command} --year={$year}",
+                // 'command'   => "{$command} --year={$year}",
+                'command'   => "{$command}",
                 'exit_code' => $exitCode,
                 'output'    => $output,
             ], $exitCode === 0 ? 200 : 500);
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,
-                'command' => "{$command} --year={$year}",
+                // 'command' => "{$command} --year={$year}",
+                'command' => "{$command}",
                 'message' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function negaraOptions(Request $request)
+    {
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara']);
+        $service = MonitoringRekonsiliasiService::make($filters);
+        $options = $service->filteredNegaraOptions($filters);
+
+        return response()->json($options);
     }
 }

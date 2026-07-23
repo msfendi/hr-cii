@@ -9,32 +9,15 @@ use Illuminate\Support\Facades\DB;
 
 class SyncShipmentFromSmartit extends Command
 {
-    /**
-     * php artisan monitoring:sync-shipment
-     * php artisan monitoring:sync-shipment --year=2026
-     * php artisan monitoring:sync-shipment --from=2026-01-01 --to=2026-12-31
-     */
-    protected $signature = 'monitoring:sync-shipment
-        {--year= : Tahun tgl_bukti yang disinkron, default tahun berjalan}
-        {--from= : Override tanggal mulai (Y-m-d)}
-        {--to= : Override tanggal akhir (Y-m-d)}';
+    protected $signature = 'monitoring:sync-shipment';
 
-    protected $description = 'Sinkronisasi sheet SHIPMENT dari database smartit (get_pengeluaran_bc.txt) ke tabel mon_shipments';
+    protected $description = 'Sinkronisasi FULL data Shipment (pengeluaran BC) dari smartit (tanpa filter tanggal) ke tabel mon_shipments';
 
     public function handle(): int
     {
-        $year = $this->option('year') ?: now()->year;
-        $from = $this->option('from') ?: "{$year}-01-01";
-        $to = $this->option('to') ?: "{$year}-12-31";
+        $this->info('Mengambil SEMUA data Shipment dari smartit ...');
 
-        $this->info("Mengambil data Shipment (pengeluaran BC) dari smartit, tgl_bukti {$from} s/d {$to} ...");
-
-        // Query persis dari get_pengeluaran_bc.txt (blok UNION ALL dibungkus
-        // subquery m, sama seperti aslinya), hanya WHERE tgl_bukti di akhir
-        // yang ditambahkan/diparameterisasi -- pola sama seperti
-        // SyncRekonsiliasiFromSmartit / SyncProdLineFromSmartit. Bagian
-        // ROW_NUMBER() OVER (...) AS no dari file asli tidak dipakai karena
-        // "no" hanya nomor urut tampilan Excel, bukan data.
+        // Query tanpa WHERE tanggal
         $sql = <<<SQL
             SELECT * FROM (
                 SELECT
@@ -189,27 +172,20 @@ class SyncShipmentFromSmartit extends Command
                     d.keterangan, h.so_id, pd.spesifikasi, pd.uraian, pd.dt_po_id, h.berat,
                     b.satuan_code, b.barang_category
             ) m
-            WHERE m.tgl_bukti >= ? AND m.tgl_bukti <= ?
             ORDER BY m.tgl_bukti
         SQL;
 
-        $rows = DB::connection('smartit')->select($sql, [$from, $to]);
+        $rows = DB::connection('smartit')->select($sql);
 
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
         $inserted = 0;
 
-        // 35 kolom per baris (termasuk row_key, created_at, updated_at) -> hitung
-        // otomatis biar total parameter per batch aman di bawah limit SQL Server.
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 35);
 
-        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
-            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
-            // disinkron (bukan truncate seluruh tabel), supaya data
-            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
-            // terhapus. Baru setelah itu insert data baru dari smartit.
-            MonShipment::whereBetween('tgl_bukti', [$from, $to])->delete();
+        DB::transaction(function () use ($rows, $chunkSize, $now, &$inserted) {
+            MonShipment::truncate();
 
             foreach (array_chunk($rows, $chunkSize) as $chunk) {
                 $data = array_map(function ($r) use ($now) {
@@ -230,7 +206,7 @@ class SyncShipmentFromSmartit extends Command
                         'supplier_name'  => $r->supplier_name,
                         'barang_code'    => $r->barang_code,
                         'barang_name'    => $r->barang_name,
-                        'barang_category'=> $r->barang_category,
+                        'barang_category' => $r->barang_category,
                         'satuan_doc'     => $r->satuan_doc,
                         'jumlah_doc'     => $r->jumlah_doc,
                         'valas'          => $r->valas,
@@ -254,22 +230,15 @@ class SyncShipmentFromSmartit extends Command
                 }, $chunk);
 
                 MonShipment::insert($data);
-
                 $inserted += count($data);
             }
         });
 
-        $this->info("Selesai. {$inserted} baris Shipment diinsert ke mon_shipments (data lama pada rentang tanggal ini dihapus lebih dulu).");
+        $this->info("Selesai. {$inserted} baris Shipment diinsert ke mon_shipments (seluruh data lama dihapus).");
 
         return self::SUCCESS;
     }
 
-    /**
-     * Hash sintetis sebagai kunci unik upsert, karena hasil query
-     * get_pengeluaran_bc sudah di-GROUP BY banyak kolom dan tidak punya satu
-     * kolom id tunggal. Kombinasi doc_id + barang_code + dt_so_id + satuan_doc
-     * + keterangan cukup untuk membedakan tiap baris hasil GROUP BY tsb.
-     */
     private static function rowKey(object $r): string
     {
         return md5(implode('|', [

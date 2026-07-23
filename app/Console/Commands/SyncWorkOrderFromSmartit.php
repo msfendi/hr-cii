@@ -9,25 +9,13 @@ use Illuminate\Support\Facades\DB;
 
 class SyncWorkOrderFromSmartit extends Command
 {
-    /**
-     * php artisan monitoring:sync-work-order
-     * php artisan monitoring:sync-work-order --year=2026
-     * php artisan monitoring:sync-work-order --from=2026-01-01 --to=2026-12-31
-     */
-    protected $signature = 'monitoring:sync-work-order
-        {--year= : Tahun tgl_prod yang disinkron, default tahun berjalan}
-        {--from= : Override tanggal mulai (Y-m-d)}
-        {--to= : Override tanggal akhir (Y-m-d)}';
+    protected $signature = 'monitoring:sync-work-order';
 
-    protected $description = 'Sinkronisasi data Work Order/BOM dari smartit ke tabel mon_work_orders';
+    protected $description = 'Sinkronisasi FULL data Work Order/BOM dari smartit (tanpa filter tanggal) ke tabel mon_work_orders';
 
     public function handle(): int
     {
-        $year = $this->option('year') ?: now()->year;
-        $from = $this->option('from') ?: "{$year}-01-01";
-        $to = $this->option('to') ?: "{$year}-12-31";
-
-        $this->info("Mengambil data Work Order/BOM dari smartit, tgl_prod {$from} s/d {$to} ...");
+        $this->info('Mengambil SEMUA data Work Order/BOM dari smartit ...');
 
         $sql = <<<SQL
             ;WITH RequestSummary AS
@@ -112,10 +100,10 @@ class SyncWorkOrderFromSmartit extends Command
             WHERE
                 h.status = 'Unfinish'
                 AND rc.total_request > 0
-                AND h.tgl_prod >= ? AND h.tgl_prod <= ?
+            -- Tidak ada filter tanggal
         SQL;
 
-        $rows = DB::connection('smartit')->select($sql, [$from, $to]);
+        $rows = DB::connection('smartit')->select($sql);
 
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
@@ -124,12 +112,8 @@ class SyncWorkOrderFromSmartit extends Command
 
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 38);
 
-        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
-            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
-            // disinkron (bukan truncate seluruh tabel), supaya data
-            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
-            // terhapus. Baru setelah itu insert data baru dari smartit.
-            MonWorkOrder::whereBetween('tgl_prod', [$from, $to])->delete();
+        DB::transaction(function () use ($rows, $chunkSize, $now, &$inserted) {
+            MonWorkOrder::truncate();
 
             foreach (array_chunk($rows, $chunkSize) as $chunk) {
                 $data = array_map(function ($r) use ($now) {
@@ -180,7 +164,8 @@ class SyncWorkOrderFromSmartit extends Command
             }
         });
 
-        $this->info("Selesai. {$inserted} baris Work Order/BOM diinsert ke mon_work_orders (data lama pada rentang tanggal ini dihapus lebih dulu).");
+        $this->info("Selesai. {$inserted} baris Work Order/BOM diinsert ke mon_work_orders (seluruh data lama dihapus).");
+
         return self::SUCCESS;
     }
 }

@@ -9,27 +9,15 @@ use Illuminate\Support\Facades\DB;
 
 class SyncPoFromSmartit extends Command
 {
-    /**
-     * php artisan monitoring:sync-po
-     * php artisan monitoring:sync-po --year=2026
-     * php artisan monitoring:sync-po --from=2026-01-01 --to=2026-12-31
-     */
-    protected $signature = 'monitoring:sync-po
-        {--year= : Tahun tgl_po yang disinkron, default tahun berjalan}
-        {--from= : Override tanggal mulai (Y-m-d)}
-        {--to= : Override tanggal akhir (Y-m-d)}';
+    protected $signature = 'monitoring:sync-po';
 
-    protected $description = 'Sinkronisasi sheet PO dari database smartit (get_po_2026.txt) ke tabel mon_purchase_orders';
+    protected $description = 'Sinkronisasi FULL data PO dari smartit (tanpa filter tanggal) ke tabel mon_purchase_orders';
 
     public function handle(): int
     {
-        $year = $this->option('year') ?: now()->year;
-        $from = $this->option('from') ?: "{$year}-01-01";
-        $to = $this->option('to') ?: "{$year}-12-31";
+        $this->info('Mengambil SEMUA data PO dari smartit ...');
 
-        $this->info("Mengambil data PO dari smartit, tgl_po {$from} s/d {$to} ...");
-
-        // Query persis dari get_po_2026.txt, hanya bagian WHERE tgl_po di akhir yang diparameterisasi.
+        // Query tanpa WHERE tanggal
         $sql = <<<SQL
             SELECT
                 m.*,
@@ -164,27 +152,20 @@ class SyncPoFromSmartit extends Command
                 INNER JOIN ms_supplier s ON s.supplier_code = h.supplier_code
                 WHERE h.jenis_po <> 'Subkon'
             ) m
-            WHERE tgl_po >= ? AND tgl_po <= ?
             ORDER BY tgl_po
         SQL;
 
-        $rows = DB::connection('smartit')->select($sql, [$from, $to]);
+        $rows = DB::connection('smartit')->select($sql);
 
         $this->info('Baris diterima dari smartit: ' . count($rows));
 
         $now = now();
         $inserted = 0;
 
-        // 44 kolom per baris -> hitung otomatis biar total parameter per batch
-        // aman di bawah limit SQL Server (2100 bound parameters per query).
         $chunkSize = SqlServerChunk::rows(columnsPerRow: 44);
 
-        DB::transaction(function () use ($rows, $chunkSize, $now, $from, $to, &$inserted) {
-            // Kosongkan dulu HANYA baris pada rentang tanggal yang sedang
-            // disinkron (bukan truncate seluruh tabel), supaya data
-            // tahun/rentang lain yang sudah tersinkron sebelumnya tidak ikut
-            // terhapus. Baru setelah itu insert data baru dari smartit.
-            MonPurchaseOrder::whereBetween('tgl_po', [$from, $to])->delete();
+        DB::transaction(function () use ($rows, $chunkSize, $now, &$inserted) {
+            MonPurchaseOrder::truncate();
 
             foreach (array_chunk($rows, $chunkSize) as $chunk) {
                 $data = array_map(function ($r) use ($now) {
@@ -237,12 +218,11 @@ class SyncPoFromSmartit extends Command
                 }, $chunk);
 
                 MonPurchaseOrder::insert($data);
-
                 $inserted += count($data);
             }
         });
 
-        $this->info("Selesai. {$inserted} baris PO diinsert ke mon_purchase_orders (data lama pada rentang tanggal ini dihapus lebih dulu).");
+        $this->info("Selesai. {$inserted} baris PO diinsert ke mon_purchase_orders (seluruh data lama dihapus).");
 
         return self::SUCCESS;
     }

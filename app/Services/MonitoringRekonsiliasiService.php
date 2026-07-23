@@ -42,12 +42,21 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * Resolve filter Buyer/Style/CPO menjadi daftar kode uraian (CPO) yang
-     * dipakai untuk scope semua query di bawah.
+     * Resolve filter Buyer/Style/CPO/Negara menjadi daftar kode uraian (CPO)
+     * yang dipakai untuk scope semua query di bawah.
      *  - Kalau CPO dipilih eksplisit, itu final -- Buyer/Style diabaikan di
      *    server (mereka cuma dipakai buat mempersempit dropdown di frontend).
      *  - Kalau CPO belum dipilih tapi Buyer dan/atau Style ada, cari semua
      *    uraian yang match kombinasi tsb dari mon_orders.
+     *  - Negara bisa dipakai SENDIRIAN (tanpa Buyer/Style/CPO) atau
+     *    dikombinasikan: kalau dikombinasikan, hasil akhirnya adalah
+     *    IRISAN (intersect) antara CPO hasil Buyer/Style/CPO dan CPO yang
+     *    punya shipment dari negara terpilih (lihat cpoListForNegara()).
+     *    mon_prod_lines (Cutting/Sewing/Packing/Warehouse) tidak punya info
+     *    supplier/negara sendiri, jadi filter negara di tahap-tahap itu
+     *    di-approx lewat CPO yang match -- shipmentQuery() sendiri masih
+     *    di-scope LANGSUNG ke baris supplier yang cocok (lihat di bawah)
+     *    supaya Shipment Qty tetap presisi per baris.
      */
     private function filterUraianList(): array
     {
@@ -58,24 +67,29 @@ class MonitoringRekonsiliasiService
         $uraian = trim((string) ($this->filters['uraian'] ?? ''));
         $brand  = trim((string) ($this->filters['brand'] ?? ''));
         $style  = trim((string) ($this->filters['style'] ?? ''));
+        $negara = trim((string) ($this->filters['negara'] ?? ''));
+
+        $base = null; // null = belum ditentukan oleh Buyer/Style/CPO
 
         if ($uraian !== '') {
-            return $this->resolvedUraian = [$uraian];
+            $base = [$uraian];
+        } elseif ($brand !== '' || $style !== '') {
+            $query = DB::table('mon_orders')->whereNotNull('uraian');
+            if ($brand !== '') {
+                $query->where('brand', $brand);
+            }
+            if ($style !== '') {
+                $query->where('style', $style);
+            }
+            $base = $query->distinct()->pluck('uraian')->all();
         }
 
-        if ($brand === '' && $style === '') {
-            return $this->resolvedUraian = [];
+        if ($negara !== '') {
+            $negaraCpo = $this->cpoListForNegara($negara);
+            $base = $base === null ? $negaraCpo : array_values(array_intersect($base, $negaraCpo));
         }
 
-        $query = DB::table('mon_orders')->whereNotNull('uraian');
-        if ($brand !== '') {
-            $query->where('brand', $brand);
-        }
-        if ($style !== '') {
-            $query->where('style', $style);
-        }
-
-        return $this->resolvedUraian = $query->distinct()->pluck('uraian')->all();
+        return $this->resolvedUraian = $base ?? [];
     }
 
     private function hasCpo(): bool
@@ -83,10 +97,29 @@ class MonitoringRekonsiliasiService
         return count($this->filterUraianList()) > 0;
     }
 
+    /**
+     * Apakah user memasukkan filter APAPUN (uraian/brand/style/negara)?
+     * Beda dengan hasCpo(): hasCpo() bisa false meski filter negara aktif,
+     * kalau kebetulan tidak ada CPO yang match (mis. negara dipilih tapi
+     * belum ada shipment sama sekali dari negara itu) -- dalam kondisi itu
+     * hasilnya harus tetap KOSONG, bukan balik ke "tanpa filter" (semua data).
+     */
+    private function hasAnyFilterInput(): bool
+    {
+        foreach (['uraian', 'brand', 'style', 'negara'] as $key) {
+            if (trim((string) ($this->filters[$key] ?? '')) !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private function rekonQuery()
     {
         $query = DB::table('mon_rekonsiliasis');
-        if ($this->hasCpo()) {
+        if ($this->hasAnyFilterInput()) {
+            // whereIn dengan array kosong otomatis menghasilkan 0 baris (Laravel),
+            // jadi filter yang match 0 CPO tetap kosong, bukan unscoped.
             $query->whereIn('uraian', $this->filterUraianList());
         }
         return $query;
@@ -95,7 +128,7 @@ class MonitoringRekonsiliasiService
     private function orderQuery()
     {
         $query = DB::table('mon_orders');
-        if ($this->hasCpo()) {
+        if ($this->hasAnyFilterInput()) {
             $query->whereIn('uraian', $this->filterUraianList());
         }
         return $query;
@@ -104,10 +137,99 @@ class MonitoringRekonsiliasiService
     private function shipmentQuery()
     {
         $query = DB::table('mon_shipments');
-        if ($this->hasCpo()) {
+        if ($this->hasAnyFilterInput()) {
             $query->whereIn('uraian', $this->filterUraianList());
         }
+        // Selain di-scope lewat CPO (di atas, yang sudah mengandung filter
+        // negara via intersect), baris shipment juga di-scope LANGSUNG ke
+        // supplier yang cocok dengan negara terpilih, supaya presisi per
+        // baris (bukan cuma per CPO).
+        $this->applyNegaraScopeToShipment($query);
         return $query;
+    }
+
+    /**
+     * Dropdown filter Negara: semua negara yang punya minimal 1 supplier
+     * terdaftar di mon_ms_suppliers, di-join ke mon_ms_negaras untuk nama.
+     */
+    public function negaraOptions(): Collection
+    {
+        return DB::table('mon_ms_suppliers as s')
+            ->join('mon_ms_negaras as n', 'n.negara_code', '=', 's.negara_id')
+            ->whereNotNull('s.negara_id')
+            ->select('n.negara_code', 'n.negara_name')
+            ->distinct()
+            ->orderBy('n.negara_name')
+            ->get();
+    }
+
+    /**
+     * Nama-nama supplier (mon_ms_suppliers.supplier_name, TANPA kode di
+     * dalam kurung) yang negara_id-nya cocok dengan $negaraCode.
+     */
+    private function supplierNamesForNegara(string $negaraCode): array
+    {
+        return DB::table('mon_ms_suppliers')
+            ->where('negara_id', $negaraCode)
+            ->whereNotNull('supplier_name')
+            ->pluck('supplier_name')
+            ->all();
+    }
+
+    /**
+     * Semua kode uraian (CPO) yang punya minimal 1 baris mon_shipments
+     * dengan supplier dari negara $negaraCode.
+     *
+     * mon_shipments.supplier_name formatnya "NAMA SUPPLIER (KODE)"
+     * (contoh: "MAXHILL MANAGEMENT SERVICES PTE LTD (MAXHIL)"), sedangkan
+     * mon_ms_suppliers.supplier_name tidak punya kode di belakangnya --
+     * jadi dicocokkan pakai LIKE prefix ("NAMA SUPPLIER%").
+     */
+    public function cpoListForNegara(string $negaraCode): array // diubah dari private ke public
+    {
+        $supplierNames = $this->supplierNamesForNegara($negaraCode);
+        if (empty($supplierNames)) {
+            return [];
+        }
+
+        return DB::table('mon_shipments')
+            ->whereNotNull('uraian')
+            ->where(function ($q) use ($supplierNames) {
+                foreach ($supplierNames as $name) {
+                    $q->orWhere('supplier_name', 'like', $name . '%');
+                }
+            })
+            ->distinct()
+            ->pluck('uraian')
+            ->all();
+    }
+
+    /**
+     * Scope query mon_shipments langsung ke baris supplier yang negaranya
+     * cocok dengan filter `negara` (kalau ada). Dipakai oleh shipmentQuery()
+     * supaya KPI Shipment Qty & PIVOT SHIPMENT presisi per baris shipment,
+     * bukan cuma "per CPO yang kebetulan punya 1 shipment dari negara itu".
+     */
+    private function applyNegaraScopeToShipment($query): void
+    {
+        $negara = trim((string) ($this->filters['negara'] ?? ''));
+        if ($negara === '') {
+            return;
+        }
+
+        $supplierNames = $this->supplierNamesForNegara($negara);
+        if (empty($supplierNames)) {
+            // Negara dipilih tapi tidak ada supplier terdaftar untuk negara
+            // itu -- pastikan hasilnya kosong, bukan malah menampilkan semua.
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->where(function ($q) use ($supplierNames) {
+            foreach ($supplierNames as $name) {
+                $q->orWhere('supplier_name', 'like', $name . '%');
+            }
+        });
     }
 
     /**
@@ -676,5 +798,82 @@ class MonitoringRekonsiliasiService
             ->groupBy('tgl_bukti')
             ->orderBy('tgl_bukti')
             ->get();
+    }
+
+    /**
+     * Ringkasan jumlah dokumen & qty shipment per tanggal `tgl_bukti`, untuk
+     * satu bulan tertentu -- dipakai widget kalender "Shipment Date"
+     * (replikasi kalender Production Delivery di dashboard Gabungan).
+     * Filter uraian/brand/style/negara yang aktif tetap diikutkan.
+     */
+    public function shipmentCalendar(int $year, int $month): Collection
+    {
+        return $this->shipmentQuery()
+            ->whereNotNull('tgl_bukti')
+            ->whereYear('tgl_bukti', $year)
+            ->whereMonth('tgl_bukti', $month)
+            ->selectRaw('CAST(tgl_bukti AS DATE) as tanggal')
+            ->selectRaw('COUNT(*) as jumlah_doc')
+            ->selectRaw('SUM(jumlah_barang) as total_qty')
+            ->groupBy(DB::raw('CAST(tgl_bukti AS DATE)'))
+            ->orderBy('tanggal')
+            ->get();
+    }
+
+    /**
+     * Detail baris shipment untuk satu tanggal `tgl_bukti` spesifik
+     * (dipanggil saat user klik tanggal di kalender Shipment Date).
+     * Filter aktif (termasuk negara) tetap diikutkan.
+     */
+    public function shipmentCalendarDetail(string $date): Collection
+    {
+        return $this->shipmentQuery()
+            ->whereDate('tgl_bukti', $date)
+            ->select(
+                'uraian',
+                'no_bukti',
+                'jenis_doc',
+                'supplier_name',
+                'barang_name',
+                'satuan_doc',
+                'jumlah_doc',
+                'jumlah_barang'
+            )
+            ->orderBy('uraian')
+            ->get();
+    }
+
+    // ===== TAMBAHAN BARU: filter negara options berdasarkan filter =====
+
+    /**
+     * Mengembalikan daftar negara yang valid untuk filter yang diberikan.
+     * Hanya negara yang memiliki minimal satu CPO yang cocok dengan filter
+     * (uraian/brand/style/negara) yang akan muncul.
+     */
+    public function filteredNegaraOptions(array $filters): Collection
+    {
+        // Simpan filter sementara
+        $originalFilters = $this->filters;
+        $this->filters = $filters;
+
+        // Dapatkan daftar CPO yang cocok dengan filter
+        $cpoList = $this->filterUraianList();
+
+        // Kembalikan filter asli
+        $this->filters = $originalFilters;
+
+        if (empty($cpoList)) {
+            // Tidak ada CPO yang cocok → tidak ada negara yang valid
+            return collect();
+        }
+
+        // Ambil semua negara
+        $allCountries = $this->negaraOptions();
+
+        // Filter: hanya negara yang memiliki irisan CPO dengan $cpoList
+        return $allCountries->filter(function ($country) use ($cpoList) {
+            $cpoForCountry = $this->cpoListForNegara($country->negara_code);
+            return count(array_intersect($cpoList, $cpoForCountry)) > 0;
+        })->values();
     }
 }

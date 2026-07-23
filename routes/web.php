@@ -1098,6 +1098,16 @@ Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permissio
     Route::post('/rekonsiliasi/sync-shipment', [MonitoringRekonsiliasiController::class, 'syncShipment'])->name('rekonsiliasi.sync-shipment');
     Route::post('/rekonsiliasi/sync-work-order', [MonitoringRekonsiliasiController::class, 'syncWorkOrder'])->name('rekonsiliasi.sync-work-order');
     Route::post('/rekonsiliasi/sync-ms-barang', [MonitoringRekonsiliasiController::class, 'syncMsBarang'])->name('rekonsiliasi.sync-ms-barang');
+
+    // -- Kalender "Shipment Date" (mirip kalender Production Delivery di dashboard Gabungan) --
+    Route::get('rekonsiliasi/calendar', [MonitoringRekonsiliasiController::class, 'calendar'])->name('rekonsiliasi.calendar');
+    Route::get('rekonsiliasi/calendar-detail', [MonitoringRekonsiliasiController::class, 'calendarDetail'])->name('rekonsiliasi.calendar.detail');
+
+    // -- Sync Master Negara & Master Supplier (2 tabel baru, jadi total 7 tabel di Sync All) --
+    Route::post('rekonsiliasi/sync-ms-negara', [MonitoringRekonsiliasiController::class, 'syncMsNegara'])->name('rekonsiliasi.sync-ms-negara');
+    Route::post('rekonsiliasi/sync-ms-supplier', [MonitoringRekonsiliasiController::class, 'syncMsSupplier'])->name('rekonsiliasi.sync-ms-supplier');
+
+    Route::get('rekonsiliasi/negara-options', [MonitoringRekonsiliasiController::class, 'negaraOptions'])->name('rekonsiliasi.negara-options');
 });
 
 

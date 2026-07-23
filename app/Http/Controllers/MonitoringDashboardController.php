@@ -107,19 +107,22 @@ class MonitoringDashboardController extends Controller
         set_time_limit(0);
 
         try {
-            $exitCode = Artisan::call($command, ['--year' => $year]);
+            // $exitCode = Artisan::call($command, ['--year' => $year]);
+            $exitCode = Artisan::call($command);
             $output = trim(Artisan::output());
 
             return response()->json([
                 'success'   => $exitCode === 0,
-                'command'   => "{$command} --year={$year}",
+                // 'command'   => "{$command} --year={$year}",
+                'command'   => "{$command}",
                 'exit_code' => $exitCode,
                 'output'    => $output,
             ], $exitCode === 0 ? 200 : 500);
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,
-                'command' => "{$command} --year={$year}",
+                // 'command' => "{$command} --year={$year}",
+                'command' => "{$command}",
                 'message' => $e->getMessage(),
             ], 500);
         }

@@ -16,12 +16,18 @@
             <div class="container-fluid" id="rekon-app"
                  data-filters='@json($filters)'
                  data-filter-options='@json($filterOptions)'
+                 data-negara-options='@json($negaraOptions)'
                  data-endpoint="{{ route('monitoring.rekonsiliasi.data') }}"
+                 data-calendar-url="{{ route('monitoring.rekonsiliasi.calendar') }}"
+                 data-calendar-detail-url="{{ route('monitoring.rekonsiliasi.calendar.detail') }}"
                  data-sync-rekon-url="{{ route('monitoring.rekonsiliasi.sync') }}"
                  data-sync-prodline-url="{{ route('monitoring.rekonsiliasi.sync-prod-line') }}"
                  data-sync-shipment-url="{{ route('monitoring.rekonsiliasi.sync-shipment') }}"
                  data-sync-workorder-url="{{ route('monitoring.rekonsiliasi.sync-work-order') }}"
-                 data-sync-ms-barang-url="{{ route('monitoring.rekonsiliasi.sync-ms-barang') }}">
+                 data-sync-ms-barang-url="{{ route('monitoring.rekonsiliasi.sync-ms-barang') }}"
+                 data-sync-ms-negara-url="{{ route('monitoring.rekonsiliasi.sync-ms-negara') }}"
+                 data-sync-ms-supplier-url="{{ route('monitoring.rekonsiliasi.sync-ms-supplier') }}"
+                 data-negara-options-url="{{ route('monitoring.rekonsiliasi.negara-options') }}">
 
                 {{-- ================= HEADER BAR (mirip gambar) ================= --}}
                 <div class="rekon-hero shadow mb-4">
@@ -41,6 +47,12 @@
                                     <option value=""></option>
                                     @foreach($cpoOptions as $v)
                                         <option value="{{ $v }}" @selected(($filters['uraian'] ?? null) === $v)>{{ $v }}</option>
+                                    @endforeach
+                                </select>
+                                <select id="f-negara" class="form-control select2-filter" style="min-width:170px" data-placeholder="Semua Negara...">
+                                    <option value=""></option>
+                                    @foreach($negaraOptions as $n)
+                                        <option value="{{ $n->negara_code }}" @selected(($filters['negara'] ?? null) === $n->negara_code)>{{ $n->negara_name }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -65,6 +77,12 @@
                                 @canRoute('monitoring.rekonsiliasi.sync-ms-barang')
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.sync-ms-negara')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.sync-ms-supplier')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
                                 @if($canSyncAny)
                                     <button id="btn-sync-all" type="button" class="btn btn-outline-light btn-sm">
                                         <i class="fas fa-sync-alt fa-sm"></i> Sync All Data
@@ -77,6 +95,9 @@
                         CPO : <span id="hdr-cpo">-</span>
                         &nbsp;|&nbsp; BRAND <span id="hdr-brand">-</span>
                         &nbsp;|&nbsp; STYLE <span id="hdr-style">-</span>
+                        <span id="hdr-negara-wrap" style="display:none">
+                            &nbsp;|&nbsp; NEGARA <span id="hdr-negara">-</span>
+                        </span>
                         <span id="hdr-cpo-count-wrap" style="display:none">
                             &nbsp;|&nbsp; <span class="badge badge-light" id="hdr-cpo-count"></span>
                         </span>
@@ -90,10 +111,12 @@
                         <div class="font-weight-bold mb-1">Belum ada filter yang dipilih</div>
                         <div class="small">
                             Pilih salah satu atau kombinasi dari <strong>Buyer</strong>, <strong>Style</strong>,
-                            atau <strong>CPO</strong> pada kolom di atas untuk menampilkan data dashboard.
-                            Kalau cuma Buyer dan/atau Style yang dipilih (tanpa CPO spesifik), data dari
-                            semua CPO yang cocok akan digabung. Data tidak dimuat otomatis saat halaman
-                            dibuka karena cukup berat kalau ditarik untuk semua CPO sekaligus.
+                            <strong>CPO</strong>, atau <strong>Negara</strong> pada kolom di atas untuk menampilkan
+                            data dashboard. Kalau cuma Buyer dan/atau Style yang dipilih (tanpa CPO spesifik), data dari
+                            semua CPO yang cocok akan digabung. <strong>Negara</strong> bisa dipilih sendirian
+                            (menggabungkan semua CPO yang punya shipment dari negara itu) atau dikombinasikan
+                            dengan Buyer/Style/CPO untuk mempersempit hasilnya. Data tidak dimuat otomatis saat
+                            halaman dibuka karena cukup berat kalau ditarik untuk semua CPO sekaligus.
                         </div>
                     </div>
                 </div>
@@ -154,6 +177,58 @@
                                 <i class="fas fa-calendar-alt fa-lg text-secondary mb-2"></i>
                                 <div class="text-xs font-weight-bold text-gray-600 text-uppercase mb-1">Shipment Date</div>
                                 <div class="small font-weight-bold text-gray-800" id="kpi-shipdates">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ================= SHIPMENT DATE (kalender, mirip Kalender Shipment di dashboard Gabungan) ================= --}}
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">Shipment Date</h6>
+                        <div class="d-flex align-items-center" style="gap:10px">
+                            <button id="ship-cal-prev" type="button" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-left"></i></button>
+                            <span id="ship-cal-label" class="font-weight-bold text-gray-700" style="min-width:140px; text-align:center;">--</span>
+                            <button id="ship-cal-next" type="button" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-lg-7 mb-3 mb-lg-0">
+                                <table class="table table-bordered table-sm mb-0" id="mon-ship-calendar">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-center">Min</th><th class="text-center">Sen</th>
+                                            <th class="text-center">Sel</th><th class="text-center">Rab</th>
+                                            <th class="text-center">Kam</th><th class="text-center">Jum</th>
+                                            <th class="text-center">Sab</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                                <div class="small text-gray-600 mt-2 d-flex" style="gap:16px">
+                                    <span><span class="badge bg-info" style="width:12px;height:12px;display:inline-block;padding:0;"></span> Ada dokumen shipment</span>
+                                </div>
+                            </div>
+                            <div class="col-lg-5">
+                                <div id="ship-cal-detail-empty" class="text-muted small">
+                                    Klik salah satu tanggal pada kalender untuk melihat detail dokumen shipment
+                                    (<em>tgl bukti</em>) pada tanggal tersebut.
+                                </div>
+                                <div id="ship-cal-detail-wrap" class="d-none">
+                                    <div class="small font-weight-bold text-gray-700 mb-2" id="ship-cal-detail-title"></div>
+                                    <div class="mon-table-box" style="max-height:340px;">
+                                        <table class="table table-bordered table-sm mon-table mon-table-fixed w-100" id="table-ship-cal-detail">
+                                            <thead>
+                                                <tr>
+                                                    <th>Uraian</th><th>No. Bukti</th><th>Supplier</th>
+                                                    <th>Barang</th><th class="right">Jumlah Barang</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -299,6 +374,8 @@
                                     Semua tahap di-scope ke <code>code_prod</code> yang mengandung kode CPO (5 digit) terpilih.
                                     Loss: Cutting = Cutting &minus; Contract; Sewing = dest.Sewing &minus; dept.Sewing;
                                     Packing = dest.Packing &minus; dept.Packing; Warehouse = dept.Packing &minus; dest.Warehouse.
+                                    Juga bisa difilter per <strong>Negara</strong> (lewat CPO yang punya shipment dari
+                                    negara terpilih).
                                 </div>
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-sm w-100" id="table-loss-steps">
@@ -461,20 +538,53 @@
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+<!-- CSS Tambahan untuk sticky header -->
+<style>
+    /* Sticky header untuk semua tabel di dalam .mon-table-box */
+    .mon-table-box table thead th {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 10;
+        box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1);
+    }
+    /* Untuk DataTables yang menggunakan wrapper tambahan, pastikan header tetap sticky */
+    .mon-table-box .dataTables_scrollHeadInner table thead th {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 10;
+    }
+    /* Atur ulang padding pada tabel agar tidak bertabrakan */
+    .mon-table-box table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .mon-table-box table thead th {
+        border-bottom: 2px solid #dee2e6;
+    }
+</style>
+
 <script>
 (function(){
     const app = document.getElementById('rekon-app');
     const endpoint = app.dataset.endpoint;
+    const calendarUrl = app.dataset.calendarUrl;
+    const calendarDetailUrl = app.dataset.calendarDetailUrl;
     const syncRekonUrl = app.dataset.syncRekonUrl;
     const syncProdlineUrl = app.dataset.syncProdlineUrl;
     const syncShipmentUrl = app.dataset.syncShipmentUrl;
     const syncWorkOrderUrl = app.dataset.syncWorkorderUrl;
     const syncMsBarangUrl = app.dataset.syncMsBarangUrl;
+    const syncMsNegaraUrl = app.dataset.syncMsNegaraUrl;
+    const syncMsSupplierUrl = app.dataset.syncMsSupplierUrl;
+    const negaraOptionsUrl = app.dataset.negaraOptionsUrl;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
     const fBuyer = document.getElementById('f-buyer');
     const fStyle = document.getElementById('f-style');
     const fCpo = document.getElementById('f-cpo');
+    const fNegara = document.getElementById('f-negara');
     const emptyNotice = document.getElementById('rekon-empty-notice');
     const widgets = document.getElementById('rekon-widgets');
     const btnFilterCpo = document.getElementById('btn-filter-cpo');
@@ -532,11 +642,6 @@
 
     let chartMaterialFabric, chartMaterialAksesoris, chartMaterialPacking, chartProduction, chartExcess, chartShipment, chartShipCategory, chartFabricUsage, dtDetail, dtShipment;
 
-    /**
-     * Pecah label panjang jadi beberapa baris (dipakai Chart.js sebagai
-     * array = multi-line tick) supaya label tetap horizontal tapi tidak
-     * kepanjangan satu baris.
-     */
     function wrapLabel(label, maxWidth = 14) {
         const words = String(label ?? '-').split(' ');
         const lines = [];
@@ -553,13 +658,11 @@
         return lines.length ? lines : ['-'];
     }
 
-    // Ticks horizontal (tidak miring) + label di-wrap, dipakai chart Material
-    // Achievement & Production Result (Pcs).
     const HORIZONTAL_WRAP_X_TICKS = { autoSkip: false, maxRotation: 0, minRotation: 0 };
 
     function buildUrl(base, params) {
         const url = new URL(base, window.location.origin);
-        Object.entries(params).forEach(([k, v]) => { if (v) url.searchParams.set(k, v); });
+        Object.entries(params).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') url.searchParams.set(k, v); });
         return url.toString();
     }
 
@@ -568,6 +671,15 @@
         document.getElementById('hdr-cpo').textContent = header.cpo || '-';
         document.getElementById('hdr-brand').textContent = header.brand || '-';
         document.getElementById('hdr-style').textContent = header.style || '-';
+
+        const negaraWrap = document.getElementById('hdr-negara-wrap');
+        const negaraLabel = fNegara.options[fNegara.selectedIndex]?.text || '';
+        if (fNegara.value) {
+            document.getElementById('hdr-negara').textContent = negaraLabel || fNegara.value;
+            negaraWrap.style.display = '';
+        } else {
+            negaraWrap.style.display = 'none';
+        }
 
         const countWrap = document.getElementById('hdr-cpo-count-wrap');
         const countEl = document.getElementById('hdr-cpo-count');
@@ -657,7 +769,6 @@
         });
     }
 
-    // canvas id + variable holder untuk tiap card Material Achievement.
     const MATERIAL_ACHIEVEMENT_CHARTS = {
         fabric:    { canvasId: 'chart-material-achievement-fabric' },
         aksesoris: { canvasId: 'chart-material-achievement-aksesoris' },
@@ -699,11 +810,6 @@
         });
     }
 
-    /**
-     * Pecah baris Material Achievement (payload sudah membawa `material_group`
-     * dari service: fabric / aksesoris / packing / lainnya) jadi 3 chart
-     * terpisah. Kategori 'lainnya' tidak ditampilkan di card manapun.
-     */
     function renderMaterialAchievement(rows) {
         rows = rows || [];
         const byGroup = { fabric: [], aksesoris: [], packing: [] };
@@ -904,7 +1010,15 @@
         `).join('');
 
         if (dtShipment) dtShipment.destroy();
-        dtShipment = $('#table-shipment-detail').DataTable({ pageLength: 10, order: [], autoWidth: false, width: '100%' });
+        dtShipment = $('#table-shipment-detail').DataTable({
+            pageLength: 10,
+            order: [],
+            autoWidth: false,
+            width: '100%',
+            scrollY: '300px',
+            scrollCollapse: true,
+            fixedHeader: true,
+        });
     }
 
     function renderDetail(rows) {
@@ -932,7 +1046,15 @@
         `).join('');
 
         if (dtDetail) dtDetail.destroy();
-        dtDetail = $('#table-rekon-detail').DataTable({ pageLength: 10, order: [], autoWidth: false, width: '100%' });
+        dtDetail = $('#table-rekon-detail').DataTable({
+            pageLength: 10,
+            order: [],
+            autoWidth: false,
+            width: '100%',
+            scrollY: '400px',
+            scrollCollapse: true,
+            fixedHeader: true,
+        });
     }
 
     function renderAll(json) {
@@ -949,12 +1071,219 @@
         renderDetail(json.detail);
     }
 
-    function refresh() {
-        const buyer = fBuyer.value;
-        const style = fStyle.value;
-        const cpo = fCpo.value;
+    // ================= SHIPMENT DATE: kalender (mirip Kalender Shipment di dashboard Gabungan) =================
+    const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    const today = new Date();
 
-        if (!buyer && !style && !cpo) {
+    const shipCalState = {
+        year: today.getFullYear(),
+        month: today.getMonth() + 1, // 1-12
+        selectedDate: null,
+        requestSeq: 0,
+    };
+
+    const shipCalLabel       = document.getElementById('ship-cal-label');
+    const shipCalBody        = document.querySelector('#mon-ship-calendar tbody');
+    const shipCalPrev        = document.getElementById('ship-cal-prev');
+    const shipCalNext        = document.getElementById('ship-cal-next');
+    const shipCalDetailEmpty = document.getElementById('ship-cal-detail-empty');
+    const shipCalDetailWrap  = document.getElementById('ship-cal-detail-wrap');
+    const shipCalDetailTitle = document.getElementById('ship-cal-detail-title');
+    let dtShipCalDetail;
+
+    function pad2(n){ return String(n).padStart(2, '0'); }
+    function toIsoDate(y, m, d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
+
+    function formatTanggalIndonesia(iso) {
+        const [y, m, d] = iso.split('-').map(Number);
+        return `${d} ${monthNames[m - 1]} ${y}`;
+    }
+
+    function buildShipCalendarQuery(extra) {
+        const params = buildQueryParams(currentFilters());
+        Object.entries(extra || {}).forEach(([k, v]) => params.append(k, v));
+        return params;
+    }
+
+    function buildQueryParams(filters) {
+        const params = new URLSearchParams();
+        Object.entries(filters || {}).forEach(([k, v]) => { if (v) params.append(k, v); });
+        return params;
+    }
+
+    function setShipCalNavDisabled(disabled) {
+        if (shipCalPrev) shipCalPrev.disabled = disabled;
+        if (shipCalNext) shipCalNext.disabled = disabled;
+    }
+
+    function renderShipCalendarGrid(year, month, dayMap) {
+        if (!shipCalLabel || !shipCalBody) return;
+        shipCalLabel.textContent = `${monthNames[month - 1]} ${year}`;
+
+        const firstDow = new Date(year, month - 1, 1).getDay(); // 0=Min
+        const daysInMonth = new Date(year, month, 0).getDate();
+
+        let cells = [];
+        for (let i = 0; i < firstDow; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+        while (cells.length % 7 !== 0) cells.push(null);
+
+        let html = '';
+        for (let w = 0; w < cells.length / 7; w++) {
+            html += '<tr>';
+            for (let c = 0; c < 7; c++) {
+                const d = cells[w * 7 + c];
+                if (!d) { html += '<td class="bg-light"></td>'; continue; }
+
+                const iso = toIsoDate(year, month, d);
+                const info = dayMap[iso];
+                const isToday = iso === toIsoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+                const isSelected = iso === shipCalState.selectedDate;
+
+                let cls = 'text-center';
+                if (info) cls += ' bg-info text-white';
+                if (isToday) cls += ' font-weight-bold';
+
+                const style = isSelected
+                    ? 'cursor:pointer; vertical-align:middle; box-shadow: inset 0 0 0 3px #4e73df;'
+                    : 'cursor:pointer; vertical-align:middle;';
+
+                html += `<td class="${cls}" style="${style}" data-date="${iso}" title="${info ? `${info.jumlah_doc} dokumen` : ''}">
+                    <div>${d}</div>
+                    ${info ? `<span class="badge badge-pill badge-light" style="font-size:.65rem;">${info.jumlah_doc}</span>` : ''}
+                </td>`;
+            }
+            html += '</tr>';
+        }
+        shipCalBody.innerHTML = html;
+
+        shipCalBody.querySelectorAll('td[data-date]').forEach(td => {
+            td.addEventListener('click', () => selectShipCalendarDate(td.dataset.date));
+        });
+    }
+
+    function loadShipCalendarMonth(year, month) {
+        if (!calendarUrl) return;
+
+        shipCalState.year = year;
+        shipCalState.month = month;
+
+        const seq = ++shipCalState.requestSeq;
+        setShipCalNavDisabled(true);
+
+        const params = buildShipCalendarQuery({ year, month });
+        fetch(`${calendarUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
+            .then(json => {
+                if (seq !== shipCalState.requestSeq) return;
+                const dayMap = {};
+                (json.days || []).forEach(row => { dayMap[row.tanggal] = row; });
+                renderShipCalendarGrid(year, month, dayMap);
+            })
+            .catch(() => {
+                if (seq !== shipCalState.requestSeq) return;
+                renderShipCalendarGrid(year, month, {});
+            })
+            .finally(() => {
+                if (seq === shipCalState.requestSeq) setShipCalNavDisabled(false);
+            });
+    }
+
+    function selectShipCalendarDate(iso) {
+        shipCalState.selectedDate = iso;
+        loadShipCalendarMonth(shipCalState.year, shipCalState.month);
+
+        // Kirim filter yang aktif bersama tanggal
+        const filters = currentFilters();
+        const params = buildQueryParams({ ...filters, date: iso });
+        shipCalDetailTitle.textContent = `Shipment: ${formatTanggalIndonesia(iso)}`;
+        shipCalDetailEmpty.classList.add('d-none');
+        shipCalDetailWrap.classList.remove('d-none');
+
+        if (dtShipCalDetail) { dtShipCalDetail.clear().draw(); }
+
+        fetch(`${calendarDetailUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(json => renderShipCalDetailTable(json.rows || []))
+            .catch(() => renderShipCalDetailTable([]));
+    }
+
+    function renderShipCalDetailTable(rows) {
+        if (dtShipCalDetail) { dtShipCalDetail.destroy(); dtShipCalDetail = null; }
+
+        dtShipCalDetail = $('#table-ship-cal-detail').DataTable({
+            data: rows,
+            pageLength: 5,
+            lengthMenu: [5, 10, 25, 50],
+            order: [],
+            autoWidth: false,
+            scrollY: '200px',
+            scrollCollapse: true,
+            fixedHeader: true,
+            columns: [
+                { data: 'uraian', defaultContent: '' },
+                { data: 'no_bukti', defaultContent: '' },
+                { data: 'supplier_name', defaultContent: '' },
+                { data: 'barang_name', defaultContent: '' },
+                { data: 'jumlah_barang', className: 'right', render: v => fmtNum(v) },
+            ]
+        });
+    }
+
+    shipCalPrev?.addEventListener('click', () => {
+        let { year, month } = shipCalState;
+        month--;
+        if (month < 1) { month = 12; year--; }
+        loadShipCalendarMonth(year, month);
+    });
+    shipCalNext?.addEventListener('click', () => {
+        let { year, month } = shipCalState;
+        month++;
+        if (month > 12) { month = 1; year++; }
+        loadShipCalendarMonth(year, month);
+    });
+
+    // ===== FUNGSI UNTUK MEMPERBARUI OPSI NEGARA (CASCADE) =====
+    function refreshNegaraOptions() {
+        if (!negaraOptionsUrl) return;
+
+        const filters = currentFilters();
+        const params = buildQueryParams(filters);
+        fetch(`${negaraOptionsUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(data => {
+                // data adalah array objek { negara_code, negara_name }
+                const current = fNegara.value;
+                const options = data.map(n => `<option value="${n.negara_code}">${n.negara_name}</option>`);
+                fNegara.innerHTML = `<option value=""></option>` + options.join('');
+                // Set value jika masih valid
+                if (data.some(n => n.negara_code === current)) {
+                    fNegara.value = current;
+                } else {
+                    fNegara.value = '';
+                }
+                $(fNegara).trigger('change');
+            })
+            .catch(() => {});
+    }
+
+    // ===== FUNGSI REFRESH UTAMA =====
+    function currentFilters() {
+        return {
+            uraian: fCpo.value,
+            brand: fBuyer.value,
+            style: fStyle.value,
+            negara: fNegara.value,
+        };
+    }
+
+    function refresh() {
+        const { uraian, brand, style, negara } = currentFilters();
+
+        if (!uraian && !brand && !style && !negara) {
             if (widgets) widgets.style.display = 'none';
             if (emptyNotice) emptyNotice.style.display = '';
             document.getElementById('rekon-last-updated').textContent = '-';
@@ -972,7 +1301,7 @@
             didOpen: () => Swal.showLoading(),
         });
 
-        const url = buildUrl(endpoint, { uraian: cpo, brand: buyer, style: style });
+        const url = buildUrl(endpoint, { uraian, brand, style, negara });
         fetch(url)
             .then(r => r.json())
             .then(json => {
@@ -983,15 +1312,20 @@
                 Swal.close();
                 Swal.fire('Gagal', 'Tidak bisa memuat data dashboard.', 'error');
             });
+
+        if (calendarUrl) {
+            loadShipCalendarMonth(shipCalState.year, shipCalState.month);
+        }
+
+        // Setelah refresh, update opsi negara (cascade)
+        refreshNegaraOptions();
     }
 
-    // ========= PERBAIKAN UTAMA: sync all dengan timeout lebih panjang dan penanganan respons =========
+    // ========= SYNC ALL (dengan timeout panjang) =========
     function runSyncAll() {
         const steps = [
-            // Master barang disinkron duluan supaya barang_category sudah
-            // up-to-date sebelum widget-widget lain (yang di-scope via
-            // mon_ms_barangs, mis. Material Achievement & Production Pipeline)
-            // ikut disinkron.
+            { url: syncMsNegaraUrl, label: 'Sync Master Negara' },
+            { url: syncMsSupplierUrl, label: 'Sync Master Supplier' },
             { url: syncMsBarangUrl, label: 'Sync Master Barang' },
             { url: syncRekonUrl, label: 'Sync Rekonsiliasi' },
             { url: syncProdlineUrl, label: 'Sync Production Line' },
@@ -1013,9 +1347,7 @@
 
     function runSyncStep(steps, index, results) {
         if (index >= steps.length) {
-            // Tutup loading dengan paksa sebelum menampilkan hasil
             Swal.close();
-            // Beri jeda agar Swal benar-benar tertutup
             setTimeout(() => {
                 const failed = results.filter(r => !r.success);
                 if (failed.length === 0) {
@@ -1041,7 +1373,7 @@
         }
 
         const step = steps[index];
-        Swal.close(); // tutup popup sebelumnya
+        Swal.close();
 
         const startedAt = Date.now();
         let elapsedTimer = null;
@@ -1070,7 +1402,6 @@
         });
 
         const controller = new AbortController();
-        // Perpanjang timeout menjadi 15 menit (900.000 ms)
         const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000);
 
         fetch(step.url, {
@@ -1101,7 +1432,7 @@
             });
     }
 
-    // Event listener untuk filter (tetap sama)
+    // ===== EVENT LISTENER =====
     $(fBuyer).on('select2:select select2:clear', function () {
         $(fStyle).val('').trigger('change');
         $(fCpo).val('').trigger('change');
@@ -1114,6 +1445,7 @@
         refresh();
     });
     $(fCpo).on('select2:select select2:clear', refresh);
+    $(fNegara).on('select2:select select2:clear', refresh);
 
     if (btnFilterCpo) btnFilterCpo.addEventListener('click', refresh);
     if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
@@ -1123,7 +1455,27 @@
 </script>
 
 <style>
-    @import url('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
+    /* Sticky header untuk semua tabel di dalam .mon-table-box (diulang agar lebih kuat) */
+    .mon-table-box table thead th {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 10;
+        box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1);
+    }
+    .mon-table-box .dataTables_scrollHeadInner table thead th {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 10;
+    }
+    .mon-table-box table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .mon-table-box table thead th {
+        border-bottom: 2px solid #dee2e6;
+    }
 
     .right { text-align: right; }
     .mon-table-box { max-height: 420px; overflow: auto; }
