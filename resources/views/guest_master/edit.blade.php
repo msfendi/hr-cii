@@ -66,9 +66,10 @@
                                         <div class="form-group">
                                             <label>Guest Name</label>
                                             <input type="text"
+                                                name="name"
                                                 class="form-control"
-                                                value="{{ $data->guest_name }}"
-                                                readonly>
+                                                value="{{ $data->name }}"
+                                                required>
                                         </div>
 
                                         <div class="form-group">
@@ -102,7 +103,7 @@
                                             <input type="date"
                                                 name="date_of_birth"
                                                 class="form-control"
-                                                value="{{ \Carbon\Carbon::parse($data->date_of_birth)->format('Y-m-d') }}">
+                                                value="{{ $data->date_of_birth ? \Carbon\Carbon::parse($data->date_of_birth)->format('Y-m-d') : '' }}">
                                         </div>
 
                                         <div class="form-group">
@@ -131,7 +132,7 @@
                                             <input type="date"
                                                 name="issue_date"
                                                 class="form-control"
-                                                value="{{ \Carbon\Carbon::parse($data->issue_date)->format('Y-m-d') }}">
+                                                value="{{ $data->issue_date ? \Carbon\Carbon::parse($data->issue_date)->format('Y-m-d') : '' }}">
                                         </div>
 
                                         <div class="form-group">
@@ -139,7 +140,7 @@
                                             <input type="date"
                                                 name="must_used_date"
                                                 class="form-control"
-                                                value="{{ \Carbon\Carbon::parse($data->must_used_date)->format('Y-m-d') }}">
+                                                value="{{ $data->must_used_date ? \Carbon\Carbon::parse($data->must_used_date)->format('Y-m-d') : '' }}">
                                         </div>
 
                                         <div class="form-group">
@@ -147,7 +148,7 @@
                                             <input type="date"
                                                 name="arrival_date"
                                                 class="form-control"
-                                                value="{{ \Carbon\Carbon::parse($data->arrival_date)->format('Y-m-d') }}">
+                                                value="{{ $data->arrival_date ? \Carbon\Carbon::parse($data->arrival_date)->format('Y-m-d') : '' }}">
                                         </div>
 
                                         <div class="form-group">
@@ -155,10 +156,8 @@
                                             <input type="date"
                                                 name="visa_expiry"
                                                 class="form-control"
-                                                value="{{ \Carbon\Carbon::parse($data->visa_expiry)->format('Y-m-d') }}">
+                                                value="{{ $data->visa_expiry ? \Carbon\Carbon::parse($data->visa_expiry)->format('Y-m-d') : '' }}">
                                         </div>
-                                        
-                                        
 
                                         <div class="form-group">
                                             <label>Status</label>

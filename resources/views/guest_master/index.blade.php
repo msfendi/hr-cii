@@ -46,13 +46,10 @@
                            <th>Age</th>
                            <th>Nationality</th>
                            <th>Passport No</th>
-                           <th>Visa Type</th>
                            <th>Date of Issue</th>
                            <th>Must Used Before</th>
-                           <th>Visa Status</th>
                            <th>Arrival Date</th>
                            <th>Expired Visa</th>
-                           <th>Return Date</th>
                            <th>Status</th>
                            <th>Remarks</th>
                            <th width="120">Action</th>
@@ -63,19 +60,19 @@
                         <tr>
                            <td>{{ $row->id }}</td>
                            <td>
-                              <span class="badge badge-dark">
-                              {{ $row->guest_name }}
-                              </span>
+                                 <span class="badge badge-dark">
+                                 {{ $row->name }}
+                                 </span>
                            </td>
                            <td>{{ $row->gender }}</td>
                            <td>{{ $row->place }}</td>
                            <td>{{ $row->date_of_birth }}</td>
                            <td>
-                              @php
-                                 $ageStatus = '-';
-                                 $ageClass = 'success';
+                                 @php
+                                    $ageStatus = '-';
+                                    $ageClass = 'success';
 
-                                 if ($row->date_of_birth) {
+                                    if ($row->date_of_birth) {
                                        $birthDate = \Carbon\Carbon::parse($row->date_of_birth);
                                        $today = \Carbon\Carbon::today();
 
@@ -84,43 +81,38 @@
                                        $ageStatus = $age->y . ' Tahun '
                                                 . $age->m . ' Bulan '
                                                 . $age->d . ' Hari';
-                                 }
-                              @endphp
+                                    }
+                                 @endphp
 
-                              <span class="badge badge-{{ $ageClass }}">
-                                 {{ $ageStatus }}
-                              </span>
+                                 <span class="badge badge-{{ $ageClass }}">
+                                    {{ $ageStatus }}
+                                 </span>
                            </td>
                            <td>{{ $row->nationality }}</td>
                            <td>{{ $row->passport_no }}</td>
-                           <td>{{ $row->visa_type }}</td>
                            <td>{{ $row->issue_date }}</td>
                            <td>{{ $row->must_used_date }}</td>
-                           <td>{{ $row->visa_status }}</td>
                            <td>{{ $row->arrival_date }}</td>
                            <td>{{ $row->visa_expiry }}</td>
-                           <td>{{ $row->return }}</td>
-                           
-                           {{-- ================================================= --}}
-                           <td> {{ $row->status }}</td>
+                           <td>{{ $row->status }}</td>
                            <td>{{ $row->remark }}</td>
                            <td class="text-center">
-                              @canRoute('guest-master.edit')
-                              <a href="{{ route('guest-master.edit',$row->id) }}"
-                                 class="btn btn-primary btn-circle btn-sm">
-                              <i class="fas fa-edit"></i>
-                              </a>
-                              @endcanRoute
-                              @canRoute('guest-master.delete')
-                              <button
-                                 class="btn btn-danger btn-circle btn-sm btn-delete"
-                                 data-link="{{ route('guest-master.delete',$row->id) }}"
-                                 data-name="{{ $row->guest_name }}"
-                                 data-toggle="modal"
-                                 data-target="#deleteModal">
-                              <i class="fas fa-trash"></i>
-                              </button>
-                              @endcanRoute
+                                 @canRoute('guest-master.edit')
+                                 <a href="{{ route('guest-master.edit',$row->id) }}"
+                                    class="btn btn-primary btn-circle btn-sm">
+                                 <i class="fas fa-edit"></i>
+                                 </a>
+                                 @endcanRoute
+                                 @canRoute('guest-master.delete')
+                                 <button
+                                    class="btn btn-danger btn-circle btn-sm btn-delete"
+                                    data-link="{{ route('guest-master.delete',$row->id) }}"
+                                    data-name="{{ $row->name }}"
+                                    data-toggle="modal"
+                                    data-target="#deleteModal">
+                                 <i class="fas fa-trash"></i>
+                                 </button>
+                                 @endcanRoute
                            </td>
                         </tr>
                         @endforeach
