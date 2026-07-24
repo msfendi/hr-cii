@@ -178,6 +178,7 @@ class PayrollMADetailStaffSheet
             'cutting_insentif',
             'heat_insentif',
             'sixs_insentif',
+            'night_shift_compensation',
             'adjusment',
             'bpjs_kesehatan',
             'bpjs_ketenagakerjaan',
@@ -237,6 +238,7 @@ class PayrollMADetailStaffSheet
             'Cutting Insentif',
             'Heat Seal Insentif',
             'Six S Insentif',
+            'Night Shift Compensation',
             'Adjusment',
 
             'BPJS Kesehatan',

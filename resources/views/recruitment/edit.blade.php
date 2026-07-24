@@ -474,7 +474,7 @@
                                                 <div class="col-md-3 form-group">
                                                     <label>Pendidikan Terakhir</label>
                                                     <select class="form-control custom-select" name="pendidikan">
-                                                        @foreach(['SD','SMP','SMA/SMK','D3','S1','S2','S3'] as $edu)
+                                                        @foreach(['SD','SMP','SMA', 'SMK', 'D1', 'D2', 'D3', 'D4','S1','S2','S3'] as $edu)
                                                             <option value="{{ $edu }}" {{ old('pendidikan', strtoupper($pelamar->PENDIDIKAN ?? '')) === $edu ? 'selected' : '' }}>{{ $edu }}</option>
                                                         @endforeach
                                                     </select>

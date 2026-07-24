@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MsBarang;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 
@@ -31,6 +32,9 @@ use Illuminate\Support\Collection;
  */
 class MonitoringRekonsiliasiService
 {
+    /** TTL cache untuk dropdown filter OCF (jarang berubah, aman di-cache). */
+    private const FILTER_OPTIONS_TTL = 300; // 5 menit
+
     /** Cache hasil resolve daftar uraian (CPO) dari filter Buyer/Style/CPO. */
     private ?array $resolvedUraian = null;
 
@@ -68,6 +72,7 @@ class MonitoringRekonsiliasiService
         $brand  = trim((string) ($this->filters['brand'] ?? ''));
         $style  = trim((string) ($this->filters['style'] ?? ''));
         $negara = trim((string) ($this->filters['negara'] ?? ''));
+        $ocf    = trim((string) ($this->filters['ocf'] ?? ''));
 
         $base = null; // null = belum ditentukan oleh Buyer/Style/CPO
 
@@ -89,6 +94,14 @@ class MonitoringRekonsiliasiService
             $base = $base === null ? $negaraCpo : array_values(array_intersect($base, $negaraCpo));
         }
 
+        // OCF (kode hasil ekstraksi dari mon_boms.code_prod, lihat extractOcfCode())
+        // -- sama seperti Negara, bisa dipakai sendirian atau dikombinasikan
+        // dengan Buyer/Style/CPO/Negara lewat IRISAN (intersect) daftar CPO.
+        if ($ocf !== '') {
+            $ocfCpo = $this->cpoListForOcf($ocf);
+            $base = $base === null ? $ocfCpo : array_values(array_intersect($base, $ocfCpo));
+        }
+
         return $this->resolvedUraian = $base ?? [];
     }
 
@@ -106,7 +119,7 @@ class MonitoringRekonsiliasiService
      */
     private function hasAnyFilterInput(): bool
     {
-        foreach (['uraian', 'brand', 'style', 'negara'] as $key) {
+        foreach (['uraian', 'brand', 'style', 'negara', 'ocf'] as $key) {
             if (trim((string) ($this->filters[$key] ?? '')) !== '') {
                 return true;
             }
@@ -230,6 +243,110 @@ class MonitoringRekonsiliasiService
                 $q->orWhere('supplier_name', 'like', $name . '%');
             }
         });
+    }
+
+    // ===== FILTER OCF (diambil dari mon_boms.code_prod) =====
+
+    /**
+     * mon_boms.code_prod berisi teks bebas, contoh:
+     *   "CPO 25166 OCF 256P0011 / LADIES CREW /13-1904 TCX CHALK PINK"
+     * Kode OCF yang dipakai untuk filter adalah "256P0011" -- teks setelah
+     * kata "OCF" sampai sebelum tanda "/" pertama. Kalau posisi kata "OCF"
+     * ternyata beda-beda / tidak ketemu, fallback ke pola kode yang formatnya
+     * mirip (3 digit + 1 huruf + 4 digit, mis. 256P0011) di mana pun posisinya
+     * dalam string. Persis sama dengan MonitoringDashboardService::extractOcfCode()
+     * supaya kode OCF yang dihasilkan konsisten di kedua dashboard.
+     */
+    private static function extractOcfCode(?string $codeProd): ?string
+    {
+        if ($codeProd === null) {
+            return null;
+        }
+
+        if (preg_match('/OCF\s*([^\/]+)/i', $codeProd, $m)) {
+            $candidate = trim($m[1]);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        if (preg_match('/\b\d{3}[A-Za-z]\d{4}\b/', $codeProd, $m)) {
+            return $m[0];
+        }
+
+        return null;
+    }
+
+    /**
+     * Semua kode uraian (CPO) yang punya minimal 1 baris mon_boms dengan kode
+     * OCF hasil ekstraksi (extractOcfCode()) sama dengan $ocfCode. Di-cache
+     * per kode OCF karena dipakai berulang untuk resolve filter OCF ke CPO.
+     */
+    private function cpoListForOcf(string $ocfCode): array
+    {
+        $cacheKey = 'mon_rekon:cpo_for_ocf:' . md5($ocfCode);
+
+        return Cache::remember($cacheKey, self::FILTER_OPTIONS_TTL, function () use ($ocfCode) {
+            return DB::table('mon_boms')
+                ->whereNotNull('code_prod')
+                ->whereNotNull('uraian')
+                ->select('uraian', 'code_prod')
+                ->distinct()
+                ->get()
+                ->filter(fn($r) => self::extractOcfCode($r->code_prod) === $ocfCode)
+                ->pluck('uraian')
+                ->unique()
+                ->values()
+                ->all();
+        });
+    }
+
+    /**
+     * Daftar kode OCF (hasil extractOcfCode() dari mon_boms.code_prod) yang
+     * relevan dengan filter Buyer/Style yang SEDANG aktif -- dijembatani lewat
+     * uraian (mon_orders), persis pola cascade yang sama dengan
+     * MonitoringDashboardService::ocfCodesForCurrentBrandStyle(). Dropdown OCF
+     * sengaja TIDAK ikut disaring oleh CPO/Negara/OCF itu sendiri, supaya
+     * pilihan lain tetap terlihat -- hanya Buyer/Style yang mempersempitnya.
+     */
+    private function ocfCodesForCurrentBrandStyle(): Collection
+    {
+        $brand = trim((string) ($this->filters['brand'] ?? ''));
+        $style = trim((string) ($this->filters['style'] ?? ''));
+
+        $cacheKey = 'mon_rekon:ocf_codes:' . md5(json_encode(['brand' => $brand, 'style' => $style]));
+
+        return Cache::remember($cacheKey, self::FILTER_OPTIONS_TTL, function () use ($brand, $style) {
+            $query = DB::table('mon_boms')->whereNotNull('code_prod')->select('code_prod')->distinct();
+
+            if ($brand !== '' || $style !== '') {
+                $uraianSubquery = DB::table('mon_orders')->select('uraian')->distinct();
+                if ($brand !== '') {
+                    $uraianSubquery->where('brand', $brand);
+                }
+                if ($style !== '') {
+                    $uraianSubquery->where('style', $style);
+                }
+                $query->whereIn('uraian', $uraianSubquery);
+            }
+
+            return $query->pluck('code_prod')
+                ->map(fn($cp) => self::extractOcfCode($cp))
+                ->filter(fn($v) => $v !== null && $v !== '')
+                ->unique()
+                ->sort()
+                ->values();
+        });
+    }
+
+    /**
+     * Versi publik dari ocfCodesForCurrentBrandStyle(), dipakai controller
+     * untuk mengisi dropdown OCF awal (index()) maupun cascade-nya lewat
+     * endpoint data() setiap kali Buyer/Style berubah.
+     */
+    public function ocfOptions(): Collection
+    {
+        return $this->ocfCodesForCurrentBrandStyle();
     }
 
     /**
@@ -559,7 +676,6 @@ class MonitoringRekonsiliasiService
                         ->where('mon_ms_barangs.barang_category', MsBarang::CATEGORY_JADI);
                 });
             })
-            ->where('mon_prod_lines.barang_name', 'not like', 'Pot%')
             ->where('mon_prod_lines.barang_name', 'not like', '%Potongan%')
             ->select('mon_prod_lines.department_id', 'mon_prod_lines.barang_code', 'mon_prod_lines.barang_name')
             ->selectRaw('SUM(mon_prod_lines.jumlah) as jumlah')
@@ -568,7 +684,27 @@ class MonitoringRekonsiliasiService
 
         $this->scopeByCodeProd($query, $this->filterUraianList());
 
-        return $query->get();
+        // Baris dengan barang_name berawalan "Pot" (mis. "Pot Lengan") TIDAK
+        // lagi diabaikan (where 'not like Pot%' sudah dihapus) -- datanya tetap
+        // ditampilkan, hanya kata "Pot" di depannya yang dibuang supaya label
+        // chart lebih rapi. Barang dengan kata "Potongan" tetap disaring
+        // terpisah lewat where('not like', '%Potongan%') di atas.
+        return $query->get()->map(function ($row) {
+            $row->barang_name = $this->stripPotPrefix($row->barang_name);
+            return $row;
+        });
+    }
+
+    private function stripPotPrefix(?string $barangName): ?string
+    {
+        if ($barangName === null) {
+            return $barangName;
+        }
+
+        $trimmed  = trim($barangName);
+        $stripped = preg_replace('/^Pot\.?\s+/i', '', $trimmed);
+
+        return $stripped !== '' ? $stripped : $trimmed;
     }
 
     private function prodLineSumByDepartment(string $departmentId, ?string $barangCategory = null): float
@@ -693,6 +829,7 @@ class MonitoringRekonsiliasiService
         return $this->shipmentQuery()
             ->select(
                 'doc_id',
+                'uraian',
                 'jenis_doc',
                 'jenis_ps',
                 'no_ps',

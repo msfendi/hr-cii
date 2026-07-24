@@ -740,7 +740,19 @@
                         className: 'text-center',
                         render: (d, t, r) => {
                             const isAktif = r.status_contract === 'AKTIF';
-                            if (!isAktif) return '<span class="text-muted small">—</span>';
+                            if (!isAktif) {
+                                // return '<span class="text-muted small">—</span>';
+                                return `
+                            <div class="btn-group btn-group-sm">
+                                 ${r.can_edit ? `
+                                <button class="btn btn-warning btn-xs"
+                                    onclick='openFinansial(${JSON.stringify(r).replace(/'/g, "\\'")})'
+                                    title="Update Finansial">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </button>
+                                ` : ''}
+                            </div>`
+                            }
 
                             return `
                         <div class="btn-group btn-group-sm">

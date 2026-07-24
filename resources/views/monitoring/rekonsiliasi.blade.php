@@ -17,6 +17,7 @@
                  data-filters='@json($filters)'
                  data-filter-options='@json($filterOptions)'
                  data-negara-options='@json($negaraOptions)'
+                 data-ocf-options='@json($ocfOptions)'
                  data-endpoint="{{ route('monitoring.rekonsiliasi.data') }}"
                  data-calendar-url="{{ route('monitoring.rekonsiliasi.calendar') }}"
                  data-calendar-detail-url="{{ route('monitoring.rekonsiliasi.calendar.detail') }}"
@@ -47,6 +48,12 @@
                                     <option value=""></option>
                                     @foreach($cpoOptions as $v)
                                         <option value="{{ $v }}" @selected(($filters['uraian'] ?? null) === $v)>{{ $v }}</option>
+                                    @endforeach
+                                </select>
+                                <select id="f-ocf" class="form-control select2-filter" style="min-width:180px" data-placeholder="Cari OCF...">
+                                    <option value=""></option>
+                                    @foreach($ocfOptions as $o)
+                                        <option value="{{ $o }}" @selected(($filters['ocf'] ?? null) === $o)>{{ $o }}</option>
                                     @endforeach
                                 </select>
                                 <select id="f-negara" class="form-control select2-filter" style="min-width:170px" data-placeholder="Semua Negara...">
@@ -98,6 +105,9 @@
                         <span id="hdr-negara-wrap" style="display:none">
                             &nbsp;|&nbsp; NEGARA <span id="hdr-negara">-</span>
                         </span>
+                        <span id="hdr-ocf-wrap" style="display:none">
+                            &nbsp;|&nbsp; OCF <span id="hdr-ocf">-</span>
+                        </span>
                         <span id="hdr-cpo-count-wrap" style="display:none">
                             &nbsp;|&nbsp; <span class="badge badge-light" id="hdr-cpo-count"></span>
                         </span>
@@ -111,12 +121,12 @@
                         <div class="font-weight-bold mb-1">Belum ada filter yang dipilih</div>
                         <div class="small">
                             Pilih salah satu atau kombinasi dari <strong>Buyer</strong>, <strong>Style</strong>,
-                            <strong>CPO</strong>, atau <strong>Negara</strong> pada kolom di atas untuk menampilkan
-                            data dashboard. Kalau cuma Buyer dan/atau Style yang dipilih (tanpa CPO spesifik), data dari
-                            semua CPO yang cocok akan digabung. <strong>Negara</strong> bisa dipilih sendirian
-                            (menggabungkan semua CPO yang punya shipment dari negara itu) atau dikombinasikan
-                            dengan Buyer/Style/CPO untuk mempersempit hasilnya. Data tidak dimuat otomatis saat
-                            halaman dibuka karena cukup berat kalau ditarik untuk semua CPO sekaligus.
+                            <strong>CPO</strong>, <strong>OCF</strong>, atau <strong>Negara</strong> pada kolom di atas
+                            untuk menampilkan data dashboard. Kalau cuma Buyer dan/atau Style yang dipilih (tanpa CPO
+                            spesifik), data dari semua CPO yang cocok akan digabung. <strong>OCF</strong> dan
+                            <strong>Negara</strong> bisa dipilih sendirian (menggabungkan semua CPO yang cocok) atau
+                            dikombinasikan dengan Buyer/Style/CPO untuk mempersempit hasilnya. Data tidak dimuat
+                            otomatis saat halaman dibuka karena cukup berat kalau ditarik untuk semua CPO sekaligus.
                         </div>
                     </div>
                 </div>
@@ -171,12 +181,22 @@
                             </div>
                         </div>
                     </div>
+
+                    
                     <div class="col-md mb-4">
                         <div class="card shadow h-100 py-2 rekon-kpi">
                             <div class="card-body text-center">
-                                <i class="fas fa-calendar-alt fa-lg text-secondary mb-2"></i>
-                                <div class="text-xs font-weight-bold text-gray-600 text-uppercase mb-1">Shipment Date</div>
-                                <div class="small font-weight-bold text-gray-800" id="kpi-shipdates">-</div>
+                                <table class="table table-bordered table-sm mb-0 rekon-ship-calendar-sm" id="mon-ship-calendar">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-center">Min</th><th class="text-center">Sen</th>
+                                            <th class="text-center">Sel</th><th class="text-center">Rab</th>
+                                            <th class="text-center">Kam</th><th class="text-center">Jum</th>
+                                            <th class="text-center">Sab</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -194,40 +214,18 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-lg-7 mb-3 mb-lg-0">
-                                <table class="table table-bordered table-sm mb-0" id="mon-ship-calendar">
-                                    <thead>
-                                        <tr>
-                                            <th class="text-center">Min</th><th class="text-center">Sen</th>
-                                            <th class="text-center">Sel</th><th class="text-center">Rab</th>
-                                            <th class="text-center">Kam</th><th class="text-center">Jum</th>
-                                            <th class="text-center">Sab</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                                <div class="small text-gray-600 mt-2 d-flex" style="gap:16px">
-                                    <span><span class="badge bg-info" style="width:12px;height:12px;display:inline-block;padding:0;"></span> Ada dokumen shipment</span>
-                                </div>
-                            </div>
-                            <div class="col-lg-5">
-                                <div id="ship-cal-detail-empty" class="text-muted small">
-                                    Klik salah satu tanggal pada kalender untuk melihat detail dokumen shipment
-                                    (<em>tgl bukti</em>) pada tanggal tersebut.
-                                </div>
-                                <div id="ship-cal-detail-wrap" class="d-none">
-                                    <div class="small font-weight-bold text-gray-700 mb-2" id="ship-cal-detail-title"></div>
-                                    <div class="mon-table-box" style="max-height:340px;">
-                                        <table class="table table-bordered table-sm mon-table mon-table-fixed w-100" id="table-ship-cal-detail">
-                                            <thead>
-                                                <tr>
-                                                    <th>Uraian</th><th>No. Bukti</th><th>Supplier</th>
-                                                    <th>Barang</th><th class="right">Jumlah Barang</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody></tbody>
-                                        </table>
-                                    </div>
+                            <div class="col-lg-12">
+                                <!-- Hilangkan scroll pada card ini dengan menambahkan class no-scroll dan menghapus max-height inline -->
+                                <div class="mon-table-box no-scroll">
+                                    <table class="table table-bordered table-sm mon-table mon-table-fixed w-100" id="table-ship-cal-detail">
+                                        <thead>
+                                            <tr>
+                                                <th>Tgl Bukti</th><th>Uraian</th><th>No. Bukti</th><th>Supplier</th>
+                                                <th>Barang</th><th class="right">Jumlah Barang</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -519,18 +517,6 @@
 
 <a class="scroll-to-top rounded" href="#page-top"><i class="fas fa-angle-up"></i></a>
 
-<!-- Bootstrap core JavaScript -->
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/jquery/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/jquery-easing/jquery.easing.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/js/sb-admin-2.min.js"></script>
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-
-<!-- Select2 JS & CSS -->
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
 <!-- DataTables -->
 <script src="https://cdn.jsdelivr.net/npm/datatables.net@1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/js/dataTables.bootstrap5.min.js"></script>
@@ -563,6 +549,41 @@
     .mon-table-box table thead th {
         border-bottom: 2px solid #dee2e6;
     }
+
+    /* ============ PERUBAHAN YANG DIMINTA ============ */
+    /* Semua header card di area widget berwarna #1f3864 dengan teks putih */
+    #rekon-widgets .card-header,
+    #rekon-widgets .card .card-header {
+        background: #1f3864 !important;
+        color: #fff !important;
+    }
+    #rekon-widgets .card-header h6,
+    #rekon-widgets .card-header .m-0,
+    #rekon-widgets .card-header * {
+        color: #fff !important;
+    }
+
+    /* Semua header tabel (DataTables maupun biasa) berwarna sama */
+    #rekon-widgets .dataTable thead th,
+    #rekon-widgets .table thead th {
+        background: #1f3864 !important;
+        color: #fff !important;
+    }
+
+    /* Semua sel body tabel (DataTables maupun biasa) teks hitam */
+    #rekon-widgets .dataTable tbody td,
+    #rekon-widgets .table tbody td {
+        color: #000 !important;
+    }
+    /* =============================================== */
+
+    /* Hilangkan scroll pada card Shipment Date */
+    .mon-table-box.no-scroll {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    /* ============================================== */
+
 </style>
 
 <script>
@@ -584,6 +605,7 @@
     const fBuyer = document.getElementById('f-buyer');
     const fStyle = document.getElementById('f-style');
     const fCpo = document.getElementById('f-cpo');
+    const fOcf = document.getElementById('f-ocf');
     const fNegara = document.getElementById('f-negara');
     const emptyNotice = document.getElementById('rekon-empty-notice');
     const widgets = document.getElementById('rekon-widgets');
@@ -622,10 +644,15 @@
         populateSelect($(fCpo), uniqueSorted(cpoRows.map(r => r.uraian)));
     }
 
+    let ocfOptions = [];
+    try { ocfOptions = JSON.parse(app.dataset.ocfOptions || '[]'); } catch (e) { ocfOptions = []; }
+
     (function initCascadeFilters() {
         populateSelect($(fBuyer), uniqueSorted(filterOptions.map(r => r.brand)));
+        populateSelect($(fOcf), uniqueSorted(ocfOptions));
 
-        const initialUraian = app.dataset.filters ? (JSON.parse(app.dataset.filters).uraian || null) : null;
+        const initialFilters = app.dataset.filters ? JSON.parse(app.dataset.filters) : {};
+        const initialUraian = initialFilters.uraian || null;
         if (initialUraian) {
             const match = filterOptions.find(r => r.uraian === initialUraian);
             if (match) {
@@ -637,6 +664,9 @@
 
         if (initialUraian) {
             $(fCpo).val(initialUraian).trigger('change');
+        }
+        if (initialFilters.ocf) {
+            $(fOcf).val(initialFilters.ocf).trigger('change');
         }
     })();
 
@@ -681,6 +711,14 @@
             negaraWrap.style.display = 'none';
         }
 
+        const ocfWrap = document.getElementById('hdr-ocf-wrap');
+        if (fOcf.value) {
+            document.getElementById('hdr-ocf').textContent = fOcf.value;
+            ocfWrap.style.display = '';
+        } else {
+            ocfWrap.style.display = 'none';
+        }
+
         const countWrap = document.getElementById('hdr-cpo-count-wrap');
         const countEl = document.getElementById('hdr-cpo-count');
         if (header.cpoCount && header.cpoCount > 1) {
@@ -695,15 +733,12 @@
         });
     }
 
-    function renderKpi(summary, shipmentDates) {
+    function renderKpi(summary) {
         document.getElementById('kpi-contract').textContent = fmtNum(summary.contract_qty);
         document.getElementById('kpi-shipment').textContent = fmtNum(summary.shipment_qty);
         document.getElementById('kpi-achievement').textContent = summary.achievement_pct + '%';
         document.getElementById('kpi-balance').textContent = fmtNum(summary.balance_qty);
         document.getElementById('kpi-shortage').textContent = summary.shortage_pct + '%';
-        document.getElementById('kpi-shipdates').textContent = (shipmentDates && shipmentDates.length)
-            ? shipmentDates.join(', ')
-            : '-';
     }
 
     function renderFabricQty(fabricQty) {
@@ -731,7 +766,7 @@
         chartFabricUsage = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: ['Usage', 'Scrap'],
+                // labels: ['Usage', 'Scrap'],
                 datasets: [{
                     data: [usagePct, scrapPct],
                     backgroundColor: ['#1f6f8b', '#e07b39'],
@@ -744,7 +779,7 @@
                 cutout: '40%',
                 plugins: {
                     legend: { display: false },
-                    tooltip: { callbacks: { label: (c) => `${c.label}: ${c.parsed}%` } },
+                    tooltip: { callbacks: { label: (c) => `${c.parsed}%` } },
                 },
             },
             plugins: [{
@@ -1059,7 +1094,7 @@
 
     function renderAll(json) {
         renderHeader(json.header);
-        renderKpi(json.summary, json.shipmentDates);
+        renderKpi(json.summary);
         renderFabricQty(json.fabricQty);
         renderFabricUsage(json.fabricUsage);
         renderMaterialAchievement(json.materialAchievement);
@@ -1069,6 +1104,15 @@
         renderShipment(json.shipmentByDate, json.shipmentDetail);
         renderShipmentCategory(json.shipmentByCategory);
         renderDetail(json.detail);
+
+        // Widget "Shipment Date": tabel di sebelah kalender langsung diisi
+        // SELURUH data shipment (bukan lagi menunggu klik tanggal).
+        renderShipCalDetailTable(json.shipmentDetail);
+
+        // Dropdown OCF di-cascade ulang mengikuti Buyer/Style yang aktif.
+        if (Array.isArray(json.ocfOptions)) {
+            populateSelect($(fOcf), json.ocfOptions);
+        }
     }
 
     // ================= SHIPMENT DATE: kalender (mirip Kalender Shipment di dashboard Gabungan) =================
@@ -1078,26 +1122,17 @@
     const shipCalState = {
         year: today.getFullYear(),
         month: today.getMonth() + 1, // 1-12
-        selectedDate: null,
         requestSeq: 0,
     };
 
-    const shipCalLabel       = document.getElementById('ship-cal-label');
-    const shipCalBody        = document.querySelector('#mon-ship-calendar tbody');
-    const shipCalPrev        = document.getElementById('ship-cal-prev');
-    const shipCalNext        = document.getElementById('ship-cal-next');
-    const shipCalDetailEmpty = document.getElementById('ship-cal-detail-empty');
-    const shipCalDetailWrap  = document.getElementById('ship-cal-detail-wrap');
-    const shipCalDetailTitle = document.getElementById('ship-cal-detail-title');
+    const shipCalLabel = document.getElementById('ship-cal-label');
+    const shipCalBody  = document.querySelector('#mon-ship-calendar tbody');
+    const shipCalPrev  = document.getElementById('ship-cal-prev');
+    const shipCalNext  = document.getElementById('ship-cal-next');
     let dtShipCalDetail;
 
     function pad2(n){ return String(n).padStart(2, '0'); }
     function toIsoDate(y, m, d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
-
-    function formatTanggalIndonesia(iso) {
-        const [y, m, d] = iso.split('-').map(Number);
-        return `${d} ${monthNames[m - 1]} ${y}`;
-    }
 
     function buildShipCalendarQuery(extra) {
         const params = buildQueryParams(currentFilters());
@@ -1138,28 +1173,19 @@
                 const iso = toIsoDate(year, month, d);
                 const info = dayMap[iso];
                 const isToday = iso === toIsoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
-                const isSelected = iso === shipCalState.selectedDate;
 
                 let cls = 'text-center';
                 if (info) cls += ' bg-info text-white';
                 if (isToday) cls += ' font-weight-bold';
 
-                const style = isSelected
-                    ? 'cursor:pointer; vertical-align:middle; box-shadow: inset 0 0 0 3px #4e73df;'
-                    : 'cursor:pointer; vertical-align:middle;';
-
-                html += `<td class="${cls}" style="${style}" data-date="${iso}" title="${info ? `${info.jumlah_doc} dokumen` : ''}">
+                html += `<td class="${cls}" style="vertical-align:middle;" title="${info ? `${info.jumlah_doc} dokumen` : ''}">
                     <div>${d}</div>
-                    ${info ? `<span class="badge badge-pill badge-light" style="font-size:.65rem;">${info.jumlah_doc}</span>` : ''}
+                    ${info ? `<span class="badge badge-pill badge-light" style="font-size:.6rem;">${info.jumlah_doc}</span>` : ''}
                 </td>`;
             }
             html += '</tr>';
         }
         shipCalBody.innerHTML = html;
-
-        shipCalBody.querySelectorAll('td[data-date]').forEach(td => {
-            td.addEventListener('click', () => selectShipCalendarDate(td.dataset.date));
-        });
     }
 
     function loadShipCalendarMonth(year, month) {
@@ -1192,38 +1218,34 @@
             });
     }
 
-    function selectShipCalendarDate(iso) {
-        shipCalState.selectedDate = iso;
-        loadShipCalendarMonth(shipCalState.year, shipCalState.month);
-
-        // Kirim filter yang aktif bersama tanggal
-        const filters = currentFilters();
-        const params = buildQueryParams({ ...filters, date: iso });
-        shipCalDetailTitle.textContent = `Shipment: ${formatTanggalIndonesia(iso)}`;
-        shipCalDetailEmpty.classList.add('d-none');
-        shipCalDetailWrap.classList.remove('d-none');
-
-        if (dtShipCalDetail) { dtShipCalDetail.clear().draw(); }
-
-        fetch(`${calendarDetailUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
-            .then(r => r.json())
-            .then(json => renderShipCalDetailTable(json.rows || []))
-            .catch(() => renderShipCalDetailTable([]));
+    // Format tanggal "tgl_bukti" (mis. "2026-01-15" atau "2026-01-15 00:00:00")
+    // menjadi format Indonesia "1 Januari 2026" untuk kolom Tgl Bukti.
+    function formatTanggalIndonesia(value) {
+        if (!value) return '';
+        const datePart = String(value).split(' ')[0]; // buang jam kalau ada
+        const [y, m, d] = datePart.split('-').map(Number);
+        if (!y || !m || !d || !monthNames[m - 1]) return value;
+        return `${d} ${monthNames[m - 1]} ${y}`;
     }
 
+    // Tabel di samping kalender sekarang langsung menampilkan SELURUH data
+    // shipment (json.shipmentDetail dari endpoint utama) begitu filter
+    // aktif dimuat -- tidak perlu lagi klik tanggal di kalender dulu.
+    // Scroll pada tabel ini telah dihilangkan (scrollY dihilangkan).
     function renderShipCalDetailTable(rows) {
         if (dtShipCalDetail) { dtShipCalDetail.destroy(); dtShipCalDetail = null; }
 
         dtShipCalDetail = $('#table-ship-cal-detail').DataTable({
-            data: rows,
-            pageLength: 5,
-            lengthMenu: [5, 10, 25, 50],
+            data: rows || [],
+            pageLength: 10,
+            lengthMenu: [10, 25, 50, 100],
             order: [],
             autoWidth: false,
-            scrollY: '200px',
-            scrollCollapse: true,
+            // scrollY dihilangkan agar tidak ada scroll vertikal
+            // scrollCollapse: true, // tidak diperlukan
             fixedHeader: true,
             columns: [
+                { data: 'tgl_bukti', defaultContent: '', render: v => formatTanggalIndonesia(v) },
                 { data: 'uraian', defaultContent: '' },
                 { data: 'no_bukti', defaultContent: '' },
                 { data: 'supplier_name', defaultContent: '' },
@@ -1277,13 +1299,14 @@
             brand: fBuyer.value,
             style: fStyle.value,
             negara: fNegara.value,
+            ocf: fOcf.value,
         };
     }
 
     function refresh() {
-        const { uraian, brand, style, negara } = currentFilters();
+        const { uraian, brand, style, negara, ocf } = currentFilters();
 
-        if (!uraian && !brand && !style && !negara) {
+        if (!uraian && !brand && !style && !negara && !ocf) {
             if (widgets) widgets.style.display = 'none';
             if (emptyNotice) emptyNotice.style.display = '';
             document.getElementById('rekon-last-updated').textContent = '-';
@@ -1301,7 +1324,7 @@
             didOpen: () => Swal.showLoading(),
         });
 
-        const url = buildUrl(endpoint, { uraian, brand, style, negara });
+        const url = buildUrl(endpoint, { uraian, brand, style, negara, ocf });
         fetch(url)
             .then(r => r.json())
             .then(json => {
@@ -1445,6 +1468,7 @@
         refresh();
     });
     $(fCpo).on('select2:select select2:clear', refresh);
+    $(fOcf).on('select2:select select2:clear', refresh);
     $(fNegara).on('select2:select select2:clear', refresh);
 
     if (btnFilterCpo) btnFilterCpo.addEventListener('click', refresh);
@@ -1586,6 +1610,15 @@
 
     .rekon-pipe-arrow { display: flex; align-items: center; justify-content: center; color: #4e73df; padding: 0 .5rem; margin-bottom: .5rem; }
 
+    /* Kalender "Shipment Date": dibuat kecil & read-only (bukan tombol lagi) --
+       tabel di sampingnya sudah menampilkan seluruh data tanpa perlu klik. */
+    .rekon-ship-calendar-sm th,
+    .rekon-ship-calendar-sm td {
+        font-size: .72rem;
+        padding: .25rem .15rem;
+    }
+    .rekon-ship-calendar-sm td { line-height: 1.1; }
+
     .rekon-pipe-legend {
         display: flex;
         gap: 1.25rem;
@@ -1717,6 +1750,50 @@
         margin-right: .4rem;
         vertical-align: middle;
     }
+
+    /* ============ PERUBAHAN YANG DIMINTA ============ */
+    /* Semua header card di area widget berwarna #1f3864 dengan teks putih */
+    #rekon-widgets .card-header,
+    #rekon-widgets .card .card-header {
+        background: #1f3864 !important;
+        color: #fff !important;
+    }
+    #rekon-widgets .card-header h6,
+    #rekon-widgets .card-header .m-0,
+    #rekon-widgets .card-header * {
+        color: #fff !important;
+    }
+
+    /* Semua header tabel (DataTables maupun biasa) berwarna sama */
+    #rekon-widgets .dataTable thead th,
+    #rekon-widgets .table thead th {
+        background: #1f3864 !important;
+        color: #fff !important;
+    }
+
+    /* Semua sel body tabel (DataTables maupun biasa) teks hitam */
+    #rekon-widgets .dataTable tbody td,
+    #rekon-widgets .table tbody td {
+        color: #000 !important;
+    }
+    /* =============================================== */
+
+    /* ====== CENTER VERTICAL UNTUK KPI CARD ====== */
+    .rekon-kpi .card-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+    }
+    /* ============================================ */
+
+    /* Hilangkan scroll pada card Shipment Date */
+    .mon-table-box.no-scroll {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    /* ============================================== */
 </style>
 
 </body>

@@ -119,37 +119,6 @@
                 {{-- ================= WIDGET DATA: disembunyikan sampai filter dipilih ================= --}}
                 <div id="mon-widgets" style="display:none">
 
-                <!-- {{-- ================= KPI CARDS ================= --}}
-                <div class="row">
-                    <div class="col-md mb-4">
-                        <div class="card shadow h-100 py-2 rekon-kpi">
-                            <div class="card-body text-center">
-                                <i class="fas fa-boxes fa-lg text-primary mb-2"></i>
-                                <div class="text-xs font-weight-bold text-gray-600 text-uppercase mb-1">Total Qty Order</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-qty-order">0</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md mb-4">
-                        <div class="card shadow h-100 py-2 rekon-kpi">
-                            <div class="card-body text-center">
-                                <i class="fas fa-tshirt fa-lg text-success mb-2"></i>
-                                <div class="text-xs font-weight-bold text-gray-600 text-uppercase mb-1">Total Style</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-total-style">0</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md mb-4">
-                        <div class="card shadow h-100 py-2 rekon-kpi">
-                            <div class="card-body text-center">
-                                <i class="fas fa-exclamation-triangle fa-lg text-warning mb-2"></i>
-                                <div class="text-xs font-weight-bold text-gray-600 text-uppercase mb-1">Item BOM Belum Diorder</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-belum-order">0</div>
-                            </div>
-                        </div>
-                    </div>
-                </div> -->
-
                 {{-- ================= Pivot 1: ORDER ================= --}}
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 mon-card-header-dark">
@@ -170,7 +139,7 @@
                                         <th id="foot-total-cpo">Total CPO: 0</th>
                                         <th id="foot-total-negara">Total Negara: 0</th>
                                         <th></th>
-                                        <th class="right" id="foot-total-qty">0</th>
+                                        <th class="text-right" id="foot-total-qty">0</th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -255,15 +224,6 @@
 
 <a class="scroll-to-top rounded" href="#page-top"><i class="fas fa-angle-up"></i></a>
 
-<!-- Bootstrap core JavaScript -->
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/jquery/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/jquery-easing/jquery.easing.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/js/sb-admin-2.min.js"></script>
-
-<!-- Select2 JS & CSS -->
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
 <!-- DataTables -->
 <script src="https://cdn.jsdelivr.net/npm/datatables.net@1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/js/dataTables.bootstrap5.min.js"></script>
@@ -271,7 +231,7 @@
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<!-- CSS Tambahan untuk sticky header (native DataTables scrollY, bukan CSS manual) -->
+<!-- CSS Tambahan untuk sticky header + perbaikan border alignment -->
 <style>
     /* Warna header tabel (DataTables): gelap dengan teks putih, konsisten
        dengan warna header card (lihat .mon-card-header-dark di bawah). */
@@ -466,6 +426,52 @@
     .mon-toggle {
         cursor: pointer;
     }
+
+    /* =========================================================
+       PERBAIKAN ALIGNMENT BORDER THEAD/TBODY/TFOOT
+       DataTables dengan scrollY + scrollX sering membuat
+       border tidak lurus. Solusi: force border-collapse
+       dan gunakan width 100% + table-layout fixed.
+       ========================================================= */
+    .mon-scroll-box .dataTable {
+        border-collapse: collapse !important;
+        table-layout: fixed !important;
+        width: 100% !important;
+    }
+    .mon-scroll-box .dataTable thead th,
+    .mon-scroll-box .dataTable tbody td,
+    .mon-scroll-box .dataTable tfoot th {
+        border: 1px solid #d1d3e2 !important;
+    }
+    .mon-scroll-box .dataTables_scrollHead,
+    .mon-scroll-box .dataTables_scrollBody,
+    .mon-scroll-box .dataTables_scrollFoot {
+        width: 100% !important;
+    }
+    .mon-scroll-box .dataTables_scrollHeadInner,
+    .mon-scroll-box .dataTables_scrollFootInner {
+        width: 100% !important;
+    }
+    .mon-scroll-box .dataTables_scrollHeadInner table,
+    .mon-scroll-box .dataTables_scrollFootInner table {
+        margin: 0 !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+    }
+    .mon-scroll-box .dataTables_scrollBody table {
+        margin: 0 !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+    }
+    /* Hilangkan padding kosong di dalam scroll wrapper agar
+       tidak mempengaruhi perhitungan lebar kolom */
+    .mon-scroll-box .dataTables_scrollBody {
+        padding: 0 !important;
+    }
+    /* Pastikan footer tidak melorot */
+    .mon-scroll-box .dataTables_scrollFoot {
+        border-top: 2px solid #1b3a5c;
+    }
 </style>
 
 <script>
@@ -499,9 +505,6 @@
     const btnSyncAll = document.getElementById('btn-sync-all');
 
     let dtOrder, dtMaterial, dtWorkOrder;
-    // Data mentah pivot MATERIAL PURCHASE hasil fetch terakhir -- disimpan
-    // supaya dropdown "Urutan" bisa langsung re-render tabel tanpa fetch ulang
-    // ke server saat mode sort diganti.
     let lastMaterialRows = [];
 
     // ================================================================
@@ -513,10 +516,6 @@
 
     /* =========================================================
        Cascading Select2: Brand -> Style -> Uraian (CPO)
-       Sumber data: kombinasi uraian/brand/style yang benar-benar
-       ada di mon_orders, dikirim server lewat data-filter-options
-       (ringan, tanpa request tambahan) -- persis seperti pola di
-       blade rekonsiliasi.
        ========================================================= */
     let filterOptions = [];
     const rawFilterOptions = app.dataset.filterOptions || '[]';
@@ -561,15 +560,6 @@
         populateSelect($(fUraian), uniqueSorted(uraianRows.map(r => r.uraian)));
     }
 
-    // OCF (mon_boms.code_prod) adalah jalur filter ALTERNATIF dari CPO/Uraian
-    // (memilih salah satu mengosongkan yang lain, lihat handler select2:select
-    // di bawah), TAPI isi dropdown-nya tetap ikut cascade mengikuti brand/style
-    // yang dipilih -- sama seperti dropdown Uraian (CPO). Daftar awal ini
-    // (dari data-ocf-options, dihitung server tanpa filter brand/style saat
-    // pertama halaman dibuka) dipakai untuk render awal saja; setiap kali
-    // filter berubah dan refresh() dipanggil, dropdown OCF diisi ulang dari
-    // json.ocfOptions (lihat function refresh()) supaya OCF yang tampil hanya
-    // yang relevan dengan brand/style terpilih.
     let ocfOptions = [];
     try {
         ocfOptions = JSON.parse(app.dataset.ocfOptions || '[]');
@@ -689,38 +679,31 @@
     }
 
     // ================================================================
-    // Pivot ORDER -- tabel diisi manual (tbody), lalu di-enhance dengan
-    // DataTables bawaan (scrollY membuat header freeze secara native,
-    // BUKAN lewat CSS manual).
+    // Fungsi bantu untuk menyesuaikan alignment DataTables
+    // ================================================================
+    function adjustDataTableColumns(dtInstance) {
+        if (dtInstance && typeof dtInstance.columns === 'function') {
+            dtInstance.columns.adjust().draw();
+        }
+    }
+
+    // ================================================================
+    // Pivot ORDER
     // ================================================================
     function renderOrderPivot(rows){
         if (dtOrder) { dtOrder.destroy(); dtOrder = null; }
         $('#table-order tbody').empty();
 
-        // Dulu tabel ini diisi manual (fillTable ke <tbody>) lalu DataTables
-        // dipasang tanpa opsi `data`/`columns` -- akibatnya DataTables tidak
-        // pernah tahu bentuk data asli (uraian/destination/qty_order) per baris,
-        // cuma tahu isi HTML selnya. Itu sebabnya footerCallback SEBELUMNYA
-        // terpaksa menghitung ulang total dari closure `rows` (data awal, utuh),
-        // bukan dari baris yang sedang tampil setelah user mengetik di kolom
-        // pencarian -- jadi footer TIDAK ikut berubah saat difilter/dicari.
-        //
-        // Perbaikan: pakai `data`+`columns` supaya setiap baris DataTables
-        // "mengenal" objek data aslinya, lalu di footerCallback pakai
-        // api.rows({search:'applied'}).data() -- ini otomatis hanya berisi
-        // baris yang lolos pencarian aktif, sehingga footer menghitung ulang
-        // dengan benar setiap kali user mengetik di kolom Cari.
         dtOrder = $('#table-order').DataTable({
             language: dtLanguage,
             data: rows,
             pageLength: 10,
             lengthMenu: [10, 25, 50, 100],
-            // Urut kronologis (Juli sebelum Agustus dst.) berdasarkan kolom
-            // Estimasi Shipment (pakai tanggal ISO untuk sorting, bukan teks tampilan).
             order: [[2, 'asc']],
             autoWidth: false,
             width: '100%',
             scrollY: '360px',
+            scrollX: true,           // PERBAIKAN: scrollX agar kolom konsisten
             scrollCollapse: true,
             fixedHeader: true,
             columns: [
@@ -730,8 +713,6 @@
                     data: 'estimasi_shipment',
                     render: (v, type) => {
                         if (type === 'display') return fmtDate(v);
-                        // Untuk sorting/pencarian pakai ISO date (2026-07-31),
-                        // bukan teks "31 Juli 2026", supaya urutannya kronologis.
                         return v ? String(v).slice(0, 10) : '';
                     }
                 },
@@ -745,10 +726,6 @@
                 const cpoSet = new Set();
                 const negaraSet = new Set();
                 let sumQty = 0;
-                // search:'applied' -> hanya baris yang sedang lolos pencarian/filter
-                // DataTables aktif saat ini (bukan seluruh data awal), supaya total
-                // di footer BENAR-BENAR menghitung ulang tiap kali user mengetik
-                // di kolom Cari, sesuai yang diminta.
                 api.rows({ search: 'applied' }).data().each(function(r){
                     if (r.uraian) cpoSet.add(r.uraian);
                     if (r.destination) negaraSet.add(r.destination);
@@ -760,50 +737,31 @@
             },
         });
         $('#table-order').closest('.table-responsive').addClass('mon-scroll-box');
+
+        // PERBAIKAN: sesuaikan kolom setelah inisialisasi dan setiap draw
+        adjustDataTableColumns(dtOrder);
+        dtOrder.on('draw', function() {
+            adjustDataTableColumns(this);
+        });
     }
 
     // ================================================================
-    // DETAIL CHILD UNTUK MATERIAL PURCHASE -- DIPERBAIKI AGAR RAPI
-    //
-    // Sebelumnya garis batas kolom child-row tidak lurus dengan parent-row
-    // karena child ditampilkan sebagai <table> baru yang berdiri sendiri --
-    // browser menghitung lebar kolomnya sendiri (auto), tidak mengikuti
-    // lebar kolom asli di parent DataTable.
-    //
-    // Perbaikan: setiap kali child di-render, ambil lebar aktual (px) dari
-    // setiap <td> pada baris parent yang sedang di-klik (widthnya SUDAH pasti
-    // sama dengan header karena itu baris nyata di tabel yang sama), lalu
-    // paksa child table pakai lebar kolom yang identik lewat <colgroup>.
-    // Karena child pakai colspan="2" untuk kolom ikon+Item, colgroup child
-    // tetap dibuat 1:1 sejumlah kolom parent (11 <col>) supaya colspan
-    // menjumlahkan lebar yang tepat juga.
+    // DETAIL CHILD UNTUK MATERIAL PURCHASE
     // ================================================================
     function buildChildColgroup(parentTr){
         const widths = [];
         parentTr.find('> td').each(function(){
-            // getBoundingClientRect() memberi lebar sub-pixel yang presisi
-            // (mis. 87.4px), BEDA dengan $(el).outerWidth() yang membulatkan
-            // ke integer -- pembulatan itu terakumulasi kolom demi kolom pada
-            // tabel child (border-collapse) dan bikin kolom paling kanan
-            // "geser" sedikit demi sedikit dibanding parent. Dengan
-            // getBoundingClientRect() totalnya identik dengan lebar asli.
             widths.push(this.getBoundingClientRect().width);
         });
         if (!widths.length) return '';
         return `<colgroup>${widths.map(w => `<col style="width:${w}px">`).join('')}</colgroup>`;
     }
 
-    // Sort baris detail (child) berdasarkan warna: baris "merah" (sisa > 0,
-    // belum diterima penuh) dikelompokkan di atas -- sebelumnya sort-by-color
-    // cuma berlaku untuk baris agregat (parent) lewat kolom Sisa, sementara
-    // baris detail di dalam expand child dibiarkan apa adanya (urutan dari
-    // query backend). Sort ini SELALU aktif untuk child, terlepas dari mode
-    // dropdown "Urutan" yang cuma mengatur baris parent.
     function sortDetailsByColor(details){
         return [...details].sort((a, b) => {
             const aRed = Number(a.sisa) > 0.00001 ? 1 : 0;
             const bRed = Number(b.sisa) > 0.00001 ? 1 : 0;
-            return bRed - aRed; // merah (belum diterima) duluan, sisanya tetap urutan asli (stable sort)
+            return bRed - aRed;
         });
     }
 
@@ -838,9 +796,6 @@
         </table>`;
     }
 
-    // Sinkronkan ulang lebar kolom semua child-row yang sedang terbuka --
-    // dipanggil saat window di-resize supaya alignment tidak berantakan
-    // lagi kalau lebar layar berubah (mis. sidebar toggle, resize browser).
     function resyncOpenMaterialChildren(){
         if (!dtMaterial) return;
         dtMaterial.rows().every(function(){
@@ -852,9 +807,6 @@
         });
     }
 
-    // Render ulang ISI (bukan cuma lebar kolom) semua child yang sedang
-    // terbuka -- dipakai saat mode "Urutan" (dropdown sort by color) diganti,
-    // supaya baris detail yang sudah terlanjur di-expand ikut ter-update.
     function rerenderOpenMaterialChildren(){
         if (!dtMaterial) return;
         dtMaterial.rows().every(function(){
@@ -879,14 +831,13 @@
         return order > 0 ? (diterima / order * 100) : 0;
     }
 
-    // Mode "Urutan" untuk baris PARENT (agregat) di Pivot MATERIAL PURCHASE,
-    // dikontrol lewat dropdown #f-material-sort:
-    //  - 'color'   -> urut kolom Sisa desc (baris merah/belum diterima penuh duluan)
-    //  - 'default' -> urut Kode Barang (kolom index 1) ascending
     function currentMaterialOrder(){
         return (fMaterialSort && fMaterialSort.value === 'default') ? [[1, 'asc']] : [[12, 'desc']];
     }
 
+    // ================================================================
+    // Pivot MATERIAL PURCHASE
+    // ================================================================
     function renderMaterialPivot(rows){
         lastMaterialRows = rows;
         if (dtMaterial) { dtMaterial.destroy(); dtMaterial = null; }
@@ -900,6 +851,7 @@
             autoWidth: false,
             width: '100%',
             scrollY: '420px',
+            scrollX: true,           // PERBAIKAN: scrollX agar kolom konsisten
             scrollCollapse: true,
             fixedHeader: true,
             columns: [
@@ -942,14 +894,14 @@
         });
         $('#table-material').closest('.table-responsive').addClass('mon-scroll-box');
 
-        // Selain resync saat window resize, resync juga tiap kali tabel
-        // digambar ulang (search/sort/paging) -- lebar kolom sesekali bisa
-        // sedikit berubah antar redraw, jadi child yang sedang terbuka perlu
-        // ikut disesuaikan supaya kolomnya tetap lurus dengan parent.
-        dtMaterial.on('draw.dt', resyncOpenMaterialChildren);
+        // PERBAIKAN: sesuaikan kolom setelah inisialisasi
+        adjustDataTableColumns(dtMaterial);
+        dtMaterial.on('draw.dt', function() {
+            adjustDataTableColumns(this);
+            resyncOpenMaterialChildren();
+        });
 
-        // Delegasikan klik ke elemen tabel (stabil lintas destroy/redraw).
-        // Kolom Item sekarang kolom ke-3 (setelah ikon + Kode Barang).
+        // Delegasikan klik ke elemen tabel
         $('#table-material').off('click.monToggle').on('click.monToggle', 'td:first-child, td:nth-child(3)', function(){
             const tr = $(this).closest('tr');
             const row = dtMaterial.row(tr);
@@ -967,6 +919,9 @@
         });
     }
 
+    // ================================================================
+    // Pivot WORK ORDER
+    // ================================================================
     function renderWorkOrderPivot(rows){
         if (dtWorkOrder) { dtWorkOrder.destroy(); dtWorkOrder = null; }
 
@@ -989,12 +944,22 @@
             autoWidth: false,
             width: '100%',
             scrollY: '420px',
+            scrollX: true,           // PERBAIKAN: scrollX agar kolom konsisten
             scrollCollapse: true,
             fixedHeader: true,
         });
         $('#table-workorder').closest('.table-responsive').addClass('mon-scroll-box');
+
+        // PERBAIKAN: sesuaikan kolom setelah inisialisasi dan setiap draw
+        adjustDataTableColumns(dtWorkOrder);
+        dtWorkOrder.on('draw', function() {
+            adjustDataTableColumns(this);
+        });
     }
 
+    // ================================================================
+    // LOADING / ERROR
+    // ================================================================
     function showLoading(){
         Swal.fire({
             title: 'Memuat data...',
@@ -1030,9 +995,7 @@
     }
 
     // ================================================================
-    // REFRESH -- kalau belum ada filter sama sekali, jangan tarik data;
-    // cukup tampilkan card "Belum ada filter yang dipilih" (mirip blade
-    // rekonsiliasi).
+    // REFRESH DATA
     // ================================================================
     function refresh(){
         const filters = currentFilters();
@@ -1061,17 +1024,10 @@
                 return r.json();
             })
             .then(json => {
-                // document.getElementById('kpi-qty-order').textContent = fmt(json.summary.total_qty_order);
-                // document.getElementById('kpi-total-style').textContent = fmt(json.summary.total_style);
-                // document.getElementById('kpi-belum-order').textContent = fmt(json.summary.total_item_belum_order);
-
                 renderOrderPivot(json.orderPivot);
                 renderMaterialPivot(json.materialPivot);
                 renderWorkOrderPivot(json.workOrderPivot);
 
-                // Dropdown OCF di-cascade ulang mengikuti brand/style yang
-                // sedang aktif (sama seperti dropdown Uraian/CPO), bukan lagi
-                // menampilkan semua kode OCF setiap saat.
                 if (Array.isArray(json.ocfOptions)) {
                     populateSelect($(fOcf), json.ocfOptions);
                 }
@@ -1085,8 +1041,7 @@
     }
 
     // ================================================================
-    // Filter langsung refresh begitu dipilih/dikosongkan -- tanpa
-    // tombol Filter/Reset, persis seperti blade rekonsiliasi.
+    // FILTER HANDLERS
     // ================================================================
     $(fBrand).on('select2:select select2:clear', function(){
         $(fStyle).val('').trigger('change');
@@ -1099,8 +1054,6 @@
         refreshCascade();
         refresh();
     });
-    // Uraian (CPO) dan OCF adalah dua jalur filter alternatif untuk hal yang
-    // sama -- pilih salah satu saja, jadi memilih yang satu mengosongkan yang lain.
     $(fUraian).on('select2:select select2:clear', function(){
         if (fUraian.value) {
             $(fOcf).val('').trigger('change');
@@ -1114,13 +1067,7 @@
         refresh();
     });
 
-    // Dropdown "Urutan" di card Pivot MATERIAL PURCHASE -- ganti urutan baris
-    // parent secara in-place (order()+draw()), BUKAN destroy+rebuild penuh,
-    // supaya kotak pencarian/halaman aktif yang sedang dipakai user tidak
-    // ikut ter-reset. Baris detail (child) yang sedang terbuka ikut di-render
-    // ulang juga lewat rerenderOpenMaterialChildren() (isinya sendiri sudah
-    // selalu diurut warna, jadi ini cuma menyegarkan colgroup+konten setelah
-    // posisi baris berubah).
+    // Dropdown "Urutan" di card Pivot MATERIAL PURCHASE
     if (fMaterialSort) {
         fMaterialSort.addEventListener('change', function(){
             if (dtMaterial) {
@@ -1133,10 +1080,7 @@
     }
 
     // ================================================================
-    // SYNC ALL -- gabungan Sync BOM/PO (dashboard) + 7 sync rekonsiliasi
-    // (master negara/supplier/barang, rekonsiliasi, production line,
-    // shipment, work order) = 9 proses berurutan, sama seperti tombol
-    // "Sync All Data" di blade rekonsiliasi.
+    // SYNC ALL
     // ================================================================
     function runSyncAll(){
         const steps = [
