@@ -252,6 +252,8 @@ class HeatInsentifMasterController extends Controller
         $periodStart = $period->start_date;
         $periodEnd   = $period->end_date;
 
+        // dd($periodStart, $periodEnd);
+
 
         /*
         |--------------------------------------------------------------------------
@@ -563,8 +565,10 @@ class HeatInsentifMasterController extends Controller
 
                 $totalDeptInsentif += $rate * $operator->piece;
 
-                // dd($totalDeptInsentif);
+                // dd($operators, $totalDeptInsentif);
             }
+
+            // dd($totalDeptInsentif);
 
             /*
                 |----------------------------------
@@ -586,6 +590,7 @@ class HeatInsentifMasterController extends Controller
                 $jumlahOperator
             );
         }
+        // dd($jumlahOperator, $totalDeptInsentif, $amount, $role);
 
 
         return $amount;

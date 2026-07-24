@@ -15,7 +15,9 @@ class MonitoringDashboardService
     public function __construct(protected array $filters = []) {}
 
     /**
-     * $filters bisa berisi: uraian, brand, style
+     * $filters bisa berisi: uraian, brand, style, ocf
+     * (ocf = kode yang DIEKSTRAK dari mon_boms.code_prod, bukan nilai mentahnya --
+     * lihat extractOcfCode())
      */
     public static function make(array $filters): self
     {
@@ -23,19 +25,143 @@ class MonitoringDashboardService
     }
 
     /**
-     * Dropdown filter options, diambil dari tabel ORDER.
-     * Di-cache karena dropdown ini biasanya sama untuk semua user & jarang berubah.
+     * mon_boms.code_prod berisi teks bebas, contoh:
+     *   "26130 OCF 266C0125 / AB30LA7S / PHILIPHINA A5 / 008:DARK GREY"
+     * Kode OCF yang dipakai untuk filter adalah "266C0125" -- teks setelah kata
+     * "OCF" sampai sebelum tanda "/" pertama. Kalau posisi kata "OCF" ternyata
+     * beda-beda / tidak ketemu, fallback ke pola kode yang formatnya mirip
+     * (3 digit + 1 huruf + 4 digit, mis. 266C0125) di mana pun posisinya dalam
+     * string. Dilakukan di PHP (bukan SQL) supaya tidak bergantung pada fungsi
+     * string spesifik MySQL/SQL Server.
+     */
+    private static function extractOcfCode(?string $codeProd): ?string
+    {
+        if ($codeProd === null) {
+            return null;
+        }
+
+        if (preg_match('/OCF\s*([^\/]+)/i', $codeProd, $m)) {
+            $candidate = trim($m[1]);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        if (preg_match('/\b\d{3}[A-Za-z]\d{4}\b/', $codeProd, $m)) {
+            return $m[0];
+        }
+
+        return null;
+    }
+
+    /**
+     * Semua code_prod mentah (non-null) di mon_boms -- di-cache karena dipakai
+     * berulang untuk menerjemahkan nilai filter OCF (hasil ekstraksi) kembali
+     * ke code_prod asli saat query.
+     */
+    private function ocfRawCodeProds(): array
+    {
+        return Cache::remember('mon_dashboard:ocf_code_prod_all', self::FILTER_OPTIONS_TTL, function () {
+            return DB::table('mon_boms')->whereNotNull('code_prod')->distinct()->pluck('code_prod')->all();
+        });
+    }
+
+    /**
+     * Daftar code_prod mentah yang kode OCF hasil ekstraksinya cocok dengan
+     * nilai filter (bisa single value atau array, sejalan dengan applyFilterValue).
+     */
+    private function ocfMatchingCodeProds($ocfFilterValue): array
+    {
+        $wantedValues = is_array($ocfFilterValue) ? $ocfFilterValue : [$ocfFilterValue];
+        $wantedValues = array_values(array_filter($wantedValues, fn($v) => $v !== null && $v !== ''));
+        if (empty($wantedValues)) {
+            return [];
+        }
+
+        $wanted = array_flip($wantedValues);
+        $matches = [];
+        foreach ($this->ocfRawCodeProds() as $codeProd) {
+            $extracted = self::extractOcfCode($codeProd);
+            if ($extracted !== null && isset($wanted[$extracted])) {
+                $matches[] = $codeProd;
+            }
+        }
+
+        return $matches;
+    }
+
+    /**
+     * Daftar kode OCF (hasil extractOcfCode() dari mon_boms.code_prod) yang
+     * relevan dengan filter brand/style yang SEDANG aktif -- dijembatani lewat
+     * uraian, persis pola yang sama dengan applyUraianBridgeFilter(). Kalau
+     * brand/style belum dipilih sama sekali, kembalikan seluruh kode OCF
+     * (tidak ada yang perlu disaring), sama seperti perilaku sebelumnya.
+     *
+     * Sengaja TIDAK ikut menyaring berdasarkan nilai filter `ocf` itu sendiri --
+     * kalau ikut, begitu satu OCF dipilih maka pilihan lain di dropdown akan
+     * hilang semua padahal harusnya tetap terlihat (hanya uraian-nya yang
+     * tersaring lewat brand/style, sama seperti pola cascade Uraian/CPO).
+     *
+     * Di-cache per kombinasi brand/style (bukan satu cache global seperti
+     * sebelumnya) karena hasilnya sekarang berbeda-beda tergantung filter.
+     */
+    private function ocfCodesForCurrentBrandStyle(): Collection
+    {
+        $cacheKey = 'mon_dashboard:ocf_codes:' . md5(json_encode([
+            'brand' => $this->filters['brand'] ?? null,
+            'style' => $this->filters['style'] ?? null,
+        ]));
+
+        return Cache::remember($cacheKey, self::FILTER_OPTIONS_TTL, function () {
+            $query = DB::table('mon_boms')->whereNotNull('code_prod')->select('code_prod')->distinct();
+
+            if ($this->hasFilterValue('brand') || $this->hasFilterValue('style')) {
+                $uraianSubquery = DB::table('mon_orders')->select('uraian')->distinct();
+                $this->applyFilterValue($uraianSubquery, 'brand', 'brand');
+                $this->applyFilterValue($uraianSubquery, 'style', 'style');
+                $query->whereIn('uraian', $uraianSubquery);
+            }
+
+            return $query->pluck('code_prod')
+                ->map(fn($cp) => self::extractOcfCode($cp))
+                ->filter(fn($v) => $v !== null && $v !== '')
+                ->unique()
+                ->sort()
+                ->values();
+        });
+    }
+
+    /**
+     * Versi publik dari ocfCodesForCurrentBrandStyle(), dipakai controller untuk
+     * mengisi ulang dropdown OCF secara cascading (AJAX) setiap kali filter
+     * brand/style berubah -- perilakunya sama seperti cascade Brand -> Style ->
+     * Uraian, tapi untuk dropdown OCF.
+     */
+    public function ocfOptions(): array
+    {
+        return $this->ocfCodesForCurrentBrandStyle()->all();
+    }
+
+    /**
+     * Dropdown filter options, diambil dari tabel ORDER (dan mon_boms untuk OCF).
+     * uraian/brand/style TIDAK bergantung ke filter aktif (dropdown-nya memang
+     * dipopulasi ulang di frontend lewat cascade client-side), tapi OCF sekarang
+     * ikut disaring sesuai brand/style aktif -- lihat ocfCodesForCurrentBrandStyle().
      * Hapus cache manual saat ada import/update order besar: Cache::forget('mon_dashboard:filter_options')
      */
     public function filterOptions(): array
     {
-        return Cache::remember('mon_dashboard:filter_options', self::FILTER_OPTIONS_TTL, function () {
+        return Cache::remember('mon_dashboard:filter_options:uraian_brand_style', self::FILTER_OPTIONS_TTL, function () {
             return [
                 'uraian' => DB::table('mon_orders')->whereNotNull('uraian')->distinct()->orderBy('uraian')->pluck('uraian'),
                 'brand'  => DB::table('mon_orders')->whereNotNull('brand')->distinct()->orderBy('brand')->pluck('brand'),
                 'style'  => DB::table('mon_orders')->whereNotNull('style')->distinct()->orderBy('style')->pluck('style'),
             ];
-        });
+        }) + [
+            // OCF: kode hasil ekstraksi dari mon_boms.code_prod (lihat extractOcfCode()),
+            // sudah disaring sesuai brand/style yang aktif saat request ini dibuat.
+            'ocf' => $this->ocfCodesForCurrentBrandStyle(),
+        ];
     }
 
 
@@ -49,12 +175,41 @@ class MonitoringDashboardService
             ->get();
     }
 
+    /**
+     * Kombinasi uraian/brand/style yang siap dikirim ke blade untuk dropdown
+     * select2 (cascading). Sengaja di-map+unique DI SINI, BUKAN inline di dalam
+     * @json() pada blade -- soalnya @json() Blade meng-explode expression
+     * berdasarkan koma untuk memisahkan argumen encoding-options/depth. Kalau
+     * expression yang dikirim ke @json() mengandung array literal (banyak koma),
+     * pemisahan itu salah dan flag escaping (JSON_HEX_APOS dkk) yang seharusnya
+     * otomatis dipasang Laravel malah gagal terpasang -- akibatnya JSON yang
+     * dikirim ke atribut HTML bisa pecah kalau ada uraian/brand/style yang
+     * mengandung tanda kutip ('/"), dan dropdown filter jadi kosong.
+     * Solusi: kirim variabel polos ke blade, blade cukup @json($orderComboOptions).
+     */
+    public function orderComboOptions(): Collection
+    {
+        return $this->orderCombos()
+            ->map(fn($r) => ['uraian' => $r->uraian, 'brand' => $r->brand, 'style' => $r->style])
+            ->unique()
+            ->values();
+    }
+
     private function applyOrderFilters($query, string $prefix = ''): void
     {
         $col = fn(string $c) => $prefix ? "{$prefix}.{$c}" : $c;
 
         foreach (['uraian', 'brand', 'style'] as $field) {
             $this->applyFilterValue($query, $col($field), $field);
+        }
+
+        // OCF tidak punya kolom langsung di mon_orders -- dijembatani lewat
+        // uraian dari mon_boms yang code_prod-nya mengandung kode OCF terpilih
+        // (lihat extractOcfCode()/ocfMatchingCodeProds()).
+        if ($this->hasFilterValue('ocf')) {
+            $rawCodeProds = $this->ocfMatchingCodeProds($this->filters['ocf']);
+            $ocfSubquery = DB::table('mon_boms')->select('uraian')->distinct()->whereIn('code_prod', $rawCodeProds);
+            $query->whereIn($col('uraian'), $ocfSubquery);
         }
     }
 
@@ -92,15 +247,23 @@ class MonitoringDashboardService
 
     private function applyUraianBridgeFilter($query, string $uraianColumn): void
     {
-        if (!$this->hasFilterValue('brand') && !$this->hasFilterValue('style')) {
-            return;
+        if ($this->hasFilterValue('brand') || $this->hasFilterValue('style')) {
+            $uraianSubquery = DB::table('mon_orders')->select('uraian')->distinct();
+            $this->applyFilterValue($uraianSubquery, 'brand', 'brand');
+            $this->applyFilterValue($uraianSubquery, 'style', 'style');
+
+            $query->whereIn($uraianColumn, $uraianSubquery);
         }
 
-        $uraianSubquery = DB::table('mon_orders')->select('uraian')->distinct();
-        $this->applyFilterValue($uraianSubquery, 'brand', 'brand');
-        $this->applyFilterValue($uraianSubquery, 'style', 'style');
+        // OCF (mon_boms.code_prod, kode diekstrak) dijembatani terpisah ke
+        // uraian yang cocok -- sumbernya beda tabel dari brand/style (yang
+        // berasal dari mon_orders).
+        if ($this->hasFilterValue('ocf')) {
+            $rawCodeProds = $this->ocfMatchingCodeProds($this->filters['ocf']);
+            $ocfSubquery = DB::table('mon_boms')->select('uraian')->distinct()->whereIn('code_prod', $rawCodeProds);
 
-        $query->whereIn($uraianColumn, $uraianSubquery);
+            $query->whereIn($uraianColumn, $ocfSubquery);
+        }
     }
 
     /**

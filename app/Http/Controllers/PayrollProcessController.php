@@ -1191,12 +1191,21 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
         foreach ($components as $code => $value) {
 
-            $type = $componentTypes[$code] ?? 'earning';
+            // Komponen bisa tersimpan dalam format baru { amount, type }
+            // atau format lama (scalar langsung). Normalisasi ke scalar
+            // supaya konsisten dipakai number_format() di blade slip.
+            if (is_array($value) && array_key_exists('amount', $value)) {
+                $amount = $value['amount'];
+                $type   = $value['type'] ?? ($componentTypes[$code] ?? 'earning');
+            } else {
+                $amount = $value;
+                $type   = $componentTypes[$code] ?? 'earning';
+            }
 
             if ($type == 'earning') {
-                $earnings[$code] = $value;
+                $earnings[$code] = $amount;
             } else {
-                $deductions[$code] = $value;
+                $deductions[$code] = $amount;
             }
         }
 
@@ -1465,6 +1474,8 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                     ($components['pad_insentif'] ?? 0) +
                     ($components['cutting_insentif'] ?? 0) +
                     ($components['heat_insentif'] ?? 0) +
+                    ($components['sixs_insentif'] ?? 0) +
+                    ($components['night_shift_compensation'] ?? 0) +
                     ($components['adjusment'] ?? 0);
 
                 $deduction =

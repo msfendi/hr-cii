@@ -704,6 +704,30 @@ END AS special_overtime_hours
             ->where('period_id', $period->id)
             ->groupBy('npk');
 
+        /*
+        |--------------------------------------------------------------------------
+        | NIGHT SHIFT SUMMARY (untuk komponen Night Shift Compensation)
+        |--------------------------------------------------------------------------
+        | Dihitung dari jumlah baris employee_shifts (per NPK) dalam periode
+        | payroll berjalan, dimana shift yang bersangkutan (shifts.work_start)
+        | dimulai LEBIH dari jam 18:00. Shift dengan nama mengandung kata
+        | "Security" DIKECUALIKAN dari perhitungan ini — pengecekan nama
+        | dilakukan case-insensitive (LOWER) supaya tidak lolos hanya karena
+        | perbedaan huruf besar/kecil, mis. "security", "SECURITY", "Security".
+        |--------------------------------------------------------------------------
+        */
+        $nightShiftSummary = DB::connection('cii')
+            ->table('employee_shifts as es')
+            ->join('shifts as s', 'es.shift_id', '=', 's.id')
+            ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
+            ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
+            ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->select(
+                'es.npk',
+                DB::raw('COUNT(*) as night_shift_count')
+            )
+            ->groupBy('es.npk');
+
         $employeesQuery = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
@@ -763,6 +787,14 @@ END AS special_overtime_hours
                 );
             })
 
+            ->leftJoinSub($nightShiftSummary, 'ns', function ($join) {
+                $join->on(
+                    DB::raw('CAST(emp.NPK AS VARCHAR(50))'),
+                    '=',
+                    DB::raw('CAST(ns.npk AS VARCHAR(50))')
+                );
+            })
+
             ->select(
                 'emp.NPK',
                 'emp.NAMA_KARYAWAN',
@@ -805,6 +837,7 @@ END AS special_overtime_hours
                 DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) as total_ijin_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
+                DB::raw('COALESCE(ns.night_shift_count,0) as night_shift_count'),
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             );
@@ -1042,6 +1075,7 @@ END AS special_overtime_hours
 
                 'violation_percentage' => (float) $employee->violation_percentage,
                 'total_ijin'     => (float) $employee->total_ijin_minutes,
+                'night_shift_count' => (float) $employee->night_shift_count,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => (float) $employee->late_minutes,
@@ -1777,6 +1811,7 @@ END AS special_overtime_hours
                     'late_summary' => $employee->total_telat,
                     'violation_percentage' => (float) $employee->violation_percentage,
                     'total_ijin'     => (float) $employee->total_ijin_minutes,
+                    'night_shift_count' => (float) $employee->night_shift_count,
                     'is_sewing'       => $employee->IS_SEWING == '1' ? 1 : 0,
                     'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
                     'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,

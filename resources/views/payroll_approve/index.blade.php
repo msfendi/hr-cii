@@ -254,6 +254,7 @@
                                     <th>Cutting Insentif</th>
                                     <th>Heat Insentif</th>
                                     <th>6S Insentif</th>
+                                    <th>Night Shift Compensation</th>
                                     <th>Adjusments</th>
                                     <th>BPJS Kes</th>
                                     <th>BPJS TK</th>
@@ -275,6 +276,7 @@
                     <tr style="font-weight:bold;background:#f8f9fc">
 
                         <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -452,8 +454,8 @@ buttons: [
 
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
-                11,12,13,14,15,16,17,
-                18,19,20,21,22,23,24,25,26
+                11,12,13,14,15,16,17,18,
+                19,20,21,22,23,24,25,26,27,28
             ],
 
             format: {
@@ -682,6 +684,19 @@ buttons: [
                     }
 
                     return salaryMaskColored(data ?? 0, row.components?.sixs_insentif?.type);
+                }
+            },
+
+            {
+                data:'components.night_shift_compensation.amount',
+                defaultContent:0,
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMaskColored(data ?? 0, row.components?.night_shift_compensation?.type);
                 }
             },
 
@@ -1155,7 +1170,7 @@ buttons: [
                 6,7,8,
                 9,10,11,12,
                 13,14,15,16,
-                17,18,19,20,21,22,23,24,25
+                17,18,19,20,21,22,23,24,25,26
             ];
 
             // let ijinTotal = api

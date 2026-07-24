@@ -11,13 +11,20 @@ class MonitoringDashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'ocf']);
         $service = MonitoringDashboardService::make($filters);
-
+        // dd($service->filterOptions());
         return view('monitoring.dashboard', [
-            'filters'        => $filters,
-            'filterOptions'  => $service->filterOptions(),
-            'orderCombos'    => $service->orderCombos(), // ringan untuk cascading
+            'filters'           => $filters,
+            // Catatan: $filterOptions dipakai HANYA untuk dropdown OCF (filterOptions['ocf'],
+            // lewat atribut data-ocf-options). Dropdown cascading brand -> style -> uraian
+            // tetap dipopulasi dari $orderComboOptions lewat atribut data-filter-options.
+            'filterOptions'     => $service->filterOptions(),
+            'orderCombos'       => $service->orderCombos(),
+            // Sumber data dropdown select2 (cascading). Lihat komentar di
+            // MonitoringDashboardService::orderComboOptions() untuk alasan kenapa
+            // ini harus berupa variabel siap-pakai, bukan diproses inline di blade.
+            'orderComboOptions' => $service->orderComboOptions(),
         ]);
     }
 
@@ -26,7 +33,7 @@ class MonitoringDashboardController extends Controller
      */
     public function data(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'ocf']);
         $service = MonitoringDashboardService::make($filters);
 
         return response()->json([
@@ -34,6 +41,10 @@ class MonitoringDashboardController extends Controller
             'orderPivot'     => $service->orderPivot(),
             'materialPivot'  => $service->materialPurchasePivot(),
             'workOrderPivot' => $service->workOrderPivot(),
+            // Dropdown OCF di-cascade ulang mengikuti brand/style yang sedang
+            // aktif, persis seperti dropdown Uraian (CPO) -- lihat
+            // MonitoringDashboardService::ocfOptions().
+            'ocfOptions'     => $service->ocfOptions(),
         ]);
     }
 
@@ -43,7 +54,7 @@ class MonitoringDashboardController extends Controller
      */
     public function calendar(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'ocf']);
         $year  = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
 
@@ -62,7 +73,7 @@ class MonitoringDashboardController extends Controller
      */
     public function calendarDetail(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'ocf']);
         $date = $request->input('date');
 
         if (!$date) {
