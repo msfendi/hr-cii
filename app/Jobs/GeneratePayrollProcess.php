@@ -515,7 +515,7 @@ END AS special_overtime_hours
         calc.npk,
         SUM(
             CASE
-                WHEN calc.raw_late_minute > 240 THEN calc.late_actual
+                WHEN calc.raw_late_minute > 240 THEN calc.raw_late_minute
                 ELSE calc.raw_late_minute
             END
         ) as late_minutes,
