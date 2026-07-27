@@ -146,7 +146,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-04554')
+            // ->where('p.NPK', '=', 'C-04477')
 
             ->select(
                 'p.NPK',
@@ -175,7 +175,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-04554')
+            // ->where('ec1.npk', '=', 'C-04477')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -1080,7 +1080,12 @@ END AS special_overtime_hours
                 }
 
                 // rumus: (21 - hari kerja periode) + absence karyawan
-                $absenceDays = (21 - $workingDays) + $employee->absence_days;
+                if ($workingDays > 21) {
+                    $absenceDays = $employee->absence_days;
+                } else {
+
+                    $absenceDays = (21 - $workingDays) + $employee->absence_days;
+                }
             } else {
                 $absenceDays = $employee->absence_days;
             }
@@ -1764,6 +1769,30 @@ END AS special_overtime_hours
 
                 // 🔹 PERBAIKAN: bulatkan setiap komponen
                 $amount = round((float) $amount, 0);
+
+                /*
+                |--------------------------------------------------------------------------
+                | GUARD: absence_deduction TIDAK BOLEH NEGATIF
+                |--------------------------------------------------------------------------
+                | absence_deduction adalah komponen bertipe "deduction" yang secara
+                | semantik selalu diperlakukan sebagai nilai yang DIKURANGKAN dari
+                | grandTotal (lihat blok "if earning / else deduction" di bawah:
+                | $grandTotal -= $amount).
+                |
+                | Kalau formula-nya menghasilkan angka NEGATIF (mis. -500000), maka
+                | $grandTotal -= (-500000) akan menjadi $grandTotal + 500000 —
+                | tanda minus ketemu minus jadi PLUS, sehingga gaji malah naik alih-
+                | alih dipotong (mis. 1000000 - (-500000) = 1500000, padahal
+                | seharusnya tetap 1000000 / tidak dipotong).
+                |
+                | Fix: kalau absence_deduction hasilnya negatif, jangan dihitung —
+                | anggap 0, supaya tidak terbalik jadi penambahan.
+                |--------------------------------------------------------------------------
+                */
+                // if ($component->code === 'absence_deduction' && $amount < 0) {
+                //     $amount = 0;
+                // }
+
                 $results[$component->code] = $amount;
 
                 if ($component->type === 'earning') {
