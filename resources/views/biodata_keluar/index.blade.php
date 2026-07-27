@@ -44,6 +44,7 @@
                                             <th>TMK</th>
                                             <th class="text-center">TKK</th>
                                             <th class="text-center" style="width:200px;">Keterangan</th>
+                                            <th class="text-center">Alasan Keluar</th>
                                             <th class="text-center" style="width:80px;">Aksi</th>
                                         </tr>
                                     </thead>
@@ -118,6 +119,13 @@
                     }
                 },
                 {
+                    data: 'leave_reasons',
+                    className: 'text-center',
+                    render: function (data) {
+                        return data ? data : '-';
+                    }
+                },
+                {
                     data: null,
                     className: 'text-center',
                     orderable: false,
@@ -159,6 +167,9 @@
             var current = row.KETERANGAN || '';
             $('#modal_keterangan').val(current);
 
+            var currentAlasan = row.leave_reasons || '';
+            $('#modal_alasan_keluar').val(currentAlasan);
+
             // Store NPK for save
             $('#btnSaveKeterangan').data('npk', row.NPK);
 
@@ -169,6 +180,7 @@
         $('#btnSaveKeterangan').on('click', function () {
             var npk = $(this).data('npk');
             var val = $('#modal_keterangan').val();
+            var alasan = $('#modal_alasan_keluar').val();
             var btn = $(this);
 
             if (!val) {
@@ -183,7 +195,8 @@
                 type: 'POST',
                 data: {
                     _token: '{{ csrf_token() }}',
-                    keterangan: val
+                    keterangan: val,
+                    leave_reasons: alasan
                 },
                 success: function (res) {
                     if (res.status === 'success') {
@@ -268,6 +281,10 @@
                             <option value="HK">HK — Habis Kontrak</option>
                             <option value="MA">MA — Mangkir</option>
                         </select>
+                    </div>
+                    <div class="col-md-12 mb-2">
+                        <label class="small font-weight-bold text-danger ml-1">Alasan Keluar</label>
+                        <textarea id="modal_alasan_keluar" class="form-control px-3 border-danger text-danger" rows="3" placeholder="Masukkan alasan keluar..."></textarea>
                     </div>
                 </div>
             </div>

@@ -728,6 +728,39 @@ END AS special_overtime_hours
             )
             ->groupBy('es.npk');
 
+        /*
+        |--------------------------------------------------------------------------
+        | NIGHT SHIFT DETAILS (untuk modal detail Night Shift Compensation)
+        |--------------------------------------------------------------------------
+        | Rincian per-baris shift malam (per NPK) yang menjadi dasar
+        | $nightShiftSummary di atas -- dipakai untuk menampilkan modal
+        | detail di halaman Payroll Processing / Payroll Approve.
+        |--------------------------------------------------------------------------
+        */
+        $nightShiftDetails = DB::connection('cii')
+            ->table('employee_shifts as es')
+            ->join('shifts as s', 'es.shift_id', '=', 's.id')
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('es.npk', '=', 'bio.NPK');
+            })
+            ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
+            ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
+            ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->select(
+                'es.npk as NPK',
+                'bio.NAMA_KARYAWAN',
+                'd.DEPARTEMENT',
+                DB::raw('CAST(es.shift_date AS DATE) as shift_date'),
+                's.name as shift_name',
+                DB::raw('CAST(s.work_start AS TIME) as work_start'),
+                DB::raw('CAST(s.work_end AS TIME) as work_end')
+            )
+            ->orderBy('es.npk')
+            ->orderBy('es.shift_date')
+            ->get()
+            ->groupBy('NPK');
+
         $employeesQuery = DB::connection('cii')
             ->query()
             ->fromSub($employeeBase, 'emp')
@@ -1858,6 +1891,8 @@ END AS special_overtime_hours
                     'late_details' => ($lateDetails[$employee->NPK] ?? collect())
                         ->values(),
                     'ijin_details' => ($ijinDetails[$employee->NPK] ?? collect())->values(),
+                    'night_shift_details' => ($nightShiftDetails[$employee->NPK] ?? collect())
+                        ->values(),
                     'total_salary'  => $grandTotal
                 ];
             }

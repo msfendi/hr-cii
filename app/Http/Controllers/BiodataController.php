@@ -266,6 +266,7 @@ class BiodataController extends Controller
                     ->update([
                         'TKK' => $request->tkk,
                         'KETERANGAN' => $request->status_keluar,
+                        'leave_reasons' => $request->leave_reasons,
                     ]);
             }
 

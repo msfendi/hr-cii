@@ -30,7 +30,7 @@
                  data-sync-ms-supplier-url="{{ route('monitoring.rekonsiliasi.sync-ms-supplier') }}"
                  data-negara-options-url="{{ route('monitoring.rekonsiliasi.negara-options') }}">
 
-                {{-- ================= HEADER BAR (mirip gambar) ================= --}}
+                {{-- ================= HEADER BAR ================= --}}
                 <div class="rekon-hero shadow mb-4">
                     <div class="d-flex flex-wrap align-items-center justify-content-between">
                         <div class="rekon-hero-title">
@@ -114,7 +114,7 @@
                     </div>
                 </div>
 
-                {{-- ================= EMPTY STATE: tampil sebelum ada filter dipilih ================= --}}
+                {{-- ================= EMPTY STATE ================= --}}
                 <div id="rekon-empty-notice" class="card shadow mb-4" style="display:none">
                     <div class="card-body text-center text-muted py-5">
                         <i class="fas fa-filter fa-2x mb-3 d-block"></i>
@@ -131,7 +131,7 @@
                     </div>
                 </div>
 
-                {{-- ================= WIDGET DATA: disembunyikan sampai CPO dipilih ================= --}}
+                {{-- ================= WIDGET DATA ================= --}}
                 <div id="rekon-widgets" style="display:none">
 
                 {{-- ================= KPI CARDS ================= --}}
@@ -182,7 +182,6 @@
                         </div>
                     </div>
 
-                    
                     <div class="col-md mb-4">
                         <div class="card shadow h-100 py-2 rekon-kpi">
                             <div class="card-body text-center">
@@ -202,7 +201,7 @@
                     </div>
                 </div>
 
-                {{-- ================= SHIPMENT DATE (kalender, mirip Kalender Shipment di dashboard Gabungan) ================= --}}
+                {{-- ================= SHIPMENT DATE (kalender) ================= --}}
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary">Shipment Date</h6>
@@ -215,7 +214,6 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-lg-12">
-                                <!-- Hilangkan scroll pada card ini dengan menambahkan class no-scroll dan menghapus max-height inline -->
                                 <div class="mon-table-box no-scroll">
                                     <table class="table table-bordered table-sm mon-table mon-table-fixed w-100" id="table-ship-cal-detail">
                                         <thead>
@@ -232,9 +230,8 @@
                     </div>
                 </div>
 
-                {{-- ================= FABRIC QTY / FABRIC USAGE / FABRIC USAGE % : 1 baris, 3 card terpisah ================= --}}
+                {{-- ================= FABRIC QTY / USAGE ================= --}}
                 <div class="row">
-                    {{-- FABRIC QTY KGM (mon_rekonsiliasis + mon_work_orders) --}}
                     <div class="col-lg-4 mb-4">
                         <div class="card shadow h-100 rekon-fabric-card">
                             <div class="card-header py-2">
@@ -277,7 +274,6 @@
                         </div>
                     </div>
 
-                    {{-- FABRIC USAGE (mon_rekonsiliasis.out_req - mon_prod_lines scrap) --}}
                     <div class="col-lg-4 mb-4">
                         <div class="card shadow h-100 rekon-fabric-card">
                             <div class="card-header py-2">
@@ -304,7 +300,6 @@
                         </div>
                     </div>
 
-                    {{-- FABRIC USAGE PERCENTAGE --}}
                     <div class="col-lg-4 mb-4">
                         <div class="card shadow h-100 rekon-fabric-card">
                             <div class="card-header py-2">
@@ -323,10 +318,7 @@
                     </div>
                 </div>
 
-                {{-- ================= MATERIAL ACHIEVEMENT (mon_rekonsiliasis) =================
-                     Dipecah jadi 3 card berdasarkan mon_ms_barangs.barang_category:
-                     Fabric (Bahan Baku Lokal & Import), Aksesoris (Bahan Penolong),
-                     Packing (Packaging). Lihat MonitoringRekonsiliasiService::materialAchievement(). --}}
+                {{-- ================= MATERIAL ACHIEVEMENT ================= --}}
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">MATERIAL ACHIEVEMENT</h6>
@@ -355,13 +347,13 @@
                     </div>
                 </div>
 
-                {{-- ================= PRODUCTION RESULT (mon_prod_lines + mon_rekonsiliasis) ================= --}}
+                {{-- ================= PRODUCTION RESULT ================= --}}
                 <div class="row">
                     <div class="col-lg-12 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-body">
                                 <div class="rekon-pipeline" id="rekon-pipeline">
-                                    <!-- diisi JS: Contract -> per-department (mon_prod_lines) -> Warehouse -> Shipment -->
+                                    <!-- diisi JS -->
                                 </div>
                                 <div class="text-muted small mt-2 mb-3">
                                     Cutting = <code>mon_prod_lines.jumlah</code> (department_id = Cutting, kategori
@@ -370,8 +362,8 @@
                                     (destination = Warehouse). Sewing/Packing/Warehouse/Shipment di-scope ke kategori
                                     <em>Barang Jadi</em>. Shipment = <code>mon_shipments.jumlah_barang</code>.
                                     Semua tahap di-scope ke <code>code_prod</code> yang mengandung kode CPO (5 digit) terpilih.
-                                    Loss: Cutting = Cutting &minus; Contract; Sewing = dest.Sewing &minus; dept.Sewing;
-                                    Packing = dest.Packing &minus; dept.Packing; Warehouse = dept.Packing &minus; dest.Warehouse.
+                                    Loss: Cutting = Contract &minus; Cutting; Sewing = dept.Sewing &minus; dest.Sewing;
+                                    Packing = dept.Packing &minus; dest.Packing; Warehouse = dest.Warehouse &minus; dept.Packing.
                                     Juga bisa difilter per <strong>Negara</strong> (lewat CPO yang punya shipment dari
                                     negara terpilih).
                                 </div>
@@ -386,7 +378,7 @@
                                                 <th class="right">Loss (%)</th>
                                             </tr>
                                         </thead>
-                                        <tbody><!-- data akan diisi oleh JS --></tbody>
+                                        <tbody></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -394,7 +386,7 @@
                     </div>
                 </div>
 
-                {{-- ================= TOP 3 EXCESS (mon_rekonsiliasis) ================= --}}
+                {{-- ================= TOP 3 EXCESS ================= --}}
                 <div class="row">
                     <div class="col-lg-8 mb-4">
                         <div class="card shadow h-100">
@@ -422,7 +414,7 @@
                     </div>
                 </div>
 
-                {{-- ================= SHIPMENT (mon_shipments, sync get_pengeluaran_bc) ================= --}}
+                {{-- ================= SHIPMENT ================= --}}
                 <div class="row">
                     <div class="col-lg-5 mb-4">
                         <div class="card shadow h-100">
@@ -456,7 +448,7 @@
                                                 <th class="right">Jumlah Barang</th>
                                             </tr>
                                         </thead>
-                                        <tbody><!-- data akan diisi oleh JS --></tbody>
+                                        <tbody></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -464,7 +456,7 @@
                     </div>
                 </div>
 
-                {{-- ================= DETAIL TABLE (mon_rekonsiliasis) ================= --}}
+                {{-- ================= DETAIL TABLE ================= --}}
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Detail Rekonsiliasi per Material</h6>
@@ -493,7 +485,7 @@
                                         <th class="right">Harga Total</th>
                                     </tr>
                                 </thead>
-                                <tbody><!-- data akan diisi oleh JS --></tbody>
+                                <tbody></tbody>
                             </table>
                         </div>
                     </div>
@@ -524,9 +516,8 @@
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<!-- CSS Tambahan untuk sticky header -->
+<!-- CSS Tambahan -->
 <style>
-    /* Sticky header untuk semua tabel di dalam .mon-table-box */
     .mon-table-box table thead th {
         position: sticky;
         top: 0;
@@ -534,14 +525,12 @@
         z-index: 10;
         box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1);
     }
-    /* Untuk DataTables yang menggunakan wrapper tambahan, pastikan header tetap sticky */
     .mon-table-box .dataTables_scrollHeadInner table thead th {
         position: sticky;
         top: 0;
         background: #fff;
         z-index: 10;
     }
-    /* Atur ulang padding pada tabel agar tidak bertabrakan */
     .mon-table-box table {
         border-collapse: separate;
         border-spacing: 0;
@@ -550,8 +539,6 @@
         border-bottom: 2px solid #dee2e6;
     }
 
-    /* ============ PERUBAHAN YANG DIMINTA ============ */
-    /* Semua header card di area widget berwarna #1f3864 dengan teks putih */
     #rekon-widgets .card-header,
     #rekon-widgets .card .card-header {
         background: #1f3864 !important;
@@ -563,947 +550,24 @@
         color: #fff !important;
     }
 
-    /* Semua header tabel (DataTables maupun biasa) berwarna sama */
     #rekon-widgets .dataTable thead th,
     #rekon-widgets .table thead th {
         background: #1f3864 !important;
         color: #fff !important;
     }
 
-    /* Semua sel body tabel (DataTables maupun biasa) teks hitam */
     #rekon-widgets .dataTable tbody td,
     #rekon-widgets .table tbody td {
         color: #000 !important;
     }
-    /* =============================================== */
 
-    /* Hilangkan scroll pada card Shipment Date */
     .mon-table-box.no-scroll {
         max-height: none !important;
         overflow: visible !important;
     }
-    /* ============================================== */
-
-</style>
-
-<script>
-(function(){
-    const app = document.getElementById('rekon-app');
-    const endpoint = app.dataset.endpoint;
-    const calendarUrl = app.dataset.calendarUrl;
-    const calendarDetailUrl = app.dataset.calendarDetailUrl;
-    const syncRekonUrl = app.dataset.syncRekonUrl;
-    const syncProdlineUrl = app.dataset.syncProdlineUrl;
-    const syncShipmentUrl = app.dataset.syncShipmentUrl;
-    const syncWorkOrderUrl = app.dataset.syncWorkorderUrl;
-    const syncMsBarangUrl = app.dataset.syncMsBarangUrl;
-    const syncMsNegaraUrl = app.dataset.syncMsNegaraUrl;
-    const syncMsSupplierUrl = app.dataset.syncMsSupplierUrl;
-    const negaraOptionsUrl = app.dataset.negaraOptionsUrl;
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-    const fBuyer = document.getElementById('f-buyer');
-    const fStyle = document.getElementById('f-style');
-    const fCpo = document.getElementById('f-cpo');
-    const fOcf = document.getElementById('f-ocf');
-    const fNegara = document.getElementById('f-negara');
-    const emptyNotice = document.getElementById('rekon-empty-notice');
-    const widgets = document.getElementById('rekon-widgets');
-    const btnFilterCpo = document.getElementById('btn-filter-cpo');
-    const btnSyncAll = document.getElementById('btn-sync-all');
-
-    let filterOptions = [];
-    try { filterOptions = JSON.parse(app.dataset.filterOptions || '[]'); } catch (e) { filterOptions = []; }
-
-    $('.select2-filter').each(function () {
-        $(this).select2({ width: '100%', placeholder: $(this).data('placeholder') || '', allowClear: true });
-    });
-
-    const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(Number(v || 0));
-
-    function uniqueSorted(values) {
-        return [...new Set(values.filter(v => v !== null && v !== undefined && v !== ''))].sort();
-    }
-
-    function populateSelect($el, values) {
-        const current = $el.val();
-        $el.empty().append('<option value=""></option>');
-        values.forEach(v => $el.append(new Option(v, v, false, false)));
-        $el.val(values.includes(current) ? current : '').trigger('change');
-    }
-
-    function refreshCascade() {
-        const buyer = fBuyer.value;
-        const style = fStyle.value;
-
-        const styleRows = filterOptions.filter(r => !buyer || r.brand === buyer);
-        populateSelect($(fStyle), uniqueSorted(styleRows.map(r => r.style)));
-
-        const cpoRows = filterOptions.filter(r =>
-            (!buyer || r.brand === buyer) && (!style || r.style === style));
-        populateSelect($(fCpo), uniqueSorted(cpoRows.map(r => r.uraian)));
-    }
-
-    let ocfOptions = [];
-    try { ocfOptions = JSON.parse(app.dataset.ocfOptions || '[]'); } catch (e) { ocfOptions = []; }
-
-    (function initCascadeFilters() {
-        populateSelect($(fBuyer), uniqueSorted(filterOptions.map(r => r.brand)));
-        populateSelect($(fOcf), uniqueSorted(ocfOptions));
-
-        const initialFilters = app.dataset.filters ? JSON.parse(app.dataset.filters) : {};
-        const initialUraian = initialFilters.uraian || null;
-        if (initialUraian) {
-            const match = filterOptions.find(r => r.uraian === initialUraian);
-            if (match) {
-                $(fBuyer).val(match.brand).trigger('change');
-            }
-        }
-
-        refreshCascade();
-
-        if (initialUraian) {
-            $(fCpo).val(initialUraian).trigger('change');
-        }
-        if (initialFilters.ocf) {
-            $(fOcf).val(initialFilters.ocf).trigger('change');
-        }
-    })();
-
-    let chartMaterialFabric, chartMaterialAksesoris, chartMaterialPacking, chartProduction, chartExcess, chartShipment, chartShipCategory, chartFabricUsage, dtDetail, dtShipment;
-
-    function wrapLabel(label, maxWidth = 14) {
-        const words = String(label ?? '-').split(' ');
-        const lines = [];
-        let current = '';
-        words.forEach(w => {
-            if ((current + ' ' + w).trim().length > maxWidth) {
-                if (current) lines.push(current.trim());
-                current = w;
-            } else {
-                current = (current + ' ' + w).trim();
-            }
-        });
-        if (current) lines.push(current);
-        return lines.length ? lines : ['-'];
-    }
-
-    const HORIZONTAL_WRAP_X_TICKS = { autoSkip: false, maxRotation: 0, minRotation: 0 };
-
-    function buildUrl(base, params) {
-        const url = new URL(base, window.location.origin);
-        Object.entries(params).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') url.searchParams.set(k, v); });
-        return url.toString();
-    }
-
-    function renderHeader(header) {
-        header = header || {};
-        document.getElementById('hdr-cpo').textContent = header.cpo || '-';
-        document.getElementById('hdr-brand').textContent = header.brand || '-';
-        document.getElementById('hdr-style').textContent = header.style || '-';
-
-        const negaraWrap = document.getElementById('hdr-negara-wrap');
-        const negaraLabel = fNegara.options[fNegara.selectedIndex]?.text || '';
-        if (fNegara.value) {
-            document.getElementById('hdr-negara').textContent = negaraLabel || fNegara.value;
-            negaraWrap.style.display = '';
-        } else {
-            negaraWrap.style.display = 'none';
-        }
-
-        const ocfWrap = document.getElementById('hdr-ocf-wrap');
-        if (fOcf.value) {
-            document.getElementById('hdr-ocf').textContent = fOcf.value;
-            ocfWrap.style.display = '';
-        } else {
-            ocfWrap.style.display = 'none';
-        }
-
-        const countWrap = document.getElementById('hdr-cpo-count-wrap');
-        const countEl = document.getElementById('hdr-cpo-count');
-        if (header.cpoCount && header.cpoCount > 1) {
-            countEl.textContent = `Gabungan ${header.cpoCount} CPO`;
-            countWrap.style.display = '';
-        } else {
-            countWrap.style.display = 'none';
-        }
-
-        document.getElementById('rekon-last-updated').textContent = new Date().toLocaleString('id-ID', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        });
-    }
-
-    function renderKpi(summary) {
-        document.getElementById('kpi-contract').textContent = fmtNum(summary.contract_qty);
-        document.getElementById('kpi-shipment').textContent = fmtNum(summary.shipment_qty);
-        document.getElementById('kpi-achievement').textContent = summary.achievement_pct + '%';
-        document.getElementById('kpi-balance').textContent = fmtNum(summary.balance_qty);
-        document.getElementById('kpi-shortage').textContent = summary.shortage_pct + '%';
-    }
-
-    function renderFabricQty(fabricQty) {
-        fabricQty = fabricQty || {};
-        document.getElementById('fabric-need').textContent = fmtNum(fabricQty.need);
-        document.getElementById('fabric-order').textContent = fmtNum(fabricQty.order);
-        document.getElementById('fabric-received').textContent = fmtNum(fabricQty.received);
-        document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
-        document.getElementById('fabric-stock').textContent = fmtNum(fabricQty.stock);
-    }
-
-    function renderFabricUsage(fabricUsage) {
-        fabricUsage = fabricUsage || {};
-        document.getElementById('usage-for-gmt').textContent = fmtNum(fabricUsage.use_for_gmt);
-        document.getElementById('usage-scrap-qty').textContent = fmtNum(fabricUsage.scrap_qty);
-        document.getElementById('usage-consumption').textContent = fmtNum(fabricUsage.consumption);
-
-        const ctx = document.getElementById('chart-fabric-usage');
-        if (typeof Chart === 'undefined' || !ctx) return;
-
-        const usagePct = Number(fabricUsage.usage_pct || 0);
-        const scrapPct = Number(fabricUsage.scrap_pct || 0);
-
-        if (chartFabricUsage) chartFabricUsage.destroy();
-        chartFabricUsage = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                // labels: ['Usage', 'Scrap'],
-                datasets: [{
-                    data: [usagePct, scrapPct],
-                    backgroundColor: ['#1f6f8b', '#e07b39'],
-                    borderWidth: 0,
-                }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '40%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (c) => `${c.parsed}%` } },
-                },
-            },
-            plugins: [{
-                id: 'fabricUsageCenterLabels',
-                afterDraw(chart) {
-                    const { ctx: c } = chart;
-                    const meta = chart.getDatasetMeta(0);
-                    if (!meta || !meta.data.length) return;
-                    c.save();
-                    c.font = 'bold 14px Arial';
-                    c.fillStyle = '#fff';
-                    c.textAlign = 'center';
-                    c.textBaseline = 'middle';
-                    chart.data.datasets[0].data.forEach((value, i) => {
-                        if (!value) return;
-                        const pos = meta.data[i].tooltipPosition();
-                        c.fillText(`${value}%`, pos.x, pos.y);
-                    });
-                    c.restore();
-                },
-            }],
-        });
-    }
-
-    const MATERIAL_ACHIEVEMENT_CHARTS = {
-        fabric:    { canvasId: 'chart-material-achievement-fabric' },
-        aksesoris: { canvasId: 'chart-material-achievement-aksesoris' },
-        packing:   { canvasId: 'chart-material-achievement-packing' },
-    };
-
-    function buildMaterialAchievementChart(group, rows) {
-        const meta = MATERIAL_ACHIEVEMENT_CHARTS[group];
-        const ctx = document.getElementById(meta.canvasId);
-        if (typeof Chart === 'undefined' || !ctx) return;
-
-        const labels = rows.map(r => wrapLabel(r.barang_name));
-        const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
-
-        if (meta.chart) meta.chart.destroy();
-        meta.chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [
-                    mk('order_pct', '#4e73df', 'ORDER%'),
-                    mk('received_pct', '#f6a533', 'RECEIVED%'),
-                    mk('out_prod_pct', '#1cc88a', 'OUT PROD%'),
-                    mk('stock_pct', '#36b9cc', 'STOCK%'),
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { ticks: HORIZONTAL_WRAP_X_TICKS },
-                    y: { beginAtZero: true, ticks: { callback: v => v + '%' } },
-                },
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y}%` } },
-                },
-            },
-        });
-    }
-
-    function renderMaterialAchievement(rows) {
-        rows = rows || [];
-        const byGroup = { fabric: [], aksesoris: [], packing: [] };
-        rows.forEach(r => {
-            if (byGroup[r.material_group]) byGroup[r.material_group].push(r);
-        });
-
-        buildMaterialAchievementChart('fabric', byGroup.fabric);
-        buildMaterialAchievementChart('aksesoris', byGroup.aksesoris);
-        buildMaterialAchievementChart('packing', byGroup.packing);
-    }
-
-    const DEPT_COLORS = { Cutting: '#4e73df', Sewing: '#1cc88a', Packing: '#f6a533' };
-    const DEPT_ORDER = ['Cutting', 'Sewing', 'Packing'];
-
-    function renderProductionResult(pipeline, materialRows, lossSteps) {
-        materialRows = materialRows || [];
-        lossSteps = lossSteps || [];
-
-        const materialLabels = [...new Set(materialRows.map(r => r.barang_name ?? '-'))].sort();
-        const datasets = DEPT_ORDER.map(dept => ({
-            label: dept,
-            backgroundColor: DEPT_COLORS[dept],
-            data: materialLabels.map(name => {
-                const row = materialRows.find(r => r.department_id === dept && (r.barang_name ?? '-') === name);
-                return row ? Number(row.jumlah || 0) : 0;
-            }),
-        }));
-
-        const ctx = document.getElementById('chart-production-result');
-        if (typeof Chart !== 'undefined' && ctx) {
-            if (chartProduction) chartProduction.destroy();
-            chartProduction = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: materialLabels.map(wrapLabel), datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { ticks: HORIZONTAL_WRAP_X_TICKS },
-                        y: { beginAtZero: true },
-                    },
-                    plugins: {
-                        legend: { position: 'bottom' },
-                        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtNum(c.parsed.y)}` } },
-                    },
-                },
-            });
-        }
-
-        const stages = [
-            { label: 'Contract', value: pipeline.contract, theme: 'neutral' },
-            ...pipeline.departments.map(d => ({
-                label: d.department_id ?? '-',
-                value: d.jumlah,
-                theme: 'green',
-            })),
-            { label: 'Shipment', value: pipeline.shipment, theme: 'navy' },
-        ];
-
-        const steps = lossSteps;
-
-        const boxes = stages.map((s, i) => {
-            const step = i > 0 ? steps[i - 1] : null;
-
-            const outputPct = step && step.input > 0
-                ? (100 - Number(step.loss_pct ?? 0))
-                : (i === 0 ? 100 : null);
-
-            const lossValue = step ? Number(step.loss_pcs) : null;
-            const lossPct = step ? step.loss_pct : null;
-            const lossIsGain = lossValue !== null && lossValue < 0;
-
-            const lossRow = step ? `
-                <hr class="rekon-pipe-divider">
-                <div class="rekon-pipe-loss-value ${lossIsGain ? 'is-gain' : ''}">${lossValue < 0 ? '+' : ''}${fmtNum(Math.abs(lossValue))}</div>
-                <div class="rekon-pipe-loss-pct ${lossIsGain ? 'is-gain' : ''}">${lossPct === null ? '-' : (lossValue < 0 ? '+' : '') + Math.abs(lossPct) + '%'}</div>
-            ` : `
-                <hr class="rekon-pipe-divider">
-                <div class="rekon-pipe-loss-value">-</div>
-                <div class="rekon-pipe-loss-pct">&nbsp;</div>
-            `;
-
-            return `
-                <div class="rekon-pipe-box theme-${s.theme}">
-                    <div class="rekon-pipe-header">${s.label}</div>
-                    <div class="rekon-pipe-body">
-                        <div class="rekon-pipe-output">${fmtNum(s.value)}</div>
-                        <div class="rekon-pipe-output-pct">${outputPct === null ? '-' : fmtNum(outputPct) + '%'}</div>
-                        ${lossRow}
-                    </div>
-                </div>
-                <div class="rekon-pipe-arrow"><i class="fas fa-arrow-right"></i></div>
-            `;
-        }).join('');
-
-        const lossBox = `
-            <div class="rekon-pipe-box theme-loss rekon-pipe-total">
-                <div class="rekon-pipe-header">Total Process Loss</div>
-                <div class="rekon-pipe-body">
-                    <div class="rekon-pipe-output">${fmtNum(pipeline.total_loss)}</div>
-                    <div class="rekon-pipe-output-pct">${pipeline.loss_pct}%</div>
-                    <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
-                </div>
-            </div>
-        `;
-
-        const legend = `
-            <div class="rekon-pipe-legend">
-                <span><i class="rekon-pipe-dot dot-output"></i>Output Qty (PCS)</span>
-                <span><i class="rekon-pipe-dot dot-loss"></i>Loss Qty (PCS)</span>
-            </div>
-        `;
-
-        document.getElementById('rekon-pipeline').innerHTML =
-            `<div class="d-flex flex-wrap align-items-stretch">${boxes}${lossBox}</div>${legend}`;
-    }
-
-    function renderLossSteps(rows) {
-        const tbody = document.querySelector('#table-loss-steps tbody');
-        tbody.innerHTML = rows.map(r => `
-            <tr>
-                <td>${r.process}</td>
-                <td class="right">${fmtNum(r.input)}</td>
-                <td class="right">${fmtNum(r.output)}</td>
-                <td class="right ${Number(r.loss_pcs) > 0 ? 'text-danger' : 'text-success'}">${fmtNum(r.loss_pcs)}</td>
-                <td class="right">${r.loss_pct === null ? '-' : r.loss_pct + '%'}</td>
-            </tr>
-        `).join('');
-    }
-
-    function renderTopExcess(rows) {
-        const ctx = document.getElementById('chart-top-excess');
-        if (typeof Chart === 'undefined' || !ctx) return;
-
-        const labels = rows.map(r => r.barang_name ?? '-');
-        const data = rows.map(r => Number(r.saldo_gudang || 0));
-
-        if (chartExcess) chartExcess.destroy();
-        chartExcess = new Chart(ctx, {
-            type: 'bar',
-            data: { labels, datasets: [{ data, backgroundColor: ['#1cc88a', '#f6a533', '#4e73df'] }] },
-            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
-        });
-    }
-
-    function renderShipmentCategory(rows) {
-        const ctx = document.getElementById('chart-shipment-category');
-        if (typeof Chart === 'undefined' || !ctx) return;
-
-        const labels = rows.map(r => r.barang_category ?? '-');
-        const data = rows.map(r => Number(r.jumlah_barang || 0));
-
-        if (chartShipCategory) chartShipCategory.destroy();
-        chartShipCategory = new Chart(ctx, {
-            type: 'doughnut',
-            data: { labels, datasets: [{ data, backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'] }] },
-            options: { responsive: true, maintainAspectRatio: false },
-        });
-    }
-
-    function renderShipment(byDate, detailRows) {
-        const ctx = document.getElementById('chart-shipment-trend');
-        if (typeof Chart !== 'undefined' && ctx) {
-            const labels = byDate.map(r => r.tgl_bukti ?? '-');
-            const data = byDate.map(r => Number(r.jumlah_barang || 0));
-
-            if (chartShipment) chartShipment.destroy();
-            chartShipment = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Shipment (Pcs)',
-                        data,
-                        borderColor: '#1cc88a',
-                        backgroundColor: 'rgba(28,200,138,.15)',
-                        fill: true,
-                        tension: .25,
-                    }],
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
-            });
-        }
-
-        const tbody = document.querySelector('#table-shipment-detail tbody');
-        tbody.innerHTML = detailRows.map(r => `
-            <tr>
-                <td>${r.no_bukti ?? '-'}</td>
-                <td>${r.tgl_bukti ?? '-'}</td>
-                <td>${r.jenis_doc ?? '-'}</td>
-                <td>${r.jenis_ps ?? '-'}</td>
-                <td>${r.barang_name ?? '-'}</td>
-                <td>${r.satuan_doc ?? '-'}</td>
-                <td class="right">${fmtNum(r.jumlah_doc)}</td>
-                <td class="right">${fmtNum(r.jumlah_barang)}</td>
-            </tr>
-        `).join('');
-
-        if (dtShipment) dtShipment.destroy();
-        dtShipment = $('#table-shipment-detail').DataTable({
-            pageLength: 10,
-            order: [],
-            autoWidth: false,
-            width: '100%',
-            scrollY: '300px',
-            scrollCollapse: true,
-            fixedHeader: true,
-        });
-    }
-
-    function renderDetail(rows) {
-        const tbody = document.querySelector('#table-rekon-detail tbody');
-        tbody.innerHTML = rows.map(r => `
-            <tr>
-                <td>${r.no_po ?? '-'}</td>
-                <td>${r.jenis_po ?? '-'}</td>
-                <td>${r.tgl_po ?? '-'}</td>
-                <td>${r.tgl_pengiriman ?? '-'}</td>
-                <td>${r.supplier_name ?? '-'}</td>
-                <td>${r.barang_code ?? '-'}</td>
-                <td>${r.barang_name ?? '-'}</td>
-                <td>${r.satuan_order ?? '-'}</td>
-                <td class="right">${fmtNum(r.jumlah_order)}</td>
-                <td class="right">${fmtNum(r.jumlah_doc)}</td>
-                <td class="right">${fmtNum(r.out_req)}</td>
-                <td class="right">${fmtNum(r.out_prod)}</td>
-                <td class="right">${fmtNum(r.sisa)}</td>
-                <td class="right">${fmtNum(r.saldo_wip)}</td>
-                <td class="right">${fmtNum(r.out_doc)}</td>
-                <td class="right">${fmtNum(r.saldo_gudang)}</td>
-                <td class="right">${fmtNum(r.harga_total)}</td>
-            </tr>
-        `).join('');
-
-        if (dtDetail) dtDetail.destroy();
-        dtDetail = $('#table-rekon-detail').DataTable({
-            pageLength: 10,
-            order: [],
-            autoWidth: false,
-            width: '100%',
-            scrollY: '400px',
-            scrollCollapse: true,
-            fixedHeader: true,
-        });
-    }
-
-    function renderAll(json) {
-        renderHeader(json.header);
-        renderKpi(json.summary);
-        renderFabricQty(json.fabricQty);
-        renderFabricUsage(json.fabricUsage);
-        renderMaterialAchievement(json.materialAchievement);
-        renderProductionResult(json.productionPipeline, json.productionResultByMaterial, json.pipelineLossSteps);
-        renderLossSteps(json.pipelineLossSteps);
-        renderTopExcess(json.topMaterialExcess);
-        renderShipment(json.shipmentByDate, json.shipmentDetail);
-        renderShipmentCategory(json.shipmentByCategory);
-        renderDetail(json.detail);
-
-        // Widget "Shipment Date": tabel di sebelah kalender langsung diisi
-        // SELURUH data shipment (bukan lagi menunggu klik tanggal).
-        renderShipCalDetailTable(json.shipmentDetail);
-
-        // Dropdown OCF di-cascade ulang mengikuti Buyer/Style yang aktif.
-        if (Array.isArray(json.ocfOptions)) {
-            populateSelect($(fOcf), json.ocfOptions);
-        }
-    }
-
-    // ================= SHIPMENT DATE: kalender (mirip Kalender Shipment di dashboard Gabungan) =================
-    const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-    const today = new Date();
-
-    const shipCalState = {
-        year: today.getFullYear(),
-        month: today.getMonth() + 1, // 1-12
-        requestSeq: 0,
-    };
-
-    const shipCalLabel = document.getElementById('ship-cal-label');
-    const shipCalBody  = document.querySelector('#mon-ship-calendar tbody');
-    const shipCalPrev  = document.getElementById('ship-cal-prev');
-    const shipCalNext  = document.getElementById('ship-cal-next');
-    let dtShipCalDetail;
-
-    function pad2(n){ return String(n).padStart(2, '0'); }
-    function toIsoDate(y, m, d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
-
-    function buildShipCalendarQuery(extra) {
-        const params = buildQueryParams(currentFilters());
-        Object.entries(extra || {}).forEach(([k, v]) => params.append(k, v));
-        return params;
-    }
-
-    function buildQueryParams(filters) {
-        const params = new URLSearchParams();
-        Object.entries(filters || {}).forEach(([k, v]) => { if (v) params.append(k, v); });
-        return params;
-    }
-
-    function setShipCalNavDisabled(disabled) {
-        if (shipCalPrev) shipCalPrev.disabled = disabled;
-        if (shipCalNext) shipCalNext.disabled = disabled;
-    }
-
-    function renderShipCalendarGrid(year, month, dayMap) {
-        if (!shipCalLabel || !shipCalBody) return;
-        shipCalLabel.textContent = `${monthNames[month - 1]} ${year}`;
-
-        const firstDow = new Date(year, month - 1, 1).getDay(); // 0=Min
-        const daysInMonth = new Date(year, month, 0).getDate();
-
-        let cells = [];
-        for (let i = 0; i < firstDow; i++) cells.push(null);
-        for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-        while (cells.length % 7 !== 0) cells.push(null);
-
-        let html = '';
-        for (let w = 0; w < cells.length / 7; w++) {
-            html += '<tr>';
-            for (let c = 0; c < 7; c++) {
-                const d = cells[w * 7 + c];
-                if (!d) { html += '<td class="bg-light"></td>'; continue; }
-
-                const iso = toIsoDate(year, month, d);
-                const info = dayMap[iso];
-                const isToday = iso === toIsoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
-
-                let cls = 'text-center';
-                if (info) cls += ' bg-info text-white';
-                if (isToday) cls += ' font-weight-bold';
-
-                html += `<td class="${cls}" style="vertical-align:middle;" title="${info ? `${info.jumlah_doc} dokumen` : ''}">
-                    <div>${d}</div>
-                    ${info ? `<span class="badge badge-pill badge-light" style="font-size:.6rem;">${info.jumlah_doc}</span>` : ''}
-                </td>`;
-            }
-            html += '</tr>';
-        }
-        shipCalBody.innerHTML = html;
-    }
-
-    function loadShipCalendarMonth(year, month) {
-        if (!calendarUrl) return;
-
-        shipCalState.year = year;
-        shipCalState.month = month;
-
-        const seq = ++shipCalState.requestSeq;
-        setShipCalNavDisabled(true);
-
-        const params = buildShipCalendarQuery({ year, month });
-        fetch(`${calendarUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
-            .then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                return r.json();
-            })
-            .then(json => {
-                if (seq !== shipCalState.requestSeq) return;
-                const dayMap = {};
-                (json.days || []).forEach(row => { dayMap[row.tanggal] = row; });
-                renderShipCalendarGrid(year, month, dayMap);
-            })
-            .catch(() => {
-                if (seq !== shipCalState.requestSeq) return;
-                renderShipCalendarGrid(year, month, {});
-            })
-            .finally(() => {
-                if (seq === shipCalState.requestSeq) setShipCalNavDisabled(false);
-            });
-    }
-
-    // Format tanggal "tgl_bukti" (mis. "2026-01-15" atau "2026-01-15 00:00:00")
-    // menjadi format Indonesia "1 Januari 2026" untuk kolom Tgl Bukti.
-    function formatTanggalIndonesia(value) {
-        if (!value) return '';
-        const datePart = String(value).split(' ')[0]; // buang jam kalau ada
-        const [y, m, d] = datePart.split('-').map(Number);
-        if (!y || !m || !d || !monthNames[m - 1]) return value;
-        return `${d} ${monthNames[m - 1]} ${y}`;
-    }
-
-    // Tabel di samping kalender sekarang langsung menampilkan SELURUH data
-    // shipment (json.shipmentDetail dari endpoint utama) begitu filter
-    // aktif dimuat -- tidak perlu lagi klik tanggal di kalender dulu.
-    // Scroll pada tabel ini telah dihilangkan (scrollY dihilangkan).
-    function renderShipCalDetailTable(rows) {
-        if (dtShipCalDetail) { dtShipCalDetail.destroy(); dtShipCalDetail = null; }
-
-        dtShipCalDetail = $('#table-ship-cal-detail').DataTable({
-            data: rows || [],
-            pageLength: 10,
-            lengthMenu: [10, 25, 50, 100],
-            order: [],
-            autoWidth: false,
-            // scrollY dihilangkan agar tidak ada scroll vertikal
-            // scrollCollapse: true, // tidak diperlukan
-            fixedHeader: true,
-            columns: [
-                { data: 'tgl_bukti', defaultContent: '', render: v => formatTanggalIndonesia(v) },
-                { data: 'uraian', defaultContent: '' },
-                { data: 'no_bukti', defaultContent: '' },
-                { data: 'supplier_name', defaultContent: '' },
-                { data: 'barang_name', defaultContent: '' },
-                { data: 'jumlah_barang', className: 'right', render: v => fmtNum(v) },
-            ]
-        });
-    }
-
-    shipCalPrev?.addEventListener('click', () => {
-        let { year, month } = shipCalState;
-        month--;
-        if (month < 1) { month = 12; year--; }
-        loadShipCalendarMonth(year, month);
-    });
-    shipCalNext?.addEventListener('click', () => {
-        let { year, month } = shipCalState;
-        month++;
-        if (month > 12) { month = 1; year++; }
-        loadShipCalendarMonth(year, month);
-    });
-
-    // ===== FUNGSI UNTUK MEMPERBARUI OPSI NEGARA (CASCADE) =====
-    function refreshNegaraOptions() {
-        if (!negaraOptionsUrl) return;
-
-        const filters = currentFilters();
-        const params = buildQueryParams(filters);
-        fetch(`${negaraOptionsUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
-            .then(r => r.json())
-            .then(data => {
-                // data adalah array objek { negara_code, negara_name }
-                const current = fNegara.value;
-                const options = data.map(n => `<option value="${n.negara_code}">${n.negara_name}</option>`);
-                fNegara.innerHTML = `<option value=""></option>` + options.join('');
-                // Set value jika masih valid
-                if (data.some(n => n.negara_code === current)) {
-                    fNegara.value = current;
-                } else {
-                    fNegara.value = '';
-                }
-                $(fNegara).trigger('change');
-            })
-            .catch(() => {});
-    }
-
-    // ===== FUNGSI REFRESH UTAMA =====
-    function currentFilters() {
-        return {
-            uraian: fCpo.value,
-            brand: fBuyer.value,
-            style: fStyle.value,
-            negara: fNegara.value,
-            ocf: fOcf.value,
-        };
-    }
-
-    function refresh() {
-        const { uraian, brand, style, negara, ocf } = currentFilters();
-
-        if (!uraian && !brand && !style && !negara && !ocf) {
-            if (widgets) widgets.style.display = 'none';
-            if (emptyNotice) emptyNotice.style.display = '';
-            document.getElementById('rekon-last-updated').textContent = '-';
-            return;
-        }
-
-        if (emptyNotice) emptyNotice.style.display = 'none';
-        if (widgets) widgets.style.display = '';
-
-        Swal.fire({
-            title: 'Memuat data...',
-            text: 'Mengambil data dashboard untuk filter terpilih, mohon tunggu.',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            didOpen: () => Swal.showLoading(),
-        });
-
-        const url = buildUrl(endpoint, { uraian, brand, style, negara, ocf });
-        fetch(url)
-            .then(r => r.json())
-            .then(json => {
-                renderAll(json);
-                Swal.close();
-            })
-            .catch(() => {
-                Swal.close();
-                Swal.fire('Gagal', 'Tidak bisa memuat data dashboard.', 'error');
-            });
-
-        if (calendarUrl) {
-            loadShipCalendarMonth(shipCalState.year, shipCalState.month);
-        }
-
-        // Setelah refresh, update opsi negara (cascade)
-        refreshNegaraOptions();
-    }
-
-    // ========= SYNC ALL (dengan timeout panjang) =========
-    function runSyncAll() {
-        const steps = [
-            { url: syncMsNegaraUrl, label: 'Sync Master Negara' },
-            { url: syncMsSupplierUrl, label: 'Sync Master Supplier' },
-            { url: syncMsBarangUrl, label: 'Sync Master Barang' },
-            { url: syncRekonUrl, label: 'Sync Rekonsiliasi' },
-            { url: syncProdlineUrl, label: 'Sync Production Line' },
-            { url: syncShipmentUrl, label: 'Sync Shipment' },
-            { url: syncWorkOrderUrl, label: 'Sync Work Order' },
-        ].filter(s => !!s.url);
-
-        Swal.fire({
-            title: 'Sync semua data?',
-            html: `Proses berikut dijalankan berurutan dan bisa memakan waktu cukup lama:<br><small>${steps.map(s => s.label).join(' &rarr; ')}</small>`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Ya, sync semua',
-        }).then((res) => {
-            if (!res.isConfirmed) return;
-            runSyncStep(steps, 0, []);
-        });
-    }
-
-    function runSyncStep(steps, index, results) {
-        if (index >= steps.length) {
-            Swal.close();
-            setTimeout(() => {
-                const failed = results.filter(r => !r.success);
-                if (failed.length === 0) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Selesai',
-                        text: 'Semua proses sync berhasil dijalankan.',
-                        allowOutsideClick: true,
-                        allowEscapeKey: true,
-                    }).then(refresh);
-                } else {
-                    const failedLabels = failed.map(r => r.label).join(', ');
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Selesai dengan error',
-                        text: `Berhasil ${results.length - failed.length}/${results.length} proses. Gagal: ${failedLabels}.`,
-                        allowOutsideClick: true,
-                        allowEscapeKey: true,
-                    }).then(refresh);
-                }
-            }, 200);
-            return;
-        }
-
-        const step = steps[index];
-        Swal.close();
-
-        const startedAt = Date.now();
-        let elapsedTimer = null;
-
-        Swal.fire({
-            title: `${step.label}... (${index + 1}/${steps.length})`,
-            html: 'Menarik data terbaru dari smartit, mohon tunggu.<br><small id="sync-elapsed" class="text-muted">0 detik berjalan</small>',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            didOpen: () => {
-                Swal.showLoading();
-                elapsedTimer = setInterval(() => {
-                    const secs = Math.round((Date.now() - startedAt) / 1000);
-                    const el = document.getElementById('sync-elapsed');
-                    if (el) {
-                        el.textContent = secs > 30
-                            ? `${secs} detik berjalan -- proses smartit memang bisa lama, mohon tunggu`
-                            : `${secs} detik berjalan`;
-                    }
-                }, 1000);
-            },
-            willClose: () => {
-                if (elapsedTimer) clearInterval(elapsedTimer);
-            },
-        });
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000);
-
-        fetch(step.url, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
-            signal: controller.signal,
-        })
-            .then(response => {
-                clearTimeout(timeoutId);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(json => {
-                results.push({ label: step.label, success: !!json.success, message: json.message || json.output });
-                runSyncStep(steps, index + 1, results);
-            })
-            .catch((err) => {
-                clearTimeout(timeoutId);
-                const timedOut = err && err.name === 'AbortError';
-                results.push({
-                    label: step.label,
-                    success: false,
-                    message: timedOut ? 'Timeout -- proses lebih dari 15 menit.' : 'Request gagal dikirim.',
-                });
-                runSyncStep(steps, index + 1, results);
-            });
-    }
-
-    // ===== EVENT LISTENER =====
-    $(fBuyer).on('select2:select select2:clear', function () {
-        $(fStyle).val('').trigger('change');
-        $(fCpo).val('').trigger('change');
-        refreshCascade();
-        refresh();
-    });
-    $(fStyle).on('select2:select select2:clear', function () {
-        $(fCpo).val('').trigger('change');
-        refreshCascade();
-        refresh();
-    });
-    $(fCpo).on('select2:select select2:clear', refresh);
-    $(fOcf).on('select2:select select2:clear', refresh);
-    $(fNegara).on('select2:select select2:clear', refresh);
-
-    if (btnFilterCpo) btnFilterCpo.addEventListener('click', refresh);
-    if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
-
-    refresh();
-})();
-</script>
-
-<style>
-    /* Sticky header untuk semua tabel di dalam .mon-table-box (diulang agar lebih kuat) */
-    .mon-table-box table thead th {
-        position: sticky;
-        top: 0;
-        background: #fff;
-        z-index: 10;
-        box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1);
-    }
-    .mon-table-box .dataTables_scrollHeadInner table thead th {
-        position: sticky;
-        top: 0;
-        background: #fff;
-        z-index: 10;
-    }
-    .mon-table-box table {
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-    .mon-table-box table thead th {
-        border-bottom: 2px solid #dee2e6;
-    }
 
     .right { text-align: right; }
     .mon-table-box { max-height: 420px; overflow: auto; }
-
     .table-responsive table.dataTable { width: 100% !important; }
 
     .rekon-hero {
@@ -1610,8 +674,6 @@
 
     .rekon-pipe-arrow { display: flex; align-items: center; justify-content: center; color: #4e73df; padding: 0 .5rem; margin-bottom: .5rem; }
 
-    /* Kalender "Shipment Date": dibuat kecil & read-only (bukan tombol lagi) --
-       tabel di sampingnya sudah menampilkan seluruh data tanpa perlu klik. */
     .rekon-ship-calendar-sm th,
     .rekon-ship-calendar-sm td {
         font-size: .72rem;
@@ -1751,34 +813,6 @@
         vertical-align: middle;
     }
 
-    /* ============ PERUBAHAN YANG DIMINTA ============ */
-    /* Semua header card di area widget berwarna #1f3864 dengan teks putih */
-    #rekon-widgets .card-header,
-    #rekon-widgets .card .card-header {
-        background: #1f3864 !important;
-        color: #fff !important;
-    }
-    #rekon-widgets .card-header h6,
-    #rekon-widgets .card-header .m-0,
-    #rekon-widgets .card-header * {
-        color: #fff !important;
-    }
-
-    /* Semua header tabel (DataTables maupun biasa) berwarna sama */
-    #rekon-widgets .dataTable thead th,
-    #rekon-widgets .table thead th {
-        background: #1f3864 !important;
-        color: #fff !important;
-    }
-
-    /* Semua sel body tabel (DataTables maupun biasa) teks hitam */
-    #rekon-widgets .dataTable tbody td,
-    #rekon-widgets .table tbody td {
-        color: #000 !important;
-    }
-    /* =============================================== */
-
-    /* ====== CENTER VERTICAL UNTUK KPI CARD ====== */
     .rekon-kpi .card-body {
         display: flex;
         flex-direction: column;
@@ -1786,15 +820,1000 @@
         align-items: center;
         height: 100%;
     }
-    /* ============================================ */
 
-    /* Hilangkan scroll pada card Shipment Date */
-    .mon-table-box.no-scroll {
-        max-height: none !important;
-        overflow: visible !important;
+    /* Fix: loss negative sign display */
+    .loss-negative {
+        color: #1cc88a !important;
     }
-    /* ============================================== */
+    .loss-positive {
+        color: #c0392b !important;
+    }
+    .loss-zero {
+        color: #5a5c69 !important;
+    }
 </style>
+
+<script>
+(function(){
+    const app = document.getElementById('rekon-app');
+    const endpoint = app.dataset.endpoint;
+    const calendarUrl = app.dataset.calendarUrl;
+    const calendarDetailUrl = app.dataset.calendarDetailUrl;
+    const syncRekonUrl = app.dataset.syncRekonUrl;
+    const syncProdlineUrl = app.dataset.syncProdlineUrl;
+    const syncShipmentUrl = app.dataset.syncShipmentUrl;
+    const syncWorkOrderUrl = app.dataset.syncWorkorderUrl;
+    const syncMsBarangUrl = app.dataset.syncMsBarangUrl;
+    const syncMsNegaraUrl = app.dataset.syncMsNegaraUrl;
+    const syncMsSupplierUrl = app.dataset.syncMsSupplierUrl;
+    const negaraOptionsUrl = app.dataset.negaraOptionsUrl;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+    const fBuyer = document.getElementById('f-buyer');
+    const fStyle = document.getElementById('f-style');
+    const fCpo = document.getElementById('f-cpo');
+    const fOcf = document.getElementById('f-ocf');
+    const fNegara = document.getElementById('f-negara');
+    const emptyNotice = document.getElementById('rekon-empty-notice');
+    const widgets = document.getElementById('rekon-widgets');
+    const btnSyncAll = document.getElementById('btn-sync-all');
+
+    let filterOptions = [];
+    try { filterOptions = JSON.parse(app.dataset.filterOptions || '[]'); } catch (e) { filterOptions = []; }
+
+    $('.select2-filter').each(function () {
+        $(this).select2({ width: '100%', placeholder: $(this).data('placeholder') || '', allowClear: true });
+    });
+
+    const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(Number(v || 0));
+
+    function fmtPct(value) {
+        if (value === null || value === undefined || value === '') return '-';
+        const num = parseFloat(value);
+        if (isNaN(num)) return '-';
+        const sign = num < 0 ? '-' : '';
+        const abs = Math.abs(num);
+        const rounded = Math.round(abs * 10) / 10;
+        const formatted = rounded.toFixed(1).replace('.', ',');
+        return sign + formatted + '%';
+    }
+
+    function fmtPctWithSign(value) {
+        if (value === null || value === undefined || value === '') return '-';
+        const num = parseFloat(value);
+        if (isNaN(num)) return '-';
+        const abs = Math.abs(num);
+        const rounded = Math.round(abs * 10) / 10;
+        const formatted = rounded.toFixed(1).replace('.', ',');
+        return (num < 0 ? '' : '+') + formatted + '%';
+    }
+
+    // Format tanggal Indonesia
+    function formatTanggalIndonesia(value) {
+        if (!value) return '';
+        const datePart = String(value).split(' ')[0];
+        const [y, m, d] = datePart.split('-').map(Number);
+        if (!y || !m || !d) return value;
+        const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        if (!monthNames[m-1]) return value;
+        return `${d} ${monthNames[m-1]} ${y}`;
+    }
+
+    function uniqueSorted(values) {
+        return [...new Set(values.filter(v => v !== null && v !== undefined && v !== ''))].sort();
+    }
+
+    function populateSelect($el, values) {
+        const current = $el.val();
+        $el.empty().append('<option value=""></option>');
+        values.forEach(v => $el.append(new Option(v, v, false, false)));
+        $el.val(values.includes(current) ? current : '').trigger('change');
+    }
+
+    function refreshCascade() {
+        const buyer = fBuyer.value;
+        const style = fStyle.value;
+
+        const styleRows = filterOptions.filter(r => !buyer || r.brand === buyer);
+        populateSelect($(fStyle), uniqueSorted(styleRows.map(r => r.style)));
+
+        const cpoRows = filterOptions.filter(r =>
+            (!buyer || r.brand === buyer) && (!style || r.style === style));
+        populateSelect($(fCpo), uniqueSorted(cpoRows.map(r => r.uraian)));
+    }
+
+    let ocfOptions = [];
+    try { ocfOptions = JSON.parse(app.dataset.ocfOptions || '[]'); } catch (e) { ocfOptions = []; }
+
+    (function initCascadeFilters() {
+        populateSelect($(fBuyer), uniqueSorted(filterOptions.map(r => r.brand)));
+        populateSelect($(fOcf), uniqueSorted(ocfOptions));
+
+        const initialFilters = app.dataset.filters ? JSON.parse(app.dataset.filters) : {};
+        const initialUraian = initialFilters.uraian || null;
+        if (initialUraian) {
+            const match = filterOptions.find(r => r.uraian === initialUraian);
+            if (match) {
+                $(fBuyer).val(match.brand).trigger('change');
+            }
+        }
+
+        refreshCascade();
+
+        if (initialUraian) {
+            $(fCpo).val(initialUraian).trigger('change');
+        }
+        if (initialFilters.ocf) {
+            $(fOcf).val(initialFilters.ocf).trigger('change');
+        }
+    })();
+
+    let chartMaterialFabric, chartMaterialAksesoris, chartMaterialPacking, chartProduction, chartExcess, chartShipment, chartShipCategory, chartFabricUsage, dtDetail, dtShipment;
+
+    function wrapLabel(label, maxWidth = 14) {
+        const words = String(label ?? '-').split(' ');
+        const lines = [];
+        let current = '';
+        words.forEach(w => {
+            if ((current + ' ' + w).trim().length > maxWidth) {
+                if (current) lines.push(current.trim());
+                current = w;
+            } else {
+                current = (current + ' ' + w).trim();
+            }
+        });
+        if (current) lines.push(current);
+        return lines.length ? lines : ['-'];
+    }
+
+    const HORIZONTAL_WRAP_X_TICKS = { autoSkip: false, maxRotation: 0, minRotation: 0 };
+
+    function buildUrl(base, params) {
+        const url = new URL(base, window.location.origin);
+        Object.entries(params).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') url.searchParams.set(k, v); });
+        return url.toString();
+    }
+
+    function renderHeader(header) {
+        header = header || {};
+        document.getElementById('hdr-cpo').textContent = header.cpo || '-';
+        document.getElementById('hdr-brand').textContent = header.brand || '-';
+        document.getElementById('hdr-style').textContent = header.style || '-';
+
+        const negaraWrap = document.getElementById('hdr-negara-wrap');
+        const negaraLabel = fNegara.options[fNegara.selectedIndex]?.text || '';
+        if (fNegara.value) {
+            document.getElementById('hdr-negara').textContent = negaraLabel || fNegara.value;
+            negaraWrap.style.display = '';
+        } else {
+            negaraWrap.style.display = 'none';
+        }
+
+        const ocfWrap = document.getElementById('hdr-ocf-wrap');
+        if (fOcf.value) {
+            document.getElementById('hdr-ocf').textContent = fOcf.value;
+            ocfWrap.style.display = '';
+        } else {
+            ocfWrap.style.display = 'none';
+        }
+
+        const countWrap = document.getElementById('hdr-cpo-count-wrap');
+        const countEl = document.getElementById('hdr-cpo-count');
+        if (header.cpoCount && header.cpoCount > 1) {
+            countEl.textContent = `Gabungan ${header.cpoCount} CPO`;
+            countWrap.style.display = '';
+        } else {
+            countWrap.style.display = 'none';
+        }
+
+        document.getElementById('rekon-last-updated').textContent = new Date().toLocaleString('id-ID', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+    }
+
+    function renderKpi(summary) {
+        document.getElementById('kpi-contract').textContent = fmtNum(summary.contract_qty);
+        document.getElementById('kpi-shipment').textContent = fmtNum(summary.shipment_qty);
+        document.getElementById('kpi-achievement').textContent = fmtPct(summary.achievement_pct);
+        document.getElementById('kpi-balance').textContent = fmtNum(summary.balance_qty);
+        document.getElementById('kpi-shortage').textContent = fmtPct(summary.shortage_pct);
+    }
+
+    function renderFabricQty(fabricQty) {
+        fabricQty = fabricQty || {};
+        document.getElementById('fabric-need').textContent = fmtNum(fabricQty.need);
+        document.getElementById('fabric-order').textContent = fmtNum(fabricQty.order);
+        document.getElementById('fabric-received').textContent = fmtNum(fabricQty.received);
+        document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
+        document.getElementById('fabric-stock').textContent = fmtNum(fabricQty.stock);
+    }
+
+    function renderFabricUsage(fabricUsage) {
+        fabricUsage = fabricUsage || {};
+        document.getElementById('usage-for-gmt').textContent = fmtNum(fabricUsage.use_for_gmt);
+        document.getElementById('usage-scrap-qty').textContent = fmtNum(fabricUsage.scrap_qty);
+        document.getElementById('usage-consumption').textContent = fmtNum(fabricUsage.consumption);
+
+        const ctx = document.getElementById('chart-fabric-usage');
+        if (typeof Chart === 'undefined' || !ctx) return;
+
+        const usagePct = Number(fabricUsage.usage_pct || 0);
+        const scrapPct = Number(fabricUsage.scrap_pct || 0);
+
+        if (chartFabricUsage) chartFabricUsage.destroy();
+        chartFabricUsage = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [usagePct, scrapPct],
+                    backgroundColor: ['#1f6f8b', '#e07b39'],
+                    borderWidth: 0,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '40%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (c) => {
+                        const val = c.parsed;
+                        return `${val.toFixed(1).replace('.', ',')}%`;
+                    } } },
+                },
+            },
+            plugins: [{
+                id: 'fabricUsageCenterLabels',
+                afterDraw(chart) {
+                    const { ctx: c } = chart;
+                    const meta = chart.getDatasetMeta(0);
+                    if (!meta || !meta.data.length) return;
+                    c.save();
+                    c.font = 'bold 14px Arial';
+                    c.fillStyle = '#fff';
+                    c.textAlign = 'center';
+                    c.textBaseline = 'middle';
+                    chart.data.datasets[0].data.forEach((value, i) => {
+                        if (!value) return;
+                        const pos = meta.data[i].tooltipPosition();
+                        const formatted = value.toFixed(1).replace('.', ',') + '%';
+                        c.fillText(formatted, pos.x, pos.y);
+                    });
+                    c.restore();
+                },
+            }],
+        });
+    }
+
+    const MATERIAL_ACHIEVEMENT_CHARTS = {
+        fabric:    { canvasId: 'chart-material-achievement-fabric' },
+        aksesoris: { canvasId: 'chart-material-achievement-aksesoris' },
+        packing:   { canvasId: 'chart-material-achievement-packing' },
+    };
+
+    function buildMaterialAchievementChart(group, rows) {
+        const meta = MATERIAL_ACHIEVEMENT_CHARTS[group];
+        const ctx = document.getElementById(meta.canvasId);
+        if (typeof Chart === 'undefined' || !ctx) return;
+
+        const labels = rows.map(r => wrapLabel(r.barang_name));
+        const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
+
+        if (meta.chart) meta.chart.destroy();
+        meta.chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    mk('order_pct', '#4e73df', 'ORDER%'),
+                    mk('received_pct', '#f6a533', 'RECEIVED%'),
+                    mk('out_prod_pct', '#1cc88a', 'OUT PROD%'),
+                    mk('stock_pct', '#36b9cc', 'STOCK%'),
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: HORIZONTAL_WRAP_X_TICKS },
+                    y: { beginAtZero: true, ticks: { callback: v => v + '%' } },
+                },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%`
+                        }
+                    },
+                },
+            },
+        });
+    }
+
+    function renderMaterialAchievement(rows) {
+        rows = rows || [];
+        const byGroup = { fabric: [], aksesoris: [], packing: [] };
+        rows.forEach(r => {
+            if (byGroup[r.material_group]) byGroup[r.material_group].push(r);
+        });
+
+        buildMaterialAchievementChart('fabric', byGroup.fabric);
+        buildMaterialAchievementChart('aksesoris', byGroup.aksesoris);
+        buildMaterialAchievementChart('packing', byGroup.packing);
+    }
+
+    const DEPT_COLORS = { Cutting: '#4e73df', Sewing: '#1cc88a', Packing: '#f6a533' };
+    const DEPT_ORDER = ['Cutting', 'Sewing', 'Packing'];
+
+    // ========== FIX: renderProductionResult with proper sign & centered cards ==========
+    function renderProductionResult(pipeline, materialRows, lossSteps) {
+        materialRows = materialRows || [];
+        lossSteps = lossSteps || [];
+
+        const materialLabels = [...new Set(materialRows.map(r => r.barang_name ?? '-'))].sort();
+        const datasets = DEPT_ORDER.map(dept => ({
+            label: dept,
+            backgroundColor: DEPT_COLORS[dept],
+            data: materialLabels.map(name => {
+                const row = materialRows.find(r => r.department_id === dept && (r.barang_name ?? '-') === name);
+                return row ? Number(row.jumlah || 0) : 0;
+            }),
+        }));
+
+        const ctx = document.getElementById('chart-production-result');
+        if (typeof Chart !== 'undefined' && ctx) {
+            if (chartProduction) chartProduction.destroy();
+            chartProduction = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: materialLabels.map(wrapLabel), datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { ticks: HORIZONTAL_WRAP_X_TICKS },
+                        y: { beginAtZero: true },
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtNum(c.parsed.y)}` } },
+                    },
+                },
+            });
+        }
+
+        const stages = [
+            { label: 'Contract', value: pipeline.contract, theme: 'neutral' },
+            ...pipeline.departments.map(d => ({
+                label: d.department_id ?? '-',
+                value: d.jumlah,
+                theme: 'green',
+            })),
+            { label: 'Shipment', value: pipeline.shipment, theme: 'navy' },
+        ];
+
+        const steps = lossSteps;
+
+        // Build each stage box
+        const boxes = stages.map((s, i) => {
+            const step = i > 0 ? steps[i - 1] : null;
+
+            // ---- FIX: compute loss as input - output ----
+            let lossValue = null;
+            let lossPct = null;
+            if (step) {
+                const input = Number(step.input || 0);
+                const output = Number(step.output || 0);
+                lossValue = input - output;                 // negative = gain, positive = loss
+                lossPct = input !== 0 ? (lossValue / input) * 100 : 0;
+            }
+
+            // Output percentage relative to input
+            let outputPct = null;
+            if (step && step.input > 0) {
+                const input = Number(step.input);
+                const output = Number(step.output);
+                outputPct = (output / input) * 100;
+            } else if (i === 0) {
+                outputPct = 100;
+            }
+
+            const lossIsGain = lossValue !== null && lossValue < 0;
+            const lossIsZero = lossValue !== null && lossValue === 0;
+            const lossColorClass = lossIsGain ? 'is-gain' : (lossIsZero ? 'loss-zero' : '');
+
+            // Show signed loss with proper minus sign
+            let lossDisplay = '-';
+            if (lossValue !== null) {
+                lossDisplay = fmtNum(lossValue);
+            }
+
+            let lossPctDisplay = '-';
+            if (lossPct !== null) {
+                lossPctDisplay = fmtPct(lossPct);
+            }
+
+            const lossRow = step ? `
+                <hr class="rekon-pipe-divider">
+                <div class="rekon-pipe-loss-value ${lossColorClass}">${lossDisplay}</div>
+                <div class="rekon-pipe-loss-pct ${lossColorClass}">${lossPctDisplay}</div>
+            ` : `
+                <hr class="rekon-pipe-divider">
+                <div class="rekon-pipe-loss-value">-</div>
+                <div class="rekon-pipe-loss-pct">&nbsp;</div>
+            `;
+
+            const outputPctDisplay = outputPct !== null ? fmtPct(outputPct) : '-';
+
+            return `
+                <div class="rekon-pipe-box theme-${s.theme}">
+                    <div class="rekon-pipe-header">${s.label}</div>
+                    <div class="rekon-pipe-body">
+                        <div class="rekon-pipe-output">${fmtNum(s.value)}</div>
+                        <div class="rekon-pipe-output-pct">${outputPctDisplay}</div>
+                        ${lossRow}
+                    </div>
+                </div>
+                <div class="rekon-pipe-arrow"><i class="fas fa-arrow-right"></i></div>
+            `;
+        }).join('');
+
+        // Total loss box
+        let totalLoss = Number(pipeline.total_loss || 0);
+        let totalLossPct = Number(pipeline.loss_pct || 0);
+        // If totalLoss is from backend as output-input, we need to flip sign to input-output
+        // But backend's total_loss is already computed as sum of (input - output) if we use the fixed lossSteps
+        // Actually we recompute total from steps to be safe
+        let totalLossRecomputed = 0;
+        let totalInputRecomputed = 0;
+        steps.forEach(step => {
+            const inp = Number(step.input || 0);
+            const out = Number(step.output || 0);
+            totalLossRecomputed += (inp - out);
+            totalInputRecomputed += inp;
+        });
+        if (steps.length > 0 && totalInputRecomputed !== 0) {
+            totalLoss = totalLossRecomputed;
+            totalLossPct = (totalLoss / totalInputRecomputed) * 100;
+        }
+
+        const lossBox = `
+            <div class="rekon-pipe-box theme-loss rekon-pipe-total">
+                <div class="rekon-pipe-header">Total Process Loss</div>
+                <div class="rekon-pipe-body">
+                    <div class="rekon-pipe-output">${fmtNum(totalLoss)}</div>
+                    <div class="rekon-pipe-output-pct">${fmtPct(totalLossPct)}</div>
+                    <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
+                </div>
+            </div>
+        `;
+
+        const legend = `
+            <div class="rekon-pipe-legend">
+                <span><i class="rekon-pipe-dot dot-output"></i>Output Qty (PCS)</span>
+                <span><i class="rekon-pipe-dot dot-loss"></i>Loss Qty (PCS)</span>
+            </div>
+        `;
+
+        // ---- FIX: center the cards with justify-content-center ----
+        document.getElementById('rekon-pipeline').innerHTML =
+            `<div class="d-flex flex-wrap align-items-stretch justify-content-center">${boxes}${lossBox}</div>${legend}`;
+    }
+
+    // ========== FIX: renderLossSteps with proper sign ==========
+    function renderLossSteps(rows) {
+        const tbody = document.querySelector('#table-loss-steps tbody');
+        tbody.innerHTML = rows.map(r => {
+            const input = Number(r.input || 0);
+            const output = Number(r.output || 0);
+            const loss = input - output;          // negative = gain, positive = loss
+            const lossPct = input !== 0 ? (loss / input) * 100 : 0;
+
+            let lossClass = 'loss-zero';
+            if (loss > 0) lossClass = 'loss-positive';
+            else if (loss < 0) lossClass = 'loss-negative';
+
+            return `
+                <tr>
+                    <td>${r.process}</td>
+                    <td class="right">${fmtNum(input)}</td>
+                    <td class="right">${fmtNum(output)}</td>
+                    <td class="right ${lossClass}">${fmtNum(loss)}</td>
+                    <td class="right ${lossClass}">${fmtPct(lossPct)}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderTopExcess(rows) {
+        const ctx = document.getElementById('chart-top-excess');
+        if (typeof Chart === 'undefined' || !ctx) return;
+
+        const labels = rows.map(r => wrapLabel(r.barang_name ?? '-'));
+        const data = rows.map(r => Number(r.saldo_gudang || 0));
+
+        if (chartExcess) chartExcess.destroy();
+        chartExcess = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ data, backgroundColor: ['#1cc88a', '#f6a533', '#4e73df'] }] },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { ticks: { maxRotation: 0, minRotation: 0 } }
+                }
+            },
+        });
+    }
+
+    function renderShipmentCategory(rows) {
+        const ctx = document.getElementById('chart-shipment-category');
+        if (typeof Chart === 'undefined' || !ctx) return;
+
+        const labels = rows.map(r => r.barang_category ?? '-');
+        const data = rows.map(r => Number(r.jumlah_barang || 0));
+
+        if (chartShipCategory) chartShipCategory.destroy();
+        chartShipCategory = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data, backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'] }] },
+            options: { responsive: true, maintainAspectRatio: false },
+        });
+    }
+
+    function renderShipment(byDate, detailRows) {
+        const ctx = document.getElementById('chart-shipment-trend');
+        if (typeof Chart !== 'undefined' && ctx) {
+            const labels = byDate.map(r => wrapLabel(r.tgl_bukti ?? '-'));
+            const data = byDate.map(r => Number(r.jumlah_barang || 0));
+
+            if (chartShipment) chartShipment.destroy();
+            chartShipment = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Shipment (Pcs)',
+                        data,
+                        borderColor: '#1cc88a',
+                        backgroundColor: 'rgba(28,200,138,.15)',
+                        fill: true,
+                        tension: .25,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: HORIZONTAL_WRAP_X_TICKS }
+                    }
+                },
+            });
+        }
+
+        const tbody = document.querySelector('#table-shipment-detail tbody');
+        tbody.innerHTML = detailRows.map(r => `
+            <tr>
+                <td>${r.no_bukti ?? '-'}</td>
+                <td>${formatTanggalIndonesia(r.tgl_bukti)}</td>
+                <td>${r.jenis_doc ?? '-'}</td>
+                <td>${r.jenis_ps ?? '-'}</td>
+                <td>${r.barang_name ?? '-'}</td>
+                <td>${r.satuan_doc ?? '-'}</td>
+                <td class="right">${fmtNum(r.jumlah_doc)}</td>
+                <td class="right">${fmtNum(r.jumlah_barang)}</td>
+            </tr>
+        `).join('');
+
+        if (dtShipment) dtShipment.destroy();
+        dtShipment = $('#table-shipment-detail').DataTable({
+            pageLength: 10,
+            order: [],
+            autoWidth: false,
+            width: '100%',
+            scrollY: '300px',
+            scrollCollapse: true,
+            fixedHeader: true,
+        });
+    }
+
+    function renderDetail(rows) {
+        const tbody = document.querySelector('#table-rekon-detail tbody');
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${r.no_po ?? '-'}</td>
+                <td>${r.jenis_po ?? '-'}</td>
+                <td>${formatTanggalIndonesia(r.tgl_po)}</td>
+                <td>${formatTanggalIndonesia(r.tgl_pengiriman)}</td>
+                <td>${r.supplier_name ?? '-'}</td>
+                <td>${r.barang_code ?? '-'}</td>
+                <td>${r.barang_name ?? '-'}</td>
+                <td>${r.satuan_order ?? '-'}</td>
+                <td class="right">${fmtNum(r.jumlah_order)}</td>
+                <td class="right">${fmtNum(r.jumlah_doc)}</td>
+                <td class="right">${fmtNum(r.out_req)}</td>
+                <td class="right">${fmtNum(r.out_prod)}</td>
+                <td class="right">${fmtNum(r.sisa)}</td>
+                <td class="right">${fmtNum(r.saldo_wip)}</td>
+                <td class="right">${fmtNum(r.out_doc)}</td>
+                <td class="right">${fmtNum(r.saldo_gudang)}</td>
+                <td class="right">${fmtNum(r.harga_total)}</td>
+            </tr>
+        `).join('');
+
+        if (dtDetail) dtDetail.destroy();
+        dtDetail = $('#table-rekon-detail').DataTable({
+            pageLength: 10,
+            order: [],
+            autoWidth: false,
+            width: '100%',
+            scrollY: '400px',
+            scrollCollapse: true,
+            fixedHeader: true,
+        });
+    }
+
+    function renderAll(json) {
+        renderHeader(json.header);
+        renderKpi(json.summary);
+        renderFabricQty(json.fabricQty);
+        renderFabricUsage(json.fabricUsage);
+        renderMaterialAchievement(json.materialAchievement);
+        renderProductionResult(json.productionPipeline, json.productionResultByMaterial, json.pipelineLossSteps);
+        renderLossSteps(json.pipelineLossSteps);
+        renderTopExcess(json.topMaterialExcess);
+        renderShipment(json.shipmentByDate, json.shipmentDetail);
+        renderShipmentCategory(json.shipmentByCategory);
+        renderDetail(json.detail);
+
+        renderShipCalDetailTable(json.shipmentDetail);
+
+        if (Array.isArray(json.ocfOptions)) {
+            populateSelect($(fOcf), json.ocfOptions);
+        }
+    }
+
+    // ================= SHIPMENT DATE: kalender =================
+    const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    const today = new Date();
+
+    const shipCalState = {
+        year: today.getFullYear(),
+        month: today.getMonth() + 1,
+        requestSeq: 0,
+    };
+
+    const shipCalLabel = document.getElementById('ship-cal-label');
+    const shipCalBody  = document.querySelector('#mon-ship-calendar tbody');
+    const shipCalPrev  = document.getElementById('ship-cal-prev');
+    const shipCalNext  = document.getElementById('ship-cal-next');
+    let dtShipCalDetail;
+
+    function pad2(n){ return String(n).padStart(2, '0'); }
+    function toIsoDate(y, m, d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
+
+    function buildShipCalendarQuery(extra) {
+        const params = buildQueryParams(currentFilters());
+        Object.entries(extra || {}).forEach(([k, v]) => params.append(k, v));
+        return params;
+    }
+
+    function buildQueryParams(filters) {
+        const params = new URLSearchParams();
+        Object.entries(filters || {}).forEach(([k, v]) => { if (v) params.append(k, v); });
+        return params;
+    }
+
+    function setShipCalNavDisabled(disabled) {
+        if (shipCalPrev) shipCalPrev.disabled = disabled;
+        if (shipCalNext) shipCalNext.disabled = disabled;
+    }
+
+    function renderShipCalendarGrid(year, month, dayMap) {
+        if (!shipCalLabel || !shipCalBody) return;
+        shipCalLabel.textContent = `${monthNames[month - 1]} ${year}`;
+
+        const firstDow = new Date(year, month - 1, 1).getDay();
+        const daysInMonth = new Date(year, month, 0).getDate();
+
+        let cells = [];
+        for (let i = 0; i < firstDow; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+        while (cells.length % 7 !== 0) cells.push(null);
+
+        let html = '';
+        for (let w = 0; w < cells.length / 7; w++) {
+            html += '<tr>';
+            for (let c = 0; c < 7; c++) {
+                const d = cells[w * 7 + c];
+                if (!d) { html += '<td class="bg-light"></td>'; continue; }
+
+                const iso = toIsoDate(year, month, d);
+                const info = dayMap[iso];
+                const isToday = iso === toIsoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+
+                let cls = 'text-center';
+                if (info) cls += ' bg-info text-white';
+                if (isToday) cls += ' font-weight-bold';
+
+                html += `<td class="${cls}" style="vertical-align:middle;" title="${info ? `${info.jumlah_doc} dokumen` : ''}">
+                    <div>${d}</div>
+                    ${info ? `<span class="badge badge-pill badge-light" style="font-size:.6rem;">${info.jumlah_doc}</span>` : ''}
+                </td>`;
+            }
+            html += '</tr>';
+        }
+        shipCalBody.innerHTML = html;
+    }
+
+    function loadShipCalendarMonth(year, month) {
+        if (!calendarUrl) return;
+
+        shipCalState.year = year;
+        shipCalState.month = month;
+
+        const seq = ++shipCalState.requestSeq;
+        setShipCalNavDisabled(true);
+
+        const params = buildShipCalendarQuery({ year, month });
+        fetch(`${calendarUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
+            .then(json => {
+                if (seq !== shipCalState.requestSeq) return;
+                const dayMap = {};
+                (json.days || []).forEach(row => { dayMap[row.tanggal] = row; });
+                renderShipCalendarGrid(year, month, dayMap);
+            })
+            .catch(() => {
+                if (seq !== shipCalState.requestSeq) return;
+                renderShipCalendarGrid(year, month, {});
+            })
+            .finally(() => {
+                if (seq === shipCalState.requestSeq) setShipCalNavDisabled(false);
+            });
+    }
+
+    function renderShipCalDetailTable(rows) {
+        if (dtShipCalDetail) { dtShipCalDetail.destroy(); dtShipCalDetail = null; }
+
+        dtShipCalDetail = $('#table-ship-cal-detail').DataTable({
+            data: rows || [],
+            pageLength: 10,
+            lengthMenu: [10, 25, 50, 100],
+            order: [],
+            autoWidth: false,
+            fixedHeader: true,
+            columns: [
+                { data: 'tgl_bukti', defaultContent: '', render: v => formatTanggalIndonesia(v) },
+                { data: 'uraian', defaultContent: '' },
+                { data: 'no_bukti', defaultContent: '' },
+                { data: 'supplier_name', defaultContent: '' },
+                { data: 'barang_name', defaultContent: '' },
+                { data: 'jumlah_barang', className: 'right', render: v => fmtNum(v) },
+            ]
+        });
+    }
+
+    shipCalPrev?.addEventListener('click', () => {
+        let { year, month } = shipCalState;
+        month--;
+        if (month < 1) { month = 12; year--; }
+        loadShipCalendarMonth(year, month);
+    });
+    shipCalNext?.addEventListener('click', () => {
+        let { year, month } = shipCalState;
+        month++;
+        if (month > 12) { month = 1; year++; }
+        loadShipCalendarMonth(year, month);
+    });
+
+    function refreshNegaraOptions() {
+        if (!negaraOptionsUrl) return;
+
+        const filters = currentFilters();
+        const params = buildQueryParams(filters);
+        fetch(`${negaraOptionsUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(data => {
+                const current = fNegara.value;
+                const options = data.map(n => `<option value="${n.negara_code}">${n.negara_name}</option>`);
+                fNegara.innerHTML = `<option value=""></option>` + options.join('');
+                if (data.some(n => n.negara_code === current)) {
+                    fNegara.value = current;
+                } else {
+                    fNegara.value = '';
+                }
+                $(fNegara).trigger('change');
+            })
+            .catch(() => {});
+    }
+
+    function currentFilters() {
+        return {
+            uraian: fCpo.value,
+            brand: fBuyer.value,
+            style: fStyle.value,
+            negara: fNegara.value,
+            ocf: fOcf.value,
+        };
+    }
+
+    function refresh() {
+        const { uraian, brand, style, negara, ocf } = currentFilters();
+
+        if (!uraian && !brand && !style && !negara && !ocf) {
+            if (widgets) widgets.style.display = 'none';
+            if (emptyNotice) emptyNotice.style.display = '';
+            document.getElementById('rekon-last-updated').textContent = '-';
+            return;
+        }
+
+        if (emptyNotice) emptyNotice.style.display = 'none';
+        if (widgets) widgets.style.display = '';
+
+        Swal.fire({
+            title: 'Memuat data...',
+            text: 'Mengambil data dashboard untuk filter terpilih, mohon tunggu.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        const url = buildUrl(endpoint, { uraian, brand, style, negara, ocf });
+        fetch(url)
+            .then(r => r.json())
+            .then(json => {
+                renderAll(json);
+                Swal.close();
+            })
+            .catch(() => {
+                Swal.close();
+                Swal.fire('Gagal', 'Tidak bisa memuat data dashboard.', 'error');
+            });
+
+        if (calendarUrl) {
+            loadShipCalendarMonth(shipCalState.year, shipCalState.month);
+        }
+
+        refreshNegaraOptions();
+    }
+
+    function runSyncAll() {
+        const steps = [
+            { url: syncMsNegaraUrl, label: 'Sync Master Negara' },
+            { url: syncMsSupplierUrl, label: 'Sync Master Supplier' },
+            { url: syncMsBarangUrl, label: 'Sync Master Barang' },
+            { url: syncRekonUrl, label: 'Sync Rekonsiliasi' },
+            { url: syncProdlineUrl, label: 'Sync Production Line' },
+            { url: syncShipmentUrl, label: 'Sync Shipment' },
+            { url: syncWorkOrderUrl, label: 'Sync Work Order' },
+        ].filter(s => !!s.url);
+
+        Swal.fire({
+            title: 'Sync semua data?',
+            html: `Proses berikut dijalankan berurutan dan bisa memakan waktu cukup lama:<br><small>${steps.map(s => s.label).join(' &rarr; ')}</small>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, sync semua',
+        }).then((res) => {
+            if (!res.isConfirmed) return;
+            runSyncStep(steps, 0, []);
+        });
+    }
+
+    function runSyncStep(steps, index, results) {
+        if (index >= steps.length) {
+            Swal.close();
+            setTimeout(() => {
+                const failed = results.filter(r => !r.success);
+                if (failed.length === 0) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Selesai',
+                        text: 'Semua proses sync berhasil dijalankan.',
+                        allowOutsideClick: true,
+                        allowEscapeKey: true,
+                    }).then(refresh);
+                } else {
+                    const failedLabels = failed.map(r => r.label).join(', ');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Selesai dengan error',
+                        text: `Berhasil ${results.length - failed.length}/${results.length} proses. Gagal: ${failedLabels}.`,
+                        allowOutsideClick: true,
+                        allowEscapeKey: true,
+                    }).then(refresh);
+                }
+            }, 200);
+            return;
+        }
+
+        const step = steps[index];
+        Swal.close();
+
+        const startedAt = Date.now();
+        let elapsedTimer = null;
+
+        Swal.fire({
+            title: `${step.label}... (${index + 1}/${steps.length})`,
+            html: 'Menarik data terbaru dari smartit, mohon tunggu.<br><small id="sync-elapsed" class="text-muted">0 detik berjalan</small>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+                elapsedTimer = setInterval(() => {
+                    const secs = Math.round((Date.now() - startedAt) / 1000);
+                    const el = document.getElementById('sync-elapsed');
+                    if (el) {
+                        el.textContent = secs > 30
+                            ? `${secs} detik berjalan -- proses smartit memang bisa lama, mohon tunggu`
+                            : `${secs} detik berjalan`;
+                    }
+                }, 1000);
+            },
+            willClose: () => {
+                if (elapsedTimer) clearInterval(elapsedTimer);
+            },
+        });
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000);
+
+        fetch(step.url, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+            signal: controller.signal,
+        })
+            .then(response => {
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(json => {
+                results.push({ label: step.label, success: !!json.success, message: json.message || json.output });
+                runSyncStep(steps, index + 1, results);
+            })
+            .catch((err) => {
+                clearTimeout(timeoutId);
+                const timedOut = err && err.name === 'AbortError';
+                results.push({
+                    label: step.label,
+                    success: false,
+                    message: timedOut ? 'Timeout -- proses lebih dari 15 menit.' : 'Request gagal dikirim.',
+                });
+                runSyncStep(steps, index + 1, results);
+            });
+    }
+
+    // ===== EVENT LISTENER =====
+    $(fBuyer).on('select2:select select2:clear', function () {
+        $(fStyle).val('').trigger('change');
+        $(fCpo).val('').trigger('change');
+        refreshCascade();
+        refresh();
+    });
+    $(fStyle).on('select2:select select2:clear', function () {
+        $(fCpo).val('').trigger('change');
+        refreshCascade();
+        refresh();
+    });
+    $(fCpo).on('select2:select select2:clear', refresh);
+    $(fOcf).on('select2:select select2:clear', refresh);
+    $(fNegara).on('select2:select select2:clear', refresh);
+
+    if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
+
+    refresh();
+})();
+</script>
 
 </body>
 </html>

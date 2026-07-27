@@ -1039,6 +1039,24 @@
                                                                 <input type="text" class="form-control px-3"
                                                                     id="exit_tmk" readonly>
                                                             </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">Education</label>
+                                                                <input type="text" class="form-control px-3"
+                                                                    id="exit_pendidikan" readonly>
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">Major</label>
+                                                                <input type="text" class="form-control px-3"
+                                                                    id="exit_jurusan" readonly>
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">Dependents</label>
+                                                                <input type="text" class="form-control px-3"
+                                                                    id="exit_tanggungan" readonly>
+                                                            </div>
                                                             <!-- TKK Field Added Here -->
                                                             <div class="col-md-6 mb-3">
                                                                 <label
@@ -1062,21 +1080,12 @@
                                                             </div>
                                                             <div class="col-md-6 mb-3">
                                                                 <label
-                                                                    class="small font-weight-bold text-muted ml-2">Education</label>
-                                                                <input type="text" class="form-control px-3"
-                                                                    id="exit_pendidikan" readonly>
-                                                            </div>
-                                                            <div class="col-md-6 mb-3">
-                                                                <label
-                                                                    class="small font-weight-bold text-muted ml-2">Major</label>
-                                                                <input type="text" class="form-control px-3"
-                                                                    id="exit_jurusan" readonly>
-                                                            </div>
-                                                            <div class="col-md-6 mb-3">
-                                                                <label
-                                                                    class="small font-weight-bold text-muted ml-2">Dependents</label>
-                                                                <input type="text" class="form-control px-3"
-                                                                    id="exit_tanggungan" readonly>
+                                                                    class="small font-weight-bold text-danger ml-2">Alasan Keluar</label>
+                                                                <textarea name="alasan_keluar"
+                                                                    class="form-control px-3 border-danger text-danger"
+                                                                    id="alasan_keluar"
+                                                                    placeholder="Masukkan alasan keluar..."
+                                                                    rows="3"></textarea>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1387,6 +1396,7 @@
             var npk = $('#confirmExitBtn').data('id');
             var tkk = $('#exit_tkk').val();
             var status_keluar = $('#status_keluar').val();
+            var alasan_keluar = $('#alasan_keluar').val();
             var btn = $('#confirmExitBtn');
 
             if (!tkk) {
@@ -1404,7 +1414,7 @@
             $.ajax({
                 url: '/biodata/exit/' + npk,
                 type: 'GET',
-                data: { tkk: tkk, status_keluar: status_keluar },
+                data: { tkk: tkk, status_keluar: status_keluar, leave_reasons: alasan_keluar },
                 success: function (response) {
                     $('#exitModal').modal('hide');
                     if (response.original && response.original.status === 'success' || response.status === 'success') {

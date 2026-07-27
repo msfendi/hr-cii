@@ -1120,7 +1120,20 @@ buttons: [
                         return data ?? 0;
                     }
 
-                    return salaryMaskColored(data ?? 0, row.components?.night_shift_compensation?.type);
+                    let nightShiftData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.night_shift_details || []
+                            )
+                        );
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-night-shift-detail"
+                        data-night-shift="${nightShiftData}">
+                            ${salaryMaskColored(data ?? 0, row.components?.night_shift_compensation?.type)}
+                        </a>
+                    `;
                 }
             },
 
@@ -1635,6 +1648,7 @@ function salaryMaskColored(amount, componentType){
 </script>
 <style>
     .btn-adjusment-detail{
+    color:#4e73df !important;
     text-decoration:none;
     transition:.2s;
     font-weight:600;
@@ -1645,6 +1659,7 @@ function salaryMaskColored(amount, componentType){
     color:#dc3545 !important;
 }
     .btn-ijin-detail{
+    color:#4e73df !important;
     text-decoration:none;
     transition:.2s;
     font-weight:600;
@@ -1703,6 +1718,7 @@ function salaryMaskColored(amount, componentType){
     font-size:13px;
 }
     .btn-late-detail{
+    color:#4e73df !important;
     text-decoration:none;
     transition:.2s;
     font-weight:600;
@@ -1745,6 +1761,7 @@ function salaryMaskColored(amount, componentType){
 }
 
     .btn-overtime-detail{
+    color:#4e73df !important;
     text-decoration:none;
     transition:.2s;
 }
@@ -1801,6 +1818,7 @@ function salaryMaskColored(amount, componentType){
 }
 
     .btn-special-overtime-detail{
+    color:#4e73df !important;
     text-decoration:none;
     transition:.2s;
 }
@@ -1830,6 +1848,60 @@ function salaryMaskColored(amount, componentType){
 #specialOvertimeDetailModal .table-primary{
     font-size:14px;
 }
+
+    .btn-night-shift-detail{
+    color:#4e73df !important;
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+.btn-night-shift-detail:hover{
+    color:#0056b3 !important;
+    text-decoration:none;
+}
+
+#nightShiftDetailModal .modal-dialog{
+    max-width:90%;
+}
+
+#nightShiftDetailModal .modal-content{
+    border-radius:15px;
+    overflow:hidden;
+}
+
+#nightShiftDetailModal .modal-header{
+    background:linear-gradient(
+        135deg,
+        #4e73df,
+        #224abe
+    );
+}
+
+#table-night-shift-detail{
+    font-size:13px;
+}
+
+#table-night-shift-detail tbody tr:hover{
+    background:#f5f9ff;
+}
+
+#table-night-shift-detail_wrapper .dataTables_filter{
+    margin-bottom:10px;
+}
+
+#table-night-shift-detail tfoot{
+    background:#eef7ff;
+}
+
+#nightShiftDetailModal table tbody tr:hover{
+    background:#f8fbff;
+}
+
+#nightShiftDetailModal .table-primary{
+    font-size:14px;
+}
+
 #table-details tbody tr.table-danger td{
     background-color:#f8d7da !important;
     color:#721c24 !important;
@@ -2277,6 +2349,78 @@ function salaryMaskColored(amount, componentType){
                             </th>
 
                             <th id="total-special-ot">
+                                0
+                            </th>
+
+                        </tr>
+
+                    </tfoot>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="modal fade"
+     id="nightShiftDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-primary text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-moon mr-2"></i>
+                    Night Shift Compensation Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+
+                    <span>&times;</span>
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-night-shift-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead class="thead-light">
+
+                        <tr>
+                            <th>NPK</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Shift Date</th>
+                            <th>Shift Name</th>
+                            <th>Work Start</th>
+                            <th>Work End</th>
+                        </tr>
+
+                    </thead>
+
+                    <tfoot>
+
+                        <tr style="font-weight:bold;background:#eef7ff">
+
+                            <th colspan="6"
+                                class="text-right">
+
+                                TOTAL NIGHT SHIFT
+
+                            </th>
+
+                            <th id="total-night-shift">
                                 0
                             </th>
 
@@ -2866,6 +3010,89 @@ $(document).on(
             });
 
         $('#overtimeDetailModal')
+            .modal('show');
+
+    }
+);
+</script>
+<script>
+    let nightShiftDetailTable = null;
+    $(document).on(
+    'click',
+    '.btn-night-shift-detail',
+    function(){
+
+        let details = JSON.parse(
+            decodeURIComponent(
+                $(this).data('night-shift')
+            )
+        );
+
+        $('#total-night-shift')
+            .html(details.length);
+
+        if(nightShiftDetailTable){
+
+            nightShiftDetailTable.destroy();
+
+            $('#table-night-shift-detail tbody')
+                .remove();
+        }
+
+        $('#table-night-shift-detail').append(
+            '<tbody></tbody>'
+        );
+
+        nightShiftDetailTable =
+            $('#table-night-shift-detail').DataTable({
+
+                data: details,
+
+                pageLength: 10,
+
+                responsive: true,
+
+                ordering: true,
+
+                searching: true,
+
+                columns: [
+
+                    {
+                        data:'NPK'
+                    },
+
+                    {
+                        data:'NAMA_KARYAWAN'
+                    },
+
+                    {
+                        data:'DEPARTEMENT'
+                    },
+
+                    {
+                        data:'shift_date'
+                    },
+
+                    {
+                        data:'shift_name'
+                    },
+
+                    {
+                        data:'work_start',
+                        className:'text-center'
+                    },
+
+                    {
+                        data:'work_end',
+                        className:'text-center'
+                    }
+
+                ]
+
+            });
+
+        $('#nightShiftDetailModal')
             .modal('show');
 
     }

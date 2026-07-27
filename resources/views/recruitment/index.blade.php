@@ -814,7 +814,7 @@
                                                     <div class="d-flex align-items-center" style="gap:10px;">
                                                         <div class="av {{ $isMale ? 'av-m' : 'av-f' }}">{{ $initial }}</div>
                                                         <div>
-                                                            <div class="name-main">{{ $recruitment->NAMA }}</div>
+                                                            <div class="name-main" {!! in_array($recruitment->NIK, $exPkwtKtp ?? []) ? 'style="color: red;" title="Pelamar Pernah Menjadi Karyawan Disini"' : '' !!}>{{ $recruitment->NAMA }}</div>
                                                             <div class="name-sub">{{ $isMale ? '♂ Laki-laki' : '♀ Perempuan' }}</div>
                                                             @if($recruitment->jabatan)
                                                                 <div class="name-sub"><i class="fas fa-briefcase mr-1" style="font-size:10px;"></i>{{ $recruitment->jabatan }}</div>
@@ -891,6 +891,14 @@
                                                     <span class="s-pill {{ $sClass }}">
                                                         <i class="fas {{ $sIcon }}"></i>{{ $recruitment->status_apply ?? $sa ?? '-' }}
                                                     </span>
+                                                    <br>
+                                                        @if($recruitment->status_apply == 'ONBOARDING')
+                                                            @if($recruitment->tgl_diterima != null)
+                                                                <i class="fas fa-check-circle" style="font-size:13px;">{{ \Carbon\Carbon::parse($recruitment->tgl_diterima)->format('d F Y') }}</i>
+                                                            @else
+                                                                <i class="fas fa-exclamation-circle" style="font-size:13px;">Tanggal Diterima Belum Diisi</i>
+                                                            @endif
+                                                        @endif
                                                 </td>
                                                 
                                                 {{-- Hasil Test --}}
@@ -994,6 +1002,7 @@
                                                         @endcanRoute
                                                         <button type="button" class="act-btn act-det btn-detail"
                                                             data-recruitment="{{ json_encode($recruitment) }}"
+                                                            data-pkwt="{{ isset($pkwtRecords[$recruitment->NIK]) ? json_encode($pkwtRecords[$recruitment->NIK]) : 'null' }}"
                                                             data-toggle="modal" data-target="#detailModal">
                                                             <i class="fas fa-eye"></i> Detail
                                                         </button>
@@ -1068,6 +1077,9 @@
                                 </div>
                                 <div class="det-tab" data-tab="dokumen">
                                     <i class="fas fa-folder-open"></i> Dokumen
+                                </div>
+                                <div class="det-tab" data-tab="pkwt" id="tab-pkwt-header" style="display:none;">
+                                    <i class="fas fa-history"></i> Riwayat PKWT
                                 </div>
                                 <div class="det-tab" data-tab="penilaian">
                                     <i class="fas fa-tasks"></i> Penilaian
@@ -1264,6 +1276,16 @@
                                     <div class="sec-card-body">
                                         <p class="text-muted mb-2" style="font-size:12px;">Klik dokumen gambar untuk membuka dengan image viewer (bisa rotate). Dokumen non-gambar akan dibuka di tab baru.</p>
                                         <div id="doc_grid_modal" style="display:flex; flex-wrap:wrap;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {{-- ── TAB: RIWAYAT KELUAR ── --}}
+                            <div class="det-pane" id="pane-pkwt">
+                                <div class="sec-card">
+                                    <div class="sec-card-hd hd-orange"><i class="fas fa-history"></i> Riwayat Keluar</div>
+                                    <div class="sec-card-body">
+                                        <div id="pkwt_history_table"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1713,6 +1735,27 @@
             // Reset tabs
             $('.det-tab').removeClass('active').first().addClass('active');
             $('.det-pane').removeClass('active').first().addClass('active');
+
+            // Handle PKWT data
+            const pkwt = $(this).data('pkwt');
+            if (pkwt && pkwt !== 'null') {
+                $('#tab-pkwt-header').show();
+                let pkwtRows = [];
+                let pkwtArr = toArr(pkwt);
+                pkwtArr.forEach(p => {
+                    pkwtRows.push([
+                        p.NAMA,
+                        p.TMK ? fmtD(p.TMK) : '-',
+                        p.TKK ? fmtD(p.TKK) : '-',
+                        p.KETERANGAN || '-',
+                        p.leave_reasons || '-'
+                    ]);
+                });
+                $('#pkwt_history_table').html(stbl(['Nama di PKWT', 'TMK', 'TKK', 'Status Keluar', 'Alasan Keluar'], pkwtRows));
+            } else {
+                $('#tab-pkwt-header').hide();
+                $('#pkwt_history_table').html('');
+            }
 
             // Hero
             $('#det_av').text((d.NAMA || 'X').charAt(0).toUpperCase());

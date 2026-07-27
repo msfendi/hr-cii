@@ -119,13 +119,23 @@ class RecruitmentController extends Controller
 
         $recruitments = $query->orderByDesc('PELAMAR.id')->get();
 
+        // Check which NIKs ever existed in PKWT table
+        $niks = $recruitments->pluck('NIK')->filter()->unique()->toArray();
+        $pkwtRecords = DB::connection('cii')->table('PKWT')
+            ->whereIn('KTP', $niks)
+            ->select('KTP', 'NAMA', 'TMK', 'TKK', 'KETERANGAN', 'leave_reasons')
+            ->get()
+            ->groupBy('KTP');
+        
+        $exPkwtKtp = $pkwtRecords->keys()->toArray();
+
         // Map health test IDs by NIK for quick lookup in the blade
         $healthTestMap = HealthTest::select('id', 'nik')
             ->get()
             ->keyBy('nik')
             ->map(fn($h) => $h->id);
 
-        return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap'));
+        return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap', 'pkwtRecords', 'exPkwtKtp'));
 
     }
 

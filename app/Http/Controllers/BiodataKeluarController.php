@@ -22,7 +22,7 @@ class BiodataKeluarController extends Controller
     public function getData(Request $request)
     {
         $query = DB::connection('cii')->table('PKWT')
-            ->select('NPK', 'NAMA', 'KTP', 'TMK', 'TKK', 'KETERANGAN', 'BAGIAN')
+            ->select('NPK', 'NAMA', 'KTP', 'TMK', 'TKK', 'KETERANGAN', 'leave_reasons', 'BAGIAN')
             ->whereNotNull('TKK')
             ->orderBy('NPK', 'asc');
 
@@ -41,7 +41,10 @@ class BiodataKeluarController extends Controller
         try {
             DB::connection('cii')->table('PKWT')
                 ->where('NPK', strtoupper($npk))
-                ->update(['KETERANGAN' => $request->keterangan]);
+                ->update([
+                    'KETERANGAN' => $request->keterangan,
+                    'leave_reasons' => $request->leave_reasons
+                ]);
 
             return response()->json(['status' => 'success', 'message' => 'Keterangan berhasil diperbarui.']);
         } catch (\Exception $e) {

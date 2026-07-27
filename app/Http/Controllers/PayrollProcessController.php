@@ -960,6 +960,35 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
         /*
     |--------------------------------------------------------------------------
+    | NIGHT SHIFT DETAILS (untuk modal detail Night Shift Compensation)
+    |--------------------------------------------------------------------------
+    */
+        $nightShiftDetails = DB::connection('cii')
+            ->table('employee_shifts as es')
+            ->join('shifts as s', 'es.shift_id', '=', 's.id')
+            ->leftJoinSub($employeeUnion, 'bio', function ($join) {
+                $join->on('es.npk', '=', 'bio.NPK');
+            })
+            ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
+            ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
+            ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->select(
+                'es.npk as NPK',
+                'bio.NAMA_KARYAWAN',
+                'd.DEPARTEMENT',
+                DB::raw('CAST(es.shift_date AS DATE) as shift_date'),
+                's.name as shift_name',
+                DB::raw('CAST(s.work_start AS TIME) as work_start'),
+                DB::raw('CAST(s.work_end AS TIME) as work_end')
+            )
+            ->orderBy('es.npk')
+            ->orderBy('es.shift_date')
+            ->get()
+            ->groupBy('NPK');
+
+        /*
+    |--------------------------------------------------------------------------
     | BASE QUERY
     |--------------------------------------------------------------------------
     */
@@ -1020,6 +1049,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             $overtimeDetails,
             $lateDetails,
             $ijinDetails,
+            $nightShiftDetails,
             $componentTypeMap,
             $periodStart,
             $periodEnd
@@ -1117,6 +1147,11 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             // push detail ijin
             $item->ijin_details =
                 $ijinDetails->get($item->employee_npk, collect())
+                ->values();
+
+            // push detail night shift
+            $item->night_shift_details =
+                $nightShiftDetails->get($item->employee_npk, collect())
                 ->values();
 
             return $item;
