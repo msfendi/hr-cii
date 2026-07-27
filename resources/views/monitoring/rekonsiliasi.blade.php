@@ -355,7 +355,7 @@
                                 <div class="rekon-pipeline" id="rekon-pipeline">
                                     <!-- diisi JS -->
                                 </div>
-                                <div class="text-muted small mt-2 mb-3">
+                                <!-- <div class="text-muted small mt-2 mb-3">
                                     Cutting = <code>mon_prod_lines.jumlah</code> (department_id = Cutting, kategori
                                     <em>Bahan Setengah Jadi</em>). Sewing/Packing = <code>mon_prod_lines.jumlah</code>
                                     (department_id Sewing/Packing). Warehouse = <code>mon_prod_lines.jumlah</code>
@@ -366,7 +366,7 @@
                                     Packing = dept.Packing &minus; dest.Packing; Warehouse = dest.Warehouse &minus; dept.Packing.
                                     Juga bisa difilter per <strong>Negara</strong> (lewat CPO yang punya shipment dari
                                     negara terpilih).
-                                </div>
+                                </div> -->
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-sm w-100" id="table-loss-steps">
                                         <thead>
@@ -431,7 +431,7 @@
                     <div class="col-lg-7 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">PIVOT SHIPMENT &mdash; Dokumen Pengeluaran BC</h6>
+                                <h6 class="m-0 font-weight-bold text-primary">SHIPMENT &mdash; Dokumen Pengeluaran BC</h6>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive mon-table-box">
