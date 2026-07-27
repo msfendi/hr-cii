@@ -32,16 +32,26 @@
   <head>
     <meta charset="utf-8">
     <style>
-      body {
-        font-family: sans-serif;
-        font-size: 10px;
+      /* ===== GLOBAL & PAGE SETUP ===== */
+      @page {
+        size: A4 landscape;  /* landscape memberi lebih banyak ruang */
+        margin: 10mm 8mm;
       }
 
+      body {
+        font-family: sans-serif;
+        font-size: 8px;       /* ukuran lebih kecil agar muat */
+        margin: 0;
+        padding: 0;
+      }
+
+      /* ===== TABEL UTAMA ===== */
       table {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 15px;
-        table-layout: fixed;
+        margin-bottom: 12px;
+        table-layout: auto;   /* otomatis menyesuaikan lebar kolom */
+        font-size: 8px;
       }
 
       table,
@@ -52,12 +62,15 @@
 
       th,
       td {
-        padding: 4px;
+        padding: 2px 3px;     /* padding lebih kecil */
         word-wrap: break-word;
+        overflow-wrap: break-word;
+        vertical-align: middle;
       }
 
       th {
         background: #eee;
+        text-align: center;
       }
 
       thead {
@@ -68,45 +81,63 @@
         page-break-inside: avoid;
       }
 
+      /* ===== JUDUL & BAGIAN ===== */
       .title {
         text-align: center;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
       }
 
       .section-title {
-        margin-top: 25px;
-        font-size: 14px;
+        margin-top: 20px;
+        font-size: 12px;
         font-weight: bold;
       }
 
       .dept-block {
         page-break-inside: avoid;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
       }
 
       .page-break {
         page-break-before: always;
       }
 
+      /* ===== LEBAR KOLOM (relatif) ===== */
       .col-npk {
-        width: 70px;
+        width: 7%;
       }
-
       .col-name {
-        width: 160px;
+        width: 14%;
       }
-
-      .col-component {
-        width: 75px;
-      }
-
       .col-details {
-        width: 45px;
+        width: 5%;
+      }
+      .col-component {
+        width: auto;
+        min-width: 50px;
       }
 
+      /* ===== TABEL RINGKASAN ===== */
       .summary-table {
         width: 100%;
-        margin-top: 20px;
+        margin-top: 15px;
+        table-layout: auto;
+      }
+
+      .summary-table th,
+      .summary-table td {
+        padding: 3px 5px;
+      }
+
+      /* ===== APPROVAL ===== */
+      .approval-table {
+        width: 100%;
+        border: none;
+      }
+      .approval-table td {
+        border: none;
+        text-align: center;
+        width: 25%;
       }
     </style>
   </head>
@@ -203,7 +234,7 @@
           @endphp
 
           <tr style="background:#f5f5f5;font-weight:bold">
-            <td colspan="2" align="center">TOTAL {{ strtoupper($dept) }}</td>
+            <td colspan="2" align="center">Total Karyawan: {{ $employees->count() }}</td>
 
             <td align="center">{{ number_format($totMA,0,',','.') }}</td>
             <td align="center">{{ number_format($totP1,0,',','.') }}</td>
@@ -304,7 +335,7 @@
           @endphp
 
           <tr style="background:#f5f5f5;font-weight:bold">
-            <td colspan="2" align="center">TOTAL {{ strtoupper($dept) }}</td>
+            <td colspan="2" align="center">Total Karyawan: {{ $employees->count() }}</td>
 
             <td align="center">{{ number_format($totMA,0,',','.') }}</td>
             <td align="center">{{ number_format($totP1,0,',','.') }}</td>
@@ -405,7 +436,7 @@
           @endphp
 
           <tr style="background:#f5f5f5;font-weight:bold">
-            <td colspan="2" align="center">TOTAL {{ strtoupper($dept) }}</td>
+            <td colspan="2" align="center">Total Karyawan: {{ $employees->count() }}</td>
 
             <td align="center">{{ number_format($totMA,0,',','.') }}</td>
             <td align="center">{{ number_format($totP1,0,',','.') }}</td>
