@@ -116,7 +116,7 @@ use App\Http\Controllers\OrderImportController;
 // });
 
 Route::get('/', [HomeController::class, 'index'])->name('/');
-Route::get('/welcome', [HomeController::class, 'welcome'])->name('/welcome');
+Route::get('/welcome', [HomeController::class, 'welcome'])->name('welcome');
 // Route::get('/template/auditsewing', [TemplateController::class, 'auditsewing'])->name('template.auditsewing');
 // Route::get('/template/auditnonsewing', [TemplateController::class, 'auditnonsewing'])->name('template.auditnonsewing');
 
