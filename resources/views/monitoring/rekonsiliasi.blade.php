@@ -378,7 +378,7 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-lg-6 mb-4 mb-lg-0">
-                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Aksesoris Trim</h6>
+                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Sewing Trim</h6>
                                         <div class="chart-area" style="height:320px">
                                             <canvas id="chart-material-achievement-aksesoris"></canvas>
                                         </div>
@@ -1075,7 +1075,7 @@
             datasets: [
                 mk('order_pct', '#1f6f8b', 'ORDER%'),
                 mk('received_pct', '#e07b39', 'RECEIVED%'),
-                mk('out_prod_pct', '#4a8c9c', 'OUT PROD%'),
+                mk('out_prod_pct', '#44af69', 'OUT PROD%'),
                 mk('stock_pct', '#f5a623', 'STOCK%'),
             ],
         },
@@ -1140,7 +1140,7 @@ function updateFormulaWithColors() {
     const items = [
         { label: 'ORDER%', desc: 'Jumlah Order', color: '#1f6f8b' },
         { label: 'RECEIVED%', desc: 'Jumlah Diterima ÷ Jumlah Order', color: '#e07b39' },
-        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Jumlah Diterima', color: '#4a8c9c' },
+        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Jumlah Diterima', color: '#44af69' },
         { label: 'STOCK%', desc: 'Saldo Gudang ÷ Jumlah Diterima', color: '#f5a623' }
     ];
     formulaDiv.innerHTML = items.map(item =>
