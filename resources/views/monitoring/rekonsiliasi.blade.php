@@ -136,7 +136,7 @@
 
                 {{-- ================= KPI CARDS ================= --}}
                 <div class="row">
-                    <div class="col-md mb-4">
+                    <!-- <div class="col-md mb-4">
                         <div class="card shadow h-100 py-2 rekon-kpi">
                             <div class="card-body text-center">
                                 <i class="fas fa-file-contract fa-lg text-primary mb-2"></i>
@@ -171,18 +171,8 @@
                                 <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-balance">0</div>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-md mb-4">
-                        <div class="card shadow h-100 py-2 rekon-kpi">
-                            <div class="card-body text-center">
-                                <i class="fas fa-database fa-lg text-danger mb-2"></i>
-                                <div class="text-xs font-weight-bold text-gray-600 text-uppercase mb-1">Ship Shortage</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="kpi-shortage">0%</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md mb-4">
+                    </div> -->
+                    <!-- <div class="col-md mb-4">
                         <div class="card shadow h-100 py-2 rekon-kpi">
                             <div class="card-body text-center">
                                 <table class="table table-bordered table-sm mb-0 rekon-ship-calendar-sm" id="mon-ship-calendar">
@@ -198,11 +188,52 @@
                                 </table>
                             </div>
                         </div>
+                    </div> -->
+                </div>
+
+                {{-- ================= PRODUCTION FLOW / STAGE PIPELINE ================= --}}
+                <div class="row">
+                    <div class="col-lg-12 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-body">
+                                <div class="rekon-pipeline" id="rekon-pipeline">
+                                    <!-- diisi JS -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
+                
+                {{-- ================= PROCESS LOSS PER TAHAP (tabel) ================= --}}
+                <!-- <div class="row">
+                    <div class="col-lg-12 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary">Process Loss per Tahap</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-sm w-100" id="table-loss-steps">
+                                        <thead>
+                                            <tr>
+                                                <th>Process</th>
+                                                <th class="right">Input</th>
+                                                <th class="right">Output</th>
+                                                <th class="right">Loss (Pcs)</th>
+                                                <th class="right">Loss (%)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div> -->
+
                 {{-- ================= SHIPMENT DATE (kalender) ================= --}}
-                <div class="card shadow mb-4">
+                <!-- <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary">Shipment Date</h6>
                         <div class="d-flex align-items-center" style="gap:10px">
@@ -214,11 +245,12 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-lg-12">
-                                <div class="mon-table-box no-scroll">
+                                <div class="mon-table-box" id="ship-cal-detail-box">
                                     <table class="table table-bordered table-sm mon-table mon-table-fixed w-100" id="table-ship-cal-detail">
                                         <thead>
                                             <tr>
-                                                <th>Tgl Bukti</th><th>Uraian</th><th>No. Bukti</th><th>Supplier</th>
+                                                <th>Tgl Bukti</th><th>Uraian</th><th>No. Bukti</th>
+                                                <th>Jenis Doc</th><th>Jenis PS</th><th>Supplier</th>
                                                 <th>Barang</th><th class="right">Jumlah Barang</th>
                                             </tr>
                                         </thead>
@@ -228,17 +260,21 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </div> -->
 
                 {{-- ================= FABRIC QTY / USAGE ================= --}}
                 <div class="row">
                     <div class="col-lg-4 mb-4">
                         <div class="card shadow h-100 rekon-fabric-card">
                             <div class="card-header py-2">
-                                <h6 class="m-0 font-weight-bold"><i class="fas fa-shopping-basket mr-1"></i> FABRIC QTY (KGM)</h6>
+                                <h6 class="m-0 font-weight-bold"><i class="fas fa-shopping-basket mr-1"></i> FABRIC ACHIEVEMENT</h6>
                             </div>
                             <div class="card-body">
-                                <div class="row rekon-fabric-boxes">
+                                <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Fabric</h6>
+                                <div class="chart-area" style="height:340px">
+                                    <canvas id="chart-material-achievement-fabric"></canvas>
+                                </div>
+                                <!-- <div class="row rekon-fabric-boxes">
                                     <div class="col-4 mb-2">
                                         <div class="rekon-fabric-box">
                                             <div class="rekon-fabric-label">Need</div>
@@ -269,7 +305,7 @@
                                             <div class="rekon-fabric-value" id="fabric-stock">0</div>
                                         </div>
                                     </div>
-                                </div>
+                                </div> -->
                             </div>
                         </div>
                     </div>
@@ -281,7 +317,7 @@
                             </div>
                             <div class="card-body">
                                 <div class="rekon-usage-box">
-                                    <span class="rekon-usage-box-title">Qty Usage (KGM)</span>
+                                    <span class="rekon-usage-box-title">Qty Usage (%)</span>
                                     <div class="rekon-usage-row">
                                         <div class="rekon-usage-row-label">Use For GMT</div>
                                         <div class="rekon-usage-row-value" id="usage-for-gmt">0</div>
@@ -291,11 +327,11 @@
                                         <div class="rekon-usage-row-value" id="usage-scrap-qty">0</div>
                                     </div>
                                 </div>
-                                <div class="rekon-usage-consumption">
+                                <!-- <div class="rekon-usage-consumption">
                                     <span>Consumption :</span>
                                     <span class="rekon-usage-consumption-value" id="usage-consumption">0</span>
                                     <span>Kgm</span>
-                                </div>
+                                </div> -->
                             </div>
                         </div>
                     </div>
@@ -318,138 +354,43 @@
                     </div>
                 </div>
 
-                {{-- ================= MATERIAL ACHIEVEMENT ================= --}}
-                <div class="card shadow mb-4">
-                    <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">MATERIAL ACHIEVEMENT</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-lg-4 mb-4 mb-lg-0">
-                                <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Fabric</h6>
-                                <div class="chart-area" style="height:340px">
-                                    <canvas id="chart-material-achievement-fabric"></canvas>
-                                </div>
-                            </div>
-                            <div class="col-lg-4 mb-4 mb-lg-0">
-                                <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Aksesoris</h6>
-                                <div class="chart-area" style="height:340px">
-                                    <canvas id="chart-material-achievement-aksesoris"></canvas>
-                                </div>
-                            </div>
-                            <div class="col-lg-4">
-                                <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Packing</h6>
-                                <div class="chart-area" style="height:340px">
-                                    <canvas id="chart-material-achievement-packing"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- ================= PRODUCTION RESULT ================= --}}
+                {{-- ================= MATERIAL ACHIEVEMENT & SHIPMENT BY DATE ================= --}}
                 <div class="row">
-                    <div class="col-lg-12 mb-4">
+                    <div class="col-lg-10 mb-4">
                         <div class="card shadow h-100">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary">MATERIAL ACHIEVEMENT</h6>
+                            </div>
                             <div class="card-body">
-                                <div class="rekon-pipeline" id="rekon-pipeline">
-                                    <!-- diisi JS -->
+                                <div class="rekon-ma-formula mb-3">
                                 </div>
-                                <!-- <div class="text-muted small mt-2 mb-3">
-                                    Cutting = <code>mon_prod_lines.jumlah</code> (department_id = Cutting, kategori
-                                    <em>Bahan Setengah Jadi</em>). Sewing/Packing = <code>mon_prod_lines.jumlah</code>
-                                    (department_id Sewing/Packing). Warehouse = <code>mon_prod_lines.jumlah</code>
-                                    (destination = Warehouse). Sewing/Packing/Warehouse/Shipment di-scope ke kategori
-                                    <em>Barang Jadi</em>. Shipment = <code>mon_shipments.jumlah_barang</code>.
-                                    Semua tahap di-scope ke <code>code_prod</code> yang mengandung kode CPO (5 digit) terpilih.
-                                    Loss: Cutting = Contract &minus; Cutting; Sewing = dept.Sewing &minus; dest.Sewing;
-                                    Packing = dept.Packing &minus; dest.Packing; Warehouse = dest.Warehouse &minus; dept.Packing.
-                                    Juga bisa difilter per <strong>Negara</strong> (lewat CPO yang punya shipment dari
-                                    negara terpilih).
-                                </div> -->
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-sm w-100" id="table-loss-steps">
-                                        <thead>
-                                            <tr>
-                                                <th>Process</th>
-                                                <th class="right">Input</th>
-                                                <th class="right">Output</th>
-                                                <th class="right">Loss (Pcs)</th>
-                                                <th class="right">Loss (%)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
+                                <div class="row">
+                                    <div class="col-lg-6 mb-4 mb-lg-0">
+                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Aksesoris Trim</h6>
+                                        <div class="chart-area" style="height:320px">
+                                            <canvas id="chart-material-achievement-aksesoris"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Packing Trim</h6>
+                                        <div class="chart-area" style="height:320px">
+                                            <canvas id="chart-material-achievement-packing"></canvas>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {{-- ================= TOP 3 EXCESS ================= --}}
-                <div class="row">
-                    <div class="col-lg-8 mb-4">
+                    {{-- ================= SHIPMENT BY DATE CHART ================= --}}
+                    <div class="col-lg-2 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">PRODUCTION RESULT (PCS)</h6>
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calendar-alt mr-1"></i> SHIPMENT BY DATE</h6>
                             </div>
-                            <div class="card-body">
-                                <div class="chart-area" style="height:260px">
-                                    <canvas id="chart-production-result"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-layer-group mr-1"></i> TOP 3 MATERIAL EXCESS (BY STOCK)</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-area" style="height:260px">
-                                    <canvas id="chart-top-excess"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- ================= SHIPMENT ================= --}}
-                <div class="row">
-                    <div class="col-lg-5 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">TREN SHIPMENT (PCS / TANGGAL BUKTI)</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-area" style="height:220px">
-                                    <canvas id="chart-shipment-trend"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-7 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">SHIPMENT &mdash; Dokumen Pengeluaran BC</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive mon-table-box">
-                                    <table class="table table-bordered table-sm w-100" id="table-shipment-detail">
-                                        <thead>
-                                            <tr>
-                                                <th>No. Bukti</th>
-                                                <th>Tgl Bukti</th>
-                                                <th>Jenis Doc</th>
-                                                <th>Jenis PS</th>
-                                                <th>Barang</th>
-                                                <th>Satuan</th>
-                                                <th class="right">Jumlah Doc</th>
-                                                <th class="right">Jumlah Barang</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                <div class="chart-area" style="height:340px">
+                                    <canvas id="chart-shipment-by-date"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -457,7 +398,7 @@
                 </div>
 
                 {{-- ================= DETAIL TABLE ================= --}}
-                <div class="card shadow mb-4">
+                <!-- <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Detail Rekonsiliasi per Material</h6>
                     </div>
@@ -489,7 +430,7 @@
                             </table>
                         </div>
                     </div>
-                </div>
+                </div> -->
 
                 </div>
 
@@ -515,6 +456,7 @@
 
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <!-- CSS Tambahan -->
 <style>
@@ -665,10 +607,19 @@
 
     .rekon-pipe-divider { border: 0; border-top: 1px dashed #e3e6f0; margin: .45rem 0; }
 
-    .rekon-pipe-loss-value { font-size: .95rem; font-weight: 800; color: #c0392b; }
-    .rekon-pipe-loss-pct   { font-size: .75rem; font-weight: 700; color: #c0392b; }
-    .rekon-pipe-loss-value.is-gain,
-    .rekon-pipe-loss-pct.is-gain { color: #1cc88a; }
+    /* Warna loss sesuai permintaan: negatif = merah, positif = hijau */
+    .rekon-pipe-loss-value.loss-negative,
+    .rekon-pipe-loss-pct.loss-negative {
+        color: #c0392b !important; /* merah */
+    }
+    .rekon-pipe-loss-value.loss-positive,
+    .rekon-pipe-loss-pct.loss-positive {
+        color: #1cc88a !important; /* hijau */
+    }
+    .rekon-pipe-loss-value.loss-zero,
+    .rekon-pipe-loss-pct.loss-zero {
+        color: #5a5c69 !important; /* abu-abu */
+    }
 
     .rekon-pipe-total .rekon-pipe-body { padding-top: .7rem; }
 
@@ -786,8 +737,8 @@
     .rekon-usage-donut-area {
         position: relative;
         flex: 0 0 auto;
-        width: 140px;
-        height: 140px;
+        width: 230px;
+        height: 230px;
     }
     .rekon-usage-legend {
         display: flex;
@@ -821,16 +772,19 @@
         height: 100%;
     }
 
-    /* Fix: loss negative sign display */
-    .loss-negative {
-        color: #1cc88a !important;
+    .rekon-ma-formula {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem 1.5rem;
+        justify-content: center;
+        font-size: .72rem;
+        color: #5a5c69;
+        background: #f8f9fc;
+        border: 1px dashed #d8dae4;
+        border-radius: .35rem;
+        padding: .5rem .75rem;
     }
-    .loss-positive {
-        color: #c0392b !important;
-    }
-    .loss-zero {
-        color: #5a5c69 !important;
-    }
+    .rekon-ma-formula strong { color: #1f3864; }
 </style>
 
 <script>
@@ -948,7 +902,7 @@
         }
     })();
 
-    let chartMaterialFabric, chartMaterialAksesoris, chartMaterialPacking, chartProduction, chartExcess, chartShipment, chartShipCategory, chartFabricUsage, dtDetail, dtShipment;
+    let chartMaterialFabric, chartMaterialAksesoris, chartMaterialPacking, chartFabricUsage, chartShipmentByDate, dtDetail;
 
     function wrapLabel(label, maxWidth = 14) {
         const words = String(label ?? '-').split(' ');
@@ -1012,78 +966,90 @@
     }
 
     function renderKpi(summary) {
-        document.getElementById('kpi-contract').textContent = fmtNum(summary.contract_qty);
-        document.getElementById('kpi-shipment').textContent = fmtNum(summary.shipment_qty);
-        document.getElementById('kpi-achievement').textContent = fmtPct(summary.achievement_pct);
-        document.getElementById('kpi-balance').textContent = fmtNum(summary.balance_qty);
-        document.getElementById('kpi-shortage').textContent = fmtPct(summary.shortage_pct);
+        // document.getElementById('kpi-contract').textContent = fmtNum(summary.contract_qty);
+        // document.getElementById('kpi-shipment').textContent = fmtNum(summary.shipment_qty);
+        // document.getElementById('kpi-achievement').textContent = fmtPct(summary.achievement_pct);
+        // document.getElementById('kpi-balance').textContent = fmtNum(summary.balance_qty);
     }
 
     function renderFabricQty(fabricQty) {
         fabricQty = fabricQty || {};
-        document.getElementById('fabric-need').textContent = fmtNum(fabricQty.need);
-        document.getElementById('fabric-order').textContent = fmtNum(fabricQty.order);
-        document.getElementById('fabric-received').textContent = fmtNum(fabricQty.received);
-        document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
-        document.getElementById('fabric-stock').textContent = fmtNum(fabricQty.stock);
+        // document.getElementById('fabric-need').textContent = fmtNum(fabricQty.need);
+        // document.getElementById('fabric-order').textContent = fmtNum(fabricQty.order);
+        // document.getElementById('fabric-received').textContent = fmtNum(fabricQty.received);
+        // document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
+        // document.getElementById('fabric-stock').textContent = fmtNum(fabricQty.stock);
     }
 
     function renderFabricUsage(fabricUsage) {
-        fabricUsage = fabricUsage || {};
-        document.getElementById('usage-for-gmt').textContent = fmtNum(fabricUsage.use_for_gmt);
-        document.getElementById('usage-scrap-qty').textContent = fmtNum(fabricUsage.scrap_qty);
-        document.getElementById('usage-consumption').textContent = fmtNum(fabricUsage.consumption);
+    fabricUsage = fabricUsage || {};
 
-        const ctx = document.getElementById('chart-fabric-usage');
-        if (typeof Chart === 'undefined' || !ctx) return;
+    // Ambil nilai persentase dari backend (jika ada)
+    const usagePct = Number(fabricUsage.usage_pct) || 0;
+    const scrapPct = Number(fabricUsage.scrap_pct) || 0;
 
-        const usagePct = Number(fabricUsage.usage_pct || 0);
-        const scrapPct = Number(fabricUsage.scrap_pct || 0);
+    // Tampilkan sebagai persentase dengan 1 desimal dan koma
+    document.getElementById('usage-for-gmt').textContent = fmtPct(usagePct);        // <-- ubah
+    document.getElementById('usage-scrap-qty').textContent = fmtPct(scrapPct);      // <-- ubah
+    // document.getElementById('usage-consumption').textContent = '100,0%';            // <-- ubah (atau fmtPct(100))
 
-        if (chartFabricUsage) chartFabricUsage.destroy();
-        chartFabricUsage = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                datasets: [{
-                    data: [usagePct, scrapPct],
-                    backgroundColor: ['#1f6f8b', '#e07b39'],
-                    borderWidth: 0,
-                }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '40%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (c) => {
-                        const val = c.parsed;
-                        return `${val.toFixed(1).replace('.', ',')}%`;
-                    } } },
-                },
-            },
-            plugins: [{
-                id: 'fabricUsageCenterLabels',
-                afterDraw(chart) {
-                    const { ctx: c } = chart;
-                    const meta = chart.getDatasetMeta(0);
-                    if (!meta || !meta.data.length) return;
-                    c.save();
-                    c.font = 'bold 14px Arial';
-                    c.fillStyle = '#fff';
-                    c.textAlign = 'center';
-                    c.textBaseline = 'middle';
-                    chart.data.datasets[0].data.forEach((value, i) => {
-                        if (!value) return;
-                        const pos = meta.data[i].tooltipPosition();
-                        const formatted = value.toFixed(1).replace('.', ',') + '%';
-                        c.fillText(formatted, pos.x, pos.y);
-                    });
-                    c.restore();
-                },
+    // Ubah judul box (jika belum diubah di HTML)
+    const titleEl = document.querySelector('.rekon-usage-box-title');
+    if (titleEl) titleEl.textContent = 'Qty Usage (%)';
+
+    // Ubah satuan di bagian Consumption
+    // const consumptionSpan = document.querySelector('.rekon-usage-consumption span:last-child');
+    // if (consumptionSpan) consumptionSpan.textContent = '%';  // <-- ubah
+
+    // (lanjutkan kode untuk chart donut, tidak diubah)
+    const ctx = document.getElementById('chart-fabric-usage');
+    if (typeof Chart === 'undefined' || !ctx) return;
+
+    if (chartFabricUsage) chartFabricUsage.destroy();
+    chartFabricUsage = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [usagePct, scrapPct],
+                backgroundColor: ['#1f6f8b', '#e07b39'],
+                borderWidth: 0,
             }],
-        });
-    }
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '40%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (c) => `${c.parsed.toFixed(1).replace('.', ',')}%`
+                    }
+                },
+            },
+        },
+        plugins: [{
+            id: 'fabricUsageCenterLabels',
+            afterDraw(chart) {
+                const { ctx: c } = chart;
+                const meta = chart.getDatasetMeta(0);
+                if (!meta || !meta.data.length) return;
+                c.save();
+                c.font = 'bold 14px Arial';
+                c.fillStyle = '#fff';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                chart.data.datasets[0].data.forEach((value, i) => {
+                    if (!value) return;
+                    const pos = meta.data[i].tooltipPosition();
+                    const formatted = value.toFixed(1).replace('.', ',') + '%';
+                    c.fillText(formatted, pos.x, pos.y);
+                });
+                c.restore();
+            },
+        }],
+    });
+}
 
     const MATERIAL_ACHIEVEMENT_CHARTS = {
         fabric:    { canvasId: 'chart-material-achievement-fabric' },
@@ -1092,43 +1058,93 @@
     };
 
     function buildMaterialAchievementChart(group, rows) {
-        const meta = MATERIAL_ACHIEVEMENT_CHARTS[group];
-        const ctx = document.getElementById(meta.canvasId);
-        if (typeof Chart === 'undefined' || !ctx) return;
+    const meta = MATERIAL_ACHIEVEMENT_CHARTS[group];
+    const ctx = document.getElementById(meta.canvasId);
+    if (typeof Chart === 'undefined' || !ctx) return;
 
-        const labels = rows.map(r => wrapLabel(r.barang_name));
-        const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
+    const labels = rows.map(r => wrapLabel(r.barang_name));
+    const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
 
-        if (meta.chart) meta.chart.destroy();
-        meta.chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [
-                    mk('order_pct', '#4e73df', 'ORDER%'),
-                    mk('received_pct', '#f6a533', 'RECEIVED%'),
-                    mk('out_prod_pct', '#1cc88a', 'OUT PROD%'),
-                    mk('stock_pct', '#36b9cc', 'STOCK%'),
-                ],
+    if (meta.chart) meta.chart.destroy();
+    meta.chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                mk('order_pct', '#4e73df', 'ORDER%'),
+                mk('received_pct', '#f6a533', 'RECEIVED%'),
+                mk('out_prod_pct', '#1cc88a', 'OUT PROD%'),
+                mk('stock_pct', '#36b9cc', 'STOCK%'),
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 30 } },
+            scales: {
+                x: { ticks: HORIZONTAL_WRAP_X_TICKS },
+                y: { beginAtZero: true, ticks: { callback: v => v + '%' } },
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { ticks: HORIZONTAL_WRAP_X_TICKS },
-                    y: { beginAtZero: true, ticks: { callback: v => v + '%' } },
-                },
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: {
-                        callbacks: {
-                            label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%`
-                        }
-                    },
+            plugins: {
+                legend: { display: false },  // <- matikan legend bawaan
+                tooltip: {
+                    callbacks: {
+                        label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%`
+                    }
                 },
             },
+        },
+        // === INI BAGIAN YANG DIPERBAIKI ===
+        plugins: [{
+    id: 'materialAchievementValueLabels',
+    afterDraw(chart) {
+        const { ctx, data, chartArea: { top, bottom, left, right } } = chart;
+        ctx.save();
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#2e3a4b';
+        data.datasets.forEach((dataset, di) => {
+            const meta = chart.getDatasetMeta(di);
+            meta.data.forEach((bar, i) => {
+                const value = dataset.data[i];
+                if (value === null || value === undefined || value === 0) return;
+                // Ubah format di sini
+                const label = `${Math.round(value)}`;
+                let x = bar.x;
+                let y = bar.y - 6;
+                let baseline = 'bottom';
+                if (bar.y - top < 5) {
+                    y = top - 4;
+                    baseline = 'bottom';
+                } else if (y < top) {
+                    y = bar.y + 10;
+                    baseline = 'top';
+                }
+                ctx.textBaseline = baseline;
+                if (x > left && x < right && y > top - 20 && y < bottom) {
+                    ctx.fillText(label, x, y);
+                }
+            });
         });
+        ctx.restore();
     }
+}]
+    });
+}
+
+function updateFormulaWithColors() {
+    const formulaDiv = document.querySelector('.rekon-ma-formula');
+    if (!formulaDiv) return;
+    const items = [
+        { label: 'ORDER%', desc: 'Jumlah Order', color: '#4e73df' },
+        { label: 'RECEIVED%', desc: 'Jumlah Diterima ÷ Jumlah Order', color: '#f6a533' },
+        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Jumlah Diterima', color: '#1cc88a' },
+        { label: 'STOCK%', desc: 'Saldo Gudang ÷ Jumlah Diterima', color: '#36b9cc' }
+    ];
+    formulaDiv.innerHTML = items.map(item =>
+        `<span><span style="display:inline-block;width:12px;height:12px;background:${item.color};border-radius:2px;margin-right:4px;"></span><strong>${item.label}</strong> = ${item.desc}</span>`
+    ).join('');
+}
 
     function renderMaterialAchievement(rows) {
         rows = rows || [];
@@ -1137,49 +1153,23 @@
             if (byGroup[r.material_group]) byGroup[r.material_group].push(r);
         });
 
+        if (byGroup.fabric.length) {
+            byGroup.fabric = byGroup.fabric.map((r, idx) => {
+                const letter = String.fromCharCode(65 + idx);
+                return { ...r, barang_name: `Fabric ${letter}` };
+            });
+        }
+
         buildMaterialAchievementChart('fabric', byGroup.fabric);
         buildMaterialAchievementChart('aksesoris', byGroup.aksesoris);
         buildMaterialAchievementChart('packing', byGroup.packing);
+        updateFormulaWithColors();
     }
 
-    const DEPT_COLORS = { Cutting: '#4e73df', Sewing: '#1cc88a', Packing: '#f6a533' };
-    const DEPT_ORDER = ['Cutting', 'Sewing', 'Packing'];
-
-    // ========== FIX: renderProductionResult with proper sign & centered cards ==========
+    // ========== renderProductionResult: menggunakan data dari backend ==========
     function renderProductionResult(pipeline, materialRows, lossSteps) {
-        materialRows = materialRows || [];
+        // materialRows tidak dipakai, hanya untuk kompatibilitas
         lossSteps = lossSteps || [];
-
-        const materialLabels = [...new Set(materialRows.map(r => r.barang_name ?? '-'))].sort();
-        const datasets = DEPT_ORDER.map(dept => ({
-            label: dept,
-            backgroundColor: DEPT_COLORS[dept],
-            data: materialLabels.map(name => {
-                const row = materialRows.find(r => r.department_id === dept && (r.barang_name ?? '-') === name);
-                return row ? Number(row.jumlah || 0) : 0;
-            }),
-        }));
-
-        const ctx = document.getElementById('chart-production-result');
-        if (typeof Chart !== 'undefined' && ctx) {
-            if (chartProduction) chartProduction.destroy();
-            chartProduction = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: materialLabels.map(wrapLabel), datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { ticks: HORIZONTAL_WRAP_X_TICKS },
-                        y: { beginAtZero: true },
-                    },
-                    plugins: {
-                        legend: { position: 'bottom' },
-                        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtNum(c.parsed.y)}` } },
-                    },
-                },
-            });
-        }
 
         const stages = [
             { label: 'Contract', value: pipeline.contract, theme: 'neutral' },
@@ -1191,45 +1181,45 @@
             { label: 'Shipment', value: pipeline.shipment, theme: 'navy' },
         ];
 
-        const steps = lossSteps;
-
-        // Build each stage box
         const boxes = stages.map((s, i) => {
-            const step = i > 0 ? steps[i - 1] : null;
+            // Step ke-i (i=0 tidak punya step karena step pertama adalah Contract→Cutting)
+            const step = i > 0 && i - 1 < lossSteps.length ? lossSteps[i - 1] : null;
 
-            // ---- FIX: compute loss as input - output ----
-            let lossValue = null;
-            let lossPct = null;
-            if (step) {
-                const input = Number(step.input || 0);
-                const output = Number(step.output || 0);
-                lossValue = input - output;                 // negative = gain, positive = loss
-                lossPct = input !== 0 ? (lossValue / input) * 100 : 0;
-            }
+            // Ambil loss langsung dari backend
+            let lossValue = step ? Number(step.loss_pcs || 0) : null;
+            let lossPct   = step ? Number(step.loss_pct || 0) : null;
 
-            // Output percentage relative to input
+            // Output persentase berdasarkan input/output
             let outputPct = null;
             if (step && step.input > 0) {
-                const input = Number(step.input);
-                const output = Number(step.output);
-                outputPct = (output / input) * 100;
+                outputPct = (Number(step.output) / Number(step.input)) * 100;
             } else if (i === 0) {
                 outputPct = 100;
             }
 
-            const lossIsGain = lossValue !== null && lossValue < 0;
-            const lossIsZero = lossValue !== null && lossValue === 0;
-            const lossColorClass = lossIsGain ? 'is-gain' : (lossIsZero ? 'loss-zero' : '');
+            // Tentukan warna dan tanda
+            let lossColorClass = 'loss-zero';
+            let lossSign = '';
+            if (lossValue !== null) {
+                if (lossValue < 0) {
+                    lossColorClass = 'loss-negative';
+                    lossSign = '-';
+                } else if (lossValue > 0) {
+                    lossColorClass = 'loss-positive';
+                    // tidak pakai tanda plus
+                } else {
+                    lossColorClass = 'loss-zero';
+                }
+            }
 
-            // Show signed loss with proper minus sign
             let lossDisplay = '-';
             if (lossValue !== null) {
-                lossDisplay = fmtNum(lossValue);
+                lossDisplay = lossSign + fmtNum(Math.abs(lossValue));
             }
 
             let lossPctDisplay = '-';
             if (lossPct !== null) {
-                lossPctDisplay = fmtPct(lossPct);
+                lossPctDisplay = lossSign + fmtPct(Math.abs(lossPct));
             }
 
             const lossRow = step ? `
@@ -1257,31 +1247,27 @@
             `;
         }).join('');
 
-        // Total loss box
-        let totalLoss = Number(pipeline.total_loss || 0);
-        let totalLossPct = Number(pipeline.loss_pct || 0);
-        // If totalLoss is from backend as output-input, we need to flip sign to input-output
-        // But backend's total_loss is already computed as sum of (input - output) if we use the fixed lossSteps
-        // Actually we recompute total from steps to be safe
-        let totalLossRecomputed = 0;
-        let totalInputRecomputed = 0;
-        steps.forEach(step => {
-            const inp = Number(step.input || 0);
-            const out = Number(step.output || 0);
-            totalLossRecomputed += (inp - out);
-            totalInputRecomputed += inp;
-        });
-        if (steps.length > 0 && totalInputRecomputed !== 0) {
-            totalLoss = totalLossRecomputed;
-            totalLossPct = (totalLoss / totalInputRecomputed) * 100;
+        // Total Process Loss – dari backend (sudah dihitung di service)
+        const totalLoss   = Number(pipeline.total_loss || 0);
+        const totalLossPct = Number(pipeline.loss_pct || 0);
+
+        let totalLossColorClass = 'loss-zero';
+        let totalLossSign = '';
+        if (totalLoss < 0) {
+            totalLossColorClass = 'loss-negative';
+            totalLossSign = '-';
+        } else if (totalLoss > 0) {
+            totalLossColorClass = 'loss-positive';
+        } else {
+            totalLossColorClass = 'loss-zero';
         }
 
         const lossBox = `
             <div class="rekon-pipe-box theme-loss rekon-pipe-total">
                 <div class="rekon-pipe-header">Total Process Loss</div>
                 <div class="rekon-pipe-body">
-                    <div class="rekon-pipe-output">${fmtNum(totalLoss)}</div>
-                    <div class="rekon-pipe-output-pct">${fmtPct(totalLossPct)}</div>
+                    <div class="rekon-pipe-output ${totalLossColorClass}">${totalLossSign}${fmtNum(Math.abs(totalLoss))}</div>
+                    <div class="rekon-pipe-output-pct ${totalLossColorClass}">${totalLossSign}${fmtPct(Math.abs(totalLossPct))}</div>
                     <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
                 </div>
             </div>
@@ -1294,164 +1280,199 @@
             </div>
         `;
 
-        // ---- FIX: center the cards with justify-content-center ----
         document.getElementById('rekon-pipeline').innerHTML =
             `<div class="d-flex flex-wrap align-items-stretch justify-content-center">${boxes}${lossBox}</div>${legend}`;
     }
 
-    // ========== FIX: renderLossSteps with proper sign ==========
+    // ========== renderLossSteps dengan tanda/warna dari backend ==========
     function renderLossSteps(rows) {
-        const tbody = document.querySelector('#table-loss-steps tbody');
-        tbody.innerHTML = rows.map(r => {
-            const input = Number(r.input || 0);
-            const output = Number(r.output || 0);
-            const loss = input - output;          // negative = gain, positive = loss
-            const lossPct = input !== 0 ? (loss / input) * 100 : 0;
+        // const tbody = document.querySelector('#table-loss-steps tbody');
+        // tbody.innerHTML = rows.map(r => {
+        //     const loss = Number(r.loss_pcs || 0);
+        //     const lossPct = Number(r.loss_pct || 0);
 
-            let lossClass = 'loss-zero';
-            if (loss > 0) lossClass = 'loss-positive';
-            else if (loss < 0) lossClass = 'loss-negative';
+        //     let lossClass = 'loss-zero';
+        //     let sign = '';
+        //     if (loss < 0) {
+        //         lossClass = 'loss-negative';
+        //         sign = '-';
+        //     } else if (loss > 0) {
+        //         lossClass = 'loss-positive';
+        //     } else {
+        //         lossClass = 'loss-zero';
+        //     }
 
-            return `
-                <tr>
-                    <td>${r.process}</td>
-                    <td class="right">${fmtNum(input)}</td>
-                    <td class="right">${fmtNum(output)}</td>
-                    <td class="right ${lossClass}">${fmtNum(loss)}</td>
-                    <td class="right ${lossClass}">${fmtPct(lossPct)}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function renderTopExcess(rows) {
-        const ctx = document.getElementById('chart-top-excess');
-        if (typeof Chart === 'undefined' || !ctx) return;
-
-        const labels = rows.map(r => wrapLabel(r.barang_name ?? '-'));
-        const data = rows.map(r => Number(r.saldo_gudang || 0));
-
-        if (chartExcess) chartExcess.destroy();
-        chartExcess = new Chart(ctx, {
-            type: 'bar',
-            data: { labels, datasets: [{ data, backgroundColor: ['#1cc88a', '#f6a533', '#4e73df'] }] },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { ticks: { maxRotation: 0, minRotation: 0 } }
-                }
-            },
-        });
-    }
-
-    function renderShipmentCategory(rows) {
-        const ctx = document.getElementById('chart-shipment-category');
-        if (typeof Chart === 'undefined' || !ctx) return;
-
-        const labels = rows.map(r => r.barang_category ?? '-');
-        const data = rows.map(r => Number(r.jumlah_barang || 0));
-
-        if (chartShipCategory) chartShipCategory.destroy();
-        chartShipCategory = new Chart(ctx, {
-            type: 'doughnut',
-            data: { labels, datasets: [{ data, backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'] }] },
-            options: { responsive: true, maintainAspectRatio: false },
-        });
-    }
-
-    function renderShipment(byDate, detailRows) {
-        const ctx = document.getElementById('chart-shipment-trend');
-        if (typeof Chart !== 'undefined' && ctx) {
-            const labels = byDate.map(r => wrapLabel(r.tgl_bukti ?? '-'));
-            const data = byDate.map(r => Number(r.jumlah_barang || 0));
-
-            if (chartShipment) chartShipment.destroy();
-            chartShipment = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Shipment (Pcs)',
-                        data,
-                        borderColor: '#1cc88a',
-                        backgroundColor: 'rgba(28,200,138,.15)',
-                        fill: true,
-                        tension: .25,
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: HORIZONTAL_WRAP_X_TICKS }
-                    }
-                },
-            });
-        }
-
-        const tbody = document.querySelector('#table-shipment-detail tbody');
-        tbody.innerHTML = detailRows.map(r => `
-            <tr>
-                <td>${r.no_bukti ?? '-'}</td>
-                <td>${formatTanggalIndonesia(r.tgl_bukti)}</td>
-                <td>${r.jenis_doc ?? '-'}</td>
-                <td>${r.jenis_ps ?? '-'}</td>
-                <td>${r.barang_name ?? '-'}</td>
-                <td>${r.satuan_doc ?? '-'}</td>
-                <td class="right">${fmtNum(r.jumlah_doc)}</td>
-                <td class="right">${fmtNum(r.jumlah_barang)}</td>
-            </tr>
-        `).join('');
-
-        if (dtShipment) dtShipment.destroy();
-        dtShipment = $('#table-shipment-detail').DataTable({
-            pageLength: 10,
-            order: [],
-            autoWidth: false,
-            width: '100%',
-            scrollY: '300px',
-            scrollCollapse: true,
-            fixedHeader: true,
-        });
+        //     return `
+        //         <tr>
+        //             <td>${r.process}</td>
+        //             <td class="right">${fmtNum(r.input)}</td>
+        //             <td class="right">${fmtNum(r.output)}</td>
+        //             <td class="right ${lossClass}">${sign}${fmtNum(Math.abs(loss))}</td>
+        //             <td class="right ${lossClass}">${sign}${fmtPct(Math.abs(lossPct))}</td>
+        //         </tr>
+        //     `;
+        // }).join('');
     }
 
     function renderDetail(rows) {
-        const tbody = document.querySelector('#table-rekon-detail tbody');
-        tbody.innerHTML = rows.map(r => `
-            <tr>
-                <td>${r.no_po ?? '-'}</td>
-                <td>${r.jenis_po ?? '-'}</td>
-                <td>${formatTanggalIndonesia(r.tgl_po)}</td>
-                <td>${formatTanggalIndonesia(r.tgl_pengiriman)}</td>
-                <td>${r.supplier_name ?? '-'}</td>
-                <td>${r.barang_code ?? '-'}</td>
-                <td>${r.barang_name ?? '-'}</td>
-                <td>${r.satuan_order ?? '-'}</td>
-                <td class="right">${fmtNum(r.jumlah_order)}</td>
-                <td class="right">${fmtNum(r.jumlah_doc)}</td>
-                <td class="right">${fmtNum(r.out_req)}</td>
-                <td class="right">${fmtNum(r.out_prod)}</td>
-                <td class="right">${fmtNum(r.sisa)}</td>
-                <td class="right">${fmtNum(r.saldo_wip)}</td>
-                <td class="right">${fmtNum(r.out_doc)}</td>
-                <td class="right">${fmtNum(r.saldo_gudang)}</td>
-                <td class="right">${fmtNum(r.harga_total)}</td>
-            </tr>
-        `).join('');
+        // const tbody = document.querySelector('#table-rekon-detail tbody');
+        // tbody.innerHTML = rows.map(r => `
+        //     <tr>
+        //         <td>${r.no_po ?? '-'}</td>
+        //         <td>${r.jenis_po ?? '-'}</td>
+        //         <td>${formatTanggalIndonesia(r.tgl_po)}</td>
+        //         <td>${formatTanggalIndonesia(r.tgl_pengiriman)}</td>
+        //         <td>${r.supplier_name ?? '-'}</td>
+        //         <td>${r.barang_code ?? '-'}</td>
+        //         <td>${r.barang_name ?? '-'}</td>
+        //         <td>${r.satuan_order ?? '-'}</td>
+        //         <td class="right">${fmtNum(r.jumlah_order)}</td>
+        //         <td class="right">${fmtNum(r.jumlah_doc)}</td>
+        //         <td class="right">${fmtNum(r.out_req)}</td>
+        //         <td class="right">${fmtNum(r.out_prod)}</td>
+        //         <td class="right">${fmtNum(r.sisa)}</td>
+        //         <td class="right">${fmtNum(r.saldo_wip)}</td>
+        //         <td class="right">${fmtNum(r.out_doc)}</td>
+        //         <td class="right">${fmtNum(r.saldo_gudang)}</td>
+        //         <td class="right">${fmtNum(r.harga_total)}</td>
+        //     </tr>
+        // `).join('');
 
-        if (dtDetail) dtDetail.destroy();
-        dtDetail = $('#table-rekon-detail').DataTable({
-            pageLength: 10,
-            order: [],
-            autoWidth: false,
-            width: '100%',
-            scrollY: '400px',
-            scrollCollapse: true,
-            fixedHeader: true,
+        // if (dtDetail) dtDetail.destroy();
+        // dtDetail = $('#table-rekon-detail').DataTable({
+        //     pageLength: 10,
+        //     order: [],
+        //     autoWidth: false,
+        //     width: '100%',
+        //     scrollY: '400px',
+        //     scrollCollapse: true,
+        //     fixedHeader: true,
+        // });
+    }
+
+    // ========== renderShipmentByDate ==========
+    function renderShipmentByDate(shipmentDetail) {
+        const ctx = document.getElementById('chart-shipment-by-date');
+        if (!ctx) return;
+
+        // Aggregate by date
+        const map = {};
+        (shipmentDetail || []).forEach(row => {
+            const date = row.tgl_bukti ? row.tgl_bukti.split(' ')[0] : null;
+            if (!date) return;
+            const qty = parseFloat(row.jumlah_barang) || 0;
+            map[date] = (map[date] || 0) + qty;
+        });
+
+        const sortedDates = Object.keys(map).sort();
+        const labels = sortedDates.map(d => formatTanggalIndonesia(d)); // tampilan pendek
+        const data = sortedDates.map(d => map[d]);
+
+        // Tampilkan hanya jika ada data
+        if (chartShipmentByDate) chartShipmentByDate.destroy();
+
+        if (data.length === 0) {
+            // Tampilkan pesan kosong
+            ctx.parentElement.innerHTML = `
+                <div class="text-center text-muted small" style="height:100%;display:flex;align-items:center;justify-content:center;">
+                    <span>Tidak ada data shipment untuk filter ini</span>
+                </div>
+            `;
+            return;
+        }
+
+        // Re-create canvas karena kita mungkin menghapus konten
+        // Lebih baik kita tidak menghapus canvas, kita tetap pakai canvas
+        // Tapi jika kita menampilkan pesan di parent, kita harus mengembalikan canvas.
+        // Sederhananya: kita hanya tampilkan chart jika ada data.
+        // Jika tidak ada, kita kosongkan dan tampilkan pesan.
+        // Tapi karena kita pakai canvas, kita bisa buat chart tetap dengan data kosong.
+        // Namun lebih baik kita sembunyikan canvas dan tampilkan pesan.
+        // Tapi kita akan buat chart tetap, dengan data kosong, chart akan kosong.
+        // Untuk pengalaman lebih baik, kita tampilkan pesan di atas canvas.
+        // Kita akan buat chart dengan data, jika data kosong, tampilkan pesan di atas canvas.
+        // Cara sederhana: jika data kosong, kita kosongkan div parent dan isi dengan teks.
+        // Tapi kita ingin canvas tetap ada untuk di-render ulang.
+        // Kita akan buat chart dengan data, jika data kosong, kita tetap buat chart kosong.
+        // Namun lebih baik kita tampilkan pesan di dalam card body.
+        // Kita akan gunakan pendekatan: jika data ada, render chart; jika tidak, tampilkan pesan.
+
+        // Kita akan render chart selalu, tetapi dengan data kosong.
+        // Tapi agar tidak error, kita buat dataset dengan data kosong.
+        // Untuk value labels, kita perlu handle case data kosong.
+
+        // Tetapi cara yang lebih bersih: kita tidak buat chart jika data kosong, kita tampilkan pesan.
+        // Kita akan hapus canvas dan ganti dengan teks, tapi kita akan simpan canvas sebagai referensi.
+        // Agar lebih sederhana, kita render chart dengan data kosong dan sembunyikan label.
+
+        chartShipmentByDate = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Jumlah Shipment (Pcs)',
+                    data: data,
+                    backgroundColor: '#1f6f8b', // biru
+                    borderColor: '#1f6f8b',
+                    borderWidth: 1,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (c) => `Total: ${fmtNum(c.parsed.y)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 20
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (v) => fmtNum(v)
+                        }
+                    }
+                }
+            },
+            plugins: [{
+                id: 'shipmentValueLabels',
+                afterDraw(chart) {
+                    const { ctx, data, chartArea: { top, bottom, left, right } } = chart;
+                    ctx.save();
+                    ctx.font = 'bold 10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#2e3a4b';
+                    const meta = chart.getDatasetMeta(0);
+                    if (!meta || !meta.data) return;
+                    meta.data.forEach((bar, i) => {
+                        const value = data.datasets[0].data[i];
+                        if (value === null || value === undefined || value === 0) return;
+                        const label = fmtNum(value);
+                        let x = bar.x;
+                        let y = bar.y - 5;
+                        let baseline = 'bottom';
+                        if (bar.y - top < 10) {
+                            y = bar.y + 10;
+                            baseline = 'top';
+                        }
+                        ctx.textBaseline = baseline;
+                        if (x > left && x < right && y > top - 20 && y < bottom) {
+                            ctx.fillText(label, x, y);
+                        }
+                    });
+                    ctx.restore();
+                }
+            }]
         });
     }
 
@@ -1463,10 +1484,10 @@
         renderMaterialAchievement(json.materialAchievement);
         renderProductionResult(json.productionPipeline, json.productionResultByMaterial, json.pipelineLossSteps);
         renderLossSteps(json.pipelineLossSteps);
-        renderTopExcess(json.topMaterialExcess);
-        renderShipment(json.shipmentByDate, json.shipmentDetail);
-        renderShipmentCategory(json.shipmentByCategory);
         renderDetail(json.detail);
+
+        // Shipment by Date
+        renderShipmentByDate(json.shipmentDetail);
 
         renderShipCalDetailTable(json.shipmentDetail);
 
@@ -1486,7 +1507,7 @@
     };
 
     const shipCalLabel = document.getElementById('ship-cal-label');
-    const shipCalBody  = document.querySelector('#mon-ship-calendar tbody');
+    // const shipCalBody  = document.querySelector('#mon-ship-calendar tbody');
     const shipCalPrev  = document.getElementById('ship-cal-prev');
     const shipCalNext  = document.getElementById('ship-cal-next');
     let dtShipCalDetail;
@@ -1587,11 +1608,16 @@
             lengthMenu: [10, 25, 50, 100],
             order: [],
             autoWidth: false,
+            width: '100%',
+            scrollY: '400px',
+            scrollCollapse: true,
             fixedHeader: true,
             columns: [
                 { data: 'tgl_bukti', defaultContent: '', render: v => formatTanggalIndonesia(v) },
                 { data: 'uraian', defaultContent: '' },
                 { data: 'no_bukti', defaultContent: '' },
+                { data: 'jenis_doc', defaultContent: '' },
+                { data: 'jenis_ps', defaultContent: '' },
                 { data: 'supplier_name', defaultContent: '' },
                 { data: 'barang_name', defaultContent: '' },
                 { data: 'jumlah_barang', className: 'right', render: v => fmtNum(v) },

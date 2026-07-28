@@ -62,6 +62,7 @@ class MonitoringRekonsiliasiController extends Controller
         }
 
         $service = MonitoringRekonsiliasiService::make($filters);
+        // dd($service->shipmentByDate());
 
         return response()->json([
             'header'               => $service->header(),
@@ -72,7 +73,7 @@ class MonitoringRekonsiliasiController extends Controller
             'materialAchievement'  => $service->materialAchievement(),
             'productionPipeline'   => $service->productionPipeline(),
             'productionResultByMaterial' => $service->productionResultByMaterial(),
-            'topMaterialExcess'    => $service->topMaterialExcess(),
+            // 'topMaterialExcess'    => $service->topMaterialExcess(),
             'detail'               => $service->detail(),
             'shipmentByDate'       => $service->shipmentByDate(),
             'shipmentDetail'       => $service->shipmentDetail(),
