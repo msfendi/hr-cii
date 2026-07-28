@@ -310,31 +310,6 @@
                         </div>
                     </div>
 
-                    <div class="col-lg-4 mb-4">
-                        <div class="card shadow h-100 rekon-fabric-card">
-                            <div class="card-header py-2">
-                                <h6 class="m-0 font-weight-bold"><i class="fas fa-tshirt mr-1"></i> FABRIC USAGE</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="rekon-usage-box">
-                                    <span class="rekon-usage-box-title">Qty Usage (%)</span>
-                                    <div class="rekon-usage-row">
-                                        <div class="rekon-usage-row-label">Use For GMT</div>
-                                        <div class="rekon-usage-row-value" id="usage-for-gmt">0</div>
-                                    </div>
-                                    <div class="rekon-usage-row">
-                                        <div class="rekon-usage-row-label">Scrap Qty</div>
-                                        <div class="rekon-usage-row-value" id="usage-scrap-qty">0</div>
-                                    </div>
-                                </div>
-                                <!-- <div class="rekon-usage-consumption">
-                                    <span>Consumption :</span>
-                                    <span class="rekon-usage-consumption-value" id="usage-consumption">0</span>
-                                    <span>Kgm</span>
-                                </div> -->
-                            </div>
-                        </div>
-                    </div>
 
                     <div class="col-lg-4 mb-4">
                         <div class="card shadow h-100 rekon-fabric-card">
@@ -352,11 +327,48 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="col-lg-4 mb-4">
+                        {{-- ================= SHIPMENT BY DATE CHART ================= --}}
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calendar-alt mr-1"></i> SHIPMENT BY DATE</h6>
+                            </div>
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                <div class="chart-area" style="height:340px">
+                                    <canvas id="chart-shipment-by-date"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- <div class="card shadow h-100 rekon-fabric-card">
+                            <div class="card-header py-2">
+                                <h6 class="m-0 font-weight-bold"><i class="fas fa-tshirt mr-1"></i> FABRIC USAGE</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="rekon-usage-box">
+                                    <span class="rekon-usage-box-title">Qty Usage (%)</span>
+                                    <div class="rekon-usage-row">
+                                        <div class="rekon-usage-row-label">Use For GMT</div>
+                                        <div class="rekon-usage-row-value" id="usage-for-gmt">0</div>
+                                    </div>
+                                    <div class="rekon-usage-row">
+                                        <div class="rekon-usage-row-label">Scrap Qty</div>
+                                        <div class="rekon-usage-row-value" id="usage-scrap-qty">0</div>
+                                    </div>
+                                </div>
+                                <div class="rekon-usage-consumption">
+                                    <span>Consumption :</span>
+                                    <span class="rekon-usage-consumption-value" id="usage-consumption">0</span>
+                                    <span>Kgm</span>
+                                </div>
+                            </div>
+                        </div> -->
+                    </div>
                 </div>
 
                 {{-- ================= MATERIAL ACHIEVEMENT & SHIPMENT BY DATE ================= --}}
                 <div class="row">
-                    <div class="col-lg-10 mb-4">
+                    <div class="col-lg-12 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-header py-3">
                                 <h6 class="m-0 font-weight-bold text-primary">MATERIAL ACHIEVEMENT</h6>
@@ -377,20 +389,6 @@
                                             <canvas id="chart-material-achievement-packing"></canvas>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- ================= SHIPMENT BY DATE CHART ================= --}}
-                    <div class="col-lg-2 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calendar-alt mr-1"></i> SHIPMENT BY DATE</h6>
-                            </div>
-                            <div class="card-body d-flex flex-column justify-content-center">
-                                <div class="chart-area" style="height:340px">
-                                    <canvas id="chart-shipment-by-date"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -989,13 +987,13 @@
     const scrapPct = Number(fabricUsage.scrap_pct) || 0;
 
     // Tampilkan sebagai persentase dengan 1 desimal dan koma
-    document.getElementById('usage-for-gmt').textContent = fmtPct(usagePct);        // <-- ubah
-    document.getElementById('usage-scrap-qty').textContent = fmtPct(scrapPct);      // <-- ubah
+    // document.getElementById('usage-for-gmt').textContent = fmtPct(usagePct);        // <-- ubah
+    // document.getElementById('usage-scrap-qty').textContent = fmtPct(scrapPct);      // <-- ubah
     // document.getElementById('usage-consumption').textContent = '100,0%';            // <-- ubah (atau fmtPct(100))
 
     // Ubah judul box (jika belum diubah di HTML)
-    const titleEl = document.querySelector('.rekon-usage-box-title');
-    if (titleEl) titleEl.textContent = 'Qty Usage (%)';
+    // const titleEl = document.querySelector('.rekon-usage-box-title');
+    // if (titleEl) titleEl.textContent = 'Qty Usage (%)';
 
     // Ubah satuan di bagian Consumption
     // const consumptionSpan = document.querySelector('.rekon-usage-consumption span:last-child');
