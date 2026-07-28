@@ -1084,7 +1084,8 @@ END AS special_overtime_hours
                     $absenceDays = 0;
                 } else {
 
-                    $absenceDays = (21 - $workingDays) + $employee->absence_days;
+                    // $absenceDays = (21 - $workingDays) + $employee->absence_days;
+                    $absenceDays = $employee->absence_days;
                 }
             } else {
                 $absenceDays = $employee->absence_days;
