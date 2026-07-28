@@ -609,14 +609,17 @@
     .rekon-pipe-loss-value.loss-negative,
     .rekon-pipe-loss-pct.loss-negative {
         color: #c0392b !important; /* merah */
+        font-weight: bold;
     }
     .rekon-pipe-loss-value.loss-positive,
     .rekon-pipe-loss-pct.loss-positive {
         color: #1cc88a !important; /* hijau */
+        font-weight: bold;
     }
     .rekon-pipe-loss-value.loss-zero,
     .rekon-pipe-loss-pct.loss-zero {
         color: #5a5c69 !important; /* abu-abu */
+        font-weight: bold;
     }
 
     .rekon-pipe-total .rekon-pipe-body { padding-top: .7rem; }
@@ -1061,6 +1064,7 @@
     if (typeof Chart === 'undefined' || !ctx) return;
 
     const labels = rows.map(r => wrapLabel(r.barang_name));
+    // Warna baru sesuai palet FABRIC USAGE PERCENTAGE
     const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
 
     if (meta.chart) meta.chart.destroy();
@@ -1069,10 +1073,10 @@
         data: {
             labels,
             datasets: [
-                mk('order_pct', '#4e73df', 'ORDER%'),
-                mk('received_pct', '#f6a533', 'RECEIVED%'),
-                mk('out_prod_pct', '#1cc88a', 'OUT PROD%'),
-                mk('stock_pct', '#36b9cc', 'STOCK%'),
+                mk('order_pct', '#1f6f8b', 'ORDER%'),
+                mk('received_pct', '#e07b39', 'RECEIVED%'),
+                mk('out_prod_pct', '#4a8c9c', 'OUT PROD%'),
+                mk('stock_pct', '#f5a623', 'STOCK%'),
             ],
         },
         options: {
@@ -1134,10 +1138,10 @@ function updateFormulaWithColors() {
     const formulaDiv = document.querySelector('.rekon-ma-formula');
     if (!formulaDiv) return;
     const items = [
-        { label: 'ORDER%', desc: 'Jumlah Order', color: '#4e73df' },
-        { label: 'RECEIVED%', desc: 'Jumlah Diterima ÷ Jumlah Order', color: '#f6a533' },
-        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Jumlah Diterima', color: '#1cc88a' },
-        { label: 'STOCK%', desc: 'Saldo Gudang ÷ Jumlah Diterima', color: '#36b9cc' }
+        { label: 'ORDER%', desc: 'Jumlah Order', color: '#1f6f8b' },
+        { label: 'RECEIVED%', desc: 'Jumlah Diterima ÷ Jumlah Order', color: '#e07b39' },
+        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Jumlah Diterima', color: '#4a8c9c' },
+        { label: 'STOCK%', desc: 'Saldo Gudang ÷ Jumlah Diterima', color: '#f5a623' }
     ];
     formulaDiv.innerHTML = items.map(item =>
         `<span><span style="display:inline-block;width:12px;height:12px;background:${item.color};border-radius:2px;margin-right:4px;"></span><strong>${item.label}</strong> = ${item.desc}</span>`
