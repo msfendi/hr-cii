@@ -1080,8 +1080,8 @@ END AS special_overtime_hours
                 }
 
                 // rumus: (21 - hari kerja periode) + absence karyawan
-                if ($workingDays > 21) {
-                    $absenceDays = $employee->absence_days;
+                if ($employee->absence_days <= ($workingDays - 21)) {
+                    $absenceDays = 0;
                 } else {
 
                     $absenceDays = (21 - $workingDays) + $employee->absence_days;
