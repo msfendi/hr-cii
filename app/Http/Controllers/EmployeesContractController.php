@@ -419,12 +419,12 @@ class EmployeesContractController extends Controller
 
         $contract = EmployeesContract::findOrFail($id);
 
-        if ($contract->status_contract !== 'AKTIF') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya kontrak AKTIF yang bisa diupdate.',
-            ], 422);
-        }
+        // if ($contract->status_contract !== 'AKTIF') {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Hanya kontrak AKTIF yang bisa diupdate.',
+        //     ], 422);
+        // }
 
 
         // Calculate duration if dates are updated
