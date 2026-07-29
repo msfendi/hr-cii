@@ -93,6 +93,7 @@ use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
 use App\Http\Controllers\DoorprizeController;
+use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
@@ -1110,6 +1111,13 @@ Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permissio
 
     Route::get('rekonsiliasi/negara-options', [MonitoringRekonsiliasiController::class, 'negaraOptions'])->name('rekonsiliasi.negara-options');
 });
+
+Route::middleware(['auth', 'permission'])->prefix('exchange-rates')->name('exchange-rates.')->group(function () {
+    Route::get('/', [ExchangeRateController::class, 'index'])->name('index');
+    Route::get('/today', [ExchangeRateController::class, 'today'])->name('today');
+    Route::post('/sync', [ExchangeRateController::class, 'sync'])->name('sync');
+});
+
 
 
 

@@ -14,8 +14,6 @@
 
             <div class="container-fluid" id="mon-app"
                  data-filters='@json($filters)'
-                 data-filter-options='@json($orderComboOptions)'
-                 data-ocf-options='@json($filterOptions['ocf'] ?? [])'
                  data-endpoint="{{ route('monitoring.dashboard.data') }}"
                  data-sync-bom-url="{{ route('monitoring.sync.bom') }}"
                  data-sync-po-url="{{ route('monitoring.sync.po') }}"
@@ -35,18 +33,46 @@
                         </div>
                         <div class="d-flex align-items-center flex-wrap" style="gap:16px">
                             <div class="rekon-search input-group input-group-sm">
+                                {{-- Keempat select di bawah ini BOLAK-BALIK saling menyaring: opsi
+                                     masing-masing sudah di-cascade dari server berdasarkan filter lain
+                                     yang aktif (lihat MonitoringDashboardService::cascadedFilterOptions()),
+                                     dan akan di-refresh lagi setiap kali salah satu select berubah
+                                     (lihat applyCascadedFilterOptions() di script bawah). Urutan:
+                                     Brand, Style, OCF, Uraian (CPO). --}}
                                 <select id="f-brand" class="form-control select2-filter" style="min-width:150px" data-placeholder="Cari Brand...">
                                     <option value=""></option>
+                                    @foreach($brandOptions as $b)
+                                        <option value="{{ $b }}" @selected(($filters['brand'] ?? null) === $b)>{{ $b }}</option>
+                                    @endforeach
                                 </select>
                                 <select id="f-style" class="form-control select2-filter" style="min-width:150px" data-placeholder="Cari Style...">
                                     <option value=""></option>
-                                </select>
-                                <select id="f-uraian" class="form-control select2-filter" style="min-width:220px" data-placeholder="Cari Uraian (CPO)...">
-                                    <option value=""></option>
+                                    @foreach($styleOptions as $s)
+                                        <option value="{{ $s }}" @selected(($filters['style'] ?? null) === $s)>{{ $s }}</option>
+                                    @endforeach
                                 </select>
                                 <select id="f-ocf" class="form-control select2-filter" style="min-width:180px" data-placeholder="Cari OCF...">
                                     <option value=""></option>
+                                    @foreach($ocfOptions as $o)
+                                        <option value="{{ $o }}" @selected(($filters['ocf'] ?? null) === $o)>{{ $o }}</option>
+                                    @endforeach
                                 </select>
+                                <select id="f-uraian" class="form-control select2-filter" style="min-width:220px" data-placeholder="Cari Uraian (CPO)...">
+                                    <option value=""></option>
+                                    @foreach($uraianOptions as $v)
+                                        <option value="{{ $v }}" @selected(($filters['uraian'] ?? null) === $v)>{{ $v }}</option>
+                                    @endforeach
+                                </select>
+                                {{-- Tombol reset EKSPLISIT: tidak bergantung pada ikon "x" bawaan
+                                     select2 (klik "x" terbukti tidak selalu benar-benar mengosongkan
+                                     value <select> di DOM setelah option-nya di-rebuild lewat
+                                     populateSelect()). Tombol ini memaksa keempat select ke null lewat
+                                     API resmi select2 (.val(null).trigger('change')) lalu memanggil
+                                     refresh() langsung, supaya clear filter selalu deterministik. Sama
+                                     seperti #btn-reset-filter di rekonsiliasi_blade.php. --}}
+                                <button type="button" id="btn-reset-filter" class="btn btn-outline-light btn-sm" title="Reset semua filter">
+                                    <i class="fas fa-times"></i> Reset Filter
+                                </button>
                             </div>
                             <div class="text-white small">
                                 <div class="text-uppercase" style="opacity:.75">Last Updated</div>
@@ -515,32 +541,15 @@
     });
 
     /* =========================================================
-       Cascading Select2: Brand -> Style -> Uraian (CPO)
+       Cascading Select2 DUA ARAH: Brand / Style / OCF / Uraian (CPO)
+       Keempat select ini SUDAH dipopulasi server-side saat halaman
+       pertama kali dirender (lihat @@foreach di HTML di atas, dari
+       MonitoringDashboardService::cascadedFilterOptions()). Untuk update
+       selanjutnya (tiap kali salah satu select berubah), opsi keempatnya
+       di-refresh lagi dari response endpoint data() lewat
+       applyCascadedFilterOptions() -- sama seperti pola di
+       rekonsiliasi_blade.php.
        ========================================================= */
-    let filterOptions = [];
-    const rawFilterOptions = app.dataset.filterOptions || '[]';
-
-    try {
-        filterOptions = JSON.parse(rawFilterOptions);
-    } catch (e) {
-        console.error('Gagal parse data-filter-options, dropdown filter akan kosong.', e);
-        const match = /position (\d+)/.exec(e.message);
-        if (match) {
-            const pos = parseInt(match[1], 10);
-            console.error(
-                '[DEBUG] konteks di sekitar posisi error:',
-                JSON.stringify(rawFilterOptions.slice(Math.max(0, pos - 30), pos)),
-                '  >>> KARAKTER BERMASALAH >>>  ',
-                JSON.stringify(rawFilterOptions.slice(pos, pos + 30))
-            );
-        }
-        filterOptions = [];
-    }
-
-    function uniqueSorted(values) {
-        return [...new Set(values.filter(v => v !== null && v !== undefined && v !== ''))].sort();
-    }
-
     function populateSelect($el, values) {
         const current = $el.val();
         $el.empty().append('<option value=""></option>');
@@ -548,47 +557,23 @@
         $el.val(values.includes(current) ? current : '').trigger('change');
     }
 
-    function refreshCascade() {
-        const brand = fBrand.value;
-        const style = fStyle.value;
-
-        const styleRows = filterOptions.filter(r => !brand || r.brand === brand);
-        populateSelect($(fStyle), uniqueSorted(styleRows.map(r => r.style)));
-
-        const uraianRows = filterOptions.filter(r =>
-            (!brand || r.brand === brand) && (!style || r.style === style));
-        populateSelect($(fUraian), uniqueSorted(uraianRows.map(r => r.uraian)));
+    /**
+     * Update KEEMPAT dropdown filter (Brand/Style/OCF/Uraian) sekaligus dari
+     * hasil cascade server (lihat MonitoringDashboardService::
+     * cascadedFilterOptions(), dikirim controller di key brandOptions/
+     * styleOptions/ocfOptions/uraianOptions pada tiap response endpoint
+     * data()). Ini yang membuat filter BOLAK-BALIK: pilih OCF -> Brand/
+     * Style/Uraian ikut menyaring; pilih Style -> Brand/OCF/Uraian ikut
+     * menyaring; dst -- pilihan yang masih valid tetap dipertahankan, yang
+     * sudah tidak valid otomatis ke-clear karena tidak ada lagi di daftar
+     * opsi baru.
+     */
+    function applyCascadedFilterOptions(json) {
+        if (Array.isArray(json.brandOptions)) populateSelect($(fBrand), json.brandOptions);
+        if (Array.isArray(json.styleOptions)) populateSelect($(fStyle), json.styleOptions);
+        if (Array.isArray(json.ocfOptions)) populateSelect($(fOcf), json.ocfOptions);
+        if (Array.isArray(json.uraianOptions)) populateSelect($(fUraian), json.uraianOptions);
     }
-
-    let ocfOptions = [];
-    try {
-        ocfOptions = JSON.parse(app.dataset.ocfOptions || '[]');
-    } catch (e) {
-        console.error('Gagal parse data-ocf-options, dropdown OCF akan kosong.', e);
-        ocfOptions = [];
-    }
-
-    (function initCascadeFilters() {
-        populateSelect($(fBrand), uniqueSorted(filterOptions.map(r => r.brand)));
-        populateSelect($(fOcf), uniqueSorted(ocfOptions));
-
-        const initialFilters = app.dataset.filters ? JSON.parse(app.dataset.filters) : {};
-        if (initialFilters.brand) {
-            $(fBrand).val(initialFilters.brand).trigger('change');
-        }
-
-        refreshCascade();
-
-        if (initialFilters.style) {
-            $(fStyle).val(initialFilters.style).trigger('change');
-        }
-        if (initialFilters.uraian) {
-            $(fUraian).val(initialFilters.uraian).trigger('change');
-        }
-        if (initialFilters.ocf) {
-            $(fOcf).val(initialFilters.ocf).trigger('change');
-        }
-    })();
 
     const dtLanguage = {
         search: 'Cari:',
@@ -999,8 +984,9 @@
     // ================================================================
     function refresh(){
         const filters = currentFilters();
+        const hasAnyFilter = !!(filters.uraian || filters.brand || filters.style || filters.ocf);
 
-        if (!filters.uraian && !filters.brand && !filters.style && !filters.ocf) {
+        if (!hasAnyFilter) {
             widgets.style.display = 'none';
             emptyNotice.style.display = '';
             document.getElementById('mon-last-updated').textContent = '-';
@@ -1008,15 +994,21 @@
             document.getElementById('hdr-style').textContent = '-';
             document.getElementById('hdr-uraian').textContent = '-';
             document.getElementById('hdr-ocf').textContent = '-';
-            return;
+        } else {
+            emptyNotice.style.display = 'none';
+            widgets.style.display = '';
+            renderHeaderLabels();
+            showLoading();
         }
 
-        emptyNotice.style.display = 'none';
-        widgets.style.display = '';
-        renderHeaderLabels();
-
-        showLoading();
-
+        // Fetch TETAP dijalankan meski belum ada filter sama sekali --
+        // payload widget-nya kosong (lihat
+        // MonitoringDashboardController::emptyPayload()), tapi dropdown
+        // Brand/Style/OCF/Uraian tetap dikirim balik supaya keempat select
+        // bisa direset/di-cascade ulang dengan benar (bolak-balik) setiap
+        // kali salah satu filter berubah, termasuk saat filter dikosongkan
+        // lagi lewat tombol Reset Filter. Sama seperti refresh() di
+        // rekonsiliasi_blade.php.
         const params = buildQueryParams(filters);
         fetch(`${endpoint}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
             .then(r => {
@@ -1024,46 +1016,53 @@
                 return r.json();
             })
             .then(json => {
-                renderOrderPivot(json.orderPivot);
-                renderMaterialPivot(json.materialPivot);
-                renderWorkOrderPivot(json.workOrderPivot);
+                applyCascadedFilterOptions(json);
 
-                if (Array.isArray(json.ocfOptions)) {
-                    populateSelect($(fOcf), json.ocfOptions);
+                if (hasAnyFilter) {
+                    renderOrderPivot(json.orderPivot);
+                    renderMaterialPivot(json.materialPivot);
+                    renderWorkOrderPivot(json.workOrderPivot);
+                    hideLoading();
                 }
-
-                hideLoading();
             })
             .catch(err => {
-                hideLoading();
-                showErrorAlert(err.message);
+                if (hasAnyFilter) {
+                    hideLoading();
+                    showErrorAlert(err.message);
+                }
             });
     }
 
     // ================================================================
     // FILTER HANDLERS
     // ================================================================
-    $(fBrand).on('select2:select select2:clear', function(){
-        $(fStyle).val('').trigger('change');
-        $(fUraian).val('').trigger('change');
-        refreshCascade();
-        refresh();
-    });
-    $(fStyle).on('select2:select select2:clear', function(){
-        $(fUraian).val('').trigger('change');
-        refreshCascade();
-        refresh();
-    });
-    $(fUraian).on('select2:select select2:clear', function(){
-        if (fUraian.value) {
-            $(fOcf).val('').trigger('change');
-        }
-        refresh();
-    });
-    $(fOcf).on('select2:select select2:clear', function(){
-        if (fOcf.value) {
-            $(fUraian).val('').trigger('change');
-        }
+    // Keempat select saling menyaring dua arah (bolak-balik) lewat
+    // applyCascadedFilterOptions() yang dipanggil dari dalam refresh(),
+    // jadi TIDAK perlu lagi memaksa clear select lain saat salah satu
+    // berubah -- pilihan yang masih valid otomatis dipertahankan, yang
+    // sudah tidak valid otomatis ke-clear karena tidak ada lagi di opsi
+    // baru. Sama seperti pola di rekonsiliasi_blade.php.
+    $(fBrand).on('select2:select select2:clear', refresh);
+    $(fStyle).on('select2:select select2:clear', refresh);
+    $(fOcf).on('select2:select select2:clear', refresh);
+    $(fUraian).on('select2:select select2:clear', refresh);
+
+    /**
+     * Tombol "Reset Filter": klik ikon "x" bawaan select2 terbukti tidak
+     * selalu benar-benar mengosongkan value <select> di DOM setelah
+     * option-nya di-rebuild lewat populateSelect(). Tombol ini memaksa
+     * keempat select ke null lewat API resmi select2
+     * (.val(null).trigger('change')) SEBELUM memanggil refresh() secara
+     * langsung -- tidak bergantung pada event select2:clear sama sekali,
+     * jadi hasilnya selalu pasti: semua dropdown balik menampilkan data
+     * penuh (unfiltered). Sama seperti #btn-reset-filter di
+     * rekonsiliasi_blade.php.
+     */
+    const btnResetFilter = document.getElementById('btn-reset-filter');
+    btnResetFilter?.addEventListener('click', () => {
+        [fBrand, fStyle, fOcf, fUraian].forEach(el => {
+            $(el).val(null).trigger('change');
+        });
         refresh();
     });
 

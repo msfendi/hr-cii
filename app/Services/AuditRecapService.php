@@ -21,8 +21,12 @@ use Illuminate\Support\Facades\DB;
  *    (BUKAN awal-akhir bulan kalender).
  * 3. Daftar karyawan (master) diambil dari payroll_run_details milik
  *    payroll_runs TERBARU (processed_at/id terbesar) untuk period_id tsb.
- *    Kalau period belum punya payroll_runs sama sekali, generate akan gagal
- *    (lempar exception) -- payroll run harus dibuat dulu di modul payroll.
+ *    KALAU period BELUM punya payroll_runs sama sekali (belum ada payroll
+ *    run yang dijalankan untuk periode ini), generate TIDAK gagal --
+ *    fallback ambil daftar karyawan dari BIODATA + BIODATA_KELUAR (union),
+ *    di-join ke PKWT (TMK/TKK) untuk menentukan siapa yang aktif selama
+ *    periode ini, dan ke DEPT untuk nama departemen. Lihat
+ *    getEmployeeMasterFromBiodataPkwt() untuk detail kriteria aktifnya.
  * 4. Jam & status kehadiran (hadir/lembur/kode absen) dihitung dari tabel
  *    overtimes.
  * 5. SUBDIVISI & DEPT_GROUP tetap prioritas dari overtimes (BAGIAN/DEPT_GROUP);
@@ -126,8 +130,7 @@ class AuditRecapService
     /**
      * Entry point utama. Dipanggil dari controller saat tombol Generate diklik.
      *
-     * @throws \RuntimeException kalau periode tidak ditemukan/sudah closed,
-     *                           atau belum ada payroll run untuk periode tsb.
+     * @throws \RuntimeException kalau periode tidak ditemukan/sudah closed.
      */
     public function generate(int $periodId): array
     {
@@ -140,20 +143,25 @@ class AuditRecapService
             throw new \RuntimeException('Periode payroll tidak ditemukan atau sudah closed.');
         }
 
+        $start = Carbon::parse($period->start_date)->startOfDay();
+        $end   = Carbon::parse($period->end_date)->endOfDay();
+
         $run = DB::table('payroll_runs')
             ->where('period_id', $periodId)
             ->orderByDesc('processed_at')
             ->orderByDesc('id')
             ->first();
 
-        if (!$run) {
-            throw new \RuntimeException('Belum ada payroll run untuk periode "' . $period->name . '". Jalankan payroll run dulu sebelum generate rekap audit.');
+        if ($run) {
+            $employees = $this->getEmployeeMasterFromPayrollRun($run->id);
+            $employeeSource = 'payroll_run';
+        } else {
+            // Belum ada payroll_run untuk periode ini -> fallback ambil daftar
+            // karyawan dari BIODATA/BIODATA_KELUAR + PKWT (TMK/TKK) + DEPT.
+            $employees = $this->getEmployeeMasterFromBiodataPkwt($start, $end);
+            $employeeSource = 'biodata_pkwt';
         }
 
-        $start = Carbon::parse($period->start_date)->startOfDay();
-        $end   = Carbon::parse($period->end_date)->endOfDay();
-
-        $employees        = $this->getEmployeeMasterFromPayrollRun($run->id);
         $overtimeMap      = $this->getOvertimeMap($start, $end);
         $shiftMap         = $this->getShiftMap($start, $end);
         $lateMap          = $this->getLateMap($start, $end);
@@ -189,10 +197,11 @@ class AuditRecapService
         }
 
         return [
-            'period_id'   => $periodId,
-            'period_name' => $period->name,
-            'run_id'      => $run->id,
-            'total_rows'  => $totalRows,
+            'period_id'       => $periodId,
+            'period_name'     => $period->name,
+            'run_id'          => $run->id ?? null,
+            'employee_source' => $employeeSource, // 'payroll_run' atau 'biodata_pkwt' (fallback)
+            'total_rows'      => $totalRows,
         ];
     }
 
@@ -415,6 +424,58 @@ class AuditRecapService
             $employees[$row->npk] = [
                 'NAMA_KARYAWAN'      => $row->employee_name,
                 'SUBDIVISI_FALLBACK' => $row->employee_dept,
+            ];
+        }
+
+        return $employees;
+    }
+
+    /**
+     * FALLBACK employee master kalau period_id belum punya payroll_runs sama
+     * sekali: ambil dari BIODATA + BIODATA_KELUAR (union), di-join ke PKWT
+     * untuk menentukan siapa saja yang aktif selama periode ini berdasarkan
+     * TMK (tanggal masuk kerja) dan TKK (tanggal keluar kerja), lalu di-join
+     * ke DEPT untuk nama departemen.
+     *
+     * Kriteria aktif selama periode [$periodStart, $periodEnd]:
+     * - TMK <= periodEnd (sudah masuk kerja sebelum/pas periode berakhir)
+     * - TKK null ATAU TKK >= periodStart (belum keluar sebelum periode mulai;
+     *   TKK yang jatuh SETELAH periodEnd tetap dianggap aktif PENUH di
+     *   periode ini, jadi batas atas periodEnd sengaja TIDAK dipakai di sini).
+     */
+    protected function getEmployeeMasterFromBiodataPkwt(Carbon $periodStart, Carbon $periodEnd): array
+    {
+        $biodataUnion = DB::table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+            );
+
+        $rows = DB::table('PKWT as p')
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('p.NPK', '=', 'bio.NPK');
+            })
+            ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->where('p.TMK', '<=', $periodEnd->format('Y-m-d'))
+            ->where(function ($q) use ($periodStart) {
+                // Karyawan dianggap masih aktif di periode ini selama TKK
+                // belum lewat SEBELUM periode dimulai. TKK yang jatuh SETELAH
+                // periodEnd (mis. resign 1 Juli sedangkan periode payroll
+                // adalah Juni) tetap harus dianggap aktif penuh di periode
+                // Juni -- jadi batas atas (periodEnd) TIDAK boleh dipakai
+                // di sini, cukup batas bawah (periodStart).
+                $q->whereNull('p.TKK')
+                    ->orWhere('p.TKK', '>=', $periodStart->format('Y-m-d'));
+            })
+            ->select('p.NPK as npk', 'bio.NAMA_KARYAWAN as nama_karyawan', 'd.DEPARTEMENT as dept_name')
+            ->get();
+
+        $employees = [];
+        foreach ($rows as $row) {
+            $employees[$row->npk] = [
+                'NAMA_KARYAWAN'      => $row->nama_karyawan,
+                'SUBDIVISI_FALLBACK' => $row->dept_name,
             ];
         }
 

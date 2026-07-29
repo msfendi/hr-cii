@@ -13,17 +13,26 @@ class MonitoringDashboardController extends Controller
     {
         $filters = $request->only(['uraian', 'brand', 'style', 'ocf']);
         $service = MonitoringDashboardService::make($filters);
-        // dd($service->filterOptions());
+
+        // Keempat dropdown (Brand/Style/Uraian/OCF) di-cascade BOLAK-BALIK
+        // dari filter yang aktif saat halaman dibuka (lihat
+        // MonitoringDashboardService::cascadedFilterOptions()) -- kalau
+        // request index() ini datang dengan query filter (mis. dari link
+        // share/bookmark), dropdown lain langsung ikut menyaring sejak awal,
+        // bukan cuma nanti setelah user ganti pilihan. Sama seperti
+        // MonitoringRekonsiliasiController::index().
+        $filterOptions = $service->cascadedFilterOptions();
+
         return view('monitoring.dashboard', [
             'filters'           => $filters,
-            // Catatan: $filterOptions dipakai HANYA untuk dropdown OCF (filterOptions['ocf'],
-            // lewat atribut data-ocf-options). Dropdown cascading brand -> style -> uraian
-            // tetap dipopulasi dari $orderComboOptions lewat atribut data-filter-options.
-            'filterOptions'     => $service->filterOptions(),
+            'brandOptions'      => $filterOptions['brand'],
+            'styleOptions'      => $filterOptions['style'],
+            'uraianOptions'     => $filterOptions['uraian'],
+            'ocfOptions'        => $filterOptions['ocf'],
+            // Kombinasi uraian/brand/style dari mon_orders TANPA di-scope
+            // apapun -- dipertahankan kalau frontend masih butuh daftar
+            // lengkap awal (mis. autocomplete/search di client).
             'orderCombos'       => $service->orderCombos(),
-            // Sumber data dropdown select2 (cascading). Lihat komentar di
-            // MonitoringDashboardService::orderComboOptions() untuk alasan kenapa
-            // ini harus berupa variabel siap-pakai, bukan diproses inline di blade.
             'orderComboOptions' => $service->orderComboOptions(),
         ]);
     }
@@ -36,16 +45,63 @@ class MonitoringDashboardController extends Controller
         $filters = $request->only(['uraian', 'brand', 'style', 'ocf']);
         $service = MonitoringDashboardService::make($filters);
 
+        // Keempat dropdown (Brand/Style/Uraian/OCF) di-cascade BOLAK-BALIK
+        // dari filter yang sedang aktif (lihat
+        // MonitoringDashboardService::cascadedFilterOptions()) -- dihitung
+        // SELALU di sini supaya keempat dropdown tetap saling menyaring
+        // setiap kali user mengganti salah satunya (pilih OCF -> Uraian/
+        // Style/Brand ikut menyaring; pilih Style -> Brand/Uraian/OCF ikut
+        // menyaring; dst). Sama seperti MonitoringRekonsiliasiController::data().
+        $filterOptions = $service->cascadedFilterOptions();
+
+        // Kalau belum ada filter SAMA SEKALI (uraian, brand, style, maupun
+        // ocf), JANGAN jalankan query berat (full-scan tanpa scope bisa
+        // menarik seluruh tabel sekaligus untuk banyak widget). Cukup
+        // balikan payload kosong (dropdown tetap ikut dikirim supaya
+        // frontend bisa langsung reset/cascade ulang -- lihat tombol Reset
+        // Filter di dashboard.blade.php). Sama seperti
+        // MonitoringRekonsiliasiController::data()/emptyPayload().
+        if (empty($filters['uraian']) && empty($filters['brand']) && empty($filters['style']) && empty($filters['ocf'])) {
+            return response()->json($this->emptyPayload($filterOptions));
+        }
+
         return response()->json([
             'summary'        => $service->summary(),
             'orderPivot'     => $service->orderPivot(),
             'materialPivot'  => $service->materialPurchasePivot(),
             'workOrderPivot' => $service->workOrderPivot(),
-            // Dropdown OCF di-cascade ulang mengikuti brand/style yang sedang
-            // aktif, persis seperti dropdown Uraian (CPO) -- lihat
-            // MonitoringDashboardService::ocfOptions().
-            'ocfOptions'     => $service->ocfOptions(),
+            'filterOptions'  => $filterOptions,
+            'brandOptions'   => $filterOptions['brand'],
+            'styleOptions'   => $filterOptions['style'],
+            'uraianOptions'  => $filterOptions['uraian'],
+            // `ocfOptions` dipertahankan sebagai key terpisah (selain di
+            // dalam `filterOptions`) supaya kompatibel dengan frontend lama
+            // yang sudah membaca key ini.
+            'ocfOptions'     => $filterOptions['ocf'],
         ]);
+    }
+
+    /**
+     * Payload kosong untuk endpoint data() saat belum ada filter aktif sama
+     * sekali -- dropdown Brand/Style/Uraian/OCF tetap disertakan supaya
+     * frontend bisa reset/cascade ulang keempatnya. Meniru
+     * MonitoringRekonsiliasiController::emptyPayload().
+     */
+    private function emptyPayload(array $filterOptions = []): array
+    {
+        $filterOptions += ['brand' => [], 'style' => [], 'uraian' => [], 'ocf' => []];
+
+        return [
+            'summary'        => ['total_qty_order' => 0, 'total_style' => 0, 'total_item_belum_order' => 0],
+            'orderPivot'     => [],
+            'materialPivot'  => [],
+            'workOrderPivot' => [],
+            'filterOptions'  => $filterOptions,
+            'brandOptions'   => $filterOptions['brand'],
+            'styleOptions'   => $filterOptions['style'],
+            'uraianOptions'  => $filterOptions['uraian'],
+            'ocfOptions'     => $filterOptions['ocf'],
+        ];
     }
 
     /**

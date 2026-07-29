@@ -17,6 +17,8 @@ class AuditRecapController extends Controller
      * - Dropdown "Generate" hanya berisi payroll_period yang is_closed = 0.
      * - Dropdown "Lihat data" berisi SEMUA payroll_period (termasuk yang
      *   sudah closed), supaya data historis tetap bisa dilihat.
+     * - Kalau request AJAX (dipanggil oleh DataTables server-side), return
+     *   JSON lewat yajra/laravel-datatables, bukan render view.
      */
     public function index(Request $request)
     {
@@ -49,6 +51,7 @@ class AuditRecapController extends Controller
             ->select('SUBDIVISI', DB::raw('MIN(KODE_BAGIAN) AS KODE_BAGIAN'))
             ->groupBy('SUBDIVISI')
             ->orderBy('SUBDIVISI', 'ASC')
+            ->limit(10)
             ->get();
 
         return view('audit_recap.index', compact('openPeriods', 'allPeriods', 'periodId', 'selectedPeriod', 'employeeGroupChutex'));
@@ -76,6 +79,12 @@ class AuditRecapController extends Controller
             ->with('success', "Rekap audit berhasil digenerate: {$result['total_rows']} baris untuk periode \"{$result['period_name']}\".");
     }
 
+    /**
+     * Endpoint bantu (dipanggil via AJAX dari front-end): terima daftar tanggal
+     * libur (format "DD/MM/YYYY", dipisah koma) lewat parameter holiday_date,
+     * lalu kembalikan array angka tanggal (day-of-month) saja -- dipakai untuk
+     * menandai kolom hari libur di report grid (template.report-final).
+     */
     public function export(Request $request)
     {
         $dates = explode(',', $request->holiday_date);
@@ -87,6 +96,10 @@ class AuditRecapController extends Controller
         return response()->json(['success' => true, 'days' => $days]);
     }
 
+    /**
+     * Tampilkan laporan kehadiran (grid per-hari) untuk 1 DEPT_GROUP dalam
+     * rentang tanggal tertentu. View: template.report-final.
+     */
     public function report(Request $request)
     {
         $deptGroup = $request->dept_group;
@@ -120,9 +133,13 @@ class AuditRecapController extends Controller
         $employees = $employeesChutex->orderBy('AUDIT.SUBDIVISI', 'ASC')->orderBy('AUDIT.NPK', 'ASC')->orderBy('AUDIT.TANGGAL', 'ASC')->get();
 
         $days = $request->days;
-        return view('template.report-final-generate', compact('employees', 'employeeGroup', 'days'));
+        return view('template.report-final', compact('employees', 'employeeGroup', 'days'));
     }
 
+    /**
+     * Download rekap sebagai Excel (.xlsx) lewat class App\Exports\AuditExport
+     * (sudah ada di project, tidak di-generate ulang di sini).
+     */
     public function export_view(Request $request)
     {
         return Excel::download(
@@ -136,6 +153,10 @@ class AuditRecapController extends Controller
         );
     }
 
+    /**
+     * Download laporan kehadiran sebagai PDF (landscape A4), pakai view yang
+     * sama dengan report() yaitu template.report-final.
+     */
     public function export_pdf(Request $request)
     {
         $deptGroup = $request->dept_group;
@@ -171,11 +192,12 @@ class AuditRecapController extends Controller
             ->orderBy('AUDIT.SUBDIVISI', 'ASC')
             ->orderBy('AUDIT.NPK', 'ASC')
             ->orderBy('AUDIT.TANGGAL', 'ASC')
+            ->limit(1000)
             ->get();
 
         $days = $request->days;
 
-        $pdf = Pdf::loadView('template.report-final-generate', compact('employees', 'employeeGroup', 'days'))
+        $pdf = Pdf::loadView('template.report-final', compact('employees', 'employeeGroup', 'days'))
             ->setPaper('a4', 'landscape');
 
         $filename = 'laporan-kehadiran-' . $deptGroup . '-' . $request->fromdate . '-' . $request->todate . '.pdf';

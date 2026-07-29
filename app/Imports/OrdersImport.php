@@ -15,6 +15,8 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithStartRow;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Imports\HeadingRowFormatter;
 
 class OrdersImport implements
     ToCollection,
@@ -22,14 +24,10 @@ class OrdersImport implements
     SkipsEmptyRows,
     WithChunkReading,
     WithMultipleSheets,
-    ShouldQueue
+    ShouldQueue,
+    WithHeadingRow
 {
     use Importable;
-
-    public function __construct(
-        protected string $importBatch,
-        protected int $totalRows = 0
-    ) {}
 
     /**
      * Hanya import sheet dengan nama ORDER
@@ -48,6 +46,33 @@ class OrdersImport implements
     public function startRow(): int
     {
         return 2;
+    }
+
+    public function __construct(
+        protected string $importBatch,
+        protected int $totalRows = 0
+    ) {
+        /**
+         * PENTING:
+         * Default formatter Laravel Excel untuk WithHeadingRow
+         * adalah 'slug', yang mengubah semua nama header menjadi
+         * lowercase + underscore (contoh: "BUYER PO" -> "buyer_po").
+         *
+         * Karena kode di bawah ini mengambil kolom berdasarkan
+         * NAMA HEADER ASLI persis seperti di file Excel
+         * (mis. $row['BUYER PO'], $row['QTY ORD (PCS)']),
+         * formatter HARUS di-set ke 'none' agar key array
+         * tetap sama persis dengan header di Excel.
+         *
+         * Catatan: karena proses ini berjalan via queue (ShouldQueue),
+         * setelan ini idealnya JUGA didaftarkan secara global di
+         * AppServiceProvider::boot() atau config/excel.php, karena
+         * queue worker adalah proses PHP terpisah dan baris ini
+         * (constructor) tidak ikut ter-restore saat job di-unserialize
+         * di worker. Baris di sini hanya sebagai jaring pengaman
+         * untuk proses import yang berjalan sinkron / langsung.
+         */
+        HeadingRowFormatter::default('none');
     }
 
     /**
@@ -74,7 +99,13 @@ class OrdersImport implements
         foreach ($rows as $row) {
 
             // Abaikan baris jika kolom uraian kosong
-            if (blank($row[1] ?? null)) {
+            if (blank($row['uraian'] ?? null)) {
+                continue;
+            }
+
+            // Cek apakah kolom Catatan berisi "CANCEL" (case insensitive, trim whitespace)
+            $catatan = $this->str($row['Catatan'] ?? null);
+            if ($catatan !== null && strtoupper(trim($catatan)) === 'CANCEL') {
                 continue;
             }
 
@@ -82,58 +113,65 @@ class OrdersImport implements
 
             // Untuk informasi progress
             $lastLabel = trim(
-                (string) ($row[6] ?? $row[1] ?? '')
+                (string) ($row['ITEM'] ?? $row['uraian'] ?? '')
             );
 
             $insert[] = [
-                'uraian'               => (string) $row[1],
-                'ocf_no'               => $this->str($row[2] ?? null),
-                'buyer_po'             => $this->str($row[3] ?? null),
-                'buyer'                => $this->str($row[4] ?? null),
-                'brand'                => $this->str($row[5] ?? null),
-                'style'                => $this->str($row[6] ?? null),
-                'item'                 => $this->str($row[7] ?? null),
-                'qty_ord'              => $this->num($row[8] ?? null),
-                'destination'          => $this->str($row[9] ?? null),
-                'artwork'              => $this->str($row[10] ?? null),
-                'sewing_process'       => $this->str($row[11] ?? null),
-                'production_delivery'  => $this->date($row[12] ?? null),
-                'buyer_delivery'       => $this->date($row[13] ?? null),
-                'prod_start'           => $this->date($row[14] ?? null),
-                'prod_end'             => $this->date($row[15] ?? null),
-                'shipment_mode'        => $this->str($row[16] ?? null),
-                'material_fab'         => $this->str($row[17] ?? null),
-                'fabric'               => $this->str($row[18] ?? null),
-                'sample'               => $this->str($row[19] ?? null),
-                'thread'               => $this->str($row[20] ?? null),
-                'pad_htl'              => $this->str($row[21] ?? null),
-                'main_label'           => $this->str($row[22] ?? null),
-                'care_label'           => $this->str($row[23] ?? null),
-                'button_snap'          => $this->str($row[24] ?? null),
-                'tape'                  => $this->str($row[25] ?? null),
-                'hangtag'               => $this->str($row[26] ?? null),
-                'price_ticket'          => $this->str($row[27] ?? null),
-                'size_strip'            => $this->str($row[28] ?? null),
-                'polybag'               => $this->str($row[29] ?? null),
-                'sticker'               => $this->str($row[30] ?? null),
-                'hanger'                => $this->str($row[31] ?? null),
-                'sizer'                 => $this->str($row[32] ?? null),
-                'carton_box'            => $this->str($row[33] ?? null),
-                'vessel_book'           => $this->str($row[34] ?? null),
-                'payment_terms'         => $this->str($row[35] ?? null),
-                'column17'              => $this->str($row[36] ?? null),
-                'fob'                   => $this->str($row[37] ?? null),
-                'price'                 => $this->num($row[38] ?? null),
-                'column18'              => $this->str($row[39] ?? null),
-                'column19'              => $this->str($row[40] ?? null),
-                'cmt'                   => $this->str($row[41] ?? null),
-                'price20'               => $this->str($row[42] ?? null),
-                'column21'              => $this->str($row[43] ?? null),
-                'sample2'              => $this->str($row[44] ?? null),
-                'smv'                   => $this->num($row[45] ?? null),
-                'planned_qty'          => $this->num($row[46] ?? null),
-                'sewing_start_date'    => $this->date($row[47] ?? null),
-                'remarks'              => $this->str($row[48] ?? null),
+                'uraian'               => (string) $row['uraian'],
+                'ocf_no'               => $this->str($row['OCF'] ?? null),
+                'sub_ref'              => $this->str($row['Sub Ref'] ?? null),
+                'buyer_po'             => $this->str($row['BUYER PO'] ?? null),
+                'buyer'                => $this->str($row['BUYER'] ?? null),
+                'brand'                => $this->str($row['BRAND'] ?? null),
+                'style'                => $this->str($row['STYLE'] ?? null),
+                'item'                 => $this->str($row['ITEM'] ?? null),
+                'qty_ord'              => $this->num($row['QTY ORD (PCS)'] ?? null),
+                'destination'          => $this->str($row['DESTINATION'] ?? null),
+                'artwork'              => $this->str($row['ARTWORK'] ?? null),
+                'sewing_process'       => $this->str($row['SEWING PROCESS'] ?? null),
+                'production_delivery'  => $this->date($row['PRODUCTION DELIVERY'] ?? null),
+                'buyer_delivery'       => $this->date($row['BUYER DELIVERY'] ?? null),
+                'prod_start'           => $this->date($row['PROD START'] ?? null),
+                'prod_end'             => $this->date($row['PROD END'] ?? null),
+                'shipment_mode'        => $this->str($row['SHIPMENT MODE'] ?? null),
+                'material_fab'         => $this->str($row['MATERIAL (FAB)'] ?? null),
+                'fabric'               => $this->str($row['FABRIC'] ?? null),
+                'sample'               => $this->str($row['SAMPLE'] ?? null),
+                'thread'               => $this->str($row['THREAD'] ?? null),
+                'pad_htl'              => $this->str($row['PAD / HTL'] ?? null),
+                'main_label'           => $this->str($row['MAIN LABEL'] ?? null),
+                'care_label'           => $this->str($row['CARE LABEL'] ?? null),
+                'button_snap'          => $this->str($row['BUTTON/SNAP'] ?? null),
+                'tape'                  => $this->str($row['TAPE'] ?? null),
+                'hangtag'               => $this->str($row['HANGTAG'] ?? null),
+                'price_ticket'          => $this->str($row['PRICE TICKET'] ?? null),
+                'size_strip'            => $this->str($row['SIZE STRIP'] ?? null),
+                'polybag'               => $this->str($row['POLYBAG'] ?? null),
+                'sticker'               => $this->str($row['STICKER'] ?? null),
+                'hanger'                => $this->str($row['HANGER'] ?? null),
+                'sizer'                 => $this->str($row['SIZER'] ?? null),
+                'carton_box'            => $this->str($row['CARTON BOX'] ?? null),
+                'vessel_book'           => $this->str($row['VESSEL BOOK'] ?? null),
+                'payment_terms'         => $this->str($row['Payment terms'] ?? null),
+                'column17'              => $this->str($row['Column17'] ?? null),
+                'fob'                   => $this->str($row['FOB'] ?? null),
+                'price'                 => $this->num($row['PRICE'] ?? null),
+                'column18'              => $this->str($row['Column18'] ?? null),
+                'column19'              => $this->str($row['Column19'] ?? null),
+                'cmt'                   => $this->str($row['CMT'] ?? null),
+                'price20'               => $this->str($row['PRICE20'] ?? null),
+                'column21'              => $this->str($row['Column21'] ?? null),
+                'sample2'              => $this->str($row['SAMPLE2'] ?? null),
+                'smv'                   => $this->num($row['SMV'] ?? null),
+                'planned_qty'          => $this->num($row['Planned Qty'] ?? null),
+                'sewing_start_date'    => $this->date($row['Sewing Start Date'] ?? null),
+                'remarks'              => $this->str($row['REMARKS'] ?? null),
+                'column1'              => $this->str($row['Column1'] ?? null),
+                'column2'              => $this->str($row['Column2'] ?? null),
+                'column3'              => $this->str($row['Column3'] ?? null),
+                'catatan'              => $this->str($row['Catatan'] ?? null),
+                'season'              => $this->str($row['SEASON'] ?? null),
+
 
                 'import_batch'         => $this->importBatch,
 
@@ -150,7 +188,7 @@ class OrdersImport implements
         if (!empty($insert)) {
 
             $chunkSize = SqlServerChunk::rows(
-                columnsPerRow: 51
+                columnsPerRow: 55
             );
 
             foreach (array_chunk($insert, $chunkSize) as $chunk) {

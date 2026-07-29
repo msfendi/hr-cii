@@ -51,22 +51,16 @@
                                         <option value="{{ $s }}" @selected(($filters['style'] ?? null) === $s)>{{ $s }}</option>
                                     @endforeach
                                 </select>
-                                <select id="f-ocf" class="form-control select2-filter" style="min-width:180px" data-placeholder="Cari OCF...">
-                                    <option value=""></option>
-                                    @foreach($ocfOptions as $o)
-                                        <option value="{{ $o }}" @selected(($filters['ocf'] ?? null) === $o)>{{ $o }}</option>
-                                    @endforeach
-                                </select>
-                                <select id="f-sub-ref" class="form-control select2-filter" style="min-width:180px" data-placeholder="Cari Sub Ref...">
-                                    <option value=""></option>
-                                    @foreach($subRefOptions as $sr)
-                                        <option value="{{ $sr }}" @selected(($filters['sub_ref'] ?? null) === $sr)>{{ $sr }}</option>
-                                    @endforeach
-                                </select>
                                 <select id="f-cpo" class="form-control select2-filter" style="min-width:220px" data-placeholder="Cari CPO...">
                                     <option value=""></option>
                                     @foreach($cpoOptions as $v)
                                         <option value="{{ $v }}" @selected(($filters['uraian'] ?? null) === $v)>{{ $v }}</option>
+                                    @endforeach
+                                </select>
+                                <select id="f-ocf" class="form-control select2-filter" style="min-width:180px" data-placeholder="Cari OCF...">
+                                    <option value=""></option>
+                                    @foreach($ocfOptions as $o)
+                                        <option value="{{ $o }}" @selected(($filters['ocf'] ?? null) === $o)>{{ $o }}</option>
                                     @endforeach
                                 </select>
                                 <select id="f-negara" class="form-control select2-filter" style="min-width:170px" data-placeholder="Semua Negara...">
@@ -75,15 +69,6 @@
                                         <option value="{{ $n->negara_code }}" @selected(($filters['negara'] ?? null) === $n->negara_code)>{{ $n->negara_name }}</option>
                                     @endforeach
                                 </select>
-                                {{-- Tombol reset EKSPLISIT: tidak bergantung pada ikon "x" bawaan
-                                     select2 (klik "x" terbukti tidak selalu benar-benar mengosongkan
-                                     value <select> di DOM setelah option-nya di-rebuild lewat
-                                     populateSelect()). Tombol ini memaksa kelima select ke null lewat
-                                     API resmi select2 (.val(null).trigger('change')) lalu memanggil
-                                     refresh() langsung, supaya clear filter selalu deterministik. --}}
-                                <button type="button" id="btn-reset-filter" class="btn btn-outline-light btn-sm" title="Reset semua filter">
-                                    <i class="fas fa-times"></i> Reset Filter
-                                </button>
                             </div>
                             <div class="text-white small">
                                 <div class="text-uppercase" style="opacity:.75">Last Updated</div>
@@ -130,9 +115,6 @@
                         <span id="hdr-ocf-wrap" style="display:none">
                             &nbsp;|&nbsp; OCF <span id="hdr-ocf">-</span>
                         </span>
-                        <span id="hdr-sub-ref-wrap" style="display:none">
-                            &nbsp;|&nbsp; SUB REF <span id="hdr-sub-ref">-</span>
-                        </span>
                         <span id="hdr-cpo-count-wrap" style="display:none">
                             &nbsp;|&nbsp; <span class="badge badge-light" id="hdr-cpo-count"></span>
                         </span>
@@ -146,13 +128,12 @@
                         <div class="font-weight-bold mb-1">Belum ada filter yang dipilih</div>
                         <div class="small">
                             Pilih salah satu atau kombinasi dari <strong>Buyer</strong>, <strong>Style</strong>,
-                            <strong>CPO</strong>, <strong>OCF</strong>, <strong>Sub Ref</strong>, atau <strong>Negara</strong>
-                            pada kolom di atas untuk menampilkan data dashboard. Kalau cuma Buyer dan/atau Style yang dipilih
-                            (tanpa CPO spesifik), data dari semua CPO yang cocok akan digabung. <strong>OCF</strong>,
-                            <strong>Sub Ref</strong>, dan <strong>Negara</strong> bisa dipilih sendirian (menggabungkan
-                            semua CPO yang cocok) atau dikombinasikan dengan Buyer/Style/OCF/Sub Ref/CPO untuk
-                            mempersempit hasilnya. Data tidak dimuat otomatis saat halaman dibuka karena cukup berat
-                            kalau ditarik untuk semua CPO sekaligus.
+                            <strong>CPO</strong>, <strong>OCF</strong>, atau <strong>Negara</strong> pada kolom di atas
+                            untuk menampilkan data dashboard. Kalau cuma Buyer dan/atau Style yang dipilih (tanpa CPO
+                            spesifik), data dari semua CPO yang cocok akan digabung. <strong>OCF</strong> dan
+                            <strong>Negara</strong> bisa dipilih sendirian (menggabungkan semua CPO yang cocok) atau
+                            dikombinasikan dengan Buyer/Style/CPO untuk mempersempit hasilnya. Data tidak dimuat
+                            otomatis saat halaman dibuka karena cukup berat kalau ditarik untuk semua CPO sekaligus.
                         </div>
                     </div>
                 </div>
@@ -355,7 +336,7 @@
                     </div>
 
                     <div class="col-lg-4 mb-4">
-                        {{-- ================= PLAN VS ACTUAL SHIPMENT REPORT CHART ================= --}}
+                        {{-- ================= SHIPMENT BY DATE CHART ================= --}}
                         <div class="card shadow h-100">
                             <div class="card-header py-3">
                                 <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calendar-alt mr-1"></i> SHIPMENT BY DATE</h6>
@@ -831,9 +812,8 @@
 
     const fBuyer = document.getElementById('f-buyer');
     const fStyle = document.getElementById('f-style');
-    const fOcf = document.getElementById('f-ocf');
-    const fSubRef = document.getElementById('f-sub-ref');
     const fCpo = document.getElementById('f-cpo');
+    const fOcf = document.getElementById('f-ocf');
     const fNegara = document.getElementById('f-negara');
     const emptyNotice = document.getElementById('rekon-empty-notice');
     const widgets = document.getElementById('rekon-widgets');
@@ -888,8 +868,6 @@
         $el.val(values.includes(current) ? current : '').trigger('change');
     }
 
-
-
     /**
      * Sama seperti populateSelect(), tapi untuk dropdown Negara yang
      * opsinya berupa objek {negara_code, negara_name} (bukan string polos).
@@ -903,7 +881,7 @@
     }
 
     /**
-     * Update KELIMA dropdown filter (Buyer/Style/OCF/CPO/Negara) sekaligus
+     * Update KELIMA dropdown filter (Buyer/Style/CPO/OCF/Negara) sekaligus
      * dari hasil cascade server (lihat MonitoringRekonsiliasiService::
      * cascadedFilterOptions(), dikirim oleh controller di key buyerOptions/
      * styleOptions/cpoOptions/ocfOptions/negaraOptions pada tiap response
@@ -916,9 +894,8 @@
     function applyCascadedFilterOptions(json) {
         if (Array.isArray(json.buyerOptions)) populateSelect($(fBuyer), json.buyerOptions);
         if (Array.isArray(json.styleOptions)) populateSelect($(fStyle), json.styleOptions);
-        if (Array.isArray(json.ocfOptions)) populateSelect($(fOcf), json.ocfOptions);
-        if (Array.isArray(json.subRefOptions)) populateSelect($(fSubRef), json.subRefOptions);
         if (Array.isArray(json.cpoOptions)) populateSelect($(fCpo), json.cpoOptions);
+        if (Array.isArray(json.ocfOptions)) populateSelect($(fOcf), json.ocfOptions);
         if (Array.isArray(json.negaraOptions)) populateNegaraSelect($(fNegara), json.negaraOptions);
     }
 
@@ -969,14 +946,6 @@
             ocfWrap.style.display = '';
         } else {
             ocfWrap.style.display = 'none';
-        }
-
-        const subRefWrap = document.getElementById('hdr-sub-ref-wrap');
-        if (fSubRef.value) {
-            document.getElementById('hdr-sub-ref').textContent = fSubRef.value;
-            subRefWrap.style.display = '';
-        } else {
-            subRefWrap.style.display = 'none';
         }
 
         const countWrap = document.getElementById('hdr-cpo-count-wrap');
@@ -1100,7 +1069,6 @@
         data: {
             labels,
             datasets: [
-                mk('need_pct', '#6c757d', 'NEED%'),
                 mk('order_pct', '#1f6f8b', 'ORDER%'),
                 mk('received_pct', '#e07b39', 'RECEIVED%'),
                 mk('out_prod_pct', '#44af69', 'OUT PROD%'),
@@ -1166,9 +1134,8 @@ function updateFormulaWithColors() {
     const formulaDiv = document.querySelector('.rekon-ma-formula');
     if (!formulaDiv) return;
     const items = [
-        { label: 'NEED%', desc: 'Kebutuhan (Work Order Request) -- patokan 100%', color: '#6c757d' },
-        { label: 'ORDER%', desc: 'Jumlah Order ÷ Need', color: '#1f6f8b' },
-        { label: 'RECEIVED%', desc: 'Jumlah Diterima ÷ Need', color: '#e07b39' },
+        { label: 'ORDER%', desc: 'Jumlah Order', color: '#1f6f8b' },
+        { label: 'RECEIVED%', desc: 'Jumlah Diterima ÷ Jumlah Order', color: '#e07b39' },
         { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Jumlah Diterima', color: '#44af69' },
         { label: 'STOCK%', desc: 'Saldo Gudang ÷ Jumlah Diterima', color: '#f5a623' }
     ];
@@ -1507,7 +1474,6 @@ function updateFormulaWithColors() {
         });
     }
 
-
     function renderAll(json) {
         renderHeader(json.header);
         renderKpi(json.summary);
@@ -1518,8 +1484,8 @@ function updateFormulaWithColors() {
         renderLossSteps(json.pipelineLossSteps);
         renderDetail(json.detail);
 
-        // Plan vs Actual Shipment Report
-        renderShipmentByDate(json.shipmentByDate);
+        // Shipment by Date
+        renderShipmentByDate(json.shipmentDetail);
 
         renderShipCalDetailTable(json.shipmentDetail);
 
@@ -1670,32 +1636,17 @@ function updateFormulaWithColors() {
 
     function currentFilters() {
         return {
+            uraian: fCpo.value,
             brand: fBuyer.value,
             style: fStyle.value,
-            ocf: fOcf.value,
-            sub_ref: fSubRef.value,
-            uraian: fCpo.value,
             negara: fNegara.value,
+            ocf: fOcf.value,
         };
     }
 
-    // Penjaga urutan request refresh(): tiap kali refresh() dipanggil
-    // (mis. clear 2 dropdown berturut-turut dengan cepat: OCF lalu Uraian),
-    // request AJAX sebelumnya yang masih berjalan di-ABORT dan responsnya
-    // diabaikan kalau ternyata datang belakangan -- supaya response BASI
-    // (dari kondisi filter sebelum di-clear) tidak menimpa hasil dari
-    // filter state TERBARU. Tanpa ini, dua request yang selesai tidak
-    // berurutan bisa membuat clear/cascade filter "tidak berpengaruh".
-    let refreshSeq = 0;
-    let refreshAbortController = null;
-
     function refresh() {
-        const seq = ++refreshSeq;
-        if (refreshAbortController) refreshAbortController.abort();
-        refreshAbortController = new AbortController();
-
-        const { uraian, brand, style, negara, ocf, sub_ref } = currentFilters();
-        const hasAnyFilter = !!(uraian || brand || style || negara || ocf || sub_ref);
+        const { uraian, brand, style, negara, ocf } = currentFilters();
+        const hasAnyFilter = !!(uraian || brand || style || negara || ocf);
 
         if (!hasAnyFilter) {
             if (widgets) widgets.style.display = 'none';
@@ -1716,18 +1667,14 @@ function updateFormulaWithColors() {
 
         // Fetch TETAP dijalankan meski belum ada filter sama sekali --
         // payload widget-nya kosong (lihat MonitoringRekonsiliasiController::
-        // emptyPayload()), tapi dropdown Buyer/Style/OCF/CPO/Negara tetap
+        // emptyPayload()), tapi dropdown Buyer/Style/CPO/OCF/Negara tetap
         // dikirim balik supaya kelima select bisa direset/di-cascade ulang
         // dengan benar (bolak-balik) setiap kali salah satu filter berubah,
         // termasuk saat filter dikosongkan lagi.
-        const url = buildUrl(endpoint, { uraian, brand, style, negara, ocf, sub_ref });
-        fetch(url, { signal: refreshAbortController.signal })
+        const url = buildUrl(endpoint, { uraian, brand, style, negara, ocf });
+        fetch(url)
             .then(r => r.json())
             .then(json => {
-                // Response basi (sudah ada refresh() yang lebih baru dipanggil
-                // setelah ini) -- abaikan, jangan render/populate apapun.
-                if (seq !== refreshSeq) return;
-
                 if (hasAnyFilter) {
                     renderAll(json);
                     Swal.close();
@@ -1735,15 +1682,12 @@ function updateFormulaWithColors() {
                     applyCascadedFilterOptions(json);
                 }
             })
-            .catch((err) => {
-                if (err && err.name === 'AbortError') return; // sengaja di-cancel oleh refresh() berikutnya
-                if (seq !== refreshSeq) return;
+            .catch(() => {
                 if (hasAnyFilter) {
                     Swal.close();
                     Swal.fire('Gagal', 'Tidak bisa memuat data dashboard.', 'error');
                 }
             });
-
 
         if (hasAnyFilter && calendarUrl) {
             loadShipCalendarMonth(shipCalState.year, shipCalState.month);
@@ -1868,28 +1812,9 @@ function updateFormulaWithColors() {
     // sudah tidak valid otomatis ke-clear karena tidak ada lagi di opsi baru.
     $(fBuyer).on('select2:select select2:clear', refresh);
     $(fStyle).on('select2:select select2:clear', refresh);
-    $(fOcf).on('select2:select select2:clear', refresh);
-    $(fSubRef).on('select2:select select2:clear', refresh);
     $(fCpo).on('select2:select select2:clear', refresh);
+    $(fOcf).on('select2:select select2:clear', refresh);
     $(fNegara).on('select2:select select2:clear', refresh);
-
-    /**
-     * Tombol "Reset Filter": klik ikon "x" bawaan select2 terbukti tidak
-     * selalu benar-benar mengosongkan value <select> di DOM (URL request
-     * masih membawa filter lama walau tampilan sudah terlihat ter-clear).
-     * Tombol ini memaksa kelima select ke null lewat API resmi select2
-     * (.val(null).trigger('change')) SEBELUM memanggil refresh() secara
-     * langsung -- tidak bergantung pada event select2:clear sama sekali,
-     * jadi hasilnya selalu pasti: semua dropdown balik menampilkan data
-     * penuh (unfiltered).
-     */
-    const btnResetFilter = document.getElementById('btn-reset-filter');
-    btnResetFilter?.addEventListener('click', () => {
-        [fBuyer, fStyle, fOcf, fSubRef, fCpo, fNegara].forEach(el => {
-            $(el).val(null).trigger('change');
-        });
-        refresh();
-    });
 
     if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
 

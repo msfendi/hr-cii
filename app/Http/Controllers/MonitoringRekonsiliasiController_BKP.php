@@ -17,7 +17,7 @@ class MonitoringRekonsiliasiController extends Controller
         // MonitoringRekonsiliasiService::cpoListForNegara()).
         // ocf = kode yang DIEKSTRAK dari mon_boms.code_prod, bukan nilai mentahnya
         // (lihat MonitoringRekonsiliasiService::extractOcfCode()).
-        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf', 'sub_ref']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf']);
         $service = MonitoringRekonsiliasiService::make($filters);
 
         // Kelima dropdown (Buyer/Style/CPO/OCF/Negara) di-cascade BOLAK-BALIK
@@ -43,8 +43,6 @@ class MonitoringRekonsiliasiController extends Controller
             'negaraOptions' => $filterOptions['negara'],
             // Dropdown filter OCF, sudah di-cascade sesuai Buyer/Style/CPO/Negara aktif.
             'ocfOptions'    => $filterOptions['ocf'],
-            // Dropdown filter Sub Ref, sudah di-cascade sesuai Buyer/Style/CPO/OCF/Negara aktif.
-            'subRefOptions' => $filterOptions['sub_ref'],
         ]);
     }
 
@@ -63,7 +61,7 @@ class MonitoringRekonsiliasiController extends Controller
         // ocf = filter tambahan/berdiri sendiri berdasarkan kode OCF hasil
         // ekstraksi dari mon_boms.code_prod -- boleh dipakai sendirian atau
         // dikombinasikan dengan Buyer/Style/CPO/Negara (di-intersect).
-        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf', 'sub_ref']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf']);
         $service = MonitoringRekonsiliasiService::make($filters);
 
         // Kelima dropdown (Buyer/Style/CPO(Uraian)/OCF/Negara) di-cascade
@@ -82,7 +80,7 @@ class MonitoringRekonsiliasiController extends Controller
         // langsung render pilihan awal); dashboard baru menarik data
         // sesungguhnya setelah user memilih minimal satu dari Buyer / Style /
         // CPO / Negara / OCF.
-        if (empty($filters['uraian']) && empty($filters['brand']) && empty($filters['style']) && empty($filters['negara']) && empty($filters['ocf']) && empty($filters['sub_ref'])) {
+        if (empty($filters['uraian']) && empty($filters['brand']) && empty($filters['style']) && empty($filters['negara']) && empty($filters['ocf'])) {
             return response()->json($this->emptyPayload($filterOptions));
         }
 
@@ -100,22 +98,20 @@ class MonitoringRekonsiliasiController extends Controller
             // 'topMaterialExcess'    => $service->topMaterialExcess(),
             'detail'               => $service->detail(),
             'shipmentByDate'       => $service->shipmentByDate(),
-            'shipmentPlanVsActual' => $service->shipmentPlanVsActual(),
             'shipmentDetail'       => $service->shipmentDetail(),
             'pipelineLossSteps'    => $service->pipelineLossSteps(),
             'shipmentByCategory'   => $service->shipmentByCategory(),
-            // Dropdown Buyer/Style/CPO(Uraian)/OCF/Sub Ref/Negara, sudah
-            // di-cascade dua arah mengikuti filter yang sedang aktif.
-            // `ocfOptions`/`subRefOptions` dipertahankan sebagai key
-            // terpisah (selain di dalam `filterOptions`) supaya kompatibel
-            // dengan frontend lama yang sudah membaca key ini.
+            // Dropdown Buyer/Style/CPO(Uraian)/OCF/Negara, sudah di-cascade
+            // dua arah mengikuti filter yang sedang aktif. `ocfOptions`
+            // dipertahankan sebagai key terpisah (selain di dalam
+            // `filterOptions`) supaya kompatibel dengan frontend lama yang
+            // sudah membaca key ini.
             'filterOptions'        => $filterOptions,
             'buyerOptions'         => $filterOptions['buyer'],
             'styleOptions'         => $filterOptions['style'],
             'cpoOptions'           => $filterOptions['uraian'],
             'negaraOptions'        => $filterOptions['negara'],
             'ocfOptions'           => $filterOptions['ocf'],
-            'subRefOptions'        => $filterOptions['sub_ref'],
         ]);
     }
 
@@ -126,7 +122,7 @@ class MonitoringRekonsiliasiController extends Controller
      */
     public function calendar(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf', 'sub_ref']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf']);
         $year  = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
 
@@ -146,7 +142,7 @@ class MonitoringRekonsiliasiController extends Controller
      */
     public function calendarDetail(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf', 'sub_ref']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf']);
         $date = $request->input('date');
 
         if (!$date) {
@@ -168,7 +164,7 @@ class MonitoringRekonsiliasiController extends Controller
      */
     private function emptyPayload(array $filterOptions = []): array
     {
-        $filterOptions += ['buyer' => [], 'style' => [], 'uraian' => [], 'ocf' => [], 'sub_ref' => [], 'negara' => []];
+        $filterOptions += ['buyer' => [], 'style' => [], 'uraian' => [], 'ocf' => [], 'negara' => []];
 
         return [
             'empty'                => true,
@@ -195,20 +191,18 @@ class MonitoringRekonsiliasiController extends Controller
             'topMaterialExcess'    => [],
             'detail'               => [],
             'shipmentByDate'       => [],
-            'shipmentPlanVsActual' => ['mode' => 'date', 'labels' => [], 'subRefs' => [], 'plan' => [], 'actual' => []],
             'shipmentDetail'       => [],
             'pipelineLossSteps'    => [],
             'shipmentByCategory'   => [],
             // Dropdown tetap dikirim meski widget lain kosong, supaya
-            // Buyer/Style/CPO/OCF/Sub Ref/Negara tetap ter-render dengan
-            // cascade yang benar walau belum ada filter yang match apapun.
+            // Buyer/Style/CPO/OCF/Negara tetap ter-render dengan cascade
+            // yang benar walau belum ada filter yang match apapun.
             'filterOptions'        => $filterOptions,
             'buyerOptions'         => $filterOptions['buyer'],
             'styleOptions'         => $filterOptions['style'],
             'cpoOptions'           => $filterOptions['uraian'],
             'negaraOptions'        => $filterOptions['negara'],
             'ocfOptions'           => $filterOptions['ocf'],
-            'subRefOptions'        => $filterOptions['sub_ref'],
         ];
     }
 
@@ -343,7 +337,7 @@ class MonitoringRekonsiliasiController extends Controller
      */
     public function filterOptions(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf', 'sub_ref']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf']);
         $service = MonitoringRekonsiliasiService::make($filters);
 
         return response()->json($service->cascadedFilterOptions());
@@ -351,7 +345,7 @@ class MonitoringRekonsiliasiController extends Controller
 
     public function negaraOptions(Request $request)
     {
-        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf', 'sub_ref']);
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf']);
         $service = MonitoringRekonsiliasiService::make($filters);
         $options = $service->filteredNegaraOptions($filters);
 
