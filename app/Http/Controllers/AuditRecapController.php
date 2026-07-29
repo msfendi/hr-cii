@@ -133,7 +133,7 @@ class AuditRecapController extends Controller
         $employees = $employeesChutex->orderBy('AUDIT.SUBDIVISI', 'ASC')->orderBy('AUDIT.NPK', 'ASC')->orderBy('AUDIT.TANGGAL', 'ASC')->get();
 
         $days = $request->days;
-        return view('template.report-final', compact('employees', 'employeeGroup', 'days'));
+        return view('template.report-final-generate', compact('employees', 'employeeGroup', 'days'));
     }
 
     /**
@@ -197,7 +197,7 @@ class AuditRecapController extends Controller
 
         $days = $request->days;
 
-        $pdf = Pdf::loadView('template.report-final', compact('employees', 'employeeGroup', 'days'))
+        $pdf = Pdf::loadView('template.report-final-generate', compact('employees', 'employeeGroup', 'days'))
             ->setPaper('a4', 'landscape');
 
         $filename = 'laporan-kehadiran-' . $deptGroup . '-' . $request->fromdate . '-' . $request->todate . '.pdf';
