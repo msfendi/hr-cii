@@ -39,16 +39,23 @@ use Illuminate\Support\Facades\DB;
  * dekat ke jam akhir shift daripada jam mulai shift), karena resolveJamPagi()
  * akan menolak scan seperti itu sebagai kandidat jam masuk (lihat method
  * tsb untuk detail):
- * - Kalau JUMLAH_JAM_LEMBUR di overtimes KOSONG/tidak ada row (type='none')
- *   DAN tidak ada scan/izin sama sekali:
- *   - Kalau hari itu WEEKEND atau terdaftar di tabel holidays -> dianggap
- *     hari LIBUR. STATUS = 'LBR', JAM_PAGI & JAM_SIANG TIDAK digenerate
- *     (tetap null).
- *   - Kalau hari kerja biasa (bukan weekend & bukan holiday) -> jam TETAP
- *     digenerate mengikuti jam shift (estimasi): JAM_PAGI = jam mulai shift
- *     dikurangi random 0-15 menit, JAM_SIANG = jam akhir shift ditambah
- *     random 0-10 menit. STATUS = 'TS' (Tidak Scan) sebagai penanda audit
- *     bahwa jam ini hasil estimasi, bukan dari scan/izin asli.
+ * - Kalau JUMLAH_JAM_LEMBUR di overtimes KOSONG/tidak ada row (type='none'):
+ *   - Kalau hari itu WEEKEND atau terdaftar di tabel holidays -> LANGSUNG
+ *     dianggap hari LIBUR (STATUS='LBR', JAM_PAGI & JAM_SIANG null) TANPA
+ *     sempat cek att_log/employee_lates sama sekali. Ini SENGAJA dicek
+ *     duluan sebelum resolve scan, karena scan yang ketemu di hari libur
+ *     bisa jadi cuma checkout shift MALAM hari sebelumnya yang "nyasar" ke
+ *     tanggal ini (misal shift malam Jumat checkout jam 03:xx dinihari
+ *     Sabtu) -- bukan jam masuk asli untuk hari Sabtu itu.
+ *   - Kalau hari kerja biasa (bukan weekend & bukan holiday):
+ *     - Ada scan/izin asli -> hadir normal, JAM_PAGI dari
+ *       normalizeArrival() (lihat aturan di bawah), JAM_SIANG = jam akhir
+ *       shift + jitter(0-10 menit), STATUS = null.
+ *     - Tidak ada scan/izin sama sekali -> jam TETAP digenerate mengikuti
+ *       jam shift (estimasi): JAM_PAGI = jam mulai shift dikurangi random
+ *       0-15 menit, JAM_SIANG = jam akhir shift ditambah random 0-10 menit.
+ *       STATUS = 'TS' (Tidak Scan) sebagai penanda audit bahwa jam ini
+ *       hasil estimasi, bukan dari scan/izin asli.
  * - Kalau JUMLAH_JAM_LEMBUR ADA (numeric/lembur, atau kode 'H'/setengah-hari)
  *   tapi tidak ada scan/izin sama sekali -> JAM_PAGI TETAP diestimasi dari
  *   jam mulai shift dikurangi random 0-15 menit (jadi karyawan "datang"
@@ -57,6 +64,17 @@ use Illuminate\Support\Facades\DB;
  *   Ini berlaku juga di hari weekend/libur -- karena data overtimes sudah
  *   mengonfirmasi karyawan tsb memang masuk hari itu. STATUS TIDAK jadi
  *   'TS' di kasus ini karena kehadiran sudah dikonfirmasi lewat overtimes.
+ *
+ * ATURAN NORMALISASI JAM MASUK ASLI (normalizeArrival()):
+ * - Scan/izin asli yang dipakai sebagai JAM_PAGI (baik di kasus 'none' hadir
+ *   normal maupun numeric/half_day) TIDAK selalu dipakai apa adanya. Kalau
+ *   scan itu LEBIH CEPAT dari jam mulai shift (berapa pun jauhnya -- misal
+ *   shift 18:30 tapi scan ketemu jam 17:30), scan tsb diganti dengan
+ *   estimasi "jam_mulai_shift dikurangi random 0-15 menit", BUKAN dipakai
+ *   apa adanya. Ini mencegah jam masuk yang janggal (misal sisa scan shift
+ *   sebelumnya, atau device error) muncul di rekap. Scan yang SAMA DENGAN
+ *   atau LEBIH LAMBAT dari jam mulai shift (termasuk yang telat) tetap
+ *   dipakai apa adanya, tidak diubah.
  *
  * ATURAN LEMBUR DI HARI LIBUR (weekend/holiday), type='numeric':
  * - JAM_SIANG dihitung dari AWAL shift (bukan akhir shift seperti hari kerja
@@ -226,27 +244,35 @@ class AuditRecapService
             $status   = $value;
         } elseif ($type === 'none') {
             // Tidak ada JUMLAH_JAM_LEMBUR sama sekali di overtimes.
-            $realJamPagi = $this->resolveJamPagi($npk, $dateKey, $shift, $lateMap, $scanMap);
-
-            if ($realJamPagi !== null) {
-                // Ada scan asli / izin terlambat -> hadir normal, jam dihitung seperti biasa.
-                $jamPagi  = $this->toHHMM($realJamPagi);
-                $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
-                $status   = null;
-            } elseif ($isDayOff) {
-                // Weekend/holiday & tidak ada scan & tidak ada data lembur -> hari libur,
-                // tidak perlu digenerate jamnya sama sekali.
+            if ($isDayOff) {
+                // Weekend/holiday & TIDAK ADA data overtime sama sekali -> LIBUR,
+                // TIDAK PEDULI ada/tidaknya scan att_log yang ketemu di tanggal ini.
+                // PENTING: kalau di sini kita masih resolve scan seperti biasa, scan
+                // yang ketemu bisa jadi cuma "nyasar" dari checkout shift MALAM hari
+                // sebelumnya (misal shift malam Jumat yang baru checkout jam 03:xx
+                // dinihari Sabtu) -- itu bukan jam masuk asli untuk hari Sabtu ini.
+                // Jadi begitu isDayOff + tidak ada overtime, langsung LBR tanpa
+                // sempat cek att_log sama sekali.
                 $jamPagi  = null;
                 $jamSiang = null;
                 $status   = 'LBR';
             } else {
-                // Hari kerja biasa (bukan weekend/holiday), tidak ada scan & tidak ada data
-                // lembur -> tetap digenerate mengikuti jam shift-nya (estimasi), sama seperti
-                // kasus numeric/half_day. STATUS tetap ditandai 'TS' sebagai jejak audit bahwa
-                // jam ini hasil estimasi, bukan dari scan/izin asli.
-                $jamPagi  = $this->addMinutesToTime($shift['work_start'], -$this->tsJitter());
-                $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
-                $status   = 'TS';
+                $realJamPagi = $this->resolveJamPagi($npk, $dateKey, $shift, $lateMap, $scanMap);
+
+                if ($realJamPagi !== null) {
+                    // Ada scan asli / izin terlambat -> hadir normal, jam dihitung seperti biasa.
+                    $jamPagi  = $this->normalizeArrival($realJamPagi, $shift['work_start']);
+                    $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
+                    $status   = null;
+                } else {
+                    // Hari kerja biasa, tidak ada scan & tidak ada data lembur -> tetap
+                    // digenerate mengikuti jam shift-nya (estimasi), sama seperti kasus
+                    // numeric/half_day. STATUS tetap ditandai 'TS' sebagai jejak audit
+                    // bahwa jam ini hasil estimasi, bukan dari scan/izin asli.
+                    $jamPagi  = $this->addMinutesToTime($shift['work_start'], -$this->tsJitter());
+                    $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
+                    $status   = 'TS';
+                }
             }
         } else {
             // numeric (lembur) atau half_day ("H") -> ada data lembur/setengah-hari,
@@ -254,7 +280,7 @@ class AuditRecapService
             $realJamPagi = $this->resolveJamPagi($npk, $dateKey, $shift, $lateMap, $scanMap);
 
             if ($realJamPagi !== null) {
-                $jamPagi = $this->toHHMM($realJamPagi);
+                $jamPagi = $this->normalizeArrival($realJamPagi, $shift['work_start']);
             } else {
                 // Tidak ada scan/izin asli, tapi overtimes sudah konfirmasi hadir -> estimasi
                 // JAM_PAGI dari jam mulai shift dikurangi random 0-15 menit (tidak pernah "telat").
@@ -600,7 +626,7 @@ class AuditRecapService
         ", [$start->format('Y-m-d'), $end->format('Y-m-d')]);
 
         return array_map(
-            fn ($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
+            fn($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
             $rows
         );
     }
@@ -679,5 +705,25 @@ class AuditRecapService
     protected function tsJitter(): int
     {
         return random_int(self::TS_JITTER_MIN_MINUTES, self::TS_JITTER_MAX_MINUTES);
+    }
+
+    /**
+     * Normalisasi jam masuk ASLI (dari scan att_log / employee_lates) sebelum
+     * dipakai sebagai JAM_PAGI. Kalau scan itu LEBIH CEPAT dari jam mulai
+     * shift (berapa pun jauhnya), jangan dipakai apa adanya -- gantikan
+     * dengan estimasi "jam_mulai_shift dikurangi random 0-15 menit", sama
+     * seperti formula estimasi TS. Ini menangani kasus seperti scan yang
+     * jauh lebih pagi dari jadwal shift (misal shift 18:30 tapi ketemu scan
+     * jam 17:30 -- kemungkinan besar bukan scan masuk yang valid untuk shift
+     * itu). Scan yang SAMA DENGAN atau LEBIH LAMBAT dari jam mulai shift
+     * (termasuk yang telat) tetap dipakai apa adanya, tidak diutak-atik.
+     */
+    protected function normalizeArrival(string $scanTime, string $shiftStart): string
+    {
+        if ($this->timeToMinutes($scanTime) < $this->timeToMinutes($shiftStart)) {
+            return $this->addMinutesToTime($shiftStart, -$this->tsJitter());
+        }
+
+        return $this->toHHMM($scanTime);
     }
 }
