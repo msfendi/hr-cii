@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('position');
             $table->string('dept');
             $table->boolean('is_aktif')->default(true);
+            $table->boolean('is_staff')->default(false);
             $table->timestamps();
         });
     }

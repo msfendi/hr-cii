@@ -402,16 +402,18 @@ class MonitoringRekonsiliasiService
     {
         $query = DB::table('mon_shipments');
         if ($this->hasAnyFilterInput()) {
-            // Sama seperti orderQuery(): whereIn uraian di sini HANYA dari
-            // Buyer/Style/CPO/OCF, BUKAN dari Negara. Kalau Negara ikut
-            // dipakai buat mempersempit uraian (lewat cpoListForNegara(),
-            // yang basisnya mon_orders.destination), shipment dari CPO yang
-            // `destination` order-nya kebetulan tidak menyebut negara itu
-            // (meski `spesifikasi` shipment-nya sendiri cocok) akan
-            // ke-exclude duluan oleh whereIn ini -- sebelum sempat dicek
-            // applyNegaraScopeToShipment() di bawah. Makanya negara
-            // diserahkan sepenuhnya ke filter `spesifikasi` langsung.
-            $core = $this->filterUraianListExcludingNegara();
+            // FIX: OCF/Sub Ref TIDAK ikut dipakai untuk menyaring di level
+            // `uraian` di sini (beda dengan sebelumnya yang lewat
+            // filterUraianListExcludingNegara() -> cpoListForOcf()/
+            // cpoListForSubRef()). mon_shipments TIDAK punya kolom
+            // ocf_no/sub_ref asli seperti mon_orders -- kebenaran "baris ini
+            // OCF/Sub Ref apa" murni dari teks bebas `no_ps` (dicek presisi
+            // lewat applyOcfSubRefScopeToShipment() di bawah). Menyaring dulu
+            // via uraian hasil cpoListForOcf() membuat SEMUA shipment di
+            // bawah CPO yang sama ikut ke-include (termasuk OCF/sub_ref lain
+            // yang beda), sehingga total jadi lebih besar dari seharusnya.
+            // Narrowing OCF/Sub Ref diserahkan sepenuhnya ke match `no_ps`.
+            $core = $this->cpoListExcluding(['negara', 'ocf', 'sub_ref']);
             if ($core !== null) {
                 $query->whereIn('uraian', $core);
             }
@@ -419,7 +421,42 @@ class MonitoringRekonsiliasiService
         // Step Shipment di-scope LANGSUNG ke baris mon_shipments yang
         // `spesifikasi`-nya cocok dengan negara terpilih.
         $this->applyNegaraScopeToShipment($query);
+        // Step Shipment juga di-scope LANGSUNG ke baris mon_shipments yang
+        // `no_ps`-nya cocok dengan OCF/Sub Ref terpilih (kalau ada).
+        $this->applyOcfSubRefScopeToShipment($query);
         return $query;
+    }
+
+    /**
+     * Scope query mon_shipments langsung ke baris yang `no_ps`-nya
+     * menyebut OCF/Sub Ref terpilih (kolom teks bebas, formatnya TIDAK
+     * konsisten -- lihat contoh di komentar shipmentPlanVsActualBySubRef()
+     * / extractSubRefsFromNoPs(), mis. "OCF 266C0051 - A4 /...",
+     * "OCF 266C0051 - B4 OL/...", "OCF 266C0051 - B/..."). Dipakai
+     * shipmentQuery() supaya semua widget berbasis shipment (Shipment Qty,
+     * Shipment By Date, Pivot Shipment, Shipment Detail, Shipment Calendar,
+     * dst) presisi per baris shipment terhadap OCF/Sub Ref yang dipilih,
+     * bukan cuma "per CPO yang kebetulan match" lewat cpoListForOcf()/
+     * cpoListForSubRef() yang sudah kehilangan info OCF/sub_ref per barisnya.
+     */
+    private function applyOcfSubRefScopeToShipment($query): void
+    {
+        $ocf    = trim((string) ($this->filters['ocf'] ?? ''));
+        $subRef = trim((string) ($this->filters['sub_ref'] ?? ''));
+
+        if ($ocf === '' && $subRef === '') {
+            return;
+        }
+
+        $query->whereNotNull('no_ps');
+
+        if ($ocf !== '') {
+            $query->whereRaw('UPPER(no_ps) LIKE ?', ['%' . strtoupper($ocf) . '%']);
+        }
+
+        if ($subRef !== '') {
+            $query->whereRaw('UPPER(no_ps) LIKE ?', ['%' . strtoupper($subRef) . '%']);
+        }
     }
 
     /**

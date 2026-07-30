@@ -50,6 +50,13 @@ class RecruitmentFormController extends Controller
         'scan_blanko_kesehatan' => 'Scan Blanko Kesehatan',
     ];
 
+    /**
+     * Batas maksimal berapa kali satu NIK boleh tercatat mengajukan
+     * lamaran (dihitung dari jumlah baris di tabel PELAMAR). Lebih dari
+     * atau sama dengan batas ini → pengajuan lamaran baru ditolak.
+     */
+    private const MAX_LAMARAN_PER_NIK = 2;
+
     /*
     |--------------------------------------------------------------------------
     | GET  /recruitments_form/step/{step}
@@ -100,6 +107,17 @@ class RecruitmentFormController extends Controller
             return $this->saveDraftAndGoBack($request, $step);
         }
 
+        // Step 8 — final submit: cek batas maksimal pengajuan lamaran
+        // berdasarkan NIK SEBELUM precheck file / validasi / upload / insert
+        // DB dijalankan. Ditaruh paling awal supaya pelamar yang memang
+        // sudah kena limit tidak perlu menunggu proses upload semua
+        // dokumen dulu baru tahu lamarannya ditolak.
+        if ($step === 8 && $this->isNikOverLamaranLimit()) {
+            return redirect()
+                ->route('recruitments.step', ['step' => 8])
+                ->with('nik_rejected', true);
+        }
+
         try {
             // Step 8: cek kesehatan file SEBELUM masuk ke rule Laravel biasa,
             // supaya pesan error untuk kasus "file dari Google Drive / OneDrive
@@ -147,6 +165,33 @@ class RecruitmentFormController extends Controller
         Session::put($this->steps[$step]['session'], $mergedData);
 
         return redirect()->route('recruitments.step', ['step' => $step - 1]);
+    }
+
+    /**
+     * Cek apakah NIK pelamar (diambil dari data step 1 yang sudah tersimpan
+     * di session) sudah mencapai/melewati batas maksimal pengajuan lamaran
+     * (MAX_LAMARAN_PER_NIK), dihitung dari jumlah baris di tabel PELAMAR
+     * (koneksi cii) yang punya NIK sama.
+     *
+     * Kalau NIK belum tersedia di session (mis. session sudah expired /
+     * user langsung POST ke step 8), anggap tidak kena limit — validasi
+     * rules() step 1 & alur skip-step di show() yang akan menangani kasus
+     * data belum lengkap.
+     */
+    private function isNikOverLamaranLimit(): bool
+    {
+        $step1 = Session::get('reg_step1', []);
+        $nik   = $step1['nik'] ?? null;
+
+        if (empty($nik)) {
+            return false;
+        }
+
+        $jumlahLamaran = DB::connection('cii')->table('PELAMAR')
+            ->where('NIK', $nik)
+            ->count();
+
+        return $jumlahLamaran >= self::MAX_LAMARAN_PER_NIK;
     }
 
     /*
@@ -334,6 +379,8 @@ class RecruitmentFormController extends Controller
         if (! $pendidikanTerakhir) {
             $pendidikanTerakhir = $step1['pendidikan'] ?? null;
         }
+
+        // 
 
         // ── Insert ke tabel PELAMAR (koneksi cii) ───────────────────────────
         try {
