@@ -131,8 +131,7 @@
 $(document).ready(function(){
 
     $('#dataTable').DataTable({
-        order: [[1,'desc']], // urut berdasarkan tanggal terbaru
-        pageLength: 30,
+        pageLength: 10,
         responsive: true,
         autoWidth: false
     });

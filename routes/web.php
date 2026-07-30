@@ -1094,6 +1094,7 @@ Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permissio
     Route::get('dashboard/calendar-detail', [MonitoringDashboardController::class, 'calendarDetail'])->name('dashboard.calendar.detail');
 
     Route::get('/rekonsiliasi', [MonitoringRekonsiliasiController::class, 'index'])->name('rekonsiliasi');
+    Route::get('/rekonsiliasiocf', [MonitoringRekonsiliasiController::class, 'indexocf'])->name('rekonsiliasiocf');
     Route::get('/rekonsiliasi/data', [MonitoringRekonsiliasiController::class, 'data'])->name('rekonsiliasi.data');
     Route::post('/rekonsiliasi/sync', [MonitoringRekonsiliasiController::class, 'syncRekonsiliasi'])->name('rekonsiliasi.sync');
     Route::post('/rekonsiliasi/sync-prod-line', [MonitoringRekonsiliasiController::class, 'syncProdLine'])->name('rekonsiliasi.sync-prod-line');

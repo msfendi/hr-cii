@@ -48,6 +48,45 @@ class MonitoringRekonsiliasiController extends Controller
         ]);
     }
 
+    public function indexocf(Request $request)
+    {
+        // uraian = CPO spesifik; brand/style dipakai untuk search tanpa harus
+        // memilih 1 CPO (lihat MonitoringRekonsiliasiService::filterUraianList()).
+        // negara = filter tambahan berdasarkan negara supplier shipment (lihat
+        // MonitoringRekonsiliasiService::cpoListForNegara()).
+        // ocf = kode yang DIEKSTRAK dari mon_boms.code_prod, bukan nilai mentahnya
+        // (lihat MonitoringRekonsiliasiService::extractOcfCode()).
+        $filters = $request->only(['uraian', 'brand', 'style', 'negara', 'ocf', 'sub_ref']);
+        $service = MonitoringRekonsiliasiService::make($filters);
+
+        // Kelima dropdown (Buyer/Style/CPO/OCF/Negara) di-cascade BOLAK-BALIK
+        // dari filter yang aktif saat halaman dibuka (lihat
+        // MonitoringRekonsiliasiService::cascadedFilterOptions()) -- kalau
+        // request index() ini datang dengan query filter (mis. dari link
+        // share/bookmark), dropdown lain langsung ikut menyaring sejak awal,
+        // bukan cuma nanti setelah user ganti pilihan.
+        $filterOptions = $service->cascadedFilterOptions();
+
+        return view('monitoring.rekonsiliasi_ocf', [
+            'filters'       => $filters,
+            'cpoOptions'    => $filterOptions['uraian'],
+            'buyerOptions'  => $filterOptions['buyer'],
+            'styleOptions'  => $filterOptions['style'],
+            // Kombinasi Buyer (brand) / Style / CPO (uraian) dari mon_orders
+            // TANPA di-scope apapun -- tetap disediakan kalau frontend masih
+            // butuh daftar lengkap awal (mis. autocomplete/search di client).
+            // Untuk cascade dua arah yang sesungguhnya, pakai buyerOptions/
+            // styleOptions/cpoOptions/ocfOptions/negaraOptions di atas & bawah.
+            'filterOptions' => $service->orderFilterOptions(),
+            // Dropdown filter Negara, sudah di-cascade sesuai Buyer/Style/CPO/OCF aktif.
+            'negaraOptions' => $filterOptions['negara'],
+            // Dropdown filter OCF, sudah di-cascade sesuai Buyer/Style/CPO/Negara aktif.
+            'ocfOptions'    => $filterOptions['ocf'],
+            // Dropdown filter Sub Ref, sudah di-cascade sesuai Buyer/Style/CPO/OCF/Negara aktif.
+            'subRefOptions' => $filterOptions['sub_ref'],
+        ]);
+    }
+
     /**
      * Endpoint AJAX tunggal yang mengisi SELURUH widget dashboard (KPI,
      * material achievement, production result, top excess, detail) --

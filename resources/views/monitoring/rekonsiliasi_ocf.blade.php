@@ -63,12 +63,12 @@
                                         <option value="{{ $sr }}" @selected(($filters['sub_ref'] ?? null) === $sr)>{{ $sr }}</option>
                                     @endforeach
                                 </select>
-                                <select id="f-cpo" class="form-control select2-filter" style="min-width:220px" data-placeholder="Cari CPO...">
+                                <!-- <select id="f-cpo" class="form-control select2-filter" style="min-width:220px" data-placeholder="Cari CPO...">
                                     <option value=""></option>
                                     @foreach($cpoOptions as $v)
                                         <option value="{{ $v }}" @selected(($filters['uraian'] ?? null) === $v)>{{ $v }}</option>
                                     @endforeach
-                                </select>
+                                </select> -->
                                 <select id="f-negara" class="form-control select2-filter" style="min-width:170px" data-placeholder="Semua Negara...">
                                     <option value=""></option>
                                     @foreach($negaraOptions as $n)
@@ -833,7 +833,7 @@
     const fStyle = document.getElementById('f-style');
     const fOcf = document.getElementById('f-ocf');
     const fSubRef = document.getElementById('f-sub-ref');
-    const fCpo = document.getElementById('f-cpo');
+    // const fCpo = document.getElementById('f-cpo');
     const fNegara = document.getElementById('f-negara');
     const emptyNotice = document.getElementById('rekon-empty-notice');
     const widgets = document.getElementById('rekon-widgets');
@@ -918,7 +918,7 @@
         if (Array.isArray(json.styleOptions)) populateSelect($(fStyle), json.styleOptions);
         if (Array.isArray(json.ocfOptions)) populateSelect($(fOcf), json.ocfOptions);
         if (Array.isArray(json.subRefOptions)) populateSelect($(fSubRef), json.subRefOptions);
-        if (Array.isArray(json.cpoOptions)) populateSelect($(fCpo), json.cpoOptions);
+        // if (Array.isArray(json.cpoOptions)) populateSelect($(fCpo), json.cpoOptions);
         if (Array.isArray(json.negaraOptions)) populateNegaraSelect($(fNegara), json.negaraOptions);
     }
 
@@ -1695,7 +1695,7 @@ function updateFormulaWithColors() {
             style: fStyle.value,
             ocf: fOcf.value,
             sub_ref: fSubRef.value,
-            uraian: fCpo.value,
+            // uraian: fCpo.value,
             negara: fNegara.value,
         };
     }
@@ -1891,7 +1891,7 @@ function updateFormulaWithColors() {
     $(fStyle).on('select2:select select2:clear', refresh);
     $(fOcf).on('select2:select select2:clear', refresh);
     $(fSubRef).on('select2:select select2:clear', refresh);
-    $(fCpo).on('select2:select select2:clear', refresh);
+    // $(fCpo).on('select2:select select2:clear', refresh);
     $(fNegara).on('select2:select select2:clear', refresh);
 
     /**
@@ -1906,7 +1906,7 @@ function updateFormulaWithColors() {
      */
     const btnResetFilter = document.getElementById('btn-reset-filter');
     btnResetFilter?.addEventListener('click', () => {
-        [fBuyer, fStyle, fOcf, fSubRef, fCpo, fNegara].forEach(el => {
+        [fBuyer, fStyle, fOcf, fSubRef, fNegara].forEach(el => {
             $(el).val(null).trigger('change');
         });
         refresh();

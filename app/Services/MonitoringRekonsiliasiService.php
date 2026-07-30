@@ -257,10 +257,22 @@ class MonitoringRekonsiliasiService
             return null;
         }
 
-        // Persempit kandidat baris dulu ke CPO yang relevan (hasil resolve
-        // OCF/Sub Ref -> CPO seperti biasa lewat filterUraianList()), supaya
-        // tidak perlu scan seluruh tabel mon_rekonsiliasis.
-        $cpoScope = $this->filterUraianList();
+        // Persempit kandidat baris dulu HANYA berdasarkan Buyer/Style/CPO/
+        // Negara yang aktif (bukan OCF/Sub Ref itu sendiri) -- supaya tidak
+        // perlu scan seluruh tabel mon_rekonsiliasis.
+        //
+        // FIX: sebelumnya pakai filterUraianList() yang ikut meng-intersect
+        // lewat mon_orders.ocf_no (cpoListForOcf()). mon_rekonsiliasis TIDAK
+        // punya kolom ocf_no sendiri -- kebenaran "baris ini OCF apa" murni
+        // dari teks `spesifikasi` (dicek presisi lewat
+        // specifikasiMatchesOcfSubRef() di bawah). Kalau ada baris yang
+        // `spesifikasi`-nya jelas menyebut OCF terpilih tapi CPO-nya
+        // kebetulan tidak tercatat/tidak sinkron di mon_orders.ocf_no,
+        // baris itu ke-drop duluan di sini sebelum sempat dicek regex-nya,
+        // membuat total (mis. Fabric Usage total_out_req) jadi lebih kecil
+        // dari seharusnya. Narrowing OCF/Sub Ref cukup diserahkan sepenuhnya
+        // ke regex match, bukan dobel-difilter lewat mon_orders juga.
+        $cpoScope = $this->cpoListExcluding(['ocf', 'sub_ref']);
         if ($cpoScope !== null && empty($cpoScope)) {
             return [];
         }
@@ -313,6 +325,7 @@ class MonitoringRekonsiliasiService
     private function specifikasiMatchesOcfSubRef(string $spesifikasi, string $ocf, string $subRef): bool
     {
         if (!preg_match_all('/OCF\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
+            // if (!preg_match_all('/\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
             return false;
         }
 
@@ -815,6 +828,7 @@ class MonitoringRekonsiliasiService
         $useForGmt = $totalOutReq - $scrapQty;
 
         return [
+            'total_out_req' => $totalOutReq,
             'use_for_gmt' => $useForGmt,
             'scrap_qty'   => $scrapQty,
             'usage_pct'   => $totalOutReq > 0 ? round($useForGmt / $totalOutReq * 100) : 0,
@@ -1014,6 +1028,7 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
             ->selectRaw('SUM(out_req) as out_req')
             ->selectRaw('SUM(saldo_gudang) as saldo_gudang')
+            ->selectRaw('SUM(harga_total) as harga_total')
             ->groupBy('barang_code', 'barang_name')
             ->orderBy('barang_name')
             ->get();
@@ -1053,6 +1068,10 @@ class MonitoringRekonsiliasiService
                 'barang_name'     => $r->barang_name,
                 'barang_category' => $categoryByCode[$r->barang_code] ?? null,
                 'material_group'  => $this->materialAchievementGroup($categoryByCode[$r->barang_code] ?? null),
+                // Total harga (mon_rekonsiliasis.harga_total, di-SUM per
+                // barang_code) -- dipakai frontend untuk ditampilkan di
+                // tooltip chart Material/Fabric Achievement saat di-hover.
+                'harga_total'     => (float) ($r->harga_total ?? 0),
                 // NEED% jadi baseline/patokan (selalu 100% kalau NEED > 0),
                 // ORDER% & RECEIVED% sekarang dihitung terhadap NEED (bukan
                 // lagi terhadap ORDER itu sendiri) -- lihat instruksi
@@ -1296,7 +1315,8 @@ class MonitoringRekonsiliasiService
         $ocf = trim((string) ($this->filters['ocf'] ?? ''));
         if ($ocf !== '') {
             $query->whereNotNull('code_prod')
-                ->whereRaw('UPPER(code_prod) LIKE ?', ['%OCF ' . strtoupper($ocf) . '-%']);
+                // ->whereRaw('UPPER(code_prod) LIKE ?', ['%OCF ' . strtoupper($ocf) . '-%']);
+                ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%']);
         }
 
         // Filter Sub Ref: code_prod harus mengandung "-{sub_ref}" yang
