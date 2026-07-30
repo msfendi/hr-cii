@@ -29,6 +29,28 @@ use Illuminate\Support\Collection;
  *    SEMUA kode uraian (CPO) yang cocok lewat mon_orders, lalu semua widget
  *    di-scope pakai whereIn() ke daftar uraian tersebut (bisa lebih dari 1
  *    CPO sekaligus, datanya digabung/agregat).
+ *
+ * SIMPLIFIKASI FILTER OCF/SUB_REF (menggantikan pendekatan regex lama):
+ *  Tabel mon_rekonsiliasis, mon_shipments, dan mon_prod_lines TIDAK punya
+ *  kolom ocf_no/sub_ref asli seperti mon_orders -- sebelumnya OCF/Sub Ref
+ *  di-resolve dulu ke daftar CPO (uraian) lewat mon_orders, lalu daftar itu
+ *  dipakai untuk whereIn ke tabel lain. Pendekatan itu SALAH karena satu
+ *  CPO/uraian bisa menaungi banyak OCF/sub_ref sekaligus -- hasilnya baris
+ *  yang tidak relevan ikut ke-include (over-count) atau, sebaliknya, bikin
+ *  kombinasi tertentu ke-drop duluan sebelum sempat dicek (under-count).
+ *  Ini yang menyebabkan fabricUsage() tidak konsisten: total_out_req
+ *  (dari mon_rekonsiliasis) dan scrap_qty (dari mon_prod_lines) dihitung
+ *  dengan basis matching yang berbeda untuk filter yang "sama".
+ *
+ *  Sekarang SEMUA tabel pakai aturan yang sama & sederhana (tanpa regex):
+ *   - Filter CPO (uraian)     -> whereIn('uraian', ...) / LIKE ke kolom
+ *                                yang menyimpan CPO (code_prod).
+ *   - Filter OCF               -> LIKE '%{ocf}%' ke kolom teks bebas milik
+ *                                tabel itu sendiri (spesifikasi / no_ps /
+ *                                code_prod).
+ *   - Filter Sub Ref            -> LIKE '%{sub_ref}%' ke kolom yang sama.
+ *   - Kalau CPO & OCF dua-duanya aktif -> keduanya di-AND-kan (uraian
+ *     match DAN kolom teks bebas match OCF-nya).
  */
 class MonitoringRekonsiliasiService
 {
@@ -87,6 +109,14 @@ class MonitoringRekonsiliasiService
      * sendiri, jadi TIDAK ada urutan tetap (bukan cuma Buyer->Style->
      * Uraian->OCF searah); siapapun yang dipilih duluan akan menyaring
      * yang lain, dan sebaliknya juga berlaku.
+     *
+     * CATATAN: fungsi ini tetap dipakai untuk dropdown cascade DAN untuk
+     * NEED (mon_work_orders, yang cuma granular sampai level CPO), karena
+     * di situ OCF/Sub Ref di-bridge lewat mon_orders.ocf_no/sub_ref yang
+     * ASLI (exact match, bukan LIKE tebak-tebakan) -- beda kasus dengan
+     * rekonQuery()/shipmentQuery()/scopeByCodeProd() yang sekarang
+     * menghindari bridge ini dan men-scope OCF/Sub Ref LANGSUNG ke kolom
+     * teks bebas milik tabelnya masing-masing (lihat catatan di atas class).
      *
      * Return null  = tidak ada filter aktif (di luar $excludeKeys) sama
      *                sekali -> tidak dibatasi CPO manapun (tampilkan semua).
@@ -201,162 +231,47 @@ class MonitoringRekonsiliasiService
         return true;
     }
 
+    /**
+     * Query dasar mon_rekonsiliasis, di-scope simpel:
+     *  - Buyer/Style/CPO/Negara -> whereIn('uraian', ...) seperti biasa.
+     *  - OCF                    -> LIKE '%{ocf}%' langsung ke `spesifikasi`.
+     *  - Sub Ref                -> LIKE '%{sub_ref}%' langsung ke `spesifikasi`.
+     *  - CPO & OCF dua-duanya aktif -> di-AND-kan (uraian match DAN
+     *    spesifikasi match OCF-nya), bukan lagi lewat bridge/regex.
+     */
     private function rekonQuery()
     {
         $query = DB::table('mon_rekonsiliasis');
-        if ($this->hasAnyFilterInput()) {
-            // FIX: kalau OCF/Sub Ref sedang aktif, scope PERSIS ke baris
-            // yang `spesifikasi`-nya match (lihat
-            // matchingRekonIdsForOcfSubRef()) -- mon_rekonsiliasis TIDAK
-            // punya kolom ocf_no/sub_ref asli seperti mon_orders, jadi
-            // sebelumnya widget Fabric Achievement/Fabric Usage/Material
-            // Achievement cuma di-scope sampai level CPO (uraian), SEMUA
-            // sub_ref di bawah CPO itu ikut ke-include walau OCF/Sub Ref
-            // sudah difilter.
-            $rekonIds = $this->matchingRekonIdsForOcfSubRef();
-            if ($rekonIds !== null) {
-                $query->whereIn('id', $rekonIds);
-            } else {
-                // whereIn dengan array kosong otomatis menghasilkan 0 baris (Laravel),
-                // jadi filter yang match 0 CPO tetap kosong, bukan unscoped.
-                $query->whereIn('uraian', $this->filterUraianList());
-            }
-        }
-        return $query;
-    }
 
-    /**
-     * Resolve id-id mon_rekonsiliasis yang match filter OCF/Sub Ref yang
-     * sedang aktif, dibaca dari kolom `spesifikasi` (teks bebas, formatnya
-     * TIDAK konsisten). Dipakai KHUSUS oleh rekonQuery() untuk widget Fabric
-     * Achievement / Fabric Usage Percentage / Material Achievement (dan
-     * ikut kepakai juga oleh topMaterialExcess()/detail() karena semuanya
-     * lewat rekonQuery()).
-     *
-     * Contoh isi `spesifikasi` (posisi OCF, separator, dan spasi tidak
-     * konsisten -- data asli dari mon_rekonsiliasis):
-     *   "OCF 266C0035-C5 (ADD) / COL.324 A. 000 324 WHITE / B. 024 PINK"
-     *   "109 A. 000 109 WHITE / B. 009 / OCF 266C0036-A5"   (OCF di akhir)
-     *   "OCF 266C0052-A/A4"                                  (2 sub_ref sekaligus)
-     *   "OCF 266C0053 B4OL"                                  (tanpa spasi;
-     *                                                          mon_orders.sub_ref-nya "B4 OL")
-     *
-     * Return null  = OCF maupun Sub Ref TIDAK aktif -> caller fallback ke
-     *                scoping CPO (uraian) seperti biasa, tidak berubah.
-     * Return array = OCF dan/atau Sub Ref aktif; isinya id mon_rekonsiliasis
-     *                yang `spesifikasi`-nya match (bisa kosong kalau tidak
-     *                ada yang match / kombinasi filternya tidak match CPO
-     *                manapun).
-     */
-    private function matchingRekonIdsForOcfSubRef(): ?array
-    {
-        $ocf    = trim((string) ($this->filters['ocf'] ?? ''));
+        if (!$this->hasAnyFilterInput()) {
+            return $query;
+        }
+
+        // Scope level CPO dari Buyer/Style/CPO/Negara SAJA. OCF & Sub Ref
+        // sengaja di-exclude dari bridge ini -- mon_rekonsiliasis tidak
+        // punya kolom ocf_no/sub_ref asli, jadi keduanya dicocokkan
+        // LANGSUNG ke `spesifikasi` di bawah (LIKE sederhana), supaya basis
+        // matching-nya konsisten dengan mon_shipments & mon_prod_lines.
+        $core = $this->cpoListExcluding(['ocf', 'sub_ref']);
+        if ($core !== null) {
+            // whereIn dengan array kosong otomatis menghasilkan 0 baris
+            // (Laravel), jadi filter yang match 0 CPO tetap kosong.
+            $query->whereIn('uraian', $core);
+        }
+
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
+        if ($ocf !== '') {
+            $query->whereNotNull('spesifikasi')
+                ->whereRaw('UPPER(spesifikasi) LIKE ?', ['%' . strtoupper($ocf) . '%']);
+        }
+
         $subRef = trim((string) ($this->filters['sub_ref'] ?? ''));
-
-        if ($ocf === '' && $subRef === '') {
-            return null;
+        if ($subRef !== '') {
+            $query->whereNotNull('spesifikasi')
+                ->whereRaw('UPPER(spesifikasi) LIKE ?', ['%' . strtoupper($subRef) . '%']);
         }
 
-        // Persempit kandidat baris dulu HANYA berdasarkan Buyer/Style/CPO/
-        // Negara yang aktif (bukan OCF/Sub Ref itu sendiri) -- supaya tidak
-        // perlu scan seluruh tabel mon_rekonsiliasis.
-        //
-        // FIX: sebelumnya pakai filterUraianList() yang ikut meng-intersect
-        // lewat mon_orders.ocf_no (cpoListForOcf()). mon_rekonsiliasis TIDAK
-        // punya kolom ocf_no sendiri -- kebenaran "baris ini OCF apa" murni
-        // dari teks `spesifikasi` (dicek presisi lewat
-        // specifikasiMatchesOcfSubRef() di bawah). Kalau ada baris yang
-        // `spesifikasi`-nya jelas menyebut OCF terpilih tapi CPO-nya
-        // kebetulan tidak tercatat/tidak sinkron di mon_orders.ocf_no,
-        // baris itu ke-drop duluan di sini sebelum sempat dicek regex-nya,
-        // membuat total (mis. Fabric Usage total_out_req) jadi lebih kecil
-        // dari seharusnya. Narrowing OCF/Sub Ref cukup diserahkan sepenuhnya
-        // ke regex match, bukan dobel-difilter lewat mon_orders juga.
-        $cpoScope = $this->cpoListExcluding(['ocf', 'sub_ref']);
-        if ($cpoScope !== null && empty($cpoScope)) {
-            return [];
-        }
-
-        $query = DB::table('mon_rekonsiliasis')
-            ->whereNotNull('spesifikasi')
-            ->select('id', 'spesifikasi');
-
-        if ($cpoScope !== null) {
-            $query->whereIn('uraian', $cpoScope);
-        }
-
-        $matchedIds = [];
-        foreach ($query->get() as $row) {
-            if ($this->specifikasiMatchesOcfSubRef((string) $row->spesifikasi, $ocf, $subRef)) {
-                $matchedIds[] = $row->id;
-            }
-        }
-
-        return $matchedIds;
-    }
-
-    /**
-     * Cocokkan satu nilai `spesifikasi` terhadap filter OCF/Sub Ref yang
-     * aktif. Strategi:
-     *  1. Cari SEMUA kemunculan kata "OCF" (case-insensitive) di teks --
-     *     posisinya boleh di mana saja (depan/tengah/akhir).
-     *  2. Ambil kode PERSIS setelah "OCF " sebagai kandidat kode OCF, lalu
-     *     sisa teks setelahnya SAMPAI ketemu " / " (slash yang diapit
-     *     spasi -- itu baru dianggap batas ke field lain, mis. warna).
-     *     Slash TANPA spasi di sekitarnya (mis. "A/A4") TETAP ikut dalam
-     *     sisa teks, karena itu cara penulisan 2 sub_ref sekaligus untuk
-     *     OCF yang sama, bukan pemisah field.
-     *  3. Kalau $ocf diisi, kode kandidat itu harus PERSIS sama (setelah
-     *     di-uppercase & dibuang semua spasi) dengan $ocf yang difilter --
-     *     kalau tidak, kemunculan "OCF" ini dilewati (lanjut cek yang lain).
-     *  4. Kalau $subRef diisi, sisa teks di atas dipecah per "/", "-", "," lalu
-     *     tiap token (setelah dibuang parens semacam "(ADD)"/"(2MW)" dan
-     *     SEMUA spasi, lalu di-uppercase) dicocokkan PERSIS ke $subRef.
-     *     Normalisasi buang-spasi ini supaya "B4 OL" (nilai asli di
-     *     mon_orders) tetap match "B4OL" (cara tulis tanpa spasi di
-     *     spesifikasi).
-     * Filter yang kosong (tidak diisi) otomatis dianggap lolos (tidak dicek).
-     *
-     * CATATAN: kalau kode OCF di `spesifikasi` salah ketik (mis. data lama
-     * pernah ditemukan "2266C0027" padahal maksudnya "266C0027"), baris itu
-     * TIDAK akan match -- sengaja dibuat ketat (exact match) supaya tidak
-     * salah menarik CPO/OCF lain, bukan menebak-nebak typo.
-     */
-    private function specifikasiMatchesOcfSubRef(string $spesifikasi, string $ocf, string $subRef): bool
-    {
-        // if (!preg_match_all('/OCF\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
-        if (!preg_match_all('/\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
-            return false;
-        }
-
-        $normalize    = fn($s) => strtoupper(preg_replace('/\s+/', '', trim((string) $s)));
-        $targetOcf    = $normalize($ocf);
-        $targetSubRef = $normalize($subRef);
-
-        foreach ($matches as $m) {
-            $codeCandidate = $normalize($m[1]);
-            $rest          = $m[2] ?? '';
-
-            if ($targetOcf !== '' && $codeCandidate !== $targetOcf) {
-                continue;
-            }
-
-            if ($targetSubRef === '') {
-                // Tidak ada filter Sub Ref -- kode OCF match saja sudah cukup.
-                return true;
-            }
-
-            $tokens = preg_split('/[\/\-,]+/', $rest) ?: [];
-            foreach ($tokens as $token) {
-                $clean = preg_replace('/\(.*?\)/', '', $token);
-                $clean = $normalize($clean);
-                if ($clean !== '' && $clean === $targetSubRef) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return $query;
     }
 
     private function orderQuery()
@@ -374,16 +289,9 @@ class MonitoringRekonsiliasiService
                 $query->whereIn('uraian', $core);
             }
         }
-        // FIX: whereIn('uraian', $core) di atas cuma menyaring sampai level
-        // CPO -- kalau 1 CPO punya banyak sub_ref (mis. CPO 25119 punya
-        // sub_ref A, B, C, A4, dst) dan yang dipilih cuma OCF/Sub Ref
-        // tertentu, tanpa baris di bawah ini SEMUA sub_ref di bawah CPO itu
-        // tetap ikut ke-include (makin banyak sub_ref di bawah CPO yang
-        // match OCF, makin "tergroup per CPO" hasilnya, filter OCF/Sub Ref
-        // seperti tidak berpengaruh). mon_orders punya kolom ocf_no/sub_ref
-        // langsung, jadi di-scope PERSIS di sini, bukan cuma lewat daftar
-        // CPO hasil cpoListForOcf()/cpoListForSubRef() yang sudah
-        // kehilangan info sub_ref-nya.
+        // mon_orders punya kolom ocf_no/sub_ref ASLI, jadi tetap exact
+        // match langsung di sini (bukan LIKE) -- ini yang paling akurat
+        // dan dipakai juga sebagai basis mon_work_orders (NEED).
         $ocf = trim((string) ($this->filters['ocf'] ?? ''));
         if ($ocf !== '') {
             $query->where('ocf_no', $ocf);
@@ -398,21 +306,19 @@ class MonitoringRekonsiliasiService
         return $query;
     }
 
+    /**
+     * Query dasar mon_shipments, di-scope simpel:
+     *  - Buyer/Style/CPO/Negara -> whereIn('uraian', ...).
+     *  - OCF                    -> LIKE '%{ocf}%' langsung ke `no_ps`.
+     *  - Sub Ref                -> LIKE '%{sub_ref}%' langsung ke `no_ps`.
+     */
     private function shipmentQuery()
     {
         $query = DB::table('mon_shipments');
         if ($this->hasAnyFilterInput()) {
-            // FIX: OCF/Sub Ref TIDAK ikut dipakai untuk menyaring di level
-            // `uraian` di sini (beda dengan sebelumnya yang lewat
-            // filterUraianListExcludingNegara() -> cpoListForOcf()/
-            // cpoListForSubRef()). mon_shipments TIDAK punya kolom
-            // ocf_no/sub_ref asli seperti mon_orders -- kebenaran "baris ini
-            // OCF/Sub Ref apa" murni dari teks bebas `no_ps` (dicek presisi
-            // lewat applyOcfSubRefScopeToShipment() di bawah). Menyaring dulu
-            // via uraian hasil cpoListForOcf() membuat SEMUA shipment di
-            // bawah CPO yang sama ikut ke-include (termasuk OCF/sub_ref lain
-            // yang beda), sehingga total jadi lebih besar dari seharusnya.
-            // Narrowing OCF/Sub Ref diserahkan sepenuhnya ke match `no_ps`.
+            // Sama seperti rekonQuery(): OCF/Sub Ref di-exclude dari bridge
+            // uraian ini -- mon_shipments tidak punya kolom ocf_no/sub_ref
+            // asli, jadi keduanya di-scope langsung ke `no_ps` di bawah.
             $core = $this->cpoListExcluding(['negara', 'ocf', 'sub_ref']);
             if ($core !== null) {
                 $query->whereIn('uraian', $core);
@@ -421,23 +327,17 @@ class MonitoringRekonsiliasiService
         // Step Shipment di-scope LANGSUNG ke baris mon_shipments yang
         // `spesifikasi`-nya cocok dengan negara terpilih.
         $this->applyNegaraScopeToShipment($query);
-        // Step Shipment juga di-scope LANGSUNG ke baris mon_shipments yang
-        // `no_ps`-nya cocok dengan OCF/Sub Ref terpilih (kalau ada).
         $this->applyOcfSubRefScopeToShipment($query);
         return $query;
     }
 
     /**
      * Scope query mon_shipments langsung ke baris yang `no_ps`-nya
-     * menyebut OCF/Sub Ref terpilih (kolom teks bebas, formatnya TIDAK
-     * konsisten -- lihat contoh di komentar shipmentPlanVsActualBySubRef()
-     * / extractSubRefsFromNoPs(), mis. "OCF 266C0051 - A4 /...",
-     * "OCF 266C0051 - B4 OL/...", "OCF 266C0051 - B/..."). Dipakai
-     * shipmentQuery() supaya semua widget berbasis shipment (Shipment Qty,
-     * Shipment By Date, Pivot Shipment, Shipment Detail, Shipment Calendar,
-     * dst) presisi per baris shipment terhadap OCF/Sub Ref yang dipilih,
-     * bukan cuma "per CPO yang kebetulan match" lewat cpoListForOcf()/
-     * cpoListForSubRef() yang sudah kehilangan info OCF/sub_ref per barisnya.
+     * mengandung OCF/Sub Ref terpilih (LIKE sederhana, tidak ada
+     * parsing/regex lagi). Dipakai shipmentQuery() supaya semua widget
+     * berbasis shipment (Shipment Qty, Shipment By Date, Pivot Shipment,
+     * Shipment Detail, Shipment Calendar, dst) konsisten dengan
+     * rekonQuery()/scopeByCodeProd().
      */
     private function applyOcfSubRefScopeToShipment($query): void
     {
@@ -648,13 +548,9 @@ class MonitoringRekonsiliasiService
      * `ocf_no` PERSIS sama dengan $ocfNo (dropdown OCF diisi dari nilai
      * ocf_no apa adanya, jadi matching-nya exact, bukan ekstraksi regex).
      * Di-cache per nilai OCF karena dipakai berulang untuk resolve filter
-     * OCF ke CPO.
-     *
-     * PENTING: sebelumnya method ini keliru pluck('ocf_no') (mengembalikan
-     * daftar ocf_no, bukan uraian), padahal hasilnya di-intersect dengan
-     * daftar uraian dari filter lain (lihat cpoListExcluding()) -- akibatnya
-     * intersect selalu kosong dan filter OCF tidak pernah nyambung ke
-     * Buyer/Style/Uraian. Sudah diperbaiki jadi pluck('uraian').
+     * OCF ke CPO (khusus untuk dropdown cascade & NEED/mon_work_orders --
+     * BUKAN lagi untuk men-scope mon_rekonsiliasis/mon_shipments/
+     * mon_prod_lines, lihat catatan di atas class).
      */
     private function cpoListForOcf(string $ocfNo): array
     {
@@ -723,7 +619,8 @@ class MonitoringRekonsiliasiService
      * `sub_ref` PERSIS sama dengan $subRef (dropdown Sub Ref diisi dari
      * nilai sub_ref apa adanya, exact match, sama seperti OCF). Di-cache
      * per nilai sub_ref karena dipakai berulang untuk resolve filter
-     * sub_ref ke CPO.
+     * sub_ref ke CPO (khusus dropdown cascade & NEED, bukan untuk men-scope
+     * mon_rekonsiliasis/mon_shipments/mon_prod_lines).
      */
     private function cpoListForSubRef(string $subRef): array
     {
@@ -806,8 +703,9 @@ class MonitoringRekonsiliasiService
         // NEED dari mon_work_orders.request (kolom `request` = NEED qty hasil
         // sinkronisasi get_ppic_bom.txt, lihat SyncWorkOrderFromSmartit),
         // di-scope via mon_boms supaya hanya menghitung material milik CPO
-        // terpilih. Kolom wo.product_code / wo.barang_code / wo.satuan_code /
-        // wo.request tetap sama persis di schema mon_work_orders yang baru.
+        // terpilih. mon_work_orders cuma granular sampai level CPO, jadi
+        // OCF/Sub Ref di sini tetap lewat bridge exact-match mon_orders
+        // (filterUraianList()), bukan LIKE ke kolom teks bebas.
         $need = 0.0;
         if ($this->hasCpo()) {
             $need = (float) DB::table('mon_work_orders as wo')
@@ -844,6 +742,12 @@ class MonitoringRekonsiliasiService
      *                            kategori Bahan Setengah Jadi -- lihat productionPipeline()
      *                            dest_sewing). "Output Cutting" = hasil Cutting yang sudah
      *                            keluar menuju Sewing, bukan lagi dibagi Contract Qty.
+     *
+     * total_out_req (mon_rekonsiliasis) dan scrap_qty (mon_prod_lines)
+     * sekarang di-scope pakai basis matching yang SAMA untuk OCF/Sub Ref
+     * (LIKE sederhana ke kolom teks bebas masing-masing tabel, lihat
+     * rekonQuery()/scopeByCodeProd()), jadi keduanya konsisten satu sama
+     * lain untuk filter yang sama.
      */
     public function fabricUsage(): array
     {
@@ -1310,27 +1214,12 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * FIX v2 (bug "tergroup by CPO/uraian" di stage pipeline production,
-     * lanjutan dari fix v1 yang ternyata bikin hasil KOSONG semua):
-     *
-     * Format asli `code_prod` di mon_prod_lines ternyata BUKAN
-     * "CPO {cpo} {sub_ref}" seperti dugaan awal, melainkan:
-     *   "CPO {cpo} OCF {ocf_no}-{sub_ref} / ST. {barang_code} / ... / {warna}"
-     * contoh: "CPO 25119 OCF 266C0051-A4 / ST. 303035 / ECOMM / RUMBA RED"
-     *
-     * Jadi ocf_no dan sub_ref SUDAH tertulis apa adanya di code_prod (dengan
-     * pemisah dash "-" di antara keduanya) -- tidak perlu lagi resolve
-     * pasangan (CPO, sub_ref) dari mon_orders (pendekatan fix v1 di atas
-     * salah asumsi format, makanya LIKE-nya tidak pernah match apa pun dan
-     * hasilnya kosong). Cukup filter `code_prod` LANGSUNG pakai nilai
-     * ocf/sub_ref dari filter yang aktif ($this->filters), match sebagai
-     * substring dengan LIKE (case-insensitive lewat UPPER, sama seperti
-     * applyNegaraScopeToProdLines()).
-     *
-     * Sub Ref di-anchor ke tanda "-" di depannya (supaya jelas itu sub_ref,
-     * bukan potongan teks lain) dan boundary spasi/slash di belakangnya
-     * (dua variasi spasi diakomodasi: "-A4 /" atau "-A4/") supaya sub_ref
-     * "A" tidak ikut match punya "A4".
+     * Scope mon_prod_lines ke filter CPO/OCF/Sub Ref/Negara -- SIMPLE LIKE,
+     * tanpa parsing/regex/boundary-anchor lagi:
+     *  - CPO(s)   : whereIn-style OR LIKE '%{cpo}%' ke `code_prod`.
+     *  - OCF      : LIKE '%{ocf}%' ke `code_prod`.
+     *  - Sub Ref  : LIKE '%{sub_ref}%' ke `code_prod`.
+     *  - Negara   : didelegasikan ke applyNegaraScopeToProdLines() (tidak berubah).
      */
     private function scopeByCodeProd($query, ?array $cpoCodes)
     {
@@ -1340,33 +1229,22 @@ class MonitoringRekonsiliasiService
             } else {
                 $query->where(function ($q) use ($cpoCodes) {
                     foreach ($cpoCodes as $cpoCode) {
-                        $q->orWhere('code_prod', 'like', "CPO {$cpoCode} %")
-                            ->orWhere('code_prod', 'like', "{$cpoCode} %");
+                        $q->orWhereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($cpoCode) . '%']);
                     }
                 });
             }
         }
 
-        // Filter OCF: code_prod harus mengandung "OCF {ocf}-" persis
-        // (dash di belakangnya menandai batas sebelum sub_ref dimulai).
         $ocf = trim((string) ($this->filters['ocf'] ?? ''));
         if ($ocf !== '') {
             $query->whereNotNull('code_prod')
-                // ->whereRaw('UPPER(code_prod) LIKE ?', ['%OCF ' . strtoupper($ocf) . '-%']);
                 ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%']);
         }
 
-        // Filter Sub Ref: code_prod harus mengandung "-{sub_ref}" yang
-        // diikuti spasi atau slash (bukan lanjutan karakter lain), supaya
-        // sub_ref "A" tidak ikut match "A4" atau "A" di tengah kata lain.
         $subRef = trim((string) ($this->filters['sub_ref'] ?? ''));
         if ($subRef !== '') {
-            $needle = strtoupper($subRef);
             $query->whereNotNull('code_prod')
-                ->where(function ($q) use ($needle) {
-                    $q->whereRaw('UPPER(code_prod) LIKE ?', ['%-' . $needle . ' %'])
-                        ->orWhereRaw('UPPER(code_prod) LIKE ?', ['%-' . $needle . '/%']);
-                });
+                ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($subRef) . '%']);
         }
 
         // Tahap Cutting..Warehouse (semua sumber dari mon_prod_lines) di-scope
@@ -1399,15 +1277,6 @@ class MonitoringRekonsiliasiService
             ->leftJoinSub($shipmentAgg, 'ship', function ($join) {
                 $join->on('ship.barang_code', '=', 'mon_rekonsiliasis.barang_code');
             });
-
-        // Pengaman tambahan: pastikan tabel Detail Rekonsiliasi per Material
-        // SELALU ikut filter uraian/Buyer/Style/OCF/Negara yang aktif (jangan
-        // sampai balik menampilkan seluruh mon_rekonsiliasis kalau salah satu
-        // filter di atas sedang dipakai). Kolom di-qualify eksplisit ke
-        // mon_rekonsiliasis supaya tidak ambigu setelah leftJoinSub di atas.
-        if ($this->hasAnyFilterInput()) {
-            $query->whereIn('mon_rekonsiliasis.uraian', $this->filterUraianList());
-        }
 
         return $query
             ->select(
@@ -1556,23 +1425,17 @@ class MonitoringRekonsiliasiService
      * Ada 2 mode tampilan:
      *  - 'date'    (default): PLAN & ACTUAL dikelompokkan per tanggal
      *    `tgl_bukti` -- ACTUAL persis shipmentByDate() (qty aktual per
-     *    tanggal), PLAN memakai total Contract Qty untuk scope filter
-     *    yang sedang aktif, ditampilkan rata di setiap tanggal supaya
-     *    kedua bar bisa dibandingkan berdampingan sebagai patokan.
+     *    tanggal, sekarang sudah scoped LIKE per OCF/Sub Ref lewat
+     *    shipmentQuery()), PLAN memakai total Contract Qty untuk scope
+     *    filter yang sedang aktif, ditampilkan rata di setiap tanggal
+     *    supaya kedua bar bisa dibandingkan berdampingan sebagai patokan.
      *  - 'sub_ref' (khusus filter OCF SENDIRIAN tanpa Buyer/Style/CPO/
      *    Negara/Sub Ref): PLAN & ACTUAL dikelompokkan per TANGGAL shipment
      *    DAN mon_orders.sub_ref sekaligus (karena 1 OCF biasanya menaungi
-     *    banyak CPO dengan banyak sub_ref berbeda-beda).
-     *    PLAN = SUM(qty_ord) per sub_ref (flat, diulang tiap tanggal
-     *    sub_ref itu muncul). ACTUAL diambil dari mon_shipments.no_ps
-     *    (BUKAN `uraian` -- satu `uraian` bisa menaungi banyak sub_ref
-     *    sekaligus jadi tidak bisa dipakai memisahkan qty per sub_ref).
-     *    `no_ps` isinya teks bebas/format tidak konsisten (mis. "26063 OCF
-     *    266C0038 A - A1" atau "26067 OCF 266C0040/A/A1/A2/E5"), diparsing
-     *    lewat extractSubRefsFromNoPs() dan divalidasi ke daftar sub_ref
-     *    asli dari mon_orders. Kalau satu no_ps menyebut beberapa sub_ref
-     *    sekaligus, qty dibagi RATA ke tiap sub_ref yang disebut (tidak
-     *    ada info porsi per sub_ref di sumber datanya).
+     *    banyak CPO dengan banyak sub_ref berbeda-beda). Mode ini masih
+     *    memakai parsing `no_ps` (extractSubRefsFromNoPs()) karena butuh
+     *    memisahkan qty PER sub_ref, bukan sekadar filter ya/tidak seperti
+     *    widget lain.
      */
     public function shipmentPlanVsActual(): array
     {
@@ -1706,24 +1569,11 @@ class MonitoringRekonsiliasiService
      * contoh di komentar shipmentPlanVsActualBySubRef()) untuk menemukan
      * sub_ref-sub_ref yang relevan dengan $ocf yang sedang aktif.
      *
-     * Strategi (supaya tahan terhadap format yang berantakan):
-     *  1. Pastikan no_ps memang menyebut kode OCF yang diminta persis
-     *     (word-boundary match, case-insensitive) -- kalau tidak ada,
-     *     no_ps ini bukan untuk OCF ini, abaikan.
-     *  2. Ambil teks SETELAH kemunculan kode OCF tsb sebagai kandidat
-     *     sub_ref (bagian sebelum kode OCF, mis. nomor CPO/SO, diabaikan).
-     *  3. Split kandidat itu dengan delimiter umum ( / - , ), TANPA
-     *     memecah spasi dulu, lalu cocokkan tiap token (trim,
-     *     case-insensitive) ke $validSubRefs (daftar sub_ref ASLI dari
-     *     mon_orders untuk OCF ini -- dipakai sebagai kamus validasi).
-     *  4. Kalau token utuh tidak match tapi mengandung spasi, coba pecah
-     *     lagi per kata dan cocokkan tiap kata -- ini yang menangani noise
-     *     semacam "C5 (ADD)" (buang "(ADD)", sisakan "C5") atau
-     *     "F3 2MWa" (kalau "F3" valid tapi "2MWa" bukan sub_ref, "2MWa"
-     *     otomatis kebuang karena tidak ada di kamus).
-     *  5. Hasil akhir: daftar unik sub_ref valid yang match -- token sampah
-     *     apapun yang TIDAK ada di $validSubRefs otomatis di-drop, jadi
-     *     tidak perlu daftar kata-kata noise secara eksplisit.
+     * CATATAN: helper ini SENGAJA masih dipertahankan (tidak ikut
+     * disederhanakan) karena shipmentPlanVsActualBySubRef() butuh MEMECAH
+     * qty per sub_ref individual untuk chart, bukan sekadar filter
+     * ya/tidak seperti widget lain -- LIKE sederhana tidak cukup untuk
+     * kebutuhan ini.
      */
     private function extractSubRefsFromNoPs(string $noPs, string $ocf, array $validSubRefs): array
     {
@@ -1780,7 +1630,7 @@ class MonitoringRekonsiliasiService
      * Ringkasan jumlah dokumen & qty shipment per tanggal `tgl_bukti`, untuk
      * satu bulan tertentu -- dipakai widget kalender "Shipment Date"
      * (replikasi kalender Production Delivery di dashboard Gabungan).
-     * Filter uraian/brand/style/negara yang aktif tetap diikutkan.
+     * Filter uraian/brand/style/negara/ocf/sub_ref yang aktif tetap diikutkan.
      */
     public function shipmentCalendar(int $year, int $month): Collection
     {
@@ -1799,7 +1649,7 @@ class MonitoringRekonsiliasiService
     /**
      * Detail baris shipment untuk satu tanggal `tgl_bukti` spesifik
      * (dipanggil saat user klik tanggal di kalender Shipment Date).
-     * Filter aktif (termasuk negara) tetap diikutkan.
+     * Filter aktif (termasuk negara/ocf/sub_ref) tetap diikutkan.
      */
     public function shipmentCalendarDetail(string $date): Collection
     {
