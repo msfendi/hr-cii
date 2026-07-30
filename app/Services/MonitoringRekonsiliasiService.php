@@ -324,8 +324,8 @@ class MonitoringRekonsiliasiService
      */
     private function specifikasiMatchesOcfSubRef(string $spesifikasi, string $ocf, string $subRef): bool
     {
-        if (!preg_match_all('/OCF\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
-            // if (!preg_match_all('/\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
+        // if (!preg_match_all('/OCF\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
+        if (!preg_match_all('/\s*([0-9A-Za-z]+)((?:(?!\s\/).)*)/i', $spesifikasi, $matches, PREG_SET_ORDER)) {
             return false;
         }
 
