@@ -187,9 +187,9 @@ body{ background-color: #f4f6fb; }
                                         <div class="col-md-4 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Jenis Biaya</label>
                                             <select id="costTypeSelect" class="form-control" style="width:100%">
-                                                <option value="all">Semua (Direct + On Leave)</option>
+                                                <option value="all">Semua (Direct + Leave Expense)</option>
                                                 <option value="direct">Direct Cost</option>
-                                                <option value="onleave">On Leave</option>
+                                                <option value="onleave">Leave Expense</option>
                                             </select>
                                         </div>
                                     </div>
@@ -260,7 +260,7 @@ body{ background-color: #f4f6fb; }
                                                     <tr>
                                                         <th>Bulan</th>
                                                         <th class="text-right">Direct</th>
-                                                        <th class="text-right">On Leave</th>
+                                                        <th class="text-right">Leave Expense</th>
                                                         <th class="text-right">Total</th>
                                                     </tr>
                                                 </thead>
@@ -349,7 +349,7 @@ body{ background-color: #f4f6fb; }
                             <div class="col-lg-6 mb-4">
                                 <div class="card shadow h-100">
                                     <div class="card-header py-3">
-                                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-plane-departure mr-1"></i> On Leave per Tipe</h6>
+                                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-plane-departure mr-1"></i> Leave Expense per Tipe</h6>
                                     </div>
                                     <div class="card-body">
                                         <div id="onleaveChartEmpty" class="text-center py-5" style="display:none;">
@@ -378,7 +378,7 @@ body{ background-color: #f4f6fb; }
                                                 <th>Kewarganegaraan</th>
                                                 <th>Status</th>
                                                 <th class="text-right">Direct Cost</th>
-                                                <th class="text-right">On Leave</th>
+                                                <th class="text-right">Leave Expense</th>
                                                 <th class="text-right">Total</th>
                                             </tr>
                                         </thead>
@@ -791,7 +791,7 @@ body{ background-color: #f4f6fb; }
                         </table>
                     </div>
 
-                    <h6 class="font-weight-bold text-primary small text-uppercase">On Leave</h6>
+                    <h6 class="font-weight-bold text-primary small text-uppercase">Leave Expense</h6>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered mb-0 small">
                             <thead>
@@ -964,7 +964,7 @@ body{ background-color: #f4f6fb; }
                                     borderRadius: 6, maxBarThickness: 22, stack: 'cost',
                                 },
                                 {
-                                    type: 'bar', label: 'On Leave', data: data.onleave_values,
+                                    type: 'bar', label: 'Leave Expense', data: data.onleave_values,
                                     backgroundColor: 'rgba(54,185,204,0.85)', hoverBackgroundColor: '#2093a4',
                                     borderRadius: 6, maxBarThickness: 22, stack: 'cost',
                                 },
@@ -1042,7 +1042,7 @@ body{ background-color: #f4f6fb; }
                             : '<span class="badge badge-secondary">Non-Aktif</span>'
                     },
                     { data: 'direct_cost', title: 'Direct Cost', className: 'text-right', render: (d, type) => type === 'display' ? rupiah(d) : d },
-                    { data: 'onleave_cost', title: 'On Leave', className: 'text-right', render: (d, type) => type === 'display' ? rupiah(d) : d },
+                    { data: 'onleave_cost', title: 'Leave Expense', className: 'text-right', render: (d, type) => type === 'display' ? rupiah(d) : d },
                     { data: 'total_cost', title: 'Total', className: 'text-right font-weight-bold', render: (d, type) => type === 'display' ? rupiah(d) : d },
                 ],
                 order: [[7, 'desc']],
