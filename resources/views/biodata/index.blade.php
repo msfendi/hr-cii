@@ -88,7 +88,17 @@
                                 <form id="editForm" method="POST" enctype="multipart/form-data">
                                     @csrf
                                     <div class="modal-body p-4">
-                                        <div class="row">
+                                        <ul class="nav nav-tabs mb-4" id="editTab" role="tablist">
+                                            <li class="nav-item">
+                                                <a class="nav-link active font-weight-bold" id="edit-biodata-tab" data-toggle="tab" href="#edit-biodata" role="tab" aria-controls="edit-biodata" aria-selected="true">Biodata</a>
+                                            </li>
+                                            <li class="nav-item">
+                                                <a class="nav-link font-weight-bold" id="edit-berkas-tab" data-toggle="tab" href="#edit-berkas" role="tab" aria-controls="edit-berkas" aria-selected="false">Berkas / Dokumen</a>
+                                            </li>
+                                        </ul>
+                                        <div class="tab-content" id="editTabContent">
+                                            <div class="tab-pane fade show active" id="edit-biodata" role="tabpanel" aria-labelledby="edit-biodata-tab">
+                                                <div class="row">
                                             <div class="col-lg-2 border-right">
                                                 <div class="d-flex flex-column align-items-center text-center p-3">
                                                     <!-- Photo Upload -->
@@ -242,7 +252,7 @@
                                                     </div>
 
                                                     <!-- Employment & Education -->
-                                                    
+
                                                     <div class="col-md-6 mb-3">
                                                         <h6
                                                             class="font-weight-bold text-success mb-3 pl-2 border-left-success ml-1">
@@ -256,13 +266,17 @@
                                                                     id="edit_id_dept" required>
                                                                     @foreach($departments as $department)
                                                                         <option value="{{ $department->ID_DEPT }}">
-                                                                            {{ $department->DEPARTEMENT }}</option>
+                                                                            {{ $department->DEPARTEMENT }}
+                                                                        </option>
                                                                     @endforeach
                                                                 </select>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
-                                                                <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
-                                                                <select class="form-control px-3" id="edit_section" name="section" required>
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">Section
+                                                                    <span class="text-danger">*</span></label>
+                                                                <select class="form-control px-3" id="edit_section"
+                                                                    name="section" required>
                                                                     <option value="">-- Pilih --</option>
                                                                     @foreach($sections as $section)
                                                                         <option value="{{ $section->id }}">
@@ -273,7 +287,7 @@
                                                                     @endforeach
                                                                 </select>
                                                             </div>
-                                                            
+
                                                             <div class="col-md-6 mb-3">
                                                                 <label
                                                                     class="small font-weight-bold text-muted ml-2">Jenjang
@@ -319,9 +333,12 @@
                                                                 </div>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
-                                                                <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">No.
+                                                                    Rekening Bank</label>
                                                                 <input type="text" class="form-control px-3"
-                                                                    name="bank_account" id="edit_bank_account" placeholder="Cth: 1234567890">
+                                                                    name="bank_account" id="edit_bank_account"
+                                                                    placeholder="Cth: 1234567890">
                                                             </div>
                                                             <div class="col-md-6 mb-3">
                                                                 <label
@@ -331,6 +348,49 @@
                                                                     id="edit_tmk" required>
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            </div>
+                                            </div>
+                                            <!-- Berkas Tab -->
+                                            <div class="tab-pane fade" id="edit-berkas" role="tabpanel" aria-labelledby="edit-berkas-tab">
+                                                <div class="row px-3 mt-3">
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">Surat Lamaran</label>
+                                                        <input type="file" class="form-control-file" name="file_surat_lamaran" id="edit_file_surat_lamaran">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">CV</label>
+                                                        <input type="file" class="form-control-file" name="file_cv" id="edit_file_cv">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">KTP</label>
+                                                        <input type="file" class="form-control-file" name="file_ktp" id="edit_file_ktp">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">KK</label>
+                                                        <input type="file" class="form-control-file" name="file_kk" id="edit_file_kk">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">Ijasah</label>
+                                                        <input type="file" class="form-control-file" name="file_ijasah" id="edit_file_ijasah">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">Akta Kelahiran</label>
+                                                        <input type="file" class="form-control-file" name="file_akta_kelahiran" id="edit_file_akta_kelahiran">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">SKCK</label>
+                                                        <input type="file" class="form-control-file" name="file_skck" id="edit_file_skck">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">Surat Sehat</label>
+                                                        <input type="file" class="form-control-file" name="file_surat_sehat" id="edit_file_surat_sehat">
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="small font-weight-bold text-muted">Pas Foto</label>
+                                                        <input type="file" class="form-control-file" name="file_pas_foto" id="edit_file_pas_foto">
                                                     </div>
                                                 </div>
                                             </div>
@@ -533,13 +593,17 @@
                                                                     <option value="">-- Pilih Department --</option>
                                                                     @foreach($departments as $department)
                                                                         <option value="{{ $department->ID_DEPT }}">
-                                                                            {{ $department->DEPARTEMENT }}</option>
+                                                                            {{ $department->DEPARTEMENT }}
+                                                                        </option>
                                                                     @endforeach
                                                                 </select>
                                                             </div>
                                                             <div class="col-md-6 mb-3">
-                                                                <label class="small font-weight-bold text-muted ml-2">Section <span class="text-danger">*</span></label>
-                                                                <select class="form-control px-3" name="section" required>
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">Section
+                                                                    <span class="text-danger">*</span></label>
+                                                                <select class="form-control px-3" name="section"
+                                                                    required>
                                                                     <option value="">-- Pilih --</option>
                                                                     @foreach($sections as $section)
                                                                         <option value="{{ $section->id }}">
@@ -583,7 +647,9 @@
                                                                     name="tanggungan" placeholder="0">
                                                             </div>
                                                             <div class="col-md-6 mb-3">
-                                                                <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
+                                                                <label
+                                                                    class="small font-weight-bold text-muted ml-2">No.
+                                                                    Rekening Bank</label>
                                                                 <input type="text" class="form-control px-3"
                                                                     name="bank_account" placeholder="Cth: 1234567890">
                                                             </div>
@@ -628,7 +694,6 @@
 
                                 <div class="modal-body p-4">
                                     <input type="hidden" name="id_pelamar" id="show_id_pelamar">
-
                                     <div class="row">
                                         <!-- Left Side: Profile & Identity (Sticky) -->
                                         <div class="col-lg-2 border-right">
@@ -770,8 +835,10 @@
                                                                 id="show_id_dept" readonly>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
-                                                            <label class="small font-weight-bold text-muted ml-2">Section</label>
-                                                            <input type="text" class="form-control px-3" id="show_section" readonly>
+                                                            <label
+                                                                class="small font-weight-bold text-muted ml-2">Section</label>
+                                                            <input type="text" class="form-control px-3"
+                                                                id="show_section" readonly>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
                                                             <label
@@ -801,8 +868,10 @@
                                                             </div>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
-                                                            <label class="small font-weight-bold text-muted ml-2">No. Rekening Bank</label>
-                                                            <input type="text" class="form-control px-3" id="show_bank_account" readonly>
+                                                            <label class="small font-weight-bold text-muted ml-2">No.
+                                                                Rekening Bank</label>
+                                                            <input type="text" class="form-control px-3"
+                                                                id="show_bank_account" readonly>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
                                                             <label
@@ -814,8 +883,6 @@
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
                                 <div class="modal-footer border-0 pb-4 pr-5 bg-white">
                                     <button type="button" class="btn btn-secondary px-4 font-weight-bold"
                                         data-dismiss="modal">Close</button>
@@ -825,7 +892,8 @@
                     </div>
 
                     {{-- modal kontrak --}}
-                    <div class="modal fade" id="kontrakModal" tabindex="-1" role="dialog" aria-labelledby="kontrakModalLabel" aria-hidden="true">
+                    <div class="modal fade" id="kontrakModal" tabindex="-1" role="dialog"
+                        aria-labelledby="kontrakModalLabel" aria-hidden="true">
                         <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
                             <div class="modal-content shadow-xl" style="border-radius: 10px; overflow: hidden;">
                                 <div class="modal-header bg-white border-0 pt-4 pb-2 px-4">
@@ -855,14 +923,18 @@
                                                 </tr>
                                             </thead>
                                             <tbody id="kontrakTbody">
-                                                <tr><td colspan="8" class="text-center text-muted py-3">Memuat...</td></tr>
+                                                <tr>
+                                                    <td colspan="8" class="text-center text-muted py-3">Memuat...</td>
+                                                </tr>
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
                                 <div class="modal-footer border-0 pb-4 px-4 bg-white justify-content-between">
-                                    <button type="button" class="btn btn-secondary px-3 font-weight-bold" data-dismiss="modal">Tutup</button>
-                                    <a id="btnKelola" href="#" target="_blank" class="btn btn-info px-4 font-weight-bold">
+                                    <button type="button" class="btn btn-secondary px-3 font-weight-bold"
+                                        data-dismiss="modal">Tutup</button>
+                                    <a id="btnKelola" href="#" target="_blank"
+                                        class="btn btn-info px-4 font-weight-bold">
                                         <i class="fas fa-external-link-alt mr-1"></i>Kelola Kontrak
                                     </a>
                                 </div>
@@ -1068,11 +1140,13 @@
                                                                     name="tkk" id="exit_tkk">
                                                             </div>
                                                             <div class="col-md-6 mb-3">
-                                                                <label class="small font-weight-bold text-danger ml-2">Status
+                                                                <label
+                                                                    class="small font-weight-bold text-danger ml-2">Status
                                                                     Keluar<span class="text-danger">*</span></label>
                                                                 <select name="status_keluar" id="status_keluar"
                                                                     class="form-control px-3 border-danger text-danger font-weight-bold">
-                                                                    <option value="" disabled selected>Pilih Status Keluar</option>
+                                                                    <option value="" disabled selected>Pilih Status
+                                                                        Keluar</option>
                                                                     <option value="SPD">Resign</option>
                                                                     <option value="HK">Habis Kontrak</option>
                                                                     <option value="MA">Mangkir</option>
@@ -1155,11 +1229,11 @@
                         if (!row.end_date) {
                             return '<span class="badge badge-secondary px-2 py-1">BELUM ADA KONTRAK</span>';
                         }
-                        
+
                         var today = new Date();
                         today.setHours(0, 0, 0, 0);
                         var endDate = new Date(row.end_date);
-                        
+
                         if (endDate >= today) {
                             return '<span class="badge badge-success px-2 py-1">AKTIF</span>';
                         } else {
@@ -1311,7 +1385,6 @@
                         imgElement.src = 'https://via.placeholder.com/140x140.png?text=No+Photo';
                     };
                     img.src = imageUrl;
-
                     $('#showModal').modal('show');
                 },
                 error: function (xhr) {
@@ -1466,13 +1539,13 @@
             var d = str.split('T')[0].split(' ')[0];
             if (!d || d === '0000-00-00') return '-';
             var parts = d.split('-');
-            var bln = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+            var bln = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
             return parts[2] + ' ' + (bln[parseInt(parts[1], 10) - 1] || parts[1]) + ' ' + parts[0];
         }
 
         // ─── Kontrak button: show modal with contract history ─
         $('body').on('click', '.btn-kontrak', function () {
-            var npk  = $(this).data('npk');
+            var npk = $(this).data('npk');
             var nama = $(this).data('nama') || npk;
 
             $('#kontrakSubtitle').text(npk + ' — ' + nama);
@@ -1481,8 +1554,8 @@
             $('#kontrakModal').modal('show');
 
             $.ajax({
-                url  : '/employees-contract/by-npk/' + encodeURIComponent(npk),
-                type : 'GET',
+                url: '/employees-contract/by-npk/' + encodeURIComponent(npk),
+                type: 'GET',
                 success: function (res) {
                     if (!res || res.length === 0) {
                         $('#kontrakTbody').html('<tr><td colspan="8" class="text-center text-muted py-3">Belum ada data kontrak.</td></tr>');
@@ -1493,8 +1566,8 @@
                     $.each(res, function (i, c) {
                         var isAktif = c.status_contract === 'AKTIF';
                         var badgeClass = {
-                            AKTIF:'success', HABIS:'secondary',
-                            DIAKHIRI:'danger', DIPERPANJANG:'info'
+                            AKTIF: 'success', HABIS: 'secondary',
+                            DIAKHIRI: 'danger', DIPERPANJANG: 'info'
                         }[c.status_contract] || 'light';
 
                         rows += '<tr' + (isAktif ? ' class="table-success font-weight-bold"' : '') + '>';
@@ -1563,6 +1636,44 @@
                     const imageUrl = `/storage/img/profile/${response.BAGIAN}/${response.NPK}_${response.NAMA}.jpg`;
                     $('#edit_previewImage').attr('src', imageUrl);
 
+                    // NOTE: some file fields have an input name that differs from the
+                    // actual PKWT/DB column name — e.g. the "Ijasah" file input is
+                    // named 'file_ijasah', but the PKWT column (and therefore the
+                    // key on `response`) is 'file_ijazah'. Use { input, db } pairs
+                    // for those, plain strings for the rest.
+                    const berkasFields = [
+                        'file_surat_lamaran',
+                        'file_cv',
+                        'file_ktp',
+                        'file_kk',
+                        { input: 'file_ijasah', db: 'file_ijazah' },
+                        'file_akta_kelahiran',
+                        'file_skck',
+                        'file_surat_sehat',
+                        'file_pas_foto'
+                    ];
+
+                    berkasFields.forEach(function(field) {
+                        let inputField = typeof field === 'string' ? field : field.input;
+                        let dbField = typeof field === 'string' ? field : field.db;
+
+                        let fileVal = response[dbField];
+                        let linkContainer = $('#edit_' + inputField).siblings('.current-file-link');
+                        if (!linkContainer.length) {
+                            $('<div class="current-file-link mt-1 small"></div>').insertAfter('#edit_' + inputField);
+                            linkContainer = $('#edit_' + inputField).siblings('.current-file-link');
+                        }
+
+                        if (fileVal) {
+                            // fileVal is now the FULL path relative to the 'public' disk
+                            // (e.g. "employees/file_cv/xxx.pdf"), not just a bare filename,
+                            // so it's used as-is rather than rebuilt from field + filename.
+                            linkContainer.html('<a href="/storage/' + fileVal + '" target="_blank" class="text-success"><i class="fas fa-check-circle"></i> File terunggah</a>');
+                        } else {
+                            linkContainer.html('<span class="text-danger"><i class="fas fa-times-circle"></i> Belum ada file</span>');
+                        }
+                    });
+
                     $('#editModal').modal('show');
                 },
                 error: function (xhr) {
@@ -1626,6 +1737,25 @@
                     btn.prop('disabled', false).html('Update Photo');
                 }
             });
+        });
+
+        // Clear modal on close
+        $('.modal').on('hidden.bs.modal', function () {
+            $(this).find('form').trigger('reset');
+            $(this).find('.current-file-link').remove();
+            
+            // Reset image previews
+            if ($(this).attr('id') === 'editModal') {
+                $('#edit_previewImage').attr('src', '');
+                $('#edit_cameraIcon').removeClass('d-none');
+                $('#edit_fotoInput').val('');
+                
+                // Switch back to the first tab (Biodata)
+                $('#editTab a:first').tab('show');
+            } else if ($(this).attr('id') === 'addModal') {
+                $('#previewImage').attr('src', '').addClass('d-none');
+                $('#cameraIcon').removeClass('d-none');
+            }
         });
 
     });

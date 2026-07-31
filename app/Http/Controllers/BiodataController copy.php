@@ -14,7 +14,7 @@ use App\Models\PayrollMaster;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
 
-class BiodataController extends Controller
+class BiodataControllerCopy extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -115,6 +115,7 @@ class BiodataController extends Controller
         ]);
 
         // insert to BIODATA completed above.
+
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
         $diff = $tgl_lahir->diff($request->tmk);
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
@@ -326,6 +327,9 @@ class BiodataController extends Controller
     /**
      * Update the specified resource in storage.
      */
+    /**
+     * Update the specified resource in storage.
+     */
     public function update(Request $request, $NPK)
     {
         try {
@@ -368,7 +372,7 @@ class BiodataController extends Controller
             $diff = $tgl_lahir->diff($request->tmk);
             $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
 
-            $pkwtUpdateData = [
+            DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->update([
                 'NAMA' => strtoupper($request->nama),
                 'JK' => strtoupper($request->jk),
                 'TGLLAHIR' => $request->tgl_lahir,
@@ -387,47 +391,7 @@ class BiodataController extends Controller
                 'STATUS' => $request->status,
                 'TANGGUNGAN' => $request->tanggungan,
                 'JURUSAN' => strtoupper($request->jurusan)
-            ];
-
-            // Request input field name kept as 'file_ijasah' (matches the existing
-            // form input / pelamar_details spelling), but it is written into the
-            // PKWT column 'file_ijazah' (the actual column name on that table).
-            $fileFieldMap = [
-                'file_surat_lamaran'  => 'file_surat_lamaran',
-                'file_cv'             => 'file_cv',
-                'file_ktp'            => 'file_ktp',
-                'file_kk'             => 'file_kk',
-                'file_ijasah'         => 'file_ijazah',
-                'file_akta_kelahiran' => 'file_akta_kelahiran',
-                'file_skck'           => 'file_skck',
-                'file_surat_sehat'    => 'file_surat_sehat',
-                'file_pas_foto'       => 'file_pas_foto',
-            ];
-
-            foreach ($fileFieldMap as $inputField => $pkwtColumn) {
-                if ($request->hasFile($inputField)) {
-                    $file = $request->file($inputField);
-                    $fileName = $NPK . '_' . strtoupper($request->nama) . '_' . $pkwtColumn . '.' . $file->getClientOriginalExtension();
-
-                    // Path relative to the 'public' disk (storage/app/public/...).
-                    // This exact string is what gets saved into the PKWT column,
-                    // so getSoftFiles() and any other reader can use it as-is.
-                    $relativePath = 'employees/' . $pkwtColumn . '/' . $fileName;
-
-                    $file->storeAs('employees/' . $pkwtColumn, $fileName, 'public');
-
-                    // Delete the old file using the path that was previously
-                    // stored in the DB (not reconstructed from a filename).
-                    $oldPath = DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->value($pkwtColumn);
-                    if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
-                    }
-
-                    $pkwtUpdateData[$pkwtColumn] = $relativePath;
-                }
-            }
-
-            DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->update($pkwtUpdateData);
+            ]);
 
             EmployeeMutation::create([
                 'npk' => $NPK,
@@ -520,28 +484,20 @@ class BiodataController extends Controller
         return view('biodata.gender', compact('data'));
     }
 
-    /**
-     * Return the list of an employee's documents.
-     *
-     * IMPORTANT: This now reads directly from the PKWT table (file_* columns),
-     * NOT from PELAMAR / pelamar_details. Documents are moved into the PKWT-owned
-     * folder ("berkas/karyawan/{field}/...") at assign-time by
-     * PelamarController::moveApplicantFilesToPkwt(), so this endpoint no longer
-     * depends on the applicant record still existing or being unchanged.
-     *
-     * Response shape is unchanged: {npk, count, docs}, so no blade/JS changes
-     * are required on the frontend that consumes this endpoint.
-     */
     public function getSoftFiles($npk)
     {
-        $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $npk)->first();
+        $pkwt = DB::connection('cii')
+            ->table('PKWT')
+            ->where('NPK', $npk)
+            ->select('KTP')
+            ->first();
 
         $labels = [
             'file_surat_lamaran'  => 'Surat Lamaran',
             'file_cv'             => 'CV',
             'file_ktp'            => 'KTP',
             'file_kk'             => 'KK',
-            'file_ijazah'         => 'Ijazah',
+            'file_ijasah'         => 'Ijazah',
             'file_akta_kelahiran' => 'Akta Kelahiran',
             'file_skck'           => 'SKCK',
             'file_surat_sehat'    => 'Surat Sehat',
@@ -550,20 +506,24 @@ class BiodataController extends Controller
 
         $docs = [];
 
-        if ($pkwt) {
-            foreach ($labels as $field => $label) {
-                // PKWT file_* columns now store the full path relative to the
-                // 'public' disk (e.g. "employees/file_cv/xxx.pdf"), not just a
-                // bare filename, so no folder-naming convention needs to be
-                // guessed here.
-                $relativePath = $pkwt->$field ?? null;
+        if ($pkwt && $pkwt->KTP) {
+            $pelamar = DB::table('PELAMAR')
+                ->where('NIK', $pkwt->KTP)
+                ->select('id')
+                ->first();
 
-                if (empty($relativePath)) {
-                    continue;
-                }
+            if ($pelamar) {
+                $detail = DB::table('pelamar_details')
+                    ->where('id_pelamar', $pelamar->id)
+                    ->orderByDesc('created_at')
+                    ->first();
 
-                if (Storage::disk('public')->exists($relativePath)) {
-                    $docs[$label] = asset('storage/' . $relativePath);
+                if ($detail) {
+                    foreach ($labels as $field => $label) {
+                        if (!empty($detail->$field)) {
+                            $docs[$label] = asset('storage/' . $detail->$field);
+                        }
+                    }
                 }
             }
         }

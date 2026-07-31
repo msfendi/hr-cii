@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use Psy\Util\Str as PsyStr;
 use Carbon\Carbon;
 
-class PelamarController extends Controller
+class PelamarControllerCopy extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -22,10 +22,17 @@ class PelamarController extends Controller
     public function index()
     {
         $pelamars = DB::connection('cii')->table('PELAMAR')
-            ->select('PELAMAR.ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP') // Added ID
+            ->select('PELAMAR.ID', 'NPK', 'NAMA', 'JENIS_KELAMIN', 'TMPT_LAHIR', 'TGL_LAHIR', 'TMK', 'UMUR', 'NIK', 'KABUPATEN', 'HP')
             ->leftJoin('pelamar_details', 'pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
-            ->where('IS_KONTRAK', 'FALSE')
-            ->where('pelamar_details.status_apply', 'ONBOARDING')
+            ->where(function ($query) {
+                $query->where('IS_KONTRAK', 'FALSE')
+                    ->where('pelamar_details.status_apply', 'ONBOARDING');
+            })
+            ->orWhere(function ($query) {
+                $query->whereNull('pelamar_details.id_pelamar')
+                    ->where('IS_KONTRAK', 'FALSE')
+                    ->whereNotNull('PELAMAR.NPK');               // tapi NPK terisi
+            })
             ->orderBy('NPK', 'ASC')
             ->get();
 
@@ -108,23 +115,15 @@ class PelamarController extends Controller
         $id_pelamar = $request->id_pelamar;
         $pelamar = DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->first();
 
-        // Fetch the applicant's latest detail record, which is where the
-        // uploaded documents (file_surat_lamaran, file_cv, etc.) currently live.
-        $pelamarDetail = DB::connection('cii')->table('pelamar_details')
-            ->where('id_pelamar', $id_pelamar)
-            ->orderByDesc('created_at')
-            ->first();
-
-        $npk = strtoupper($request->npk);
-
         $tgl_lahir = Carbon::parse($request->tgl_lahir);
         $diff = $tgl_lahir->diff(Carbon::now());
         $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
 
         $last_barcode = DB::connection('cii')->table('BIODATA')->orderBy('NPK', 'DESC')->orderBy('BARCODE', 'DESC')->first()->BARCODE + 1;
+
         DB::connection('cii')->table('PELAMAR')->where('ID', $id_pelamar)->update(
             [
-                'NPK' => $npk,
+                'NPK' => strtoupper($request->npk),
                 'NAMA' => strtoupper($request->nama),
                 'JENIS_KELAMIN' => strtoupper($request->jk),
                 'TMPT_LAHIR' => strtoupper($request->tempat_lahir) ?? '',
@@ -153,7 +152,7 @@ class PelamarController extends Controller
         $dept = DB::connection('cii')->table('DEPT')->select('*')->where('ID_DEPT', $request->id_dept)->first();
 
         DB::connection('cii')->table('BIODATA')->insert([
-            'NPK' => $npk,
+            'NPK' => strtoupper($request->npk),
             'NAMA_KARYAWAN' => strtoupper($request->nama),
             'BAG' => $dept->id_parent_dept,
             'ID_DEPT' => $request->id_dept,
@@ -164,13 +163,8 @@ class PelamarController extends Controller
             'IS_STAFF' => $request->has('is_staff') ? 1 : 0,
         ]);
 
-        // Move the applicant's uploaded documents out of the pelamar folder
-        // and into the PKWT/employee-owned folder. Returns a map of
-        // [pkwt_column => filename] ready to merge into the PKWT insert.
-        $pkwtFiles = $this->moveApplicantFilesToPkwt($pelamarDetail, $npk);
-
-        DB::connection('cii')->table('PKWT')->insert(array_merge([
-            'NPK' => $npk,
+        DB::connection('cii')->table('PKWT')->insert([
+            'NPK' => strtoupper($request->npk),
             'NAMA' => strtoupper($request->nama),
             'JK' => strtoupper($request->jk),
             'TGLLAHIR' => $request->tgl_lahir,
@@ -194,11 +188,11 @@ class PelamarController extends Controller
             'NOREK' => $request->norek,
             'JURUSAN' => strtoupper($request->jurusan),
             'FASKES' => strtoupper($request->faskes),
-        ], $pkwtFiles));
+        ]);
 
         // Cek kontrak ke berapa (berlaku untuk karyawan baru maupun lama yang kembali)
         $existingContracts = DB::table('employees_contract')
-            ->where('npk', $npk)
+            ->where('npk', strtoupper($request->npk))
             ->count();
         $contractKe = $existingContracts + 1;
 
@@ -208,7 +202,7 @@ class PelamarController extends Controller
 
         DB::table('employees_contract')->insert([
             'id'              => (string) \Illuminate\Support\Str::uuid(),
-            'npk'             => $npk,
+            'npk'             => strtoupper($request->npk),
             'contract_ke'     => $contractKe,
             'start_date'      => $startDate->toDateString(),
             'end_date'        => $endDate->toDateString(),
@@ -225,78 +219,13 @@ class PelamarController extends Controller
 
         if ($request->filled('bank_account')) {
             DB::table('payroll_masters')->insert([
-                'npk' => $npk,
+                'npk' => strtoupper($request->npk),
                 'bank_name' => 'PERMATA BANK',
                 'bank_account' => $request->bank_account,
             ]);
         }
 
         DB::connection('cii')->commit();
-    }
-
-    /**
-     * Move applicant's uploaded documents (stored on the 'public' disk under
-     * pelamar/{field}/...) into the PKWT/employee-owned folder
-     * (employees/{field}/... on the 'public' disk), and return a
-     * [pkwt_column => relative_path] map ready to merge into the PKWT insert.
-     *
-     * The PKWT file_* columns store the FULL path relative to the 'public'
-     * disk (e.g. "employees/file_cv/xxx.pdf"), matching what
-     * BiodataController::update() and getSoftFiles() expect — not just a
-     * bare filename.
-     *
-     * Note the column name mismatch between pelamar_details and PKWT:
-     * pelamar_details uses "file_ijasah", while PKWT uses "file_ijazah".
-     */
-    private function moveApplicantFilesToPkwt($pelamarDetail, $npk)
-    {
-        if (!$pelamarDetail) {
-            return [];
-        }
-
-        // pelamar_details column => PKWT column
-        $fieldMap = [
-            'file_surat_lamaran'  => 'file_surat_lamaran',
-            'file_cv'             => 'file_cv',
-            'file_ktp'            => 'file_ktp',
-            'file_kk'             => 'file_kk',
-            'file_ijasah'         => 'file_ijazah',
-            'file_akta_kelahiran' => 'file_akta_kelahiran',
-            'file_skck'           => 'file_skck',
-            'file_surat_sehat'    => 'file_surat_sehat',
-            'file_pas_foto'       => 'file_pas_foto',
-        ];
-
-        $result = [];
-
-        foreach ($fieldMap as $pelamarField => $pkwtField) {
-            $oldRelativePath = $pelamarDetail->$pelamarField ?? null; // e.g. "pelamar/file_cv/xxx.pdf"
-
-            if (empty($oldRelativePath) || !Storage::disk('public')->exists($oldRelativePath)) {
-                continue;
-            }
-
-            $extension = pathinfo($oldRelativePath, PATHINFO_EXTENSION);
-            $newFileName = $npk . '_' . time() . '_' . $pkwtField . ($extension ? '.' . $extension : '');
-            $newFolder = 'employees/' . $pkwtField;
-            $newRelativePath = $newFolder . '/' . $newFileName;
-
-            if (!Storage::disk('public')->exists($newFolder)) {
-                Storage::disk('public')->makeDirectory($newFolder);
-            }
-
-            try {
-                Storage::disk('public')->move($oldRelativePath, $newRelativePath);
-                // Store the full relative path, not just the filename.
-                $result[$pkwtField] = $newRelativePath;
-            } catch (\Throwable $e) {
-                // Don't let a single missing/locked file break the whole assignment;
-                // just skip moving that particular document.
-                continue;
-            }
-        }
-
-        return $result;
     }
 
 

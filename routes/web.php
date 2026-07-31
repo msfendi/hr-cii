@@ -92,6 +92,7 @@ use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
+use App\Http\Controllers\CanteenReportController;
 use App\Http\Controllers\DoorprizeController;
 use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\FoodMenuController;
@@ -1117,6 +1118,15 @@ Route::middleware(['auth', 'permission'])->prefix('exchange-rates')->name('excha
     Route::get('/', [ExchangeRateController::class, 'index'])->name('index');
     Route::get('/today', [ExchangeRateController::class, 'today'])->name('today');
     Route::post('/sync', [ExchangeRateController::class, 'sync'])->name('sync');
+});
+
+Route::middleware(['auth', 'permission'])->group(function () {
+    Route::get('/canteen-report', [CanteenReportController::class, 'index'])->name('canteen-report.index');
+    Route::get('/canteen-report/summary', [CanteenReportController::class, 'summaryData'])->name('canteen-report.summary');
+    Route::get('/canteen-report/detail', [CanteenReportController::class, 'detailData'])->name('canteen-report.detail');
+    Route::get('/canteen-report/duplicate', [CanteenReportController::class, 'duplicateData'])->name('canteen-report.duplicate');
+    Route::post('canteen-report/move', [CanteenReportController::class, 'moveScan'])->name('canteen-report.move');
+    Route::post('canteen-report/delete', [CanteenReportController::class, 'deleteScan'])->name('canteen-report.delete');
 });
 
 
