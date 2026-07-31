@@ -699,67 +699,116 @@ class MonitoringController extends Controller
         return false;
     }
 
+    /**
+     * Daftar host:port tambahan yang mau dimonitor sertifikat SSL-nya,
+     * di luar $this->sslHost (hris.chutex.id) yang sudah ada.
+     */
+    protected const EXTRA_SSL_TARGETS = [
+        ['host' => 'nextcloud.chutex.id', 'port' => 8010],
+        ['host' => 'passbolt.chutex.id', 'port' => 8012],
+    ];
+
+    /**
+     * Cek SSL untuk hris.chutex.id (host utama) + semua target tambahan
+     * di EXTRA_SSL_TARGETS. Hasilnya array of array (bukan lagi single
+     * assoc array), supaya blade bisa render banyak card sertifikat.
+     */
     protected function getSslInfo(): array
     {
         return Cache::remember('monitoring_ssl_info', 3600, function () {
-            $host = $this->sslHost;
-            $port = 443;
+            $targets = array_merge(
+                [['host' => $this->sslHost, 'port' => 443]],
+                self::EXTRA_SSL_TARGETS
+            );
 
-            try {
-                $context = stream_context_create([
-                    'ssl' => [
-                        'capture_peer_cert' => true,
-                        'verify_peer'       => false,
-                        'verify_peer_name'  => false,
-                    ],
-                ]);
-
-                $socket = @stream_socket_client(
-                    "ssl://{$host}:{$port}",
-                    $errno,
-                    $errstr,
-                    5,
-                    STREAM_CLIENT_CONNECT,
-                    $context
-                );
-
-                if (!$socket) {
-                    Log::warning("Gagal konek SSL ke {$host}: {$errstr}");
-                    return [
-                        'valid' => false,
-                        'host'  => $host,
-                        'error' => $errstr ?: 'Tidak bisa konek ke port 443',
-                    ];
-                }
-
-                $params = stream_context_get_params($socket);
-                fclose($socket);
-
-                $cert = $params['options']['ssl']['peer_certificate'] ?? null;
-                if (!$cert) {
-                    return ['valid' => false, 'host' => $host, 'error' => 'Sertifikat tidak ditemukan'];
-                }
-
-                $certInfo = openssl_x509_parse($cert);
-
-                $validFrom = $certInfo['validFrom_time_t'] ?? null;
-                $validTo   = $certInfo['validTo_time_t'] ?? null;
-                $daysLeft  = $validTo ? (int) floor(($validTo - time()) / 86400) : null;
-
-                return [
-                    'valid'       => true,
-                    'host'        => $host,
-                    'common_name' => $certInfo['subject']['CN'] ?? $host,
-                    'issuer'      => $certInfo['issuer']['O'] ?? ($certInfo['issuer']['CN'] ?? '-'),
-                    'valid_from'  => $validFrom ? date('Y-m-d', $validFrom) : null,
-                    'valid_to'    => $validTo ? date('Y-m-d', $validTo) : null,
-                    'days_left'   => $daysLeft,
-                    'expired'     => $daysLeft !== null && $daysLeft < 0,
-                ];
-            } catch (\Throwable $e) {
-                Log::warning('Gagal cek SSL certificate: ' . $e->getMessage());
-                return ['valid' => false, 'host' => $host, 'error' => $e->getMessage()];
+            $results = [];
+            foreach ($targets as $target) {
+                $results[] = $this->checkSslCert($target['host'], $target['port']);
             }
+
+            return $results;
         });
+    }
+
+    /**
+     * Cek sertifikat SSL untuk satu host:port tertentu. Diekstrak dari
+     * getSslInfo() lama supaya bisa dipakai ulang untuk multi-host
+     * (hris, nextcloud, passbolt, dst).
+     */
+    protected function checkSslCert(string $host, int $port): array
+    {
+        $label = $port === 443 ? $host : "{$host}:{$port}";
+
+        try {
+            $context = stream_context_create([
+                'ssl' => [
+                    'capture_peer_cert' => true,
+                    'verify_peer'       => false,
+                    'verify_peer_name'  => false,
+                ],
+            ]);
+
+            $socket = @stream_socket_client(
+                "ssl://{$host}:{$port}",
+                $errno,
+                $errstr,
+                5,
+                STREAM_CLIENT_CONNECT,
+                $context
+            );
+
+            if (!$socket) {
+                Log::warning("Gagal konek SSL ke {$label}: {$errstr}");
+                return [
+                    'valid' => false,
+                    'host'  => $host,
+                    'port'  => $port,
+                    'label' => $label,
+                    'error' => $errstr ?: "Tidak bisa konek ke port {$port}",
+                ];
+            }
+
+            $params = stream_context_get_params($socket);
+            fclose($socket);
+
+            $cert = $params['options']['ssl']['peer_certificate'] ?? null;
+            if (!$cert) {
+                return [
+                    'valid' => false,
+                    'host'  => $host,
+                    'port'  => $port,
+                    'label' => $label,
+                    'error' => 'Sertifikat tidak ditemukan',
+                ];
+            }
+
+            $certInfo = openssl_x509_parse($cert);
+
+            $validFrom = $certInfo['validFrom_time_t'] ?? null;
+            $validTo   = $certInfo['validTo_time_t'] ?? null;
+            $daysLeft  = $validTo ? (int) floor(($validTo - time()) / 86400) : null;
+
+            return [
+                'valid'       => true,
+                'host'        => $host,
+                'port'        => $port,
+                'label'       => $label,
+                'common_name' => $certInfo['subject']['CN'] ?? $host,
+                'issuer'      => $certInfo['issuer']['O'] ?? ($certInfo['issuer']['CN'] ?? '-'),
+                'valid_from'  => $validFrom ? date('Y-m-d', $validFrom) : null,
+                'valid_to'    => $validTo ? date('Y-m-d', $validTo) : null,
+                'days_left'   => $daysLeft,
+                'expired'     => $daysLeft !== null && $daysLeft < 0,
+            ];
+        } catch (\Throwable $e) {
+            Log::warning("Gagal cek SSL certificate {$label}: " . $e->getMessage());
+            return [
+                'valid' => false,
+                'host'  => $host,
+                'port'  => $port,
+                'label' => $label,
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 }

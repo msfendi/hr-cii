@@ -169,27 +169,10 @@
                         </div>
                     </div>
 
-                    <div class="col-xl-2 col-md-6 mb-4">
-                        <div class="card border-left-warning shadow h-100 py-2">
-                            <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                            SSL Certificate
-                                            <span class="status-dot" id="sslDot" style="width:8px;height:8px;"></span>
-                                        </div>
-                                        <div class="h6 mb-0 font-weight-bold text-gray-800" id="sslDomain">-</div>
-                                        <div class="text-xs text-gray-600 mt-1">
-                                            Issuer: <span id="sslIssuer">-</span><br>
-                                            Berlaku s/d: <span id="sslExpiry">-</span>
-                                            &middot; <span id="sslDaysLeft">-</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-auto"><i class="fas fa-lock fa-2x text-gray-300"></i></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- SSL Certificate card(s): di-generate otomatis oleh renderSsl() di JS,
+                         karena sekarang ada beberapa host (hris, nextcloud, passbolt).
+                         display:contents supaya col-xl-2 yang di-append jadi anak langsung .row -->
+                    <div id="sslCardsContainer" style="display:contents;"></div>
 
                     <div class="col-xl-2 col-md-6 mb-4">
                         <div class="card border-left-danger shadow h-100 py-2">
@@ -402,54 +385,84 @@ function nowLabel() {
     return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-function renderSsl(ssl) {
-    const dot = document.getElementById('sslDot');
-    const domainEl = document.getElementById('sslDomain');
-    const issuerEl = document.getElementById('sslIssuer');
-    const expiryEl = document.getElementById('sslExpiry');
-    const daysEl = document.getElementById('sslDaysLeft');
-
-    if (!ssl) {
-        dot.className = 'status-dot status-down';
-        domainEl.textContent = '-';
-        issuerEl.textContent = '-';
-        expiryEl.textContent = '-';
-        daysEl.textContent = '-';
-        return;
+/**
+ * Hitung kelas warna, kelas status-dot, dan label buat 1 entri SSL.
+ */
+function sslStatusMeta(ssl) {
+    if (!ssl || !ssl.valid) {
+        return {
+            dotClass: 'status-dot status-down',
+            cls: 'ssl-danger',
+            label: escapeHtml((ssl && ssl.error) || 'Gagal cek sertifikat'),
+        };
     }
-
-    domainEl.textContent = ssl.host || '-';
-
-    if (!ssl.valid) {
-        dot.className = 'status-dot status-down';
-        issuerEl.textContent = '-';
-        expiryEl.textContent = '-';
-        daysEl.innerHTML = `<span class="ssl-danger">${escapeHtml(ssl.error || 'Gagal cek sertifikat')}</span>`;
-        return;
-    }
-
-    issuerEl.textContent = ssl.issuer || '-';
-    expiryEl.textContent = ssl.valid_to || '-';
 
     const days = ssl.days_left;
     let cls = 'ssl-ok';
+    let dotClass = 'status-dot status-live';
     let label = `${days} hari lagi`;
 
     if (ssl.expired || days < 0) {
         cls = 'ssl-danger';
         label = 'Kadaluarsa';
-        dot.className = 'status-dot status-down';
+        dotClass = 'status-dot status-down';
     } else if (days <= 7) {
         cls = 'ssl-danger';
-        dot.className = 'status-dot status-live';
     } else if (days <= 30) {
         cls = 'ssl-warn';
-        dot.className = 'status-dot status-live';
-    } else {
-        dot.className = 'status-dot status-live';
     }
 
-    daysEl.innerHTML = `<span class="${cls} font-weight-bold">${label}</span>`;
+    return { dotClass, cls, label };
+}
+
+/**
+ * ssl: array of { host, port, label, valid, issuer, valid_to, days_left, expired, error }
+ * Satu card per entri (hris.chutex.id, nextcloud.chutex.id:8010, passbolt.chutex.id:8012, ...).
+ */
+function renderSsl(ssl) {
+    const container = document.getElementById('sslCardsContainer');
+    if (!container) return;
+
+    const list = Array.isArray(ssl) ? ssl : (ssl ? [ssl] : []);
+
+    if (!list.length) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = list.map((item) => {
+        const meta = sslStatusMeta(item);
+        const domain = escapeHtml((item && (item.label || item.host)) || '-');
+
+        const detail = (!item || !item.valid)
+            ? `<div class="text-xs text-gray-600 mt-1">
+                   <span class="${meta.cls}">${meta.label}</span>
+               </div>`
+            : `<div class="text-xs text-gray-600 mt-1">
+                   Issuer: ${escapeHtml(item.issuer || '-')}<br>
+                   Berlaku s/d: ${escapeHtml(item.valid_to || '-')}
+                   &middot; <span class="${meta.cls} font-weight-bold">${meta.label}</span>
+               </div>`;
+
+        return `
+            <div class="col-xl-2 col-md-6 mb-4">
+                <div class="card border-left-warning shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    SSL Certificate
+                                    <span class="${meta.dotClass}" style="width:8px;height:8px;"></span>
+                                </div>
+                                <div class="h6 mb-0 font-weight-bold text-gray-800">${domain}</div>
+                                ${detail}
+                            </div>
+                            <div class="col-auto"><i class="fas fa-lock fa-2x text-gray-300"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
 }
 
 function makeLineChart(ctx, label, color) {
