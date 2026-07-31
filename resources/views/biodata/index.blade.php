@@ -883,6 +883,8 @@
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
                                 <div class="modal-footer border-0 pb-4 pr-5 bg-white">
                                     <button type="button" class="btn btn-secondary px-4 font-weight-bold"
                                         data-dismiss="modal">Close</button>
@@ -1183,7 +1185,7 @@
 
             </div>
             <!-- End of Main Content -->
-            @include('layout.footer')
+        @include('layout.footer')
 </body>
 <!-- Page level plugins -->
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>

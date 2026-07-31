@@ -43,6 +43,7 @@ class EmployeesContractController extends Controller
 
         $roleAdmin = $user ? $user->hasRole('Admin') : false;
         $roleStaff = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
 
@@ -114,7 +115,7 @@ class EmployeesContractController extends Controller
             CASE WHEN c.status_contract = 'AKTIF' THEN 0 ELSE 1 END
         ")->orderBy('c.end_date', 'asc')
             ->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing) {
                 $sisa = (int) $row->sisa_hari;
                 $day  = (int) $row->end_day;
 
@@ -132,6 +133,8 @@ class EmployeesContractController extends Controller
                 if ($roleAdmin) {
                     $canSeeSalary = true;
                 } elseif ($roleStaff && $row->IS_STAFF == 1) {
+                    $canSeeSalary = true;
+                } elseif ($roleNonStaff && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
                 } elseif ($roleSewing && $row->IS_SEWING == 0 && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
@@ -164,6 +167,7 @@ class EmployeesContractController extends Controller
 
         $roleAdmin = $user ? $user->hasRole('Admin') : false;
         $roleStaff = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
 
@@ -175,12 +179,14 @@ class EmployeesContractController extends Controller
             ->orderBy('c.contract_ke', 'asc');
 
         $rows = $query->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing) {
                 // Transform financial data based on role
                 $canSeeSalary = false;
                 if ($roleAdmin) {
                     $canSeeSalary = true;
                 } elseif ($roleStaff && $row->IS_STAFF == 1) {
+                    $canSeeSalary = true;
+                } elseif ($roleNonStaff && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
                 } elseif ($roleSewing && $row->IS_SEWING == 0 && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
@@ -517,13 +523,14 @@ class EmployeesContractController extends Controller
 
         $roleAdmin     = $user ? $user->hasRole('Admin') : false;
         $roleStaff     = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff  = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing    = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
 
         $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
 
         return Excel::download(
-            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing),
+            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing),
             $filename
         );
     }
