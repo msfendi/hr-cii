@@ -1186,6 +1186,8 @@
             </div>
             <!-- End of Main Content -->
         @include('layout.footer')
+        </div>
+    </div>
 </body>
 <!-- Page level plugins -->
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
