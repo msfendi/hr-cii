@@ -79,6 +79,7 @@ class MonitoringController extends Controller
         'jepara' => [-6.5822, 110.6699],
         'kudus jawa tengah' => [-6.8048, 110.8405],
         'sukoharjo' => [-7.6879, 110.8368],
+        'grogol' => [-7.6146, 110.8136],
         'boyolali' => [-7.5307, 110.5943],
         'karanganyar' => [-7.6003, 110.9427],
         'wonogiri' => [-7.8156, 110.9235],
