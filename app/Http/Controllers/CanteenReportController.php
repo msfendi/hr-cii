@@ -12,10 +12,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Illuminate\Support\Str;
 
 class CanteenReportController extends Controller
 {
@@ -830,6 +832,8 @@ class CanteenReportController extends Controller
      */
     public function exportRekapPdf(Request $request)
     {
+
+        $userName = Auth::user()->name ?? 'Admin';
         $request->validate([
             'start_date' => 'required|date',
             'end_date'   => 'required|date',
@@ -892,6 +896,7 @@ class CanteenReportController extends Controller
             'periode'     => $periode,
             'report'      => $report,
             'grandTotal'  => $grandTotal,
+            'userName'    => Str::upper($userName),
         ])->setPaper('a4', 'portrait');
 
         $fileName = 'Realisasi_Kantin_' . str_replace(' ', '_', $kantin) . '_' . $start . '_sd_' . $end . '.pdf';

@@ -97,8 +97,8 @@
             <td class="signature-space"></td>
         </tr>
         <tr>
-            <td class="signature-name">{{-- Nama Admin --}}</td>
-            <td class="signature-name">{{-- Nama Admin Manager --}}</td>
+            <td class="signature-name">{{ $userName ?? 'Admin' }}</td>
+            <td class="signature-name">ROSALIA WIWIEK WIDAWATI</td>
         </tr>
         <tr>
             <td>Admin</td>
