@@ -9,9 +9,12 @@ use Google\Auth\Credentials\ServiceAccountCredentials;
 
 class MonitoringController extends Controller
 {
-    protected string $exporterUrl;
-    protected int $timeout;
-    protected string $sslHost;
+    /**
+     * Definisi semua server yang dimonitor. Key array ('hris', 'nextcloud',
+     * 'passbolt') dipakai juga sebagai section-key di response JSON & di
+     * blade, jadi kalau nambah server baru cukup tambah 1 entri di sini.
+     */
+    protected array $servers;
 
     /**
      * Realtime API GA4 hanya mengembalikan NAMA kota/negara, bukan lat/lng,
@@ -131,11 +134,35 @@ class MonitoringController extends Controller
 
     public function __construct()
     {
-        // Diambil dari config/services.php -> env NODE_EXPORTER_URL
-        $this->exporterUrl = config('services.node_exporter.url', 'http://192.168.1.240:9100/metrics');
-        $this->timeout     = (int) config('services.node_exporter.timeout', 3);
-        $this->sslHost = config('services.ssl_monitor.host')
-            ?: (parse_url(config('app.url'), PHP_URL_HOST) ?: 'hris.chutex.id');
+        // Semua diambil dari config/services.php supaya bisa di-override lewat .env.
+        // Fallback value = kondisi jaringan saat ini (dikasih user).
+        $this->servers = [
+            'hris' => [
+                'name'         => 'HRIS Chutex',
+                'exporter_url' => config('services.node_exporter.url', 'http://192.168.1.240:9100/metrics'),
+                'timeout'      => (int) config('services.node_exporter.timeout', 3),
+                'ssl_host'     => config('services.ssl_monitor.host')
+                    ?: (parse_url(config('app.url'), PHP_URL_HOST) ?: 'hris.chutex.id'),
+                'ssl_port'     => 443,
+                'ga4'          => true, // hanya HRIS yang punya Google Analytics
+            ],
+            'nextcloud' => [
+                'name'         => 'Nextcloud',
+                'exporter_url' => config('services.node_exporter_nextcloud.url', 'http://192.168.1.242:9100/metrics'),
+                'timeout'      => (int) config('services.node_exporter_nextcloud.timeout', 3),
+                'ssl_host'     => config('services.ssl_monitor.nextcloud_host', 'nextcloud.chutex.id'),
+                'ssl_port'     => (int) config('services.ssl_monitor.nextcloud_port', 8010),
+                'ga4'          => false,
+            ],
+            'passbolt' => [
+                'name'         => 'Passbolt',
+                'exporter_url' => config('services.node_exporter_passbolt.url', 'http://192.168.1.245:9100/metrics'),
+                'timeout'      => (int) config('services.node_exporter_passbolt.timeout', 3),
+                'ssl_host'     => config('services.ssl_monitor.passbolt_host', 'passbolt.chutex.id'),
+                'ssl_port'     => (int) config('services.ssl_monitor.passbolt_port', 8012),
+                'ga4'          => false,
+            ],
+        ];
     }
 
     public function index()
@@ -145,18 +172,32 @@ class MonitoringController extends Controller
 
     public function stats()
     {
-        $metrics = $this->fetchMetrics();
+        $servers = [];
+
+        foreach ($this->servers as $key => $server) {
+            $metrics = $this->fetchMetrics($server['exporter_url'], $server['timeout']);
+
+            $servers[$key] = [
+                'key'          => $key,
+                'name'         => $server['name'],
+                'cpu'          => $this->getCpuUsage($metrics, $key),
+                'ram'          => $this->getRamUsage($metrics),
+                'disk'         => $this->getDiskUsage($metrics),
+                'network'      => $this->getNetworkTraffic($metrics, $key),
+                'ssl'          => $this->getSslForServer($key, $server['ssl_host'], $server['ssl_port']),
+                'exporter_ok'  => $metrics !== null,
+                'exporter_url' => $server['exporter_url'],
+            ];
+
+            // GA4 cuma relevan buat HRIS (satu-satunya yang punya property GA4).
+            if ($server['ga4']) {
+                $servers[$key]['ga4'] = $this->getGa4Analytics();
+            }
+        }
 
         return response()->json([
-            'cpu'          => $this->getCpuUsage($metrics),
-            'ram'          => $this->getRamUsage($metrics),
-            'disk'         => $this->getDiskUsage($metrics),
-            'network'      => $this->getNetworkTraffic($metrics),
-            'ssl'          => $this->getSslInfo(),
-            'ga4'          => $this->getGa4Analytics(),
-            'server_time'  => now()->format('H:i:s'),
-            'exporter_ok'  => $metrics !== null,
-            'exporter_url' => $this->exporterUrl,
+            'servers'     => $servers,
+            'server_time' => now()->format('H:i:s'),
         ]);
     }
 
@@ -454,22 +495,22 @@ class MonitoringController extends Controller
     }
 
     /**
-     * Ambil teks mentah dari node_exporter (http://192.168.1.240:9100/metrics)
-     * lalu parse ke array. Return null kalau exporter tidak bisa dihubungi.
+     * Ambil teks mentah dari node_exporter server tertentu lalu parse ke array.
+     * Return null kalau exporter tidak bisa dihubungi.
      */
-    protected function fetchMetrics(): ?array
+    protected function fetchMetrics(string $url, int $timeout): ?array
     {
         try {
-            $response = Http::timeout($this->timeout)->get($this->exporterUrl);
+            $response = Http::timeout($timeout)->get($url);
 
             if (!$response->ok()) {
-                Log::warning('node_exporter merespon non-200', ['status' => $response->status()]);
+                Log::warning('node_exporter merespon non-200', ['url' => $url, 'status' => $response->status()]);
                 return null;
             }
 
             return $this->parseMetrics($response->body());
         } catch (\Throwable $e) {
-            Log::warning('Gagal konek ke node_exporter: ' . $e->getMessage());
+            Log::warning("Gagal konek ke node_exporter ({$url}): " . $e->getMessage());
             return null;
         }
     }
@@ -513,8 +554,9 @@ class MonitoringController extends Controller
     /**
      * % CPU dihitung dari counter node_cpu_seconds_total (mode=idle vs total)
      * dengan membandingkan dua titik waktu (disimpan di cache antar polling).
+     * $serverKey dipakai supaya snapshot tiap server tidak saling timpa.
      */
-    protected function getCpuUsage(?array $metrics): array
+    protected function getCpuUsage(?array $metrics, string $serverKey): array
     {
         if (!$metrics || !isset($metrics['node_cpu_seconds_total'])) {
             return ['percent' => 0, 'source' => 'node_exporter_unreachable'];
@@ -530,9 +572,10 @@ class MonitoringController extends Controller
             }
         }
 
+        $cacheKey = "monitoring_cpu_snapshot_{$serverKey}";
         $now  = microtime(true);
-        $prev = Cache::get('monitoring_cpu_snapshot');
-        Cache::put('monitoring_cpu_snapshot', ['idle' => $idle, 'total' => $total, 'time' => $now], 60);
+        $prev = Cache::get($cacheKey);
+        Cache::put($cacheKey, ['idle' => $idle, 'total' => $total, 'time' => $now], 60);
 
         if (!$prev) {
             return ['percent' => 0, 'source' => 'node_exporter_warmup']; // butuh 1x polling lagi
@@ -648,7 +691,7 @@ class MonitoringController extends Controller
         ];
     }
 
-    protected function getNetworkTraffic(?array $metrics): array
+    protected function getNetworkTraffic(?array $metrics, string $serverKey): array
     {
         if (!$metrics || !isset($metrics['node_network_receive_bytes_total'])) {
             return ['rx_mbps' => 0, 'tx_mbps' => 0, 'source' => 'node_exporter_unreachable'];
@@ -670,9 +713,10 @@ class MonitoringController extends Controller
             $tx += $row['value'];
         }
 
+        $cacheKey = "monitoring_net_snapshot_{$serverKey}";
         $now  = microtime(true);
-        $prev = Cache::get('monitoring_net_snapshot');
-        Cache::put('monitoring_net_snapshot', ['rx' => $rx, 'tx' => $tx, 'time' => $now], 60);
+        $prev = Cache::get($cacheKey);
+        Cache::put($cacheKey, ['rx' => $rx, 'tx' => $tx, 'time' => $now], 60);
 
         if (!$prev) {
             return ['rx_mbps' => 0, 'tx_mbps' => 0, 'source' => 'node_exporter_warmup'];
@@ -700,33 +744,14 @@ class MonitoringController extends Controller
     }
 
     /**
-     * Daftar host:port tambahan yang mau dimonitor sertifikat SSL-nya,
-     * di luar $this->sslHost (hris.chutex.id) yang sudah ada.
+     * Cek SSL untuk 1 server tertentu (dipanggil per section: hris, nextcloud,
+     * passbolt). Di-cache 1 jam per server supaya tidak buka koneksi TLS
+     * tiap kali polling 5 detik.
      */
-    protected const EXTRA_SSL_TARGETS = [
-        ['host' => 'nextcloud.chutex.id', 'port' => 8010],
-        ['host' => 'passbolt.chutex.id', 'port' => 8012],
-    ];
-
-    /**
-     * Cek SSL untuk hris.chutex.id (host utama) + semua target tambahan
-     * di EXTRA_SSL_TARGETS. Hasilnya array of array (bukan lagi single
-     * assoc array), supaya blade bisa render banyak card sertifikat.
-     */
-    protected function getSslInfo(): array
+    protected function getSslForServer(string $serverKey, string $host, int $port): array
     {
-        return Cache::remember('monitoring_ssl_info', 3600, function () {
-            $targets = array_merge(
-                [['host' => $this->sslHost, 'port' => 443]],
-                self::EXTRA_SSL_TARGETS
-            );
-
-            $results = [];
-            foreach ($targets as $target) {
-                $results[] = $this->checkSslCert($target['host'], $target['port']);
-            }
-
-            return $results;
+        return Cache::remember("monitoring_ssl_info_{$serverKey}", 3600, function () use ($host, $port) {
+            return $this->checkSslCert($host, $port);
         });
     }
 
