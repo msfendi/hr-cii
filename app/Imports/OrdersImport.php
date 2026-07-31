@@ -12,8 +12,10 @@ use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithStartRow;
+use Maatwebsite\Excel\Events\AfterImport;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Imports\HeadingRowFormatter;
@@ -25,7 +27,8 @@ class OrdersImport implements
     WithChunkReading,
     WithMultipleSheets,
     ShouldQueue,
-    WithHeadingRow
+    WithHeadingRow,
+    WithEvents
 {
     use Importable;
 
@@ -92,7 +95,9 @@ class OrdersImport implements
 
         $insert = [];
 
-        $processedInChunk = 0;
+        $importedInChunk  = 0;
+        $cancelledInChunk = 0;
+        $blankInChunk     = 0;
 
         $lastLabel = null;
 
@@ -100,16 +105,18 @@ class OrdersImport implements
 
             // Abaikan baris jika kolom uraian kosong
             if (blank($row['uraian'] ?? null)) {
+                $blankInChunk++;
                 continue;
             }
 
             // Cek apakah kolom Catatan berisi "CANCEL" (case insensitive, trim whitespace)
             $catatan = $this->str($row['Catatan'] ?? null);
             if ($catatan !== null && strtoupper(trim($catatan)) === 'CANCEL') {
+                $cancelledInChunk++;
                 continue;
             }
 
-            $processedInChunk++;
+            $importedInChunk++;
 
             // Untuk informasi progress
             $lastLabel = trim(
@@ -200,11 +207,53 @@ class OrdersImport implements
          * Update progress import
          */
         $this->updateProgress(
-            $processedInChunk,
+            $importedInChunk,
+            $cancelledInChunk,
+            $blankInChunk,
             $lastLabel
         );
 
         unset($insert, $rows);
+    }
+
+    /**
+     * Event bawaan Laravel Excel yang terpicu setelah SELURUH chunk
+     * pada file selesai diproses (bukan per-chunk).
+     *
+     * Ini dipakai sebagai penanda "done" yang sebenarnya, karena
+     * `processed` (baris yang benar-benar di-insert) bisa saja tidak
+     * pernah menyamai `total` (baris terbaca dari file) apabila ada
+     * baris CANCEL / kosong yang sengaja dilewati. Kalau "done" hanya
+     * dicek dari processed >= total, progress akan macet selamanya
+     * begitu ada 1 saja baris yang di-skip.
+     */
+    public function registerEvents(): array
+    {
+        return [
+            AfterImport::class => [$this, 'onAfterImport'],
+        ];
+    }
+
+    public function onAfterImport(AfterImport $event): void
+    {
+        $key = "order_import:{$this->importBatch}";
+
+        $state = Cache::get($key, [
+            'processed'      => 0,
+            'total'          => $this->totalRows,
+            'skipped_cancel' => 0,
+            'skipped_blank'  => 0,
+            'last'           => null,
+        ]);
+
+        // Kalau sebelumnya sudah ditandai error, jangan ditimpa jadi done
+        if (($state['status'] ?? null) === 'error') {
+            return;
+        }
+
+        $state['status'] = 'done';
+
+        Cache::put($key, $state, now()->addHour());
     }
 
     /**
@@ -237,7 +286,9 @@ class OrdersImport implements
      * Update progress import
      */
     private function updateProgress(
-        int $addedRows,
+        int $importedRows,
+        int $cancelledRows,
+        int $blankRows,
         ?string $lastLabel
     ): void {
 
@@ -246,25 +297,34 @@ class OrdersImport implements
         $state = Cache::get(
             $key,
             [
-                'processed' => 0,
-                'total'     => $this->totalRows,
-                'status'    => 'processing',
-                'last'      => null,
+                'processed'       => 0,
+                'total'           => $this->totalRows,
+                'status'          => 'processing',
+                'last'            => null,
+                'skipped_cancel'  => 0,
+                'skipped_blank'   => 0,
             ]
         );
 
         $state['processed'] =
-            ($state['processed'] ?? 0) + $addedRows;
+            ($state['processed'] ?? 0) + $importedRows;
+
+        $state['skipped_cancel'] =
+            ($state['skipped_cancel'] ?? 0) + $cancelledRows;
+
+        $state['skipped_blank'] =
+            ($state['skipped_blank'] ?? 0) + $blankRows;
 
         if ($lastLabel) {
             $state['last'] = $lastLabel;
         }
 
-        $state['status'] =
-            ($state['total'] > 0 &&
-                $state['processed'] >= $state['total'])
-            ? 'done'
-            : 'processing';
+        // Status "done" final HANYA diset lewat onAfterImport().
+        // Di sini kita cuma pastikan tidak menimpa status done/error
+        // yang mungkin sudah diset oleh chunk/event lain.
+        if (!in_array($state['status'] ?? null, ['done', 'error'], true)) {
+            $state['status'] = 'processing';
+        }
 
         Cache::put(
             $key,

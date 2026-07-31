@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/fontawesome-free/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/css/sb-admin-2.min.css">
 
+    <!-- DataTables -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css">
+
     <style>
         .import-card { border: none; border-radius: .75rem; overflow: hidden; }
         .import-card .card-header-gradient {
@@ -52,6 +55,8 @@
 
         .result-alert { display: none; }
         #btnSubmit[disabled] { cursor: not-allowed; opacity: .7; }
+
+        #ordersTable_wrapper .table { font-size: .85rem; }
     </style>
 </head>
 <body id="page-top">
@@ -166,6 +171,46 @@
 
                             </div>
                         </div>
+
+                        <!-- DATA HASIL IMPORT -->
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                                <h6 class="m-0 font-weight-bold text-primary">
+                                    <i class="fas fa-table mr-1"></i> Data Order (mon_orders)
+                                </h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="btnRefreshTable">
+                                    <i class="fas fa-sync-alt fa-sm"></i> Refresh
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table id="ordersTable" class="table table-bordered table-hover w-100">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Uraian</th>
+                                                <th>OCF</th>
+                                                <th>Buyer PO</th>
+                                                <th>Buyer</th>
+                                                <th>Brand</th>
+                                                <th>Style</th>
+                                                <th>Item</th>
+                                                <th>Qty Ord</th>
+                                                <th>Destination</th>
+                                                <th>Shipment Mode</th>
+                                                <th>Prod. Delivery</th>
+                                                <th>Buyer Delivery</th>
+                                                <th>Catatan</th>
+                                                <th>Batch Import</th>
+                                                <th>Diimport Pada</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -199,6 +244,13 @@
 <script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/vendor/jquery-easing/jquery.easing.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-sb-admin-2@gh-pages/js/sb-admin-2.min.js"></script>
 
+<!-- DataTables -->
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js"></script>
+
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
 (function(){
     const form            = document.getElementById('importForm');
@@ -219,6 +271,49 @@
     const modeReplaceBox  = document.getElementById('modeReplaceBox');
 
     let pollTimer = null;
+
+    // --- DataTables: tabel hasil import (mon_orders) ---
+    const ordersTable = $('#ordersTable').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: '{{ url('monitoring/order-import/data') }}',
+            type: 'GET'
+        },
+        order: [[0, 'desc']],
+        columns: [
+            { data: 'id' },
+            { data: 'uraian' },
+            { data: 'ocf_no' },
+            { data: 'buyer_po' },
+            { data: 'buyer' },
+            { data: 'brand' },
+            { data: 'style' },
+            { data: 'item' },
+            { data: 'qty_ord' },
+            { data: 'destination' },
+            { data: 'shipment_mode' },
+            { data: 'production_delivery' },
+            { data: 'buyer_delivery' },
+            { data: 'catatan' },
+            { data: 'import_batch' },
+            { data: 'created_at' }
+        ],
+        language: {
+            processing: 'Memuat data...',
+            search: 'Cari:',
+            lengthMenu: 'Tampilkan _MENU_ baris',
+            info: 'Menampilkan _START_ - _END_ dari _TOTAL_ baris',
+            infoEmpty: 'Tidak ada data',
+            infoFiltered: '(disaring dari _MAX_ total baris)',
+            paginate: { previous: 'Sebelumnya', next: 'Berikutnya' },
+            zeroRecords: 'Data tidak ditemukan'
+        }
+    });
+
+    document.getElementById('btnRefreshTable').addEventListener('click', () => {
+        ordersTable.ajax.reload(null, false);
+    });
 
     // --- Drag & drop / klik untuk pilih file ---
     dropZone.addEventListener('click', () => fileInput.click());
@@ -265,6 +360,11 @@
         btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Mengimpor...';
     }
 
+    function finishUI(){
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="fas fa-file-import fa-sm mr-1"></i> Import Sekarang';
+    }
+
     function pollProgress(batchId, total){
         pollTimer = setInterval(() => {
             fetch(`{{ url('monitoring/order-import/progress') }}/${batchId}`, {
@@ -272,15 +372,18 @@
             })
             .then(r => r.json())
             .then(state => {
-                const processed = state.processed || 0;
-                const totalRows = state.total || total || 0;
-                const pct = totalRows > 0 ? Math.min(100, Math.round((processed / totalRows) * 100)) : 0;
+                const processed      = state.processed || 0;
+                const totalRows      = state.total || total || 0;
+                const skippedCancel  = state.skipped_cancel || 0;
+                const skippedBlank   = state.skipped_blank || 0;
+                const touched        = processed + skippedCancel + skippedBlank;
+                const pct = totalRows > 0 ? Math.min(100, Math.round((touched / totalRows) * 100)) : 0;
 
                 progressBar.style.width = pct + '%';
                 progressPercent.textContent = pct + '%';
 
                 if (totalRows > 0) {
-                    progressStatus.innerHTML = `Baris ke <b>${fmt(processed)}</b> dari <b>${fmt(totalRows)}</b>` +
+                    progressStatus.innerHTML = `Baris ke <b>${fmt(touched)}</b> dari <b>${fmt(totalRows)}</b>` +
                         (state.last ? ` &mdash; data terakhir: <span class="badge badge-light border">${state.last}</span>` : '');
                 } else {
                     progressStatus.textContent = `Memproses ${fmt(processed)} baris...`;
@@ -292,18 +395,46 @@
                     progressBar.classList.add('bg-success');
                     progressBar.style.width = '100%';
                     progressPercent.textContent = '100%';
-                    successText.textContent = `Import selesai. Total ${fmt(processed)} baris berhasil diproses. Batch: ${batchId}`;
+
+                    let detail = `<b>${fmt(processed)}</b> dari <b>${fmt(totalRows)}</b> baris berhasil diimport.`;
+                    if (skippedCancel > 0) {
+                        detail += `<br>${fmt(skippedCancel)} baris dilewati karena status <b>CANCEL</b>.`;
+                    }
+                    if (skippedBlank > 0) {
+                        detail += `<br>${fmt(skippedBlank)} baris dilewati karena kolom uraian kosong.`;
+                    }
+
+                    successText.textContent = `Import selesai. ${fmt(processed)} dari ${fmt(totalRows)} baris berhasil diproses. Batch: ${batchId}`;
                     successAlert.style.display = 'block';
-                    btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = '<i class="fas fa-file-import fa-sm mr-1"></i> Import Sekarang';
+                    finishUI();
+
+                    if (window.Swal) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Import Selesai!',
+                            html: detail,
+                            confirmButtonText: 'OK'
+                        });
+                    }
+
+                    // refresh tabel hasil import
+                    ordersTable.ajax.reload(null, false);
+
                 } else if (state.status === 'error') {
                     clearInterval(pollTimer);
                     progressBar.classList.remove('progress-bar-striped-anim', 'bg-primary');
                     progressBar.classList.add('bg-danger');
                     errorText.textContent = state.message || 'Import gagal diproses.';
                     errorAlert.style.display = 'block';
-                    btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = '<i class="fas fa-file-import fa-sm mr-1"></i> Import Sekarang';
+                    finishUI();
+
+                    if (window.Swal) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Import Gagal',
+                            text: state.message || 'Import gagal diproses.'
+                        });
+                    }
                 }
             })
             .catch(() => {
@@ -338,8 +469,7 @@
             progressSection.style.display = 'none';
             errorText.textContent = err.message || 'Gagal memulai import.';
             errorAlert.style.display = 'block';
-            btnSubmit.disabled = false;
-            btnSubmit.innerHTML = '<i class="fas fa-file-import fa-sm mr-1"></i> Import Sekarang';
+            finishUI();
         });
     });
 })();

@@ -1089,6 +1089,7 @@ Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permissio
     Route::post('/order/import', [OrderImportController::class, 'store'])->name('order.import.store');
     Route::get('order-import/progress/{batchId}', [OrderImportController::class, 'progress'])
         ->name('order.import.progress');
+    Route::get('order-import/data', [OrderImportController::class, 'data'])->name('order.import.data');
     Route::post('sync-bom', [MonitoringDashboardController::class, 'syncBom'])->name('sync.bom');
     Route::post('sync-po', [MonitoringDashboardController::class, 'syncPo'])->name('sync.po');
     Route::get('dashboard/calendar', [MonitoringDashboardController::class, 'calendar'])->name('dashboard.calendar');

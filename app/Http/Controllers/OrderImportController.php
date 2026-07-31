@@ -32,10 +32,12 @@ class OrderImportController extends Controller
         $batchId = (string) Str::uuid();
 
         Cache::put("order_import:{$batchId}", [
-            'processed' => 0,
-            'total'     => $totalRows,
-            'status'    => 'processing',
-            'last'      => null,
+            'processed'      => 0,
+            'total'          => $totalRows,
+            'status'         => 'processing',
+            'last'           => null,
+            'skipped_cancel' => 0,
+            'skipped_blank'  => 0,
         ], now()->addHour());
 
         if ($request->input('mode') === 'replace') {
@@ -67,6 +69,75 @@ class OrderImportController extends Controller
         }
 
         return response()->json($state);
+    }
+
+    /**
+     * Endpoint server-side untuk DataTables, menampilkan isi tabel
+     * mon_orders supaya hasil import bisa langsung dicek dari halaman
+     * yang sama.
+     */
+    public function data(Request $request)
+    {
+        $columns = [
+            'id',
+            'uraian',
+            'ocf_no',
+            'buyer_po',
+            'buyer',
+            'brand',
+            'style',
+            'item',
+            'qty_ord',
+            'destination',
+            'shipment_mode',
+            'production_delivery',
+            'buyer_delivery',
+            'catatan',
+            'import_batch',
+            'created_at',
+        ];
+
+        $draw   = (int) $request->input('draw', 1);
+        $start  = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 25);
+        $search = trim((string) $request->input('search.value', ''));
+
+        $base = DB::table('mon_orders');
+
+        $recordsTotal = (clone $base)->count();
+
+        if ($search !== '') {
+            $base->where(function ($q) use ($search) {
+                $q->where('uraian', 'like', "%{$search}%")
+                    ->orWhere('ocf_no', 'like', "%{$search}%")
+                    ->orWhere('buyer_po', 'like', "%{$search}%")
+                    ->orWhere('buyer', 'like', "%{$search}%")
+                    ->orWhere('brand', 'like', "%{$search}%")
+                    ->orWhere('style', 'like', "%{$search}%")
+                    ->orWhere('item', 'like', "%{$search}%")
+                    ->orWhere('destination', 'like', "%{$search}%")
+                    ->orWhere('import_batch', 'like', "%{$search}%");
+            });
+        }
+
+        $recordsFiltered = (clone $base)->count();
+
+        $orderColumnIndex = (int) $request->input('order.0.column', 0);
+        $orderDir = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $orderColumn = $columns[$orderColumnIndex] ?? 'id';
+
+        $rows = $base
+            ->orderBy($orderColumn, $orderDir)
+            ->offset($start)
+            ->limit($length > 0 ? $length : 25)
+            ->get($columns);
+
+        return response()->json([
+            'draw'            => $draw,
+            'recordsTotal'    => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data'            => $rows,
+        ]);
     }
 
     private function countDataRows(string $path): int
