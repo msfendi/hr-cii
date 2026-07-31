@@ -3,11 +3,11 @@
     <div id="wrapper"> @include('layout.sidebar') <div id="content-wrapper" class="d-flex flex-column">
         <div id="content"> @include('layout.navbar') <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
-              <h1 class="h3 mb-0 text-gray-800">Edit Expat On Leave</h1>
+              <h1 class="h3 mb-0 text-gray-800">Edit Expat Leave Expense</h1>
             </div>
             <div class="card shadow mb-4">
               <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary"> Form Edit Expat On Leave </h6>
+                <h6 class="m-0 font-weight-bold text-primary"> Form Edit Expat Leave Expense </h6>
               </div>
               <div class="card-body">
                 <form method="POST" action="{{ route('expat.onleave.update', $data->id) }}"> @csrf @if ($message = Session::get('success')) <div class="alert alert-success">{{ $message }}</div> @endif @if ($errors->any()) <div class="alert alert-danger">
@@ -26,11 +26,11 @@
                         </select>
                       </div>
                       <div class="form-group">
-                        <label>On Leave Start</label>
+                        <label>Leave Expense Start</label>
                         <input type="date" name="onleave_start" class="form-control" value="{{ old('onleave_start', $data->onleave_start) }}" required>
                       </div>
                       <div class="form-group">
-                        <label>On Leave End</label>
+                        <label>Leave Expense End</label>
                         <input type="date" name="onleave_end" class="form-control" value="{{ old('onleave_end', $data->onleave_end) }}" required>
                       </div>
                       <div class="form-group">
@@ -142,7 +142,7 @@
                           Add Component
                       </button>
                   </div>
-                  <button type="submit" class="btn btn-primary btn-block"> Update Expat On Leave </button>
+                  <button type="submit" class="btn btn-primary btn-block"> Update Expat Leave Expense </button>
                 </form>
               </div>
             </div>

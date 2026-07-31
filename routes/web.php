@@ -101,6 +101,7 @@ use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\MonitoringDashboardController;
 use App\Http\Controllers\MonitoringRekonsiliasiController;
 use App\Http\Controllers\OrderImportController;
+use App\Http\Controllers\OutsourceController;
 
 /*
 |--------------------------------------------------------------------------
@@ -1128,6 +1129,27 @@ Route::middleware(['auth', 'permission'])->group(function () {
     Route::get('/canteen-report/duplicate', [CanteenReportController::class, 'duplicateData'])->name('canteen-report.duplicate');
     Route::post('canteen-report/move', [CanteenReportController::class, 'moveScan'])->name('canteen-report.move');
     Route::post('canteen-report/delete', [CanteenReportController::class, 'deleteScan'])->name('canteen-report.delete');
+    Route::post('/canteen-report/manual-store', [CanteenReportController::class, 'manualStore'])->name('canteen-report.manual-store');
+    Route::get('/canteen-report/employee-options', [CanteenReportController::class, 'employeeOptions'])->name('canteen-report.employee-options');
+    Route::get('/canteen-report/outsource-options', [CanteenReportController::class, 'outsourceOptions'])->name('canteen-report.outsource-options');
+
+    // Template & import excel shift siang/malam
+    Route::get('/canteen-report/template', [CanteenReportController::class, 'downloadTemplate'])->name('canteen-report.template');
+    Route::post('/canteen-report/import', [CanteenReportController::class, 'importShift'])->name('canteen-report.import');
+
+    // Export rekap PDF (format "Realisasi Kantin")
+    Route::get('/canteen-report/export-pdf', [CanteenReportController::class, 'exportRekapPdf'])->name('canteen-report.export-pdf');
+});
+
+Route::prefix('outsource')->name('outsource.')->middleware(['auth', 'permission'])->group(function () {
+    Route::get('/', [OutsourceController::class, 'index'])->name('index');
+    Route::get('/create', [OutsourceController::class, 'create'])->name('create');
+    Route::post('/', [OutsourceController::class, 'store'])->name('store');
+    Route::get('/{id}/edit', [OutsourceController::class, 'edit'])->name('edit');
+    Route::put('/{id}', [OutsourceController::class, 'update'])->name('update');
+    Route::delete('/{id}', [OutsourceController::class, 'destroy'])->name('destroy');
+    Route::get('/template/download', [OutsourceController::class, 'template'])->name('template');
+    Route::post('/import/upload', [OutsourceController::class, 'import'])->name('import');
 });
 
 

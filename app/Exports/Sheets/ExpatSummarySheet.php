@@ -228,9 +228,9 @@ class ExpatSummarySheet implements
             'Total Living Cost',
             'Total Legal Cost',
             'Total Meal Cost',
-            'On Leave Count',
-            'Total On Leave Days',
-            'On Leave Amount',
+            'Leave Expense Count',
+            'Total Leave Expense Days',
+            'Leave Expense Amount',
             'Total Amount'
         ];
     }
@@ -299,7 +299,7 @@ class ExpatSummarySheet implements
         | P = Total Living Cost
         | Q = Total Legal Cost
         | R = Total Meal
-        | U = On Leave Amount
+        | U = Leave Expense Amount
         | V = Total Amount
         */
         $sheet->getStyle("N2:R{$highestRow}")
