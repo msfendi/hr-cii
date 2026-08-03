@@ -1721,20 +1721,24 @@ END AS special_overtime_hours
                                 $employeeDates = DB::table('heat_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('npk', $employee->NPK)
+                                    ->where('role', $assignment->role)
                                     ->pluck('date')
                                     ->unique()
                                     ->toArray();
-
                                 $totalDeptInsentif = 0;
 
                                 $operators = DB::table('heat_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('role', '=', 'operator')
                                     ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereIn('date', $employeeDates)
+                                    ->whereIn('date', $employeeDates) // sekarang hanya tanggal saat NPK ini jadi $role, bukan semua tanggal NPK
                                     ->get();
 
                                 foreach ($operators as $operator) {
+                                    if ($tkkDate && $operator->date >= $tkkDate) {
+                                        continue;
+                                    }
+                                    // FILTER HANYA NUMERATOR
                                     if (!$isValidOvertime($operator->npk, $operator->date)) {
                                         continue;
                                     }
@@ -1746,10 +1750,9 @@ END AS special_overtime_hours
 
                                     $totalDeptInsentif += $rate * $operator->piece;
                                 }
-
                                 $jumlahOperator = DB::table('heat_efficiencies as he')
                                     ->where('he.period_id', $period->id)
-                                    ->whereIn('he.date', $employeeDates)
+                                    ->whereIn('he.date', $employeeDates) // ikut pakai $employeeDates yang sudah difilter role
                                     ->where('he.role', '=', 'operator')
                                     ->pluck('he.npk')
                                     ->unique()
