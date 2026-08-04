@@ -742,8 +742,12 @@ class CanteenReportController extends Controller
     /**
      * Import file excel (npk, nama_karyawan, bagian, jam_masuk, jam_pulang) ke
      * canteen / canteen_twos sesuai kantin & shift yang dipilih pada modal import.
-     * - Shift Siang -> created_at/updated_at = tanggal terpilih 18:00:00
-     * - Shift Malam -> created_at/updated_at = tanggal terpilih 22:30:00
+     * - Shift Siang -> created_at/updated_at & date = tanggal terpilih, jam 18:00:00
+     * - Shift Malam -> jam scan tercatat 00:30:00, yang artinya baris tersebut
+     *   secara kalender adalah keesokan hari dari tanggal yang dipilih di form
+     *   (mis. shift malam untuk tanggal 5 Agustus dicatat sebagai tanggal 6
+     *   Agustus jam 00:30:00). Jadi date & created_at/updated_at = tanggal
+     *   terpilih + 1 hari, jam 00:30:00.
      * Kolom jam_masuk & jam_pulang pada file hanya untuk referensi/pengecekan,
      * tidak disimpan karena tabel canteen/canteen_twos tidak punya kolom tsb.
      */
@@ -760,10 +764,20 @@ class CanteenReportController extends Controller
             return response()->json(['message' => $validator->errors()->first()], 422);
         }
 
-        $shift  = $request->input('shift');
-        $kantin = $request->input('kantin');
-        $date   = $request->input('date');
-        $time   = $shift === 'siang' ? '18:00:00' : '00:30:00';
+        $shift     = $request->input('shift');
+        $kantin    = $request->input('kantin');
+        $inputDate = $request->input('date');
+
+        // Shift Malam: jam 00:30 berarti baris tersebut jatuh di tanggal
+        // keesokan harinya dari tanggal yang dipilih pada form import.
+        if ($shift === 'malam') {
+            $date = Carbon::parse($inputDate)->addDay()->format('Y-m-d');
+            $time = '00:30:00';
+        } else {
+            $date = $inputDate;
+            $time = '18:00:00';
+        }
+
         $dateTime = Carbon::parse("{$date} {$time}");
 
         // Kantin 1 -> canteen (CanteenReport), Kantin 2 -> canteen_twos (CanteenTwoReport)
@@ -836,8 +850,12 @@ class CanteenReportController extends Controller
             session()->flash('import_errors', $errors);
         }
 
+        $shiftInfo = $shift === 'malam'
+            ? 'shift Malam, tercatat tanggal ' . Carbon::parse($date)->locale('id')->translatedFormat('d F Y') . ' jam 00:30'
+            : 'shift Siang, tanggal ' . Carbon::parse($date)->locale('id')->translatedFormat('d F Y');
+
         return response()->json([
-            'message' => "Import selesai. $created baris baru ditambahkan, $updated baris diperbarui, ke $kantin (shift " . ucfirst($shift) . ").",
+            'message' => "Import selesai. $created baris baru ditambahkan, $updated baris diperbarui, ke $kantin ($shiftInfo).",
         ]);
     }
  
@@ -854,30 +872,20 @@ class CanteenReportController extends Controller
      *   TOTAL = JUMLAH SCAN + TIDAK SCAN (security OS) + SIFT MALAM + SIFT SIANG
      *   TOTAL (Rp) = TOTAL x HARGA NASI
      *
-     * - JUMLAH SCAN        = baris dengan canteen_no asli dari mesin scan
-     *                         (bukan 'MANUAL' & bukan 'IMPORT')
-     * - TIDAK SCAN         = baris dari tombol "Tambah Data Manual" (canteen_no = 'MANUAL')
-     * - SIFT MALAM / SIANG = baris dari import excel (canteen_no = 'IMPORT'),
-     *                         dibedakan dari jam di created_at (18:00 siang / 22:30 malam)
-     */
-    /**
-     * Export rekap harian per kantin dalam format PDF seperti contoh
-     * "REALISASI KANTIN ...". Difilter berdasarkan range tanggal & kantin.
-     *
-     * Formula per baris (tervalidasi dari contoh):
-     *   TOTAL = JUMLAH SCAN + TIDAK SCAN (security OS) + SIFT MALAM + SIFT SIANG
-     *   TOTAL (Rp) = TOTAL x HARGA NASI
-     *
      * Catatan: sejak importShift() menyimpan canteen_no hanya sebagai angka
      * kantin ('1' / '2'), baris hasil import TIDAK BISA lagi dibedakan dari
      * canteen_no. Jadi baris shift (Sift Siang/Malam) sekarang dideteksi dari
-     * JAM di created_at (18:00:00 = siang, 22:30:00 = malam) — jam ini hanya
+     * JAM di created_at (18:00:00 = siang, 00:30:00 = malam) — jam ini hanya
      * dihasilkan oleh proses import, sehingga tetap aman dipakai sebagai penanda.
      *
      * - TIDAK SCAN         = baris dari tombol "Tambah Data Manual" (canteen_no = 'MANUAL')
-     * - SIFT SIANG / MALAM = baris dengan created_at jam persis 18:00:00 / 22:30:00
-     *                        (hasil import), dan canteen_no BUKAN 'MANUAL'
-     * - JUMLAH SCAN        = sisanya (bukan manual & bukan import)
+     * - SIFT SIANG         = baris dengan created_at jam persis 18:00:00 (hasil import),
+     *                        pada tanggal yang sama dengan baris rekap.
+     * - SIFT MALAM         = baris dengan created_at jam persis 00:30:00 (hasil import)
+     *                        yang tersimpan pada tanggal KEESOKAN HARI dari baris
+     *                        rekap (shift malam dimulai malam ini, makan tercatat
+     *                        lewat tengah malam), sehingga diambil dari data H+1.
+     * - JUMLAH SCAN        = sisanya (bukan manual, bukan shift siang, bukan shift malam)
      */
     public function exportRekapPdf(Request $request)
     {
@@ -923,7 +931,11 @@ class CanteenReportController extends Controller
     {
         $modelClass = $this->kantinModel($kantin);
 
-        $rows = $modelClass::whereBetween('date', [$start, $end])->get();
+        // Ambil sampai H+1 dari $end supaya baris Shift Malam (00:30) milik
+        // tanggal terakhir periode, yang tersimpan di tanggal keesokan harinya,
+        // ikut terbaca.
+        $queryEnd = Carbon::parse($end)->addDay()->format('Y-m-d');
+        $rows = $modelClass::whereBetween('date', [$start, $queryEnd])->get();
 
         $period = collect();
         for ($d = Carbon::parse($start); $d->lte(Carbon::parse($end)); $d->addDay()) {
@@ -935,15 +947,25 @@ class CanteenReportController extends Controller
         $report = $period->map(function ($date) use ($rows, &$grandTotal) {
             $dayRows = $rows->filter(fn($r) => Carbon::parse($r->date)->format('Y-m-d') === $date);
 
+            // Shift Malam: jam scan 00:30 tercatat di tanggal keesokan harinya,
+            // tapi secara operasional adalah bagian dari shift malam tanggal ini
+            // (mulai malam $date, makan tercatat lewat tengah malam).
+            $nextDate    = Carbon::parse($date)->addDay()->format('Y-m-d');
+            $nextDayRows = $rows->filter(fn($r) => Carbon::parse($r->date)->format('Y-m-d') === $nextDate);
+
             $isManual = fn($r) => substr($r->npk, 0, 2) === 'O-';
             $shiftTime = fn($r) => Carbon::parse($r->created_at)->format('H:i:s');
 
             $tidakScan = $dayRows->filter($isManual)->count();
             $siftSiang = $dayRows->filter(fn($r) => ! $isManual($r) && $shiftTime($r) === '18:00:00')->count();
-            $siftMalam = $dayRows->filter(fn($r) => ! $isManual($r) && $shiftTime($r) === '22:30:00')->count();
+            $siftMalam = $nextDayRows->filter(fn($r) => ! $isManual($r) && $shiftTime($r) === '00:30:00')->count();
 
+            // Baris jam 00:30 yang jatuh pada $dayRows milik shift malam tanggal
+            // SEBELUMNYA (sudah dihitung sebagai sift_malam di baris tanggal itu),
+            // jadi harus dikecualikan di sini supaya tidak dobel hitung sebagai
+            // jumlah_scan pada tanggal ini.
             $jumlahScan = $dayRows->filter(function ($r) use ($isManual, $shiftTime) {
-                return ! $isManual($r) && ! in_array($shiftTime($r), ['18:00:00', '22:30:00'], true);
+                return ! $isManual($r) && ! in_array($shiftTime($r), ['18:00:00', '00:30:00'], true);
             })->count();
 
             $total     = $jumlahScan + $tidakScan + $siftMalam + $siftSiang;
@@ -984,7 +1006,8 @@ class CanteenReportController extends Controller
      * Kategorisasi per baris:
      * - OS           : NPK diawali 'O-'.
      * - Shift Siang  : bukan OS, jam created_at persis 18:00:00 (hasil importShift siang).
-     * - Shift Malam  : bukan OS, jam created_at persis 22:30:00 (hasil importShift malam).
+     * - Shift Malam  : bukan OS, jam created_at persis 00:30:00 (hasil importShift malam,
+     *                  tersimpan di tanggal keesokan hari dari tanggal shift malam dimulai).
      * - Normal Break : bukan OS & bukan shift siang/malam, jam created_at ada di antara
      *                  mainBreakStart (11:00:00) s.d. mainBreakEnd (13:30:00).
      * Baris di luar 4 kategori di atas (mis. scan lembur di luar jam istirahat utama)
@@ -1038,7 +1061,7 @@ class CanteenReportController extends Controller
                 continue;
             }
 
-            if ($time === '22:30:00') {
+            if ($time === '00:30:00') {
                 $categorized['shift_malam']->push($item);
                 continue;
             }
@@ -1057,7 +1080,7 @@ class CanteenReportController extends Controller
      * 2. Normal Break  - detail scan pada jam istirahat utama.
      * 3. OS            - detail scan NPK outsource/security (diawali 'O-').
      * 4. Shift Siang   - detail hasil import shift siang (18:00:00).
-     * 5. Shift Malam   - detail hasil import shift malam (22:30:00).
+     * 5. Shift Malam   - detail hasil import shift malam (00:30:00, tanggal H+1).
      *
      * Kolom sheet detail: No, NPK, Nama, Kantin, Tanggal, Waktu Scanning, Harga per Porsi,
      * dengan baris TOTAL PORSI di baris paling bawah masing-masing sheet.
