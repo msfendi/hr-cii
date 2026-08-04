@@ -1013,11 +1013,12 @@ class CanteenReportController extends Controller
      * Baris di luar 4 kategori di atas (mis. scan lembur di luar jam istirahat utama)
      * tidak masuk ke sheet manapun, karena tidak diminta.
      *
-     * Kolom TANGGAL untuk baris Shift Malam ditampilkan H-1 dari tanggal yang
-     * tersimpan di database, supaya konsisten dengan sheet Summary (shift malam
-     * dihitung pada tanggal mulai shift, bukan tanggal saat makan tercatat lewat
-     * tengah malam). Baris yang secara operasional jatuh di luar rentang
-     * $start s.d. $end setelah penyesuaian ini tidak diikutsertakan.
+     * Kolom TANGGAL untuk baris Shift Malam menampilkan tanggal ASLI hasil scan
+     * (tanggal keesokan hari, jam 00:30) apa adanya. Yang disesuaikan hanya
+     * pengecekan periode filter: baris shift malam dianggap masuk ke tanggal
+     * H-1 dari tanggal tersimpan (tanggal mulai shift), supaya tetap muncul
+     * ketika periode filter hanya mencakup tanggal H-nya (mis. filter "3 s.d. 3
+     * Agustus" tetap menampilkan baris shift malam yang tersimpan di tanggal 4).
      *
      * Nama karyawan diambil dari union cii.BIODATA & cii.BIODATA_KELUAR (via
      * getNameMapForNpks()), bukan dari kolom `name` yang tersimpan di baris scan, supaya
@@ -1054,12 +1055,15 @@ class CanteenReportController extends Controller
             $time = $r->created_at ? Carbon::parse($r->created_at)->format('H:i:s') : null;
             $rawDate = $r->date instanceof Carbon ? $r->date->format('Y-m-d') : (string) $r->date;
 
-            // Shift Malam tersimpan di tanggal KEESOKAN HARI (jam 00:30). Tanggal
-            // yang ditampilkan (kolom TANGGAL) & dipakai untuk cek periode adalah
-            // H-1 dari tanggal tersimpan, supaya konsisten dengan sheet Summary
-            // (baris shift malam ditampilkan pada tanggal mulai shift, bukan
-            // tanggal saat makan tercatat lewat tengah malam).
-            $displayDate = $time === '00:30:00'
+            // Shift Malam tersimpan di tanggal KEESOKAN HARI (jam 00:30). Untuk
+            // menentukan apakah baris ini termasuk dalam periode filter yang
+            // diminta, dipakai tanggal OPERASIONAL (H-1 dari tanggal tersimpan),
+            // supaya baris shift malam tanggal 3 (tersimpan sbg tanggal 4 jam
+            // 00:30) tetap ikut saat filter periode-nya "3 s.d. 3". Kolom
+            // TANGGAL yang DITAMPILKAN di sheet tetap memakai tanggal asli
+            // (tanggal 4), bukan digeser, karena sheet detail menampilkan data
+            // scan apa adanya.
+            $operationalDate = $time === '00:30:00'
                 ? Carbon::parse($rawDate)->subDay()->format('Y-m-d')
                 : $rawDate;
 
@@ -1067,7 +1071,7 @@ class CanteenReportController extends Controller
             // non-shift-malam pada tanggal tambahan H+1 yang ikut terambil oleh
             // $queryEnd, atau shift malam yang sebenarnya milik tanggal sebelum
             // $start) tidak ikut ditampilkan.
-            if ($displayDate < $start || $displayDate > $end) {
+            if ($operationalDate < $start || $operationalDate > $end) {
                 continue;
             }
 
@@ -1075,7 +1079,7 @@ class CanteenReportController extends Controller
                 'npk'    => $r->npk,
                 'name'   => $nameMap[$r->npk] ?? ($r->name ?: '-'),
                 'kantin' => $kantin,
-                'date'   => $displayDate,
+                'date'   => $rawDate,
                 'time'   => $time,
                 'cost'   => $this->costPerMeal,
             ];
