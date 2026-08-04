@@ -763,7 +763,7 @@ class CanteenReportController extends Controller
         $shift  = $request->input('shift');
         $kantin = $request->input('kantin');
         $date   = $request->input('date');
-        $time   = $shift === 'siang' ? '18:00:00' : '22:30:00';
+        $time   = $shift === 'siang' ? '18:00:00' : '00:30:00';
         $dateTime = Carbon::parse("{$date} {$time}");
 
         // Kantin 1 -> canteen (CanteenReport), Kantin 2 -> canteen_twos (CanteenTwoReport)
