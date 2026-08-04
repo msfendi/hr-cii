@@ -1139,6 +1139,7 @@ Route::middleware(['auth', 'permission'])->group(function () {
 
     // Export rekap PDF (format "Realisasi Kantin")
     Route::get('/canteen-report/export-pdf', [CanteenReportController::class, 'exportRekapPdf'])->name('canteen-report.export-pdf');
+    Route::get('canteen-report/export-excel', [CanteenReportController::class, 'exportRekapExcel'])->name('canteen-report.export-excel');
 });
 
 Route::prefix('outsource')->name('outsource.')->middleware(['auth', 'permission'])->group(function () {

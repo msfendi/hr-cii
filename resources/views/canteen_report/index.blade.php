@@ -117,6 +117,9 @@ body{ background-color: #f4f6fb; }
                             <button type="button" class="btn btn-sm btn-danger shadow-sm" data-toggle="modal" data-target="#exportPdfModal">
                                 <i class="fas fa-file-pdf fa-sm"></i> Export Rekap PDF
                             </button>
+                            <button type="button" class="btn btn-sm btn-success shadow-sm" data-toggle="modal" data-target="#exportExcelModal">
+                                <i class="fas fa-file-excel fa-sm"></i> Export Rekap Excel
+                            </button>
                         </div>
                     </div>
 
@@ -505,6 +508,47 @@ body{ background-color: #f4f6fb; }
                     <div class="modal-footer">
                       <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                       <button type="submit" class="btn btn-danger"><i class="fas fa-download fa-sm"></i> Export PDF</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <!-- EXPORT EXCEL MODAL -->
+            <div class="modal fade" id="exportExcelModal" tabindex="-1">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <form id="exportExcelForm" action="{{ route('canteen-report.export-excel') }}" method="GET" target="_blank">
+                    <div class="modal-header">
+                      <h5 class="modal-title"><i class="fas fa-file-excel mr-1"></i> Export Rekap Excel</h5>
+                      <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                    </div>
+                    <div class="modal-body">
+                      <p class="small text-muted mb-3">
+                        File akan berisi 5 sheet: <strong>Summary</strong>, <strong>Normal Break</strong>,
+                        <strong>OS</strong>, <strong>Shift Siang</strong>, dan <strong>Shift Malam</strong>.
+                      </p>
+                      <div class="form-group">
+                        <label class="small font-weight-bold text-gray-600">Kantin</label>
+                        <select name="kantin" class="form-control" required>
+                          <option value="Kantin 1">Kantin 1 - Diamond Chickres</option>
+                          <option value="Kantin 2">Kantin 2 - Pawon Ndoro Ayu</option>
+                        </select>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group col-md-6">
+                          <label class="small font-weight-bold text-gray-600">Tanggal Mulai</label>
+                          <input type="date" name="start_date" class="form-control" value="{{ $defaultStartDate }}" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                          <label class="small font-weight-bold text-gray-600">Tanggal Selesai</label>
+                          <input type="date" name="end_date" class="form-control" value="{{ $defaultEndDate }}" required>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                      <button type="submit" class="btn btn-success"><i class="fas fa-download fa-sm"></i> Export Excel</button>
                     </div>
                   </form>
                 </div>

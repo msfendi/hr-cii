@@ -122,11 +122,18 @@ class ExpatTransportSheet implements
         $costData = DB::table('expat_cost as c')
             ->join('expat_master as m', 'm.npk', '=', 'c.npk')
             ->join('expat_cost_components as cc', 'cc.id', '=', 'c.component')
+            ->leftJoin('expat_onleave as l', function ($join) {
+                $join->on('l.npk', '=', 'c.npk')
+                    ->whereColumn('c.transactions_date', '>=', 'l.onleave_start')
+                    ->whereColumn('c.transactions_date', '<=', 'l.onleave_end');
+            })
             ->where('cc.component_type', '=', 'transport')
             ->whereBetween('c.transactions_date', [$this->start, $this->end])
             ->select(
                 'c.npk',
                 'm.name',
+                'l.onleave_start',
+                'l.onleave_end',
                 'cc.component',
                 'c.amount',
                 'c.transactions_date',
@@ -138,8 +145,8 @@ class ExpatTransportSheet implements
             $rows->push([
                 'npk' => $row->npk,
                 'name' => $row->name,
-                'leave_start' => null,
-                'leave_end' => null,
+                'leave_start' => $row->onleave_start,
+                'leave_end' => $row->onleave_end,
                 'component' => $row->component,
                 'amount' => $row->amount,
                 'transactions_date' => $row->transactions_date,

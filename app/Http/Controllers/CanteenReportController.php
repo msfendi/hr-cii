@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use Illuminate\Support\Str;
 
 class CanteenReportController extends Controller
@@ -506,6 +509,52 @@ class CanteenReportController extends Controller
         return $map;
     }
 
+    /**
+     * Bentuk map NPK => nama karyawan (untuk export Excel rekap kantin), dengan alur
+     * yang sama seperti getDeptMapForNpks(): karena tabel canteen/canteen_twos ada di
+     * connection 'canteen' sedangkan BIODATA/BIODATA_KELUAR ada di connection 'cii',
+     * keduanya tidak bisa di-JOIN langsung lewat SQL (beda connection/server).
+     *
+     * Jadi "join"-nya dilakukan di level aplikasi:
+     * 1. NPK-NPK dari baris canteen/canteen_twos dikumpulkan dulu (unique).
+     * 2. NPK tsb dipakai untuk query connection 'cii' -> union(BIODATA, BIODATA_KELUAR)
+     *    -> ambil NPK & NAMA_KARYAWAN.
+     * 3. Hasilnya dibentuk jadi array asosiatif [NPK => NAMA_KARYAWAN] sebagai lookup map.
+     * 4. Baris canteen/canteen_twos di-mapping ke nama lewat lookup map ini di PHP,
+     *    bukan lewat JOIN SQL.
+     */
+    protected function getNameMapForNpks(Collection $npks): array
+    {
+        $npks = $npks->filter()->unique()->values();
+
+        if ($npks->isEmpty()) {
+            return [];
+        }
+
+        $npkList = $this->quotedSqlList($npks->all());
+
+        $biodataAll = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN')
+            ->union(
+                DB::connection('cii')->table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN')
+            );
+
+        $rows = DB::connection('cii')
+            ->table(DB::raw('(' . $biodataAll->toSql() . ') AS biodata_all'))
+            ->mergeBindings($biodataAll)
+            ->whereRaw("biodata_all.NPK IN ({$npkList})")
+            ->select('biodata_all.NPK', 'biodata_all.NAMA_KARYAWAN')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row->NPK] = $row->NAMA_KARYAWAN;
+        }
+
+        return $map;
+    }
+
     protected function kantinModel(string $kantin): string
     {
         return $kantin === 'Kantin 1' ? CanteenReport::class : CanteenTwoReport::class;
@@ -843,6 +892,35 @@ class CanteenReportController extends Controller
         $start  = $request->input('start_date');
         $end    = $request->input('end_date');
         $kantin = $request->input('kantin');
+
+        [$report, $grandTotal, $periode] = $this->buildRekapReport($start, $end, $kantin);
+
+        $pdf = Pdf::loadView('canteen_report.rekap_pdf', [
+            'kantinLabel' => $this->kantinLabels[$kantin] ?? $kantin,
+            'periode'     => $periode,
+            'report'      => $report,
+            'grandTotal'  => $grandTotal,
+            'userName'    => Str::upper($userName),
+        ])->setPaper('a4', 'portrait');
+
+        $fileName = 'Realisasi_Kantin_' . str_replace(' ', '_', $kantin) . '_' . $start . '_sd_' . $end . '.pdf';
+
+        return $pdf->download($fileName);
+    }
+
+    /**
+     * Bentuk data rekap harian (sheet Summary / rekap_pdf) untuk satu kantin & range
+     * tanggal tertentu. Dipisah dari exportRekapPdf() supaya bisa dipakai bareng oleh
+     * exportRekapExcel() tanpa duplikasi formula.
+     *
+     * Formula per baris (tervalidasi dari contoh):
+     *   TOTAL = JUMLAH SCAN + TIDAK SCAN (security OS) + SIFT MALAM + SIFT SIANG
+     *   TOTAL (Rp) = TOTAL x HARGA NASI
+     *
+     * @return array{0: Collection, 1: int, 2: string} [$report, $grandTotal, $periode]
+     */
+    protected function buildRekapReport(string $start, string $end, string $kantin): array
+    {
         $modelClass = $this->kantinModel($kantin);
 
         $rows = $modelClass::whereBetween('date', [$start, $end])->get();
@@ -891,16 +969,333 @@ class CanteenReportController extends Controller
             . ' s.d. '
             . Carbon::parse($end)->locale('id')->translatedFormat('d F Y');
 
-        $pdf = Pdf::loadView('canteen_report.rekap_pdf', [
-            'kantinLabel' => $this->kantinLabels[$kantin] ?? $kantin,
-            'periode'     => $periode,
-            'report'      => $report,
-            'grandTotal'  => $grandTotal,
-            'userName'    => Str::upper($userName),
-        ])->setPaper('a4', 'portrait');
+        return [$report, $grandTotal, $periode];
+    }
 
-        $fileName = 'Realisasi_Kantin_' . str_replace(' ', '_', $kantin) . '_' . $start . '_sd_' . $end . '.pdf';
+/* =========================================================================
+ * 4) EXPORT REKAP EXCEL (Summary + Normal Break + OS + Shift Siang + Shift Malam)
+ * ========================================================================= */
 
-        return $pdf->download($fileName);
+    /**
+     * Ambil baris canteen/canteen_twos untuk satu kantin & range tanggal, lalu
+     * kelompokkan ke 4 kategori (Normal Break, OS, Shift Siang, Shift Malam) untuk
+     * dipakai sebagai sheet detail pada export Excel.
+     *
+     * Kategorisasi per baris:
+     * - OS           : NPK diawali 'O-'.
+     * - Shift Siang  : bukan OS, jam created_at persis 18:00:00 (hasil importShift siang).
+     * - Shift Malam  : bukan OS, jam created_at persis 22:30:00 (hasil importShift malam).
+     * - Normal Break : bukan OS & bukan shift siang/malam, jam created_at ada di antara
+     *                  mainBreakStart (11:00:00) s.d. mainBreakEnd (13:30:00).
+     * Baris di luar 4 kategori di atas (mis. scan lembur di luar jam istirahat utama)
+     * tidak masuk ke sheet manapun, karena tidak diminta.
+     *
+     * Nama karyawan diambil dari union cii.BIODATA & cii.BIODATA_KELUAR (via
+     * getNameMapForNpks()), bukan dari kolom `name` yang tersimpan di baris scan, supaya
+     * konsisten dengan sumber data HR. Jika NPK tidak ditemukan di HR (mis. NPK outsource
+     * 'O-...'), fallback ke kolom `name` yang tersimpan.
+     *
+     * @return array{normal_break: Collection, os: Collection, shift_siang: Collection, shift_malam: Collection}
+     */
+    protected function getDetailRowsCategorized(string $start, string $end, string $kantin): array
+    {
+        $modelClass = $this->kantinModel($kantin);
+
+        $rows = $modelClass::whereBetween('date', [$start, $end])
+            ->orderBy('date')
+            ->orderBy('created_at')
+            ->get();
+
+        $nameMap = $this->getNameMapForNpks($rows->pluck('npk')->filter()->unique()->values());
+
+        $categorized = [
+            'normal_break' => collect(),
+            'os'           => collect(),
+            'shift_siang'  => collect(),
+            'shift_malam'  => collect(),
+        ];
+
+        foreach ($rows as $r) {
+            $isOs = strtoupper(substr((string) $r->npk, 0, 2)) === 'O-';
+            $time = $r->created_at ? Carbon::parse($r->created_at)->format('H:i:s') : null;
+
+            $item = [
+                'npk'    => $r->npk,
+                'name'   => $nameMap[$r->npk] ?? ($r->name ?: '-'),
+                'kantin' => $kantin,
+                'date'   => $r->date instanceof Carbon ? $r->date->format('Y-m-d') : (string) $r->date,
+                'time'   => $time,
+                'cost'   => $this->costPerMeal,
+            ];
+
+            if ($isOs) {
+                $categorized['os']->push($item);
+                continue;
+            }
+
+            if ($time === '18:00:00') {
+                $categorized['shift_siang']->push($item);
+                continue;
+            }
+
+            if ($time === '22:30:00') {
+                $categorized['shift_malam']->push($item);
+                continue;
+            }
+
+            if ($time !== null && $time >= $this->mainBreakStart && $time <= $this->mainBreakEnd) {
+                $categorized['normal_break']->push($item);
+            }
+        }
+
+        return $categorized;
+    }
+
+    /**
+     * Export rekap kantin dalam format Excel (5 sheet):
+     * 1. Summary       - layout sama persis dengan rekap_pdf.blade.php.
+     * 2. Normal Break  - detail scan pada jam istirahat utama.
+     * 3. OS            - detail scan NPK outsource/security (diawali 'O-').
+     * 4. Shift Siang   - detail hasil import shift siang (18:00:00).
+     * 5. Shift Malam   - detail hasil import shift malam (22:30:00).
+     *
+     * Kolom sheet detail: No, NPK, Nama, Kantin, Tanggal, Waktu Scanning, Harga per Porsi,
+     * dengan baris TOTAL PORSI di baris paling bawah masing-masing sheet.
+     */
+    public function exportRekapExcel(Request $request)
+    {
+        $userName = Auth::user()->name ?? 'Admin';
+
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date'   => 'required|date',
+            'kantin'     => 'required|in:Kantin 1,Kantin 2',
+        ]);
+
+        $start  = $request->input('start_date');
+        $end    = $request->input('end_date');
+        $kantin = $request->input('kantin');
+
+        [$report, $grandTotal, $periode] = $this->buildRekapReport($start, $end, $kantin);
+        $categorized = $this->getDetailRowsCategorized($start, $end, $kantin);
+
+        $spreadsheet = new Spreadsheet();
+
+        $this->writeSummarySheet(
+            $spreadsheet,
+            $this->kantinLabels[$kantin] ?? $kantin,
+            $periode,
+            $report,
+            $grandTotal,
+            Str::upper($userName)
+        );
+
+        $sheetDefs = [
+            'Normal Break' => $categorized['normal_break'],
+            'OS'           => $categorized['os'],
+            'Shift Siang'  => $categorized['shift_siang'],
+            'Shift Malam'  => $categorized['shift_malam'],
+        ];
+
+        foreach ($sheetDefs as $title => $rows) {
+            $this->writeDetailSheet($spreadsheet, $title, $rows);
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        $writer = new Xlsx($spreadsheet);
+
+        $fileName = 'Realisasi_Kantin_' . str_replace(' ', '_', $kantin) . '_' . $start . '_sd_' . $end . '.xlsx';
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $fileName . '"');
+        header('Cache-Control: max-age=0');
+
+        $writer->save('php://output');
+        exit;
+    }
+
+    /**
+     * Tulis sheet "Summary", mereplikasi layout rekap_pdf.blade.php: judul, info
+     * kantin/periode, tabel rekap harian (baris weekend disorot merah muda), baris
+     * grand total (disorot kuning), lalu blok tanda tangan di bagian bawah.
+     */
+    protected function writeSummarySheet(
+        Spreadsheet $spreadsheet,
+        string $kantinLabel,
+        string $periode,
+        Collection $report,
+        int $grandTotal,
+        string $userName
+    ): void {
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Summary');
+
+        $sheet->mergeCells('A1:I1');
+        $sheet->setCellValue('A1', 'REALISASI KANTIN ' . Str::upper($kantinLabel));
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->setCellValue('A3', 'KANTIN');
+        $sheet->mergeCells('B3:I3');
+        $sheet->setCellValue('B3', ': ' . $kantinLabel);
+
+        $sheet->setCellValue('A4', 'PERIODE');
+        $sheet->mergeCells('B4:I4');
+        $sheet->setCellValue('B4', ': ' . $periode);
+
+        $sheet->getStyle('A3:A4')->getFont()->setBold(true);
+
+        $headerRow = 6;
+        $headers = ['NO.', 'HARI, TANGGAL', 'JUMLAH SCAN', "TIDAK SCAN\n(security OS)", 'Sift Malam', 'Sift Siang', 'TOTAL', 'HARGA NASI', 'TOTAL'];
+        $sheet->fromArray($headers, null, "A{$headerRow}");
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER)
+            ->setWrapText(true);
+
+        $row = $headerRow + 1;
+        foreach ($report->values() as $i => $r) {
+            $sheet->setCellValue("A{$row}", $i + 1);
+            $sheet->setCellValue("B{$row}", $r['date_label']);
+            $sheet->setCellValue("C{$row}", $r['jumlah_scan'] ?: null);
+            $sheet->setCellValue("D{$row}", $r['tidak_scan'] ?: null);
+            $sheet->setCellValue("E{$row}", $r['sift_malam'] ?: null);
+            $sheet->setCellValue("F{$row}", $r['sift_siang'] ?: null);
+            $sheet->setCellValue("G{$row}", $r['total']);
+            $sheet->setCellValue("H{$row}", $r['harga_nasi']);
+            $sheet->setCellValue("I{$row}", $r['total_cost']);
+
+            if ($r['is_weekend']) {
+                $sheet->getStyle("A{$row}:I{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F8D7DA');
+            }
+
+            $row++;
+        }
+
+        $lastDataRow = $row - 1;
+
+        $sheet->mergeCells("A{$row}:H{$row}");
+        $sheet->setCellValue("A{$row}", 'TOTAL');
+        $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->setCellValue("I{$row}", $grandTotal);
+        $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:I{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+
+        $totalRow = $row;
+
+        $sheet->getStyle("A{$headerRow}:I{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("H{$headerRow}:I{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        $sheet->getStyle("C" . ($headerRow + 1) . ":G{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("A" . ($headerRow + 1) . ":A{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        // Blok tanda tangan, mengikuti rekap_pdf.blade.php.
+        $sigRow = $totalRow + 3;
+        $sheet->mergeCells("F{$sigRow}:I{$sigRow}");
+        $sheet->setCellValue("F{$sigRow}", 'Sukoharjo, ' . Carbon::now()->locale('id')->translatedFormat('d F Y'));
+        $sheet->getStyle("F{$sigRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+        $labelRow = $sigRow + 2;
+        $sheet->mergeCells("A{$labelRow}:D{$labelRow}");
+        $sheet->setCellValue("A{$labelRow}", 'Yang Mengajukan,');
+        $sheet->mergeCells("F{$labelRow}:I{$labelRow}");
+        $sheet->setCellValue("F{$labelRow}", 'Mengetahui,');
+        $sheet->getStyle("A{$labelRow}:I{$labelRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $nameRow = $labelRow + 5; // ruang kosong untuk tanda tangan basah
+        $sheet->mergeCells("A{$nameRow}:D{$nameRow}");
+        $sheet->setCellValue("A{$nameRow}", $userName);
+        $sheet->mergeCells("F{$nameRow}:I{$nameRow}");
+        $sheet->setCellValue("F{$nameRow}", 'ROSALIA WIWIEK WIDAWATI');
+        $sheet->getStyle("A{$nameRow}:I{$nameRow}")->getFont()->setBold(true)->setUnderline(true);
+        $sheet->getStyle("A{$nameRow}:I{$nameRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $roleRow = $nameRow + 1;
+        $sheet->mergeCells("A{$roleRow}:D{$roleRow}");
+        $sheet->setCellValue("A{$roleRow}", 'Admin');
+        $sheet->mergeCells("F{$roleRow}:I{$roleRow}");
+        $sheet->setCellValue("F{$roleRow}", 'Admin Manager');
+        $sheet->getStyle("A{$roleRow}:I{$roleRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $colWidths = ['A' => 5, 'B' => 24, 'C' => 12, 'D' => 16, 'E' => 10, 'F' => 10, 'G' => 9, 'H' => 13, 'I' => 16];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+
+        $sheet->getRowDimension($headerRow)->setRowHeight(28);
+    }
+
+    /**
+     * Tulis satu sheet detail (Normal Break / OS / Shift Siang / Shift Malam) dengan
+     * kolom: No, NPK, Nama, Kantin, Tanggal, Waktu Scanning, Harga per Porsi, ditutup
+     * dengan baris TOTAL PORSI di bagian paling bawah.
+     */
+    protected function writeDetailSheet(Spreadsheet $spreadsheet, string $title, Collection $rows): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle($title);
+
+        $headers = ['NO.', 'NPK', 'NAMA', 'KANTIN', 'TANGGAL', 'WAKTU SCANNING', 'HARGA PER PORSI'];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:G1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:G1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+        $sheet->getStyle('A1:G1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+
+        $row = 2;
+        foreach ($rows->values() as $i => $r) {
+            $sheet->setCellValue("A{$row}", $i + 1);
+            $sheet->setCellValue("B{$row}", $r['npk']);
+            $sheet->setCellValue("C{$row}", $r['name']);
+            $sheet->setCellValue("D{$row}", $r['kantin']);
+            $sheet->setCellValue("E{$row}", Carbon::parse($r['date'])->format('d-m-Y'));
+            $sheet->setCellValue("F{$row}", $r['time'] ?? '-');
+            $sheet->setCellValue("G{$row}", $r['cost']);
+            $row++;
+        }
+
+        $lastDataRow = $row - 1;
+
+        if ($rows->isEmpty()) {
+            $sheet->mergeCells("A{$row}:G{$row}");
+            $sheet->setCellValue("A{$row}", 'Tidak ada data.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        // Baris TOTAL PORSI & TOTAL UANG di paling bawah.
+        $totalPorsi = $rows->count();
+        $totalUang  = $rows->sum('cost');
+
+        $sheet->mergeCells("A{$row}:F{$row}");
+        $sheet->setCellValue("A{$row}", 'TOTAL PORSI');
+        $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->setCellValue("G{$row}", $totalPorsi);
+        $sheet->getStyle("A{$row}:G{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:G{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+        $row++;
+
+        $sheet->mergeCells("A{$row}:F{$row}");
+        $sheet->setCellValue("A{$row}", 'TOTAL UANG');
+        $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->setCellValue("G{$row}", $totalUang);
+        $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        $sheet->getStyle("A{$row}:G{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:G{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+
+        $totalRow = $row;
+
+        $sheet->getStyle("A1:G{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("G2:G{$lastDataRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        $sheet->getStyle("A2:A{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("B2:B{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("E2:F{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("G2:G{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+        $colWidths = ['A' => 5, 'B' => 12, 'C' => 28, 'D' => 12, 'E' => 13, 'F' => 15, 'G' => 16];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
     }
 }

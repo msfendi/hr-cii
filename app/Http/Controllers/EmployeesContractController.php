@@ -70,6 +70,32 @@ class EmployeesContractController extends Controller
                 DB::raw("DAY(c.end_date) AS end_day"),
             ]);
 
+        // ── Role-based filtering ──────────────────────────────────────────────
+        if (!$roleAdmin) {
+            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing) {
+                if ($roleStaff) {
+                    $q->orWhere('b.IS_STAFF', 1);
+                }
+                if ($roleNonStaff) {
+                    $q->orWhere('b.IS_STAFF', 0);
+                }
+                if ($roleSewing) {
+                    $q->orWhere(function ($q2) {
+                        $q2->where('d.IS_SEWING', 0)->where('b.IS_STAFF', 0);
+                    });
+                }
+                if ($roleNonSewing) {
+                    $q->orWhere(function ($q2) {
+                        $q2->where('d.IS_SEWING', 1)->where('b.IS_STAFF', 0);
+                    });
+                }
+                // Jika tidak punya akses sama sekali, filter habis
+                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing) {
+                    $q->whereRaw('1 = 0');
+                }
+            });
+        }
+
         // ── Filter utama ──────────────────────────────────────────────────────
         if ($npk !== '') {
             // Redirect dari biodata: tampilkan semua kontrak karyawan (semua status)

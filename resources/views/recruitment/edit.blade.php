@@ -334,8 +334,8 @@
                                                 <div class="col-md-3 form-group">
                                                     <label>Status Pernikahan</label>
                                                     <select class="form-control custom-select" name="status_pernikahan">
-                                                        @foreach(['Belum Kawin','Kawin','Cerai Hidup','Cerai Mati'] as $sts)
-                                                            <option value="{{ $sts }}" {{ old('status_pernikahan', $pelamar->STATUS) === $sts ? 'selected' : '' }}>{{ $sts }}</option>
+                                                        @foreach(['BM' => 'Belum Menikah', 'M' => 'Menikah', 'CH' => 'Cerai Hidup', 'CM' => 'Cerai Mati'] as $code => $label)
+                                                            <option value="{{ $code }}" {{ old('status_pernikahan', $pelamar->STATUS) === $code ? 'selected' : '' }}>{{ $label }}</option>
                                                         @endforeach
                                                     </select>
                                                 </div>
