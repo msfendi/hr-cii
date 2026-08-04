@@ -1013,6 +1013,12 @@ class CanteenReportController extends Controller
      * Baris di luar 4 kategori di atas (mis. scan lembur di luar jam istirahat utama)
      * tidak masuk ke sheet manapun, karena tidak diminta.
      *
+     * Kolom TANGGAL untuk baris Shift Malam ditampilkan H-1 dari tanggal yang
+     * tersimpan di database, supaya konsisten dengan sheet Summary (shift malam
+     * dihitung pada tanggal mulai shift, bukan tanggal saat makan tercatat lewat
+     * tengah malam). Baris yang secara operasional jatuh di luar rentang
+     * $start s.d. $end setelah penyesuaian ini tidak diikutsertakan.
+     *
      * Nama karyawan diambil dari union cii.BIODATA & cii.BIODATA_KELUAR (via
      * getNameMapForNpks()), bukan dari kolom `name` yang tersimpan di baris scan, supaya
      * konsisten dengan sumber data HR. Jika NPK tidak ditemukan di HR (mis. NPK outsource
@@ -1024,7 +1030,12 @@ class CanteenReportController extends Controller
     {
         $modelClass = $this->kantinModel($kantin);
 
-        $rows = $modelClass::whereBetween('date', [$start, $end])
+        // Ambil sampai H+1 dari $end supaya baris Shift Malam (00:30) yang
+        // tersimpan di tanggal keesokan harinya tetap terbaca untuk tanggal
+        // terakhir periode yang diminta.
+        $queryEnd = Carbon::parse($end)->addDay()->format('Y-m-d');
+
+        $rows = $modelClass::whereBetween('date', [$start, $queryEnd])
             ->orderBy('date')
             ->orderBy('created_at')
             ->get();
@@ -1041,12 +1052,30 @@ class CanteenReportController extends Controller
         foreach ($rows as $r) {
             $isOs = strtoupper(substr((string) $r->npk, 0, 2)) === 'O-';
             $time = $r->created_at ? Carbon::parse($r->created_at)->format('H:i:s') : null;
+            $rawDate = $r->date instanceof Carbon ? $r->date->format('Y-m-d') : (string) $r->date;
+
+            // Shift Malam tersimpan di tanggal KEESOKAN HARI (jam 00:30). Tanggal
+            // yang ditampilkan (kolom TANGGAL) & dipakai untuk cek periode adalah
+            // H-1 dari tanggal tersimpan, supaya konsisten dengan sheet Summary
+            // (baris shift malam ditampilkan pada tanggal mulai shift, bukan
+            // tanggal saat makan tercatat lewat tengah malam).
+            $displayDate = $time === '00:30:00'
+                ? Carbon::parse($rawDate)->subDay()->format('Y-m-d')
+                : $rawDate;
+
+            // Baris di luar periode yang diminta secara operasional (mis. baris
+            // non-shift-malam pada tanggal tambahan H+1 yang ikut terambil oleh
+            // $queryEnd, atau shift malam yang sebenarnya milik tanggal sebelum
+            // $start) tidak ikut ditampilkan.
+            if ($displayDate < $start || $displayDate > $end) {
+                continue;
+            }
 
             $item = [
                 'npk'    => $r->npk,
                 'name'   => $nameMap[$r->npk] ?? ($r->name ?: '-'),
                 'kantin' => $kantin,
-                'date'   => $r->date instanceof Carbon ? $r->date->format('Y-m-d') : (string) $r->date,
+                'date'   => $displayDate,
                 'time'   => $time,
                 'cost'   => $this->costPerMeal,
             ];
