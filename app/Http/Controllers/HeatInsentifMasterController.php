@@ -357,7 +357,7 @@ class HeatInsentifMasterController extends Controller
                 $employee->role,
             );
 
-            // if ($heat <= 0) continue;
+            if ($heat <= 0) continue;
 
             $results[] = [
                 'npk' => $employee->NPK,

@@ -6,6 +6,7 @@ use App\Events\NotificationEvent;
 use App\Jobs\GeneratePayrollCheck;
 use App\Jobs\GeneratePayrollExport;
 use App\Jobs\GeneratePayrollProcess;
+use App\Jobs\GeneratePayrollProcessV2;
 use App\Jobs\GeneratePayrollRekap;
 use App\Models\InsentifApproval;
 use App\Models\PayrollApprove;
@@ -143,6 +144,31 @@ class PayrollProcessController extends Controller
         ));
     }
 
+    public function generatev2()
+    {
+        $user    = Auth::user();
+        $role    = PayrollRoleFilterService::getRole($user);
+        // $isAdmin = $user->hasRole('Admin');
+
+        // $noRoleAssigned = !$isAdmin && !PayrollRoleFilterService::isRegistered($role);
+        $noRoleAssigned = !PayrollRoleFilterService::isRegistered($role);
+
+        // Kalau user belum terdaftar di role_payrolls (dan bukan Admin),
+        // halaman generate payroll tidak menampilkan periode apapun --
+        // form pilih periode / check / process jadi tidak bisa dipakai.
+        $periods = $noRoleAssigned
+            ? collect()
+            : PayrollPeriod::orderBy('start_date')->where('is_closed', 0)->get();
+
+        $payrollRoleLabel = $role ? (RolePayroll::ROLES[$role] ?? $role) : null;
+
+        return view('payroll.processv2', compact(
+            'periods',
+            'noRoleAssigned',
+            'payrollRoleLabel'
+        ));
+    }
+
     public function checkPayroll($period_id)
     {
         $period = PayrollPeriod::findOrFail($period_id);
@@ -151,6 +177,23 @@ class PayrollProcessController extends Controller
         // karena job dijalankan sinkron di request yang sama sehingga
         // Auth::user() valid di sana. Tidak perlu filter ulang di sini.
         $service = new GeneratePayrollProcess($period->id);
+        $raw     = $service->simulation();
+
+        $payrollResults = collect($raw['data'] ?? $raw);
+
+        return response()->json([
+            'data' => $payrollResults->values()
+        ]);
+    }
+
+    public function checkPayrollV2($period_id)
+    {
+        $period = PayrollPeriod::findOrFail($period_id);
+
+        // Filter payroll_role sudah dilakukan DI DALAM job (mode simulation),
+        // karena job dijalankan sinkron di request yang sama sehingga
+        // Auth::user() valid di sana. Tidak perlu filter ulang di sini.
+        $service = new GeneratePayrollProcessV2($period->id);
         $raw     = $service->simulation();
 
         $payrollResults = collect($raw['data'] ?? $raw);

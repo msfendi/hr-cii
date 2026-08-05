@@ -24,6 +24,11 @@
                         class="fas fa-plus fa-sm text-white-50"></i> Generate Payroll</a>
                     @endcanRoute
 
+                    @canRoute('payroll-process.generatev2')
+                    <a href="{{ route('payroll-process.generatev2') }}" class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"><i
+                        class="fas fa-plus fa-sm text-white-50"></i> Generate Payroll V2</a>
+                    @endcanRoute
+
                     @canRoute('payroll-periods.create')
                     <a href="{{ route('payroll-periods.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                         class="fas fa-plus fa-sm text-white-50"></i> Create Payroll Period</a>

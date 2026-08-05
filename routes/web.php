@@ -102,6 +102,7 @@ use App\Http\Controllers\MonitoringDashboardController;
 use App\Http\Controllers\MonitoringRekonsiliasiController;
 use App\Http\Controllers\OrderImportController;
 use App\Http\Controllers\OutsourceController;
+use App\Http\Controllers\SpeechController;
 
 /*
 |--------------------------------------------------------------------------
@@ -261,8 +262,12 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Payroll Process
     Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'permission']);
+
     Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/generatev2', [PayrollProcessController::class, 'generateV2'])->name('payroll-process.generatev2');
+    Route::get('/payroll-process/checkv2/{period_id}', [PayrollProcessController::class, 'checkPayrollV2'])->name('payroll-process.checkv2');
+
     Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'permission']);
     Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'permission']);
@@ -1152,6 +1157,8 @@ Route::prefix('outsource')->name('outsource.')->middleware(['auth', 'permission'
     Route::get('/template/download', [OutsourceController::class, 'template'])->name('template');
     Route::post('/import/upload', [OutsourceController::class, 'import'])->name('import');
 });
+
+Route::get('/speech/index', [SpeechController::class, 'index'])->name('speech.index')->middleware(['auth', 'permission']);
 
 
 

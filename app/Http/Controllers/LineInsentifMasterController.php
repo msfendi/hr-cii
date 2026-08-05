@@ -496,7 +496,7 @@ class LineInsentifMasterController extends Controller
 
             // dd($sewing);
 
-            // if ($sewing <= 0) continue;
+            if ($sewing <= 0) continue;
 
             $dept = $employee->DEPARTEMENT;
 
