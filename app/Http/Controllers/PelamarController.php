@@ -289,6 +289,7 @@ class PelamarController extends Controller
                 Storage::disk('public')->move($oldRelativePath, $newRelativePath);
                 // Store the full relative path, not just the filename.
                 $result[$pkwtField] = $newRelativePath;
+                dd($result);
             } catch (\Throwable $e) {
                 // Don't let a single missing/locked file break the whole assignment;
                 // just skip moving that particular document.
