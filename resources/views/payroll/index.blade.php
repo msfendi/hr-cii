@@ -202,23 +202,72 @@
                                         <td class="text-center">
                                             {{-- DOWNLOAD BANK (HANYA JIKA APPROVAL FINISH) --}}
                                             @if($period->approve_status == 'finish' && $period->export_status == 'approved' && (auth()->user()->hasRole('Accounting') || auth()->user()->hasRole('Admin')))
-                                            
-                                                <a class="btn btn-primary btn-sm"
-                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$period->file_bank_active) }}"
-                                                target="_blank">
-                                                    <i class="fas fa-university mr-1"></i> Active
-                                                </a>
-                                                
-                                                <a class="btn btn-secondary btn-sm"
-                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$period->file_bank_resign) }}"
-                                                target="_blank">
-                                                    <i class="fas fa-university mr-1"></i> Resign
-                                                </a>
-                                                <a class="btn btn-danger btn-sm"
-                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$period->file_bank_mangkir) }}"
-                                                target="_blank">
-                                                    <i class="fas fa-university mr-1"></i> Mangkir
-                                                </a>
+                                                @php
+                                                    // 🔥 HARDCODE DULU: hanya Accounting/Admin yang lihat section ini,
+                                                    // jadi cukup tampilkan role STAFF & NON_STAFF saja.
+                                                    // file_bank_active/resign/mangkir disimpan sebagai JSON per role, contoh:
+                                                    // {"ALL":"...csv","STAFF":"...csv","NON_STAFF":["...PART1.csv","...PART2.csv"]}
+                                                    $bankGroups = [
+                                                        'STAFF'     => 'Staff',
+                                                        'NON_STAFF' => 'Non Staff',
+                                                    ];
+                                                    $bankStatuses = [
+                                                        'AKTIF'   => ['label' => 'Active',  'class' => 'btn-primary',   'source' => $period->file_bank_active],
+                                                        'RESIGN'  => ['label' => 'Resign',  'class' => 'btn-secondary', 'source' => $period->file_bank_resign],
+                                                        'MANGKIR' => ['label' => 'Mangkir', 'class' => 'btn-danger',    'source' => $period->file_bank_mangkir],
+                                                    ];
+
+                                                    $bankButtons = [];
+
+                                                    foreach ($bankGroups as $roleFolder => $roleLabel) {
+                                                        foreach ($bankStatuses as $statusCode => $meta) {
+                                                            $decoded  = json_decode($meta['source'] ?? '', true);
+                                                            $fileData = $decoded[$roleFolder] ?? null;
+
+                                                            if (empty($fileData)) {
+                                                                continue; // role ini tidak ada file untuk status ini
+                                                            }
+
+                                                            // 🔥 bisa string (1 file) atau array (split beberapa part)
+                                                            $fileNames = is_array($fileData) ? $fileData : [$fileData];
+
+                                                            $files = array_map(function ($fileName) use ($folder, $roleFolder) {
+                                                                return Storage::url("payroll/{$folder}/{$roleFolder}/{$fileName}");
+                                                            }, $fileNames);
+
+                                                            $bankButtons[$roleFolder][$statusCode] = [
+                                                                'meta'  => $meta,
+                                                                'files' => $files,
+                                                            ];
+                                                        }
+                                                    }
+                                                @endphp
+
+                                                @foreach($bankGroups as $roleFolder => $roleLabel)
+                                                    @if(!empty($bankButtons[$roleFolder]))
+                                                        <div class="mb-1">
+                                                            <span class="d-block text-muted" style="font-size:10px; font-weight:600; letter-spacing:.5px;">{{ strtoupper($roleLabel) }}</span>
+                                                            @foreach($bankButtons[$roleFolder] as $statusCode => $btn)
+                                                                @php $fileCount = count($btn['files']); @endphp
+                                                                @if($fileCount === 1)
+                                                                    <a class="btn {{ $btn['meta']['class'] }} btn-sm"
+                                                                        href="{{ $btn['files'][0] }}"
+                                                                        target="_blank">
+                                                                        <i class="fas fa-university mr-1"></i>{{ $btn['meta']['label'] }}
+                                                                    </a>
+                                                                @else
+                                                                    <button type="button"
+                                                                        class="btn {{ $btn['meta']['class'] }} btn-sm btn-bank-split"
+                                                                        data-title="{{ $roleLabel }} - {{ $btn['meta']['label'] }}"
+                                                                        data-files='@json($btn['files'])'>
+                                                                        <i class="fas fa-university mr-1"></i>{{ $btn['meta']['label'] }}
+                                                                        <span class="badge badge-light ml-1">{{ $fileCount }}x</span>
+                                                                    </button>
+                                                                @endif
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+                                                @endforeach
                                             @endif
                                         </td>
                                         
@@ -431,6 +480,27 @@ $(document).ready(function(){
         pageLength: 10,
         responsive: true,
         autoWidth:false
+    });
+
+    // 🔥 DOWNLOAD BANK YANG SPLIT (PART1, PART2, dst)
+    $(document).on('click', '.btn-bank-split', function () {
+        const title = $(this).data('title');
+        const files = $(this).data('files');
+
+        let html = '<div class="text-left">';
+        files.forEach(function (url, idx) {
+            html += `<a href="${url}" target="_blank" class="btn btn-outline-primary btn-block btn-sm mb-2">
+                        <i class="fas fa-file-csv mr-1"></i> Part ${idx + 1}
+                     </a>`;
+        });
+        html += '</div>';
+
+        Swal.fire({
+            title: title,
+            html: html,
+            showConfirmButton: false,
+            showCloseButton: true
+        });
     });
 
 });
