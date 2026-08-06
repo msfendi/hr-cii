@@ -214,6 +214,11 @@
                                                 target="_blank">
                                                     <i class="fas fa-university mr-1"></i> Resign
                                                 </a>
+                                                <a class="btn btn-danger btn-sm"
+                                                    href="{{ Storage::url('payroll/'.$folder.'/'.$period->file_bank_mangkir) }}"
+                                                target="_blank">
+                                                    <i class="fas fa-university mr-1"></i> Mangkir
+                                                </a>
                                             @endif
                                         </td>
                                         
