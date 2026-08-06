@@ -61,7 +61,7 @@
                 </div>
                <div class="card-body">
                   <form method="POST"
-                     action="{{ route('payroll-process.process') }}"
+                     action="{{ route('payroll-process.processv2') }}"
                      id="payrollForm">
                      @csrf
                      <div class="form-group">
@@ -128,10 +128,9 @@
                      <br>
                     <div class="d-flex flex-wrap mt-4">
 
-                    @canRoute('payroll-process.process')
+                    @canRoute('payroll-process.processv2')
                         <button id="btnProcess"
-                            class="btn btn-success btn-sm shadow-sm"
-                            disabled>
+                            class="btn btn-success btn-sm shadow-sm">
                             <i class="fas fa-cogs mr-2"></i>
                             Process Payroll
                         </button>
@@ -324,7 +323,7 @@ $('#period_id').on('change', function(){
     let periodId = $(this).val();
 
     $('#approvalBox').hide();
-    $('#btnProcess').prop('disabled', true);
+    // $('#btnProcess').prop('disabled', true);
 
 
     if(!periodId) return;
@@ -642,14 +641,14 @@ $('#period_id').on('change', function(){
         if(allFinish){
 
             $('#btnProcess')
-                .prop('disabled',false)
+                // .prop('disabled',false)
                 .removeClass('btn-secondary')
                 .addClass('btn-primary');
 
         }else{
 
             $('#btnProcess')
-                .prop('disabled',true)
+                // .prop('disabled',true)
                 .removeClass('btn-primary')
                 .addClass('btn-secondary');
         }
@@ -680,7 +679,7 @@ $(document).on('click','#btnProcess',function(e){
     ==========================================
     */
 
-    let url = "{{ route('payroll-process.process') }}";
+    let url = "{{ route('payroll-process.processv2') }}";
 
     let progressUrlTemplate =
         "{{ route('payroll.process.progress', ':period_id') }}";

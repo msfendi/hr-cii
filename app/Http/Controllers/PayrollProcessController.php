@@ -91,6 +91,7 @@ class PayrollProcessController extends Controller
                 'payroll_exports.file_pdf',
                 'payroll_exports.file_bank_active',
                 'payroll_exports.file_bank_resign',
+                'payroll_exports.file_bank_mangkir',
                 'payroll_exports.file_peng',
                 'payroll_approve.status as approve_status'
             );
@@ -584,6 +585,36 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
         event(new NotificationEvent(
             'Process Payroll!',
             'Users : ' . $user->name . ' has been process Payroll ' . $period->name . '!',
+            'success'
+        ));
+        return redirect('payroll-process/index');
+    }
+
+    public function processV2(Request $request)
+    {
+        $payrollResults = [];
+        $user = Auth::user();
+        $period = PayrollPeriod::findOrFail($request->period_id);
+
+        // PROTEKSI: cek apakah payroll sudah pernah digenerate
+        $exists = PayrollRun::where('period_id', $period->id)->exists();
+
+        if ($exists) {
+            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
+            return redirect()->back();
+        }
+
+        $run = PayrollRun::create([
+            'period_id' => $period->id,
+            'processed_at' => now(),
+        ]);
+
+        GeneratePayrollProcessV2::dispatch($run->id);
+
+        // return response()->json($payrollResults);
+        event(new NotificationEvent(
+            'Process Payroll V2!',
+            'Users : ' . $user->name . ' has been process Payroll V2 ' . $period->name . '!',
             'success'
         ));
         return redirect('payroll-process/index');

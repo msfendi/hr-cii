@@ -2065,40 +2065,103 @@ END AS special_overtime_hours
                 }
             }
 
-            DB::transaction(function () use ($periodStart, $periodEnd) {
+            DB::transaction(function () use ($periodStart, $periodEnd, $overtimeDetails) {
 
-                // Hapus data payroll lembur pada periode yang akan digenerate
-                DB::table('overtimes_payroll')
-                    ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
-                    ->delete();
+                /*
+                |----------------------------------------------------------------
+                | SYNC overtimes_payroll (UPDATE OR CREATE)
+                |----------------------------------------------------------------
+                | Sebelumnya JUMLAH_JAM_LEMBUR & OVERTIME_DATE di-copy langsung
+                | dari tabel `overtimes` (delete lalu insertUsing). Sekarang
+                | overtime_hours & special_overtime_hours sudah TIDAK lagi
+                | berasal dari tabel `overtimes`, melainkan hasil kalkulasi
+                | attendance (att_log) yang sudah tersedia di $overtimeDetails
+                | (lihat $overtimeMergedSql di atas).
+                |
+                | Kolom identitas (NAMA_KARYAWAN, BAGIAN, DAY, DEPT_GROUP) tetap
+                | bersumber dari tabel `overtimes` seperti sebelumnya. Kolom
+                | JUMLAH_JAM_LEMBUR asli dari `overtimes` HANYA dipakai sebagai
+                | penentu boleh/tidaknya baris ini di-update:
+                | - null ATAU angka -> boleh di-update, nilainya diganti dengan
+                |   (overtime_hours + special_overtime_hours) dari $overtimeDetails.
+                | - string kode (MA, CT, BR, OUT, P1, H, SD, dll) -> SKIP, baris
+                |   tidak disentuh sama sekali (data manual tetap dipertahankan).
+                |----------------------------------------------------------------
+                */
 
-                // Insert ulang dari tabel overtimes
-                DB::table('overtimes_payroll')->insertUsing(
-                    [
+                // Index $overtimeDetails (grouped by NPK) menjadi lookup
+                // "NPK|Y-m-d" -> row, supaya pencarian per source row O(1).
+                $overtimeDetailsByKey = [];
+                foreach ($overtimeDetails as $npk => $rows) {
+                    foreach ($rows as $ot) {
+                        $key = $npk . '|' . Carbon::parse($ot->OVERTIME_DATE)->toDateString();
+                        $overtimeDetailsByKey[$key] = $ot;
+                    }
+                }
+
+                $sourceOvertimes = DB::table('overtimes')
+                    ->select(
                         'NPK',
                         'NAMA_KARYAWAN',
                         'BAGIAN',
                         'OVERTIME_DATE',
                         'JUMLAH_JAM_LEMBUR',
-                        'created_at',
-                        'updated_at',
                         'DAY',
                         'DEPT_GROUP',
-                    ],
-                    DB::table('overtimes')
-                        ->select(
-                            'NPK',
-                            'NAMA_KARYAWAN',
-                            'BAGIAN',
-                            'OVERTIME_DATE',
-                            'JUMLAH_JAM_LEMBUR',
-                            'created_at',
-                            'updated_at',
-                            'DAY',
-                            'DEPT_GROUP',
-                        )
-                        ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
-                );
+                    )
+                    ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
+                    ->get();
+
+                $now = Carbon::now();
+
+                foreach ($sourceOvertimes as $source) {
+
+                    $originalLembur = $source->JUMLAH_JAM_LEMBUR;
+
+                    // String kode (MA, CT, BR, OUT, P1, H, SD, dll) -> skip,
+                    // jangan update baris ini sama sekali.
+                    if ($originalLembur !== null && $originalLembur !== '' && !is_numeric($originalLembur)) {
+                        continue;
+                    }
+
+                    $dateKey = $source->NPK . '|' . Carbon::parse($source->OVERTIME_DATE)->toDateString();
+                    $detail  = $overtimeDetailsByKey[$dateKey] ?? null;
+
+                    $jumlahJamLembur = $detail
+                        ? ((float) ($detail->overtime_hours ?? 0) + (float) ($detail->special_overtime_hours ?? 0))
+                        : 0;
+
+                    $existing = DB::table('overtimes_payroll')
+                        ->where('NPK', $source->NPK)
+                        ->where('OVERTIME_DATE', $source->OVERTIME_DATE)
+                        ->first();
+
+                    if ($existing) {
+                        DB::table('overtimes_payroll')
+                            ->where('NPK', $source->NPK)
+                            ->where('OVERTIME_DATE', $source->OVERTIME_DATE)
+                            ->update([
+                                'NAMA_KARYAWAN'     => $source->NAMA_KARYAWAN,
+                                'BAGIAN'            => $source->BAGIAN,
+                                'JUMLAH_JAM_LEMBUR' => $jumlahJamLembur,
+                                'DAY'               => $source->DAY,
+                                'DEPT_GROUP'        => $source->DEPT_GROUP,
+                                'updated_at'        => $now,
+                            ]);
+                    } else {
+                        DB::table('overtimes_payroll')->insert([
+                            'NPK'               => $source->NPK,
+                            'NAMA_KARYAWAN'     => $source->NAMA_KARYAWAN,
+                            'BAGIAN'            => $source->BAGIAN,
+                            'OVERTIME_DATE'     => $source->OVERTIME_DATE,
+                            'JUMLAH_JAM_LEMBUR' => $jumlahJamLembur,
+                            'created_at'        => $now,
+                            'updated_at'        => $now,
+                            'DAY'               => $source->DAY,
+                            'DEPT_GROUP'        => $source->DEPT_GROUP,
+                        ]);
+                    }
+                }
             });
         }
         if ($isCheck) {

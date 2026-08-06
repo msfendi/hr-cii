@@ -267,8 +267,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/generatev2', [PayrollProcessController::class, 'generateV2'])->name('payroll-process.generatev2');
     Route::get('/payroll-process/checkv2/{period_id}', [PayrollProcessController::class, 'checkPayrollV2'])->name('payroll-process.checkv2');
-
     Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'permission']);
+    Route::post('/payroll-process/processv2', [PayrollProcessController::class, 'processV2'])->name('payroll-process.processv2')->middleware(['auth', 'permission']);
+
     Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'permission']);
     Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'permission']);
