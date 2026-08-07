@@ -3,60 +3,83 @@
 
 @include('layout.header')
 
-<style>
-    #attendanceTable th,
-    #attendanceTable td {
-        text-align: center;
-        vertical-align: middle;
-        font-size: 12.5px;
-        white-space: nowrap;
-    }
+<head>
+    <style>
+        #attendanceTable th,
+        #attendanceTable td {
+            text-align: center;
+            vertical-align: middle;
+            font-size: 12.5px;
+            white-space: nowrap;
+        }
 
-    #attendanceTable td.text-left {
-        text-align: left;
-        white-space: normal;
-    }
+        #attendanceTable td.text-left {
+            text-align: left;
+            white-space: normal;
+        }
 
-    .badge-masuk {
-        background: #d1fae5;
-        color: #065f46;
-    }
+        /* kolom tanggal libur / weekend */
+        #attendanceTable th.col-off,
+        #attendanceTable td.col-off {
+            background-color: #fecaca !important;
+        }
 
-    .badge-pulang {
-        background: #fee2e2;
-        color: #991b1b;
-    }
+        /* sel jam masuk/pulang: 2 baris dalam 1 sel, biar gampang dibaca */
+        .time-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            font-variant-numeric: tabular-nums;
+        }
 
-    /* kolom tanggal libur / weekend */
-    #attendanceTable th.col-off,
-    #attendanceTable td.col-off {
-        background-color: #fecaca !important;
-        color: #7f1d1d;
-    }
+        .time-cell .time-in,
+        .time-cell .time-out {
+            font-weight: 600;
+        }
 
-    .attendance-legend {
-        font-size: 12.5px;
-    }
+        .time-cell .time-in { color: #065f46; }
+        .time-cell .time-out {
+            color: #991b1b;
+            border-top: 1px dashed #e5e7eb;
+            padding-top: 2px;
+        }
 
-    .attendance-legend .legend-swatch {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 2px;
-        vertical-align: middle;
-        margin-right: 4px;
-    }
+        .time-cell .time-na { color: #9ca3af; font-weight: 400; }
 
-    .attendance-legend .legend-swatch.off {
-        background-color: #fecaca;
-    }
+        .time-cell i {
+            width: 11px;
+            display: inline-block;
+            text-align: center;
+            margin-right: 2px;
+        }
 
-    #exportEmpTable thead th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-    }
-</style>
+        .attendance-legend {
+            font-size: 12.5px;
+        }
+
+        .attendance-legend .legend-item {
+            margin-right: 16px;
+            white-space: nowrap;
+        }
+
+        .attendance-legend .legend-swatch {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            vertical-align: middle;
+            margin-right: 4px;
+            background-color: #fecaca;
+        }
+
+        #exportEmpTable thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+    </style>
+</head>
 
 <body id="page-top">
     @include('sweetalert::alert')
@@ -92,8 +115,10 @@
                                     style="width:260px" placeholder="Cari nama / NPK / bagian...">
                             </div>
 
-                            <div class="attendance-legend mb-2">
-                                <span class="legend-swatch off"></span> Libur / Weekend
+                            <div class="attendance-legend mb-2 d-flex flex-wrap align-items-center">
+                                <span class="legend-item"><i class="fas fa-arrow-right text-success"></i> Masuk</span>
+                                <span class="legend-item"><i class="fas fa-arrow-left text-danger"></i> Pulang</span>
+                                <span class="legend-item"><span class="legend-swatch"></span> Libur / Weekend</span>
                             </div>
 
                             <div class="table-responsive">
@@ -108,6 +133,8 @@
                 </div>
             </div>
             @include('layout.footer')
+        </div>
+    </div>
 
     {{-- ================= Modal Export ================= --}}
     <div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel" aria-hidden="true">
@@ -217,6 +244,19 @@
                 return val.substring(0, 5);
             }
 
+            // gabung Masuk & Pulang dalam 1 sel, 2 baris, ikon + warna beda
+            // biar langsung kebaca sekilas tanpa perlu lihat kolom keterangan lagi
+            function timeCellHtml(masuk, pulang) {
+                const m = fmtTime(masuk);
+                const p = fmtTime(pulang);
+                const mCls = m === 'N/A' ? 'time-na' : 'time-in';
+                const pCls = p === 'N/A' ? 'time-na' : 'time-out';
+                return `<div class="time-cell">
+                    <span class="${mCls}"><i class="fas fa-arrow-right"></i>${m}</span>
+                    <span class="${pCls}"><i class="fas fa-arrow-left"></i>${p}</span>
+                </div>`;
+            }
+
             function loadData() {
                 $.get("{{ route('attendance.expat.data') }}", { period: $('#period').val() }, function (res) {
                     lastEmployees = res.employees || [];
@@ -227,6 +267,10 @@
             }
 
             function renderTable(dates, employees, offDates) {
+                // destroy DULU, sebelum DOM thead/tbody diubah — jumlah kolom
+                // (tanggal) berubah tiap periode, kalau destroy dipanggil
+                // setelah markup diganti, DataTables bisa nyasar dan lempar
+                // "Cannot reinitialise DataTable" pas init ulang.
                 if ($.fn.dataTable.isDataTable('#attendanceTable')) {
                     $('#attendanceTable').DataTable().destroy();
                 }
@@ -248,6 +292,8 @@
                 employees.forEach(emp => {
                     searchIndex[emp.npk] = `${emp.nama || ''} ${emp.npk || ''} ${emp.bagian || ''}`.toLowerCase();
 
+                    // satu baris per karyawan — Masuk & Pulang digabung per sel tanggal,
+                    // jadi nggak perlu rowspan lagi dan pagination DataTables aman dipakai
                     bodyHtml += `<tr data-npk="${emp.npk}">` +
                         `<td>${emp.no}</td>` +
                         `<td>${emp.npk}</td>` +
@@ -256,24 +302,20 @@
                     dates.forEach(d => {
                         const cls = offDates[d] ? ' class="col-off"' : '';
                         const att = emp.attendance[d] || {};
-                        const m = fmtTime(att.masuk);
-                        const p = fmtTime(att.pulang);
-                        bodyHtml += `<td${cls}>` +
-                            `<div class="badge badge-masuk px-1 py-0 mb-1 d-block" style="font-size:11px;" title="Jam Masuk">${m}</div>` +
-                            `<div class="badge badge-pulang px-1 py-0 d-block" style="font-size:11px;" title="Jam Pulang">${p}</div>` +
-                            `</td>`;
+                        bodyHtml += `<td${cls}>${timeCellHtml(att.masuk, att.pulang)}</td>`;
                     });
                     bodyHtml += `</tr>`;
                 });
                 $('#attendanceTbody').html(bodyHtml);
 
                 dt = $('#attendanceTable').DataTable({
-                    destroy: true,
-                    ordering: true,
+                    destroy: true,               // jaga-jaga kalau ada edge case lolos dari cek di atas
+                    ordering: false,              // sorting per kolom akan merusak alignment tanggal
                     paging: true,
-                    pageLength: 10,
+                    pageLength: 15,
+                    lengthMenu: [10, 15, 25, 50, 100],
                     searching: true,
-                    dom: 'lrtip'
+                    dom: 'lrtip'                  // tanpa 'f' bawaan — search pakai #customSearch sendiri
                 });
             }
 
