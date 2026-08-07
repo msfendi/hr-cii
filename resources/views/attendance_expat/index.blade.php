@@ -3,62 +3,60 @@
 
 @include('layout.header')
 
-<head>
-    <style>
-        #attendanceTable th,
-        #attendanceTable td {
-            text-align: center;
-            vertical-align: middle;
-            font-size: 12.5px;
-            white-space: nowrap;
-        }
+<style>
+    #attendanceTable th,
+    #attendanceTable td {
+        text-align: center;
+        vertical-align: middle;
+        font-size: 12.5px;
+        white-space: nowrap;
+    }
 
-        #attendanceTable td.text-left {
-            text-align: left;
-            white-space: normal;
-        }
+    #attendanceTable td.text-left {
+        text-align: left;
+        white-space: normal;
+    }
 
-        .badge-masuk {
-            background: #d1fae5;
-            color: #065f46;
-        }
+    .badge-masuk {
+        background: #d1fae5;
+        color: #065f46;
+    }
 
-        .badge-pulang {
-            background: #fee2e2;
-            color: #991b1b;
-        }
+    .badge-pulang {
+        background: #fee2e2;
+        color: #991b1b;
+    }
 
-        /* kolom tanggal libur / weekend */
-        #attendanceTable th.col-off,
-        #attendanceTable td.col-off {
-            background-color: #fecaca !important;
-            color: #7f1d1d;
-        }
+    /* kolom tanggal libur / weekend */
+    #attendanceTable th.col-off,
+    #attendanceTable td.col-off {
+        background-color: #fecaca !important;
+        color: #7f1d1d;
+    }
 
-        .attendance-legend {
-            font-size: 12.5px;
-        }
+    .attendance-legend {
+        font-size: 12.5px;
+    }
 
-        .attendance-legend .legend-swatch {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 2px;
-            vertical-align: middle;
-            margin-right: 4px;
-        }
+    .attendance-legend .legend-swatch {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        vertical-align: middle;
+        margin-right: 4px;
+    }
 
-        .attendance-legend .legend-swatch.off {
-            background-color: #fecaca;
-        }
+    .attendance-legend .legend-swatch.off {
+        background-color: #fecaca;
+    }
 
-        #exportEmpTable thead th {
-            position: sticky;
-            top: 0;
-            z-index: 1;
-        }
-    </style>
-</head>
+    #exportEmpTable thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+</style>
 
 <body id="page-top">
     @include('sweetalert::alert')
@@ -110,8 +108,6 @@
                 </div>
             </div>
             @include('layout.footer')
-        </div>
-    </div>
 
     {{-- ================= Modal Export ================= --}}
     <div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel" aria-hidden="true">
@@ -196,7 +192,6 @@
             let dt = null;
             let searchIndex = {};      // npk -> "nama npk bagian" lowercase
             let lastEmployees = [];    // dipakai buat isi daftar karyawan di modal export
-            const evenPageLength = [10, 20, 40, 60];
 
             // header kolom cuma tanggal (dd) — bulan sudah jelas dari filter Periode
             function fmtHeaderDate(iso) {
@@ -232,10 +227,6 @@
             }
 
             function renderTable(dates, employees, offDates) {
-                // destroy DULU, sebelum DOM thead/tbody diubah — jumlah kolom
-                // (tanggal) berubah tiap periode, kalau destroy dipanggil
-                // setelah markup diganti, DataTables bisa nyasar dan lempar
-                // "Cannot reinitialise DataTable" pas init ulang.
                 if ($.fn.dataTable.isDataTable('#attendanceTable')) {
                     $('#attendanceTable').DataTable().destroy();
                 }
@@ -249,7 +240,7 @@
                     if (off) titleParts.push(offLabel(off));
                     theadHtml += `<th${cls} title="${titleParts.join(' - ')}">${fmtHeaderDate(d)}</th>`;
                 });
-                theadHtml += '<th>Keterangan</th></tr>';
+                theadHtml += '</tr>';
                 $('#attendanceThead').html(theadHtml);
 
                 searchIndex = {};
@@ -258,38 +249,35 @@
                     searchIndex[emp.npk] = `${emp.nama || ''} ${emp.npk || ''} ${emp.bagian || ''}`.toLowerCase();
 
                     bodyHtml += `<tr data-npk="${emp.npk}">` +
-                        `<td rowspan="2">${emp.no}</td>` +
-                        `<td rowspan="2">${emp.npk}</td>` +
-                        `<td rowspan="2" class="text-left">${emp.nama}</td>` +
-                        `<td rowspan="2" class="text-left">${emp.bagian ?? '-'}</td>`;
+                        `<td>${emp.no}</td>` +
+                        `<td>${emp.npk}</td>` +
+                        `<td class="text-left">${emp.nama}</td>` +
+                        `<td class="text-left">${emp.bagian ?? '-'}</td>`;
                     dates.forEach(d => {
                         const cls = offDates[d] ? ' class="col-off"' : '';
-                        bodyHtml += `<td${cls}>${fmtTime((emp.attendance[d] || {}).masuk)}</td>`;
+                        const att = emp.attendance[d] || {};
+                        const m = fmtTime(att.masuk);
+                        const p = fmtTime(att.pulang);
+                        bodyHtml += `<td${cls}>` +
+                            `<div class="badge badge-masuk px-1 py-0 mb-1 d-block" style="font-size:11px;" title="Jam Masuk">${m}</div>` +
+                            `<div class="badge badge-pulang px-1 py-0 d-block" style="font-size:11px;" title="Jam Pulang">${p}</div>` +
+                            `</td>`;
                     });
-                    bodyHtml += `<td><span class="badge badge-masuk">Masuk</span></td></tr>`;
-
-                    bodyHtml += `<tr data-npk="${emp.npk}">`;
-                    dates.forEach(d => {
-                        const cls = offDates[d] ? ' class="col-off"' : '';
-                        bodyHtml += `<td${cls}>${fmtTime((emp.attendance[d] || {}).pulang)}</td>`;
-                    });
-                    bodyHtml += `<td><span class="badge badge-pulang">Pulang</span></td></tr>`;
+                    bodyHtml += `</tr>`;
                 });
                 $('#attendanceTbody').html(bodyHtml);
 
                 dt = $('#attendanceTable').DataTable({
-                    destroy: true,             // jaga-jaga kalau ada edge case lolos dari cek di atas
-                    ordering: false,            // sorting per kolom akan merusak pasangan rowspan
+                    destroy: true,
+                    ordering: true,
                     paging: true,
-                    pageLength: 20,              // WAJIB kelipatan 2
-                    lengthMenu: evenPageLength,
+                    pageLength: 10,
                     searching: true,
-                    dom: 'lrtip'                // tanpa 'f' bawaan — search pakai #customSearch sendiri
+                    dom: 'lrtip'
                 });
             }
 
-            // custom search: match ke nama/npk/bagian per-employee (bukan per-cell),
-            // jadi baris Masuk & Pulang selalu ikut lolos/tersingkir bersamaan
+            // custom search: match ke nama/npk/bagian per-employee
             $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
                 if (!dt || settings.nTable.id !== 'attendanceTable') return true;
                 const term = $('#customSearch').val().trim().toLowerCase();

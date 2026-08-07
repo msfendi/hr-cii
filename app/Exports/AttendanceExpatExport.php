@@ -125,8 +125,15 @@ class AttendanceExpatExport implements FromArray, WithEvents, WithStyles
                     $sheet->getStyle($range)->getFont()->getColor()->setRGB('7F1D1D');
                 }
 
-                foreach (range('A', $lastCol) as $col) {
-                    $sheet->getColumnDimension($col)->setAutoSize(true);
+                // NOTE: sengaja gak pakai range('A', $lastCol) — range() cuma jalan
+                // untuk 1 huruf (A-Z), pas total kolom > 26 (4 kolom tetap + tanggal
+                // + Keterangan gampang lewat 26 kalau periodenya 1 bulan penuh),
+                // $lastCol jadi 'AA' dst dan range() lempar error di tengah AfterSheet
+                // -> file xlsx-nya gak sempat selesai di-build / jadi rusak.
+                $lastColIndex = Coordinate::columnIndexFromString($lastCol);
+                for ($colIndex = 1; $colIndex <= $lastColIndex; $colIndex++) {
+                    $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($colIndex))
+                        ->setAutoSize(true);
                 }
             },
         ];
