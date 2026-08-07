@@ -31,21 +31,35 @@ class AttendanceExpatController extends Controller
         ]);
     }
 
+    /**
+     * Export bisa dipanggil dengan:
+     * - period=YYYY-MM                         -> satu bulan penuh
+     * - start_date=YYYY-MM-DD&end_date=YYYY-MM-DD -> rentang custom (bisa lintas bulan)
+     * - npks[]=NPK1&npks[]=NPK2...              -> hanya karyawan tertentu
+     *   (kalau npks[] tidak dikirim / kosong -> export SEMUA expat)
+     */
     public function export(Request $request)
     {
         [$start, $end] = $this->resolveRange($request);
-        $dates    = $this->buildDateList($start, $end);
-        $result   = $this->buildMatrix($start, $end, $dates);
+        $dates = $this->buildDateList($start, $end);
+
+        $npks = $request->input('npks');
+        $npks = (is_array($npks) && count($npks) > 0) ? array_values($npks) : null;
+
+        $result   = $this->buildMatrix($start, $end, $dates, $npks);
         $holidays = $this->getHolidayDates($start, $end);
         $offDates = $this->buildOffDates($dates, $holidays);
 
-        $filename = 'Attendance_Expat_' . $start->format('Ymd') . '-' . $end->format('Ymd') . '.xlsx';
+        $periodLabel = $start->format('d/m/Y') . ' - ' . $end->format('d/m/Y');
 
-        // NOTE: AttendanceExpatExport perlu di-update supaya menerima $offDates
-        // sebagai parameter ke-3 dan mewarnai kolom tanggal libur/weekend jadi
-        // merah. Lihat catatan di chat untuk contoh implementasinya (pakai
-        // WithEvents/AfterSheet dari Maatwebsite Excel + PhpSpreadsheet Fill).
-        return Excel::download(new AttendanceExpatExport($result, $dates, $offDates), $filename);
+        $filename = 'Attendance_Expat_' . $start->format('Ymd') . '-' . $end->format('Ymd')
+            . ($npks ? '_' . count($npks) . 'emp' : '')
+            . '.xlsx';
+
+        return Excel::download(
+            new AttendanceExpatExport($result, $dates, $offDates, $periodLabel),
+            $filename
+        );
     }
 
     // ------------------------------------------------------------------
@@ -78,23 +92,38 @@ class AttendanceExpatController extends Controller
     }
 
     /**
-     * Master list semua expat — dipisah dari perhitungan berat supaya
-     * karyawan yang not-scanned sepanjang bulan tetap muncul di report.
+     * Master list expat — dipisah dari perhitungan berat supaya karyawan
+     * yang not-scanned sepanjang periode tetap muncul di report.
+     * $npks: kalau diisi, hanya kembalikan karyawan dengan NPK tsb (untuk export terfilter).
      */
-    private function getExpatList(): array
+    private function getExpatList(?array $npks = null): array
     {
-        return DB::connection('cii')->select("
+        $sql = "
             SELECT b.NPK AS npk, b.NAMA_KARYAWAN AS nama, d.DEPARTEMENT AS bagian
             FROM BIODATA b
             LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
             WHERE b.IS_EXPAT = 1
-            ORDER BY d.DEPARTEMENT ASC, b.NPK ASC
-        ");
+        ";
+        $bindings = [];
+
+        if (!empty($npks)) {
+            $placeholders = implode(',', array_fill(0, count($npks), '?'));
+            $sql       .= " AND b.NPK IN ({$placeholders})";
+            $bindings   = $npks;
+        }
+
+        $sql .= " ORDER BY d.DEPARTEMENT ASC, b.NPK ASC";
+
+        return DB::connection('cii')->select($sql, $bindings);
     }
 
-    private function buildMatrix(Carbon $start, Carbon $end, array $dates): array
+    private function buildMatrix(Carbon $start, Carbon $end, array $dates, ?array $npks = null): array
     {
-        $master = $this->getExpatList();
+        $master = $this->getExpatList($npks);
+        // NOTE: query absensi (getAttendanceMatrix) tetap dihitung untuk SEMUA expat,
+        // filter NPK cuma diterapkan di master list. Ini sengaja biar query berat di
+        // getAttendanceMatrix() nggak perlu diutak-atik lagi — baris yang NPK-nya
+        // tidak ada di $master otomatis kebuang di loop join di bawah.
         $matrix = $this->getAttendanceMatrix($start, $end);
 
         $employees = [];

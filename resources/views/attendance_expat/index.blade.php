@@ -51,6 +51,12 @@
         .attendance-legend .legend-swatch.off {
             background-color: #fecaca;
         }
+
+        #exportEmpTable thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
     </style>
 </head>
 
@@ -107,26 +113,118 @@
         </div>
     </div>
 
+    {{-- ================= Modal Export ================= --}}
+    <div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exportModalLabel">
+                        <i class="fas fa-file-excel mr-1 text-success"></i>Export Attendance Report
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+
+                    <div class="form-group">
+                        <label class="font-weight-bold d-block">Rentang Periode</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="exportPeriodMode" id="modeMonth" value="month" checked>
+                            <label class="form-check-label" for="modeMonth">Per Bulan</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="exportPeriodMode" id="modeRange" value="range">
+                            <label class="form-check-label" for="modeRange">Rentang Tanggal Custom</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="exportMonthGroup">
+                        <input type="month" id="exportPeriod" class="form-control form-control-sm" style="max-width:200px">
+                    </div>
+
+                    <div class="form-row d-none" id="exportRangeGroup">
+                        <div class="form-group col-md-6">
+                            <label class="small mb-1">Dari Tanggal</label>
+                            <input type="date" id="exportStartDate" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label class="small mb-1">Sampai Tanggal</label>
+                            <input type="date" id="exportEndDate" class="form-control form-control-sm">
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="font-weight-bold mb-0">Pilih Karyawan</label>
+                        <input type="text" id="exportEmpSearch" class="form-control form-control-sm" style="width:220px" placeholder="Cari nama / NPK / bagian...">
+                    </div>
+
+                    <div class="table-responsive" style="max-height:320px; overflow-y:auto; border:1px solid #e3e6f0;">
+                        <table class="table table-sm table-hover mb-0" id="exportEmpTable">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width:40px;"><input type="checkbox" id="exportSelectAll" checked></th>
+                                    <th>NPK</th>
+                                    <th>Nama</th>
+                                    <th>Bagian</th>
+                                </tr>
+                            </thead>
+                            <tbody id="exportEmpTbody"></tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small mt-2 mb-0">
+                        <span id="exportSelectedCount">0</span> dari <span id="exportTotalCount">0</span> karyawan dipilih.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-success btn-sm" id="btnDoExport">
+                        <i class="fas fa-file-excel mr-1"></i>Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
 
     <script>
         $(function () {
             let dt = null;
-            let searchIndex = {}; // npk -> "nama npk bagian" lowercase
+            let searchIndex = {};      // npk -> "nama npk bagian" lowercase
+            let lastEmployees = [];    // dipakai buat isi daftar karyawan di modal export
             const evenPageLength = [10, 20, 40, 60];
 
+            // header kolom cuma tanggal (dd) — bulan sudah jelas dari filter Periode
             function fmtHeaderDate(iso) {
                 const d = new Date(iso + 'T00:00:00');
-                return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+                return String(d.getDate()).padStart(2, '0');
+            }
+
+            // dd/mm/yyyy lengkap, dipakai buat tooltip header aja
+            function fmtFullDate(iso) {
+                const d = new Date(iso + 'T00:00:00');
+                return String(d.getDate()).padStart(2, '0') + '/' +
+                    String(d.getMonth() + 1).padStart(2, '0') + '/' +
+                    d.getFullYear();
             }
 
             function offLabel(type) {
                 return type === 'holiday' ? 'Libur' : 'Weekend';
             }
 
+            // "08:15:32" -> "08:15", kosong/"not scanned" -> "N/A"
+            function fmtTime(val) {
+                if (!val || val === 'not scanned') return 'N/A';
+                return val.substring(0, 5);
+            }
+
             function loadData() {
                 $.get("{{ route('attendance.expat.data') }}", { period: $('#period').val() }, function (res) {
+                    lastEmployees = res.employees || [];
                     renderTable(res.dates, res.employees, res.offDates || {});
                 }).fail(function (xhr) {
                     Swal.fire('Gagal memuat data', xhr.responseJSON?.error || 'Terjadi kesalahan', 'error');
@@ -134,12 +232,22 @@
             }
 
             function renderTable(dates, employees, offDates) {
+                // destroy DULU, sebelum DOM thead/tbody diubah — jumlah kolom
+                // (tanggal) berubah tiap periode, kalau destroy dipanggil
+                // setelah markup diganti, DataTables bisa nyasar dan lempar
+                // "Cannot reinitialise DataTable" pas init ulang.
+                if ($.fn.dataTable.isDataTable('#attendanceTable')) {
+                    $('#attendanceTable').DataTable().destroy();
+                }
+                dt = null;
+
                 let theadHtml = '<tr><th>No</th><th>NPK</th><th>Nama</th><th>Bagian</th>';
                 dates.forEach(d => {
                     const off = offDates[d];
                     const cls = off ? ' class="col-off"' : '';
-                    const title = off ? ` title="${offLabel(off)}"` : '';
-                    theadHtml += `<th${cls}${title}>${fmtHeaderDate(d)}</th>`;
+                    const titleParts = [fmtFullDate(d)];
+                    if (off) titleParts.push(offLabel(off));
+                    theadHtml += `<th${cls} title="${titleParts.join(' - ')}">${fmtHeaderDate(d)}</th>`;
                 });
                 theadHtml += '<th>Keterangan</th></tr>';
                 $('#attendanceThead').html(theadHtml);
@@ -156,28 +264,27 @@
                         `<td rowspan="2" class="text-left">${emp.bagian ?? '-'}</td>`;
                     dates.forEach(d => {
                         const cls = offDates[d] ? ' class="col-off"' : '';
-                        bodyHtml += `<td${cls}>${(emp.attendance[d] || {}).masuk || 'not scanned'}</td>`;
+                        bodyHtml += `<td${cls}>${fmtTime((emp.attendance[d] || {}).masuk)}</td>`;
                     });
                     bodyHtml += `<td><span class="badge badge-masuk">Masuk</span></td></tr>`;
 
                     bodyHtml += `<tr data-npk="${emp.npk}">`;
                     dates.forEach(d => {
                         const cls = offDates[d] ? ' class="col-off"' : '';
-                        bodyHtml += `<td${cls}>${(emp.attendance[d] || {}).pulang || 'not scanned'}</td>`;
+                        bodyHtml += `<td${cls}>${fmtTime((emp.attendance[d] || {}).pulang)}</td>`;
                     });
                     bodyHtml += `<td><span class="badge badge-pulang">Pulang</span></td></tr>`;
                 });
                 $('#attendanceTbody').html(bodyHtml);
 
-                if (dt) dt.destroy();
-
                 dt = $('#attendanceTable').DataTable({
-                    ordering: false,          // sorting per kolom akan merusak pasangan rowspan
+                    destroy: true,             // jaga-jaga kalau ada edge case lolos dari cek di atas
+                    ordering: false,            // sorting per kolom akan merusak pasangan rowspan
                     paging: true,
-                    pageLength: 20,           // WAJIB kelipatan 2
+                    pageLength: 20,              // WAJIB kelipatan 2
                     lengthMenu: evenPageLength,
                     searching: true,
-                    dom: 'lrtip'              // tanpa 'f' bawaan — search pakai #customSearch sendiri
+                    dom: 'lrtip'                // tanpa 'f' bawaan — search pakai #customSearch sendiri
                 });
             }
 
@@ -193,8 +300,103 @@
 
             $('#customSearch').on('keyup', () => dt && dt.draw());
             $('#btnLoad').on('click', loadData);
+
+            // ================= Export modal =================
+
+            $('input[name="exportPeriodMode"]').on('change', function () {
+                const isRange = $('#modeRange').is(':checked');
+                $('#exportMonthGroup').toggleClass('d-none', isRange);
+                $('#exportRangeGroup').toggleClass('d-none', !isRange);
+            });
+
+            function updateExportSelectedCount() {
+                const total = $('.export-emp-chk').length;
+                const checked = $('.export-emp-chk:checked').length;
+                $('#exportSelectedCount').text(checked);
+                $('#exportSelectAll').prop('checked', total > 0 && checked === total);
+            }
+
+            function populateExportEmployeeList() {
+                // default: samain sama periode yang lagi ditampilkan di layar
+                $('#exportPeriod').val($('#period').val());
+
+                let rows = '';
+                lastEmployees.forEach(emp => {
+                    rows += `<tr>
+                        <td><input type="checkbox" class="export-emp-chk" value="${emp.npk}" checked></td>
+                        <td>${emp.npk}</td>
+                        <td>${emp.nama}</td>
+                        <td>${emp.bagian ?? '-'}</td>
+                    </tr>`;
+                });
+                $('#exportEmpTbody').html(rows);
+                $('#exportEmpSearch').val('');
+                $('#exportTotalCount').text(lastEmployees.length);
+                updateExportSelectedCount();
+            }
+
             $('#btnExport').on('click', function () {
-                window.location = "{{ route('attendance.expat.export') }}?period=" + $('#period').val();
+                if (!lastEmployees.length) {
+                    Swal.fire('Data belum siap', 'Tunggu tabel selesai dimuat dulu, ya.', 'info');
+                    return;
+                }
+                populateExportEmployeeList();
+                $('#exportModal').modal('show');
+            });
+
+            $('#exportEmpTbody').on('change', '.export-emp-chk', updateExportSelectedCount);
+
+            $('#exportSelectAll').on('change', function () {
+                $('.export-emp-chk').prop('checked', $(this).is(':checked'));
+                updateExportSelectedCount();
+            });
+
+            $('#exportEmpSearch').on('keyup', function () {
+                const term = $(this).val().trim().toLowerCase();
+                $('#exportEmpTbody tr').each(function () {
+                    $(this).toggle($(this).text().toLowerCase().includes(term));
+                });
+            });
+
+            $('#btnDoExport').on('click', function () {
+                const isRange = $('#modeRange').is(':checked');
+                const params = new URLSearchParams();
+
+                if (isRange) {
+                    const s = $('#exportStartDate').val();
+                    const e = $('#exportEndDate').val();
+                    if (!s || !e) {
+                        Swal.fire('Lengkapi tanggal', 'Isi tanggal mulai dan tanggal akhir dulu.', 'warning');
+                        return;
+                    }
+                    if (s > e) {
+                        Swal.fire('Rentang tanggal salah', 'Tanggal mulai tidak boleh lebih besar dari tanggal akhir.', 'warning');
+                        return;
+                    }
+                    params.set('start_date', s);
+                    params.set('end_date', e);
+                } else {
+                    const p = $('#exportPeriod').val();
+                    if (!p) {
+                        Swal.fire('Pilih periode', 'Pilih bulan periode dulu.', 'warning');
+                        return;
+                    }
+                    params.set('period', p);
+                }
+
+                const allChk  = $('.export-emp-chk');
+                const checked = allChk.filter(':checked');
+                if (checked.length === 0) {
+                    Swal.fire('Pilih karyawan', 'Pilih minimal satu karyawan, atau centang Select All untuk semua.', 'warning');
+                    return;
+                }
+                // kalau semua dicentang -> nggak usah kirim npks[], backend anggap "semua"
+                if (checked.length < allChk.length) {
+                    checked.each(function () { params.append('npks[]', $(this).val()); });
+                }
+
+                window.location = "{{ route('attendance.expat.export') }}?" + params.toString();
+                $('#exportModal').modal('hide');
             });
 
             loadData();
