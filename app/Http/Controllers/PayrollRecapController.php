@@ -137,7 +137,6 @@ class PayrollRecapController extends Controller
         $employees = $query
             ->distinct()
             ->orderBy('prd.employee_name')
-            ->limit(20)
             ->get()
             ->map(fn($row) => [
                 'id'   => $row->employee_npk,

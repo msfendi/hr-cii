@@ -24,6 +24,7 @@ use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\AttendanceExpatController;
 use App\Http\Controllers\AuditRecapController;
 use App\Http\Controllers\BiodataKeluarController;
 use App\Http\Controllers\BpjsExceptionController;
@@ -1221,3 +1222,10 @@ Route::post('/audit-recap/export', [AuditRecapController::class, 'export'])->nam
 Route::get('/audit-recap/report', [AuditRecapController::class, 'report'])->name('audit-recap.report');
 Route::get('/audit-recap/export-view', [AuditRecapController::class, 'export_view'])->name('audit-recap.export-view');
 Route::get('/audit-recap/export-pdf', [AuditRecapController::class, 'export_pdf'])->name('audit-recap.export-pdf');
+
+
+Route::prefix('attendance-expat')->name('attendance.expat.')->group(function () {
+    Route::get('/', [AttendanceExpatController::class, 'index'])->name('index');
+    Route::get('/data', [AttendanceExpatController::class, 'data'])->name('data');
+    Route::get('/export', [AttendanceExpatController::class, 'export'])->name('export');
+});
