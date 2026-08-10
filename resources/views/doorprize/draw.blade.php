@@ -346,7 +346,20 @@
                         <h1 class="h3 mb-0 text-gray-800">
                             <i class="fas fa-gift text-primary mr-2"></i>Undian Doorprize
                         </h1>
+                        @if($event)
+                            <span class="badge badge-primary p-2">
+                                <i class="fas fa-calendar-check mr-1"></i> Event Aktif: {{ $event->name }}
+                            </span>
+                        @endif
                     </div>
+
+                    @if(!$event)
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Tidak ada event doorprize yang sedang aktif. Aktifkan salah satu event terlebih dahulu
+                            sebelum melakukan scan atau undian.
+                        </div>
+                    @endif
 
                     {{-- ===================== KPI CARDS ===================== --}}
                     <div class="row">

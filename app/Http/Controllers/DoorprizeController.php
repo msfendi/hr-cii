@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\DoorprizeScan;
 use App\Models\DoorprizeWinner;
+use App\Models\Event;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,14 +13,51 @@ use Illuminate\Support\Facades\Storage;
 class DoorprizeController extends Controller
 {
     /**
+     * Cache event aktif per request, supaya query "events" tidak berulang
+     * setiap kali activeEvent() dipanggil dalam 1 request yang sama.
+     */
+    private ?Event $activeEvent = null;
+    private bool $activeEventResolved = false;
+
+    /**
+     * Ambil event yang sedang aktif (events.is_active = 1).
+     * Seluruh scan & undian doorprize mengikuti event ini.
+     *
+     * Asumsi: hanya ada 1 event yang is_active = 1 pada satu waktu
+     * (dijaga di sisi form pengaturan event, bukan di controller ini).
+     */
+    private function activeEvent(): ?Event
+    {
+        if (!$this->activeEventResolved) {
+            $this->activeEvent = Event::where('is_active', 1)->first();
+            $this->activeEventResolved = true;
+        }
+
+        return $this->activeEvent;
+    }
+
+    /**
+     * Response standar kalau tidak ada event yang aktif.
+     */
+    private function noActiveEventResponse(): JsonResponse
+    {
+        return response()->json([
+            'status'  => 'no_active_event',
+            'message' => 'Tidak ada event doorprize yang sedang aktif. Aktifkan salah satu event terlebih dahulu.',
+        ], 422);
+    }
+
+    /**
      * Halaman scan QR NPK.
      */
     public function scanPage()
     {
-        $totalScanned   = DoorprizeScan::count();
-        $totalAvailable = DoorprizeScan::available()->count();
+        $event = $this->activeEvent();
 
-        return view('doorprize.scan', compact('totalScanned', 'totalAvailable'));
+        $totalScanned   = $event ? DoorprizeScan::where('event_id', $event->id)->count() : 0;
+        $totalAvailable = $event ? DoorprizeScan::available()->where('event_id', $event->id)->count() : 0;
+
+        return view('doorprize.scan', compact('totalScanned', 'totalAvailable', 'event'));
     }
 
     /**
@@ -31,9 +69,18 @@ class DoorprizeController extends Controller
      *
      * NPK diekstrak di sisi server (bagian sebelum underscore pertama),
      * supaya format QR bebas berubah tanpa perlu ubah logic di client.
+     *
+     * Scan selalu terikat ke event yang sedang aktif (event_id), sehingga
+     * satu NPK bisa scan lagi di event lain tanpa dianggap duplikat.
      */
     public function storeScan(Request $request): JsonResponse
     {
+        $event = $this->activeEvent();
+
+        if (!$event) {
+            return $this->noActiveEventResponse();
+        }
+
         $rawQr = trim((string) $request->input('qr_code', $request->input('npk', '')));
 
         if ($rawQr === '') {
@@ -52,12 +99,15 @@ class DoorprizeController extends Controller
 
         $npk = $matches[1];
 
-        // Cek duplikat -> hanya boleh scan 1x
-        $existing = DoorprizeScan::where('npk', $npk)->first();
+        // Cek duplikat -> hanya boleh scan 1x PER EVENT
+        $existing = DoorprizeScan::where('npk', $npk)
+            ->where('event_id', $event->id)
+            ->first();
+
         if ($existing) {
             return response()->json([
                 'status'     => 'duplicate',
-                'message'    => "NPK {$npk} sudah pernah discan sebelumnya!",
+                'message'    => "NPK {$npk} sudah pernah discan sebelumnya di event \"{$event->name}\"!",
                 'scanned_at' => optional($existing->scanned_at)->format('d-m-Y H:i:s'),
             ], 409);
         }
@@ -72,6 +122,7 @@ class DoorprizeController extends Controller
         }
 
         DoorprizeScan::create([
+            'event_id'   => $event->id,
             'npk'        => $npk,
             'scanned_by' => auth()->id(),
             'scanned_at' => now(),
@@ -84,8 +135,8 @@ class DoorprizeController extends Controller
                 'npk'             => $npk,
                 'name'            => $employee->NAMA_KARYAWAN ?? '-',
                 'department'      => $employee->BAG ?? '-',
-                'total_scanned'   => DoorprizeScan::count(),
-                'total_available' => DoorprizeScan::available()->count(),
+                'total_scanned'   => DoorprizeScan::where('event_id', $event->id)->count(),
+                'total_available' => DoorprizeScan::available()->where('event_id', $event->id)->count(),
             ],
         ]);
     }
@@ -95,42 +146,55 @@ class DoorprizeController extends Controller
      */
     public function drawPage()
     {
-        $totalScanned   = DoorprizeScan::count();
-        $totalAvailable = DoorprizeScan::available()->count();
-        $totalWon       = DoorprizeWinner::active()->count();
-        $totalVoid      = DoorprizeWinner::voided()->count();
+        $event = $this->activeEvent();
 
-        $winners = DoorprizeWinner::orderByDesc('won_at')
-            ->get()
-            ->map(fn($w) => $this->formatWinner($w));
+        $totalScanned   = $event ? DoorprizeScan::where('event_id', $event->id)->count() : 0;
+        $totalAvailable = $event ? DoorprizeScan::available()->where('event_id', $event->id)->count() : 0;
+        $totalWon       = $event ? DoorprizeWinner::active()->where('event_id', $event->id)->count() : 0;
+        $totalVoid      = $event ? DoorprizeWinner::voided()->where('event_id', $event->id)->count() : 0;
+
+        $winners = $event
+            ? DoorprizeWinner::where('event_id', $event->id)
+                ->orderByDesc('won_at')
+                ->get()
+                ->map(fn($w) => $this->formatWinner($w))
+            : collect();
 
         return view('doorprize.draw', compact(
             'totalScanned',
             'totalAvailable',
             'totalWon',
             'totalVoid',
-            'winners'
+            'winners',
+            'event'
         ));
     }
 
     /**
      * Jalankan undian sejumlah $amount pemenang, diambil random dari NPK
-     * yang sudah discan dan belum pernah menang.
+     * yang sudah discan dan belum pernah menang, DI DALAM event yang
+     * sedang aktif saja.
      */
     public function draw(Request $request): JsonResponse
     {
+        $event = $this->activeEvent();
+
+        if (!$event) {
+            return $this->noActiveEventResponse();
+        }
+
         $request->validate([
             'amount'      => 'required|integer|min:1|max:100',
             'batch_label' => 'nullable|string|max:100',
         ]);
 
         $amount = (int) $request->amount;
-        $availableCount = DoorprizeScan::available()->count();
+        $availableCount = DoorprizeScan::available()->where('event_id', $event->id)->count();
 
         if ($availableCount === 0) {
             return response()->json([
                 'status'  => 'empty',
-                'message' => 'Tidak ada peserta yang tersedia untuk diundi. Pastikan sudah ada NPK yang discan.',
+                'message' => 'Tidak ada peserta yang tersedia untuk diundi pada event ini. Pastikan sudah ada NPK yang discan.',
             ], 422);
         }
 
@@ -143,10 +207,11 @@ class DoorprizeController extends Controller
 
         $batchLabel = $request->batch_label ?: ('Undian ' . now()->format('d-m-Y H:i'));
 
-        $results = DB::transaction(function () use ($amount, $batchLabel) {
+        $results = DB::transaction(function () use ($amount, $batchLabel, $event) {
             // lockForUpdate mencegah 2 request draw yang jalan bersamaan
-            // mengambil NPK yang sama.
+            // mengambil NPK yang sama, dibatasi ke event yang aktif.
             $winnerScans = DoorprizeScan::available()
+                ->where('event_id', $event->id)
                 ->inRandomOrder()
                 ->limit($amount)
                 ->lockForUpdate()
@@ -164,6 +229,7 @@ class DoorprizeController extends Controller
                 );
 
                 $winner = DoorprizeWinner::create([
+                    'event_id'    => $event->id,
                     'npk'         => $scan->npk,
                     'name'        => $employee->NAMA_KARYAWAN ?? null,
                     'department'  => $employee->BAG ?? null,
@@ -173,8 +239,8 @@ class DoorprizeController extends Controller
                     'won_at'      => now(),
                 ]);
 
-                // Tandai scan ini sudah menang -> tidak akan pernah ikut undian lagi,
-                // walaupun nanti pemenangnya dihanguskan (void).
+                // Tandai scan ini sudah menang -> tidak akan pernah ikut undian lagi
+                // di event yang sama, walaupun nanti pemenangnya dihanguskan (void).
                 $scan->update(['is_winner' => true]);
 
                 $results[] = $this->formatWinner($winner);
@@ -187,18 +253,27 @@ class DoorprizeController extends Controller
             'status'    => 'success',
             'message'   => count($results) . ' pemenang berhasil diundi.',
             'winners'   => $results,
-            'remaining' => DoorprizeScan::available()->count(),
-            'total_won' => DoorprizeWinner::active()->count(),
+            'remaining' => DoorprizeScan::available()->where('event_id', $event->id)->count(),
+            'total_won' => DoorprizeWinner::active()->where('event_id', $event->id)->count(),
         ]);
     }
 
     /**
-     * Hanguskan satu pemenang. NPK tetap tidak bisa ikut undian lagi
-     * (karena doorprize_scans.is_winner tidak direset), hanya status
-     * hadiahnya yang jadi tidak berlaku.
+     * Hanguskan satu pemenang. NPK tetap tidak bisa ikut undian lagi di
+     * event yang sama (karena doorprize_scans.is_winner tidak direset),
+     * hanya status hadiahnya yang jadi tidak berlaku.
      */
     public function voidWinner(Request $request, DoorprizeWinner $winner): JsonResponse
     {
+        $event = $this->activeEvent();
+
+        if ($event && (int) $winner->event_id !== (int) $event->id) {
+            return response()->json([
+                'status'  => 'invalid',
+                'message' => 'Pemenang ini bukan bagian dari event yang sedang aktif.',
+            ], 422);
+        }
+
         if ($winner->is_void) {
             return response()->json([
                 'status'  => 'already_void',
@@ -214,51 +289,71 @@ class DoorprizeController extends Controller
         ]);
 
         return response()->json([
-            'status'    => 'success',
-            'message'   => "NPK {$winner->npk} berhasil dihanguskan.",
-            'winner'    => $this->formatWinner($winner),
-            'total_won' => DoorprizeWinner::active()->count(),
-            'total_void' => DoorprizeWinner::voided()->count(),
+            'status'     => 'success',
+            'message'    => "NPK {$winner->npk} berhasil dihanguskan.",
+            'winner'     => $this->formatWinner($winner),
+            'total_won'  => $event ? DoorprizeWinner::active()->where('event_id', $event->id)->count() : DoorprizeWinner::active()->count(),
+            'total_void' => $event ? DoorprizeWinner::voided()->where('event_id', $event->id)->count() : DoorprizeWinner::voided()->count(),
         ]);
     }
 
     /**
-     * List seluruh pemenang (dipakai untuk refresh tabel via AJAX kalau diperlukan).
+     * List seluruh pemenang pada event aktif (dipakai untuk refresh tabel
+     * via AJAX kalau diperlukan).
      */
     public function winnersList(): JsonResponse
     {
-        $winners = DoorprizeWinner::orderByDesc('won_at')
-            ->get()
-            ->map(fn($w) => $this->formatWinner($w));
+        $event = $this->activeEvent();
+
+        $winners = $event
+            ? DoorprizeWinner::where('event_id', $event->id)
+                ->orderByDesc('won_at')
+                ->get()
+                ->map(fn($w) => $this->formatWinner($w))
+            : collect();
 
         return response()->json(['data' => $winners]);
     }
 
     /**
-     * Reset seluruh data scan.
+     * Reset seluruh data scan, TAPI hanya untuk event yang sedang aktif.
+     * Data scan event lain tidak tersentuh.
      */
     public function resetScans(): JsonResponse
     {
-        DoorprizeScan::truncate();
+        $event = $this->activeEvent();
+
+        if (!$event) {
+            return $this->noActiveEventResponse();
+        }
+
+        DoorprizeScan::where('event_id', $event->id)->delete();
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'Seluruh data scan berhasil direset.',
+            'message' => "Seluruh data scan untuk event \"{$event->name}\" berhasil direset.",
         ]);
     }
 
     /**
-     * Reset seluruh data pemenang, dan kembalikan semua NPK yang sudah
-     * pernah scan ke pool undian (is_winner = false).
+     * Reset seluruh data pemenang pada event yang sedang aktif, dan
+     * kembalikan semua NPK yang sudah pernah scan di event tersebut
+     * ke pool undian (is_winner = false).
      */
     public function resetWinners(): JsonResponse
     {
-        DoorprizeWinner::truncate();
-        DoorprizeScan::query()->update(['is_winner' => false]);
+        $event = $this->activeEvent();
+
+        if (!$event) {
+            return $this->noActiveEventResponse();
+        }
+
+        DoorprizeWinner::where('event_id', $event->id)->delete();
+        DoorprizeScan::where('event_id', $event->id)->update(['is_winner' => false]);
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'Data pemenang berhasil direset, seluruh NPK dikembalikan ke pool undian.',
+            'message' => "Data pemenang event \"{$event->name}\" berhasil direset, seluruh NPK dikembalikan ke pool undian.",
         ]);
     }
 

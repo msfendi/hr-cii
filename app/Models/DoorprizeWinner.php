@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class DoorprizeWinner extends Model
 {
     protected $fillable = [
+        'event_id',
         'npk',
         'name',
         'department',

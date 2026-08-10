@@ -21,10 +21,16 @@ class EventInvitationController extends Controller
      */
     public function scanPage(Request $request, $event = null): View
     {
-        $event = $this->resolveEvent($event);
+        $eventModel = $this->resolvePublicEvent($event);
 
-        return view("event_invitation.{$event->view_folder}.scan", [
-            'event' => $event,
+        if (!$eventModel) {
+            return view('event_invitation.expired', [
+                'event' => $this->findEventEvenIfInactive($event),
+            ]);
+        }
+
+        return view("event_invitation.{$eventModel->view_folder}.scan", [
+            'event' => $eventModel,
         ]);
     }
 
@@ -34,7 +40,16 @@ class EventInvitationController extends Controller
      */
     public function storeScan(Request $request, $event = null): JsonResponse
     {
-        $event = $this->resolveEvent($event);
+        $eventModel = $this->resolvePublicEvent($event);
+
+        if (!$eventModel) {
+            return response()->json([
+                'status'  => 'expired',
+                'message' => 'Event ini sudah tidak aktif / berakhir.',
+            ], 410);
+        }
+
+        $event = $eventModel;
         $rawQr = trim((string) $request->input('qr_code', $request->input('npk', '')));
 
         if ($rawQr === '') {
@@ -88,7 +103,15 @@ class EventInvitationController extends Controller
      */
     public function formPage(Request $request, $event = null): View|RedirectResponse
     {
-        $event   = $this->resolveEvent($event);
+        $eventModel = $this->resolvePublicEvent($event);
+
+        if (!$eventModel) {
+            return view('event_invitation.expired', [
+                'event' => $this->findEventEvenIfInactive($event),
+            ]);
+        }
+
+        $event   = $eventModel;
         $session = $request->session()->get(self::SESSION_KEY);
 
         if (!$session || (int) ($session['event_id'] ?? 0) !== $event->id) {
@@ -117,7 +140,16 @@ class EventInvitationController extends Controller
      */
     public function storeResponse(Request $request, $event = null): JsonResponse
     {
-        $event   = $this->resolveEvent($event);
+        $eventModel = $this->resolvePublicEvent($event);
+
+        if (!$eventModel) {
+            return response()->json([
+                'status'  => 'expired',
+                'message' => 'Event ini sudah tidak aktif / berakhir.',
+            ], 410);
+        }
+
+        $event   = $eventModel;
         $session = $request->session()->get(self::SESSION_KEY);
 
         if (!$session || (int) ($session['event_id'] ?? 0) !== $event->id) {
@@ -183,17 +215,39 @@ class EventInvitationController extends Controller
     /* ------------------------------------------------------------ */
 
     /**
-     * $event bisa berupa id (dari route) atau kosong -> pakai event
-     * yang sedang is_active. 404 kalau id tidak ketemu atau tidak ada
-     * event aktif sama sekali.
+     * Dipakai khusus untuk halaman/endpoint publik (scan, form, respond).
+     * Berbeda dengan resolveEvent(), method ini TIDAK 404 kalau event tidak
+     * ditemukan atau sudah nonaktif -> cukup kembalikan null, supaya caller
+     * bisa menampilkan halaman "Event Sudah Berakhir" alih-alih error 404.
+     *
+     * - $event diisi (id dari route lama/di-bookmark user) tapi:
+     *      - tidak ketemu di DB -> null
+     *      - ketemu tapi is_active = 0 -> null
+     * - $event kosong -> pakai event yang sedang is_active (kalau tidak ada -> null)
      */
-    private function resolveEvent($event): Event
+    private function resolvePublicEvent($event): ?Event
     {
         if (!empty($event)) {
-            return Event::findOrFail($event);
+            $found = Event::find($event);
+
+            return ($found && $found->is_active) ? $found : null;
         }
 
-        return Event::active()->firstOrFail();
+        return Event::active()->first();
+    }
+
+    /**
+     * Ambil data event walau statusnya sudah nonaktif, khusus supaya halaman
+     * "Event Sudah Berakhir" tetap bisa menampilkan nama event-nya (kalau ada).
+     * Kembalikan null kalau id tidak diisi atau memang tidak ketemu sama sekali.
+     */
+    private function findEventEvenIfInactive($event): ?Event
+    {
+        if (empty($event)) {
+            return null;
+        }
+
+        return Event::find($event);
     }
 
     /**

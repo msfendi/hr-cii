@@ -8,6 +8,7 @@ class DoorprizeScan extends Model
 {
     protected $fillable = [
         'npk',
+        'event_id',
         'scanned_by',
         'scanned_at',
         'is_winner',
