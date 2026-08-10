@@ -88,7 +88,7 @@ function startScanning() {
             if (!regexQr.test(rawText)) {
                 if (!statusEl.dataset.locked) {
                     statusEl.dataset.locked = '1';
-                    Swal.fire({ icon: 'error', title: 'QR Tidak Valid', text: 'Format QR Code tidak sesuai (contoh: C-00827_NAMA KARYAWAN).' })
+                    Swal.fire({ icon: 'error', title: 'QR Tidak Valid', text: 'QR yang anda scan tidak sesuai dengan format perusahaan.' })
                         .then(() => { delete statusEl.dataset.locked; });
                 }
                 return;
