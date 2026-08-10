@@ -1,10 +1,5 @@
-{{--
-    Halaman admin untuk kelola tabel `events`.
-    Ditulis pakai @include('layout.header/sidebar/topbar/footer') mengikuti
-    pola SB Admin 2 yang biasa dipakai di panel internal — sesuaikan nama
-    include di bawah ini (sidebar/topbar) dengan partial layout admin yang
-    sebenarnya kalau namanya berbeda di project kamu.
---}}
+<!DOCTYPE html>
+<html lang="en">
 @include('layout.header')
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
@@ -64,9 +59,9 @@
                                             <td class="text-center"><span class="badge badge-secondary">{{ $event->jumlah_tidak_hadir }}</span></td>
                                             <td class="text-center">
                                                 @if ($event->is_active)
-                                                    <span class="badge badge-danger">Aktif</span>
+                                                    <span class="badge badge-success">Aktif</span>
                                                 @else
-                                                    <span class="badge badge-light border">Nonaktif</span>
+                                                    <span class="badge badge-danger">Nonaktif</span>
                                                 @endif
                                             </td>
                                             <td class="text-center">
@@ -105,7 +100,7 @@
     </div>
 </div>
 
-{{-- =============== MODAL TAMBAH / EDIT EVENT =============== --}}
+
 <div class="modal fade" id="modalEvent" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -186,8 +181,6 @@
         </div>
     </div>
 </div>
-
-@include('layout.footerscript')
 </body>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>

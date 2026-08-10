@@ -459,7 +459,7 @@
                 <div class="box"><div class="num" id="cd-mins">00</div><div class="lbl">Menit</div></div>
                 <div class="box"><div class="num" id="cd-secs">00</div><div class="lbl">Detik</div></div>
             </div>
-            <p class="small countdown-caption">menuju hari kemerdekaan</p>
+            <p class="small countdown-caption">Menuju Event {{ $event->nama_event }}</p>
         </div>
     </section>
 
