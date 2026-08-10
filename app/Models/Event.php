@@ -30,14 +30,28 @@ class Event extends Model
     ];
 
     private const HARI = [
-        'Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa',
-        'Wednesday' => 'Rabu', 'Thursday' => 'Kamis', 'Friday' => 'Jumat', 'Saturday' => 'Sabtu',
+        'Sunday' => 'Minggu',
+        'Monday' => 'Senin',
+        'Tuesday' => 'Selasa',
+        'Wednesday' => 'Rabu',
+        'Thursday' => 'Kamis',
+        'Friday' => 'Jumat',
+        'Saturday' => 'Sabtu',
     ];
 
     private const BULAN = [
-        1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
-        5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
-        9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        1 => 'Januari',
+        2 => 'Februari',
+        3 => 'Maret',
+        4 => 'April',
+        5 => 'Mei',
+        6 => 'Juni',
+        7 => 'Juli',
+        8 => 'Agustus',
+        9 => 'September',
+        10 => 'Oktober',
+        11 => 'November',
+        12 => 'Desember',
     ];
 
     public function invitations()
@@ -48,6 +62,26 @@ class Event extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Dihitung LANGSUNG dari tabel event_invitations, bukan dari kolom
+     * fisik "jumlah_hadir". Ini sengaja meng-override akses ke atribut
+     * tersebut (walau kolomnya masih ada di DB) supaya angkanya selalu
+     * akurat, termasuk kalau ada baris event_invitations yang dihapus/
+     * diubah manual langsung lewat database (bukan lewat aplikasi).
+     */
+    public function getJumlahHadirAttribute(): int
+    {
+        return $this->invitations()->where('status', 'hadir')->count();
+    }
+
+    /**
+     * Sama seperti getJumlahHadirAttribute(), untuk status "tidak_hadir".
+     */
+    public function getJumlahTidakHadirAttribute(): int
+    {
+        return $this->invitations()->where('status', 'tidak_hadir')->count();
     }
 
     /**
