@@ -258,9 +258,18 @@
             }
 
             function loadData() {
+                Swal.fire({
+                    title: 'Memuat data...',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
                 $.get("{{ route('attendance.expat.data') }}", { period: $('#period').val() }, function (res) {
                     lastEmployees = res.employees || [];
                     renderTable(res.dates, res.employees, res.offDates || {});
+                    Swal.close();
                 }).fail(function (xhr) {
                     Swal.fire('Gagal memuat data', xhr.responseJSON?.error || 'Terjadi kesalahan', 'error');
                 });
@@ -425,8 +434,46 @@
                     checked.each(function () { params.append('npks[]', $(this).val()); });
                 }
 
-                window.location = "{{ route('attendance.expat.export') }}?" + params.toString();
                 $('#exportModal').modal('hide');
+
+                Swal.fire({
+                    title: 'Membuat file Excel...',
+                    text: 'Mohon tunggu, sedang menyiapkan data.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                // pakai fetch + blob (bukan window.location langsung) supaya loading
+                // bisa ditutup TEPAT saat file-nya beneran selesai dibuat, dan kalau
+                // export gagal di server, errornya kelihatan alih-alih cuma diam saja.
+                fetch("{{ route('attendance.expat.export') }}?" + params.toString())
+                    .then(async (res) => {
+                        if (!res.ok) {
+                            throw new Error('Export gagal (HTTP ' + res.status + ')');
+                        }
+                        const blob = await res.blob();
+
+                        let filename = 'Attendance_Expat.xlsx';
+                        const disposition = res.headers.get('Content-Disposition') || '';
+                        const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+                        if (match && match[1]) filename = decodeURIComponent(match[1].replace(/"/g, ''));
+
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+
+                        Swal.close();
+                    })
+                    .catch((err) => {
+                        Swal.fire('Gagal export', err.message || 'Terjadi kesalahan saat export.', 'error');
+                    });
             });
 
             loadData();

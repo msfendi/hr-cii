@@ -112,7 +112,7 @@ class AttendanceExpatController extends Controller
             $bindings   = $npks;
         }
 
-        $sql .= " ORDER BY d.DEPARTEMENT ASC, b.NPK ASC";
+        $sql .= " ORDER BY b.NPK ASC";
 
         return DB::connection('cii')->select($sql, $bindings);
     }

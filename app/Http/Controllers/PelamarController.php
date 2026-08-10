@@ -270,7 +270,7 @@ class PelamarController extends Controller
         $result = [];
 
         foreach ($fieldMap as $pelamarField => $pkwtField) {
-            $oldRelativePath = $pelamarDetail->$pelamarField ?? null; // e.g. "pelamar/file_cv/xxx.pdf"
+            $oldRelativePath = $pelamarDetail->$pelamarField ?? null;
 
             if (empty($oldRelativePath) || !Storage::disk('public')->exists($oldRelativePath)) {
                 continue;
@@ -285,16 +285,57 @@ class PelamarController extends Controller
                 Storage::disk('public')->makeDirectory($newFolder);
             }
 
-            try {
-                Storage::disk('public')->move($oldRelativePath, $newRelativePath);
-                // Store the full relative path, not just the filename.
-                $result[$pkwtField] = $newRelativePath;
-                // dd($result);
-            } catch (\Throwable $e) {
-                // Don't let a single missing/locked file break the whole assignment;
-                // just skip moving that particular document.
-                continue;
+            $maxRetry   = 3;
+            $attempt    = 0;
+            $fileExists = false;
+
+            while ($attempt < $maxRetry && !$fileExists) {
+                $attempt++;
+                try {
+                    // Hapus file lama di newRelativePath jika ada (hasil percobaan gagal sebelumnya)
+                    if (Storage::disk('public')->exists($newRelativePath)) {
+                        Storage::disk('public')->delete($newRelativePath);
+                    }
+
+                    $moved = Storage::disk('public')->copy($oldRelativePath, $newRelativePath);
+
+                    if (!$moved) {
+                        \Log::warning("Attempt {$attempt}: copy() returned false for {$pkwtField}", [
+                            'old' => $oldRelativePath,
+                            'new' => $newRelativePath,
+                        ]);
+                        usleep(500000); // tunggu 500ms sebelum retry
+                        continue;
+                    }
+
+                    // Verifikasi fisik: file harus benar-benar ada di path baru
+                    if (Storage::disk('public')->exists($newRelativePath)) {
+                        $fileExists = true;
+                        \Log::info("Attempt {$attempt}: file successfully copied for {$pkwtField}", [
+                            'new' => $newRelativePath,
+                        ]);
+                    } else {
+                        \Log::warning("Attempt {$attempt}: file not found after copy for {$pkwtField}", [
+                            'old' => $oldRelativePath,
+                            'new' => $newRelativePath,
+                        ]);
+                        usleep(500000); // tunggu 500ms sebelum retry
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("Attempt {$attempt}: Exception copying file for {$pkwtField}: " . $e->getMessage());
+                    usleep(500000);
+                }
             }
+
+            if (!$fileExists) {
+                \Log::error("Giving up after {$maxRetry} attempts for {$pkwtField}", [
+                    'old' => $oldRelativePath,
+                    'new' => $newRelativePath,
+                ]);
+                continue; // skip field ini, jangan masukkan path yang tidak valid ke PKWT
+            }
+
+            $result[$pkwtField] = $newRelativePath;
         }
 
         return $result;
