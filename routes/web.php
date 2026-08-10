@@ -95,6 +95,8 @@ use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
 use App\Http\Controllers\CanteenReportController;
 use App\Http\Controllers\DoorprizeController;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventInvitationController;
 use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
@@ -1158,6 +1160,25 @@ Route::prefix('outsource')->name('outsource.')->middleware(['auth', 'permission'
     Route::delete('/{id}', [OutsourceController::class, 'destroy'])->name('destroy');
     Route::get('/template/download', [OutsourceController::class, 'template'])->name('template');
     Route::post('/import/upload', [OutsourceController::class, 'import'])->name('import');
+});
+
+Route::prefix('event-invitation')->name('event-invitation.')->group(function () {
+
+    // ---- Admin: kelola master event (bungkus middleware auth/permission kamu sendiri) ----
+    // PENTING: grup ini harus didaftarkan SEBELUM route GET '/{event?}' di bawah,
+    // supaya "/event_invitation/admin" tidak ketangkep sebagai parameter {event}.
+    Route::prefix('admin')->name('admin.')->group(function () {
+        Route::get('/', [EventController::class, 'index'])->name('index');
+        Route::post('/', [EventController::class, 'store'])->name('store');
+        Route::put('/{event}', [EventController::class, 'update'])->name('update');
+        Route::delete('/{event}', [EventController::class, 'destroy'])->name('destroy');
+        Route::post('/{event}/activate', [EventController::class, 'activate'])->name('activate');
+    });
+    Route::get('/scan/{event?}', [EventInvitationController::class, 'scanPage'])->name('scan');
+    Route::post('/scan/{event?}', [EventInvitationController::class, 'storeScan'])->name('scan.store');
+
+    Route::get('/{event?}', [EventInvitationController::class, 'formPage'])->name('form');
+    Route::post('/{event?}/respond', [EventInvitationController::class, 'storeResponse'])->name('respond');
 });
 
 Route::get('/speech/index', [SpeechController::class, 'index'])->name('speech.index')->middleware(['auth', 'permission']);
