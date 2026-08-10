@@ -464,7 +464,7 @@
     </section>
 
     {{-- aksen deretan bendera merah putih mini --}}
-    <div class="flag-divider">
+    <!-- <div class="flag-divider">
         @for ($i = 0; $i < 9; $i++)
             <span class="mini-flag" style="animation-delay: {{ $i * 0.12 }}s;">
                 <svg viewBox="0 0 20 26" width="14" height="18">
@@ -474,7 +474,7 @@
                 </svg>
             </span>
         @endfor
-    </div>
+    </div> -->
 
     <div class="card-info-wrap">
         <div class="card-info-inner">
@@ -730,7 +730,7 @@
     </section>
 
     {{-- aksen deretan bendera merah putih sebelum footer --}}
-    <div class="flag-divider" style="background:var(--merah-tua); padding: .75rem 0;">
+    <!-- <div class="flag-divider" style="background:var(--merah-tua); padding: .75rem 0;">
         @for ($i = 0; $i < 9; $i++)
             <span class="mini-flag" style="animation-delay: {{ $i * 0.12 }}s;">
                 <svg viewBox="0 0 20 26" width="14" height="18">
@@ -740,7 +740,7 @@
                 </svg>
             </span>
         @endfor
-    </div>
+    </div> -->
 
     <footer class="merdeka-footer">
         <div class="mb-1" style="font-size:1.4rem;">🇮🇩</div>
