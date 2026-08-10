@@ -124,12 +124,38 @@ class EventInvitationController extends Controller
             ->where('npk', $session['npk'])
             ->first();
 
+        // Daftar ucapan yang ditampilkan di bawah form: npk + ucapan dari
+        // event_invitations, TIDAK menyertakan status hadir/tidak_hadir.
+        // Baris dengan ucapan kosong/null tidak diambil sama sekali.
+        $ucapanRows = EventInvitation::where('event_id', $event->id)
+            ->whereNotNull('ucapan')
+            ->where('ucapan', '!=', '')
+            ->orderByDesc('responded_at')
+            ->get(['npk', 'ucapan']);
+
+        // Nama & department diambil live dari BIODATA/BIODATA_KELUAR + DEPT
+        // (bukan dari kolom snapshot di event_invitations), 1x query untuk
+        // semua NPK sekaligus supaya tidak N+1.
+        $employees = $this->findEmployeesByNpks($ucapanRows->pluck('npk')->all());
+
+        $ucapanList = $ucapanRows->map(function ($row) use ($employees) {
+            $employee = $employees[$row->npk] ?? null;
+
+            return (object) [
+                'npk'        => $row->npk,
+                'ucapan'     => $row->ucapan,
+                'nama'       => $employee->NAMA_KARYAWAN ?? '-',
+                'department' => $employee->DEPARTEMENT ?? '-',
+            ];
+        });
+
         return view("event_invitation.{$event->view_folder}.form", [
             'event'      => $event,
             'npk'        => $session['npk'],
             'nama'       => $session['nama'],
             'departemen' => $session['departemen'],
             'invitation' => $invitation,
+            'ucapanList' => $ucapanList,
         ]);
     }
 
@@ -248,6 +274,44 @@ class EventInvitationController extends Controller
         }
 
         return Event::find($event);
+    }
+
+    /**
+     * Versi batch dari findEmployeeByNpk(): ambil NAMA_KARYAWAN & DEPARTEMENT
+     * untuk banyak NPK sekaligus dalam 1 query (dipakai di daftar ucapan,
+     * supaya tidak query per-baris / N+1).
+     *
+     * Return: array asosiatif [NPK => stdClass{NPK, NAMA_KARYAWAN, BAG, DEPARTEMENT, ...}]
+     */
+    private function findEmployeesByNpks(array $npks): array
+    {
+        $npks = array_values(array_unique(array_filter($npks)));
+
+        if (empty($npks)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($npks), '?'));
+
+        $sql = "
+            SELECT EMP.NPK, EMP.NAMA_KARYAWAN, EMP.BAG, EMP.ID_DEPT, EMP.JENIS_KEL,
+                   EMP.SECTION, EMP.STATUS, EMP.IS_STAFF, EMP.IS_EXPAT,
+                   D.DEPARTEMENT
+            FROM (
+                SELECT NPK, NAMA_KARYAWAN, BAG, ID_DEPT, JENIS_KEL, SECTION, STATUS, IS_STAFF, IS_EXPAT
+                FROM BIODATA WHERE NPK IN ({$placeholders})
+                UNION
+                SELECT NPK, NAMA_KARYAWAN, BAG, ID_DEPT, JENIS_KEL, SECTION, STATUS, IS_STAFF, IS_EXPAT
+                FROM BIODATA_KELUAR WHERE NPK IN ({$placeholders})
+            ) AS EMP
+            LEFT JOIN DEPT AS D ON D.ID_DEPT = EMP.ID_DEPT
+        ";
+
+        $bindings = array_merge($npks, $npks);
+
+        $rows = DB::connection('cii')->select($sql, $bindings);
+
+        return collect($rows)->keyBy('NPK')->all();
     }
 
     /**

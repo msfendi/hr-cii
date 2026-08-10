@@ -385,6 +385,48 @@
         border-radius: 2px;
     }
 
+    /* ============== DAFTAR UCAPAN ============== */
+    .ucapan-item{
+        background: #fff;
+        border: 1px solid rgba(255,215,0,.4);
+        border-radius: .6rem;
+        padding: .75rem 1rem;
+        margin-bottom: .6rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+    .ucapan-nama{
+        color: var(--merah);
+        font-weight: 700;
+        font-size: .88rem;
+        margin-bottom: .1rem;
+    }
+    .ucapan-meta{
+        color: #6b6b6b;
+        font-size: .72rem;
+        letter-spacing: .3px;
+        margin-bottom: .35rem;
+    }
+    .ucapan-text{
+        color: #333;
+        font-size: .88rem;
+        white-space: pre-line;
+        word-break: break-word;
+    }
+    .ucapan-list::-webkit-scrollbar{
+        width: 6px;
+    }
+    .ucapan-list::-webkit-scrollbar-track{
+        background: rgba(255,255,255,.08);
+        border-radius: 3px;
+    }
+    .ucapan-list::-webkit-scrollbar-thumb{
+        background: rgba(255,215,0,.5);
+        border-radius: 3px;
+    }
+    .ucapan-list::-webkit-scrollbar-thumb:hover{
+        background: rgba(255,215,0,.75);
+    }
+
     @media (max-width: 420px){
         .hero h1{ font-size: 2.1rem; }
         .countdown .box{ min-width: 60px; padding:.5rem .3rem; }
@@ -729,7 +771,25 @@
         </div>
     </section>
 
-    {{-- aksen deretan bendera merah putih sebelum footer --}}
+    {{-- =============== DAFTAR UCAPAN =============== --}}
+    @if ($ucapanList->isNotEmpty())
+        <section class="section" style="padding: 1rem 1.25rem 3rem;">
+            <div class="text-center mb-3">
+                <h4 class="font-display" style="color:#fff;">UCAPAN &amp; DOA</h4>
+                <p class="text-white small mb-0" style="opacity:.8;">Ucapan dari rekan-rekan yang sudah konfirmasi</p>
+            </div>
+
+            <div class="ucapan-list" style="max-width:520px; margin:0 auto; max-height:360px; overflow-y:auto; padding-right:6px;">
+                @foreach ($ucapanList as $item)
+                    <div class="ucapan-item">
+                        <div class="ucapan-nama">{{ $item->nama }}</div>
+                        <div class="ucapan-meta">{{ $item->npk }} &bull; {{ $item->department }}</div>
+                        <div class="ucapan-text">{{ $item->ucapan }}</div>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
     <!-- <div class="flag-divider" style="background:var(--merah-tua); padding: .75rem 0;">
         @for ($i = 0; $i < 9; $i++)
             <span class="mini-flag" style="animation-delay: {{ $i * 0.12 }}s;">
