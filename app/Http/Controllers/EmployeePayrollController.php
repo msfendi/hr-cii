@@ -392,10 +392,60 @@ class EmployeePayrollController extends Controller
                     ->addDay()
                     ->setTimeFrom($workEnd);
 
-                $dailyLogs = $logs->filter(function ($log) use ($shiftStartDT, $shiftEndDT) {
-                    $scan = Carbon::parse($log->scan_date);
-                    return $scan->between($shiftStartDT, $shiftEndDT);
-                });
+                /*
+        ======================================================
+        SHIFT MALAM
+        ======================================================
+        | work_end < work_start, artinya karyawan pulang di
+        | hari berikutnya. Jangan pakai window waktu yang kaku
+        | (between shiftStart-shiftEnd), karena scan asli sering
+        | meleset beberapa menit dari jam shift (mis. scan masuk
+        | jam 18:19 padahal work_start jam 18:30 -> akan gugur
+        | kalau pakai between()).
+        |
+        | Solusi: cari scan TERDEKAT dengan work_start dari log
+        | pada TANGGAL YANG SAMA (jam masuk), dan scan TERDEKAT
+        | dengan work_end dari log pada TANGGAL BERIKUTNYA
+        | (jam pulang).
+        ======================================================
+        */
+                $tanggalPulang = Carbon::parse($tanggal)
+                    ->addDay()
+                    ->format('Y-m-d');
+
+                $candidatesIn = $logs->filter(
+                    fn($log) =>
+                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                )->values();
+
+                $candidatesOut = $logs->filter(
+                    fn($log) =>
+                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggalPulang
+                )->values();
+
+                $findNearest = function ($candidates, Carbon $anchor) {
+                    $best = null;
+                    $bestDiff = PHP_INT_MAX;
+
+                    foreach ($candidates as $log) {
+                        $scan = Carbon::parse($log->scan_date);
+                        $diff = abs($scan->diffInSeconds($anchor));
+
+                        if ($diff < $bestDiff) {
+                            $bestDiff = $diff;
+                            $best = $log;
+                        }
+                    }
+
+                    return $best;
+                };
+
+                $bestIn  = $findNearest($candidatesIn, $shiftStartDT);
+                $bestOut = $findNearest($candidatesOut, $shiftEndDT);
+
+                $dailyLogs = collect(array_filter([$bestIn, $bestOut]))
+                    ->sortBy('scan_date')
+                    ->values();
             } else {
 
                 $shiftStartDT = Carbon::parse($tanggal)
@@ -407,7 +457,7 @@ class EmployeePayrollController extends Controller
                 $dailyLogs = $logs->filter(
                     fn($log) =>
                     Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
-                );
+                )->values();
             }
 
             /*
