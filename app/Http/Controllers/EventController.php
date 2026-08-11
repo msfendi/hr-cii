@@ -93,7 +93,7 @@ class EventController extends Controller
     public function peserta(Event $event): JsonResponse
     {
         $peserta = EventInvitation::where('event_id', $event->id)
-            ->orderBy('nama')
+            ->orderByDesc('responded_at')
             ->get(['id', 'npk', 'nama', 'status', 'ucapan', 'responded_at']);
 
         // Departemen tidak diambil dari kolom event_invitations.departemen,
@@ -108,7 +108,6 @@ class EventController extends Controller
 
                 return $p;
             })
-            ->sortBy([['departemen', 'asc'], ['nama', 'asc']])
             ->values();
 
         $perDepartemen = $peserta
@@ -148,7 +147,7 @@ class EventController extends Controller
     public function exportPeserta(Event $event)
     {
         $peserta = EventInvitation::where('event_id', $event->id)
-            ->orderBy('nama')
+            ->orderByDesc('responded_at')
             ->get();
 
         // Departemen tidak diambil dari kolom event_invitations.departemen,
@@ -163,7 +162,6 @@ class EventController extends Controller
 
                 return $p;
             })
-            ->sortBy([['departemen', 'asc'], ['nama', 'asc']])
             ->values();
 
         $perDepartemen = $peserta
