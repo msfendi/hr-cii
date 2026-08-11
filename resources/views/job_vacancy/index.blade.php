@@ -670,7 +670,7 @@ body.modal-open {
                         </div>
 
                         <div class="row">
-                            <div class="col-md-6 form-group">
+                            <div class="col-md-4 form-group">
                                 <label class="small font-weight-bold text-gray-600">Department</label>
                                 <select id="fDepartment" name="department_id" class="form-control" style="width:100%">
                                     <option value="">Pilih Department</option>
@@ -679,7 +679,7 @@ body.modal-open {
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-6 form-group">
+                            <div class="col-md-4 form-group">
                                 <label class="small font-weight-bold text-gray-600">Tipe Pekerjaan <span class="text-danger">*</span></label>
                                 <select id="fType" name="employment_type" class="form-control" style="width:100%" required>
                                     <option value="full_time">Full Time</option>
@@ -687,6 +687,13 @@ body.modal-open {
                                     <option value="contract">Kontrak</option>
                                     <option value="internship">Magang</option>
                                     <option value="daily_worker">Harian Lepas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold text-gray-600">Level <span class="text-danger">*</span></label>
+                                <select id="fIsStaff" name="is_staff" class="form-control" style="width:100%" required>
+                                    <option value="0">Non-Staff</option>
+                                    <option value="1">Staff</option>
                                 </select>
                             </div>
                         </div>
@@ -1482,6 +1489,7 @@ body.modal-open {
             $('#vacancyId').val('');
             $('#fDepartment').val('').trigger('change');
             $('#fType').val('full_time').trigger('change');
+            $('#fIsStaff').val('0').trigger('change');
             $('#fStatus').val('open').trigger('change');
             $('#criteriaWrapper').empty();
             $('#documentWrapper').empty();
@@ -1499,6 +1507,7 @@ body.modal-open {
             $('#fPosition').val(v.position);
             $('#fDepartment').val(v.department_id || '').trigger('change');
             $('#fType').val(v.employment_type).trigger('change');
+            $('#fIsStaff').val(v.is_staff ? '1' : '0').trigger('change');
             $('#fTotalNeeded').val(v.total_needed);
             $('#fStatus').val(v.status).trigger('change');
             $('#fOpenDate').val(v.open_date);

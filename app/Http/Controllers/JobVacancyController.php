@@ -167,6 +167,7 @@ class JobVacancyController extends Controller
                     'position' => $validated['position'],
                     'dept' => $this->resolveDepartmentName($validated['department_id'] ?? null),
                     'is_aktif' => $validated['status'] === 'open' ? 1 : 0,
+                    'is_staff' => $validated['is_staff'],
                 ]);
 
                 JobVacancy::create($validated + [
@@ -196,7 +197,11 @@ class JobVacancyController extends Controller
      */
     public function edit(JobVacancy $jobVacancy)
     {
-        return response()->json($jobVacancy);
+        $jobVacancy->load('recruitmentPosition');
+        $data = $jobVacancy->toArray();
+        $data['is_staff'] = optional($jobVacancy->recruitmentPosition)->is_staff ?? 0;
+
+        return response()->json($data);
     }
 
     /**
@@ -218,12 +223,14 @@ class JobVacancyController extends Controller
                         'position' => $validated['position'],
                         'dept' => $departmentName,
                         'is_aktif' => $isAktif,
+                        'is_staff' => $validated['is_staff'],
                     ]);
                 } else {
                     $recruitmentPosition = RecruitmentPosition::create([
                         'position' => $validated['position'],
                         'dept' => $departmentName,
                         'is_aktif' => $isAktif,
+                        'is_staff' => $validated['is_staff'],
                     ]);
 
                     $validated['recruitment_position_id'] = $recruitmentPosition->id;
@@ -319,6 +326,7 @@ class JobVacancyController extends Controller
             'open_date' => 'required|date',
             'close_date' => 'required|date|after_or_equal:open_date',
             'status' => 'required|in:draft,open,closed',
+            'is_staff' => 'required|boolean',
         ]);
     }
 
