@@ -17,9 +17,11 @@
                     <h1 class="h3 mb-0 text-gray-800">
                         <i class="fas fa-flag mr-1"></i> Manajemen Event
                     </h1>
+                    @canRoute('event-invitation.admin.store')
                     <button class="btn btn-danger shadow-sm" data-toggle="modal" data-target="#modalEvent" onclick="bukaModalTambah()">
                         <i class="fas fa-plus fa-sm mr-1"></i> Tambah Event
                     </button>
+                    @endcanRoute
                 </div>
 
                 <div class="card shadow mb-4">
@@ -65,24 +67,32 @@
                                                 @endif
                                             </td>
                                             <td class="text-center">
+                                                @canRoute('event-invitation.admin.activate')
                                                 @unless ($event->is_active)
                                                     <button class="btn btn-sm btn-outline-success" title="Aktifkan"
                                                         onclick="aktifkanEvent({{ $event->id }}, '{{ addslashes($event->nama_event) }}')">
                                                         <i class="fas fa-check"></i>
                                                     </button>
                                                 @endunless
+                                                @endcanRoute
+                                                @canRoute('event-invitation.admin.peserta')
                                                 <button class="btn btn-sm btn-outline-info" title="Detail Peserta"
                                                     onclick="bukaModalPeserta({{ $event->id }}, '{{ addslashes($event->nama_event) }}')">
                                                     <i class="fas fa-users"></i>
                                                 </button>
+                                                @endcanRoute
+                                                @canRoute('event-invitation.admin.update')
                                                 <button class="btn btn-sm btn-outline-primary" title="Edit"
                                                     onclick='bukaModalEdit(@json($event))'>
                                                     <i class="fas fa-pen"></i>
                                                 </button>
+                                                @endcanRoute
+                                                @canRoute('event-invitation.admin.destroy')
                                                 <button class="btn btn-sm btn-outline-danger" title="Hapus"
                                                     onclick="hapusEvent({{ $event->id }}, '{{ addslashes($event->nama_event) }}')">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
+                                                @endcanRoute
                                             </td>
                                         </tr>
                                     @empty
