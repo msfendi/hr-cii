@@ -301,7 +301,7 @@
         margin: .25rem;
     }
 
-    /* ============== LOMBA (yel-yel, menyanyi, gerak jalan) ============== */
+    /* ============== LOMBA (yel-yel, paduan suara, gerak jalan) ============== */
     .lomba-section{
         position: relative;
         background: #fff;
@@ -607,7 +607,7 @@
         </div>
     </section>
 
-    {{-- =============== LOMBA: YEL-YEL, MENYANYI, GERAK JALAN =============== --}}
+    {{-- =============== LOMBA: YEL-YEL, PADUAN SUARA, GERAK JALAN =============== --}}
     <section class="section lomba-section" style="padding: 3rem 1.25rem;">
         <div class="bambu-accent" style="top:6px; left:6px;">
             <svg viewBox="0 0 100 100" width="46" height="46">
@@ -660,20 +660,24 @@
                 <p>Tunjukkan kekompakan &amp; kreativitas tim lewat yel-yel paling meriah!</p>
             </div>
 
-            {{-- Lomba Menyanyi --}}
+            {{-- Lomba Paduan Suara --}}
             <div class="lomba-card">
                 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <text x="64" y="22" font-size="15" class="ic-gold">&#9834;</text>
-                    <text x="79" y="12" font-size="13" class="ic-red">&#9835;</text>
-                    <text x="70" y="38" font-size="11" class="ic-tua">&#9834;</text>
-                    <circle cx="42" cy="26" r="12" class="ic-skin"/>
-                    <path d="M26 46 Q42 34 58 46 L55 82 Q42 88 29 82 Z" class="ic-red"/>
-                    <line x1="55" y1="50" x2="66" y2="34" stroke="#3a2a20" stroke-width="5" stroke-linecap="round"/>
-                    <rect x="65.5" y="12" width="2" height="14" fill="#888"/>
-                    <rect x="63" y="24" width="7" height="14" rx="3.5" fill="#444"/>
+                    <text x="60" y="16" font-size="13" class="ic-gold">&#9834;</text>
+                    <text x="78" y="24" font-size="11" class="ic-red">&#9835;</text>
+                    <text x="66" y="34" font-size="10" class="ic-tua">&#9834;</text>
+
+                    <circle cx="28" cy="30" r="10" class="ic-skin"/>
+                    <path d="M15 48 Q28 38 41 48 L38 80 Q28 86 18 80 Z" class="ic-red"/>
+
+                    <circle cx="50" cy="24" r="10" class="ic-skin"/>
+                    <path d="M37 42 Q50 32 63 42 L60 80 Q50 86 40 80 Z" fill="#fff" stroke="#eee" stroke-width="1"/>
+
+                    <circle cx="72" cy="30" r="10" class="ic-skin"/>
+                    <path d="M59 48 Q72 38 85 48 L82 80 Q72 86 62 80 Z" class="ic-gold"/>
                 </svg>
-                <h6>Lomba Menyanyi</h6>
-                <p>Unjuk suara terbaikmu membawakan lagu perjuangan &amp; nasional.</p>
+                <h6>Lomba Paduan Suara</h6>
+                <p>Unjuk kekompakan suara timmu membawakan lagu perjuangan &amp; nasional.</p>
             </div>
 
             {{-- Lomba Gerak Jalan --}}
