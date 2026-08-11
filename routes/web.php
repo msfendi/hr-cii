@@ -1167,7 +1167,7 @@ Route::prefix('event-invitation')->name('event-invitation.')->group(function () 
     // ---- Admin: kelola master event (bungkus middleware auth/permission kamu sendiri) ----
     // PENTING: grup ini harus didaftarkan SEBELUM route GET '/{event?}' di bawah,
     // supaya "/event_invitation/admin" tidak ketangkep sebagai parameter {event}.
-    Route::prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission'])->group(function () {
         Route::get('/', [EventController::class, 'index'])->name('index');
         Route::post('/', [EventController::class, 'store'])->name('store');
         Route::put('/{event}', [EventController::class, 'update'])->name('update');
