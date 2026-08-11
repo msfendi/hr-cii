@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\EventInvitation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -92,26 +93,42 @@ class EventController extends Controller
     public function peserta(Event $event): JsonResponse
     {
         $peserta = EventInvitation::where('event_id', $event->id)
-            ->orderBy('departemen')
             ->orderBy('nama')
-            ->get(['id', 'npk', 'nama', 'departemen', 'status', 'ucapan', 'responded_at']);
+            ->get(['id', 'npk', 'nama', 'status', 'ucapan', 'responded_at']);
 
-        $perDepartemen = EventInvitation::where('event_id', $event->id)
-            ->selectRaw("
-                COALESCE(departemen, '(Tanpa Departemen)') as departemen,
-                SUM(CASE WHEN status = 'hadir' THEN 1 ELSE 0 END) as hadir,
-                SUM(CASE WHEN status = 'tidak_hadir' THEN 1 ELSE 0 END) as tidak_hadir,
-                COUNT(*) as total
-            ")
+        // Departemen tidak diambil dari kolom event_invitations.departemen,
+        // tapi dari BIODATA/BIODATA_KELUAR (cii) di-join ke DEPT.
+        $departmentMap = $this->getDepartmentMapForNpks(
+            $peserta->pluck('npk')->filter()->unique()->values()->all()
+        );
+
+        $peserta = $peserta
+            ->map(function ($p) use ($departmentMap) {
+                $p->departemen = $departmentMap[$p->npk] ?? '(Tanpa Departemen)';
+
+                return $p;
+            })
+            ->sortBy([['departemen', 'asc'], ['nama', 'asc']])
+            ->values();
+
+        $perDepartemen = $peserta
             ->groupBy('departemen')
-            ->orderBy('departemen')
-            ->get()
-            ->map(function ($row) {
-                $row->persen_hadir       = $row->total > 0 ? round($row->hadir / $row->total * 100, 1) : 0;
-                $row->persen_tidak_hadir = $row->total > 0 ? round($row->tidak_hadir / $row->total * 100, 1) : 0;
+            ->map(function ($group, $departemen) {
+                $hadir      = $group->where('status', 'hadir')->count();
+                $tidakHadir = $group->where('status', 'tidak_hadir')->count();
+                $total      = $group->count();
 
-                return $row;
-            });
+                return (object) [
+                    'departemen'         => $departemen,
+                    'hadir'              => $hadir,
+                    'tidak_hadir'        => $tidakHadir,
+                    'total'              => $total,
+                    'persen_hadir'       => $total > 0 ? round($hadir / $total * 100, 1) : 0,
+                    'persen_tidak_hadir' => $total > 0 ? round($tidakHadir / $total * 100, 1) : 0,
+                ];
+            })
+            ->sortKeys()
+            ->values();
 
         return response()->json([
             'status' => 'success',
@@ -131,20 +148,36 @@ class EventController extends Controller
     public function exportPeserta(Event $event)
     {
         $peserta = EventInvitation::where('event_id', $event->id)
-            ->orderBy('departemen')
             ->orderBy('nama')
             ->get();
 
-        $perDepartemen = EventInvitation::where('event_id', $event->id)
-            ->selectRaw("
-                COALESCE(departemen, '(Tanpa Departemen)') as departemen,
-                SUM(CASE WHEN status = 'hadir' THEN 1 ELSE 0 END) as hadir,
-                SUM(CASE WHEN status = 'tidak_hadir' THEN 1 ELSE 0 END) as tidak_hadir,
-                COUNT(*) as total
-            ")
+        // Departemen tidak diambil dari kolom event_invitations.departemen,
+        // tapi dari BIODATA/BIODATA_KELUAR (cii) di-join ke DEPT.
+        $departmentMap = $this->getDepartmentMapForNpks(
+            $peserta->pluck('npk')->filter()->unique()->values()->all()
+        );
+
+        $peserta = $peserta
+            ->map(function ($p) use ($departmentMap) {
+                $p->departemen = $departmentMap[$p->npk] ?? '(Tanpa Departemen)';
+
+                return $p;
+            })
+            ->sortBy([['departemen', 'asc'], ['nama', 'asc']])
+            ->values();
+
+        $perDepartemen = $peserta
             ->groupBy('departemen')
-            ->orderBy('departemen')
-            ->get();
+            ->map(function ($group, $departemen) {
+                return (object) [
+                    'departemen'  => $departemen,
+                    'hadir'       => $group->where('status', 'hadir')->count(),
+                    'tidak_hadir' => $group->where('status', 'tidak_hadir')->count(),
+                    'total'       => $group->count(),
+                ];
+            })
+            ->sortKeys()
+            ->values();
 
         $spreadsheet = new Spreadsheet();
 
@@ -236,6 +269,47 @@ class EventController extends Controller
     /* ------------------------------------------------------------ */
     /*  Helpers                                                        */
     /* ------------------------------------------------------------ */
+
+    /**
+     * Ambil nama departemen per NPK dari data HR (koneksi `cii`), bukan
+     * dari kolom event_invitations.departemen. Sumbernya union BIODATA
+     * (karyawan aktif) & BIODATA_KELUAR (karyawan keluar), masing-masing
+     * di-join ke DEPT lewat ID_DEPT untuk dapat nama departemennya.
+     *
+     * Di-chunk per 1500 NPK untuk menghindari limit 2100 parameter SQL Server.
+     *
+     * @return array<string, string> NPK => nama departemen
+     */
+    private function getDepartmentMapForNpks(array $npks): array
+    {
+        if (empty($npks)) {
+            return [];
+        }
+
+        $map = [];
+
+        foreach (array_chunk($npks, 1500) as $chunk) {
+            $rows = DB::connection('cii')
+                ->table('BIODATA')
+                ->join('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
+                ->whereIn('BIODATA.NPK', $chunk)
+                ->select('BIODATA.NPK as npk', 'DEPT.DEPARTEMENT as departemen')
+                ->union(
+                    DB::connection('cii')
+                        ->table('BIODATA_KELUAR')
+                        ->join('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA_KELUAR.ID_DEPT')
+                        ->whereIn('BIODATA_KELUAR.NPK', $chunk)
+                        ->select('BIODATA_KELUAR.NPK as npk', 'DEPT.DEPARTEMENT as departemen')
+                )
+                ->get();
+
+            foreach ($rows as $row) {
+                $map[$row->npk] = $row->departemen;
+            }
+        }
+
+        return $map;
+    }
 
     private function activateOnly(Event $event): void
     {

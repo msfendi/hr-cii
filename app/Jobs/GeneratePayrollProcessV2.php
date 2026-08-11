@@ -803,9 +803,17 @@ END AS special_overtime_hours
         $nightShiftSummary = DB::connection('cii')
             ->table('employee_shifts as es')
             ->join('shifts as s', 'es.shift_id', '=', 's.id')
+            ->leftJoin('overtimes as o', function ($join) {
+                $join->on('o.NPK', '=', 'es.npk')
+                    ->on(DB::raw('CAST(o.OVERTIME_DATE AS DATE)'), '=', DB::raw('CAST(es.shift_date AS DATE)'));
+            })
             ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
             ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
             ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->where(function ($q) {
+                $q->whereNull('o.JUMLAH_JAM_LEMBUR')
+                    ->orWhereRaw("TRY_CAST(o.JUMLAH_JAM_LEMBUR AS DECIMAL(10,2)) IS NOT NULL");
+            })
             ->select(
                 'es.npk',
                 DB::raw('COUNT(*) as night_shift_count')
@@ -828,9 +836,17 @@ END AS special_overtime_hours
                 $join->on('es.npk', '=', 'bio.NPK');
             })
             ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->leftJoin('overtimes as o', function ($join) {
+                $join->on('o.NPK', '=', 'es.npk')
+                    ->on(DB::raw('CAST(o.OVERTIME_DATE AS DATE)'), '=', DB::raw('CAST(es.shift_date AS DATE)'));
+            })
             ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
             ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
             ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->where(function ($q) {
+                $q->whereNull('o.JUMLAH_JAM_LEMBUR')
+                    ->orWhereRaw("TRY_CAST(o.JUMLAH_JAM_LEMBUR AS DECIMAL(10,2)) IS NOT NULL");
+            })
             ->select(
                 'es.npk as NPK',
                 'bio.NAMA_KARYAWAN',
