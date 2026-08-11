@@ -384,7 +384,13 @@ class RecruitmentFormController extends Controller
 
         // ── Insert ke tabel PELAMAR (koneksi cii) ───────────────────────────
         try {
+            $recruitmentPos = RecruitmentPosition::where('position', $step1['jabatan'] ?? '')
+                ->where('dept', $step1['department'] ?? '')
+                ->first();
+            $isStaff = $recruitmentPos ? ($recruitmentPos->is_staff ?? 0) : 0;
+
             $pelamarId = DB::connection('cii')->table('PELAMAR')->insertGetId([
+                'is_staff'         => $isStaff,
                 'NAMA'             => strtoupper($step1['nama_lengkap'] ?? '-'),
                 'NIK'              => $step1['nik']              ?? null,
                 'NO_KK'            => $step1['no_kk']            ?? null,

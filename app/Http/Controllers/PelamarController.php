@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pelamar;
+use App\Models\SalaryApprove;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Imports\PelamarImport;
@@ -29,10 +31,48 @@ class PelamarController extends Controller
             ->orderBy('NPK', 'ASC')
             ->get();
 
+        // ── "LEFT JOIN" ke salary_approve buat ambil approved_salary ──────
+        // salary_approve ada di koneksi default sedangkan PELAMAR ada di
+        // koneksi 'cii' (server DB terpisah), jadi tidak bisa pakai
+        // leftJoin() query builder beneran lintas koneksi. Di-emulasi
+        // manual: ambil semua approved_salary yang relevan sekali query,
+        // lalu ditempelkan ke tiap baris $pelamars (setara hasil LEFT JOIN).
+        $pelamarIds = $pelamars->pluck('ID')->filter()->unique()->values()->toArray();
+
+        $approvedSalaryMap = SalaryApprove::whereIn('id_pelamar', $pelamarIds)
+            ->whereNotNull('approved_salary')
+            ->pluck('approved_salary', 'id_pelamar');
+
+        $canSeeSalary = $this->userCanSeeSalary();
+
+        foreach ($pelamars as $pelamar) {
+            $approved = $approvedSalaryMap[$pelamar->ID] ?? null;
+
+            // Nilai mentah TETAP ditempel (dipakai kalau suatu saat butuh di
+            // server-side / role berubah), tapi blade hanya boleh menampilkan
+            // approved_salary_display, bukan approved_salary langsung — biar
+            // role selain PAYROLL_STAFF tidak pernah melihat nominal asli.
+            $pelamar->approved_salary = $approved;
+            $pelamar->approved_salary_display = is_null($approved)
+                ? '-'
+                : ($canSeeSalary ? 'Rp ' . number_format($approved, 0, ',', '.') : '***');
+        }
+
         $departments = DB::connection('cii')->table('DEPT')->select('ID_DEPT', 'DEPARTEMENT')->where('SECTION', 'CHUTEX')->get(); // Fetch departments
         $sections = DB::table('sections')->orderBy('name', 'asc')->get();
 
-        return view('pelamar.index', compact('pelamars', 'departments', 'sections'));
+        return view('pelamar.index', compact('pelamars', 'departments', 'sections', 'canSeeSalary'));
+    }
+
+    /**
+     * TODO: sesuaikan dengan struktur role/permission user kamu kalau bukan
+     * kolom `role` sederhana di tabel users (mis. kalau pakai Spatie
+     * Permission, ganti jadi `$user->hasRole('PAYROLL_STAFF')`).
+     */
+    private function userCanSeeSalary(): bool
+    {
+        $user = Auth::user();
+        return $user && (($user->role ?? null) === 'PAYROLL_STAFF');
     }
 
     public function import(Request $request)
@@ -96,6 +136,29 @@ class PelamarController extends Controller
                     $next_number = str_pad((int)$number + 1, strlen($number), '0', STR_PAD_LEFT);
                     $pelamar->NPK = $prefix . $next_number;
                 }
+            }
+
+            // Approved salary (kalau ada & sudah 'finish') — dipakai buat
+            // auto-isi & kunci field Gaji Pokok di modal assign. Nilai mentah
+            // HANYA dikirim ke response kalau user PAYROLL_STAFF; role lain
+            // cuma dapat flag has_approved_salary + versi ***-nya, supaya
+            // nominal asli tidak pernah nyampe ke browser buat role selain itu.
+            // processEmployeeAssignment() tetap ambil nilai asli langsung dari
+            // DB server-side saat submit, jadi ini murni soal apa yang
+            // ditampilkan, bukan apa yang benar-benar dipakai buat kontrak.
+            $approvedSalary = SalaryApprove::where('id_pelamar', $id)
+                ->whereNotNull('approved_salary')
+                ->value('approved_salary');
+
+            $canSeeSalary = $this->userCanSeeSalary();
+
+            $pelamar->has_approved_salary = !is_null($approvedSalary);
+            $pelamar->approved_salary_display = is_null($approvedSalary)
+                ? null
+                : ($canSeeSalary ? 'Rp ' . number_format($approvedSalary, 0, ',', '.') : '***');
+
+            if ($canSeeSalary && !is_null($approvedSalary)) {
+                $pelamar->approved_salary = (float) $approvedSalary;
             }
         }
         return response()->json($pelamar);
@@ -206,6 +269,27 @@ class PelamarController extends Controller
         $startDate = Carbon::parse($request->tmk);
         [$endDate, $dayDuration, $actualMonthDuration] = $this->calculateEndDateAndDayDuration($request, $startDate, $duration);
 
+        // ── Basic salary kontrak ────────────────────────────────────────
+        // Kalau pelamar ini punya pengajuan gaji yang SUDAH disetujui
+        // (salary_approve.approved_salary), nominal itu yang dipakai
+        // LANGSUNG sebagai gaji pokok kontrak — diambil ulang dari DB di
+        // sini (bukan dari input form), supaya:
+        //  1) Selalu konsisten dengan nominal yang benar-benar disetujui GM,
+        //     walaupun field di form sempat di-disable/di-mask di browser.
+        //  2) Role selain PAYROLL_STAFF tetap bisa menjalankan proses assign
+        //     dengan benar meskipun mereka tidak pernah melihat nominal
+        //     aslinya di layar (field tersebut dikirim ke browser sebagai
+        //     "***" untuk mereka — lihat detail()).
+        // Kalau belum ada pengajuan yang disetujui (mis. bukan posisi staff),
+        // fallback ke input manual dari form seperti alur lama.
+        $approvedSalary = SalaryApprove::where('id_pelamar', $id_pelamar)
+            ->whereNotNull('approved_salary')
+            ->value('approved_salary');
+
+        $basicSalary = !is_null($approvedSalary)
+            ? (float) $approvedSalary
+            : (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000);
+
         DB::table('employees_contract')->insert([
             'id'              => (string) \Illuminate\Support\Str::uuid(),
             'npk'             => $npk,
@@ -216,7 +300,7 @@ class PelamarController extends Controller
             'day_duration'    => $dayDuration,
             'status_contract' => 'AKTIF',
             'type'            => 'CONTRACT',
-            'salary'          => (float) str_replace('.', '', $request->salary_raw ?? $request->salary ?? 2500000),
+            'salary'          => $basicSalary,
             'allowance'       => (float) str_replace('.', '', $request->allowance_raw ?? $request->allowance ?? 0),
             'pph21'           => (float) str_replace('.', '', $request->pph21_raw ?? $request->pph21 ?? 0),
             'created_at'      => now(),
@@ -285,55 +369,7 @@ class PelamarController extends Controller
                 Storage::disk('public')->makeDirectory($newFolder);
             }
 
-            $maxRetry   = 3;
-            $attempt    = 0;
-            $fileExists = false;
-
-            while ($attempt < $maxRetry && !$fileExists) {
-                $attempt++;
-                try {
-                    // Hapus file lama di newRelativePath jika ada (hasil percobaan gagal sebelumnya)
-                    if (Storage::disk('public')->exists($newRelativePath)) {
-                        Storage::disk('public')->delete($newRelativePath);
-                    }
-
-                    $moved = Storage::disk('public')->copy($oldRelativePath, $newRelativePath);
-
-                    if (!$moved) {
-                        \Log::warning("Attempt {$attempt}: copy() returned false for {$pkwtField}", [
-                            'old' => $oldRelativePath,
-                            'new' => $newRelativePath,
-                        ]);
-                        usleep(500000); // tunggu 500ms sebelum retry
-                        continue;
-                    }
-
-                    // Verifikasi fisik: file harus benar-benar ada di path baru
-                    if (Storage::disk('public')->exists($newRelativePath)) {
-                        $fileExists = true;
-                        \Log::info("Attempt {$attempt}: file successfully copied for {$pkwtField}", [
-                            'new' => $newRelativePath,
-                        ]);
-                    } else {
-                        \Log::warning("Attempt {$attempt}: file not found after copy for {$pkwtField}", [
-                            'old' => $oldRelativePath,
-                            'new' => $newRelativePath,
-                        ]);
-                        usleep(500000); // tunggu 500ms sebelum retry
-                    }
-                } catch (\Exception $e) {
-                    \Log::error("Attempt {$attempt}: Exception copying file for {$pkwtField}: " . $e->getMessage());
-                    usleep(500000);
-                }
-            }
-
-            if (!$fileExists) {
-                \Log::error("Giving up after {$maxRetry} attempts for {$pkwtField}", [
-                    'old' => $oldRelativePath,
-                    'new' => $newRelativePath,
-                ]);
-                continue; // skip field ini, jangan masukkan path yang tidak valid ke PKWT
-            }
+            $moved = Storage::disk('public')->copy($oldRelativePath, $newRelativePath);
 
             $result[$pkwtField] = $newRelativePath;
         }

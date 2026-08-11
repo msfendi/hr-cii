@@ -105,6 +105,7 @@ use App\Http\Controllers\MonitoringDashboardController;
 use App\Http\Controllers\MonitoringRekonsiliasiController;
 use App\Http\Controllers\OrderImportController;
 use App\Http\Controllers\OutsourceController;
+use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
 
 /*
@@ -1251,4 +1252,13 @@ Route::prefix('attendance-expat')->name('attendance.expat.')->group(function () 
     Route::get('/', [AttendanceExpatController::class, 'index'])->name('index');
     Route::get('/data', [AttendanceExpatController::class, 'data'])->name('data');
     Route::get('/export', [AttendanceExpatController::class, 'export'])->name('export');
+});
+
+Route::middleware(['auth', 'permission'])->group(function () {
+    Route::post('/recruitment/salary-approve', [SalaryApproveController::class, 'store'])->name('salary-approve.store');
+    Route::post('/salary-approve', [SalaryApproveController::class, 'store']);
+    Route::put('/salary-approve/{id}', [SalaryApproveController::class, 'update'])->name('salary-approve.update');
+    Route::get('/salary-approve', [SalaryApproveController::class, 'index'])->name('salary-approve.index');
+    Route::post('/salary-approve/{id}/approve', [SalaryApproveController::class, 'approve'])->name('salary-approve.approve');
+    Route::post('/salary-approve/{id}/reject', [SalaryApproveController::class, 'reject'])->name('salary-approve.reject');
 });

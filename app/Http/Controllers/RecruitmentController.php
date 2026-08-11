@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesSalaryApprovalSteps;
 use App\Models\WhatsappDevice;
 use App\Models\HealthTest;
+use App\Models\RecruitmentPosition;
+use App\Models\SalaryApprove;
+use App\Models\User; // TODO: sesuaikan namespace User model kamu kalau berbeda
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Services\FonnteService;
@@ -13,6 +17,8 @@ use Illuminate\Support\Str;
 
 class RecruitmentController extends Controller
 {
+    use HandlesSalaryApprovalSteps;
+
     protected $fonnteService;
 
     public function __construct(FonnteService $fonnteService)
@@ -126,7 +132,7 @@ class RecruitmentController extends Controller
             ->select('KTP', 'NAMA', 'TMK', 'TKK', 'KETERANGAN', 'leave_reasons')
             ->get()
             ->groupBy('KTP');
-        
+
         $exPkwtKtp = $pkwtRecords->keys()->toArray();
 
         // Map health test IDs by NIK for quick lookup in the blade
@@ -135,8 +141,38 @@ class RecruitmentController extends Controller
             ->keyBy('nik')
             ->map(fn($h) => $h->id);
 
-        return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap', 'pkwtRecords', 'exPkwtKtp'));
+        // ── Pengajuan Gaji Karyawan Baru ──────────────────────────────────
+        // salary_approve ada di koneksi default, jadi gak bisa di-join lewat
+        // query builder ke PELAMAR (koneksi cii). Ambil per id_pelamar lalu
+        // tempelkan ke setiap baris recruitment di blade.
+        $pelamarIds = $recruitments->pluck('ID')->filter()->unique()->values()->toArray();
 
+        $salaryMap = SalaryApprove::whereIn('id_pelamar', $pelamarIds)
+            ->orderByDesc('id')
+            ->get()
+            ->unique('id_pelamar') // ambil pengajuan terbaru per pelamar
+            ->keyBy('id_pelamar');
+
+        $approverNameMap = $this->resolveApproverNames($salaryMap);
+
+        foreach ($salaryMap as $sal) {
+            // Ditempel sebagai attribute tambahan supaya ikut ke-encode saat
+            // json_encode($sal) dipakai di data-salary="" pada blade.
+            $sal->setAttribute('steps', $this->buildStepsDisplay($sal->progress ?? [], $approverNameMap));
+        }
+
+        // Daftar approver untuk modal "Pengajuan Gaji" — diambil dinamis dari tabel users
+        // TODO: sesuaikan filter kolom (department/jabatan/role) dengan struktur users kamu.
+        // Saat ini "management" masih menampilkan SEMUA user yang punya npk, dan "gm" masih
+        // hardcode ke satu npk tertentu sebagai placeholder.
+        $approvers = [
+            'management' => User::whereNotNull('npk')->where('npk', '!=', '')->get(['npk', 'name']),
+            'gm' => User::where('npk', 'C-00001')->get(['npk', 'name']),
+        ];
+
+        // dd($recruitments);
+
+        return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap', 'pkwtRecords', 'exPkwtKtp', 'approvers', 'salaryMap'));
     }
 
     public function updatePenilaian(Request $request)
@@ -180,16 +216,27 @@ class RecruitmentController extends Controller
         }
 
         // Auto status_apply: FALSE di mana saja -> REJECTED, semua TRUE -> ONBOARDING
+        // Khusus staff (PELAMAR.is_staff): jangan langsung ONBOARDING walau semua
+        // penilaian lolos — masih harus menunggu pengajuan gaji selesai di-approve
+        // (lihat HandlesSalaryApprovalSteps::maybeFinalizeStaffOnboarding()).
         $results = array_filter($updates, fn($v, $k) => str_starts_with($k, 'result_'), ARRAY_FILTER_USE_BOTH);
+        $isStaff = false;
         if (in_array('FALSE', $results)) {
             $updates['status_apply'] = 'REJECTED';
         } elseif (count($results) === 4 && !in_array(null, $results) && !in_array('', $results) && count(array_unique($results)) === 1 && reset($results) === 'TRUE') {
-            $updates['status_apply'] = 'ONBOARDING';
+            $isStaff = $this->isPelamarStaff($request->id);
+            $updates['status_apply'] = $isStaff ? 'READY FOR SALARY' : 'ONBOARDING';
         }
 
         DB::connection('cii')->table('pelamar_details')
             ->where('id_pelamar', $request->id)
             ->update($updates);
+
+        if ($isStaff) {
+            // Barangkali pengajuan gajinya sudah lebih dulu selesai di-approve
+            // sebelum penilaian ini kelar -> langsung finalize ke ONBOARDING.
+            $this->maybeFinalizeStaffOnboarding($request->id);
+        }
 
         Alert::success('Berhasil', 'Penilaian pelamar berhasil diperbarui!');
         return back()->with('success', 'Penilaian pelamar berhasil diperbarui!');
@@ -306,10 +353,16 @@ class RecruitmentController extends Controller
                 $umur = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
             }
 
+            $recruitmentPos = RecruitmentPosition::where('position', $request->jabatan)
+                ->where('dept', $request->department)
+                ->first();
+            $isStaff = $recruitmentPos ? ($recruitmentPos->is_staff ?? 0) : 0;
+
             // Update PELAMAR
             DB::connection('cii')->table('PELAMAR')
                 ->where('ID', $id)
                 ->update([
+                    'is_staff' => $isStaff,
                     'NAMA' => strtoupper($request->nama_lengkap ?? '-'),
                     'NIK' => $request->nik,
                     'NO_KK' => $request->no_kk,
