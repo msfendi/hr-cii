@@ -40,14 +40,24 @@ use Illuminate\Support\Facades\DB;
  * akan menolak scan seperti itu sebagai kandidat jam masuk (lihat method
  * tsb untuk detail):
  * - Kalau JUMLAH_JAM_LEMBUR di overtimes KOSONG/tidak ada row (type='none'):
- *   - Kalau hari itu WEEKEND atau terdaftar di tabel holidays -> LANGSUNG
- *     dianggap hari LIBUR (STATUS='LBR', JAM_PAGI & JAM_SIANG null) TANPA
- *     sempat cek att_log/employee_lates sama sekali. Ini SENGAJA dicek
- *     duluan sebelum resolve scan, karena scan yang ketemu di hari libur
- *     bisa jadi cuma checkout shift MALAM hari sebelumnya yang "nyasar" ke
- *     tanggal ini (misal shift malam Jumat checkout jam 03:xx dinihari
- *     Sabtu) -- bukan jam masuk asli untuk hari Sabtu itu.
- *   - Kalau hari kerja biasa (bukan weekend & bukan holiday):
+ *   - Kalau hari itu WEEKEND/holiday DAN karyawan TIDAK punya shift
+ *     eksplisit di employee_shifts untuk tanggal itu (jadi pakai shift
+ *     default 08:00-17:00) -> LANGSUNG dianggap hari LIBUR (STATUS='LBR',
+ *     JAM_PAGI & JAM_SIANG null) TANPA sempat cek att_log/employee_lates
+ *     sama sekali. Ini SENGAJA dicek duluan sebelum resolve scan, karena
+ *     scan yang ketemu di hari libur bisa jadi cuma checkout shift MALAM
+ *     hari sebelumnya yang "nyasar" ke tanggal ini (misal shift malam
+ *     Jumat checkout jam 03:xx dinihari Sabtu) -- bukan jam masuk asli
+ *     untuk hari Sabtu itu.
+ *     PENGECUALIAN: kalau karyawan MEMANG dijadwalkan kerja di hari
+ *     libur itu (ADA row eksplisit di employee_shifts untuk tanggal tsb,
+ *     misal shift rotasi security yang termasuk weekend), aturan LBR
+ *     otomatis ini TIDAK berlaku -- diproses seperti hari kerja biasa
+ *     (lihat poin berikutnya), supaya karyawan seperti ini tetap
+ *     ter-generate jam kerjanya walau tidak ada data overtime.
+ *   - Kalau hari kerja biasa (bukan weekend & bukan holiday), ATAU
+ *     weekend/holiday tapi karyawan punya shift eksplisit (lihat
+ *     pengecualian di atas):
  *     - Ada scan/izin asli -> hadir normal, JAM_PAGI dari
  *       normalizeArrival() (lihat aturan di bawah), JAM_SIANG = jam akhir
  *       shift + jitter(0-10 menit), STATUS = null.
@@ -66,15 +76,19 @@ use Illuminate\Support\Facades\DB;
  *   'TS' di kasus ini karena kehadiran sudah dikonfirmasi lewat overtimes.
  *
  * ATURAN NORMALISASI JAM MASUK ASLI (normalizeArrival()):
- * - Scan/izin asli yang dipakai sebagai JAM_PAGI (baik di kasus 'none' hadir
- *   normal maupun numeric/half_day) TIDAK selalu dipakai apa adanya. Kalau
- *   scan itu LEBIH CEPAT dari jam mulai shift (berapa pun jauhnya -- misal
- *   shift 18:30 tapi scan ketemu jam 17:30), scan tsb diganti dengan
- *   estimasi "jam_mulai_shift dikurangi random 0-15 menit", BUKAN dipakai
- *   apa adanya. Ini mencegah jam masuk yang janggal (misal sisa scan shift
- *   sebelumnya, atau device error) muncul di rekap. Scan yang SAMA DENGAN
- *   atau LEBIH LAMBAT dari jam mulai shift (termasuk yang telat) tetap
- *   dipakai apa adanya, tidak diubah.
+ * - Sumbernya dibedakan lewat resolveJamPagi() (return 'source' => 'late'
+ *   atau 'scan'):
+ *   - `employee_lates` (source='late') -> JAM_PAGI dipakai APA ADANYA
+ *     (persis sesuai arrival_time yang terdaftar), karena sudah ada alasan
+ *     resmi di baliknya (izin terlambat), tidak diutak-atik.
+ *   - Scan `att_log` (source='scan') -> JAM_PAGI SELALU dirapikan jadi
+ *     "jam_mulai_shift dikurangi random 0-15 menit", BAIK scan itu LEBIH
+ *     CEPAT maupun LEBIH LAMBAT/TELAT dari jam mulai shift (berapa pun
+ *     jauhnya -- misal shift 08:00 tapi scan ketemu jam 07:30 ATAU jam
+ *     08:15, dua-duanya sama-sama diganti estimasi, bukan dipakai apa
+ *     adanya). Scan asli di sini murni dipakai sebagai BUKTI bahwa
+ *     karyawan memang hadir (sehingga STATUS jadi null, bukan 'TS'),
+ *     bukan buat menentukan jam yang ditampilkan.
  *
  * ATURAN LEMBUR DI HARI LIBUR (weekend/holiday), type='numeric':
  * - JAM_SIANG dihitung dari AWAL shift (bukan akhir shift seperti hari kerja
@@ -230,6 +244,7 @@ class AuditRecapService
     {
         $ot = $overtimeMap[$npk][$dateKey] ?? null;
 
+        $hasExplicitShift = isset($shiftMap[$npk][$dateKey]);
         $shift = $shiftMap[$npk][$dateKey] ?? [
             'work_start' => self::DEFAULT_SHIFT_START,
             'work_end'   => self::DEFAULT_SHIFT_END,
@@ -244,15 +259,22 @@ class AuditRecapService
             $status   = $value;
         } elseif ($type === 'none') {
             // Tidak ada JUMLAH_JAM_LEMBUR sama sekali di overtimes.
-            if ($isDayOff) {
-                // Weekend/holiday & TIDAK ADA data overtime sama sekali -> LIBUR,
-                // TIDAK PEDULI ada/tidaknya scan att_log yang ketemu di tanggal ini.
+            if ($isDayOff && !$hasExplicitShift) {
+                // Weekend/holiday, TIDAK ADA shift eksplisit di employee_shifts (jadi
+                // karyawan ini secara default TIDAK dijadwalkan kerja di hari libur),
+                // DAN tidak ada data overtime sama sekali -> LIBUR, TIDAK PEDULI
+                // ada/tidaknya scan att_log yang ketemu di tanggal ini.
                 // PENTING: kalau di sini kita masih resolve scan seperti biasa, scan
                 // yang ketemu bisa jadi cuma "nyasar" dari checkout shift MALAM hari
                 // sebelumnya (misal shift malam Jumat yang baru checkout jam 03:xx
                 // dinihari Sabtu) -- itu bukan jam masuk asli untuk hari Sabtu ini.
-                // Jadi begitu isDayOff + tidak ada overtime, langsung LBR tanpa
-                // sempat cek att_log sama sekali.
+                // Jadi begitu isDayOff + tidak ada shift eksplisit + tidak ada overtime,
+                // langsung LBR tanpa sempat cek att_log sama sekali.
+                //
+                // CATATAN: kalau karyawan MEMANG dijadwalkan kerja di weekend/holiday
+                // (ada row di employee_shifts, misal shift rotasi security), aturan LBR
+                // ini TIDAK berlaku -- turun ke else branch di bawah, diproses seperti
+                // hari kerja biasa (cek scan asli / estimasi TS).
                 $jamPagi  = null;
                 $jamSiang = null;
                 $status   = 'LBR';
@@ -364,13 +386,17 @@ class AuditRecapService
      * paling dekat dengan jam mulai shift -- TAPI hanya scan yang memang
      * lebih dekat ke jam MULAI shift dibanding ke jam AKHIR shift yang
      * dianggap kandidat "jam masuk" (lihat catatan di dalam method).
-     * Return null kalau tidak ketemu kandidat yang valid (estimasi TS
-     * ditangani di buildRow(), bukan di sini).
+     *
+     * Return array ['value' => 'HH:MM:SS', 'source' => 'late'|'scan'] kalau
+     * ketemu, atau null kalau tidak ketemu kandidat yang valid (estimasi TS
+     * ditangani di buildRow(), bukan di sini). Info 'source' dipakai oleh
+     * normalizeArrival() untuk menentukan apakah nilainya dipakai apa adanya
+     * (source='late', ada alasan resmi) atau dirapikan (source='scan').
      */
-    protected function resolveJamPagi(string $npk, string $dateKey, array $shift, array $lateMap, array $scanMap): ?string
+    protected function resolveJamPagi(string $npk, string $dateKey, array $shift, array $lateMap, array $scanMap): ?array
     {
         if (isset($lateMap[$npk][$dateKey])) {
-            return $lateMap[$npk][$dateKey];
+            return ['value' => $lateMap[$npk][$dateKey], 'source' => 'late'];
         }
 
         $scans = $scanMap[$npk][$dateKey] ?? [];
@@ -403,7 +429,11 @@ class AuditRecapService
             }
         }
 
-        return $closest;
+        if ($closest === null) {
+            return null;
+        }
+
+        return ['value' => $closest, 'source' => 'scan'];
     }
 
     /**
@@ -626,7 +656,7 @@ class AuditRecapService
         ", [$start->format('Y-m-d'), $end->format('Y-m-d')]);
 
         return array_map(
-            fn($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
+            fn ($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
             $rows
         );
     }
@@ -708,22 +738,27 @@ class AuditRecapService
     }
 
     /**
-     * Normalisasi jam masuk ASLI (dari scan att_log / employee_lates) sebelum
-     * dipakai sebagai JAM_PAGI. Kalau scan itu LEBIH CEPAT dari jam mulai
-     * shift (berapa pun jauhnya), jangan dipakai apa adanya -- gantikan
-     * dengan estimasi "jam_mulai_shift dikurangi random 0-15 menit", sama
-     * seperti formula estimasi TS. Ini menangani kasus seperti scan yang
-     * jauh lebih pagi dari jadwal shift (misal shift 18:30 tapi ketemu scan
-     * jam 17:30 -- kemungkinan besar bukan scan masuk yang valid untuk shift
-     * itu). Scan yang SAMA DENGAN atau LEBIH LAMBAT dari jam mulai shift
-     * (termasuk yang telat) tetap dipakai apa adanya, tidak diutak-atik.
+     * Normalisasi jam masuk ASLI (hasil resolveJamPagi()) sebelum dipakai
+     * sebagai JAM_PAGI:
+     * - Kalau sumbernya `employee_lates` ('source' => 'late') -> dipakai APA
+     *   ADANYA, tidak diubah, karena ada alasan resmi di baliknya (izin
+     *   terlambat).
+     * - Kalau sumbernya scan `att_log` ('source' => 'scan') -> SELALU
+     *   dirapikan jadi "jam_mulai_shift dikurangi random 0-15 menit", BAIK
+     *   scan itu lebih cepat MAUPUN lebih lambat/telat dari jam mulai shift.
+     *   Nilai scan asli di sini cuma dipakai sebagai bukti bahwa karyawan
+     *   memang hadir (jadi STATUS = null, bukan 'TS'), bukan ditampilkan
+     *   apa adanya sebagai JAM_PAGI.
+     *
+     * @param array $resolved ['value' => 'HH:MM:SS', 'source' => 'late'|'scan'],
+     *                        hasil return resolveJamPagi().
      */
-    protected function normalizeArrival(string $scanTime, string $shiftStart): string
+    protected function normalizeArrival(array $resolved, string $shiftStart): string
     {
-        if ($this->timeToMinutes($scanTime) < $this->timeToMinutes($shiftStart)) {
-            return $this->addMinutesToTime($shiftStart, -$this->tsJitter());
+        if ($resolved['source'] === 'late') {
+            return $this->toHHMM($resolved['value']);
         }
 
-        return $this->toHHMM($scanTime);
+        return $this->addMinutesToTime($shiftStart, -$this->tsJitter());
     }
 }
