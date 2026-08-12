@@ -176,19 +176,19 @@ class AuditRecapService
     {
         $periodQuery = DB::table('payroll_periods')->where('id', $periodId);
 
-        if (!$forceClosed) {
-            $periodQuery->where('is_closed', 0);
-        }
+        // if (!$forceClosed) {
+        //     $periodQuery->where('is_closed', 0);
+        // }
 
         $period = $periodQuery->first();
 
-        if (!$period) {
-            throw new \RuntimeException(
-                $forceClosed
-                    ? 'Periode payroll tidak ditemukan.'
-                    : 'Periode payroll tidak ditemukan atau sudah closed. Kalau memang ingin generate ulang periode yang sudah closed, centang opsi "Izinkan generate periode closed".'
-            );
-        }
+        // if (!$period) {
+        //     throw new \RuntimeException(
+        //         $forceClosed
+        //             ? 'Periode payroll tidak ditemukan.'
+        //             : 'Periode payroll tidak ditemukan atau sudah closed. Kalau memang ingin generate ulang periode yang sudah closed, centang opsi "Izinkan generate periode closed".'
+        //     );
+        // }
 
         $start = Carbon::parse($period->start_date)->startOfDay();
         $end   = Carbon::parse($period->end_date)->endOfDay();
@@ -672,7 +672,7 @@ class AuditRecapService
         ", [$start->format('Y-m-d'), $end->format('Y-m-d')]);
 
         return array_map(
-            fn ($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
+            fn($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
             $rows
         );
     }
