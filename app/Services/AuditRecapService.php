@@ -162,17 +162,32 @@ class AuditRecapService
     /**
      * Entry point utama. Dipanggil dari controller saat tombol Generate diklik.
      *
-     * @throws \RuntimeException kalau periode tidak ditemukan/sudah closed.
+     * @param bool $forceClosed Default false: hanya periode is_closed=0 yang
+     *             boleh digenerate (proteksi supaya data periode yang sudah
+     *             final/closed tidak ke-generate ulang tanpa sengaja). Set
+     *             true untuk override -- generate ulang periode yang SUDAH
+     *             closed juga (dipicu dari UI lewat opsi eksplisit yang
+     *             harus dicentang/dikonfirmasi dulu oleh user).
+     *
+     * @throws \RuntimeException kalau periode tidak ditemukan (atau kalau
+     *                           $forceClosed=false dan periode ternyata closed).
      */
-    public function generate(int $periodId): array
+    public function generate(int $periodId, bool $forceClosed = false): array
     {
-        $period = DB::table('payroll_periods')
-            ->where('id', $periodId)
-            ->where('is_closed', 0)
-            ->first();
+        $periodQuery = DB::table('payroll_periods')->where('id', $periodId);
+
+        if (!$forceClosed) {
+            $periodQuery->where('is_closed', 0);
+        }
+
+        $period = $periodQuery->first();
 
         if (!$period) {
-            throw new \RuntimeException('Periode payroll tidak ditemukan atau sudah closed.');
+            throw new \RuntimeException(
+                $forceClosed
+                    ? 'Periode payroll tidak ditemukan.'
+                    : 'Periode payroll tidak ditemukan atau sudah closed. Kalau memang ingin generate ulang periode yang sudah closed, centang opsi "Izinkan generate periode closed".'
+            );
         }
 
         $start = Carbon::parse($period->start_date)->startOfDay();
@@ -233,6 +248,7 @@ class AuditRecapService
             'period_name'     => $period->name,
             'run_id'          => $run->id ?? null,
             'employee_source' => $employeeSource, // 'payroll_run' atau 'biodata_pkwt' (fallback)
+            'was_closed'      => (bool) $period->is_closed, // true kalau digenerate pakai override forceClosed
             'total_rows'      => $totalRows,
         ];
     }

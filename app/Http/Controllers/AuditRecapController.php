@@ -14,7 +14,9 @@ class AuditRecapController extends Controller
 {
     /**
      * Tampilkan halaman rekap audit.
-     * - Dropdown "Generate" hanya berisi payroll_period yang is_closed = 0.
+     * - Dropdown "Generate" hanya berisi payroll_period yang is_closed = 0
+     *   secara default; user bisa toggle opsi "Izinkan generate periode
+     *   closed" di view untuk memilih dari SEMUA periode (lihat allPeriods).
      * - Dropdown "Lihat data" berisi SEMUA payroll_period (termasuk yang
      *   sudah closed), supaya data historis tetap bisa dilihat.
      * - Kalau request AJAX (dipanggil oleh DataTables server-side), return
@@ -23,7 +25,7 @@ class AuditRecapController extends Controller
     public function index(Request $request)
     {
         $openPeriods = DB::table('payroll_periods')
-            // ->where('is_closed', 0)
+            ->where('is_closed', 0)
             ->orderByDesc('start_date')
             ->get();
 
@@ -61,22 +63,34 @@ class AuditRecapController extends Controller
      * Proses generate rekap audit untuk 1 payroll_period (dipicu tombol Generate).
      * Overwrite total: row NPK+TANGGAL yang sudah ada akan ditimpa ulang
      * (termasuk jitter random-nya).
+     *
+     * Default: hanya periode is_closed=0 yang bisa digenerate. Kalau user
+     * mencentang opsi "Izinkan generate periode closed" di form (checkbox
+     * force_closed), periode yang sudah closed juga boleh digenerate ulang.
      */
     public function generate(Request $request, AuditRecapService $service)
     {
         $validated = $request->validate([
-            'period_id' => 'required|integer|exists:payroll_periods,id',
+            'period_id'    => 'required|integer|exists:payroll_periods,id',
+            // 'force_closed' => 'nullable|boolean',
         ]);
 
+        // $forceClosed = (bool) ($validated['force_closed'] ?? true);
+        $forceClosed = true;
+
         try {
-            $result = $service->generate((int) $validated['period_id']);
+            $result = $service->generate((int) $validated['period_id'], $forceClosed);
         } catch (\RuntimeException $e) {
             return back()->withErrors(['period_id' => $e->getMessage()]);
         }
 
+        $closedNote = $result['was_closed']
+            ? ' (periode CLOSED, digenerate ulang secara paksa lewat opsi override.)'
+            : '';
+
         return redirect()
             ->route('audit-recap.index', ['period_id' => $validated['period_id']])
-            ->with('success', "Rekap audit berhasil digenerate: {$result['total_rows']} baris untuk periode \"{$result['period_name']}\".");
+            ->with('success', "Rekap audit berhasil digenerate: {$result['total_rows']} baris untuk periode \"{$result['period_name']}\".{$closedNote}");
     }
 
     /**
@@ -133,7 +147,7 @@ class AuditRecapController extends Controller
         $employees = $employeesChutex->orderBy('AUDIT.SUBDIVISI', 'ASC')->orderBy('AUDIT.NPK', 'ASC')->orderBy('AUDIT.TANGGAL', 'ASC')->get();
 
         $days = $request->days;
-        return view('template.report-final-generate', compact('employees', 'employeeGroup', 'days'));
+        return view('template.report-final', compact('employees', 'employeeGroup', 'days'));
     }
 
     /**
@@ -197,7 +211,7 @@ class AuditRecapController extends Controller
 
         $days = $request->days;
 
-        $pdf = Pdf::loadView('template.report-final-generate', compact('employees', 'employeeGroup', 'days'))
+        $pdf = Pdf::loadView('template.report-final', compact('employees', 'employeeGroup', 'days'))
             ->setPaper('a4', 'landscape');
 
         $filename = 'laporan-kehadiran-' . $deptGroup . '-' . $request->fromdate . '-' . $request->todate . '.pdf';
