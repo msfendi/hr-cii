@@ -596,8 +596,7 @@
         <h2 class="font-display mt-2" style="color: var(--merah); letter-spacing:1px;">ADA DOORPRIZE MENARIK!</h2>
         <p class="text-muted px-2" style="max-width:420px; margin:0 auto;">
             Jangan sampai terlewat! Khusus untuk yang hadir langsung di lokasi, disediakan
-            <b>doorprize</b> spesial seperti mobil, kulkas, kipas angin, dan hadiah menarik lainnya
-            di penghujung acara. Semakin cepat konfirmasi hadir,
+            <b>doorprize</b> spesial di penghujung acara. Semakin cepat konfirmasi hadir,
             semakin besar semangat gotong royong merayakan kemerdekaan bersama-sama 🎉
         </p>
         <div class="doorprize-badges mt-3">
