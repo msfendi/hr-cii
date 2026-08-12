@@ -23,7 +23,7 @@ class AuditRecapController extends Controller
     public function index(Request $request)
     {
         $openPeriods = DB::table('payroll_periods')
-            ->where('is_closed', 0)
+            // ->where('is_closed', 0)
             ->orderByDesc('start_date')
             ->get();
 
