@@ -1051,6 +1051,9 @@ class MonitoringRekonsiliasiService
      * Sumber qty per tahap:
      *  - Cutting   : mon_prod_lines.jumlah, department_id = Cutting
      *  - Sewing    : mon_prod_lines.jumlah, department_id = Sewing
+     *  - QC        : mon_prod_qc.jumlah,    department_id = QC
+     *                (stage inspeksi yang di-inject di antara Sewing dan
+     *                Packing, lihat prodQcSumByDepartment())
      *  - Packing   : mon_prod_lines.jumlah, department_id = Packing
      *  - Warehouse : mon_prod_lines.jumlah, destination   = Warehouse
      *  - Shipment  : mon_shipments.jumlah_barang
@@ -1058,6 +1061,11 @@ class MonitoringRekonsiliasiService
      * dest_sewing & dest_packing (mon_prod_lines.jumlah per kolom
      * `destination`) juga dihitung di sini karena dipakai sebagai basis
      * loss per tahap, lihat pipelineLossSteps().
+     *
+     * Setiap department di atas juga dilengkapi `remarks` (koleksi teks
+     * dari mon_stage_remarks, dicocokkan lewat department_id -- dan OCF
+     * kalau filter OCF aktif) supaya frontend bisa menampilkannya di
+     * bawah persentase loss pada masing-masing stage box.
      *
      * PERUBAHAN: total_loss sekarang hanya mencakup loss dari Packing ke Warehouse,
      * bukan seluruh rantai (Contract → Shipment). Hal ini karena permintaan
@@ -1070,6 +1078,7 @@ class MonitoringRekonsiliasiService
 
         $deptCutting = $this->prodLineSumByDepartment('Cutting', MsBarang::CATEGORY_WIP);
         $deptSewing  = $this->prodLineSumByDepartment('Sewing', MsBarang::CATEGORY_JADI);
+        $deptQc      = $this->prodQcSumByDepartment('QC');
         $deptPacking = $this->prodLineSumByDepartment('Packing', MsBarang::CATEGORY_JADI);
 
         $destSewing    = $this->prodLineSumByDestination('Sewing', MsBarang::CATEGORY_WIP);
@@ -1079,15 +1088,30 @@ class MonitoringRekonsiliasiService
         $shipment = $this->shipmentSumByCategory(MsBarang::CATEGORY_JADI);
 
         $departments = collect([
-            (object) ['department_id' => 'Cutting', 'jumlah' => $deptCutting],
-            (object) ['department_id' => 'Sewing', 'jumlah' => $deptSewing],
-            (object) ['department_id' => 'Packing', 'jumlah' => $deptPacking],
-            (object) ['department_id' => 'Warehouse', 'jumlah' => $destWarehouse],
+            (object) ['department_id' => 'Cutting', 'jumlah' => $deptCutting, 'remarks' => $this->stageRemarksByDepartment('Cutting')],
+            (object) ['department_id' => 'Sewing', 'jumlah' => $deptSewing, 'remarks' => $this->stageRemarksByDepartment('Sewing')],
+            (object) ['department_id' => 'QC', 'jumlah' => $deptQc, 'remarks' => $this->stageRemarksByDepartment('QC')],
+            (object) ['department_id' => 'Packing', 'jumlah' => $deptPacking, 'remarks' => $this->stageRemarksByDepartment('Packing')],
+            (object) ['department_id' => 'Warehouse', 'jumlah' => $destWarehouse, 'remarks' => $this->stageRemarksByDepartment('Warehouse')],
         ]);
 
         // Total loss hanya dari Packing ke Warehouse (loss di tahap ini)
         $totalLoss = ($deptSewing - $destSewing) + ($deptPacking - $destPacking) + ($destWarehouse - $deptPacking);
         $lossPct   = $deptPacking > 0 ? round($totalLoss / $deptCutting * 100, 2) : 0;
+
+        // Cabang SABKON (PABRIK LUAR): terpisah dari flow produksi internal
+        // di atas, sumbernya tabel mon_subkons (bukan mon_prod_lines), dan
+        // di-scope HANYA lewat filter OCF (dicocokkan ke mon_subkons.no_order)
+        // -- lihat subkonSumByField().
+        //  - Sabkon (Pabrik Luar) : SUM(qty_result_order)
+        //  - Warehouse (Sabkon)   : SUM(qty_result_aktual)
+        $sabkonPabrikLuar = $this->subkonSumByField('qty_result_order');
+        $sabkonWarehouse  = $this->subkonSumByField('qty_result_aktual');
+
+        $sabkonDepartments = collect([
+            (object) ['department_id' => 'Sabkon', 'jumlah' => $sabkonPabrikLuar, 'remarks' => $this->stageRemarksByDepartment('Sabkon')],
+            (object) ['department_id' => 'Warehouse (Sabkon)', 'jumlah' => $sabkonWarehouse, 'remarks' => $this->stageRemarksByDepartment('Warehouse (Sabkon)')],
+        ]);
 
         return [
             'contract'    => $contract,
@@ -1096,15 +1120,43 @@ class MonitoringRekonsiliasiService
             'total_loss'  => $totalLoss,
             'loss_pct'    => $lossPct,
 
+            // Cabang Sabkon (Pabrik Luar) -> Warehouse (Sabkon), ditampilkan
+            // sebagai grup terpisah di sebelah flow produksi internal.
+            'sabkon' => $sabkonDepartments,
+
             // Nilai mentah per tahap, dipakai pipelineLossSteps() untuk
             // menghitung loss per tahap sesuai definisi masing-masing.
             'dept_cutting'   => $deptCutting,
             'dept_sewing'    => $deptSewing,
+            'dept_qc'        => $deptQc,
             'dept_packing'   => $deptPacking,
             'dest_sewing'    => $destSewing,
             'dest_packing'   => $destPacking,
             'dest_warehouse' => $destWarehouse,
+
+            'sabkon_pabrik_luar' => $sabkonPabrikLuar,
+            'sabkon_warehouse'   => $sabkonWarehouse,
         ];
+    }
+
+    /**
+     * SUM(mon_subkons.{$field}) di-scope HANYA lewat filter OCF, dicocokkan
+     * ke mon_subkons.no_order (bukan code_prod -- tabel ini datang dari
+     * smartit lewat query get_subkon, kolom identifikasinya no_order/no_po
+     * atau no_so, bukan CPO/uraian). Kalau filter OCF kosong, sengaja balik
+     * 0 (tidak ada basis pencarian) -- sama seperti stage lain yang butuh
+     * hasAnyFilterInput().
+     */
+    private function subkonSumByField(string $field): float
+    {
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
+        if ($ocf === '') {
+            return 0;
+        }
+
+        return (float) (DB::table('mon_subkons')
+            ->whereRaw('UPPER(no_order) LIKE ?', ['%' . strtoupper($ocf) . '%'])
+            ->sum($field) ?? 0);
     }
 
     public function productionResultByMaterial(): Collection
@@ -1195,6 +1247,51 @@ class MonitoringRekonsiliasiService
         $this->scopeByCodeProd($query, $this->filterUraianListExcludingNegara());
 
         return (float) ($query->value('jumlah') ?? 0);
+    }
+
+    /**
+     * SUM(mon_prod_qc.jumlah) untuk 1 department_id (mis. 'QC'), di-scope
+     * ke filter CPO/OCF/Sub Ref/Negara yang sama seperti tahap-tahap
+     * mon_prod_lines lainnya (lewat scopeByCodeProd(), karena mon_prod_qc
+     * juga punya kolom `code_prod`). Dipakai untuk inject stage QC di
+     * antara Sewing dan Packing pada productionPipeline().
+     */
+    private function prodQcSumByDepartment(string $departmentId): float
+    {
+        if (!$this->hasAnyFilterInput()) {
+            return 0;
+        }
+
+        $query = DB::table('mon_prod_qc')
+            ->where('mon_prod_qc.department_id', $departmentId)
+            ->selectRaw('SUM(mon_prod_qc.jumlah) as jumlah');
+
+        // $this->scopeByCodeProd($query, $this->filterUraianListExcludingNegara());
+
+        return (float) ($query->value('jumlah') ?? 0);
+    }
+
+    /**
+     * Ambil daftar remark (mon_stage_remarks.remark) untuk 1 department_id,
+     * dicocokkan juga dengan filter OCF yang aktif (kolom mon_stage_remarks.
+     * ocf_no) -- dipakai untuk menampilkan remark di bawah persentase loss
+     * pada tiap stage box di PRODUCTION FLOW / STAGE PIPELINE.
+     */
+    private function stageRemarksByDepartment(string $departmentId): Collection
+    {
+        $query = DB::table('mon_stage_remarks')
+            ->where('department_id', $departmentId);
+
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
+        if ($ocf !== '') {
+            $query->whereNotNull('ocf_no')
+                ->whereRaw('UPPER(ocf_no) LIKE ?', ['%' . strtoupper($ocf) . '%']);
+        }
+
+        return $query->orderByDesc('id')
+            ->pluck('remark')
+            ->filter(fn($remark) => trim((string) $remark) !== '')
+            ->values();
     }
 
     /**
@@ -1334,7 +1431,12 @@ class MonitoringRekonsiliasiService
      * sekarang -- tiap tahap punya basis perhitungannya sendiri:
      *  - Cutting   : dept Cutting − Contract
      *  - Sewing    : dest Sewing − dept Sewing
-     *  - Packing   : dest Packing − dept Packing
+     *  - QC        : dept QC − dept Sewing (stage inspeksi hasil Sewing,
+     *                di-inject di antara Sewing dan Packing, sumber data
+     *                mon_prod_qc -- lihat prodQcSumByDepartment())
+     *  - Packing   : dest Packing − dept Packing (basis input sekarang
+     *                dept QC, menggantikan dept Sewing karena QC sudah
+     *                disisipkan di antara keduanya)
      *  - Warehouse : dept Packing − dest Warehouse
      *  - Shipment  : dest Warehouse − Shipment (basis akhir ke pengiriman aktual)
      */
@@ -1359,8 +1461,15 @@ class MonitoringRekonsiliasiService
         ));
 
         $steps->push($this->lossStep(
-            'Sewing → Packing',
+            'Sewing → QC',
             $p['dept_sewing'],
+            $p['dept_qc'],
+            $p['dept_qc'] - $p['dept_sewing']
+        ));
+
+        $steps->push($this->lossStep(
+            'QC → Packing',
+            $p['dept_qc'],
             $p['dept_packing'],
             $p['dept_packing'] - $p['dest_packing']
         ));
@@ -1377,6 +1486,28 @@ class MonitoringRekonsiliasiService
             $p['dept_cutting'],
             $p['shipment'],
             $p['shipment'] - $p['dept_cutting']
+        ));
+
+        // Cabang SABKON (PABRIK LUAR) -- terpisah dari chain produksi
+        // internal di atas, tidak punya stage "sebelumnya" jadi input-nya 0
+        // (loss = output itu sendiri, sesuai definisi yang diminta: loss
+        // Sabkon (Pabrik Luar) = SUM(qty_result_order)).
+        $steps->push($this->lossStep(
+            'Sabkon (Pabrik Luar)',
+            0,
+            $p['sabkon_pabrik_luar'],
+            $p['sabkon_pabrik_luar'] - 0
+        ));
+
+        // Warehouse (Sabkon): loss = qty_result_aktual - qty_result_order
+        // (ditampilkan negatif kalau qty_result_order > qty_result_aktual,
+        // sesuai definisi yang diminta: loss = SUM(qty_result_order) -
+        // SUM(qty_result_aktual)).
+        $steps->push($this->lossStep(
+            'Sabkon → Warehouse (Sabkon)',
+            $p['sabkon_pabrik_luar'],
+            $p['sabkon_warehouse'],
+            $p['sabkon_warehouse'] - $p['sabkon_pabrik_luar']
         ));
 
         return $steps;

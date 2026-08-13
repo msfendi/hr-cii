@@ -165,6 +165,26 @@ class GeneratePayrollProcessV2 implements ShouldQueue
             )
             ->distinct();
 
+        /*
+        |--------------------------------------------------------------------------
+        | PKWT AKTIF (NPK, TMK, TKK) -- DIPAKAI UNTUK:
+        | 1. Membatasi absence_days (H/MA/P1/SD) dari `overtimes` agar hanya
+        |    valid jika tanggalnya berada di antara TMK - TKK karyawan.
+        | 2. Menjadi acuan tanggal untuk perhitungan BR (sebelum TMK) dan OUT
+        |    (setelah/mulai TKK) yang sekarang dihitung otomatis dari tanggal,
+        |    bukan dari teks 'BR'/'OUT' di table overtimes lagi.
+        |--------------------------------------------------------------------------
+        */
+        $pkwtActive = DB::connection('cii')
+            ->table('PKWT as p')
+            ->select('p.NPK', 'p.TMK', 'p.TKK')
+            ->where('p.TMK', '<=', $periodEnd)
+            ->where(function ($q) use ($periodStart) {
+                $q->whereNull('p.TKK')
+                    ->orWhere('p.TKK', '>=', $periodStart);
+            })
+            ->where('p.NPK', '!=', 'C-00017');
+
         $latestContract = DB::table('employees_contract as ec1')
             ->select(
                 'ec1.npk',
@@ -367,6 +387,21 @@ class GeneratePayrollProcessV2 implements ShouldQueue
         |   tetap harus muncul walau tidak ada att_log di hari itu.
         |--------------------------------------------------------------------------
         */
+        // NOTE: BR & OUT TIDAK LAGI dihitung dari `overtimes` di sini (dihitung
+        // otomatis dari tanggal TMK/TKK di foreach($employees) memakai table
+        // PKWT). H/MA/P1/SD hanya valid (dihitung) jika tanggalnya berada di
+        // antara TMK - TKK karyawan (data di luar rentang itu, mis. MA/P1
+        // setelah TKK atau sebelum TMK, dianggap tidak valid dan tidak
+        // dihitung ke absence_days/sick_days -- tetap ditampilkan apa adanya
+        // di absence_status sebagai referensi/audit trail).
+        $pkwtActiveSql = "
+            SELECT p.NPK, p.TMK, p.TKK
+            FROM PKWT p
+            WHERE p.TMK <= '{$periodEndStr}'
+              AND (p.TKK IS NULL OR p.TKK >= '{$periodStartStr}')
+              AND p.NPK <> 'C-00017'
+        ";
+
         $overtimeMergedSql = <<<SQL
 SELECT
     COALESCE(ac.NPK, o.NPK) AS NPK,
@@ -380,10 +415,15 @@ SELECT
     ac.overtime_hours,
     ac.special_overtime_hours,
     CASE
-        WHEN UPPER(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR))) = 'H' THEN 0.5
+        WHEN UPPER(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR))) = 'H'
+            AND CAST(o.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+            AND (pk.TKK IS NULL OR CAST(o.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
+            THEN 0.5
         WHEN o.JUMLAH_JAM_LEMBUR IS NOT NULL
             AND TRY_CAST(o.JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-            AND UPPER(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
+            AND UPPER(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR))) IN ('MA','P1')
+            AND CAST(o.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+            AND (pk.TKK IS NULL OR CAST(o.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
             THEN 1
         ELSE 0
     END AS absence_days,
@@ -398,6 +438,8 @@ SELECT
         WHEN o.JUMLAH_JAM_LEMBUR IS NOT NULL
             AND TRY_CAST(o.JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
             AND UPPER(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR))) = 'SD'
+            AND CAST(o.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+            AND (pk.TKK IS NULL OR CAST(o.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
             THEN 1
         ELSE 0
     END AS sick_days
@@ -408,6 +450,8 @@ FULL OUTER JOIN (
 ) o
     ON o.NPK = ac.NPK
    AND CAST(o.OVERTIME_DATE AS DATE) = ac.attendance_date
+LEFT JOIN ({$pkwtActiveSql}) pk
+    ON pk.NPK = COALESCE(ac.NPK, o.NPK)
 SQL;
 
         $overtimeBase = DB::connection('cii')
@@ -1162,6 +1206,48 @@ END AS special_overtime_hours
             $tmk = $employee->TMK ? Carbon::parse($employee->TMK) : null;
             $tkk = $employee->TKK ? Carbon::parse($employee->TKK) : null;
 
+            /**
+             * BR & OUT SEKARANG DIHITUNG OTOMATIS DARI TANGGAL TMK/TKK (PKWT),
+             * BUKAN dari teks literal 'BR'/'OUT' di table overtimes.
+             * - BR  : hari kerja (Senin-Jumat) SEBELUM tanggal TMK, dimulai
+             *         dari awal periode payroll berjalan.
+             *         Contoh: TMK 7 Juli -> BR diambil dari tanggal 1-6 Juli,
+             *         Sabtu/Minggu dilewati.
+             * - OUT : hari kerja (Senin-Jumat) MULAI tanggal TKK s/d akhir
+             *         periode payroll berjalan.
+             *         Contoh: TKK 28 Juli -> OUT diambil dari tanggal 28-31
+             *         Juli, Sabtu/Minggu dilewati.
+             */
+            $autoBrDays = 0;
+            if ($tmk && $tmk->between($periodStart, $periodEnd)) {
+                $cursor = $periodStart->copy();
+                $limit  = $tmk->copy()->subDay();
+
+                while ($cursor->lte($limit)) {
+                    if (!$cursor->isWeekend()) {
+                        $autoBrDays++;
+                    }
+                    $cursor->addDay();
+                }
+            }
+
+            $autoOutDays = 0;
+            if ($tkk && $tkk->between($periodStart, $periodEnd)) {
+                $cursor = $tkk->copy();
+
+                while ($cursor->lte($periodEnd)) {
+                    if (!$cursor->isWeekend()) {
+                        $autoOutDays++;
+                    }
+                    $cursor->addDay();
+                }
+            }
+
+            // $employee->absence_days sekarang HANYA berisi H/MA/P1 yang valid
+            // dari overtimes (sudah difilter di rentang TMK-TKK pada
+            // $overtimeMergedSql). BR & OUT otomatis ditambahkan di sini.
+            $absenceDaysRaw = (float) $employee->absence_days + $autoBrDays + $autoOutDays;
+
             $isJoinOrResignInPeriod =
                 ($tmk && $tmk->between($periodStart, $periodEnd)) ||
                 ($tkk && $tkk->between($periodStart, $periodEnd));
@@ -1180,15 +1266,15 @@ END AS special_overtime_hours
                 }
 
                 // rumus: (21 - hari kerja periode) + absence karyawan
-                if ($employee->absence_days <= ($workingDays - 21)) {
+                if ($absenceDaysRaw <= ($workingDays - 21)) {
                     $absenceDays = 0;
                 } else {
 
-                    // $absenceDays = (21 - $workingDays) + $employee->absence_days;
-                    $absenceDays = (21 - $workingDays) + $employee->absence_days;
+                    // $absenceDays = (21 - $workingDays) + $absenceDaysRaw;
+                    $absenceDays = (21 - $workingDays) + $absenceDaysRaw;
                 }
             } else {
-                $absenceDays = $employee->absence_days;
+                $absenceDays = $absenceDaysRaw;
             }
 
             $isJoinOrResignInPeriod =
@@ -1201,7 +1287,7 @@ END AS special_overtime_hours
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
-                'absence_days_asli'   => (float) $employee->absence_days,
+                'absence_days_asli'   => (float) $absenceDaysRaw,
                 'absence_days'   => (float) $absenceDays,
                 'sick_days'   => (float) $employee->sick_days,
                 'working_years'  => (float) $employee->working_years,
@@ -1962,8 +2048,10 @@ END AS special_overtime_hours
                     'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                     'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                     'salary_daily_contract' => $salaryDailyContract,
-                    'absence_days_asli'   => (float) $employee->absence_days,
+                    'absence_days_asli'   => (float) $absenceDaysRaw,
                     'absence_days'   => (float) $absenceDays,
+                    'br_days_auto'   => (float) $autoBrDays,
+                    'out_days_auto'  => (float) $autoOutDays,
                     'sick_days'   => (float) $employee->sick_days,
                     'count_days'    => $count_days,
                     'type' => Str::ucfirst(Str::lower($employee->type)),

@@ -24,7 +24,10 @@
                  data-sync-workorder-url="{{ route('monitoring.rekonsiliasi.sync-work-order') }}"
                  data-sync-ms-barang-url="{{ route('monitoring.rekonsiliasi.sync-ms-barang') }}"
                  data-sync-ms-negara-url="{{ route('monitoring.rekonsiliasi.sync-ms-negara') }}"
-                 data-sync-ms-supplier-url="{{ route('monitoring.rekonsiliasi.sync-ms-supplier') }}">
+                 data-sync-ms-supplier-url="{{ route('monitoring.rekonsiliasi.sync-ms-supplier') }}"
+                 data-sync-subkon-url="{{ route('monitoring.rekonsiliasi.sync-subkon') }}"
+                 data-import-stage-remark-url="{{ route('monitoring.rekonsiliasi.stage-remark.import') }}"
+                 data-import-prod-qc-url="{{ route('monitoring.rekonsiliasi.prod-qc.import') }}">
 
                 {{-- ================= HEADER BAR ================= --}}
                 <div class="rekon-hero shadow mb-4">
@@ -112,10 +115,55 @@
                                 @canRoute('monitoring.rekonsiliasi.sync-ms-supplier')
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.sync-subkon')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
                                 @if($canSyncAny)
                                     <button id="btn-sync-all" type="button" class="btn btn-outline-light btn-sm">
                                         <i class="fas fa-sync-alt fa-sm"></i> Sync All Data
                                     </button>
+                                @endif
+
+                                {{-- Import Stage Remark (mon_stage_remarks) & Prod QC (mon_prod_qc) --
+                                     sengaja ditaruh 1 kelompok (di dalam div.d-flex yang sama) dengan
+                                     tombol "Sync All Data" di atas, sesuai permintaan. --}}
+                                @php $canImportAny = false; @endphp
+                                @canRoute('monitoring.rekonsiliasi.stage-remark.import')
+                                    @php $canImportAny = true; @endphp
+                                @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.prod-qc.import')
+                                    @php $canImportAny = true; @endphp
+                                @endcanRoute
+                                @if($canImportAny)
+                                    <div class="dropdown">
+                                        <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button"
+                                                id="btn-import-menu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            <i class="fas fa-file-import fa-sm"></i> Import Data
+                                        </button>
+                                        <div class="dropdown-menu dropdown-menu-right" aria-labelledby="btn-import-menu">
+                                            @canRoute('monitoring.rekonsiliasi.stage-remark.import')
+                                                <h6 class="dropdown-header">Stage Remark</h6>
+                                                <a class="dropdown-item" href="{{ route('monitoring.rekonsiliasi.stage-remark.template') }}">
+                                                    <i class="fas fa-download fa-sm mr-1"></i> Download Template
+                                                </a>
+                                                <a class="dropdown-item" href="#" id="btn-import-stage-remark">
+                                                    <i class="fas fa-upload fa-sm mr-1"></i> Import Excel
+                                                </a>
+                                            @endcanRoute
+                                            @canRoute('monitoring.rekonsiliasi.prod-qc.import')
+                                                <div class="dropdown-divider"></div>
+                                                <h6 class="dropdown-header">Prod QC</h6>
+                                                <a class="dropdown-item" href="{{ route('monitoring.rekonsiliasi.prod-qc.template') }}">
+                                                    <i class="fas fa-download fa-sm mr-1"></i> Download Template
+                                                </a>
+                                                <a class="dropdown-item" href="#" id="btn-import-prod-qc">
+                                                    <i class="fas fa-upload fa-sm mr-1"></i> Import Excel
+                                                </a>
+                                            @endcanRoute
+                                        </div>
+                                    </div>
+                                    <input type="file" id="file-stage-remark" accept=".xlsx,.xls" style="display:none">
+                                    <input type="file" id="file-prod-qc" accept=".xlsx,.xls" style="display:none">
                                 @endif
                             </div>
                         </div>
@@ -619,6 +667,7 @@
     .rekon-pipe-box.theme-navy    .rekon-pipe-header { background: #1f3864; }
     .rekon-pipe-box.theme-neutral .rekon-pipe-header { background: #5a5c69; }
     .rekon-pipe-box.theme-loss    .rekon-pipe-header { background: #c0392b; }
+    .rekon-pipe-box.theme-blue    .rekon-pipe-header { background: #2e75b6; }
 
     .rekon-pipe-body { padding: .55rem .6rem .65rem; }
 
@@ -628,6 +677,39 @@
     .theme-navy    .rekon-pipe-output, .theme-navy    .rekon-pipe-output-pct { color: #1f3864; }
     .theme-neutral .rekon-pipe-output, .theme-neutral .rekon-pipe-output-pct { color: #2e3a4b; }
     .theme-loss    .rekon-pipe-output, .theme-loss    .rekon-pipe-output-pct { color: #c0392b; }
+    .theme-blue    .rekon-pipe-output, .theme-blue    .rekon-pipe-output-pct { color: #2e75b6; }
+
+    /* Grup visual "Produksi Internal (Pabrik)" & "Sabkon (Pabrik Luar)" --
+       membungkus beberapa rekon-pipe-box sekaligus dengan border + judul
+       supaya kedua flow (internal vs subkon pabrik luar) terlihat sebagai
+       2 jalur terpisah, bukan 1 rantai linear tunggal. */
+    .rekon-pipe-group {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        border: 1px dashed #d8dae4;
+        border-radius: .6rem;
+        padding: 1.5rem .75rem .5rem;
+        margin: 0 .75rem .5rem;
+        position: relative;
+        background: #fbfbfe;
+    }
+    .rekon-pipe-group.theme-blue { border-color: #b8d3ec; background: #f5f9fd; }
+    .rekon-pipe-group-title {
+        position: absolute;
+        top: -.6rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fff;
+        padding: 0 .6rem;
+        font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: .03em;
+        text-transform: uppercase;
+        color: #5a5c69;
+        white-space: nowrap;
+    }
+    .rekon-pipe-group.theme-blue .rekon-pipe-group-title { color: #2e75b6; }
 
     .rekon-pipe-divider { border: 0; border-top: 1px dashed #e3e6f0; margin: .45rem 0; }
 
@@ -649,6 +731,41 @@
     }
 
     .rekon-pipe-total .rekon-pipe-body { padding-top: .7rem; }
+    /* Shipment (Total) & Total Process Loss sama-sama box mandiri (tidak
+       dihubungkan panah), jadi butuh jarak eksplisit -- tanpa ini keduanya
+       menempel karena tidak ada .rekon-pipe-group atau .rekon-pipe-arrow
+       di antaranya seperti box lain. */
+    .rekon-pipe-total { margin-left: .75rem; }
+
+    /* Remark (mon_stage_remarks), ditampilkan di bawah persentase loss
+       pada tiap stage box (Cutting/Sewing/QC/Packing/Warehouse). */
+    .rekon-pipe-remarks {
+        margin-top: .4rem;
+        padding-top: .35rem;
+        border-top: 1px dashed #e3e6f0;
+        text-align: left;
+    }
+    .rekon-pipe-remark-item {
+        font-size: .68rem;
+        color: #5a5c69;
+        line-height: 1.3;
+        margin-bottom: .2rem;
+        word-break: break-word;
+    }
+    .rekon-pipe-remark-item:last-child { margin-bottom: 0; }
+    .rekon-pipe-remark-item .fa-comment-dots { color: #4e73df; }
+
+    /* Ikon pensil di pojok kanan-bawah tiap box (dekoratif -- menandakan
+       remark di atasnya diisi manual lewat fitur Import Stage Remark,
+       BUKAN tombol edit inline). */
+    .rekon-pipe-remark-edit {
+        position: absolute;
+        bottom: .4rem;
+        right: .5rem;
+        font-size: .65rem;
+        color: #b7b9c8;
+    }
+    .rekon-pipe-remarks { position: relative; padding-right: 1.1rem; }
 
     .rekon-pipe-arrow { display: flex; align-items: center; justify-content: center; color: #4e73df; padding: 0 .5rem; margin-bottom: .5rem; }
 
@@ -678,6 +795,8 @@
     }
     .rekon-pipe-dot.dot-output { background: #1f3864; }
     .rekon-pipe-dot.dot-loss   { background: #c0392b; }
+    .rekon-pipe-dot.dot-sabkon { background: #2e75b6; }
+    .rekon-pipe-dot.dot-pct    { background: #b7b9c8; }
 
     .rekon-fabric-card .card-header {
         background: #1f3864;
@@ -827,6 +946,9 @@
     const syncMsBarangUrl = app.dataset.syncMsBarangUrl;
     const syncMsNegaraUrl = app.dataset.syncMsNegaraUrl;
     const syncMsSupplierUrl = app.dataset.syncMsSupplierUrl;
+    const syncSubkonUrl = app.dataset.syncSubkonUrl;
+    const importStageRemarkUrl = app.dataset.importStageRemarkUrl;
+    const importProdQcUrl = app.dataset.importProdQcUrl;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
     const fBuyer = document.getElementById('f-buyer');
@@ -844,6 +966,18 @@
     });
 
     const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(Number(v || 0));
+
+    // Escape teks bebas (mis. remark dari mon_stage_remarks) sebelum
+    // disisipkan lewat innerHTML, supaya aman dari HTML/markup liar.
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+        }[ch]));
+    }
 
     function fmtPct(value) {
         if (value === null || value === undefined || value === '') return '-';
@@ -1223,33 +1357,24 @@ function updateFormulaWithColors() {
         // materialRows tidak dipakai, hanya untuk kompatibilitas
         lossSteps = lossSteps || [];
 
-        const stages = [
-            { label: 'Contract', value: pipeline.contract, theme: 'neutral' },
-            ...pipeline.departments.map(d => ({
-                label: d.department_id ?? '-',
-                value: d.jumlah,
-                theme: 'green',
-            })),
-            { label: 'Shipment', value: pipeline.shipment, theme: 'navy' },
-        ];
+        // Cari loss step lewat NAMA proses (bukan index array) -- lebih
+        // aman karena sekarang ada 2 chain terpisah (Produksi Internal &
+        // Sabkon) yang tidak lagi berurutan linear dalam 1 array.
+        const findStep = (process) => lossSteps.find(s => s.process === process) || null;
 
-        const boxes = stages.map((s, i) => {
-            // Step ke-i (i=0 tidak punya step karena step pertama adalah Contract→Cutting)
-            const step = i > 0 && i - 1 < lossSteps.length ? lossSteps[i - 1] : null;
-
-            // Ambil loss langsung dari backend
+        // Render 1 box stage. `pct` dipakai kalau step-nya tidak
+        // menyediakan basis input/output sendiri (mis. Contract, atau
+        // cabang Sabkon yang basisnya dihitung terhadap Kontrak, bukan
+        // stage sebelumnya).
+        function renderBox(label, value, theme, step, pct, remarks) {
             let lossValue = step ? Number(step.loss_pcs || 0) : null;
             let lossPct   = step ? Number(step.loss_pct || 0) : null;
 
-            // Output persentase berdasarkan input/output
-            let outputPct = null;
-            if (step && step.input > 0) {
+            let outputPct = pct;
+            if (outputPct === null && step && step.input > 0) {
                 outputPct = (Number(step.output) / Number(step.input)) * 100;
-            } else if (i === 0) {
-                outputPct = 100;
             }
 
-            // Tentukan warna dan tanda
             let lossColorClass = 'loss-zero';
             let lossSign = '';
             if (lossValue !== null) {
@@ -1258,9 +1383,7 @@ function updateFormulaWithColors() {
                     lossSign = '-';
                 } else if (lossValue > 0) {
                     lossColorClass = 'loss-positive';
-                    // tidak pakai tanda plus
-                } else {
-                    lossColorClass = 'loss-zero';
+                    lossSign = '+';
                 }
             }
 
@@ -1286,21 +1409,73 @@ function updateFormulaWithColors() {
 
             const outputPctDisplay = outputPct !== null ? fmtPct(outputPct) : '-';
 
+            remarks = Array.isArray(remarks) ? remarks : [];
+            const remarksRow = remarks.length
+                ? `
+                <div class="rekon-pipe-remarks">
+                    ${remarks.map(r => `<div class="rekon-pipe-remark-item"><i class="fas fa-comment-dots mr-1"></i>${escapeHtml(r)}</div>`).join('')}
+                    <i class="fas fa-pencil-alt rekon-pipe-remark-edit" title="Remark diisi manual"></i>
+                </div>
+            `
+                : '';
+
             return `
-                <div class="rekon-pipe-box theme-${s.theme}">
-                    <div class="rekon-pipe-header">${s.label}</div>
+                <div class="rekon-pipe-box theme-${theme}">
+                    <div class="rekon-pipe-header">${label}</div>
                     <div class="rekon-pipe-body">
-                        <div class="rekon-pipe-output">${fmtNum(s.value)}</div>
+                        <div class="rekon-pipe-output">${fmtNum(value)}</div>
                         <div class="rekon-pipe-output-pct">${outputPctDisplay}</div>
                         ${lossRow}
+                        ${remarksRow}
                     </div>
                 </div>
-                <div class="rekon-pipe-arrow"><i class="fas fa-arrow-right"></i></div>
             `;
-        }).join('');
+        }
 
-        // Total Process Loss – dari backend (sudah dihitung di service)
-        const totalLoss   = Number(pipeline.total_loss || 0);
+        const arrow = `<div class="rekon-pipe-arrow"><i class="fas fa-arrow-right"></i></div>`;
+
+        // ===== Kontrak (Total) =====
+        const contractBox = renderBox('Kontrak (Total)', pipeline.contract, 'neutral', null, 100, []);
+
+        // ===== Grup Produksi Internal (Pabrik): Cutting → Sewing → QC → Packing → Warehouse =====
+        // Urutan & datanya TIDAK berubah dari sebelumnya, cuma dibungkus
+        // di dalam 1 grup visual (rekon-pipe-group).
+        const internalProcess = {
+            'Cutting':   'Contract → Cutting',
+            'Sewing':    'Cutting → Sewing',
+            'QC':        'Sewing → QC',
+            'Packing':   'QC → Packing',
+            'Warehouse': 'Packing → Warehouse',
+        };
+        const internalBoxes = (pipeline.departments || []).map(d => {
+            const label = d.department_id ?? '-';
+            const step = findStep(internalProcess[label] || '');
+            return renderBox(label, d.jumlah, 'green', step, null, d.remarks);
+        }).join(arrow);
+
+        // ===== Grup Sabkon (Pabrik Luar): Sabkon → Warehouse (Sabkon) =====
+        // Cabang terpisah dari flow internal, sumbernya mon_subkons
+        // (di-scope lewat filter OCF -- lihat
+        // MonitoringRekonsiliasiService::subkonSumByField()). Persentase
+        // dihitung terhadap Kontrak (bukan terhadap stage sebelumnya)
+        // karena cabang ini tidak punya "stage sebelumnya" di flow.
+        const sabkonProcess = {
+            'Sabkon':             'Sabkon (Pabrik Luar)',
+            'Warehouse (Sabkon)': 'Sabkon → Warehouse (Sabkon)',
+        };
+        const contractVal = Number(pipeline.contract || 0);
+        const sabkonBoxes = (pipeline.sabkon || []).map(d => {
+            const label = d.department_id ?? '-';
+            const step = findStep(sabkonProcess[label] || '');
+            const pct = contractVal > 0 ? (Number(d.jumlah || 0) / contractVal) * 100 : null;
+            return renderBox(label, d.jumlah, 'blue', step, pct, d.remarks);
+        }).join(arrow);
+
+        // ===== Shipment (Total) =====
+        const shipmentBox = renderBox('Shipment (Total)', pipeline.shipment, 'navy', findStep('Cutting → Shipment'), null, []);
+
+        // ===== Total Process Loss (tidak berubah, tetap dari Produksi Internal saja) =====
+        const totalLoss    = Number(pipeline.total_loss || 0);
         const totalLossPct = Number(pipeline.loss_pct || 0);
 
         let totalLossColorClass = 'loss-zero';
@@ -1310,8 +1485,6 @@ function updateFormulaWithColors() {
             totalLossSign = '-';
         } else if (totalLoss > 0) {
             totalLossColorClass = 'loss-positive';
-        } else {
-            totalLossColorClass = 'loss-zero';
         }
 
         const lossBox = `
@@ -1329,11 +1502,30 @@ function updateFormulaWithColors() {
             <div class="rekon-pipe-legend">
                 <span><i class="rekon-pipe-dot dot-output"></i>Output Qty (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-loss"></i>Loss Qty (PCS)</span>
+                <span><i class="rekon-pipe-dot dot-sabkon"></i>Sabkon Input/Output (PCS)</span>
+                <span><i class="rekon-pipe-dot dot-pct"></i>Persentase terhadap Kontrak</span>
+                <span><i class="fas fa-pencil-alt mr-1"></i>Remark diisi manual</span>
             </div>
         `;
 
-        document.getElementById('rekon-pipeline').innerHTML =
-            `<div class="d-flex flex-wrap align-items-stretch justify-content-center">${boxes}${lossBox}</div>${legend}`;
+        const html = `
+            <div class="d-flex flex-wrap align-items-stretch justify-content-center">
+                ${contractBox}
+                <div class="rekon-pipe-group">
+                    <div class="rekon-pipe-group-title">Produksi Internal (Pabrik)</div>
+                    <div class="d-flex flex-wrap align-items-stretch justify-content-center">${internalBoxes}</div>
+                </div>
+                <div class="rekon-pipe-group theme-blue">
+                    <div class="rekon-pipe-group-title">Sabkon (Pabrik Luar)</div>
+                    <div class="d-flex flex-wrap align-items-stretch justify-content-center">${sabkonBoxes}</div>
+                </div>
+                ${shipmentBox}
+                ${lossBox}
+            </div>
+            ${legend}
+        `;
+
+        document.getElementById('rekon-pipeline').innerHTML = html;
     }
 
     // ========== renderLossSteps dengan tanda/warna dari backend ==========
@@ -1780,6 +1972,7 @@ function updateFormulaWithColors() {
             { url: syncProdlineUrl, label: 'Sync Production Line' },
             { url: syncShipmentUrl, label: 'Sync Shipment' },
             { url: syncWorkOrderUrl, label: 'Sync Work Order' },
+            { url: syncSubkonUrl, label: 'Sync Subkon' },
         ].filter(s => !!s.url);
 
         Swal.fire({
@@ -1913,6 +2106,72 @@ function updateFormulaWithColors() {
     });
 
     if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
+
+    /**
+     * Import Stage Remark (mon_stage_remarks) & Prod QC (mon_prod_qc):
+     * klik menu dropdown -> buka file picker tersembunyi -> begitu file
+     * dipilih, langsung upload lewat fetch (multipart/form-data) ke
+     * endpoint import masing-masing. Template Excel-nya (dengan dropdown
+     * ocf_no/code_prod/department_id) diunduh lewat link biasa
+     * (route stage-remark.template / prod-qc.template), tidak perlu JS.
+     */
+    function uploadImportFile(url, file, successMessage) {
+        if (!url || !file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        Swal.fire({
+            title: 'Mengimpor data...',
+            html: 'Mohon tunggu, sedang memproses file Excel.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+            body: formData,
+        })
+            .then(async (response) => {
+                const json = await response.json().catch(() => ({}));
+                if (!response.ok || !json.success) {
+                    const detail = Array.isArray(json.errors) ? json.errors.join('<br>') : '';
+                    throw new Error((json.message || 'Import gagal.') + (detail ? `<br><br><small>${detail}</small>` : ''));
+                }
+                return json;
+            })
+            .then((json) => {
+                Swal.fire({ icon: 'success', title: 'Berhasil', html: json.message || successMessage });
+            })
+            .catch((err) => {
+                Swal.fire({ icon: 'error', title: 'Gagal', html: err.message || 'Import gagal diproses.' });
+            });
+    }
+
+    const fileStageRemark = document.getElementById('file-stage-remark');
+    const fileProdQc = document.getElementById('file-prod-qc');
+    const btnImportStageRemark = document.getElementById('btn-import-stage-remark');
+    const btnImportProdQc = document.getElementById('btn-import-prod-qc');
+
+    btnImportStageRemark?.addEventListener('click', (e) => {
+        e.preventDefault();
+        fileStageRemark?.click();
+    });
+    btnImportProdQc?.addEventListener('click', (e) => {
+        e.preventDefault();
+        fileProdQc?.click();
+    });
+    fileStageRemark?.addEventListener('change', () => {
+        uploadImportFile(importStageRemarkUrl, fileStageRemark.files[0], 'Import Stage Remark berhasil.');
+        fileStageRemark.value = '';
+    });
+    fileProdQc?.addEventListener('change', () => {
+        uploadImportFile(importProdQcUrl, fileProdQc.files[0], 'Import Prod QC berhasil.');
+        fileProdQc.value = '';
+    });
 
     refresh();
 })();

@@ -303,7 +303,7 @@ class EmployeePayrollController extends Controller
                 return Carbon::parse($row->date)->format('Y-m-d');
             });
 
-        $overtimeRaw = DB::table('overtimes')
+        $overtimeRaw = DB::table('overtimes_payroll')
             ->where('NPK', $employee->employee_npk)
             ->whereBetween('OVERTIME_DATE', [$startDate, $endDate])
             ->select('OVERTIME_DATE', 'JUMLAH_JAM_LEMBUR')

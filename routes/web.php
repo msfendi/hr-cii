@@ -103,6 +103,7 @@ use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\MonitoringDashboardController;
 use App\Http\Controllers\MonitoringRekonsiliasiController;
+use App\Http\Controllers\MonStageDataController;
 use App\Http\Controllers\OrderImportController;
 use App\Http\Controllers\OutsourceController;
 use App\Http\Controllers\SalaryApproveController;
@@ -1114,6 +1115,7 @@ Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permissio
     Route::post('/rekonsiliasi/sync-shipment', [MonitoringRekonsiliasiController::class, 'syncShipment'])->name('rekonsiliasi.sync-shipment');
     Route::post('/rekonsiliasi/sync-work-order', [MonitoringRekonsiliasiController::class, 'syncWorkOrder'])->name('rekonsiliasi.sync-work-order');
     Route::post('/rekonsiliasi/sync-ms-barang', [MonitoringRekonsiliasiController::class, 'syncMsBarang'])->name('rekonsiliasi.sync-ms-barang');
+    Route::post('/rekonsiliasi/sync-subkon', [MonitoringRekonsiliasiController::class, 'syncSubkon'])->name('rekonsiliasi.sync-subkon');
 
     // -- Kalender "Shipment Date" (mirip kalender Production Delivery di dashboard Gabungan) --
     Route::get('rekonsiliasi/calendar', [MonitoringRekonsiliasiController::class, 'calendar'])->name('rekonsiliasi.calendar');
@@ -1183,6 +1185,26 @@ Route::prefix('event-invitation')->name('event-invitation.')->group(function () 
     Route::get('/{event?}', [EventInvitationController::class, 'formPage'])->name('form');
     Route::post('/{event?}/respond', [EventInvitationController::class, 'storeResponse'])->name('respond');
 });
+
+Route::middleware(['auth', 'permission'])
+    ->prefix('monitoring/rekonsiliasi')
+    ->name('monitoring.rekonsiliasi.')
+    ->group(function () {
+
+        // ... route index/data/sync/calendar/dll yang sudah ada tetap di sini ...
+
+        // ===== Stage Remark (mon_stage_remarks) =====
+        Route::get('stage-remark/template', [MonStageDataController::class, 'templateStageRemark'])
+            ->name('stage-remark.template');
+        Route::post('stage-remark/import', [MonStageDataController::class, 'importStageRemark'])
+            ->name('stage-remark.import');
+
+        // ===== Prod QC (mon_prod_qc) =====
+        Route::get('prod-qc/template', [MonStageDataController::class, 'templateProdQc'])
+            ->name('prod-qc.template');
+        Route::post('prod-qc/import', [MonStageDataController::class, 'importProdQc'])
+            ->name('prod-qc.import');
+    });
 
 Route::get('/speech/index', [SpeechController::class, 'index'])->name('speech.index')->middleware(['auth', 'permission']);
 

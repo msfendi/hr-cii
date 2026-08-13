@@ -316,6 +316,17 @@ class MonitoringRekonsiliasiController extends Controller
     }
 
     /**
+     * Tombol "Sync Subkon" -> php artisan monitoring:sync-subkon
+     * (tidak ada opsi --year, query get_subkon menarik SEMUA transaksi
+     * Kirim Subkon (prd_po_hd) & Terima Subkon (prd_so_hd) sekaligus,
+     * sama seperti sync-rekonsiliasi -- selalu truncate + insert ulang).
+     */
+    public function syncSubkon(Request $request)
+    {
+        return $this->runSyncCommandNoYear('monitoring:sync-subkon');
+    }
+
+    /**
      * Variant runSyncCommand() untuk command master data yang TIDAK punya
      * opsi --year (mis. sync-ms-barang, sync-ms-negara, sync-ms-supplier).
      */
