@@ -428,6 +428,7 @@ class LineInsentifMasterController extends Controller
                 'p.NPK',
                 'emp.NAMA_KARYAWAN',
                 'anpk.role',
+                'anpk.line_number as assignment_line_number',
                 'p.TMK',
                 'p.TKK as tkk',
                 'emp.ID_DEPT',
@@ -504,10 +505,29 @@ class LineInsentifMasterController extends Controller
                 $dept .= " ({$employee->line_start}-{$employee->line_end})";
             }
 
+            // =========================
+            // KETERANGAN LINE
+            // - Operator & Supervisor : line spesifik dari employee_line_assignments
+            // - Role lain             : range line dari section (sections.line_start - line_end)
+            // =========================
+            $roleLower = strtolower($employee->role ?? '');
+
+            if (in_array($roleLower, ['operator', 'supervisor'])) {
+                $lineInfo = $employee->assignment_line_number
+                    ? 'Line ' . $employee->assignment_line_number
+                    : '-';
+            } else {
+                $lineInfo = ($employee->line_start !== null && $employee->line_end !== null)
+                    ? 'Line ' . $employee->line_start . '-' . $employee->line_end
+                    : '-';
+            }
+
             $results[] = [
                 'npk' => $employee->NPK,
                 'name' => $employee->NAMA_KARYAWAN,
                 'dept' => $dept,
+                'role' => $employee->role,
+                'line_info' => $lineInfo,
                 'sewing_insentif' => $sewing,
                 'tkk' => $employee->tkk,
                 'status' => $status

@@ -86,51 +86,82 @@
                         </select>
                      </div>
                      {{-- ================= VALIDATION RESULT ================= --}}
-                     <div id="approvalBox"
+                     <div id="validationButtons"
                         class="mt-4"
                         style="display:none">
-                        <div class="card border-left-info shadow-sm">
-                           <div class="card-header bg-info text-white">
 
-                                <div class="d-flex justify-content-between">
+                        <label class="font-weight-bold text-dark d-block mb-2">
+                            <i class="fas fa-clipboard-check mr-1"></i>
+                            Payroll Requirement Check
+                        </label>
 
-                                    <span>
-                                        <i class="fas fa-check-circle mr-2"></i>
-                                        Approval Validation
-                                    </span>
+                        <div class="d-flex flex-wrap"
+                            style="gap:8px;">
 
-                                    <span>
-                                        Payroll Requirement Check
-                                    </span>
+                            <button type="button"
+                                id="btnApprovalStatus"
+                                class="btn btn-outline-secondary btn-sm shadow-sm">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                Approval Status
+                                <span id="badgeApprovalStatus"
+                                    class="badge badge-pill badge-light ml-1">-</span>
+                            </button>
 
-                                </div>
+                            <button type="button"
+                                id="btnInvalidContract"
+                                class="btn btn-outline-danger btn-sm shadow-sm"
+                                style="display:none">
+                                <i class="fas fa-file-contract mr-2"></i>
+                                Kontrak Tidak Valid
+                                <span id="badgeInvalidContract"
+                                    class="badge badge-pill badge-light ml-1">0</span>
+                            </button>
 
-                            </div>
-                           <div class="card-body">
-                              <div id="approvalLoading"
-                                 class="text-center p-3"
-                                 style="display:none">
-                                 <i class="fas fa-spinner fa-spin fa-2x"></i>
-                              </div>
-                              <table class="table table-sm table-bordered mb-0">
-                                 <thead>
-                                    <tr>
-                                        <th>Payroll Component</th>
-                                        <th>Status</th>
-                                        <th>Approval Progress</th>
-                                    </tr>
-                                </thead>
-                                 <tbody id="approvalTable"></tbody>
-                              </table>
-                           </div>
+                            <button type="button"
+                                id="btnInvalidBank"
+                                class="btn btn-outline-danger btn-sm shadow-sm"
+                                style="display:none">
+                                <i class="fas fa-university mr-2"></i>
+                                Rekening Belum Ada
+                                <span id="badgeInvalidBank"
+                                    class="badge badge-pill badge-light ml-1">0</span>
+                            </button>
+
+                            <button type="button"
+                                id="btnDuplicateBank"
+                                class="btn btn-outline-danger btn-sm shadow-sm"
+                                style="display:none">
+                                <i class="fas fa-clone mr-2"></i>
+                                Rekening Duplikat
+                                <span id="badgeDuplicateBank"
+                                    class="badge badge-pill badge-light ml-1">0</span>
+                            </button>
+
+                            <button type="button"
+                                id="btnDataFreshness"
+                                class="btn btn-outline-info btn-sm shadow-sm">
+                                <i class="fas fa-database mr-2"></i>
+                                Kelengkapan Data Absensi &amp; Insentif
+                                <span id="badgeDataFreshness"
+                                    class="badge badge-pill badge-light ml-1">-</span>
+                            </button>
+
                         </div>
+
+                        <div id="approvalLoading"
+                            class="text-center p-3"
+                            style="display:none">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        </div>
+
                      </div>
                      <br>
                     <div class="d-flex flex-wrap mt-4">
 
                     @canRoute('payroll-process.processv2')
                         <button id="btnProcess"
-                            class="btn btn-success btn-sm shadow-sm">
+                            class="btn btn-success btn-sm shadow-sm"
+                            disabled>
                             <i class="fas fa-cogs mr-2"></i>
                             Process Payroll
                         </button>
@@ -143,6 +174,17 @@
 
                             <i class="fas fa-search mr-2"></i>
                             Check Payroll
+
+                        </button>
+
+                        <button type="button"
+                            id="btnMinusSalaryAlert"
+                            class="btn btn-outline-danger btn-sm ml-2 shadow-sm"
+                            style="display:none;">
+
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            Karyawan Gaji Minus
+                            <span id="minusSalaryBadge" class="badge badge-danger ml-1">0</span>
 
                         </button>
 
@@ -311,10 +353,283 @@
     width: '100%'
 });
       </script>
-      <script>
+<script>
 /*
 ================================================
-LOAD APPROVAL WHEN PERIOD SELECTED
+HELPER : FORMAT TANGGAL INDONESIA
+================================================
+*/
+
+function formatDateID(dateStr){
+
+    if(!dateStr) return '-';
+
+    let d = new Date(dateStr);
+
+    return d.toLocaleString('id-ID', {
+        day:'2-digit',
+        month:'short',
+        year:'numeric',
+        hour:'2-digit',
+        minute:'2-digit'
+    });
+}
+
+/*
+================================================
+HELPER : WARNA BADGE BERDASARKAN SELISIH HARI
+================================================
+*/
+
+function freshnessBadgeClass(daysDiff){
+
+    if(daysDiff === null || daysDiff === undefined) return 'badge-secondary';
+    if(daysDiff <= 1) return 'badge-success';
+    if(daysDiff <= 3) return 'badge-warning';
+
+    return 'badge-danger';
+}
+
+/*
+================================================
+RENDER : APPROVAL STATUS MODAL
+================================================
+*/
+
+function renderApprovalModal(approvals){
+
+    let html = '';
+
+    if(approvals.length === 0){
+
+        html = `<tr>
+                    <td colspan="3" class="text-center text-danger">
+                        Approval belum tersedia
+                    </td>
+                </tr>`;
+
+        $('#approvalStatusTableBody').html(html);
+        return;
+    }
+
+    approvals.forEach(row=>{
+
+        let badge = '';
+
+        if(row.status === 'finish'){
+            badge = `<span class="badge badge-success">Finish</span>`;
+        }else{
+            badge = `<span class="badge badge-warning">Pending</span>`;
+        }
+
+        let progressHtml = '-';
+
+        if(row.progress && row.progress.length > 0){
+
+            progressHtml = row.progress.map(p=>{
+
+                let statusBadge = '';
+                let timeHtml = '';
+
+                if(p.status === 'approve'){
+
+                    statusBadge = `<span class="badge badge-success">Approve</span>`;
+
+                    if(p.approved_at){
+                        timeHtml = `<small class="badge badge-primary white">${formatDateID(p.approved_at)}</small>`;
+                    }
+
+                }else{
+                    statusBadge = `<span class="badge badge-warning">Waiting</span>`;
+                }
+
+                return `
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="mr-2">${p.npk} - ${p.nama}</span>
+                        <span class="d-flex align-items-center">
+                            ${statusBadge}
+                            ${timeHtml}
+                        </span>
+                    </div>
+                `;
+
+            }).join('');
+        }
+
+        html += `
+            <tr>
+                <td>${row.payroll_component.toUpperCase()}</td>
+                <td>${badge}</td>
+                <td style="min-width:220px">${progressHtml}</td>
+            </tr>
+        `;
+    });
+
+    $('#approvalStatusTableBody').html(html);
+}
+
+/*
+================================================
+RENDER : KONTRAK TIDAK VALID MODAL
+================================================
+*/
+
+function renderInvalidContractModal(invalidContracts){
+
+    let html = '';
+
+    invalidContracts.forEach(emp=>{
+
+        let empName = emp.NAMA_KARYAWAN ?? 'Kontrak tidak valid';
+
+        html += `<li>${emp.NPK} - ${empName}</li>`;
+    });
+
+    $('#invalidContractList').html(html || '<li class="text-muted">Tidak ada data</li>');
+    $('#invalidContractCount').text(invalidContracts.length);
+}
+
+/*
+================================================
+RENDER : REKENING BELUM ADA MODAL
+================================================
+*/
+
+function renderInvalidBankModal(invalidBankAccounts){
+
+    let html = '';
+
+    invalidBankAccounts.forEach(emp=>{
+
+        let empNameBankAccount = emp.bank_account ?? 'Nomor Rekening Belum Ada';
+
+        html += `<li>${emp.NPK} - ${emp.NAMA} - ${empNameBankAccount}</li>`;
+    });
+
+    $('#invalidBankList').html(html || '<li class="text-muted">Tidak ada data</li>');
+    $('#invalidBankCount').text(invalidBankAccounts.length);
+}
+
+/*
+================================================
+RENDER : REKENING DUPLIKAT MODAL
+================================================
+*/
+
+function renderDuplicateBankModal(duplicateBankAccounts){
+
+    let grouped = {};
+
+    duplicateBankAccounts.forEach(emp=>{
+
+        let key = emp.bank_account ?? '-';
+
+        if(!grouped[key]){
+            grouped[key] = [];
+        }
+
+        grouped[key].push(emp);
+    });
+
+    let groupedHtml = '';
+
+    Object.keys(grouped).forEach(bankAcc=>{
+
+        groupedHtml += `
+            <li class="mb-2">
+                <b>No. Rek: ${bankAcc}</b>
+                <ul style="padding-left:20px">
+        `;
+
+        grouped[bankAcc].forEach(emp=>{
+            groupedHtml += `<li>${emp.NPK} - ${emp.NAMA_KARYAWAN ?? '-'}</li>`;
+        });
+
+        groupedHtml += `</ul></li>`;
+    });
+
+    $('#duplicateBankList').html(groupedHtml || '<li class="text-muted">Tidak ada data</li>');
+    $('#duplicateBankCount').text(Object.keys(grouped).length);
+
+    return Object.keys(grouped).length;
+}
+
+/*
+================================================
+RENDER : KELENGKAPAN DATA (ATT_LOG / OVERTIME / INSENTIF) MODAL
+================================================
+*/
+
+function renderDataFreshnessModal(res){
+
+    let rows = [
+        {
+            label: res.att_log.label,
+            last_date: res.att_log.last_date,
+            days_diff: res.att_log.days_diff
+        },
+        {
+            label: res.overtimes.label,
+            last_date: res.overtimes.last_date,
+            days_diff: res.overtimes.days_diff
+        }
+    ];
+
+    Object.keys(res.insentif.detail).forEach(key=>{
+
+        let d = res.insentif.detail[key];
+
+        rows.push({
+            label: 'Insentif - ' + d.label,
+            last_date: d.last_date,
+            days_diff: d.days_diff
+        });
+    });
+
+    let html = '';
+
+    rows.forEach(r=>{
+
+        let cls = freshnessBadgeClass(r.days_diff);
+
+        let diffText = (r.days_diff === null || r.days_diff === undefined)
+            ? 'Tidak ada data'
+            : (r.days_diff === 0 ? 'Hari ini' : r.days_diff + ' hari lalu');
+
+        html += `
+            <tr>
+                <td>${r.label}</td>
+                <td>${formatDateID(r.last_date)}</td>
+                <td><span class="badge ${cls}">${diffText}</span></td>
+            </tr>
+        `;
+    });
+
+    $('#dataFreshnessTableBody').html(html);
+    $('#dataFreshnessToday').text(formatDateID(res.today));
+
+    /*
+    ================================================
+    BADGE DI TOMBOL -> AMBIL YANG PALING LAMA TIDAK UPDATE
+    ================================================
+    */
+
+    let worst = rows.reduce(function(max, r){
+        if(r.days_diff === null || r.days_diff === undefined) return max;
+        return r.days_diff > max ? r.days_diff : max;
+    }, 0);
+
+    let worstCls = freshnessBadgeClass(worst);
+
+    $('#badgeDataFreshness')
+        .removeClass('badge-success badge-warning badge-danger badge-secondary badge-light')
+        .addClass(worstCls)
+        .text(worst === 0 ? 'Up to date' : worst + 'h lalu');
+}
+
+/*
+================================================
+LOAD APPROVAL + DATA FRESHNESS WHEN PERIOD SELECTED
 ================================================
 */
 
@@ -322,314 +637,78 @@ $('#period_id').on('change', function(){
 
     let periodId = $(this).val();
 
-    $('#approvalBox').hide();
-    // $('#btnProcess').prop('disabled', true);
-
+    $('#validationButtons').hide();
+    $('#btnInvalidContract').hide();
+    $('#btnInvalidBank').hide();
+    $('#btnDuplicateBank').hide();
+    $('#btnProcess').prop('disabled', true);
 
     if(!periodId) return;
 
-    $('#approvalBox').show();
+    $('#validationButtons').show();
     $('#approvalLoading').show();
-    $('#approvalTable').html('');
 
-    $.get('/payroll-process/approval/'+periodId,function(res){
+    /*
+    =========================================
+    APPROVAL STATUS + KONTRAK / REKENING
+    =========================================
+    */
 
-        let html='';
-        let allFinish=true;
-
-        /*
-        =========================================
-        APPROVAL DATA
-        =========================================
-        */
+    $.get('/payroll-process/approval/'+periodId, function(res){
 
         let approvals = res.approval ?? [];
         let invalidContracts = res.invalid_contracts ?? [];
         let invalidBankAccounts = res.invalid_bank_accounts ?? [];
         let duplicateBankAccounts = res.duplicate_bank_accounts ?? [];
 
-        /*
-        =========================================
-        APPROVAL EMPTY
-        =========================================
-        */
-
-        if(approvals.length===0){
-
-            html=`<tr>
-                    <td colspan="3" class="text-center text-danger">
-                        Approval belum tersedia
-                    </td>
-                  </tr>`;
-
-            allFinish=false;
-        }
-
-        /*
-        =========================================
-        LOOP APPROVAL
-        =========================================
-        */
+        let allFinish = approvals.length > 0;
+        let finishedCount = 0;
 
         approvals.forEach(row=>{
-
-            let badge='';
-
-            if(row.status==='finish'){
-                badge=`<span class="badge badge-success">Finish</span>`;
+            if(row.status === 'finish'){
+                finishedCount++;
             }else{
-                badge=`<span class="badge badge-warning">Pending</span>`;
-                allFinish=false;
+                allFinish = false;
             }
-
-            /*
-            =========================================
-            RENDER APPROVAL PROGRESS (NPK + STATUS)
-            =========================================
-            */
-
-            let progressHtml = '-';
-
-                if(row.progress && row.progress.length > 0){
-
-                    progressHtml = row.progress.map(p=>{
-
-                        let statusBadge = '';
-                        let timeHtml = '';
-
-                        if(p.status === 'approve'){
-                            statusBadge = `<span class="badge badge-success">Approve</span>`;
-
-                            if(p.approved_at){
-
-                                let d = new Date(p.approved_at);
-
-                                let formatted = d.toLocaleString('id-ID', {
-                                    day:'2-digit',
-                                    month:'short',
-                                    year:'numeric',
-                                    hour:'2-digit',
-                                    minute:'2-digit'
-                                });
-
-                                timeHtml = `<small class="badge badge-primary white">${formatted}</small>`;
-                            }
-
-                        }else{
-                            statusBadge = `<span class="badge badge-warning">Waiting</span>`;
-                        }
-
-                        return `
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="mr-2">${p.npk} - ${p.nama}</span>
-                                <span class="d-flex align-items-center">
-                                    ${statusBadge}
-                                    ${timeHtml}
-                                </span>
-                            </div>
-                        `;
-
-                    }).join('');
-                }
-
-            html+=`
-                <tr>
-                    <td>${row.payroll_component.toUpperCase()}</td>
-                    <td>${badge}</td>
-                    <td style="min-width:220px">${progressHtml}</td>
-                </tr>
-            `;
         });
 
-        /*
-        =========================================
-        INVALID CONTRACT CHECK
-        =========================================
-        */
+        renderApprovalModal(approvals);
+
+        $('#badgeApprovalStatus')
+            .removeClass('badge-success badge-warning badge-secondary badge-light')
+            .addClass(approvals.length === 0 ? 'badge-secondary' : (allFinish ? 'badge-success' : 'badge-warning'))
+            .text(approvals.length === 0 ? 'Belum tersedia' : finishedCount + '/' + approvals.length + ' Selesai');
+
+        renderInvalidContractModal(invalidContracts);
 
         if(invalidContracts.length > 0){
-
             allFinish = false;
-
-            let employeeList = '';
-
-            invalidContracts.forEach(emp=>{
-
-                let empName = emp.NAMA_KARYAWAN ?? 'Kontrak tidak valid';
-
-                employeeList += `
-                    <li>
-                        ${emp.NPK} - ${empName}
-                    </li>
-                `;
-            });
-
-            html += `
-                <tr>
-                    <td colspan="3">
-
-                        <div class="alert alert-danger mb-0">
-
-                            <b>Kontrak Karyawan Tidak Valid :</b>
-                            <br>
-                            <b>Total Karyawan : ${invalidContracts.length}</b>
-
-                            <br><br>
-
-                            <div style="
-                                max-height:250px;
-                                overflow-y:auto;
-                                border:1px solid #ddd;
-                                padding:10px;
-                                background:#fff;
-                            ">
-
-                                <ul style="margin-bottom:0;padding-left:20px">
-                                    ${employeeList}
-                                </ul>
-
-                            </div>
-
-                        </div>
-
-                    </td>
-                </tr>
-            `;
+            $('#badgeInvalidContract').text(invalidContracts.length);
+            $('#btnInvalidContract').show();
+        }else{
+            $('#btnInvalidContract').hide();
         }
 
-        /*
-        =========================================
-        INVALID BANK ACCOUNT CHECK
-        =========================================
-        */
+        renderInvalidBankModal(invalidBankAccounts);
 
         if(invalidBankAccounts.length > 0){
-
             allFinish = false;
-
-            let employeeListBankAccount = '';
-
-            invalidBankAccounts.forEach(emp=>{
-
-                let empNameBankAccount = emp.bank_account ?? 'Nomor Rekening Belum Ada';
-
-                employeeListBankAccount += `
-                    <li>
-                        ${emp.NPK} - ${emp.NAMA} - ${empNameBankAccount}
-                    </li>
-                `;
-            });
-
-            html += `
-                <tr>
-                    <td colspan="3">
-
-                        <div class="alert alert-danger mb-0">
-
-                            <b>Nomor Rekening Karyawan Belum Ada :</b>
-                            <br>
-                            <b>Total Karyawan : ${invalidBankAccounts.length}</b>
-
-                            <br><br>
-
-                            <div style="
-                                max-height:250px;
-                                overflow-y:auto;
-                                border:1px solid #ddd;
-                                padding:10px;
-                                background:#fff;
-                            ">
-
-                                <ul style="margin-bottom:0;padding-left:20px">
-                                    ${employeeListBankAccount}
-                                </ul>
-
-                            </div>
-
-                        </div>
-
-                    </td>
-                </tr>
-            `;
+            $('#badgeInvalidBank').text(invalidBankAccounts.length);
+            $('#btnInvalidBank').show();
+        }else{
+            $('#btnInvalidBank').hide();
         }
 
-        /*
-        =========================================
-        DUPLICATE BANK ACCOUNT CHECK
-        =========================================
-        */
+        let duplicateGroupCount = renderDuplicateBankModal(duplicateBankAccounts);
 
-        if(duplicateBankAccounts.length > 0){
-
+        if(duplicateGroupCount > 0){
             allFinish = false;
-
-            // Group by bank_account
-            let grouped = {};
-
-            duplicateBankAccounts.forEach(emp=>{
-
-                let key = emp.bank_account ?? '-';
-
-                if(!grouped[key]){
-                    grouped[key] = [];
-                }
-
-                grouped[key].push(emp);
-            });
-
-            let groupedHtml = '';
-
-            Object.keys(grouped).forEach(bankAcc=>{
-
-                groupedHtml += `
-                    <li class="mb-2">
-                        <b>No. Rek: ${bankAcc}</b>
-                        <ul style="padding-left:20px">
-                `;
-
-                grouped[bankAcc].forEach(emp=>{
-                    groupedHtml += `
-                        <li>${emp.NPK} - ${emp.NAMA_KARYAWAN ?? '-'}</li>
-                    `;
-                });
-
-                groupedHtml += `</ul></li>`;
-            });
-
-            html += `
-                <tr>
-                    <td colspan="3">
-
-                        <div class="alert alert-danger mb-0">
-
-                            <b>Nomor Rekening Bank Duplikat (Digunakan Lebih Dari 1 Karyawan) :</b>
-                            <br>
-                            <b>Total Nomor Rekening Duplikat : ${Object.keys(grouped).length}</b>
-
-                            <br><br>
-
-                            <div style="
-                                max-height:250px;
-                                overflow-y:auto;
-                                border:1px solid #ddd;
-                                padding:10px;
-                                background:#fff;
-                            ">
-
-                                <ul style="margin-bottom:0;padding-left:20px">
-                                    ${groupedHtml}
-                                </ul>
-
-                            </div>
-
-                        </div>
-
-                    </td>
-                </tr>
-            `;
+            $('#badgeDuplicateBank').text(duplicateGroupCount);
+            $('#btnDuplicateBank').show();
+        }else{
+            $('#btnDuplicateBank').hide();
         }
 
-        $('#approvalTable').html(html);
         $('#approvalLoading').hide();
 
         /*
@@ -641,20 +720,60 @@ $('#period_id').on('change', function(){
         if(allFinish){
 
             $('#btnProcess')
-                // .prop('disabled',false)
+                .prop('disabled', false)
                 .removeClass('btn-secondary')
                 .addClass('btn-primary');
 
         }else{
 
             $('#btnProcess')
-                // .prop('disabled',true)
+                .prop('disabled', true)
                 .removeClass('btn-primary')
                 .addClass('btn-secondary');
         }
-
     });
 
+    /*
+    =========================================
+    KELENGKAPAN DATA ATT_LOG / OVERTIME / INSENTIF
+    =========================================
+    */
+
+    $('#badgeDataFreshness')
+        .removeClass('badge-success badge-warning badge-danger badge-secondary')
+        .addClass('badge-light')
+        .text('...');
+
+    $.get('/payroll-process/data-freshness/'+periodId, function(res){
+        renderDataFreshnessModal(res);
+    });
+
+});
+
+/*
+================================================
+TOMBOL -> BUKA MODAL MASING-MASING
+================================================
+*/
+
+$(document).on('click', '#btnApprovalStatus', function(){
+    $('#modalApprovalStatus').modal('show');
+});
+
+$(document).on('click', '#btnInvalidContract', function(){
+    $('#modalInvalidContract').modal('show');
+});
+
+$(document).on('click', '#btnInvalidBank', function(){
+    $('#modalInvalidBank').modal('show');
+});
+
+$(document).on('click', '#btnDuplicateBank', function(){
+    $('#modalDuplicateBank').modal('show');
+});
+
+$(document).on('click', '#btnDataFreshness', function(){
+    $('#modalDataFreshness').modal('show');
 });
 </script>
       <script>
@@ -831,6 +950,50 @@ $(document).on('click','#btnProcess',function(e){
 </script>
 <script>
     let tableDetails = null;
+    let minusSalaryList = [];
+
+function renderMinusSalaryModal(){
+
+    let tbody = $('#minusSalaryTableBody');
+
+    tbody.empty();
+
+    if(minusSalaryList.length === 0){
+
+        tbody.append(`
+            <tr>
+                <td colspan="4" class="text-center text-muted">
+                    Tidak ada karyawan dengan Total Salary minus.
+                </td>
+            </tr>
+        `);
+
+        $('#minusSalaryCount').text(0);
+
+        return;
+    }
+
+    minusSalaryList.forEach(function(item){
+
+        tbody.append(`
+            <tr>
+                <td>${item.npk ?? '-'}</td>
+                <td>${item.nama ?? '-'}</td>
+                <td>${item.bagian ?? '-'}</td>
+                <td class="text-right text-danger font-weight-bold">
+                    ${formatRupiah(item.total_salary)}
+                </td>
+            </tr>
+        `);
+    });
+
+    $('#minusSalaryCount').text(minusSalaryList.length);
+}
+
+$(document).on('click','#btnMinusSalaryAlert',function(){
+    renderMinusSalaryModal();
+    $('#minusSalaryModal').modal('show');
+});
 
 $(document).on('click','#btnCheckPayroll',function(){
 
@@ -853,6 +1016,40 @@ $(document).on('click','#btnCheckPayroll',function(){
     if(tableDetails){
         tableDetails.destroy();
     }
+
+    $('#btnMinusSalaryAlert').hide();
+
+    $('#table-details').off('xhr.dt').on('xhr.dt', function(e, settings, json){
+
+        let rows = Array.isArray(json) ? json : (json.data ?? []);
+
+        minusSalaryList = rows
+            .filter(function(row){
+                return Number(row.total_salary || 0) < 0;
+            })
+            .map(function(row){
+                return {
+                    npk: row.employee_npk,
+                    nama: row.employee_name,
+                    bagian: row.dept,
+                    total_salary: row.total_salary
+                };
+            });
+
+        renderMinusSalaryModal();
+
+        if(minusSalaryList.length > 0){
+
+            $('#minusSalaryBadge').text(minusSalaryList.length);
+            $('#btnMinusSalaryAlert').show();
+
+            $('#minusSalaryModal').modal('show');
+
+        }else{
+
+            $('#btnMinusSalaryAlert').hide();
+        }
+    });
 
     tableDetails = $('#table-details').DataTable({
 
@@ -1983,8 +2180,12 @@ function formatTimeRange(startStr,endStr){
     border-radius: 8px;
 }
 
-#approvalBox .alert {
-    border-radius: 10px;
+#validationButtons .btn {
+    border-radius: 20px;
+}
+
+#validationButtons .btn .badge {
+    font-size: 85%;
 }
 
 #table-details tbody tr:hover {
@@ -2020,6 +2221,262 @@ function formatTimeRange(startStr,endStr){
 }
 
 </style>
+<!-- ================= MODAL : APPROVAL STATUS ================= -->
+<div class="modal fade"
+     id="modalApprovalStatus"
+     tabindex="-1"
+     role="dialog"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    Approval Validation
+                </h5>
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal"
+                        aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>Payroll Component</th>
+                                <th>Status</th>
+                                <th>Approval Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approvalStatusTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary btn-sm"
+                        data-dismiss="modal">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL : KONTRAK TIDAK VALID ================= -->
+<div class="modal fade"
+     id="modalInvalidContract"
+     tabindex="-1"
+     role="dialog"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-contract mr-2"></i>
+                    Kontrak Karyawan Tidak Valid
+                    (<span id="invalidContractCount">0</span>)
+                </h5>
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal"
+                        aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="max-height:400px; overflow-y:auto;">
+                    <ul id="invalidContractList" style="padding-left:20px; margin-bottom:0;"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary btn-sm"
+                        data-dismiss="modal">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL : REKENING BELUM ADA ================= -->
+<div class="modal fade"
+     id="modalInvalidBank"
+     tabindex="-1"
+     role="dialog"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-university mr-2"></i>
+                    Nomor Rekening Karyawan Belum Ada
+                    (<span id="invalidBankCount">0</span>)
+                </h5>
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal"
+                        aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="max-height:400px; overflow-y:auto;">
+                    <ul id="invalidBankList" style="padding-left:20px; margin-bottom:0;"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary btn-sm"
+                        data-dismiss="modal">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL : REKENING DUPLIKAT ================= -->
+<div class="modal fade"
+     id="modalDuplicateBank"
+     tabindex="-1"
+     role="dialog"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-clone mr-2"></i>
+                    Nomor Rekening Bank Duplikat
+                    (<span id="duplicateBankCount">0</span>)
+                </h5>
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal"
+                        aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <small class="text-muted d-block mb-2">
+                    Nomor rekening di bawah ini digunakan oleh lebih dari satu karyawan dengan nama berbeda.
+                </small>
+                <div style="max-height:400px; overflow-y:auto;">
+                    <ul id="duplicateBankList" style="padding-left:20px; margin-bottom:0;"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary btn-sm"
+                        data-dismiss="modal">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL : KELENGKAPAN DATA (ATT_LOG / OVERTIME / INSENTIF) ================= -->
+<div class="modal fade"
+     id="modalDataFreshness"
+     tabindex="-1"
+     role="dialog"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-database mr-2"></i>
+                    Kelengkapan Data Absensi &amp; Insentif
+                </h5>
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal"
+                        aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <small class="text-muted d-block mb-3">
+                    Tanggal data terakhir masuk, dibandingkan dengan hari ini
+                    (<span id="dataFreshnessToday">-</span>).
+                </small>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>Sumber Data</th>
+                                <th>Tanggal Terakhir</th>
+                                <th>Selisih</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataFreshnessTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary btn-sm"
+                        data-dismiss="modal">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade"
+     id="minusSalaryModal"
+     tabindex="-1"
+     role="dialog"
+     aria-labelledby="minusSalaryModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"
+                    id="minusSalaryModalLabel">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Karyawan dengan Total Salary Minus
+                    (<span id="minusSalaryCount">0</span>)
+                </h5>
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal"
+                        aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>NPK</th>
+                                <th>Nama</th>
+                                <th>Bagian</th>
+                                <th class="text-right">Total Salary</th>
+                            </tr>
+                        </thead>
+                        <tbody id="minusSalaryTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary btn-sm"
+                        data-dismiss="modal">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade"
      id="lateDetailModal"
      tabindex="-1">

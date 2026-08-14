@@ -330,6 +330,14 @@
                                                 </a>
                                             @endcanRoute
                                             @endif
+                                            @canRoute('payroll.export.export')
+                                                <a class="btn btn-secondary btn-circle btn-sm btn-export"
+                                                    href="#"
+                                                    data-url="{{ route('payroll.exportaudit.export', $period->id) }}"
+                                                    title="Generate Export Audit">
+                                                    <i class="fas fa-database"></i>
+                                                </a>
+                                            @endcanRoute
                                             @canRoute('payroll-process.destroy')
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete-payroll"
                                                 data-id="{{ $period->id }}"

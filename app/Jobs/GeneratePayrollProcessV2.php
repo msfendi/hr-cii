@@ -696,8 +696,8 @@ END AS special_overtime_hours
 
         $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans as imp')
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
-            ->leftJoin('dept_breaktimes as db', 'db.id_dept', '=', 'b.ID_DEPT')
-            ->leftJoin('break_masters as bm', 'bm.id', '=', 'db.id_break')
+            ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
+            ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
             ->selectRaw("
         imp.npk,
 
@@ -730,19 +730,18 @@ END AS special_overtime_hours
         ) as total_ijin_minutes
     ")
             ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])
+            ->where('imp.is_deduction', true)
             ->groupBy('imp.npk');
 
         // dd($ijinSummary->get());
 
         $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans as imp')
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
-            ->leftJoin('dept_breaktimes as db', 'db.id_dept', '=', 'b.ID_DEPT')
-            ->leftJoin('break_masters as bm', 'bm.id', '=', 'db.id_break')
+            ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
+            ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
             ->selectRaw("
         imp.npk,
         b.NAMA_KARYAWAN,
-        d.DEPARTEMENT,
         imp.tanggal,
         imp.jam_keluar,
         imp.rencana_kembali,
@@ -750,6 +749,7 @@ END AS special_overtime_hours
         imp.reason,
         bm.time_start,
         bm.time_end,
+        db.DEPARTEMENT,
 
         CASE
             WHEN imp.jam_kembali IS NULL THEN 0
@@ -778,6 +778,7 @@ END AS special_overtime_hours
         END AS ijin_minutes
     ")
             ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])
+            ->where('imp.is_deduction', true)
             ->orderBy('imp.tanggal', 'asc')
             ->get()
             ->groupBy('npk');

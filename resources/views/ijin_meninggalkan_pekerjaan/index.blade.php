@@ -54,6 +54,8 @@
                         <th>Jam Keluar</th>
                         <th>Rencana Kembali</th>
                         <th>Jam Kembali</th>
+                        <th>Break</th>
+                        <th>Potong Jam Kerja</th>
                         <th>Reason</th>
                         <th width="120">Action</th>
                       </tr>
@@ -70,6 +72,22 @@
                         <td>{{ $row->jam_keluar }}</td>
                         <td>{{ $row->rencana_kembali }}</td>
                         <td>{{ $row->jam_kembali }}</td>
+                        <td>
+                          @if($row->break_sesi)
+                            {{ $row->break_sesi }}
+                            ({{ \Carbon\Carbon::parse($row->break_time_start)->format('H:i') }}
+                            - {{ \Carbon\Carbon::parse($row->break_time_end)->format('H:i') }})
+                          @else
+                            -
+                          @endif
+                        </td>
+                        <td class="text-center">
+                          @if($row->is_deduction)
+                            <span class="badge badge-danger">Dipotong</span>
+                          @else
+                            <span class="badge badge-secondary">Tidak Dipotong</span>
+                          @endif
+                        </td>
                         <td>{{ $row->reason }}</td>
 
                         <td class="text-center">

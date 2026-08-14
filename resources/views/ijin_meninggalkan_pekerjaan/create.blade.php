@@ -64,6 +64,32 @@
                   </div>
 
                   <div class="form-group">
+                    <label>Break</label>
+
+                    <select name="id_break" class="form-control select2">
+                      <option value="">- Tidak Terkait Break -</option>
+
+                      @foreach($breaks as $break)
+                      <option value="{{ $break->id }}">
+                        {{ $break->sesi }}
+                        ({{ \Carbon\Carbon::parse($break->time_start)->format('H:i') }}
+                        - {{ \Carbon\Carbon::parse($break->time_end)->format('H:i') }})
+                      </option>
+                      @endforeach
+
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Potong Jam Kerja</label>
+
+                    <select name="is_deduction" class="form-control" required>
+                      <option value="1">Dipotong</option>
+                      <option value="0" selected>Tidak Dipotong</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
                     <label>Reason</label>
                     <textarea name="reason" class="form-control"></textarea>
                   </div>

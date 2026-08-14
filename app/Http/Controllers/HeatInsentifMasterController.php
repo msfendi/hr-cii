@@ -364,6 +364,7 @@ class HeatInsentifMasterController extends Controller
                 'name' => $employee->NAMA_KARYAWAN,
                 'heat_insentif' => $heat,
                 'dept' => $employee->DEPARTEMENT,
+                'role' => $employee->role,
                 'tkk' => $employee->tkk,
                 'status' => $status
             ];

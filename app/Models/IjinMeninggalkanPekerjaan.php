@@ -14,10 +14,13 @@ class IjinMeninggalkanPekerjaan extends Model
         'jam_keluar',
         'rencana_kembali',
         'jam_kembali',
+        'id_break',
+        'is_deduction',
         'reason',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
+        'is_deduction' => 'boolean',
     ];
 }

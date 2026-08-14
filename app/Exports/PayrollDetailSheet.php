@@ -23,6 +23,20 @@ class PayrollDetailSheet
             ->toArray();
     }
 
+    /**
+     * Tentukan tabel payroll_run_details yang dipakai berdasarkan route saat ini.
+     * - payroll.exportaudit.export -> payroll_run_details_audit
+     * - payroll.export.export (default) -> payroll_run_details
+     */
+    protected function detailsTable(): string
+    {
+        $routeName = optional(request()->route())->getName();
+
+        return $routeName === 'payroll.exportaudit.export'
+            ? 'payroll_run_details_audit'
+            : 'payroll_run_details';
+    }
+
     public function title(): string
     {
         return 'Payroll_Active';
@@ -131,7 +145,7 @@ class PayrollDetailSheet
     {
         $biodataUnion = $this->baseBiodataQuery();
 
-        return DB::table('payroll_run_details as prd')
+        return DB::table($this->detailsTable() . ' as prd')
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })

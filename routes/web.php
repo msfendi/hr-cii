@@ -289,6 +289,10 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/data-freshness/{period_id}', [PayrollProcessController::class, 'dataFreshness'])->name('payroll-process.data-freshness')->middleware(['auth', 'permission']);
+
+    // Payroll Audit
+    Route::get('/payroll/exportaudit/{run_id}', [PayrollProcessController::class, 'exportAudit'])->name('payroll.exportaudit.export')->middleware(['auth', 'permission']);
 
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'permission']);

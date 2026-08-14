@@ -431,6 +431,7 @@ class PadInsentifMasterController extends Controller
                 'name' => $employee->NAMA_KARYAWAN,
                 'pad_insentif' => $pad,
                 'dept' => $employee->DEPARTEMENT,
+                'role' => $employee->role,
                 'tkk' => $employee->tkk,
                 'status' => $status
             ];

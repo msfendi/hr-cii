@@ -453,6 +453,7 @@ class CuttingInsentifMasterController extends Controller
                 'name' => $employee->NAMA_KARYAWAN,
                 'cutting_insentif' => $cutting,
                 'dept' => $employee->DEPARTEMENT,
+                'role' => $employee->role,
                 'tkk' => $employee->tkk,
                 'status' => $status
             ];

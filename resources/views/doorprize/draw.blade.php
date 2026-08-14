@@ -196,123 +196,6 @@
         margin:.15rem;
     }
 
-    /* ---------- Stage-only fullscreen popup mode ---------- */
-    body.stage-only-mode{
-        background: #0b1226;
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-    }
-    body.stage-only-mode #panggung-undian-card{
-        box-shadow:none;
-        margin:0;
-        border-radius:0;
-        min-height:100vh;
-        display:flex;
-        flex-direction:column;
-    }
-    body.stage-only-mode #panggung-undian-card .card-header{
-        background:transparent;
-        border-bottom:1px solid rgba(255,255,255,.08);
-    }
-    body.stage-only-mode #panggung-undian-card .card-header h6{
-        color:#fff;
-        font-size:1.4rem;
-    }
-    /* body-card jadi dua kolom pasti: panggung (3 bagian) | daftar pemenang (1 bagian) */
-    body.stage-only-mode #panggung-undian-card .card-body{
-        flex:1;
-        display:grid;
-        grid-template-columns: 3fr 1fr;
-        align-items:stretch;
-        gap:1rem;
-        min-height:0;
-        overflow:hidden;
-    }
-    body.stage-only-mode .stage-card{
-        display:flex;
-        flex-direction:column;
-        align-items:stretch;
-        justify-content:flex-start;
-        min-height: 0;
-        height: 100%;
-        border-radius: .5rem;
-        overflow-y:auto;
-    }
-    body.stage-only-mode #stage-slot{
-        display:flex;
-        flex-direction:column;
-        width:100%;
-        flex:1;
-    }
-    body.stage-only-mode #stage-placeholder{
-        margin:auto;
-    }
-
-    /* kartu pemenang jadi horizontal: foto di kiri, NPK/nama/dept di kanan */
-    body.stage-only-mode .slot-card{
-        display:flex;
-        align-items:center;
-        text-align:left;
-        gap: 16px;
-        width: 100%;
-        padding: 16px 20px;
-    }
-    body.stage-only-mode .slot-info{
-        display:flex;
-        flex-direction:column;
-        align-items:flex-start;
-        gap:.35rem;
-        min-width:0;
-    }
-    body.stage-only-mode .slot-photo{ width: 90px; height: 90px; flex-shrink:0; }
-    body.stage-only-mode .slot-badge-npk{ margin-top:0; font-size: 1.05rem; }
-    body.stage-only-mode .slot-name{ margin-top:0 !important; font-size: 1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
-    body.stage-only-mode .slot-department{ font-size: .82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
-
-    /* grid multi-kolom yang menyesuaikan lebar area panggung (2/3/4 kolom otomatis) */
-    body.stage-only-mode .stage-slot-grid{
-        display:grid !important;
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-        justify-content: stretch;
-        align-content: start;
-        gap: 14px;
-        max-width: none;
-        margin: 0;
-        width:100%;
-        flex: none;
-    }
-
-    /* panel Pemenang Ronde Ini jadi kolom kanan yang sempit & bisa discroll (grid item, bukan flex item) */
-    body.stage-only-mode #round-result{
-        max-width: none;
-        margin:0 !important;
-        width:100%;
-        min-width: 0;
-        height:100%;
-        display:flex;
-        flex-direction:column;
-        overflow-y:auto;
-        border-left: 1px solid rgba(255,255,255,.08);
-        padding-left: 1rem;
-    }
-    body.stage-only-mode #round-result h6{ color:#fff; flex-shrink:0; }
-    body.stage-only-mode #round-result-list{
-        overflow-y:auto;
-        flex:1;
-        min-height:0;
-    }
-    body.stage-only-mode #round-result-list .round-result-item{
-        flex-direction:row;
-        align-items:center;
-        gap:.55rem;
-        padding:.4rem .55rem;
-    }
-    body.stage-only-mode #round-result-list .round-result-item img{
-        width:32px; height:32px;
-    }
-    body.stage-only-mode #round-result-empty{ color: rgba(255,255,255,.5); }
-
     /* NPK & departemen langsung di sebelah foto, dipotong dengan ellipsis biar tidak melebar */
     #round-result-list .round-result-item .flex-grow-1{ min-width:0; }
     #round-result-list .round-result-item .font-weight-bold,
@@ -329,6 +212,177 @@
         opacity:.85;
     }
     #btn-toggle-fullscreen:hover{ opacity:1; }
+
+    /* ============================================================
+       LAYAR UNDIAN — layar proyektor KIRI (animasi kocok & reveal)
+       ============================================================ */
+    body.layar-undian-mode{
+        background: radial-gradient(circle at 50% 15%, #26356b 0%, #101a38 55%, #05070f 100%);
+        margin:0; padding:0; min-height:100vh; overflow:hidden;
+    }
+    body.layar-undian-mode::before{
+        content:'';
+        position:fixed; inset:0;
+        background-image: radial-gradient(circle, rgba(255,255,255,.07) 1.5px, transparent 1.5px);
+        background-size: 30px 30px;
+        pointer-events:none;
+        animation: undian-bg-drift 18s linear infinite;
+    }
+    @keyframes undian-bg-drift{
+        0%{ background-position: 0 0; }
+        100%{ background-position: 300px 300px; }
+    }
+    .layar-undian-wrap{
+        min-height:100vh;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        padding: 2.5rem 3rem;
+        position:relative;
+        z-index:1;
+    }
+    .layar-undian-header{ text-align:center; margin-bottom: 2.25rem; }
+    .layar-undian-header .title-badge{
+        display:inline-flex; align-items:center; gap:.5rem;
+        background: linear-gradient(135deg, var(--dp-gold), #ffe08a);
+        color:#3a2a00;
+        font-weight:800;
+        letter-spacing:.1em;
+        text-transform:uppercase;
+        padding:.45rem 1.4rem;
+        border-radius: 2rem;
+        font-size: .85rem;
+        box-shadow: 0 .5rem 1.5rem rgba(246,195,67,.35);
+    }
+    .layar-undian-header h1{
+        color:#fff;
+        font-weight:800;
+        font-size: 2.6rem;
+        margin: .85rem 0 0;
+        text-shadow: 0 4px 28px rgba(78,115,223,.65);
+    }
+    .layar-undian-header .event-name{
+        color: rgba(255,255,255,.6);
+        font-size: 1.05rem;
+        margin-top:.35rem;
+        letter-spacing:.03em;
+    }
+    .layar-undian-stage-grid{
+        display:grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1.75rem;
+        width:100%;
+        max-width: 1500px;
+        justify-items:stretch;
+    }
+    .layar-undian-progress{
+        margin-top:2.25rem;
+        color: rgba(255,255,255,.85);
+        font-size: 1.2rem;
+        font-weight:600;
+        letter-spacing:.04em;
+    }
+    body.layar-undian-mode .stage-placeholder{ color: rgba(255,255,255,.55); }
+    body.layar-undian-mode .slot-card{
+        width:100%;
+        padding: 1.75rem 1.25rem;
+        border-radius: 20px;
+        box-shadow: 0 15px 40px rgba(0,0,0,.5), 0 0 0 2px rgba(246,195,67,.15);
+    }
+    body.layar-undian-mode .slot-photo{ width:120px; height:120px; border-width:5px; }
+    body.layar-undian-mode .slot-badge-npk{ font-size:1.25rem; padding:.4rem 1rem; }
+    body.layar-undian-mode .slot-name{ font-size:1.05rem; margin-top:.5rem !important; }
+    body.layar-undian-mode .slot-department{ font-size:.9rem; }
+    body.layar-undian-mode .winner-reveal{ animation: winner-pop-big .6s ease; }
+    @keyframes winner-pop-big{
+        0% { transform: scale(0.5) rotate(-4deg); opacity: 0; }
+        60% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+        100% { transform: scale(1) rotate(0); }
+    }
+
+    /* ============================================================
+       LAYAR PEMENANG — layar proyektor KANAN (leaderboard)
+       ============================================================ */
+    body.layar-pemenang-mode{
+        background: linear-gradient(160deg, #fffaf0 0%, #fdf3dc 100%);
+        margin:0; padding:0; min-height:100vh;
+    }
+    .layar-pemenang-wrap{
+        min-height:100vh;
+        display:flex; flex-direction:column;
+        padding: 2rem 3rem;
+    }
+    .layar-pemenang-header{
+        display:flex; align-items:center; justify-content:space-between;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 3px solid var(--dp-gold);
+        flex-shrink:0;
+    }
+    .layar-pemenang-header h1{
+        font-weight:800; color:#2e2205; margin:0;
+        font-size: 2.1rem;
+        display:flex; align-items:center; gap:.6rem;
+    }
+    .layar-pemenang-header .event-name{ color:#8a7440; font-size:1rem; margin-top:.2rem; }
+    .layar-pemenang-counter{
+        background: linear-gradient(135deg, var(--dp-primary), var(--dp-primary-dark));
+        color:#fff;
+        border-radius: 1rem;
+        padding: .8rem 1.75rem;
+        text-align:center;
+        box-shadow: 0 .5rem 1.5rem rgba(78,115,223,.35);
+    }
+    .layar-pemenang-counter .num{ font-size:2rem; font-weight:800; line-height:1; }
+    .layar-pemenang-counter .lbl{ font-size:.68rem; text-transform:uppercase; letter-spacing:.07em; opacity:.9; }
+    .layar-pemenang-grid{
+        flex:1;
+        overflow-y:auto;
+        display:grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+        align-content:start;
+        padding-right:.5rem;
+    }
+    .pemenang-card{
+        background:#fff;
+        border-radius: 16px;
+        padding: 1rem 1.2rem;
+        display:flex; align-items:center; gap:1rem;
+        box-shadow: 0 .2rem .8rem rgba(0,0,0,.06);
+        border: 1px solid #f1e6c8;
+        position:relative;
+    }
+    .pemenang-card.is-void{
+        opacity:.85;
+        background: #fdecef;
+        border-color: #f3b6c0;
+    }
+    .pemenang-card.is-void .npk{ color:#c0293c; }
+    .pemenang-card.is-void .photo{ border-color:#e6798a; filter: grayscale(.35); }
+    .pemenang-card.is-void .void-tag{
+        background:#c0293c;
+        color:#fff;
+    }
+    .pemenang-card.is-new{ animation: pemenang-highlight 2.6s ease; }
+    @keyframes pemenang-highlight{
+        0%{ box-shadow: 0 0 0 5px rgba(246,195,67,.9), 0 .2rem .8rem rgba(0,0,0,.06); background:#fff8e1; transform: scale(1.02); }
+        100%{ box-shadow: 0 .2rem .8rem rgba(0,0,0,.06); background:#fff; transform: scale(1); }
+    }
+    .pemenang-card .photo{ width:60px; height:60px; border-radius:50%; object-fit:cover; border:3px solid var(--dp-gold); flex-shrink:0; }
+    .pemenang-card .info{ min-width:0; flex:1; }
+    .pemenang-card .npk{ font-weight:800; color: var(--dp-primary-dark); font-size:1rem; }
+    .pemenang-card .npk .trophy-icon{ color: var(--dp-gold); margin-left:.3rem; }
+    .pemenang-card .name{ font-size:.92rem; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pemenang-card .dept{ font-size:.78rem; color:#8a8a8a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pemenang-card .batch{ font-size:.68rem; color:#b8952f; font-weight:700; text-transform:uppercase; margin-top:.2rem; }
+    .pemenang-card .void-tag{
+        position:absolute; top:.6rem; right:.7rem;
+        background:#fdecef; color:#c0293c; font-size:.66rem; font-weight:700;
+        padding:.2rem .55rem; border-radius: .6rem;
+    }
+    .layar-pemenang-empty{ color:#a08a56; text-align:center; margin-top:4rem; font-size:1.1rem; }
 </style>
 <body id="page-top">
     @include('sweetalert::alert')
@@ -348,7 +402,7 @@
                         </h1>
                         @if($event)
                             <span class="badge badge-primary p-2">
-                                <i class="fas fa-calendar-check mr-1"></i> Event Aktif: {{ $event->name }}
+                                <i class="fas fa-calendar-check mr-1"></i> Event Aktif: {{ $event->nama_event }}
                             </span>
                         @endif
                     </div>
@@ -455,9 +509,14 @@
                                     <h6 class="m-0 font-weight-bold text-primary">
                                         <i class="fas fa-star mr-1"></i> Panggung Undian
                                     </h6>
-                                    <button type="button" id="btn-open-stage-window" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-external-link-alt mr-1"></i> Buka Fullscreen
-                                    </button>
+                                    <div class="btn-group">
+                                        <button type="button" id="btn-open-layar-undian" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-dice mr-1"></i> Layar Undian
+                                        </button>
+                                        <button type="button" id="btn-open-layar-pemenang" class="btn btn-sm btn-outline-warning">
+                                            <i class="fas fa-trophy mr-1"></i> Layar Pemenang
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="stage-card">
@@ -555,6 +614,8 @@
     </div>
     <!-- End of Page Wrapper -->
 
+    <script id="winners-seed-data" type="application/json">{!! json_encode($winners) !!}</script>
+
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -562,23 +623,36 @@
     <script>
     $(function () {
         const params = new URLSearchParams(window.location.search);
-        const isStageOnly = params.get('panggung') === '1';
+        // 'undian' = layar KIRI (animasi kocok & reveal), 'pemenang' = layar KANAN (daftar pemenang)
+        const stageMode = params.get('layar');
+        const isDrawStage = stageMode === 'undian';
+        const isWinnersStage = stageMode === 'pemenang';
+        const isStageOnly = isDrawStage || isWinnersStage;
         const csrfTokenMeta = document.querySelector('meta[name="csrf-token"]');
         const csrfToken = csrfTokenMeta ? csrfTokenMeta.content : null;
 
-        // Channel untuk sinkronisasi tab utama <-> tab panggung (fullscreen)
+        // Channel untuk sinkronisasi tab utama <-> layar undian <-> layar pemenang
         const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('doorprize-undian-stage') : null;
 
         const defaultPhoto = "{{ asset('storage/img/profile/default.jpg') }}";
+
+        // Seed data seluruh pemenang (dipakai untuk pool acak & papan pemenang, tanpa tergantung tabel DOM)
+        const winnersSeedEl = document.getElementById('winners-seed-data');
+        let winnersSeed = [];
+        try { winnersSeed = winnersSeedEl ? JSON.parse(winnersSeedEl.textContent || '[]') : []; } catch (e) { winnersSeed = []; }
 
         // Kumpulan NPK dummy untuk efek acak visual sebelum hasil asli muncul.
         let dummyPool = [];
         function buildDummyPool() {
             dummyPool = [];
-            $('#winners-table tbody tr').each(function () {
-                const npk = $(this).find('td').eq(1).text().trim();
-                if (npk) dummyPool.push(npk);
-            });
+            if (winnersSeed.length) {
+                winnersSeed.forEach(w => { if (w.npk) dummyPool.push(w.npk); });
+            } else {
+                $('#winners-table tbody tr').each(function () {
+                    const npk = $(this).find('td').eq(1).text().trim();
+                    if (npk) dummyPool.push(npk);
+                });
+            }
             if (dummyPool.length === 0) {
                 for (let i = 1; i <= 20; i++) {
                     dummyPool.push('C-' + String(i).padStart(5, '0'));
@@ -701,18 +775,12 @@
         }
 
         // =====================================================================
-        // MODE PANGGUNG SAJA (dibuka di tab/jendela terpisah via ?panggung=1)
+        // MODE LAYAR TERPISAH (dibuka di jendela/proyektor lain)
+        // ?layar=undian   -> layar KIRI: animasi kocok & reveal pemenang
+        // ?layar=pemenang -> layar KANAN: papan daftar pemenang (live)
         // =====================================================================
         if (isStageOnly) {
-            $('body').addClass('stage-only-mode');
-
-            // Buang semua elemen layout lain, sisakan hanya kartu Panggung Undian, full screen.
-            const $stageCard = $('#panggung-undian-card').detach();
-            $('body').empty().append($stageCard);
-            $('body').append(
-                '<button id="btn-toggle-fullscreen" class="btn btn-sm btn-light shadow">' +
-                '<i class="fas fa-expand mr-1"></i> Fullscreen</button>'
-            );
+            buildDummyPool();
 
             $(document).on('click', '#btn-toggle-fullscreen', function () {
                 if (!document.fullscreenElement) {
@@ -724,30 +792,133 @@
                 }
             });
 
-            buildDummyPool();
+            // ---------------- LAYAR UNDIAN (KIRI) ----------------
+            if (isDrawStage) {
+                $('body').addClass('layar-undian-mode');
+                $('body').empty().append(`
+                    <div class="layar-undian-wrap">
+                        <div class="layar-undian-header">
+                            <span class="title-badge"><i class="fas fa-gift mr-1"></i> Doorprize</span>
+                            <h1>Panggung Undian</h1>
+                            @if($event)
+                                <div class="event-name">{{ $event->name }}</div>
+                            @endif
+                        </div>
 
-            // Tampilkan panel daftar pemenang sejak awal (kosong) supaya layout 3:1 sudah terbentuk
-            $('#round-result').removeClass('d-none');
-            $('#round-result-list').html('<p class="text-muted small mb-0" id="round-result-empty">Menunggu hasil undian...</p>');
+                        <div id="stage-placeholder" class="stage-placeholder text-center">
+                            <i class="fas fa-dice fa-4x mb-3" style="color: rgba(255,255,255,.35)"></i>
+                            <p class="mb-0" style="color: rgba(255,255,255,.6); font-size:1.1rem;">
+                                Menunggu undian dimulai dari layar admin...
+                            </p>
+                        </div>
 
-            let stageShuffleInterval = null;
+                        <div id="stage-slot" class="d-none w-100">
+                            <div id="stage-slot-grid" class="layar-undian-stage-grid"></div>
+                            <p class="layar-undian-progress text-center" id="progress-round"></p>
+                        </div>
+                    </div>
+                    <button id="btn-toggle-fullscreen" class="btn btn-sm btn-light shadow">
+                        <i class="fas fa-expand mr-1"></i> Fullscreen
+                    </button>
+                `);
 
-            if (bc) {
-                bc.onmessage = (ev) => {
-                    const msg = ev.data || {};
-                    if (msg.type === 'draw-start') {
-                        stageShuffleInterval = startStageShuffle(msg.amount);
-                    } else if (msg.type === 'draw-reveal') {
-                        finishStageReveal(stageShuffleInterval, msg.winners);
-                    }
-                };
-            } else {
-                $('#stage-placeholder').html(
-                    '<p class="mb-0">Browser ini tidak mendukung sinkronisasi otomatis (BroadcastChannel). Gunakan browser modern seperti Chrome/Edge terbaru.</p>'
-                );
+                let stageShuffleInterval = null;
+
+                if (bc) {
+                    bc.onmessage = (ev) => {
+                        const msg = ev.data || {};
+                        if (msg.type === 'draw-start') {
+                            stageShuffleInterval = startStageShuffle(msg.amount);
+                        } else if (msg.type === 'draw-reveal') {
+                            finishStageReveal(stageShuffleInterval, msg.winners);
+                        }
+                    };
+                } else {
+                    $('#stage-placeholder').html(
+                        '<p class="mb-0" style="color: rgba(255,255,255,.6);">Browser ini tidak mendukung sinkronisasi otomatis (BroadcastChannel). Gunakan browser modern seperti Chrome/Edge terbaru.</p>'
+                    );
+                }
             }
 
-            return; // mode panggung tidak butuh tabel, KPI, atau tombol undian
+            // ---------------- LAYAR PEMENANG (KANAN) ----------------
+            if (isWinnersStage) {
+                $('body').addClass('layar-pemenang-mode');
+
+                let pemenangList = Array.isArray(winnersSeed) ? [...winnersSeed] : [];
+
+                function countWon() {
+                    return pemenangList.filter(w => !w.is_void).length;
+                }
+
+                function renderPemenangCard(w, isNewCard) {
+                    const displayName = truncateEmployeeName(w.name, 26);
+                    return `
+                        <div class="pemenang-card ${w.is_void ? 'is-void' : ''} ${isNewCard ? 'is-new' : ''}" data-winner-id="${w.id}">
+                            ${w.is_void ? '<span class="void-tag">HANGUS</span>' : ''}
+                            <img class="photo" src="${w.photo}">
+                            <div class="info">
+                                <div class="npk">${w.npk}<i class="fas fa-trophy trophy-icon"></i></div>
+                                <div class="name" title="${w.name}">${displayName}</div>
+                                <div class="dept" title="${w.department || ''}">${w.department || '-'}</div>
+                                ${w.batch_label ? `<div class="batch">${w.batch_label}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                function renderPemenangGrid(newIds) {
+                    newIds = newIds || [];
+                    const sorted = [...pemenangList].reverse(); // terbaru tampil paling atas
+                    const html = sorted.map(w => renderPemenangCard(w, newIds.includes(w.id))).join('');
+                    $('#layar-pemenang-grid').html(html || '<p class="layar-pemenang-empty"><i class="fas fa-hourglass-half mr-1"></i> Belum ada pemenang. Menunggu undian dimulai...</p>');
+                    $('#layar-pemenang-total .num').text(countWon());
+                }
+
+                $('body').empty().append(`
+                    <div class="layar-pemenang-wrap">
+                        <div class="layar-pemenang-header">
+                            <div>
+                                <h1><i class="fas fa-trophy" style="color: var(--dp-gold);"></i> Daftar Pemenang</h1>
+                                @if($event)
+                                    <div class="event-name">{{ $event->name }}</div>
+                                @endif
+                            </div>
+                            <div id="layar-pemenang-total" class="layar-pemenang-counter">
+                                <div class="num">0</div>
+                                <div class="lbl">Total Pemenang</div>
+                            </div>
+                        </div>
+                        <div id="layar-pemenang-grid" class="layar-pemenang-grid"></div>
+                    </div>
+                    <button id="btn-toggle-fullscreen" class="btn btn-sm btn-light shadow">
+                        <i class="fas fa-expand mr-1"></i> Fullscreen
+                    </button>
+                `);
+
+                renderPemenangGrid();
+
+                if (bc) {
+                    bc.onmessage = (ev) => {
+                        const msg = ev.data || {};
+                        if (msg.type === 'draw-reveal') {
+                            const newIds = [];
+                            (msg.winners || []).forEach(w => {
+                                pemenangList.push(w);
+                                newIds.push(w.id);
+                            });
+                            renderPemenangGrid(newIds);
+                        } else if (msg.type === 'void-winner') {
+                            const item = pemenangList.find(w => String(w.id) === String(msg.id));
+                            if (item) item.is_void = true;
+                            renderPemenangGrid();
+                        }
+                    };
+                } else {
+                    $('#layar-pemenang-grid').html('<p class="layar-pemenang-empty">Browser ini tidak mendukung sinkronisasi otomatis (BroadcastChannel). Gunakan browser modern seperti Chrome/Edge terbaru.</p>');
+                }
+            }
+
+            return; // layar terpisah tidak butuh tabel, KPI, atau tombol undian admin
         }
 
         // =====================================================================
@@ -844,6 +1015,7 @@
                     }
                     markVoidedInUi(id, npk);
                     updateKpi({ won: data.total_won, voidCount: data.total_void });
+                    if (bc) bc.postMessage({ type: 'void-winner', id: id, npk: npk });
                     Swal.fire({ icon: 'success', title: 'Berhasil', text: data.message, timer: 1500, showConfirmButton: false });
                 })
                 .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan, silakan coba lagi.', 'error'));
@@ -860,11 +1032,18 @@
             $(this).removeClass('btn-outline-primary').addClass('btn-primary');
         });
 
-        // Buka Panggung Undian di tab/jendela baru, siap fullscreen (mis. untuk layar proyektor).
-        $('#btn-open-stage-window').on('click', function () {
+        // Buka Layar Undian & Layar Pemenang di jendela terpisah, siap fullscreen untuk 2 proyektor.
+        // Nama jendela dibuat tetap agar klik berikutnya fokus ke jendela yang sama (tidak buka duplikat).
+        function openLayarWindow(layar) {
             const url = new URL(window.location.href);
-            url.searchParams.set('panggung', '1');
-            window.open(url.toString(), '_blank', 'noopener');
+            url.searchParams.set('layar', layar);
+            window.open(url.toString(), 'doorprize_layar_' + layar, 'noopener');
+        }
+        $('#btn-open-layar-undian').on('click', function () {
+            openLayarWindow('undian');
+        });
+        $('#btn-open-layar-pemenang').on('click', function () {
+            openLayarWindow('pemenang');
         });
 
         $('#btn-draw').on('click', function () {
@@ -917,8 +1096,11 @@
                 setTimeout(() => {
                     finishStageReveal(shuffleInterval, data.winners);
 
-                    // Beritahu tab panggung agar mengungkap hasil yang sama, bersamaan.
-                    if (bc) bc.postMessage({ type: 'draw-reveal', winners: data.winners, batchLabel });
+                    // Sisipkan batch_label ke tiap pemenang agar layar Daftar Pemenang bisa menampilkannya.
+                    const winnersForBroadcast = (data.winners || []).map(w => ({ ...w, batch_label: w.batch_label || batchLabel || null }));
+
+                    // Beritahu layar undian & layar pemenang agar mengungkap hasil yang sama, bersamaan.
+                    if (bc) bc.postMessage({ type: 'draw-reveal', winners: winnersForBroadcast, batchLabel });
 
                     data.winners.forEach(w => appendWinnerRow(w, batchLabel));
                     updateKpi({ available: data.remaining, won: data.total_won });

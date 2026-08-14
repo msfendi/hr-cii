@@ -10,18 +10,46 @@
 }
 </style>
 <style>
-.dept-filter-modal {
+.role-filter-modal {
     display: flex;
     align-items: center;
 }
 
-#filterDeptModal {
+#filterRoleModal {
     width: 250px !important;
     min-width: 250px;
 }
 
 .dataTables_filter {
     margin-left: auto;
+}
+
+.insentif-summary-card {
+    border-left: 4px solid #4e73df;
+}
+.insentif-summary-card.highest {
+    border-left-color: #1cc88a;
+}
+.insentif-summary-card.lowest {
+    border-left-color: #e74a3b;
+}
+.insentif-summary-card.average {
+    border-left-color: #36b9cc;
+}
+.insentif-summary-label {
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #b7791f;
+}
+.insentif-chart-card canvas {
+    max-height: 280px;
+}
+.insentif-detail-table th,
+.insentif-detail-table td {
+    font-size: .8rem;
+    padding: .4rem .5rem;
+    vertical-align: middle;
 }
 </style>
    <body id="page-top">
@@ -201,25 +229,77 @@
                   </button>
                </div>
                <div class="modal-body">
+
+                  <!-- ================= SUMMARY CARDS ================= -->
+                  <div class="row mb-3" id="insentifSummaryRow">
+                     <div class="col-md-4 mb-2">
+                        <div class="card shadow h-100 py-2 insentif-summary-card highest">
+                           <div class="card-body">
+                              <div class="insentif-summary-label">Insentif Tertinggi</div>
+                              <div class="h6 mb-0 font-weight-bold text-gray-800" id="summaryHighest">-</div>
+                           </div>
+                        </div>
+                     </div>
+                     <div class="col-md-4 mb-2">
+                        <div class="card shadow h-100 py-2 insentif-summary-card lowest">
+                           <div class="card-body">
+                              <div class="insentif-summary-label">Insentif Terendah</div>
+                              <div class="h6 mb-0 font-weight-bold text-gray-800" id="summaryLowest">-</div>
+                           </div>
+                        </div>
+                     </div>
+                     <div class="col-md-4 mb-2">
+                        <div class="card shadow h-100 py-2 insentif-summary-card average">
+                           <div class="card-body">
+                              <div class="insentif-summary-label">Rata-rata Insentif</div>
+                              <div class="h6 mb-0 font-weight-bold text-gray-800" id="summaryAverage">-</div>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+
+                  <!-- ================= CHARTS ================= -->
+                  <div class="row mb-3">
+                     <div class="col-md-6 mb-2">
+                        <div class="card shadow h-100 insentif-chart-card">
+                           <div class="card-header py-2">
+                              <b class="text-primary">Distribusi Berdasarkan Role</b>
+                           </div>
+                           <div class="card-body">
+                              <canvas id="roleChart"></canvas>
+                           </div>
+                        </div>
+                     </div>
+                     <div class="col-md-6 mb-2">
+                        <div class="card shadow h-100 insentif-chart-card">
+                           <div class="card-header py-2">
+                              <b class="text-primary">Pengelompokan Nominal Insentif</b>
+                           </div>
+                           <div class="card-body">
+                              <canvas id="amountChart"></canvas>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+
                   <div class="table-responsive">
-                     <table class="table table-bordered table-sm"
+                     <table class="table table-bordered table-sm insentif-detail-table"
                         id="insentifTable"
                         width="100%">
                         <thead>
                            <tr>
                               <th>NPK</th>
                               <th>Name</th>
-                              <th>Departement</th>
+                              <th>Role</th>
+                              <th>Line</th>
                               <th>Insentif</th>
-                              <th>TKK</th>
                               <th>Status</th>
                            </tr>
                         </thead>
                         <tbody></tbody>
                         <tfoot>
                            <tr style="background:#f8f9fc;font-weight:bold">
-                              <th colspan="3" class="text-right">TOTAL</th>
-                              <th></th>
+                              <th colspan="4" class="text-right">TOTAL</th>
                               <th></th>
                               <th></th>
                            </tr>
@@ -234,9 +314,19 @@
       <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
       <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
       <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
       <script>
          let insentifTable;
-         
+         let roleChartInstance = null;
+         let amountChartInstance = null;
+
+         // datalabels aktif secara global supaya nilai/percentage
+         // langsung tampil di chart tanpa perlu hover
+         if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
+             Chart.register(ChartDataLabels);
+         }
+
          function formatRupiah(number){
          
          number = Number(number) || 0;
@@ -248,41 +338,156 @@
          }).format(number);
          
          }
-         
+
+         // ambil nilai insentif dari row apapun jenis komponennya
+         function getInsentifValue(row){
+             return row.sewing_insentif ??
+                 row.pad_insentif ??
+                 row.cutting_insentif ??
+                 row.heat_insentif ??
+                 row.sixs_insentif ??
+                 0;
+         }
+
+         /*
+         | ==============================================
+         | RENDER SUMMARY + CHART (ROLE & NOMINAL)
+         | ==============================================
+         */
+         function renderInsentifCharts(data){
+
+             let values = data.map(function(r){
+                 return Object.assign({}, r, { value: Number(getInsentifValue(r)) });
+             });
+
+             if (values.length === 0) {
+                 $('#summaryHighest, #summaryLowest, #summaryAverage').text('-');
+                 if (roleChartInstance) { roleChartInstance.destroy(); roleChartInstance = null; }
+                 if (amountChartInstance) { amountChartInstance.destroy(); amountChartInstance = null; }
+                 return;
+             }
+
+             // ============ TERTINGGI / TERENDAH / RATA-RATA ============
+             let highest = values.reduce((a, b) => b.value > a.value ? b : a);
+             let lowest  = values.reduce((a, b) => b.value < a.value ? b : a);
+             let total   = values.reduce((s, r) => s + r.value, 0);
+             let average = total / values.length;
+
+             $('#summaryHighest').html(
+                 formatRupiah(highest.value) +
+                 '<br><small class="text-gray-600">' + highest.npk + ' - ' + highest.name + '</small>'
+             );
+             $('#summaryLowest').html(
+                 formatRupiah(lowest.value) +
+                 '<br><small class="text-gray-600">' + lowest.npk + ' - ' + lowest.name + '</small>'
+             );
+             $('#summaryAverage').html(formatRupiah(average));
+
+             // ============ CHART 1: PENGELOMPOKAN BERDASARKAN ROLE ============
+             let roleGroups = {};
+             values.forEach(function(r){
+                 let role = r.role || 'Tanpa Role';
+                 if (!roleGroups[role]) roleGroups[role] = { count: 0, total: 0 };
+                 roleGroups[role].count += 1;
+                 roleGroups[role].total += r.value;
+             });
+
+             let roleLabels = Object.keys(roleGroups);
+             let roleCounts = roleLabels.map(l => roleGroups[l].count);
+             let roleColors = roleLabels.map((_, i) => `hsl(${(i * 57) % 360}, 65%, 55%)`);
+
+             if (roleChartInstance) roleChartInstance.destroy();
+             roleChartInstance = new Chart(document.getElementById('roleChart'), {
+                 type: 'doughnut',
+                 data: {
+                     labels: roleLabels,
+                     datasets: [{
+                         data: roleCounts,
+                         backgroundColor: roleColors
+                     }]
+                 },
+                 options: {
+                     responsive: true,
+                     maintainAspectRatio: true,
+                     plugins: {
+                         legend: { position: 'bottom' },
+                         datalabels: {
+                             color: '#fff',
+                             font: { weight: 'bold', size: 11 },
+                             formatter: function(value, ctx){
+                                 let arr = ctx.chart.data.datasets[0].data;
+                                 let sum = arr.reduce((a, b) => a + b, 0);
+                                 let pct = sum ? ((value / sum) * 100).toFixed(1) : 0;
+                                 return value + ' orang\n(' + pct + '%)';
+                             }
+                         },
+                         tooltip: {
+                             callbacks: {
+                                 label: function(ctx){
+                                     let role = ctx.label;
+                                     let total = roleGroups[role].total;
+                                     return ctx.parsed + ' orang - Total ' + formatRupiah(total);
+                                 }
+                             }
+                         }
+                     }
+                 }
+             });
+
+             // ============ CHART 2: PENGELOMPOKAN BERDASARKAN NOMINAL ============
+             let amountGroups = {};
+             values.forEach(function(r){
+                 let key = r.value;
+                 amountGroups[key] = (amountGroups[key] || 0) + 1;
+             });
+
+             let sortedAmounts = Object.keys(amountGroups).map(Number).sort((a, b) => a - b);
+             let amountLabels = sortedAmounts.map(v => formatRupiah(v));
+             let amountCounts = sortedAmounts.map(v => amountGroups[v]);
+
+             if (amountChartInstance) amountChartInstance.destroy();
+             amountChartInstance = new Chart(document.getElementById('amountChart'), {
+                 type: 'bar',
+                 data: {
+                     labels: amountLabels,
+                     datasets: [{
+                         label: 'Jumlah Orang',
+                         data: amountCounts,
+                         backgroundColor: '#4e73df'
+                     }]
+                 },
+                 options: {
+                     responsive: true,
+                     maintainAspectRatio: true,
+                     layout: {
+                         padding: { top: 28 }
+                     },
+                     scales: {
+                         y: {
+                             beginAtZero: true,
+                             ticks: { precision: 0 },
+                             suggestedMax: Math.max(...amountCounts) + 1
+                         },
+                         x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 } }
+                     },
+                     plugins: {
+                         legend: { display: false },
+                         datalabels: {
+                             anchor: 'end',
+                             align: 'top',
+                             offset: 4,
+                             clamp: true,
+                             clip: false,
+                             color: '#2e2e2e',
+                             font: { weight: 'bold', size: 11 },
+                             formatter: function(value){ return value + ' orang'; }
+                         }
+                     }
+                 }
+             });
+         }
+
          $(document).ready(function(){
-            let deptDropdownModal = `
-    <select id="filterDeptModal"
-            class="form-control form-control-sm"
-            style="min-width:250px; width:auto">
-        <option value="">Department</option>
-    </select>
-`;
-
-$('.dept-filter-modal').html(deptDropdownModal);
-
-$('#filterDeptModal').select2({
-    placeholder: 'Department',
-    allowClear: true,
-    width: '100%',
-});
-
-/*
-| FILTER DEPT (EXACT MATCH)
-*/
-$(document).on('change', '#filterDeptModal', function () {
-
-    let val = $(this).val();
-
-    if (!val) {
-        insentifTable.column(2).search('').draw();
-        return;
-    }
-
-    insentifTable
-        .column(2)
-        .search('^' + val + '$', true, false)
-        .draw();
-});
          
          $('#dataTable').DataTable({
          order:[[0,'desc']],
@@ -303,28 +508,31 @@ $(document).on('change', '#filterDeptModal', function () {
 
     dom:
     "<'row mb-2 align-items-center px-2'" +
-        "<'col-auto dept-filter-modal'>" +
+        "<'col-auto role-filter-modal'>" +
+        "<'col-auto ml-2'l>" +
         "<'col text-end'f>" +
     ">" +
     "rtip",
 
+    lengthMenu: [ [10, 25, 50, 100, -1], [10, 25, 50, 100, 'All'] ],
+
     initComplete: function () {
 
         // =========================
-        // CREATE SELECT DEPT
+        // CREATE SELECT ROLE
         // =========================
-        let deptDropdownModal = `
-        <select id="filterDeptModal"
+        let roleDropdownModal = `
+        <select id="filterRoleModal"
                 class="form-control form-control-sm"
                 style="width:250px">
-            <option value="">Department</option>
+            <option value="">Role</option>
         </select>
     `;
 
-    $('.dept-filter-modal').html(deptDropdownModal);
+    $('.role-filter-modal').html(roleDropdownModal);
 
-    $('#filterDeptModal').select2({
-        placeholder: 'Department',
+    $('#filterRoleModal').select2({
+        placeholder: 'Role',
         allowClear: true,
         width: '250px',
         dropdownParent: $('#detailModal')
@@ -333,7 +541,7 @@ $(document).on('change', '#filterDeptModal', function () {
         // =========================
         // FILTER EVENT
         // =========================
-        $(document).on('change', '#filterDeptModal', function () {
+        $(document).on('change', '#filterRoleModal', function () {
 
             let val = $(this).val();
 
@@ -352,7 +560,19 @@ $(document).on('change', '#filterDeptModal', function () {
     columns:[
         {data:'npk'},
         {data:'name'},
-        {data:'dept'},
+        {
+            data:'role',
+            render:function(data){
+                return data ?? '-';
+            }
+        },
+        {
+            data:'line_info',
+            defaultContent:'-',
+            render:function(data){
+                return data ?? '-';
+            }
+        },
         {
             data:null,
             render:function(row){
@@ -366,12 +586,6 @@ $(document).on('change', '#filterDeptModal', function () {
                 0;
 
                 return formatRupiah(value);
-            }
-        },
-        {
-            data:'tkk',
-            render:function(data){
-                return data ?? '-';
             }
         },
         {
@@ -416,7 +630,7 @@ $(document).on('change', '#filterDeptModal', function () {
          
          },0);
          
-         $(api.column(3).footer())
+         $(api.column(4).footer())
          .html(formatRupiah(total));
          
          }
@@ -426,16 +640,50 @@ $(document).on('change', '#filterDeptModal', function () {
          });
          
          
+         // label & warna badge untuk tiap jenis insentif
+         // supaya modal langsung jelas ini insentif apa
+         const insentifLabels = {
+             'sewing_insentif':  { label: 'Sewing',    color: '#4e73df' },
+             'pad_insentif':     { label: 'Pad Print',  color: '#1cc88a' },
+             'cutting_insentif': { label: 'Cutting',    color: '#f6c23e' },
+             'heat_insentif':    { label: 'Heat Seal',  color: '#e74a3b' },
+             'sixs_insentif':    { label: '6S',         color: '#36b9cc' }
+         };
+
          $(document).on('click','.btn-detail',function(){
          
          let period=$(this).data('period');
          let periodName=$(this).data('period-name');
          let component=$(this).data('component');
+
+         // =========================
+         // BERSIHKAN DATA LAMA DULU
+         // supaya saat modal dibuka tidak sempat
+         // menampilkan data dari insentif sebelumnya
+         // =========================
+         insentifTable
+             .search('')
+             .columns().search('')
+             .clear()
+             .draw();
+
+         $('#filterRoleModal')
+             .html('<option value="">Role</option>')
+             .val('')
+             .trigger('change.select2');
+
+         renderInsentifCharts([]); // reset summary tertinggi/terendah/rata-rata & hapus chart lama
          
          $('#detailModal').modal('show');
-         
-         $('#detail-title')
-         .text('Insentif Detail - '+periodName);
+
+         let info = insentifLabels[component] || { label: component, color: '#858796' };
+
+         $('#detail-title').html(
+             '<span class="badge mr-2" style="background:' + info.color + ';color:#fff;font-size:.8rem;vertical-align:middle;">'
+             + info.label.toUpperCase() +
+             '</span>' +
+             '<span style="vertical-align:middle;">Insentif ' + info.label + ' - ' + periodName + '</span>'
+         );
          
          let url='';
          
@@ -468,30 +716,28 @@ $(document).on('change', '#filterDeptModal', function () {
          insentifTable.clear();
          insentifTable.rows.add(res.data);
          insentifTable.draw();
-         // BUILD DEPT OPTIONS
-let deptMap = {};
+
+         // BUILD ROLE OPTIONS
+         let roleMap = {};
 
             res.data.forEach(item => {
-
-                let deptDisplay = item.dept;
-
-                if(item.line_start && item.line_end){
-                    deptDisplay += ` (${item.line_start}-${item.line_end})`;
-                }
-
-                deptMap[deptDisplay] = item.dept; // simpan dept asli
+                let roleDisplay = item.role || 'Tanpa Role';
+                roleMap[roleDisplay] = item.role || '';
             });
 
-            let options = `<option value="">Department</option>`;
+            let options = `<option value="">Role</option>`;
 
-            Object.keys(deptMap).forEach(display => {
-                options += `<option value="${deptMap[display]}">${display}</option>`;
+            Object.keys(roleMap).forEach(display => {
+                options += `<option value="${roleMap[display]}">${display}</option>`;
             });
 
-$('#filterDeptModal')
+$('#filterRoleModal')
     .html(options)
     .val('')
     .trigger('change.select2');
+
+         // BUILD SUMMARY + CHARTS
+         renderInsentifCharts(res.data);
          
          $('#insentifTable_processing').hide();
          

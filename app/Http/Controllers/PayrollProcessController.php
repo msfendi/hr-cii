@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\NotificationEvent;
 use App\Jobs\GeneratePayrollCheck;
 use App\Jobs\GeneratePayrollExport;
+use App\Jobs\GeneratePayrollExportAudit;
 use App\Jobs\GeneratePayrollProcess;
 use App\Jobs\GeneratePayrollProcessV2;
 use App\Jobs\GeneratePayrollRekap;
@@ -557,6 +558,96 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             'invalid_contracts' => $invalidContracts,
             'invalid_bank_accounts' => $invalidBankAccounts,
             'duplicate_bank_accounts' => $duplicateBankAccounts   // <-- tambahan
+        ]);
+    }
+
+    public function dataFreshness($periodId)
+    {
+        /*
+        ============================================
+        CEK TANGGAL DATA TERAKHIR (ATT_LOG, OVERTIMES, INSENTIF)
+        DIBANDINGKAN DENGAN HARI INI
+        ============================================
+        */
+
+        $period = DB::table('payroll_periods')
+            ->where('id', $periodId)
+            ->first();
+
+        $today = Carbon::today();
+
+        /*
+        ============================================
+        ATT_LOG (FINGER KARYAWAN)
+        ============================================
+        */
+
+        $lastAttLog = DB::table('att_log')->max('scan_date');
+
+        /*
+        ============================================
+        OVERTIMES
+        ============================================
+        */
+
+        $lastOvertime = DB::table('overtimes')->max('OVERTIME_DATE');
+
+        /*
+        ============================================
+        INSENTIF (SUMBER DATA EFFICIENCY PER JENIS)
+        ============================================
+        */
+
+        $insentifTables = [
+            'line'    => ['table' => 'line_efficiencies',    'label' => 'Line (Sewing) Efficiency'],
+            'pad'     => ['table' => 'pad_efficiencies',      'label' => 'Pad Print Efficiency'],
+            'cutting' => ['table' => 'cutting_efficiencies',  'label' => 'Cutting Efficiency'],
+            'heat'    => ['table' => 'heat_efficiencies',     'label' => 'Heat Press Efficiency'],
+        ];
+
+        $insentifDetail = [];
+        $insentifDates  = [];
+
+        foreach ($insentifTables as $key => $info) {
+
+            $lastDate = DB::table($info['table'])->max('date');
+
+            $insentifDetail[$key] = [
+                'label'     => $info['label'],
+                'last_date' => $lastDate,
+                'days_diff' => $lastDate ? (int) Carbon::parse($lastDate)->diffInDays($today) : null,
+            ];
+
+            if ($lastDate) {
+                $insentifDates[] = $lastDate;
+            }
+        }
+
+        $lastInsentif = count($insentifDates) > 0
+            ? collect($insentifDates)->map(fn($d) => Carbon::parse($d))->max()
+            : null;
+
+        return response()->json([
+            'today' => $today->toDateString(),
+            'period' => $period ? [
+                'start_date' => $period->start_date,
+                'end_date'   => $period->end_date,
+            ] : null,
+            'att_log' => [
+                'label'     => 'ATT_LOG (Finger Karyawan)',
+                'last_date' => $lastAttLog,
+                'days_diff' => $lastAttLog ? (int) Carbon::parse($lastAttLog)->diffInDays($today) : null,
+            ],
+            'overtimes' => [
+                'label'     => 'Overtimes',
+                'last_date' => $lastOvertime,
+                'days_diff' => $lastOvertime ? (int) Carbon::parse($lastOvertime)->diffInDays($today) : null,
+            ],
+            'insentif' => [
+                'last_date' => $lastInsentif ? $lastInsentif->toDateString() : null,
+                'days_diff' => $lastInsentif ? (int) $lastInsentif->diffInDays($today) : null,
+                'detail'    => $insentifDetail,
+            ],
         ]);
     }
 
@@ -1346,6 +1437,33 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
         // dd($exportPeriod);
 
         GeneratePayrollExport::dispatch($export->id, $type);
+
+        Alert::success('Sukses', 'Export payroll selesai diproses!');
+
+        event(new NotificationEvent(
+            'Export Payroll!',
+            'Users : ' . $user->name . ' has been export Payroll ' . $exportPeriod . '!',
+            'success'
+        ));
+        return redirect('payroll-process/index');
+        // return response()->json([
+        //     'message' => 'Export started',
+        //     'export_id' => $export->id
+        // ]);
+    }
+
+    public function exportAudit($run_id)
+    {
+        $user = Auth::user();
+        // dd($exportPeriod);
+        $export = PayrollExport::where('run_id', $run_id)->first();
+
+        $exportPeriod = PayrollExport::leftJoin('payroll_runs', 'payroll_runs.id', '=', 'payroll_exports.run_id')->leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')->where('payroll_exports.run_id', '=', $run_id)->pluck('payroll_periods.name');
+        $type = 'process';
+
+        // dd($exportPeriod);
+
+        GeneratePayrollExportAudit::dispatch($export->id, $type);
 
         Alert::success('Sukses', 'Export payroll selesai diproses!');
 
