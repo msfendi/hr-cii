@@ -30,14 +30,25 @@ class GeneratePayrollProcessV2 implements ShouldQueue
     public $runId;
 
     /**
+     * NPK spesifik untuk mode "per NPK" (single employee).
+     * - null  -> mode ALL (semua karyawan, dipakai untuk generate payroll
+     *            sungguhan / check payroll biasa).
+     * - 'xxx' -> mode PER NPK (hanya 1 karyawan, dipakai untuk live slip
+     *            preview) — query dibatasi dari awal, TIDAK compute
+     *            seluruh karyawan lalu difilter belakangan.
+     */
+    public $npk;
+
+    /**
      * Throttle timestamp for progress updates (avoid 1 UPDATE query per
      * employee x component, which was previously hammering the DB).
      */
     private $lastProgressUpdate = 0;
 
-    public function __construct($runId)
+    public function __construct($runId, $npk = null)
     {
         $this->runId = $runId;
+        $this->npk   = $npk;
     }
 
     public function handle()
@@ -45,9 +56,14 @@ class GeneratePayrollProcessV2 implements ShouldQueue
         $this->processPayroll(false);
     }
 
-    public function simulation()
+    /**
+     * @param  string|null $npk  Override NPK per-panggilan. Jika null,
+     *                           pakai $this->npk dari constructor (bisa
+     *                           juga null -> mode ALL).
+     */
+    public function simulation($npk = null)
     {
-        return $this->processPayroll(true);
+        return $this->processPayroll(true, $npk ?? $this->npk);
     }
 
     /**
@@ -74,7 +90,7 @@ class GeneratePayrollProcessV2 implements ShouldQueue
         $this->lastProgressUpdate = $now;
     }
 
-    private function processPayroll($isCheck = false)
+    private function processPayroll($isCheck = false, $npk = null)
     {
         $payrollResults = [];
         if (!$isCheck) {
@@ -147,6 +163,20 @@ class GeneratePayrollProcessV2 implements ShouldQueue
 
             ->where('p.NPK', '!=', 'C-00017')
             // ->where('p.NPK', '=', 'C-00043')
+
+            /*
+            |----------------------------------------------------------------
+            | MODE PER NPK
+            |----------------------------------------------------------------
+            | Kalau $npk diisi (live slip preview), batasi dari root query
+            | paling awal supaya seluruh subquery turunan & loop di bawah
+            | hanya memproses 1 karyawan — bukan compute semua karyawan
+            | dulu baru difilter belakangan (lambat).
+            |----------------------------------------------------------------
+            */
+            ->when($npk, function ($q) use ($npk) {
+                $q->where('p.NPK', $npk);
+            })
 
             ->select(
                 'p.NPK',
@@ -1050,6 +1080,12 @@ END AS special_overtime_hours
         }
 
         $employees = $employeesQuery
+            ->when($npk, function ($q) use ($npk) {
+                // Safety-net: employeeBase sudah difilter di root query,
+                // tapi tetap dijaga di sini juga supaya query akhir yang
+                // benar-benar dieksekusi pasti hanya 1 NPK.
+                $q->where('emp.NPK', $npk);
+            })
             ->orderBy('emp.ID_DEPT', 'asc')
             ->orderBy('emp.NPK', 'asc')
             ->get();

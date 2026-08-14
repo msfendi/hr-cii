@@ -1081,6 +1081,7 @@ Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrL
 Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
 Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
+Route::get('/payroll-process/slip-live/{period_id}/{npk}', [EmployeePayrollController::class, 'showSlipLive'])->name('payroll-process.slip-live');
 
 // Employee Thr
 Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.view-slip');

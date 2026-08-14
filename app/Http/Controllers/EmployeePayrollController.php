@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Cmixin\BusinessDay;
+use App\Jobs\GeneratePayrollProcess;
+use App\Jobs\GeneratePayrollProcessV2;
+use App\Models\PayrollPeriod;
 
 class EmployeePayrollController extends Controller
 {
@@ -1192,5 +1195,466 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
         //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
         // ]);
+    }
+
+    /**
+     * showSlipLive
+     * --------------------------------------------------------------------
+     * Menampilkan slip gaji LIVE langsung dari hasil job (mode simulation),
+     * BUKAN dari data yang sudah tersimpan di payroll_run_details. Dipakai
+     * oleh tombol action "View Slip Live" pada tabel hasil Check Payroll
+     * di halaman Process & Process V2.
+     *
+     * Job dijalankan dalam mode PER NPK (bukan mode ALL): NPK dilempar ke
+     * constructor job sehingga query utamanya (root query karyawan) sudah
+     * dibatasi ke 1 NPK sejak awal — bukan menghitung seluruh karyawan
+     * lebih dulu baru difilter belakangan di controller, yang akan jauh
+     * lebih lambat.
+     *
+     * Blade ditampilkan langsung sebagai HTML (tanpa PDF & tanpa
+     * password), karena ini hanya preview sementara sebelum payroll
+     * benar-benar di-generate / disimpan.
+     *
+     * @param  Request $request
+     * @param  int     $period_id
+     * @param  string  $npk
+     * @return \Illuminate\View\View
+     */
+    public function showSlipLive(Request $request, $period_id, $npk)
+    {
+        $period = PayrollPeriod::findOrFail($period_id);
+
+        // 'v1' -> GeneratePayrollProcess (dipakai halaman Process)
+        // 'v2' -> GeneratePayrollProcessV2 (dipakai halaman Process V2)
+        $version = $request->query('version', 'v1');
+
+        // ⭐ MODE PER NPK: $npk dilempar langsung ke constructor job supaya
+        // filternya terjadi DI DALAM job (root query), bukan compute
+        // seluruh karyawan dulu baru dicari satu-satu di controller —
+        // itu akan lambat karena tetap menjalankan loop berat untuk
+        // semua karyawan padahal yang dibutuhkan cuma 1.
+        //
+        // Filter payroll_role tetap dilakukan DI DALAM job (mode
+        // simulation), karena job dijalankan sinkron di request yang
+        // sama sehingga Auth::user() valid di sana.
+        $service = $version === 'v2'
+            ? new GeneratePayrollProcessV2($period->id, $npk)
+            : new GeneratePayrollProcess($period->id, $npk);
+
+        $raw = $service->simulation();
+
+        $payrollResults = collect($raw['data'] ?? $raw);
+
+        // Karena job sudah dibatasi ke 1 NPK, tinggal ambil baris
+        // pertama (dan satu-satunya) hasil simulasi.
+        $data = $payrollResults->first();
+
+        if (!$data) {
+            abort(404, 'Data payroll untuk NPK ' . $npk . ' tidak ditemukan pada hasil simulasi.');
+        }
+
+        $data = (array) $data;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Biodata (untuk NAMA_KARYAWAN, BARCODE fingerprint, IS_STAFF, dll)
+        |--------------------------------------------------------------------------
+        */
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+            );
+
+        $bio = DB::query()
+            ->fromSub($biodataUnion, 'b')
+            ->where('b.NPK', $npk)
+            ->first();
+
+        if (!$bio) {
+            abort(404, 'Data biodata untuk NPK ' . $npk . ' tidak ditemukan.');
+        }
+
+        $departement = DB::table('DEPT')
+            ->where('id_dept', $bio->ID_DEPT)
+            ->value('DEPARTEMENT');
+
+        // Susun object $employee (mirip struktur di showSlip) supaya bisa
+        // langsung dipakai oleh view payroll.viewslip tanpa perubahan.
+        $employee = (object) [
+            'employee_npk'  => $npk,
+            'employee_name' => $data['employee_name'] ?? $bio->NAMA_KARYAWAN,
+            'period_id'     => $period->id,
+            'period_name'   => $period->name,
+            'DEPARTEMENT'   => $data['dept'] ?? $departement,
+            'total_salary'  => $data['total_salary'] ?? 0,
+            'BARCODE'       => $bio->BARCODE,
+            'IS_STAFF'      => $bio->IS_STAFF,
+        ];
+
+        /*
+        |--------------------------------------------------------------------------
+        | Pendapatan / Potongan — LANGSUNG dari hasil job (live, belum disimpan)
+        |--------------------------------------------------------------------------
+        */
+        $componentTypes = DB::table('payroll_components')->pluck('type', 'code');
+
+        $earnings = [];
+        $deductions = [];
+
+        foreach (($data['components'] ?? []) as $code => $value) {
+
+            if (is_array($value) && array_key_exists('amount', $value)) {
+                $amount = (float) $value['amount'];
+                $type   = $value['type'] ?? ($componentTypes[$code] ?? 'earning');
+            } else {
+                $amount = (float) $value;
+                $type   = $componentTypes[$code] ?? 'earning';
+            }
+
+            if ($type === 'earning') {
+                $earnings[$code] = $amount;
+            } else {
+                $deductions[$code] = $amount;
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Ijin & Adjustment — pakai hasil job juga supaya konsisten dgn
+        | angka yang tampil di tabel Check Payroll
+        |--------------------------------------------------------------------------
+        */
+        $ijinDetails      = collect($data['ijin_details'] ?? []);
+        $adjusmentDetails = collect($data['payroll_adjustment_details'] ?? []);
+        $totalIjin        = $data['total_ijin'] ?? 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Rekap Absensi — dibangun real-time dari att_log dkk (sumber data
+        | sama seperti showSlip), karena hasil job simulation hanya berisi
+        | angka agregat, bukan rincian per-hari.
+        |--------------------------------------------------------------------------
+        */
+        $startDate = Carbon::parse($period->start_date)->startOfDay();
+        $endDate   = Carbon::parse($period->end_date)->endOfDay();
+
+        $logs = DB::table('att_log')
+            ->where('pin', $employee->BARCODE)
+            ->where('sn', '!=', '66208026030047')
+            ->whereBetween('scan_date', [$startDate, $endDate->copy()->addDay()->endOfDay()])
+            ->orderBy('scan_date')
+            ->get();
+
+        $employeeLates = DB::table('employee_lates')
+            ->where('npk', $npk)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->keyBy(function ($row) {
+                return Carbon::parse($row->date)->format('Y-m-d');
+            });
+
+        $overtimeRaw = DB::table('overtimes_payroll')
+            ->where('NPK', $npk)
+            ->whereBetween('OVERTIME_DATE', [$startDate, $endDate])
+            ->select('OVERTIME_DATE', 'JUMLAH_JAM_LEMBUR')
+            ->get();
+
+        $overtimes = [];
+
+        foreach ($overtimeRaw as $ot) {
+            $key = Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
+            $overtimes[$key] = trim($ot->JUMLAH_JAM_LEMBUR);
+        }
+
+        $summary = [
+            'hadir' => 0,
+            'absent' => 0,
+            'lembur_resmi' => 0,
+            'lembur_khusus' => 0,
+            'status' => []
+        ];
+
+        $attendance = [];
+        $late_minutes = 0;
+
+        $dates = CarbonPeriod::create($startDate, $endDate);
+
+        $holidays = DB::table('holidays')
+            ->whereBetween('holiday_date', [$startDate, $endDate])
+            ->pluck('holiday_date')
+            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+            ->toArray();
+
+        foreach ($dates as $date) {
+
+            $tanggal = $date->format('Y-m-d');
+
+            $shift = DB::connection('cii')
+                ->table('employee_shifts as es')
+                ->join('shifts as s', 's.id', '=', 'es.shift_id')
+                ->where('es.npk', $npk)
+                ->whereDate('es.shift_date', $tanggal)
+                ->select('s.name', 's.work_start', 's.work_end')
+                ->first();
+
+            if (!$shift) {
+                $shift = (object)[
+                    'name' => 'NORMAL',
+                    'work_start' => '08:00:00',
+                    'work_end'   => '17:00:00',
+                ];
+            }
+
+            $workStart = Carbon::parse($shift->work_start);
+            $workEnd   = Carbon::parse($shift->work_end);
+
+            $isNightShift = $workStart->gt($workEnd);
+
+            if ($isNightShift) {
+
+                $shiftStartDT = Carbon::parse($tanggal)
+                    ->setTimeFrom($workStart);
+
+                $shiftEndDT = Carbon::parse($tanggal)
+                    ->addDay()
+                    ->setTimeFrom($workEnd);
+
+                $tanggalPulang = Carbon::parse($tanggal)
+                    ->addDay()
+                    ->format('Y-m-d');
+
+                $candidatesIn = $logs->filter(
+                    fn($log) =>
+                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                )->values();
+
+                $candidatesOut = $logs->filter(
+                    fn($log) =>
+                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggalPulang
+                )->values();
+
+                $findNearest = function ($candidates, Carbon $anchor) {
+                    $best = null;
+                    $bestDiff = PHP_INT_MAX;
+
+                    foreach ($candidates as $log) {
+                        $scan = Carbon::parse($log->scan_date);
+                        $diff = abs($scan->diffInSeconds($anchor));
+
+                        if ($diff < $bestDiff) {
+                            $bestDiff = $diff;
+                            $best = $log;
+                        }
+                    }
+
+                    return $best;
+                };
+
+                $bestIn  = $findNearest($candidatesIn, $shiftStartDT);
+                $bestOut = $findNearest($candidatesOut, $shiftEndDT);
+
+                $dailyLogs = collect(array_filter([$bestIn, $bestOut]))
+                    ->sortBy('scan_date')
+                    ->values();
+            } else {
+
+                $shiftStartDT = Carbon::parse($tanggal)
+                    ->setTimeFrom($workStart);
+
+                $shiftEndDT = Carbon::parse($tanggal)
+                    ->setTimeFrom($workEnd);
+
+                $dailyLogs = $logs->filter(
+                    fn($log) =>
+                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                )->values();
+            }
+
+            $jamMasuk = null;
+            $jamPulang = null;
+            $status = '';
+            $overtime = null;
+
+            $lembur = $overtimes[$tanggal] ?? null;
+
+            $isWeekend = $date->isWeekend();
+            $isHoliday = in_array($tanggal, $holidays);
+            $isWorkday = !($isWeekend || $isHoliday);
+
+            $hasLog = $dailyLogs->count() > 0;
+            $isNumericOT = is_numeric($lembur);
+
+            $izinCodes = ['MA', 'BR', 'P1', 'SD', 'CT', 'H', 'OUT'];
+
+            if (in_array($lembur, $izinCodes)) {
+
+                $jamMasuk = '-';
+                $jamPulang = '-';
+                $status = $lembur;
+
+                $summary['status'][$status] =
+                    ($summary['status'][$status] ?? 0) + 1;
+
+                if ($isWorkday) {
+                    $summary['absent']++;
+                }
+            } elseif (($isWeekend || $isHoliday) && $isNumericOT) {
+
+                if ($hasLog) {
+
+                    $dailyLogs = $dailyLogs->sortBy('scan_date')->values();
+
+                    $jamMasuk  = Carbon::parse($dailyLogs->first()->scan_date)->format('H:i');
+                    $jamPulang = Carbon::parse($dailyLogs->last()->scan_date)->format('H:i');
+                }
+
+                $status = 'Lembur';
+            } elseif ($hasLog) {
+
+                $dailyLogs = $dailyLogs->sortBy('scan_date')->values();
+
+                $last = Carbon::parse($dailyLogs->last()->scan_date);
+
+                $bestIn = null;
+                $bestDiff = PHP_INT_MAX;
+
+                foreach ($dailyLogs as $index => $log) {
+
+                    if ($index == ($dailyLogs->count() - 1)) {
+                        continue;
+                    }
+
+                    $scan = Carbon::parse($log->scan_date);
+                    $diff = abs($scan->diffInSeconds($shiftStartDT, false));
+
+                    if ($diff < $bestDiff) {
+                        $bestDiff = $diff;
+                        $bestIn = $scan;
+                    }
+                }
+
+                if (!$bestIn) {
+                    $bestIn = Carbon::parse($dailyLogs->first()->scan_date);
+                }
+
+                $first = $bestIn;
+
+                $lateEntry     = $employeeLates->get($tanggal);
+                $hasLateEntry  = $lateEntry && !empty($lateEntry->arrival_time);
+
+                if ($dailyLogs->count() == 1) {
+
+                    $scan = $first;
+
+                    $distanceStart = abs($scan->diffInSeconds($shiftStartDT, false));
+                    $distanceEnd   = abs($scan->diffInSeconds($shiftEndDT, false));
+
+                    if ($distanceEnd < $distanceStart) {
+
+                        $jamPulang = $scan->format('H:i');
+                        $status = 'Scan Pulang';
+                    } else {
+
+                        $jamMasuk = $scan->format('H:i');
+                        $status = $hasLateEntry ? 'Terlambat' : 'Scan Masuk';
+
+                        if ($hasLateEntry) {
+                            $arrivalTime = Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time);
+                            $late_minutes += $shiftStartDT->copy()
+                                ->addMinutes(5)
+                                ->diffInMinutes($arrivalTime);
+                        }
+                    }
+                } else {
+
+                    $jamMasuk  = $first->format('H:i');
+                    $jamPulang = $last->format('H:i');
+
+                    $status = $hasLateEntry ? 'Terlambat' : 'Hadir';
+
+                    if ($hasLateEntry) {
+                        $arrivalTime = Carbon::parse($tanggal . ' ' . $lateEntry->arrival_time);
+                        $late_minutes += $shiftStartDT->copy()
+                            ->addMinutes(5)
+                            ->diffInMinutes($arrivalTime);
+                    }
+                }
+
+                if ($isWorkday) {
+                    $summary['hadir']++;
+                }
+            } else {
+
+                if ($lembur === 'IN') {
+
+                    $status = 'Masuk (Finger tidak terbaca)';
+
+                    if ($isWorkday) {
+                        $summary['hadir']++;
+                    }
+                } elseif ($isNumericOT) {
+
+                    $status = 'Lembur';
+
+                    if ($isWorkday) {
+                        $summary['hadir']++;
+                    }
+                } elseif ($isWeekend || $isHoliday) {
+
+                    $status = 'Libur';
+                } else {
+
+                    $status = 'Tidak Finger';
+                    $summary['absent']++;
+                }
+            }
+
+            if ($isNumericOT) {
+
+                $overtime = (float)$lembur;
+
+                if ($isWeekend || $isHoliday) {
+                    $summary['lembur_khusus'] += $overtime;
+                } else {
+                    $summary['lembur_resmi'] += $overtime;
+                }
+            }
+
+            if ($employeeLates->has($tanggal) && !empty($employeeLates[$tanggal]->arrival_time)) {
+                $jamMasuk = Carbon::parse($employeeLates[$tanggal]->arrival_time)->format('H:i');
+            }
+
+            $attendance[] = (object)[
+                'tanggal' => $tanggal,
+                'jam_masuk' => $jamMasuk,
+                'jam_pulang' => $jamPulang,
+                'status' => $status,
+                'overtime' => $overtime,
+                'is_holiday' => ($isWeekend || $isHoliday),
+            ];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Tampilkan langsung blade-nya (BUKAN PDF, BUKAN ter-password) —
+        | ini hanya preview live sebelum payroll disimpan permanen.
+        |--------------------------------------------------------------------------
+        */
+        return view('payroll.viewslip', [
+            'employee' => $employee,
+            'earnings' => $earnings,
+            'deductions' => $deductions,
+            'attendance' => $attendance,
+            'summary' => $summary,
+            'holidays' => $holidays,
+            'late_minutes' => $late_minutes,
+            'ijin_details' => $ijinDetails->values(),
+            'adjusment_details' => $adjusmentDetails->values(),
+            'total_ijin' => $totalIjin,
+        ]);
     }
 }

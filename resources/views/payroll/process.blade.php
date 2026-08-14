@@ -275,6 +275,7 @@
                                     <th>Total Salary</th>
                                     <th>% Difference</th>
                                     <th>Status</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
 
@@ -287,6 +288,7 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -594,7 +596,9 @@ function renderDataFreshnessModal(res){
 
         let diffText = (r.days_diff === null || r.days_diff === undefined)
             ? 'Tidak ada data'
-            : (r.days_diff === 0 ? 'Hari ini' : r.days_diff + ' hari lalu');
+            : (r.days_diff < 0
+                ? 'Updated'
+                : (r.days_diff === 0 ? 'Hari ini' : r.days_diff + ' hari lalu'));
 
         html += `
             <tr>
@@ -993,6 +997,24 @@ function renderMinusSalaryModal(){
 $(document).on('click','#btnMinusSalaryAlert',function(){
     renderMinusSalaryModal();
     $('#minusSalaryModal').modal('show');
+});
+
+// ⭐ View Slip Live — ambil data payroll langsung dari hasil job (belum
+// disimpan), difilter berdasarkan NPK baris yang tombolnya diklik, lalu
+// ditampilkan sebagai halaman HTML biasa (bukan PDF, bukan ter-password)
+// di tab baru.
+$(document).on('click', '.btnViewSlipLive', function(){
+
+    let npk = $(this).data('npk');
+    let periodId = $('#period_id').val();
+
+    if(!periodId || !npk){
+        return;
+    }
+
+    let url = '/payroll-process/slip-live/' + periodId + '/' + npk;
+
+    window.open(url, '_blank');
 });
 
 $(document).on('click','#btnCheckPayroll',function(){
@@ -1590,6 +1612,27 @@ buttons: [
 
                     // Selain itu Active
                     return `<span class="badge badge-success">Active</span>`;
+                }
+            },
+
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                render: function(data, type, row){
+
+                    if(type !== 'display'){
+                        return '';
+                    }
+
+                    return `
+                        <button type="button"
+                            class="btn btn-info btn-sm btnViewSlipLive"
+                            data-npk="${row.employee_npk}"
+                            title="Lihat slip gaji live untuk NPK ini">
+                            <i class="fas fa-eye"></i> Slip Live
+                        </button>
+                    `;
                 }
             }
         ],
@@ -2360,7 +2403,7 @@ function salaryMaskColored(amount, componentType){
                             <tr>
                                 <th>Sumber Data</th>
                                 <th>Tanggal Terakhir</th>
-                                <th>Selisih</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="dataFreshnessTableBody"></tbody>

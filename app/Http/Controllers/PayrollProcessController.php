@@ -615,7 +615,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             $insentifDetail[$key] = [
                 'label'     => $info['label'],
                 'last_date' => $lastDate,
-                'days_diff' => $lastDate ? (int) Carbon::parse($lastDate)->diffInDays($today) : null,
+                'days_diff' => $lastDate ? (int) Carbon::parse($lastDate)->diffInDays($today, false) : null,
             ];
 
             if ($lastDate) {
@@ -636,16 +636,16 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             'att_log' => [
                 'label'     => 'ATT_LOG (Finger Karyawan)',
                 'last_date' => $lastAttLog,
-                'days_diff' => $lastAttLog ? (int) Carbon::parse($lastAttLog)->diffInDays($today) : null,
+                'days_diff' => $lastAttLog ? (int) Carbon::parse($lastAttLog)->diffInDays($today, false) : null,
             ],
             'overtimes' => [
                 'label'     => 'Overtimes',
                 'last_date' => $lastOvertime,
-                'days_diff' => $lastOvertime ? (int) Carbon::parse($lastOvertime)->diffInDays($today) : null,
+                'days_diff' => $lastOvertime ? (int) Carbon::parse($lastOvertime)->diffInDays($today, false) : null,
             ],
             'insentif' => [
                 'last_date' => $lastInsentif ? $lastInsentif->toDateString() : null,
-                'days_diff' => $lastInsentif ? (int) $lastInsentif->diffInDays($today) : null,
+                'days_diff' => $lastInsentif ? (int) $lastInsentif->diffInDays($today, false) : null,
                 'detail'    => $insentifDetail,
             ],
         ]);
