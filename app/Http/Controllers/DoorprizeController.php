@@ -48,6 +48,33 @@ class DoorprizeController extends Controller
     }
 
     /**
+     * Cek apakah tanggal event (events.tanggal_event) sama dengan hari ini.
+     * Scan QR hanya boleh dilakukan tepat pada tanggal event berlangsung,
+     * walaupun event tersebut masih ditandai is_active = 1.
+     */
+    private function isEventDateToday(Event $event): bool
+    {
+        if (!$event->tanggal_event) {
+            return false;
+        }
+
+        return \Carbon\Carbon::parse($event->tanggal_event)->isSameDay(now());
+    }
+
+    /**
+     * Response standar kalau event aktif ada, tapi tanggalnya bukan hari ini.
+     */
+    private function eventNotTodayResponse(Event $event): JsonResponse
+    {
+        $tanggal = \Carbon\Carbon::parse($event->tanggal_event)->translatedFormat('d F Y');
+
+        return response()->json([
+            'status'  => 'event_not_today',
+            'message' => "Event \"{$event->name}\" dijadwalkan pada {$tanggal}. Scan QR hanya bisa dilakukan pada tanggal tersebut.",
+        ], 422);
+    }
+
+    /**
      * Halaman scan QR NPK.
      */
     public function scanPage()
@@ -57,7 +84,20 @@ class DoorprizeController extends Controller
         $totalScanned   = $event ? DoorprizeScan::where('event_id', $event->id)->count() : 0;
         $totalAvailable = $event ? DoorprizeScan::available()->where('event_id', $event->id)->count() : 0;
 
-        return view('doorprize.scan', compact('totalScanned', 'totalAvailable', 'event'));
+        // Kamera hanya diaktifkan kalau ada event aktif DAN hari ini adalah
+        // tanggal event tersebut (events.tanggal_event).
+        $eventDateOk    = $event ? $this->isEventDateToday($event) : false;
+        $eventDateLabel = $event && $event->tanggal_event
+            ? \Carbon\Carbon::parse($event->tanggal_event)->translatedFormat('d F Y')
+            : null;
+
+        return view('doorprize.scan', compact(
+            'totalScanned',
+            'totalAvailable',
+            'event',
+            'eventDateOk',
+            'eventDateLabel'
+        ));
     }
 
     /**
@@ -79,6 +119,10 @@ class DoorprizeController extends Controller
 
         if (!$event) {
             return $this->noActiveEventResponse();
+        }
+
+        if (!$this->isEventDateToday($event)) {
+            return $this->eventNotTodayResponse($event);
         }
 
         $rawQr = trim((string) $request->input('qr_code', $request->input('npk', '')));
@@ -155,9 +199,9 @@ class DoorprizeController extends Controller
 
         $winners = $event
             ? DoorprizeWinner::where('event_id', $event->id)
-                ->orderByDesc('won_at')
-                ->get()
-                ->map(fn($w) => $this->formatWinner($w))
+            ->orderByDesc('won_at')
+            ->get()
+            ->map(fn($w) => $this->formatWinner($w))
             : collect();
 
         return view('doorprize.draw', compact(
@@ -307,9 +351,9 @@ class DoorprizeController extends Controller
 
         $winners = $event
             ? DoorprizeWinner::where('event_id', $event->id)
-                ->orderByDesc('won_at')
-                ->get()
-                ->map(fn($w) => $this->formatWinner($w))
+            ->orderByDesc('won_at')
+            ->get()
+            ->map(fn($w) => $this->formatWinner($w))
             : collect();
 
         return response()->json(['data' => $winners]);
