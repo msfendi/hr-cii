@@ -1308,11 +1308,11 @@ body{
                     const totalAktif   = data.aktif_values.reduce((a, b) => a + b, 0);
                     const totalKeluar  = data.keluar_values.reduce((a, b) => a + b, 0);
                     const totalMangkir = data.mangkir_values.reduce((a, b) => a + b, 0);
-                    $('#footerAktifCount').text(Math.max(...data.aktif_counts));
+                    $('#footerAktifCount').text("-");
                     $('#footerAktifTotal').text(rupiah(totalAktif));
-                    $('#footerKeluarCount').text(Math.max(...data.keluar_counts));
+                    $('#footerKeluarCount').text("-");
                     $('#footerKeluarTotal').text(rupiah(totalKeluar));
-                    $('#footerMangkirCount').text(Math.max(...data.mangkir_counts));
+                    $('#footerMangkirCount').text("-");
                     $('#footerMangkirTotal').text(rupiah(totalMangkir));
                     $('#footerTotal').text(rupiah(data.grand_total));
                 })

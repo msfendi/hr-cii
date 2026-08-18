@@ -249,6 +249,21 @@
         margin: 0 auto;
     }
 
+    /* Leave blocks (multi pengajuan) */
+    .leave-block {
+        text-align: left;
+        background: #fbfbfe;
+        transition: box-shadow .2s;
+    }
+
+    .leave-block:hover {
+        box-shadow: 0 .15rem .75rem rgba(0, 0, 0, .06);
+    }
+
+    .btn-remove-leave {
+        line-height: 1;
+    }
+
     /* Footer */
     .sticky-footer {
         background: rgba(255, 255, 255, .08) !important;
@@ -275,7 +290,26 @@
     .fade-up {
         animation: fadeUp .4s ease;
     }
+
+    /* Flatpickr — selaraskan warna dengan tema biru aplikasi */
+    .flatpickr-day.selected,
+    .flatpickr-day.selected:hover {
+        background: #4e73df;
+        border-color: #4e73df;
+    }
+
+    .flatpickr-day.today {
+        border-color: #4e73df;
+    }
+
+    .flatpickr-day.flatpickr-disabled,
+    .flatpickr-day.flatpickr-disabled:hover {
+        color: #d3d6e0;
+        text-decoration: line-through;
+    }
 </style>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 
 <body id="page-top">
     @include('sweetalert::alert')
@@ -330,7 +364,9 @@
                         <h1 class="h3 font-weight-bold mb-1"><i class="fas fa-calendar-check mr-2"></i>Pengajuan Cuti
                         </h1>
                         <p class="mb-0" style="font-size:.9rem; opacity:0.9;">Isi form di bawah untuk mengajukan cuti
-                            Anda kepada atasan.</p>
+                            Anda kepada atasan. Anda bisa menambahkan lebih dari satu jenis cuti sekaligus — setiap
+                            jenis cuti akan diajukan sebagai pengajuan approval yang terpisah, jenis cuti yang sama
+                            hanya boleh dipilih sekali, dan tanggalnya tidak boleh tumpang tindih antar pengajuan.</p>
                     </div>
 
                     {{-- Form Card --}}
@@ -369,60 +405,20 @@
                                             <i class="fas fa-id-badge fa-2x text-primary mr-3"></i>
                                             <div>
                                                 <div class="font-weight-bold text-gray-900" style="font-size:.95rem;">
-                                                    {{ $employee->NAMA_KARYAWAN }}</div>
+                                                    {{ $employee->NAMA_KARYAWAN }}
+                                                </div>
                                                 <div class="text-muted" style="font-size:.8rem;">{{ $employee->NPK }}
                                                     &middot; {{ $employee->DEPARTEMENT }}</div>
                                             </div>
                                         </div>
 
-                                        {{-- Input Fields --}}
-                                        <div class="form-group mb-4">
-                                            <label class="font-weight-bold text-gray-700 small">Jenis Cuti <span
-                                                    class="text-danger">*</span></label>
-                                            <select class="form-control" name="jenis_cuti" id="jenis_cuti" required>
-                                                <option value="" disabled selected>— Pilih Jenis Cuti —</option>
-                                                @foreach ($masterLeaveType as $item)
-                                                    <option value="{{ $item->id }}" data-name="{{ $item->name }}" {{ ($employee->JK == $item->gender_type || $item->gender_type == 'A') ? '' : 'disabled' }}>{{ $item->name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </div>
+                                        {{-- Kontainer blok cuti — diisi lewat JS agar bisa ditambah/dihapus dinamis --}}
+                                        <div id="leaves-container"></div>
 
-                                        <div class="row">
-                                            <div class="col-md-6 form-group mb-4">
-                                                <label class="font-weight-bold text-gray-700 small">Tanggal Mulai <span
-                                                        class="text-danger">*</span></label>
-                                                <input type="date" class="form-control" name="tanggal_mulai"
-                                                    id="tanggal_mulai" required>
-                                            </div>
-                                            <div class="col-md-6 form-group mb-4">
-                                                <label class="font-weight-bold text-gray-700 small">Tanggal Selesai
-                                                    <span class="text-danger">*</span></label>
-                                                <input type="date" class="form-control" name="tanggal_selesai"
-                                                    id="tanggal_selesai" required>
-                                            </div>
-                                        </div>
-
-                                        <div class="form-group mb-4">
-                                            <label class="font-weight-bold text-gray-700 small">Jumlah Hari</label>
-                                            <div class="input-group">
-                                                <div class="input-group-prepend">
-                                                    <span class="input-group-text bg-light text-primary"><i
-                                                            class="fas fa-calendar-day"></i></span>
-                                                </div>
-                                                <input type="hidden" name="jumlah_hari" id="jumlah_hari_val">
-                                                <input type="text" class="form-control bg-light"
-                                                    id="jumlah_hari_display" readonly
-                                                    placeholder="Otomatis dihitung...">
-                                            </div>
-                                            <small id="sisa_cuti_info" class="form-text mt-2 font-weight-bold"
-                                                style="display:none;"></small>
-                                        </div>
-
-                                        <div class="form-group mb-4">
-                                            <label class="font-weight-bold text-gray-700 small">Keterangan / Alasan
-                                                <span class="text-danger">*</span></label>
-                                            <textarea class="form-control" name="keterangan" id="keterangan" rows="3"
-                                                required placeholder="Alasan cuti..."></textarea>
+                                        <div class="text-center mb-4">
+                                            <button type="button" class="btn btn-outline-primary btn-sm px-3" id="btnTambahCuti">
+                                                <i class="fas fa-plus mr-1"></i> Tambah Pengajuan Cuti Lain
+                                            </button>
                                         </div>
 
                                         <div class="d-flex justify-content-between border-top pt-4 mt-2">
@@ -442,30 +438,10 @@
                                         <h6 class="text-primary font-weight-bold mb-3"><i
                                                 class="fas fa-clipboard-check mr-2"></i>Review Pengajuan</h6>
                                         <p class="text-muted small mb-4">Pastikan data pengajuan cuti Anda di bawah ini
-                                            sudah benar sebelum melakukan konfirmasi akhir.</p>
+                                            sudah benar sebelum melakukan konfirmasi akhir. Setiap jenis cuti akan
+                                            diajukan sebagai pengajuan approval terpisah.</p>
 
-                                        <div class="bg-light p-3 p-md-4 rounded mb-4 border">
-                                            <div class="review-row">
-                                                <span class="review-label">Jenis Cuti</span>
-                                                <span class="review-value" id="rv-jenis"></span>
-                                            </div>
-                                            <div class="review-row">
-                                                <span class="review-label">Tanggal Mulai</span>
-                                                <span class="review-value" id="rv-mulai"></span>
-                                            </div>
-                                            <div class="review-row">
-                                                <span class="review-label">Tanggal Selesai</span>
-                                                <span class="review-value" id="rv-selesai"></span>
-                                            </div>
-                                            <div class="review-row">
-                                                <span class="review-label">Total Hari</span>
-                                                <span class="review-value text-primary" id="rv-hari"></span>
-                                            </div>
-                                            <div class="review-row">
-                                                <span class="review-label">Alasan</span>
-                                                <span class="review-value" id="rv-ket"></span>
-                                            </div>
-                                        </div>
+                                        <div id="review-container"></div>
 
                                         <div class="d-flex justify-content-between pt-2">
                                             <button type="button" class="btn btn-light px-4 text-gray-700"
@@ -473,7 +449,7 @@
                                                 <i class="fas fa-arrow-left mr-1"></i> Kembali
                                             </button>
                                             <button type="submit" class="btn btn-success px-5 shadow-sm">
-                                                <i class="fas fa-paper-plane mr-1"></i> Kirim
+                                                <i class="fas fa-paper-plane mr-1"></i> Kirim Semua Pengajuan
                                             </button>
                                         </div>
                                     </div>
@@ -501,13 +477,26 @@
 
     @include('layout.footerscript')
 
+    <!-- Flatpickr: dipakai agar tanggal yang sudah dipilih di satu blok cuti bisa didisable di blok lainnya -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/id.js"></script>
+
     <script>
-        const elJenis = document.getElementById('jenis_cuti'),
-            elMulai = document.getElementById('tanggal_mulai'),
-            elSelesai = document.getElementById('tanggal_selesai'),
-            elHariDisp = document.getElementById('jumlah_hari_display'),
-            elHariVal = document.getElementById('jumlah_hari_val'),
-            elSisaInfo = document.getElementById('sisa_cuti_info');
+        flatpickr.localize(flatpickr.l10ns.id);
+
+        /* ══ Data dari server ══ */
+        // masterLeaveType sudah difilter di controller sesuai gender karyawan (gender_type 'A' = semua)
+        const leaveTypeOptions = @json($masterLeaveType->map(function ($t) {
+            return ['id' => $t->id, 'name' => $t->name];
+        }));
+        const holidays = @json($holidays ?? []);
+        const employeeNpk = @json($employee->NPK);
+        const getBalanceUrl = @json(route('pengajuan-cuti.get-leave-balance'));
+
+        const now = new Date();
+        const todayStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+        let leaveIndex = 0;
 
         /* ── Utilities ── */
         const formatDate = (val) => {
@@ -516,7 +505,425 @@
             return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][parseInt(m) - 1]} ${y}`;
         };
 
-        const updateDisplayItem = (id, html) => { document.getElementById(id).innerHTML = html; };
+        // tanggal_mulai dan tanggal_selesai dihitung INCLUSIVE (keduanya adalah hari cuti).
+        // Rentang [tanggal_mulai, tanggal_selesai] — melewati akhir pekan & hari libur.
+        const computeWorkingDays = (startVal, endVal) => {
+            if (!startVal || !endVal) return 0;
+            let start = new Date(startVal);
+            let end = new Date(endVal);
+            if (end < start) return -1;
+
+            let diff = 0;
+            let current = new Date(start);
+            while (current <= end) {
+                let dayOfWeek = current.getDay();
+                let tempDate = new Date(current.getTime() - (current.getTimezoneOffset() * 60000));
+                let dateString = tempDate.toISOString().split('T')[0];
+                let isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+                let isHoliday = holidays.includes(dateString);
+                if (!isWeekend && !isHoliday) diff++;
+                current.setDate(current.getDate() + 1);
+            }
+            return diff;
+        };
+
+        /* ── Cek tumpang tindih tanggal antar blok (interval tertutup/inclusive [mulai, selesai]) ── */
+        const getBlockRange = (block) => {
+            const mulai = block.querySelector('.leave-mulai').value;
+            const selesai = block.querySelector('.leave-selesai').value;
+            if (!mulai || !selesai) return null;
+            return { start: mulai, end: selesai };
+        };
+
+        const rangesOverlap = (a, b) => (a.start <= b.end) && (b.start <= a.end);
+
+        const checkOverlaps = () => {
+            const blocks = Array.from(document.querySelectorAll('.leave-block'));
+            let anyOverlap = false;
+
+            blocks.forEach(b => {
+                const info = b.querySelector('.leave-overlap-info');
+                info.style.display = 'none';
+                info.innerHTML = '';
+            });
+
+            for (let i = 0; i < blocks.length; i++) {
+                const rangeI = getBlockRange(blocks[i]);
+                if (!rangeI) continue;
+                for (let j = 0; j < i; j++) {
+                    const rangeJ = getBlockRange(blocks[j]);
+                    if (!rangeJ) continue;
+                    if (rangesOverlap(rangeI, rangeJ)) {
+                        anyOverlap = true;
+                        const info = blocks[i].querySelector('.leave-overlap-info');
+                        info.style.display = 'block';
+                        info.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> Tanggal bertumpang tindih dengan Cuti #${j + 1}.`;
+                    }
+                }
+            }
+            return !anyOverlap;
+        };
+
+        /* ── Satu jenis cuti hanya boleh dipilih di satu blok — nonaktifkan di blok lain ── */
+        const updateJenisAvailability = () => {
+            const blocks = Array.from(document.querySelectorAll('.leave-block'));
+            const selectedValues = blocks
+                .map(b => b.querySelector('.leave-jenis').value)
+                .filter(v => v);
+
+            blocks.forEach(b => {
+                const select = b.querySelector('.leave-jenis');
+                const currentVal = select.value;
+                Array.from(select.options).forEach(opt => {
+                    if (!opt.value) return; // lewati placeholder "— Pilih Jenis Cuti —"
+                    opt.disabled = selectedValues.includes(opt.value) && opt.value !== currentVal;
+                });
+            });
+        };
+
+        /* ── Datepicker (flatpickr): tanggal yang sudah dipakai di satu blok didisable di blok lain ──
+           Catatan: ini hanya bantuan UX (mencegah memilih tanggal yang PERSIS berada di dalam rentang
+           blok lain). checkOverlaps() tetap jadi penjaga utama untuk kasus rentang baru yang "membungkus"
+           rentang blok lain tanpa titik ujungnya sendiri jatuh di dalam rentang tsb. */
+        function initBlockDatepickers(block) {
+            const mulaiInput = block.querySelector('.leave-mulai');
+            const selesaiInput = block.querySelector('.leave-selesai');
+
+            flatpickr(mulaiInput, {
+                dateFormat: 'Y-m-d',
+                minDate: 'today',
+                disableMobile: true,
+                onChange: () => {
+                    handleBlockDateChange(block);
+                    refreshAllDatepickersDisabledDates();
+                }
+            });
+
+            flatpickr(selesaiInput, {
+                dateFormat: 'Y-m-d',
+                minDate: 'today',
+                disableMobile: true,
+                onChange: () => {
+                    handleBlockDateChange(block);
+                    refreshAllDatepickersDisabledDates();
+                }
+            });
+        }
+
+        function destroyBlockDatepickers(block) {
+            const mulaiInput = block.querySelector('.leave-mulai');
+            const selesaiInput = block.querySelector('.leave-selesai');
+            if (mulaiInput._flatpickr) mulaiInput._flatpickr.destroy();
+            if (selesaiInput._flatpickr) selesaiInput._flatpickr.destroy();
+        }
+
+        function refreshAllDatepickersDisabledDates() {
+            const blocks = Array.from(document.querySelectorAll('.leave-block'));
+            const withRanges = blocks.map(b => ({ block: b, range: getBlockRange(b) }));
+
+            blocks.forEach(b => {
+                const others = withRanges.filter(r => r.block !== b && r.range);
+                const disableRanges = others.map(r => ({ from: r.range.start, to: r.range.end }));
+
+                const mulaiInput = b.querySelector('.leave-mulai');
+                const selesaiInput = b.querySelector('.leave-selesai');
+                if (mulaiInput._flatpickr) mulaiInput._flatpickr.set('disable', disableRanges);
+                if (selesaiInput._flatpickr) selesaiInput._flatpickr.set('disable', disableRanges);
+            });
+        }
+
+        /* ── Membangun 1 blok cuti ── */
+        function createLeaveBlockHTML(idx) {
+            const optionsHtml = leaveTypeOptions.map(o =>
+                `<option value="${o.id}" data-name="${o.name.replace(/"/g, '&quot;')}">${o.name}</option>`
+            ).join('');
+
+            return `
+            <div class="leave-block border rounded p-3 p-md-4 mb-4 position-relative" data-index="${idx}">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-leave"
+                    style="position:absolute; top:.65rem; right:.65rem; display:none;" title="Hapus cuti ini">
+                    <i class="fas fa-times"></i>
+                </button>
+
+                <div class="font-weight-bold text-primary small mb-3">
+                    <i class="fas fa-calendar-alt mr-1"></i> Pengajuan Cuti #${idx + 1}
+                </div>
+
+                <div class="form-group mb-4">
+                    <label class="font-weight-bold text-gray-700 small">Jenis Cuti <span class="text-danger">*</span></label>
+                    <select class="form-control leave-jenis" name="leaves[${idx}][jenis_cuti]" required>
+                        <option value="" disabled selected>— Pilih Jenis Cuti —</option>
+                        ${optionsHtml}
+                    </select>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 form-group mb-4">
+                        <label class="font-weight-bold text-gray-700 small">Tanggal Mulai <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control leave-mulai" name="leaves[${idx}][tanggal_mulai]"
+                            placeholder="Pilih tanggal" autocomplete="off" readonly required>
+                    </div>
+                    <div class="col-md-6 form-group mb-4">
+                        <label class="font-weight-bold text-gray-700 small">Tanggal Selesai <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control leave-selesai" name="leaves[${idx}][tanggal_selesai]"
+                            placeholder="Pilih tanggal" autocomplete="off" readonly required>
+                    </div>
+                </div>
+
+                <div class="form-group mb-4">
+                    <label class="font-weight-bold text-gray-700 small">Jumlah Hari</label>
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text bg-light text-primary"><i class="fas fa-calendar-day"></i></span>
+                        </div>
+                        <input type="text" class="form-control bg-light leave-hari-display" readonly
+                            placeholder="Otomatis dihitung...">
+                    </div>
+                    <small class="form-text mt-2 font-weight-bold leave-sisa-info" style="display:none;"></small>
+                    <small class="form-text mt-1 font-weight-bold text-danger leave-overlap-info" style="display:none;"></small>
+                </div>
+
+                <div class="form-group mb-0">
+                    <label class="font-weight-bold text-gray-700 small">Keterangan / Alasan <span class="text-danger">*</span></label>
+                    <textarea class="form-control leave-keterangan" name="leaves[${idx}][keterangan]" rows="3"
+                        required placeholder="Alasan cuti..."></textarea>
+                </div>
+            </div>`;
+        }
+
+        function appendLeaveBlock() {
+            const idx = leaveIndex++;
+            const container = document.getElementById('leaves-container');
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = createLeaveBlockHTML(idx);
+            const block = wrapper.firstElementChild;
+            container.appendChild(block);
+            initBlockDatepickers(block);
+            updateRemoveButtonsVisibility();
+            updateJenisAvailability();
+            refreshAllDatepickersDisabledDates();
+        }
+
+        function updateRemoveButtonsVisibility() {
+            const blocks = document.querySelectorAll('.leave-block');
+            blocks.forEach(b => {
+                const btn = b.querySelector('.btn-remove-leave');
+                btn.style.display = blocks.length > 1 ? 'inline-block' : 'none';
+            });
+        }
+
+        function renumberBlockLabels() {
+            document.querySelectorAll('.leave-block').forEach((b, i) => {
+                b.querySelector('.font-weight-bold.text-primary.small').innerHTML =
+                    `<i class="fas fa-calendar-alt mr-1"></i> Pengajuan Cuti #${i + 1}`;
+            });
+        }
+
+        /* ── Hitung hari & cek sisa saldo per blok ── */
+        function handleBlockDateChange(block) {
+            const jenis = block.querySelector('.leave-jenis');
+            const mulai = block.querySelector('.leave-mulai');
+            const selesai = block.querySelector('.leave-selesai');
+            const hariDisp = block.querySelector('.leave-hari-display');
+            const sisaInfo = block.querySelector('.leave-sisa-info');
+
+            // Tanggal selesai tidak boleh sebelum tanggal mulai (boleh sama = cuti 1 hari)
+            if (mulai.value && selesai._flatpickr) {
+                selesai._flatpickr.set('minDate', mulai.value);
+                if (selesai.value && selesai.value < mulai.value) {
+                    selesai._flatpickr.clear();
+                }
+            }
+
+            const diff = computeWorkingDays(mulai.value, selesai.value);
+
+            if (diff > 0) {
+                hariDisp.value = `${diff} Hari`;
+            } else {
+                hariDisp.value = mulai.value && selesai.value ? 'Tgl tdk valid / Libur' : '';
+                if (!jenis.value || !mulai.value) {
+                    sisaInfo.style.display = 'none';
+                }
+            }
+
+            if (jenis.value && mulai.value) {
+                checkBlockBalance(block, diff);
+            }
+
+            checkOverlaps();
+        }
+
+        function checkBlockBalance(block, days) {
+            const jenis = block.querySelector('.leave-jenis');
+            const mulai = block.querySelector('.leave-mulai');
+            const selesai = block.querySelector('.leave-selesai');
+            const hariDisp = block.querySelector('.leave-hari-display');
+            const sisaInfo = block.querySelector('.leave-sisa-info');
+
+            sisaInfo.style.display = 'block';
+            sisaInfo.className = 'form-text text-info mt-2 small font-weight-bold leave-sisa-info';
+            sisaInfo.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> Memeriksa sisa cuti...';
+
+            const params = new URLSearchParams({
+                npk: employeeNpk,
+                leave_type_id: jenis.value,
+                start_date: mulai.value
+            });
+
+            fetch(`${getBalanceUrl}?${params.toString()}`)
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                        sisaInfo.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Gagal mengecek data cuti.';
+                        return;
+                    }
+
+                    // Batasi tanggal selesai sesuai sisa saldo cuti yang tersedia
+                    if (res.max_end_date) {
+                        if (selesai._flatpickr) selesai._flatpickr.set('maxDate', res.max_end_date);
+                        selesai.dataset.maxEnd = res.max_end_date;
+                        if (selesai.value && selesai.value > res.max_end_date) {
+                            if (selesai._flatpickr) selesai._flatpickr.clear();
+                            hariDisp.value = '';
+                        }
+                    } else {
+                        if (selesai._flatpickr) selesai._flatpickr.set('maxDate', null);
+                        delete selesai.dataset.maxEnd;
+                    }
+
+                    const recalculatedDiff = computeWorkingDays(mulai.value, selesai.value);
+                    const effectiveDiff = selesai.value ? recalculatedDiff : days;
+
+                    if (res.sisa <= 0) {
+                        sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                        sisaInfo.innerHTML = `<i class="fas fa-times-circle mr-1"></i> ${res.keterangan}. Anda tidak memiliki sisa cuti.`;
+                    } else if (effectiveDiff > res.sisa) {
+                        sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                        sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Sisa cuti tidak mencukupi.`;
+                    } else {
+                        const maxInfo = res.max_end_date ? ` Maks. tanggal selesai: <strong>${formatDate(res.max_end_date)}</strong>.` : '';
+                        sisaInfo.className = 'form-text text-success mt-2 small font-weight-bold leave-sisa-info';
+                        sisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}. Sisa cuti mencukupi.${maxInfo}`;
+                    }
+
+                    refreshAllDatepickersDisabledDates();
+                }).catch(() => {
+                    sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                    sisaInfo.innerHTML = '<i class="fas fa-wifi mr-1"></i> Koneksi bermasalah saat mengecek cuti.';
+                });
+        }
+
+        /* ── Event delegation: berlaku juga untuk blok yang ditambahkan belakangan ──
+           Catatan: perubahan tanggal (.leave-mulai/.leave-selesai) ditangani lewat callback
+           onChange flatpickr masing-masing instance (lihat initBlockDatepickers), bukan di sini. */
+        document.getElementById('leaves-container').addEventListener('change', function (e) {
+            if (e.target.matches('.leave-jenis')) {
+                updateJenisAvailability();
+                handleBlockDateChange(e.target.closest('.leave-block'));
+            }
+        });
+
+        document.getElementById('leaves-container').addEventListener('click', function (e) {
+            const removeBtn = e.target.closest('.btn-remove-leave');
+            if (removeBtn) {
+                const block = removeBtn.closest('.leave-block');
+                destroyBlockDatepickers(block);
+                block.remove();
+                updateRemoveButtonsVisibility();
+                renumberBlockLabels();
+                updateJenisAvailability();
+                checkOverlaps();
+                refreshAllDatepickersDisabledDates();
+            }
+        });
+
+        document.getElementById('btnTambahCuti').addEventListener('click', appendLeaveBlock);
+
+        /* ── Panel Navigations ── */
+        window.goToReview = () => {
+            const blocks = document.querySelectorAll('.leave-block');
+            if (blocks.length === 0) {
+                alert('Minimal harus ada 1 pengajuan cuti.');
+                return;
+            }
+
+            if (!checkOverlaps()) {
+                alert('Ada tanggal cuti yang tumpang tindih antar pengajuan. Silakan perbaiki tanggalnya terlebih dahulu.');
+                return;
+            }
+
+            const chosenTypes = [];
+            let reviewHtml = '';
+            for (const block of blocks) {
+                const jenis = block.querySelector('.leave-jenis');
+                const mulai = block.querySelector('.leave-mulai');
+                const selesai = block.querySelector('.leave-selesai');
+                const ket = block.querySelector('.leave-keterangan');
+                const nomor = block.querySelector('.font-weight-bold.text-primary.small').textContent.trim();
+
+                if (!jenis.value) { jenis.reportValidity(); return; }
+                if (!mulai.value) { mulai.reportValidity(); return; }
+                if (!selesai.value) { selesai.reportValidity(); return; }
+                if (!ket.value.trim()) { ket.reportValidity(); return; }
+
+                if (chosenTypes.includes(jenis.value)) {
+                    alert(`${nomor}: Jenis cuti ini sudah dipilih di pengajuan lain. Setiap jenis cuti hanya boleh dipilih sekali.`);
+                    return;
+                }
+                chosenTypes.push(jenis.value);
+
+                if (mulai.value < todayStr) {
+                    alert(`${nomor}: Tanggal mulai tidak boleh sebelum hari ini.`);
+                    return;
+                }
+
+                const diff = computeWorkingDays(mulai.value, selesai.value);
+                if (!diff || diff <= 0) {
+                    alert(`${nomor}: Format tanggal tidak valid (tanggal mulai harus lebih awal atau sama dengan tanggal selesai, dan bukan hanya akhir pekan/libur).`);
+                    return;
+                }
+
+                const maxAttr = selesai.dataset.maxEnd;
+                if (maxAttr && selesai.value > maxAttr) {
+                    alert(`${nomor}: Tanggal selesai melebihi sisa saldo cuti yang tersedia.`);
+                    return;
+                }
+
+                const leaveName = jenis.options[jenis.selectedIndex].getAttribute('data-name');
+
+                reviewHtml += `
+                <div class="bg-light p-3 p-md-4 rounded mb-3 border">
+                    <div class="font-weight-bold text-primary small mb-2"><i class="fas fa-calendar-alt mr-1"></i> ${nomor}</div>
+                    <div class="review-row">
+                        <span class="review-label">Jenis Cuti</span>
+                        <span class="review-value"><span class="badge badge-primary px-2 py-1">${leaveName}</span></span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Tanggal Mulai</span>
+                        <span class="review-value">${formatDate(mulai.value)}</span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Tanggal Selesai</span>
+                        <span class="review-value">${formatDate(selesai.value)}</span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Total Hari</span>
+                        <span class="review-value text-primary">${diff} Hari</span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Alasan</span>
+                        <span class="review-value">${ket.value}</span>
+                    </div>
+                </div>`;
+            }
+
+            document.getElementById('review-container').innerHTML = reviewHtml;
+            switchPanel(1, 2, true);
+        };
+
+        window.backToForm = () => switchPanel(2, 1, false);
+
         const switchPanel = (hideParam, showParam, isNext) => {
             document.getElementById(`panel-${hideParam}`).classList.remove('active');
             document.getElementById(`panel-${showParam}`).classList.add('active');
@@ -536,109 +943,8 @@
             }
         };
 
-        const holidays = @json($holidays ?? []);
-
-        /* ── Date Logic ── */
-        const handleDateChange = () => {
-            let diff = 0;
-            if (elMulai.value && elSelesai.value) {
-                let start = new Date(elMulai.value);
-                let end = new Date(elSelesai.value);
-
-                // Loop setiap hari dari rentang start sampai end
-                if (end >= start) {
-                    let current = new Date(start);
-                    while (current <= end) {
-                        let dayOfWeek = current.getDay();
-
-                        // ISO format YYYY-MM-DD
-                        // Penting: pastikan timezone tidak bergeser saat convert ke ISO
-                        let tempDate = new Date(current.getTime() - (current.getTimezoneOffset() * 60000));
-                        let dateString = tempDate.toISOString().split('T')[0];
-
-                        // 0 = Sunday, 6 = Saturday
-                        let isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-                        let isHoliday = holidays.includes(dateString);
-
-                        if (!isWeekend && !isHoliday) {
-                            diff++;
-                        }
-                        // tambah 1 hari
-                        current.setDate(current.getDate() + 1);
-                    }
-                }
-            }
-
-            if (diff > 0) {
-                elHariDisp.value = `${diff} Hari`;
-                elHariVal.value = diff;
-                if (elJenis.value) checkBalance(diff);
-            } else {
-                // Jika tanggal terbalik (selesai < mulai) atau range 100% jatuh di hari libur
-                elHariDisp.value = elMulai.value && elSelesai.value ? 'Tgl tdk valid / Libur' : '';
-                elHariVal.value = '';
-                elSisaInfo.style.display = 'none';
-            }
-        };
-
-        [elMulai, elSelesai, elJenis].forEach(el => el.addEventListener('change', handleDateChange));
-
-        /* ── Fetch Sisa Cuti API ── */
-        const checkBalance = (days) => {
-            if (!elJenis.value) return;
-            elSisaInfo.style.display = 'block';
-            elSisaInfo.className = 'form-text text-info mt-2 small font-weight-bold';
-            elSisaInfo.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> Memeriksa sisa cuti...';
-
-            fetch(`{{ route('pengajuan-cuti.get-leave-balance') }}?npk={{ $employee->NPK }}&leave_type_id=${elJenis.value}`)
-                .then(r => r.json())
-                .then(res => {
-                    if (res.success) {
-                        if (res.sisa <= 0) {
-                            elSisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold';
-                            elSisaInfo.innerHTML = `<i class="fas fa-times-circle mr-1"></i> ${res.keterangan}. Anda tidak memiliki sisa cuti.`;
-                        } else if (days > res.sisa) {
-                            elSisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold';
-                            elSisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Sisa cuti tidak mencukupi untuk ${days} hari.`;
-                        } else {
-                            elSisaInfo.className = 'form-text text-success mt-2 small font-weight-bold';
-                            elSisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}. Sisa cuti mencukupi.`;
-                        }
-                    } else {
-                        elSisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold';
-                        elSisaInfo.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Gagal mengecek data cuti.';
-                    }
-                }).catch(() => {
-                    elSisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold';
-                    elSisaInfo.innerHTML = '<i class="fas fa-wifi mr-1"></i> Koneksi bermasalah saat mengecek cuti.';
-                });
-        };
-
-        /* ── Panel Navigations ── */
-        window.goToReview = () => {
-            const elKet = document.getElementById('keterangan');
-
-            if (!elJenis.value) return elJenis.reportValidity();
-            if (!elMulai.value) return elMulai.reportValidity();
-            if (!elSelesai.value) return elSelesai.reportValidity();
-            if (!elKet.value.trim()) return elKet.reportValidity();
-
-            if (!elHariVal.value || elHariVal.value <= 0) {
-                return alert('Format tanggal tidak valid (mulai harus lebih awal dari selesai).');
-            }
-
-            const leaveName = elJenis.options[elJenis.selectedIndex].getAttribute('data-name');
-
-            updateDisplayItem('rv-jenis', `<span class="badge badge-primary px-2 py-1">${leaveName}</span>`);
-            updateDisplayItem('rv-mulai', formatDate(elMulai.value));
-            updateDisplayItem('rv-selesai', formatDate(elSelesai.value));
-            updateDisplayItem('rv-hari', `${elHariVal.value} Hari`);
-            updateDisplayItem('rv-ket', elKet.value);
-
-            switchPanel(1, 2, true);
-        };
-
-        window.backToForm = () => switchPanel(2, 1, false);
+        /* ── Inisialisasi: satu blok cuti default saat halaman dimuat ── */
+        document.addEventListener('DOMContentLoaded', appendLeaveBlock);
     </script>
 </body>
 

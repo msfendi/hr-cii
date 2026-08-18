@@ -16,5 +16,6 @@ class LeaveTypes extends Model
         'code',
         'default_days',
         'is_active',
+        'gender_type',
     ];
 }

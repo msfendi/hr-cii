@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Biodata;
 use App\Models\LeaveBalances;
 use App\Models\LeaveTypes;
+use App\Services\LeaveBalanceGenerationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -165,77 +165,30 @@ class AdminLeaveBalanceController extends Controller
         return response()->json(['status' => 'success']);
     }
 
-    public function generateYearlyBalance(Request $request)
+    /**
+     * Generate jatah cuti tahunan untuk seluruh karyawan tetap.
+     * Logika sebenarnya ada di LeaveBalanceGenerationService (lihat app/Services),
+     * supaya bisa dites & dipanggil dari tempat lain (mis. command/scheduler) tanpa
+     * bergantung pada HTTP request.
+     */
+    public function generateYearlyBalance(Request $request, LeaveBalanceGenerationService $leaveBalanceGenerationService)
     {
         $year = (int) $request->input('year', now()->year);
 
-        $leaveTypes = LeaveTypes::where('is_active', true)->get();
-        if ($leaveTypes->isEmpty()) {
-            return response()->json(['status' => 'error', 'message' => 'No active Leave Types found'], 400);
+        $result = $leaveBalanceGenerationService->generate($year);
+
+        if (!$result['success']) {
+            return response()->json(['status' => 'error', 'message' => $result['message']], 400);
         }
-
-        // Ambil semua dulu via Eloquent, filter di PHP agar tidak terpengaruh format kolom database SQL
-        $allEmployees = Biodata::leftJoin('PKWT', 'BIODATA.NPK', '=', 'PKWT.NPK')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'PKWT.TMK', 'PKWT.TKK', 'PKWT.JK')
-            ->get();
-
-        $employees = $allEmployees->filter(function($emp) {
-            $tkkKosong = empty($emp->TKK) || trim($emp->TKK) === '';
-            
-            $sudahSetahun = false;
-            if (!empty($emp->TMK) && trim($emp->TMK) !== '') {
-                try {
-                    $tmk = Carbon::parse($emp->TMK);
-                    if ($tmk->diffInYears(now()) >= 1) {
-                        $sudahSetahun = true;
-                    }
-                } catch (\Exception $e) {
-                    // Abaikan jika format error
-                }
-            }
-
-            return $tkkKosong && $sudahSetahun;
-        });
-
-        $created = 0;
-        $skipped = 0;
-
-        DB::transaction(function () use ($employees, $leaveTypes, $year, &$created, &$skipped) {
-            foreach ($employees as $employee) {
-                foreach ($leaveTypes as $type) {
-                    $remainedDays = $type->default_days;
-
-                    // Logika JK
-                    if ($employee->JK === 'L' && in_array($type->id, [3, 4])) {
-                        $remainedDays = 0;
-                    } elseif ($employee->JK === 'P' && in_array($type->id, [6, 7])) {
-                        $remainedDays = 0;
-                    }
-
-                    $balance = LeaveBalances::firstOrCreate(
-                        [
-                            'NPK'           => $employee->NPK,
-                            'leave_type_id' => $type->id,
-                            'year'          => $year,
-                        ],
-                        [
-                            'remained_days' => $remainedDays,
-                            'used_days'     => 0,
-                        ]
-                    );
-
-                    $balance->wasRecentlyCreated ? $created++ : $skipped++;
-                }
-            }
-        });
 
         return response()->json([
             'status'          => 'success',
             'message'         => "Generate Balance selesai untuk tahun $year",
             'year'            => $year,
-            'employees_count' => $employees->count(),
-            'created'         => $created,
-            'skipped'         => $skipped,
+            'employees_count' => $result['employees_count'],
+            'created'         => $result['created'],
+            'skipped'         => $result['skipped'],
+            'skipped_gender'  => $result['skipped_gender'],
         ]);
     }
 }

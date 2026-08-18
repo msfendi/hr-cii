@@ -625,6 +625,10 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/store', [ApprovalController::class, 'store'])->name('approval.store');
         Route::post('/update/{id}', [ApprovalController::class, 'update'])->name('approval.update');
         Route::post('/destroy/{id}', [ApprovalController::class, 'destroy'])->name('approval.destroy');
+        // Import
+        Route::get('/download-template', [ApprovalController::class, 'downloadTemplate'])->name('approval.download-template')->middleware(['auth', 'permission']);
+        Route::post('/import', [ApprovalController::class, 'import'])->name('approval.import')->middleware(['auth', 'permission']);
+
 
         // Nested Rule inside Group
         Route::post('/rule/store', [ApprovalController::class, 'storeRule'])->name('approval.rule.store');
@@ -1032,6 +1036,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval');
         Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve');
         Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject');
+        Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update');
     });
 
     // Insentif 6S
