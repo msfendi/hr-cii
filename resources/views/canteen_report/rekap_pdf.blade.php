@@ -29,7 +29,7 @@
 </head>
 <body>
 
-    <h1>REALISASI KANTIN {{ strtoupper($kantinLabel) }}</h1>
+    <h1>REALISASI {{ strtoupper($kantinLabel) }}</h1>
 
     <table class="info-table">
         <tr>
