@@ -1054,7 +1054,9 @@ body.modal-open {
 
             const tglCell = `<div class="cell-title">${escapeHtml(a.applied_at_formatted || '-')}</div>`;
 
-            return [a.no, nameCell, nikCell, eduCell, fisikCell, kontakCell, agamaCell, deptCell, tglCell];
+            // Kolom ke-10 (index 9) berisi nilai mentah 'Y-m-d H:i' yang dipakai
+            // khusus untuk sorting kolom Tanggal Apply (kolom 8), bukan untuk ditampilkan.
+            return [a.no, nameCell, nikCell, eduCell, fisikCell, kontakCell, agamaCell, deptCell, tglCell, a.applied_at || ''];
         }
 
         function initApplicantsTable() {
@@ -1066,6 +1068,29 @@ body.modal-open {
                 pageLength: 10,
                 lengthMenu: [5, 10, 25, 50],
                 order: [[5, 'desc']],
+                columns: [
+                    { data: 0 },
+                    { data: 1 },
+                    { data: 2 },
+                    { data: 3 },
+                    { data: 4 },
+                    { data: 5 },
+                    { data: 6 },
+                    { data: 7 },
+                    {
+                        // Tampilkan teks tanggal yang sudah diformat, tapi urutkan
+                        // berdasarkan nilai mentah 'Y-m-d H:i' di kolom tersembunyi (index 9)
+                        // supaya sort mengikuti tanggal-bulan-tahun asli, bukan teks tanggal.
+                        data: 8,
+                        render: function (data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                return row[9] || '';
+                            }
+                            return data;
+                        },
+                    },
+                    { data: 9, visible: false, searchable: false },
+                ],
                 language: {
                     search: 'Cari:',
                     lengthMenu: 'Tampilkan _MENU_ data',
