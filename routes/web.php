@@ -1248,7 +1248,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('canteen-report/export-excel', [CanteenReportController::class, 'exportRekapExcel'])->name('canteen-report.export-excel');
     });
 
-    Route::prefix('audit-trail')->name('audit-trail.')->group(function () {
+    Route::middleware(['auth', 'permission'])->prefix('audit-trail')->name('audit-trail.')->group(function () {
         Route::get('/', [AuditTrailController::class, 'index'])->name('index');
         Route::get('/data', [AuditTrailController::class, 'data'])->name('data');
         Route::get('/{auditTrail}', [AuditTrailController::class, 'show'])->name('show');
