@@ -286,7 +286,7 @@ class EventController extends Controller
 
         $map = [];
 
-        foreach (array_chunk($npks, 1500) as $chunk) {
+        foreach (array_chunk($npks, 1000) as $chunk) {
             $rows = DB::connection('cii')
                 ->table('BIODATA')
                 ->join('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
