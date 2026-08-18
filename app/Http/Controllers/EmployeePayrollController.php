@@ -1357,7 +1357,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 return Carbon::parse($row->date)->format('Y-m-d');
             });
 
-        $overtimeRaw = DB::table('overtimes_payroll')
+        $overtimeRaw = DB::table('overtimes')
             ->where('NPK', $npk)
             ->whereBetween('OVERTIME_DATE', [$startDate, $endDate])
             ->select('OVERTIME_DATE', 'JUMLAH_JAM_LEMBUR')
