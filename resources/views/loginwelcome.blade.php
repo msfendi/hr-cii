@@ -164,7 +164,7 @@
 
         .hero-content {
             position: relative;
-            z-index: 2;
+            /* z-index: 2; */
             display: flex;
             flex-wrap: wrap;
             align-items: center;
