@@ -34,33 +34,33 @@ class AppServiceProvider extends ServiceProvider
         PKWT::observe(PkwtObserver::class);
         Magang::observe(MagangObserver::class);
 
-        $models = File::allFiles(app_path('Models'));
+        // $models = File::allFiles(app_path('Models'));
 
-        foreach ($models as $model) {
+        // foreach ($models as $model) {
 
-            $class = 'App\\Models\\' .
-                str_replace(
-                    ['/', '.php'],
-                    ['\\', ''],
-                    $model->getRelativePathname()
-                );
+        //     $class = 'App\\Models\\' .
+        //         str_replace(
+        //             ['/', '.php'],
+        //             ['\\', ''],
+        //             $model->getRelativePathname()
+        //         );
 
-            if (!class_exists($class)) {
-                continue;
-            }
+        //     if (!class_exists($class)) {
+        //         continue;
+        //     }
 
-            $reflection = new ReflectionClass($class);
+        //     $reflection = new ReflectionClass($class);
 
-            // ✅ SKIP ABSTRACT CLASS
-            if ($reflection->isAbstract()) {
-                continue;
-            }
+        //     // ✅ SKIP ABSTRACT CLASS
+        //     if ($reflection->isAbstract()) {
+        //         continue;
+        //     }
 
-            // ✅ HARUS ELOQUENT MODEL
-            if ($reflection->isSubclassOf(Model::class)) {
-                $class::observe(GlobalObserver::class);
-            }
-        }
+        //     // ✅ HARUS ELOQUENT MODEL
+        //     if ($reflection->isSubclassOf(Model::class)) {
+        //         $class::observe(GlobalObserver::class);
+        //     }
+        // }
         view()->composer('*', function ($view) {
             if (Auth::check()) {
                 $roleusers = User::select('users.name', 'users.email', 'users.id', 'model_has_roles.*', 'roles.name as rolename')
