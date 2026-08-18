@@ -590,7 +590,9 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
         ============================================
         */
 
-        $lastOvertime = DB::table('overtimes')->max('OVERTIME_DATE');
+        $lastOvertime = DB::table('overtimes')
+            ->whereRaw('TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL')
+            ->max('OVERTIME_DATE');
 
         /*
         ============================================
