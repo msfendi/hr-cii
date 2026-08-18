@@ -981,13 +981,10 @@
                                                                                 </td>
 
                                                                                 {{-- Tanggal Apply --}}
-                                                                                <td>
+                                                                                <td data-order="{{ $recruitment->created_at ? \Carbon\Carbon::parse($recruitment->created_at)->timestamp : 0 }}">
                                                                                     <div class="name-main" style="font-size:13px;">
-                                                                                        {{ 
-                                                                                                                                                                                                                                                                                                                                                            $recruitment->created_at
-                                            ? \Carbon\Carbon::parse($recruitment->created_at)->format('d F Y')
-                                            : '-' 
-                                                                                                                                                                                                                                                                                                                                                        }}</div>
+                                                                                        {{ $recruitment->created_at ? \Carbon\Carbon::parse($recruitment->created_at)->format('d F Y') : '-' }}
+                                                                                    </div>
                                                                                 </td>
 
                                                                                 {{-- Status Apply --}}
