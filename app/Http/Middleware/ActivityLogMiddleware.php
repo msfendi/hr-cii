@@ -11,10 +11,10 @@ class ActivityLogMiddleware
     {
         $response = $next($request);
 
-        ActivityLogger::log([
-            'action' => 'request',
-            'description' => $request->method() . ' ' . $request->path(),
-        ]);
+        // ActivityLogger::log([
+        //     'action' => 'request',
+        //     'description' => $request->method() . ' ' . $request->path(),
+        // ]);
 
         return $response;
     }
