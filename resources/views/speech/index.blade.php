@@ -19,7 +19,7 @@
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Text To Speech</h1>
                 </div>
-                
+
                 <!-- DataTales Example -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-sm-flex align-items-center justify-content-between">
@@ -34,9 +34,18 @@
                             <option value="Indonesian Male">Indonesian Male</option>
                             <option value="Indonesian Female">Indonesian Female</option>
                         </select>
+                        <small class="form-text text-muted">
+                            Pilihan suara hanya berlaku untuk preview di browser. File MP3 yang diunduh
+                            menggunakan satu suara standar Bahasa Indonesia.
+                        </small>
                         <br>
                         <button id="submit" class="btn btn-primary">Proses</button>
                         <button id="cancel" class="btn btn-danger">Cancel</button>
+                        <button id="download" class="btn btn-success">
+                            <i class="fas fa-download"></i> Download MP3
+                        </button>
+
+                        <div id="result" class="mt-3"></div>
                     </div>
                 </div>
                 <!-- Content Row -->
@@ -68,8 +77,51 @@
         $('#submit').click(function() {
             texttospeech();
         });
+
         $('#cancel').click(function() {
             responsiveVoice.cancel();
+        });
+
+        $('#download').click(function () {
+            var text = $('#speech').val().trim();
+
+            if (!text) {
+                Swal.fire('Peringatan', 'Teks tidak boleh kosong.', 'warning');
+                return;
+            }
+
+            var $btn = $(this);
+            var originalHtml = $btn.html();
+            $btn.prop('disabled', true).html(
+                '<span class="spinner-border spinner-border-sm"></span> Memproses...'
+            );
+            $('#result').empty();
+
+            $.ajax({
+                url: '{{ route("speech.generate") }}',
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    text: text,
+                    voice: $('#voice').val()
+                },
+                success: function (res) {
+                    $('#result').html(
+                        '<audio controls src="' + res.url + '" class="mb-2 w-100"></audio><br>' +
+                        '<a href="' + res.url + '" download="' + res.filename + '" class="btn btn-outline-success">' +
+                        '<i class="fas fa-download"></i> Simpan MP3</a>'
+                    );
+                },
+                error: function (xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                        ? xhr.responseJSON.message
+                        : 'Gagal membuat file MP3.';
+                    Swal.fire('Error', msg, 'error');
+                },
+                complete: function () {
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
         });
     });
 </script>
