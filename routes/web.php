@@ -98,6 +98,7 @@ use App\Http\Controllers\DoorprizeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventInvitationController;
 use App\Http\Controllers\ExchangeRateController;
+use App\Http\Controllers\ExpatMealController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
@@ -724,10 +725,10 @@ Route::group(['middleware' => 'auth'], function () {
         });
 
     /*
-|--------------------------------------------------------------------------
-| Canteen Management
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | Canteen Management
+    |--------------------------------------------------------------------------
+    */
     Route::get('/canteens', [CanteenController::class, 'index'])->middleware(['auth', 'permission'])->name('canteens.index');
     Route::get('/canteens/create', [CanteenController::class, 'create'])->middleware(['auth', 'permission'])->name('canteens.create');
     Route::post('/canteens', [CanteenController::class, 'store'])->middleware(['auth', 'permission'])->name('canteens.store');
@@ -1150,6 +1151,36 @@ Route::middleware(['auth', 'permission'])->group(function () {
     Route::get('/canteen-report/employee-options', [CanteenReportController::class, 'employeeOptions'])->name('canteen-report.employee-options');
     Route::get('/canteen-report/outsource-options', [CanteenReportController::class, 'outsourceOptions'])->name('canteen-report.outsource-options');
 
+    Route::prefix('expat-meal')
+        ->name('expat-meal.')
+        ->group(function () {
+            Route::get('/', [ExpatMealController::class, 'index'])->name('index');
+
+            // Dashboard & laporan
+            Route::get('/summary', [ExpatMealController::class, 'summaryData'])->name('summary');
+            Route::get('/detail', [ExpatMealController::class, 'detailData'])->name('detail');
+
+            // Daftar peserta makan (expat_meal_participants)
+            Route::get('/participants', [ExpatMealController::class, 'participantData'])->name('participants');
+            Route::post('/participants', [ExpatMealController::class, 'participantStore'])->name('participants.store');
+            Route::post('/participants/delete', [ExpatMealController::class, 'participantDestroy'])->name('participants.delete');
+
+            // Menu makanan (expat_meal_menus)
+            Route::get('/menu', [ExpatMealController::class, 'menuData'])->name('menu');
+            Route::post('/menu', [ExpatMealController::class, 'menuStore'])->name('menu.store');
+            Route::post('/menu/delete', [ExpatMealController::class, 'menuDestroy'])->name('menu.delete');
+
+            // Template & import excel (2 sheet: Daftar Expat & Makanan)
+            Route::get('/template', [ExpatMealController::class, 'downloadTemplate'])->name('template');
+            Route::post('/import', [ExpatMealController::class, 'import'])->name('import');
+
+            // Export laporan
+            Route::get('/export-excel', [ExpatMealController::class, 'exportRekapExcel'])->name('export-excel');
+            Route::get('/detail-makanan', [ExpatMealController::class, 'mealDetailData'])->name('detail-makanan');
+            Route::get('expat-options', [ExpatMealController::class, 'expatOptions'])->name('expat-options');
+        });
+
+
     // Template & import excel shift siang/malam
     Route::get('/canteen-report/template', [CanteenReportController::class, 'downloadTemplate'])->name('canteen-report.template');
     Route::post('/canteen-report/import', [CanteenReportController::class, 'importShift'])->name('canteen-report.import');
@@ -1212,6 +1243,9 @@ Route::middleware(['auth', 'permission'])
     });
 
 Route::get('/speech/index', [SpeechController::class, 'index'])->name('speech.index')->middleware(['auth', 'permission']);
+Route::post('/speech/generate', [\App\Http\Controllers\SpeechController::class, 'generate'])
+    ->name('speech.generate')
+    ->middleware(['auth', 'permission']);
 
 
 
