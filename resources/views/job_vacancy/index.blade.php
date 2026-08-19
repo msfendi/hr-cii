@@ -692,6 +692,7 @@ body.modal-open {
                             <div class="col-md-4 form-group">
                                 <label class="small font-weight-bold text-gray-600">Level <span class="text-danger">*</span></label>
                                 <select id="fIsStaff" name="is_staff" class="form-control" style="width:100%" required>
+                                    <option value="" selected disabled>Pilih Level</option>
                                     <option value="0">Non-Staff</option>
                                     <option value="1">Staff</option>
                                 </select>
