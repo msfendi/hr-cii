@@ -314,11 +314,29 @@ class EmployeePayrollController extends Controller
 
         // dd($overtimeRaw);
 
+        // Tanggal-tanggal dimana karyawan ini punya ijin_meninggalkan_pekerjaans
+        // yang belum kembali (jam_kembali masih NULL). Kalau
+        // overtimes_payroll.JUMLAH_JAM_LEMBUR pada tanggal tsb berupa angka,
+        // nilainya diabaikan (tidak dipakai sebagai jam lembur).
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->where('npk', $employee->employee_npk)
+            ->whereBetween('tanggal', [$startDate, $endDate])
+            ->whereNull('jam_kembali')
+            ->pluck('tanggal')
+            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+            ->flip();
+
         $overtimes = [];
 
         foreach ($overtimeRaw as $ot) {
             $key = Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
-            $overtimes[$key] = trim($ot->JUMLAH_JAM_LEMBUR);
+            $value = trim($ot->JUMLAH_JAM_LEMBUR);
+
+            if (is_numeric($value) && isset($openIjinDates[$key])) {
+                continue;
+            }
+
+            $overtimes[$key] = $value;
         }
 
         $summary = [
@@ -895,10 +913,28 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             ->select('OVERTIME_DATE', 'JUMLAH_JAM_LEMBUR')
             ->get();
 
+        // Tanggal-tanggal dimana karyawan ini punya ijin_meninggalkan_pekerjaans
+        // yang belum kembali (jam_kembali masih NULL). Kalau
+        // overtimes.JUMLAH_JAM_LEMBUR pada tanggal tsb berupa angka, nilainya
+        // diabaikan (tidak dipakai sebagai jam lembur).
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->where('npk', $employee->employee_npk)
+            ->whereBetween('tanggal', [$startDate, $endDate])
+            ->whereNull('jam_kembali')
+            ->pluck('tanggal')
+            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+            ->flip();
+
         $overtimes = [];
         foreach ($overtimeRaw as $ot) {
             $key = Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
-            $overtimes[$key] = trim($ot->JUMLAH_JAM_LEMBUR);
+            $value = trim($ot->JUMLAH_JAM_LEMBUR);
+
+            if (is_numeric($value) && isset($openIjinDates[$key])) {
+                continue;
+            }
+
+            $overtimes[$key] = $value;
         }
 
         $summary = [
@@ -1363,11 +1399,29 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             ->select('OVERTIME_DATE', 'JUMLAH_JAM_LEMBUR')
             ->get();
 
+        // Tanggal-tanggal dimana karyawan ini punya ijin_meninggalkan_pekerjaans
+        // yang belum kembali (jam_kembali masih NULL). Kalau
+        // overtimes.JUMLAH_JAM_LEMBUR pada tanggal tsb berupa angka, nilainya
+        // diabaikan (tidak dipakai sebagai jam lembur).
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->where('npk', $npk)
+            ->whereBetween('tanggal', [$startDate, $endDate])
+            ->whereNull('jam_kembali')
+            ->pluck('tanggal')
+            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+            ->flip();
+
         $overtimes = [];
 
         foreach ($overtimeRaw as $ot) {
             $key = Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
-            $overtimes[$key] = trim($ot->JUMLAH_JAM_LEMBUR);
+            $value = trim($ot->JUMLAH_JAM_LEMBUR);
+
+            if (is_numeric($value) && isset($openIjinDates[$key])) {
+                continue;
+            }
+
+            $overtimes[$key] = $value;
         }
 
         $summary = [

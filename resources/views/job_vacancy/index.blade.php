@@ -1830,6 +1830,7 @@ body.modal-open {
                     position: $('#fPosition').val(),
                     department_id: $('#fDepartment').val(),
                     employment_type: $('#fType').val(),
+                    is_staff: $('#fIsStaff').val(),
                     total_needed: $('#fTotalNeeded').val(),
                     status: $('#fStatus').val(),
                     open_date: $('#fOpenDate').val(),

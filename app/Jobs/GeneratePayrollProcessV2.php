@@ -572,6 +572,46 @@ END AS special_overtime_hours
             ->get()
             ->groupBy('NPK');
 
+        /*
+        |--------------------------------------------------------------------------
+        | NOLKAN overtime_hours / special_overtime_hours JIKA ADA IJIN YANG BELUM
+        | KEMBALI (ijin_meninggalkan_pekerjaans.jam_kembali = NULL) DI NPK &
+        | TANGGAL YANG SAMA
+        |--------------------------------------------------------------------------
+        | Di V2, overtime_hours & special_overtime_hours dihitung dari selisih
+        | check-in/check-out di att_log (bukan langsung dari JUMLAH_JAM_LEMBUR
+        | yang numerik seperti di V1). Tapi kalau pada NPK & tanggal yang sama
+        | karyawan tsb punya baris ijin_meninggalkan_pekerjaans dengan
+        | jam_kembali masih NULL (belum kembali dari ijin), maka jam kerja hasil
+        | scan di tanggal itu tidak bisa dipercaya untuk dihitung sebagai lembur
+        | -> overtime_hours & special_overtime_hours dinolkan di sini
+        | (post-process di PHP karena ijin_meninggalkan_pekerjaans ada di
+        | connection DB yang berbeda dari `overtimes`/`att_log`/`cii`).
+        |--------------------------------------------------------------------------
+        */
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->whereBetween('tanggal', [$periodStart, $periodEnd])
+            ->whereNull('jam_kembali')
+            ->select('npk', DB::raw('CAST(tanggal AS DATE) as tanggal'))
+            ->get()
+            ->map(function ($row) {
+                return $row->npk . '|' . Carbon::parse($row->tanggal)->format('Y-m-d');
+            })
+            ->flip();
+
+        $overtimeDetails = $overtimeDetails->map(function ($rows) use ($openIjinDates) {
+            return $rows->map(function ($ot) use ($openIjinDates) {
+                $key = $ot->NPK . '|' . Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
+
+                if (isset($openIjinDates[$key])) {
+                    $ot->overtime_hours = 0;
+                    $ot->special_overtime_hours = 0;
+                }
+
+                return $ot;
+            });
+        });
+
         // SUMMARY LATE
 
         if (!$isCheck) {
@@ -728,34 +768,46 @@ END AS special_overtime_hours
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
             ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
             ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
+            ->leftJoin('employee_shifts as ijes', function ($join) {
+                $join->on('ijes.npk', '=', 'imp.npk')
+                    ->on(
+                        DB::raw('CAST(ijes.shift_date AS DATE)'),
+                        '=',
+                        DB::raw('CAST(imp.tanggal AS DATE)')
+                    );
+            })
+            ->leftJoin('shifts as ijs', function ($join) {
+                $join->on('ijes.shift_id', '=', 'ijs.id')
+                    ->whereNotNull('ijes.shift_id');
+            })
             ->selectRaw("
         imp.npk,
 
         SUM(
+            DATEDIFF(
+                MINUTE,
+                imp.jam_keluar,
+                COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00')
+            )
+            -
             CASE
-                WHEN imp.jam_kembali IS NULL THEN 0
-                ELSE
-                    DATEDIFF(MINUTE, imp.jam_keluar, imp.jam_kembali)
-                    -
-                    CASE
-                        WHEN imp.jam_keluar < bm.time_end
-                         AND imp.jam_kembali > bm.time_start
-                        THEN
-                            DATEDIFF(
-                                MINUTE,
-                                CASE
-                                    WHEN imp.jam_keluar > bm.time_start
-                                        THEN imp.jam_keluar
-                                    ELSE bm.time_start
-                                END,
-                                CASE
-                                    WHEN imp.jam_kembali < bm.time_end
-                                        THEN imp.jam_kembali
-                                    ELSE bm.time_end
-                                END
-                            )
-                        ELSE 0
-                    END
+                WHEN imp.jam_keluar < bm.time_end
+                 AND COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00') > bm.time_start
+                THEN
+                    DATEDIFF(
+                        MINUTE,
+                        CASE
+                            WHEN imp.jam_keluar > bm.time_start
+                                THEN imp.jam_keluar
+                            ELSE bm.time_start
+                        END,
+                        CASE
+                            WHEN COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00') < bm.time_end
+                                THEN COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00')
+                            ELSE bm.time_end
+                        END
+                    )
+                ELSE 0
             END
         ) as total_ijin_minutes
     ")
@@ -769,6 +821,18 @@ END AS special_overtime_hours
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
             ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
             ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
+            ->leftJoin('employee_shifts as ijdes', function ($join) {
+                $join->on('ijdes.npk', '=', 'imp.npk')
+                    ->on(
+                        DB::raw('CAST(ijdes.shift_date AS DATE)'),
+                        '=',
+                        DB::raw('CAST(imp.tanggal AS DATE)')
+                    );
+            })
+            ->leftJoin('shifts as ijds', function ($join) {
+                $join->on('ijdes.shift_id', '=', 'ijds.id')
+                    ->whereNotNull('ijdes.shift_id');
+            })
             ->selectRaw("
         imp.npk,
         b.NAMA_KARYAWAN,
@@ -781,30 +845,30 @@ END AS special_overtime_hours
         bm.time_end,
         db.DEPARTEMENT,
 
+        DATEDIFF(
+            MINUTE,
+            imp.jam_keluar,
+            COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00')
+        )
+        -
         CASE
-            WHEN imp.jam_kembali IS NULL THEN 0
-            ELSE
-                DATEDIFF(MINUTE, imp.jam_keluar, imp.jam_kembali)
-                -
-                CASE
-                    WHEN imp.jam_keluar < bm.time_end
-                     AND imp.jam_kembali > bm.time_start
-                    THEN
-                        DATEDIFF(
-                            MINUTE,
-                            CASE
-                                WHEN imp.jam_keluar > bm.time_start
-                                    THEN imp.jam_keluar
-                                ELSE bm.time_start
-                            END,
-                            CASE
-                                WHEN imp.jam_kembali < bm.time_end
-                                    THEN imp.jam_kembali
-                                ELSE bm.time_end
-                            END
-                        )
-                    ELSE 0
-                END
+            WHEN imp.jam_keluar < bm.time_end
+             AND COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00') > bm.time_start
+            THEN
+                DATEDIFF(
+                    MINUTE,
+                    CASE
+                        WHEN imp.jam_keluar > bm.time_start
+                            THEN imp.jam_keluar
+                        ELSE bm.time_start
+                    END,
+                    CASE
+                        WHEN COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00') < bm.time_end
+                            THEN COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00')
+                        ELSE bm.time_end
+                    END
+                )
+            ELSE 0
         END AS ijin_minutes
     ")
             ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])

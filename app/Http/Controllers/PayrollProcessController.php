@@ -901,6 +901,45 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             ->get()
             ->groupBy('NPK');
 
+        /*
+        |--------------------------------------------------------------------------
+        | ABAIKAN overtimes.JUMLAH_JAM_LEMBUR (NUMERIK) JIKA ADA IJIN YANG BELUM
+        | KEMBALI (ijin_meninggalkan_pekerjaans.jam_kembali = NULL) DI NPK &
+        | TANGGAL YANG SAMA
+        |--------------------------------------------------------------------------
+        | overtime_hours & special_overtime_hours di atas hanya terisi (bukan 0)
+        | kalau JUMLAH_JAM_LEMBUR numerik (TRY_CAST(...) IS NOT NULL). Kalau pada
+        | NPK & tanggal yang sama ternyata karyawan tsb punya baris di
+        | ijin_meninggalkan_pekerjaans dengan jam_kembali masih NULL (belum
+        | kembali dari ijin), maka JUMLAH_JAM_LEMBUR pada tanggal itu dianggap
+        | tidak valid untuk dihitung -> overtime_hours & special_overtime_hours
+        | dinolkan di sini (post-process di PHP karena ijin_meninggalkan_pekerjaans
+        | ada di connection DB yang berbeda dari `overtimes`/`cii`).
+        |--------------------------------------------------------------------------
+        */
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->whereBetween('tanggal', [$periodStart, $periodEnd])
+            ->whereNull('jam_kembali')
+            ->select('npk', DB::raw('CAST(tanggal AS DATE) as tanggal'))
+            ->get()
+            ->map(function ($row) {
+                return $row->npk . '|' . Carbon::parse($row->tanggal)->format('Y-m-d');
+            })
+            ->flip();
+
+        $overtimeDetails = $overtimeDetails->map(function ($rows) use ($openIjinDates) {
+            return $rows->map(function ($ot) use ($openIjinDates) {
+                $key = $ot->NPK . '|' . Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
+
+                if (isset($openIjinDates[$key])) {
+                    $ot->overtime_hours = 0;
+                    $ot->special_overtime_hours = 0;
+                }
+
+                return $ot;
+            });
+        });
+
         $lateDetails =
             DB::connection('cii')
             ->query()
