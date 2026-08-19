@@ -27,7 +27,7 @@ class MonStageDataService
     private const OCF_LIST_TTL = 300; // 5 menit
 
     /** Daftar department tetap untuk kolom department_id di kedua tabel. */
-    public const DEPARTMENTS = ['Cutting', 'Sewing', 'Packing', 'QC', 'Balance Garment Stock'];
+    public const DEPARTMENTS = ['Cutting', 'Sewing', 'Packing', 'QC', 'Balance Garment Stock', 'Warehouse'];
 
     /**
      * Daftar kode OCF hasil ekstraksi dari mon_rekonsiliasis.spesifikasi,
