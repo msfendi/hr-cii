@@ -679,7 +679,7 @@
     .theme-loss    .rekon-pipe-output, .theme-loss    .rekon-pipe-output-pct { color: #c0392b; }
     .theme-blue    .rekon-pipe-output, .theme-blue    .rekon-pipe-output-pct { color: #2e75b6; }
 
-    /* Grup visual "Produksi Internal (Pabrik)" & "Sabkon (Pabrik Luar)" --
+    /* Grup visual "Work In Process (Chutex)" & "Sabkon Process" --
        membungkus beberapa rekon-pipe-box sekaligus dengan border + judul
        supaya kedua flow (internal vs subkon pabrik luar) terlihat sebagai
        2 jalur terpisah, bukan 1 rantai linear tunggal. */
@@ -731,10 +731,10 @@
     }
 
     .rekon-pipe-total .rekon-pipe-body { padding-top: .7rem; }
-    /* Shipment (Total) & Total Process Loss sama-sama box mandiri (tidak
-       dihubungkan panah), jadi butuh jarak eksplisit -- tanpa ini keduanya
-       menempel karena tidak ada .rekon-pipe-group atau .rekon-pipe-arrow
-       di antaranya seperti box lain. */
+    /* Box mandiri (tidak dihubungkan panah): Total Process Loss (menempel
+       di ekor grup "Work In Process (Chutex)") & Balance Garment Stock
+       (menempel di ekor Shipment (Total)) -- butuh jarak eksplisit karena
+       tidak ada arrow di antaranya seperti box lain. */
     .rekon-pipe-total { margin-left: .75rem; }
 
     /* Remark (mon_stage_remarks), ditampilkan di bawah persentase loss
@@ -1434,10 +1434,10 @@ function updateFormulaWithColors() {
 
         const arrow = `<div class="rekon-pipe-arrow"><i class="fas fa-arrow-right"></i></div>`;
 
-        // ===== Kontrak (Total) =====
-        const contractBox = renderBox('Kontrak (Total)', pipeline.contract, 'neutral', null, 100, []);
+        // ===== Total Contract =====
+        const contractBox = renderBox('Total Contract', pipeline.contract, 'neutral', null, 100, []);
 
-        // ===== Grup Produksi Internal (Pabrik): Cutting → Sewing → QC → Packing → Warehouse =====
+        // ===== Grup Work In Process (Chutex): Cutting → Sewing → QC → Packing → Warehouse =====
         // Urutan & datanya TIDAK berubah dari sebelumnya, cuma dibungkus
         // di dalam 1 grup visual (rekon-pipe-group).
         const internalProcess = {
@@ -1453,28 +1453,56 @@ function updateFormulaWithColors() {
             return renderBox(label, d.jumlah, 'green', step, null, d.remarks);
         }).join(arrow);
 
-        // ===== Grup Sabkon (Pabrik Luar): Sabkon → Warehouse (Sabkon) =====
+        // ===== Grup Sabkon Process: Sabkon → Warehouse (Chutex) =====
         // Cabang terpisah dari flow internal, sumbernya mon_subkons
         // (di-scope lewat filter OCF -- lihat
-        // MonitoringRekonsiliasiService::subkonSumByField()). Persentase
-        // dihitung terhadap Kontrak (bukan terhadap stage sebelumnya)
-        // karena cabang ini tidak punya "stage sebelumnya" di flow.
+        // MonitoringRekonsiliasiService::subkonSumByField()). Sabkon selalu
+        // dianggap 100% tercapai, jadi persentasenya flat 100% dan loss
+        // selalu 0 (nilai loss/loss% sudah 0 dari backend).
         const sabkonProcess = {
-            'Sabkon':             'Sabkon (Pabrik Luar)',
-            'Warehouse (Sabkon)': 'Sabkon → Warehouse (Sabkon)',
+            'Sabkon':             'Sabkon Process',
+            'Warehouse (Chutex)': 'Sabkon → Warehouse (Chutex)',
         };
-        const contractVal = Number(pipeline.contract || 0);
         const sabkonBoxes = (pipeline.sabkon || []).map(d => {
             const label = d.department_id ?? '-';
             const step = findStep(sabkonProcess[label] || '');
-            const pct = contractVal > 0 ? (Number(d.jumlah || 0) / contractVal) * 100 : null;
-            return renderBox(label, d.jumlah, 'blue', step, pct, d.remarks);
+            return renderBox(label, d.jumlah, 'blue', step, 100, d.remarks);
         }).join(arrow);
 
         // ===== Shipment (Total) =====
+        // Basis sekarang Total Contract (bukan lagi output Cutting):
+        //  - Shipment loss   = shipment − total contract
+        //  - Shipment loss % = shipment / total contract
         const shipmentBox = renderBox('Shipment (Total)', pipeline.shipment, 'navy', findStep('Cutting → Shipment'), null, []);
 
-        // ===== Total Process Loss (tidak berubah, tetap dari Produksi Internal saja) =====
+        // ===== Balance Garment Stock (kotak baru di samping Shipment) =====
+        // = (Warehouse [Work In Process] + Warehouse [Sabkon]) − Shipment (Total)
+        const balanceGarmentStock = Number(pipeline.balance_garment_stock || 0);
+
+        let balanceColorClass = 'loss-zero';
+        let balanceSign = '';
+        if (balanceGarmentStock < 0) {
+            balanceColorClass = 'loss-negative';
+            balanceSign = '-';
+        } else if (balanceGarmentStock > 0) {
+            balanceColorClass = 'loss-positive';
+        }
+
+        const balanceBox = `
+            <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
+                <div class="rekon-pipe-header">Balance Garment Stock</div>
+                <div class="rekon-pipe-body">
+                    <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtNum(Math.abs(balanceGarmentStock))}</div>
+                    <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
+                </div>
+            </div>
+        `;
+
+        // ===== Total Process Loss =====
+        // = loss sewing + loss qc + loss packing
+        // %  = total process loss / total contract
+        // Sekarang ditempatkan DI DALAM grup "Work In Process (Chutex)",
+        // menempel setelah box Warehouse TANPA tanda panah pemisah.
         const totalLoss    = Number(pipeline.total_loss || 0);
         const totalLossPct = Number(pipeline.loss_pct || 0);
 
@@ -1498,13 +1526,16 @@ function updateFormulaWithColors() {
             </div>
         `;
 
+        // Digabung ke internalBoxes TANPA arrow di depannya (beda dengan
+        // box lain dalam grup yang dipisah oleh `arrow`).
+        const internalGroupHtml = internalBoxes + lossBox;
+
         const legend = `
             <div class="rekon-pipe-legend">
                 <span><i class="rekon-pipe-dot dot-output"></i>Output Qty (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-loss"></i>Loss Qty (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-sabkon"></i>Sabkon Input/Output (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-pct"></i>Persentase terhadap Kontrak</span>
-                <span><i class="fas fa-pencil-alt mr-1"></i>Remark diisi manual</span>
             </div>
         `;
 
@@ -1512,15 +1543,15 @@ function updateFormulaWithColors() {
             <div class="d-flex flex-wrap align-items-stretch justify-content-center">
                 ${contractBox}
                 <div class="rekon-pipe-group">
-                    <div class="rekon-pipe-group-title">Produksi Internal (Pabrik)</div>
-                    <div class="d-flex flex-wrap align-items-stretch justify-content-center">${internalBoxes}</div>
+                    <div class="rekon-pipe-group-title">Work In Process (Chutex)</div>
+                    <div class="d-flex flex-wrap align-items-stretch justify-content-center">${internalGroupHtml}</div>
                 </div>
                 <div class="rekon-pipe-group theme-blue">
-                    <div class="rekon-pipe-group-title">Sabkon (Pabrik Luar)</div>
+                    <div class="rekon-pipe-group-title">Sabkon Process</div>
                     <div class="d-flex flex-wrap align-items-stretch justify-content-center">${sabkonBoxes}</div>
                 </div>
                 ${shipmentBox}
-                ${lossBox}
+                ${balanceBox}
             </div>
             ${legend}
         `;

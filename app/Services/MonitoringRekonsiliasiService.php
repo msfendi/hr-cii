@@ -1095,10 +1095,6 @@ class MonitoringRekonsiliasiService
             (object) ['department_id' => 'Warehouse', 'jumlah' => $destWarehouse, 'remarks' => $this->stageRemarksByDepartment('Warehouse')],
         ]);
 
-        // Total loss hanya dari Packing ke Warehouse (loss di tahap ini)
-        $totalLoss = ($deptSewing - $destSewing) + ($deptPacking - $destPacking) + ($destWarehouse - $deptPacking);
-        $lossPct   = $deptPacking > 0 ? round($totalLoss / $deptCutting * 100, 2) : 0;
-
         // Cabang SABKON (PABRIK LUAR): terpisah dari flow produksi internal
         // di atas, sumbernya tabel mon_subkons (bukan mon_prod_lines), dan
         // di-scope HANYA lewat filter OCF (dicocokkan ke mon_subkons.no_order)
@@ -1113,6 +1109,32 @@ class MonitoringRekonsiliasiService
             (object) ['department_id' => 'Warehouse (Sabkon)', 'jumlah' => $sabkonWarehouse, 'remarks' => $this->stageRemarksByDepartment('Warehouse (Sabkon)')],
         ]);
 
+        // ===== Rumus per tahap (revisi) =====
+        //  - Loss cutting    = output cutting - (total contract - sabkon)
+        //  - Cutting %       = output cutting / (total contract - sabkon)
+        //  - Cutting loss %  = loss cutting / output cutting
+        $cuttingBase    = $contract - $sabkonPabrikLuar;
+        $lossCutting    = $deptCutting - $cuttingBase;
+        $cuttingPct     = $cuttingBase > 0 ? round($deptCutting / $cuttingBase * 100, 2) : 0;
+        $cuttingLossPct = $deptCutting > 0 ? round($lossCutting / $deptCutting * 100, 2) : 0;
+
+        //  - Shipment loss   = shipment - total contract
+        //  - Shipment loss % = shipment / total contract
+        $shipmentLoss    = $shipment - $contract;
+        $shipmentLossPct = $contract > 0 ? round($shipment / $contract * 100, 2) : 0;
+
+        //  - Total process loss   = loss sewing + loss qc + loss packing
+        //  - Total process loss % = total process loss / contract total
+        $lossSewing  = $deptSewing - $destSewing;
+        $lossQc      = $deptQc - $deptSewing;
+        $lossPacking = $deptPacking - $destPacking;
+        $totalLoss   = $lossSewing + $lossQc + $lossPacking;
+        $lossPct     = $contract > 0 ? round($totalLoss / $contract * 100, 2) : 0;
+
+        // Balance Garment Stock = (Warehouse [Work In Process] + Warehouse
+        // [Sabkon]) - Shipment (Total).
+        $balanceGarmentStock = ($destWarehouse + $sabkonWarehouse) - $shipment;
+
         return [
             'contract'    => $contract,
             'departments' => $departments,
@@ -1122,6 +1144,7 @@ class MonitoringRekonsiliasiService
 
             // Cabang Sabkon (Pabrik Luar) -> Warehouse (Sabkon), ditampilkan
             // sebagai grup terpisah di sebelah flow produksi internal.
+            // Sabkon selalu dianggap 100% tercapai (loss selalu 0).
             'sabkon' => $sabkonDepartments,
 
             // Nilai mentah per tahap, dipakai pipelineLossSteps() untuk
@@ -1136,6 +1159,24 @@ class MonitoringRekonsiliasiService
 
             'sabkon_pabrik_luar' => $sabkonPabrikLuar,
             'sabkon_warehouse'   => $sabkonWarehouse,
+
+            // Cutting: basis kontrak dikurangi sabkon.
+            'cutting_base'     => $cuttingBase,
+            'loss_cutting'     => $lossCutting,
+            'cutting_pct'      => $cuttingPct,
+            'cutting_loss_pct' => $cuttingLossPct,
+
+            // Komponen Total Process Loss.
+            'loss_sewing'  => $lossSewing,
+            'loss_qc'      => $lossQc,
+            'loss_packing' => $lossPacking,
+
+            // Shipment vs Total Contract.
+            'shipment_loss'     => $shipmentLoss,
+            'shipment_loss_pct' => $shipmentLossPct,
+
+            // Balance Garment Stock = (Warehouse + Warehouse Sabkon) - Shipment.
+            'balance_garment_stock' => $balanceGarmentStock,
         ];
     }
 
@@ -1427,9 +1468,10 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * Loss per tahap TIDAK lagi sekadar selisih output tahap sebelumnya vs
-     * sekarang -- tiap tahap punya basis perhitungannya sendiri:
-     *  - Cutting   : dept Cutting − Contract
+     * Loss per tahap -- tiap tahap punya basis perhitungannya sendiri:
+     *  - Cutting   : output Cutting − (Total Contract − Sabkon); loss %
+     *                dihitung terhadap output Cutting (bukan basisnya),
+     *                sesuai definisi: Cutting loss % = loss cutting / output cutting.
      *  - Sewing    : dest Sewing − dept Sewing
      *  - QC        : dept QC − dept Sewing (stage inspeksi hasil Sewing,
      *                di-inject di antara Sewing dan Packing, sumber data
@@ -1438,7 +1480,9 @@ class MonitoringRekonsiliasiService
      *                dept QC, menggantikan dept Sewing karena QC sudah
      *                disisipkan di antara keduanya)
      *  - Warehouse : dept Packing − dest Warehouse
-     *  - Shipment  : dest Warehouse − Shipment (basis akhir ke pengiriman aktual)
+     *  - Shipment  : Shipment − Total Contract (basis kontrak, bukan lagi
+     *                output Cutting); loss % = shipment / total contract.
+     *  - Sabkon    : selalu dianggap 100% tercapai, loss selalu 0.
      */
     public function pipelineLossSteps(): Collection
     {
@@ -1446,12 +1490,15 @@ class MonitoringRekonsiliasiService
 
         $steps = collect();
 
-        $steps->push($this->lossStep(
-            'Contract → Cutting',
-            $p['contract'],
-            $p['dept_cutting'],
-            $p['dept_cutting'] - $p['contract']
-        ));
+        // Cutting: basis = Total Contract - Sabkon. Loss % dihitung
+        // terhadap OUTPUT Cutting (bukan basisnya) -- lihat docblock di atas.
+        $steps->push((object) [
+            'process'  => 'Contract → Cutting',
+            'input'    => $p['cutting_base'],
+            'output'   => $p['dept_cutting'],
+            'loss_pcs' => $p['loss_cutting'],
+            'loss_pct' => $p['cutting_loss_pct'],
+        ]);
 
         $steps->push($this->lossStep(
             'Cutting → Sewing',
@@ -1481,34 +1528,34 @@ class MonitoringRekonsiliasiService
             $p['dest_warehouse'] - $p['dept_packing']
         ));
 
-        $steps->push($this->lossStep(
-            'Cutting → Shipment',
-            $p['dept_cutting'],
-            $p['shipment'],
-            $p['shipment'] - $p['dept_cutting']
-        ));
+        // Shipment: basis = Total Contract (bukan lagi output Cutting).
+        // Loss % = shipment / total contract (bukan loss / contract).
+        $steps->push((object) [
+            'process'  => 'Cutting → Shipment',
+            'input'    => $p['contract'],
+            'output'   => $p['shipment'],
+            'loss_pcs' => $p['shipment_loss'],
+            'loss_pct' => $p['shipment_loss_pct'],
+        ]);
 
         // Cabang SABKON (PABRIK LUAR) -- terpisah dari chain produksi
-        // internal di atas, tidak punya stage "sebelumnya" jadi input-nya 0
-        // (loss = output itu sendiri, sesuai definisi yang diminta: loss
-        // Sabkon (Pabrik Luar) = SUM(qty_result_order)).
-        $steps->push($this->lossStep(
-            'Sabkon (Pabrik Luar)',
-            0,
-            $p['sabkon_pabrik_luar'],
-            $p['sabkon_pabrik_luar'] - 0
-        ));
+        // internal di atas. Sabkon selalu dianggap 100% tercapai, jadi
+        // loss selalu 0 untuk kedua tahapnya (Sabkon & Warehouse (Sabkon)).
+        $steps->push((object) [
+            'process'  => 'Sabkon (Pabrik Luar)',
+            'input'    => 0,
+            'output'   => $p['sabkon_pabrik_luar'],
+            'loss_pcs' => 0,
+            'loss_pct' => 0,
+        ]);
 
-        // Warehouse (Sabkon): loss = qty_result_aktual - qty_result_order
-        // (ditampilkan negatif kalau qty_result_order > qty_result_aktual,
-        // sesuai definisi yang diminta: loss = SUM(qty_result_order) -
-        // SUM(qty_result_aktual)).
-        $steps->push($this->lossStep(
-            'Sabkon → Warehouse (Sabkon)',
-            $p['sabkon_pabrik_luar'],
-            $p['sabkon_warehouse'],
-            $p['sabkon_warehouse'] - $p['sabkon_pabrik_luar']
-        ));
+        $steps->push((object) [
+            'process'  => 'Sabkon → Warehouse (Sabkon)',
+            'input'    => $p['sabkon_pabrik_luar'],
+            'output'   => $p['sabkon_warehouse'],
+            'loss_pcs' => 0,
+            'loss_pct' => 0,
+        ]);
 
         return $steps;
     }
