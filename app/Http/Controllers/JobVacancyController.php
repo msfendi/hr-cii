@@ -326,7 +326,7 @@ class JobVacancyController extends Controller
             'open_date' => 'required|date',
             'close_date' => 'required|date|after_or_equal:open_date',
             'status' => 'required|in:draft,open,closed',
-            // 'is_staff' => 'required|boolean',
+            'is_staff' => 'required',
         ]);
     }
 
