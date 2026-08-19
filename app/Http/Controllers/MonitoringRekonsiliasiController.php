@@ -407,4 +407,42 @@ class MonitoringRekonsiliasiController extends Controller
 
         return response()->json($options);
     }
+
+    /**
+     * Hapus 1 baris remark manual (mon_stage_remarks) lewat ikon "hapus"
+     * kecil di tiap baris remark pada box pipeline reconciliation
+     * (rekon-pipe-remark-delete). Endpoint SENGAJA dipisah dari
+     * stage-remark.import supaya bisa diberi permission sendiri di
+     * route (lihat monitoring.rekonsiliasi.stage-remark.destroy),
+     * jadi role yang boleh import Excel belum tentu boleh hapus manual.
+     *
+     * CATATAN: saya tidak punya akses ke Model/Controller stage-remark
+     * import yang asli (tidak ikut di-upload), jadi nama Model & connection
+     * di bawah ini ASUMSI mengikuti konvensi project (App\Models\MonStageRemark,
+     * connection default 'cii'). Sesuaikan kalau ternyata beda -- yang penting
+     * response JSON-nya tetap {success, message} supaya cocok dengan JS di
+     * blade (rekonsiliasi_blade.php / rekonsiliasi_ocf_blade.php).
+     */
+    public function destroyStageRemark($id)
+    {
+        try {
+            $remark = \App\Models\MonStageRemark::findOrFail($id);
+            $remark->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Remark berhasil dihapus.',
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Remark tidak ditemukan (mungkin sudah dihapus sebelumnya).',
+            ], 404);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

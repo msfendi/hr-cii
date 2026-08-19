@@ -1062,10 +1062,12 @@ class MonitoringRekonsiliasiService
      * `destination`) juga dihitung di sini karena dipakai sebagai basis
      * loss per tahap, lihat pipelineLossSteps().
      *
-     * Setiap department di atas juga dilengkapi `remarks` (koleksi teks
-     * dari mon_stage_remarks, dicocokkan lewat department_id -- dan OCF
-     * kalau filter OCF aktif) supaya frontend bisa menampilkannya di
-     * bawah persentase loss pada masing-masing stage box.
+     * Setiap department di atas juga dilengkapi `remarks` (koleksi object
+     * {id, remark} dari mon_stage_remarks, dicocokkan lewat department_id
+     * -- dan OCF kalau filter OCF aktif) supaya frontend bisa menampilkannya
+     * di bawah persentase loss pada masing-masing stage box, LENGKAP dengan
+     * `id` supaya tombol hapus per baris remark bisa memanggil route
+     * monitoring.rekonsiliasi.stage-remark.destroy.
      *
      * PERUBAHAN: total_loss sekarang hanya mencakup loss dari Packing ke Warehouse,
      * bukan seluruh rantai (Contract → Shipment). Hal ini karena permintaan
@@ -1318,10 +1320,18 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * Ambil daftar remark (mon_stage_remarks.remark) untuk 1 department_id,
-     * dicocokkan juga dengan filter OCF yang aktif (kolom mon_stage_remarks.
-     * ocf_no) -- dipakai untuk menampilkan remark di bawah persentase loss
-     * pada tiap stage box di PRODUCTION FLOW / STAGE PIPELINE.
+     * Ambil daftar remark (mon_stage_remarks.id + .remark) untuk 1
+     * department_id, dicocokkan juga dengan filter OCF yang aktif (kolom
+     * mon_stage_remarks.ocf_no) -- dipakai untuk menampilkan remark di
+     * bawah persentase loss pada tiap stage box di PRODUCTION FLOW /
+     * STAGE PIPELINE.
+     *
+     * Balikannya berupa Collection of object {id, remark} (BUKAN cuma
+     * teks remark) supaya front-end (rekonsiliasi_blade.php /
+     * rekonsiliasi_ocf_blade.php) bisa menampilkan tombol hapus per baris
+     * remark -- ikon hapus butuh `id` untuk memanggil
+     * DELETE /rekonsiliasi/stage-remark/{id}
+     * (route monitoring.rekonsiliasi.stage-remark.destroy).
      */
     private function stageRemarksByDepartment(string $departmentId): Collection
     {
@@ -1335,8 +1345,10 @@ class MonitoringRekonsiliasiService
         }
 
         return $query->orderByDesc('id')
-            ->pluck('remark')
-            ->filter(fn($remark) => trim((string) $remark) !== '')
+            ->select('id', 'remark')
+            ->get()
+            ->filter(fn($row) => trim((string) $row->remark) !== '')
+            ->map(fn($row) => ['id' => $row->id, 'remark' => $row->remark])
             ->values();
     }
 

@@ -1180,6 +1180,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/rekonsiliasi/sync-work-order', [MonitoringRekonsiliasiController::class, 'syncWorkOrder'])->name('rekonsiliasi.sync-work-order');
         Route::post('/rekonsiliasi/sync-ms-barang', [MonitoringRekonsiliasiController::class, 'syncMsBarang'])->name('rekonsiliasi.sync-ms-barang');
         Route::post('/rekonsiliasi/sync-subkon', [MonitoringRekonsiliasiController::class, 'syncSubkon'])->name('rekonsiliasi.sync-subkon');
+        Route::delete('/rekonsiliasi/stage-remark/{id}', [MonitoringRekonsiliasiController::class, 'destroyStageRemark'])->name('rekonsiliasi.stage-remark.destroy');
 
         // -- Kalender "Shipment Date" (mirip kalender Production Delivery di dashboard Gabungan) --
         Route::get('rekonsiliasi/calendar', [MonitoringRekonsiliasiController::class, 'calendar'])->name('rekonsiliasi.calendar');

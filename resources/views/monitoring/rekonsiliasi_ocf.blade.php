@@ -27,7 +27,11 @@
                  data-sync-ms-supplier-url="{{ route('monitoring.rekonsiliasi.sync-ms-supplier') }}"
                  data-sync-subkon-url="{{ route('monitoring.rekonsiliasi.sync-subkon') }}"
                  data-import-stage-remark-url="{{ route('monitoring.rekonsiliasi.stage-remark.import') }}"
-                 data-import-prod-qc-url="{{ route('monitoring.rekonsiliasi.prod-qc.import') }}">
+                 data-import-prod-qc-url="{{ route('monitoring.rekonsiliasi.prod-qc.import') }}"
+                 data-delete-stage-remark-url="{{ route('monitoring.rekonsiliasi.stage-remark.destroy', ['id' => '__ID__']) }}"
+                 @canRoute('monitoring.rekonsiliasi.stage-remark.destroy')
+                 data-can-delete-stage-remark="1"
+                 @endcanRoute>
 
                 {{-- ================= HEADER BAR ================= --}}
                 <div class="rekon-hero shadow mb-4">
@@ -755,17 +759,20 @@
     .rekon-pipe-remark-item:last-child { margin-bottom: 0; }
     .rekon-pipe-remark-item .fa-comment-dots { color: #4e73df; }
 
-    /* Ikon pensil di pojok kanan-bawah tiap box (dekoratif -- menandakan
-       remark di atasnya diisi manual lewat fitur Import Stage Remark,
-       BUKAN tombol edit inline). */
-    .rekon-pipe-remark-edit {
-        position: absolute;
-        bottom: .4rem;
-        right: .5rem;
-        font-size: .65rem;
+    /* Ikon hapus kecil di tiap baris remark (mon_stage_remarks). Hanya
+       dirender di JS kalau data-can-delete-stage-remark="1" (lihat
+       canDeleteStageRemark), sesuai permission user ke route
+       monitoring.rekonsiliasi.stage-remark.destroy. */
+    .rekon-pipe-remark-item { display: flex; align-items: flex-start; justify-content: space-between; gap: .3rem; }
+    .rekon-pipe-remark-text { flex: 1 1 auto; }
+    .rekon-pipe-remark-delete {
+        flex: 0 0 auto;
+        cursor: pointer;
         color: #b7b9c8;
+        font-size: .68rem;
+        margin-top: .15rem;
     }
-    .rekon-pipe-remarks { position: relative; padding-right: 1.1rem; }
+    .rekon-pipe-remark-delete:hover { color: #e74a3b; }
 
     .rekon-pipe-arrow { display: flex; align-items: center; justify-content: center; color: #4e73df; padding: 0 .5rem; margin-bottom: .5rem; }
 
@@ -949,6 +956,8 @@
     const syncSubkonUrl = app.dataset.syncSubkonUrl;
     const importStageRemarkUrl = app.dataset.importStageRemarkUrl;
     const importProdQcUrl = app.dataset.importProdQcUrl;
+    const deleteStageRemarkUrl = app.dataset.deleteStageRemarkUrl;
+    const canDeleteStageRemark = app.dataset.canDeleteStageRemark === '1';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
     const fBuyer = document.getElementById('f-buyer');
@@ -1362,6 +1371,37 @@ function updateFormulaWithColors() {
         // Sabkon) yang tidak lagi berurutan linear dalam 1 array.
         const findStep = (process) => lossSteps.find(s => s.process === process) || null;
 
+        /**
+         * Render daftar remark manual (mon_stage_remarks) di bawah 1 box
+         * pipeline, tiap baris punya ikon hapus sendiri (bukan 1 ikon
+         * pensil global seperti sebelumnya). Terima remarks sebagai array
+         * of string (format lama) ATAU array of object {id, remark}
+         * (format baru, wajib supaya tombol hapus bisa jalan -- kalau
+         * masih string, ikon hapus disembunyikan karena tidak ada id-nya).
+         */
+        function renderRemarkList(remarks) {
+            remarks = Array.isArray(remarks) ? remarks : [];
+            if (!remarks.length) return '';
+
+            const items = remarks.map(r => {
+                const isObj = r && typeof r === 'object';
+                const text = isObj ? (r.remark ?? r.text ?? '') : r;
+                const remarkId = isObj ? (r.id ?? null) : null;
+                const deleteBtn = (canDeleteStageRemark && remarkId !== null)
+                    ? `<i class="fas fa-trash-alt rekon-pipe-remark-delete" title="Hapus remark" data-remark-id="${remarkId}"></i>`
+                    : '';
+
+                return `
+                    <div class="rekon-pipe-remark-item">
+                        <span class="rekon-pipe-remark-text"><i class="fas fa-comment-dots mr-1"></i>${escapeHtml(text)}</span>
+                        ${deleteBtn}
+                    </div>
+                `;
+            }).join('');
+
+            return `<div class="rekon-pipe-remarks">${items}</div>`;
+        }
+
         // Render 1 box stage. `pct` dipakai kalau step-nya tidak
         // menyediakan basis input/output sendiri (mis. Contract, atau
         // cabang Sabkon yang basisnya dihitung terhadap Kontrak, bukan
@@ -1409,15 +1449,7 @@ function updateFormulaWithColors() {
 
             const outputPctDisplay = outputPct !== null ? fmtPct(outputPct) : '-';
 
-            remarks = Array.isArray(remarks) ? remarks : [];
-            const remarksRow = remarks.length
-                ? `
-                <div class="rekon-pipe-remarks">
-                    ${remarks.map(r => `<div class="rekon-pipe-remark-item"><i class="fas fa-comment-dots mr-1"></i>${escapeHtml(r)}</div>`).join('')}
-                    <i class="fas fa-pencil-alt rekon-pipe-remark-edit" title="Remark diisi manual"></i>
-                </div>
-            `
-                : '';
+            const remarksRow = renderRemarkList(remarks);
 
             return `
                 <div class="rekon-pipe-box theme-${theme}">
@@ -1489,14 +1521,7 @@ function updateFormulaWithColors() {
             balanceColorClass = 'loss-positive';
         }
 
-        const balanceRemarksRow = balanceRemarks.length
-            ? `
-            <div class="rekon-pipe-remarks">
-                ${balanceRemarks.map(r => `<div class="rekon-pipe-remark-item"><i class="fas fa-comment-dots mr-1"></i>${escapeHtml(r)}</div>`).join('')}
-                <i class="fas fa-pencil-alt rekon-pipe-remark-edit" title="Remark diisi manual"></i>
-            </div>
-        `
-            : '';
+        const balanceRemarksRow = renderRemarkList(balanceRemarks);
 
         const balanceBox = `
             <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
@@ -2213,6 +2238,67 @@ function updateFormulaWithColors() {
     fileProdQc?.addEventListener('change', () => {
         uploadImportFile(importProdQcUrl, fileProdQc.files[0], 'Import Prod QC berhasil.');
         fileProdQc.value = '';
+    });
+
+    /**
+     * Hapus 1 remark manual (mon_stage_remarks) lewat ikon tempat sampah
+     * kecil di tiap baris remark (lihat renderRemarkList()). Event
+     * di-delegasikan ke #rekon-app (bukan dipasang langsung ke tiap ikon)
+     * karena box pipeline di-render ulang total lewat innerHTML setiap
+     * kali refresh() jalan -- listener langsung akan hilang begitu
+     * elemen lama dibuang.
+     */
+    app.addEventListener('click', (e) => {
+        const btn = e.target.closest('.rekon-pipe-remark-delete');
+        if (!btn) return;
+
+        const remarkId = btn.dataset.remarkId;
+        if (!remarkId || !deleteStageRemarkUrl) return;
+
+        Swal.fire({
+            title: 'Hapus remark ini?',
+            text: 'Remark yang sudah dihapus tidak bisa dikembalikan.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, hapus',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#e74a3b',
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+
+            Swal.fire({
+                title: 'Menghapus remark...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading(),
+            });
+
+            fetch(deleteStageRemarkUrl.replace('__ID__', remarkId), {
+                method: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+            })
+                .then(async (response) => {
+                    const json = await response.json().catch(() => ({}));
+                    if (!response.ok || !json.success) {
+                        throw new Error(json.message || 'Remark gagal dihapus.');
+                    }
+                    return json;
+                })
+                .then((json) => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil',
+                        html: json.message || 'Remark berhasil dihapus.',
+                        timer: 1500,
+                        showConfirmButton: false,
+                    });
+                    refresh();
+                })
+                .catch((err) => {
+                    Swal.fire({ icon: 'error', title: 'Gagal', html: err.message || 'Remark gagal dihapus.' });
+                });
+        });
     });
 
     refresh();
