@@ -109,6 +109,7 @@ class PayrollRecapController extends Controller
     {
         $role = $this->getRole();
         $q    = trim((string) $request->get('q'));
+        $dept = $request->get('dept');
 
         $bioUnion = DB::table('BIODATA')
             ->select('NPK', 'IS_STAFF')
@@ -125,6 +126,12 @@ class PayrollRecapController extends Controller
                     $sub->where('prd.employee_npk', 'like', "%{$q}%")
                         ->orWhere('prd.employee_name', 'like', "%{$q}%");
                 });
+            })
+            // Filter karyawan sesuai department yang sedang dipilih di UI.
+            // Kalau dept kosong / tidak dikirim / "all" -> tidak difilter
+            // (tampilkan semua karyawan, dept di-reset ke "All").
+            ->when($dept && $dept !== 'all', function ($query) use ($dept) {
+                $query->where('prd.employee_dept', $dept);
             });
 
         $query = PayrollRoleFilterService::applyToQuery(
@@ -136,7 +143,7 @@ class PayrollRecapController extends Controller
 
         $employees = $query
             ->distinct()
-            ->orderBy('prd.employee_name')
+            ->orderBy('prd.employee_npk')
             ->get()
             ->map(fn($row) => [
                 'id'   => $row->employee_npk,
@@ -643,6 +650,21 @@ class PayrollRecapController extends Controller
             ->orderBy('ot.OVERTIME_DATE')
             ->get();
 
+        // NPK|tanggal yang punya ijin_meninggalkan_pekerjaans dengan
+        // jam_kembali masih NULL (belum kembali dari ijin) di periode ini.
+        // JUMLAH_JAM_LEMBUR yang numerik pada NPK & tanggal tsb diabaikan
+        // (dianggap 0 jam lembur), sama seperti di GeneratePayrollProcess /
+        // PayrollProcessController / EmployeePayrollController.
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->whereBetween('tanggal', [$periodStart->toDateString(), $periodEnd->toDateString()])
+            ->whereNull('jam_kembali')
+            ->select('npk', DB::raw('CAST(tanggal AS DATE) as tanggal'))
+            ->get()
+            ->map(function ($row) {
+                return $row->npk . '|' . Carbon::parse($row->tanggal)->format('Y-m-d');
+            })
+            ->flip();
+
         $overtimeByDept    = [];
         $overtimeEmployees = [];
         $overtimeMatrix    = [];
@@ -668,6 +690,12 @@ class PayrollRecapController extends Controller
             $isSpecial = $isWeekend || $isHoliday;
 
             $jam = $this->parseJam($row->JUMLAH_JAM_LEMBUR);
+
+            // Abaikan JUMLAH_JAM_LEMBUR (numerik) jika NPK & tanggal ini punya
+            // ijin_meninggalkan_pekerjaans yang jam_kembali-nya masih NULL.
+            if ($jam > 0 && isset($openIjinDates[$row->NPK . '|' . $dateKey])) {
+                $jam = 0.0;
+            }
 
             $deptKey  = $row->dept_key;
             $deptName = $row->dept_name;

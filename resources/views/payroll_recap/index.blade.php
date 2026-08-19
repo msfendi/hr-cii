@@ -2026,13 +2026,21 @@ body{
                     url: "{{ route('payroll-recap.search-employee') }}",
                     dataType: 'json',
                     delay: 300,
-                    data: params => ({ q: params.term }),
+                    data: params => ({ q: params.term, dept: $('#deptSelect').val() }),
                     processResults: data => ({ results: data.results })
                 },
                 minimumInputLength: 0
             });
             $('#deptSelect').select2({ placeholder: 'Semua Department', allowClear: true });
             $('#componentSelect').select2({ minimumResultsForSearch: 0 });
+
+            // Ganti department -> daftar karyawan di filter NPK hanya
+            // menampilkan karyawan dari department tsb. Pilih "Semua
+            // Department" (value kosong) untuk mengembalikan filter karyawan
+            // ke semua karyawan lagi.
+            $('#deptSelect').on('change', function () {
+                $('#npkSelect').val(null).trigger('change');
+            });
 
             $('#filterForm').on('submit', function (e) {
                 e.preventDefault();
@@ -2055,13 +2063,18 @@ body{
                     url: "{{ route('payroll-recap.search-employee') }}",
                     dataType: 'json',
                     delay: 300,
-                    data: params => ({ q: params.term }),
+                    data: params => ({ q: params.term, dept: $('#detailDeptSelect').val() }),
                     processResults: data => ({ results: data.results })
                 },
                 minimumInputLength: 0
             });
             $('#detailDeptSelect').select2({ placeholder: 'Semua Department', allowClear: true });
             $('#detailComponentSelect').select2({ minimumResultsForSearch: 0 });
+
+            // Sama seperti section 1: ganti department -> reset filter karyawan.
+            $('#detailDeptSelect').on('change', function () {
+                $('#detailNpkSelect').val(null).trigger('change');
+            });
 
             $('#detailFilterForm').on('submit', function (e) {
                 e.preventDefault();
