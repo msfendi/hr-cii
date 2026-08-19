@@ -1138,11 +1138,8 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Employee Payroll
     Route::get('/employee-payroll/show-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlipAudit'])->name('employee-payroll.view-slip-audit');
-    Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
     Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->name('employee-payroll.index');
-    Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
     Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
-    Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
     Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
     Route::get('/payroll-process/slip-live/{period_id}/{npk}', [EmployeePayrollController::class, 'showSlipLive'])->name('payroll-process.slip-live');
 
@@ -1260,6 +1257,9 @@ Route::group(['middleware' => 'auth'], function () {
 });
 
 Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
+Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
+Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
+Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
 Route::get('/test-reverb', function () {
     event(new NotificationEvent(
         'Test Reverb',
