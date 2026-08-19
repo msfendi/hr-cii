@@ -1478,6 +1478,7 @@ function updateFormulaWithColors() {
         // ===== Balance Garment Stock (kotak baru di samping Shipment) =====
         // = (Warehouse [Work In Process] + Warehouse [Sabkon]) − Shipment (Total)
         const balanceGarmentStock = Number(pipeline.balance_garment_stock || 0);
+        const balanceRemarks = Array.isArray(pipeline.balance_garment_stock_remarks) ? pipeline.balance_garment_stock_remarks : [];
 
         let balanceColorClass = 'loss-zero';
         let balanceSign = '';
@@ -1488,12 +1489,22 @@ function updateFormulaWithColors() {
             balanceColorClass = 'loss-positive';
         }
 
+        const balanceRemarksRow = balanceRemarks.length
+            ? `
+            <div class="rekon-pipe-remarks">
+                ${balanceRemarks.map(r => `<div class="rekon-pipe-remark-item"><i class="fas fa-comment-dots mr-1"></i>${escapeHtml(r)}</div>`).join('')}
+                <i class="fas fa-pencil-alt rekon-pipe-remark-edit" title="Remark diisi manual"></i>
+            </div>
+        `
+            : '';
+
         const balanceBox = `
             <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
                 <div class="rekon-pipe-header">Balance Garment Stock</div>
                 <div class="rekon-pipe-body">
                     <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtNum(Math.abs(balanceGarmentStock))}</div>
                     <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
+                    ${balanceRemarksRow}
                 </div>
             </div>
         `;
