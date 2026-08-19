@@ -564,6 +564,7 @@ body{ background-color: #f4f6fb; }
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
@@ -736,11 +737,30 @@ body{ background-color: #f4f6fb; }
                         { label: 'Kantin 2', data: rows.map((r) => r.kantin_2), backgroundColor: 'rgba(54,185,204,.85)', borderRadius: 4, maxBarThickness: 28 },
                     ],
                 },
+                plugins: [ChartDataLabels],
                 options: {
                     maintainAspectRatio: false,
+                    layout: { padding: { top: 22 } },
                     scales: {
-                        x: { stacked: true, grid: { display: false, drawBorder: false } },
-                        y: { stacked: true, beginAtZero: true, grid: { color: 'rgb(234, 236, 244)', drawBorder: false, borderDash: [3] } },
+                        x: { stacked: false, grid: { display: false, drawBorder: false } },
+                        y: {
+                            stacked: false,
+                            beginAtZero: true,
+                            grid: { color: 'rgb(234, 236, 244)', drawBorder: false, borderDash: [3] },
+                            // extra headroom so the labels above the bars don't get clipped
+                            suggestedMax: Math.max(1, ...rows.map((r) => Math.max(r.kantin_1, r.kantin_2))) * 1.2,
+                        },
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            offset: 2,
+                            color: '#5a5c69',
+                            font: { size: 10, weight: '700' },
+                            formatter: (value) => (value ? value : ''),
+                        },
                     },
                 },
             });
@@ -748,16 +768,34 @@ body{ background-color: #f4f6fb; }
 
         function renderWindowChart(w) {
             if (windowChart) windowChart.destroy();
+            const wData = [w.kantin_1_utama, w.kantin_1_lembur, w.kantin_2_utama, w.kantin_2_lembur];
+            const wTotal = wData.reduce((a, b) => a + b, 0);
             windowChart = new Chart(document.getElementById('windowChart'), {
                 type: 'doughnut',
                 data: {
                     labels: ['Kantin 1 - Utama', 'Kantin 1 - Lembur', 'Kantin 2 - Utama', 'Kantin 2 - Lembur'],
                     datasets: [{
-                        data: [w.kantin_1_utama, w.kantin_1_lembur, w.kantin_2_utama, w.kantin_2_lembur],
+                        data: wData,
                         backgroundColor: ['#4e73df', '#aab8f2', '#36b9cc', '#a9e2e9'],
                     }],
                 },
-                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+                plugins: [ChartDataLabels],
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        datalabels: {
+                            color: '#fff',
+                            font: { size: 11, weight: '700' },
+                            formatter: (value) => {
+                                if (!value) return '';
+                                const pct = wTotal ? Math.round((value / wTotal) * 100) : 0;
+                                return value + '\n(' + pct + '%)';
+                            },
+                            textAlign: 'center',
+                        },
+                    },
+                },
             });
         }
 
