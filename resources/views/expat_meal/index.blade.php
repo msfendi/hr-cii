@@ -260,9 +260,10 @@ body{ background-color: #f4f6fb; }
                                         <thead>
                                             <tr>
                                                 <th>Tanggal</th>
-                                                <th class="text-right">Jml Expat</th>
+                                                <th class="text-right">Jml Expat Sarapan</th>
                                                 <th>Menu Sarapan</th>
                                                 <th class="text-right">Harga Sarapan</th>
+                                                <th class="text-right">Jml Expat Makan Siang</th>
                                                 <th>Menu Makan Siang</th>
                                                 <th class="text-right">Harga Makan Siang</th>
                                                 <th class="text-right">Total</th>
@@ -597,6 +598,24 @@ body{ background-color: #f4f6fb; }
             });
         }
 
+        // Format tanggal ke gaya Indonesia panjang tanpa leading zero,
+        // contoh: "2026-08-01" -> "1 Agustus 2026".
+        const BULAN_ID = [
+            'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+        ];
+        function formatTanggalIndo(dateStr) {
+            if (!dateStr) return '-';
+            const datePart = String(dateStr).split(' ')[0].split('T')[0];
+            const parts = datePart.split('-');
+            if (parts.length !== 3) return dateStr;
+            const [y, m, d] = parts;
+            const day = parseInt(d, 10);
+            const monthIdx = parseInt(m, 10) - 1;
+            if (isNaN(day) || !BULAN_ID[monthIdx]) return dateStr;
+            return `${day} ${BULAN_ID[monthIdx]} ${y}`;
+        }
+
         function showLoadingSwal(text) {
             Swal.fire({
                 title: text || 'Memuat data...',
@@ -644,10 +663,11 @@ body{ background-color: #f4f6fb; }
             detailTable = $('#detailTable').DataTable({
                 data: [],
                 columns: [
-                    { data: 'tanggal' },
-                    { data: 'jumlah_expat', className: 'text-right' },
+                    { data: 'tanggal', render: (d, type) => (type === 'display' ? formatTanggalIndo(d) : d) },
+                    { data: 'jumlah_expat_sarapan', className: 'text-right' },
                     { data: 'menu_sarapan' },
                     { data: 'harga_sarapan', className: 'text-right', render: (d) => formatRupiah(d) },
+                    { data: 'jumlah_expat_makan_siang', className: 'text-right' },
                     { data: 'menu_makan_siang' },
                     { data: 'harga_makan_siang', className: 'text-right', render: (d) => formatRupiah(d) },
                     { data: 'total_harga', className: 'text-right', render: (d) => `<strong>${formatRupiah(d)}</strong>` },
@@ -672,7 +692,7 @@ body{ background-color: #f4f6fb; }
             participantTable = $('#participantTable').DataTable({
                 data: [],
                 columns: [
-                    { data: 'tanggal' },
+                    { data: 'tanggal', render: (d, type) => (type === 'display' ? formatTanggalIndo(d) : d) },
                     { data: 'npk' },
                     { data: 'nama_expat' },
                     {
@@ -704,7 +724,7 @@ body{ background-color: #f4f6fb; }
             menuTable = $('#menuTable').DataTable({
                 data: [],
                 columns: [
-                    { data: 'tanggal' },
+                    { data: 'tanggal', render: (d, type) => (type === 'display' ? formatTanggalIndo(d) : d) },
                     { data: 'makanan' },
                     {
                         data: 'kategori',
@@ -757,7 +777,7 @@ body{ background-color: #f4f6fb; }
             recapChart = new Chart(document.getElementById('recapChart'), {
                 type: 'bar',
                 data: {
-                    labels: rows.map((r) => r.tanggal),
+                    labels: rows.map((r) => formatTanggalIndo(r.tanggal)),
                     datasets: [
                         { label: 'Total Biaya', data: rows.map((r) => r.total_harga), backgroundColor: 'rgba(78,115,223,.85)', borderRadius: 4, maxBarThickness: 28 },
                     ],
@@ -819,7 +839,7 @@ body{ background-color: #f4f6fb; }
         }
 
         function loadMealDetail(tanggal) {
-            $('#mealDetailSubtitle').text(tanggal);
+            $('#mealDetailSubtitle').text(formatTanggalIndo(tanggal));
             $('#mealDetailTable tbody').empty();
             $('#mealDetailExpatTable tbody').empty();
             $('#mealDetailTotal').text(formatRupiah(0));

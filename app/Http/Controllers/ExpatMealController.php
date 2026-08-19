@@ -61,10 +61,11 @@ class ExpatMealController extends Controller
 
         $recapPerDate = $report
             ->map(fn(array $r) => [
-                'tanggal'      => $r['tanggal'],
-                'jumlah_expat' => $r['jumlah_expat'],
-                'jumlah_porsi' => $r['jumlah_porsi'],
-                'total_harga'  => $r['total_harga'],
+                'tanggal'                  => $r['tanggal'],
+                'jumlah_expat_sarapan'     => $r['jumlah_expat_sarapan'],
+                'jumlah_expat_makan_siang' => $r['jumlah_expat_makan_siang'],
+                'jumlah_porsi'             => $r['jumlah_porsi'],
+                'total_harga'              => $r['total_harga'],
             ])
             ->values();
 
@@ -169,15 +170,22 @@ class ExpatMealController extends Controller
                 $hargaSarapan    = round((float) $menuSarapan->sum('harga'), 2);
                 $hargaMakanSiang = round((float) $menuMakanSiang->sum('harga'), 2);
 
+                // Jumlah expat dipecah per kategori makan (Sarapan / Makan
+                // Siang), karena satu expat bisa hadir di salah satu atau
+                // kedua kategori pada tanggal yang sama.
+                $jumlahExpatSarapan    = $rows->where('kategori', 'Sarapan')->pluck('npk')->unique()->count();
+                $jumlahExpatMakanSiang = $rows->where('kategori', 'Makan Siang')->pluck('npk')->unique()->count();
+
                 return [
-                    'tanggal'           => $tanggalStr,
-                    'jumlah_expat'      => $rows->pluck('npk')->unique()->count(),
-                    'jumlah_porsi'      => $rows->count(),
-                    'menu_sarapan'      => $menuSarapan->pluck('makanan')->implode(', ') ?: '-',
-                    'menu_makan_siang'  => $menuMakanSiang->pluck('makanan')->implode(', ') ?: '-',
-                    'harga_sarapan'     => $hargaSarapan,
-                    'harga_makan_siang' => $hargaMakanSiang,
-                    'total_harga'       => round($hargaSarapan + $hargaMakanSiang, 2),
+                    'tanggal'                  => $tanggalStr,
+                    'jumlah_expat_sarapan'     => $jumlahExpatSarapan,
+                    'jumlah_expat_makan_siang' => $jumlahExpatMakanSiang,
+                    'jumlah_porsi'             => $rows->count(),
+                    'menu_sarapan'             => $menuSarapan->pluck('makanan')->implode(', ') ?: '-',
+                    'menu_makan_siang'         => $menuMakanSiang->pluck('makanan')->implode(', ') ?: '-',
+                    'harga_sarapan'            => $hargaSarapan,
+                    'harga_makan_siang'        => $hargaMakanSiang,
+                    'total_harga'              => round($hargaSarapan + $hargaMakanSiang, 2),
                 ];
             })
             ->sortKeys()
@@ -826,63 +834,65 @@ class ExpatMealController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Laporan Makan Expat');
 
-        $periode = Carbon::parse($start)->locale('id')->translatedFormat('d F Y')
-            . ' - ' . Carbon::parse($end)->locale('id')->translatedFormat('d F Y');
+        $periode = Carbon::parse($start)->locale('id')->translatedFormat('j F Y')
+            . ' - ' . Carbon::parse($end)->locale('id')->translatedFormat('j F Y');
 
-        $sheet->mergeCells('A1:H1');
+        $sheet->mergeCells('A1:I1');
         $sheet->setCellValue('A1', 'LAPORAN BIAYA MAKAN EXPAT');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $sheet->mergeCells('A2:H2');
+        $sheet->mergeCells('A2:I2');
         $sheet->setCellValue('A2', 'Periode: ' . $periode);
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $headerRow = 4;
-        $headers = ['NO.', 'TANGGAL', 'JUMLAH EXPAT', 'MENU SARAPAN', 'HARGA SARAPAN', 'MENU MAKAN SIANG', 'HARGA MAKAN SIANG', 'TOTAL HARGA'];
+        $headers = ['NO.', 'TANGGAL', 'JML EXPAT SARAPAN', 'MENU SARAPAN', 'HARGA SARAPAN', 'JML EXPAT MAKAN SIANG', 'MENU MAKAN SIANG', 'HARGA MAKAN SIANG', 'TOTAL HARGA'];
         $sheet->fromArray($headers, null, "A{$headerRow}");
-        $sheet->getStyle("A{$headerRow}:H{$headerRow}")->getFont()->setBold(true);
-        $sheet->getStyle("A{$headerRow}:H{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
-        $sheet->getStyle("A{$headerRow}:H{$headerRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $row = $headerRow + 1;
         foreach ($report as $i => $r) {
             $sheet->setCellValue("A{$row}", $i + 1);
-            $sheet->setCellValue("B{$row}", Carbon::parse($r['tanggal'])->format('d-m-Y'));
-            $sheet->setCellValue("C{$row}", $r['jumlah_expat']);
+            $sheet->setCellValue("B{$row}", Carbon::parse($r['tanggal'])->locale('id')->translatedFormat('j F Y'));
+            $sheet->setCellValue("C{$row}", $r['jumlah_expat_sarapan']);
             $sheet->setCellValue("D{$row}", $r['menu_sarapan']);
             $sheet->setCellValue("E{$row}", $r['harga_sarapan']);
-            $sheet->setCellValue("F{$row}", $r['menu_makan_siang']);
-            $sheet->setCellValue("G{$row}", $r['harga_makan_siang']);
-            $sheet->setCellValue("H{$row}", $r['total_harga']);
+            $sheet->setCellValue("F{$row}", $r['jumlah_expat_makan_siang']);
+            $sheet->setCellValue("G{$row}", $r['menu_makan_siang']);
+            $sheet->setCellValue("H{$row}", $r['harga_makan_siang']);
+            $sheet->setCellValue("I{$row}", $r['total_harga']);
             $row++;
         }
 
         $lastDataRow = $row - 1;
 
         if ($report->isEmpty()) {
-            $sheet->mergeCells("A{$row}:H{$row}");
+            $sheet->mergeCells("A{$row}:I{$row}");
             $sheet->setCellValue("A{$row}", 'Tidak ada data.');
             $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $row++;
         }
 
-        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->mergeCells("A{$row}:H{$row}");
         $sheet->setCellValue("A{$row}", 'TOTAL');
         $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-        $sheet->setCellValue("H{$row}", $report->sum('total_harga'));
-        $sheet->getStyle("A{$row}:H{$row}")->getFont()->setBold(true);
-        $sheet->getStyle("A{$row}:H{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+        $sheet->setCellValue("I{$row}", $report->sum('total_harga'));
+        $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:I{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
 
         $totalRow = $row;
 
-        $sheet->getStyle("A{$headerRow}:H{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("A{$headerRow}:I{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         $sheet->getStyle("E" . ($headerRow + 1) . ":E{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
-        $sheet->getStyle("G" . ($headerRow + 1) . ":G{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
         $sheet->getStyle("H" . ($headerRow + 1) . ":H{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        $sheet->getStyle("I" . ($headerRow + 1) . ":I{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
         $sheet->getStyle("A" . ($headerRow + 1) . ":C{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("F" . ($headerRow + 1) . ":F{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $colWidths = ['A' => 5, 'B' => 13, 'C' => 13, 'D' => 30, 'E' => 15, 'F' => 30, 'G' => 17, 'H' => 16];
+        $colWidths = ['A' => 5, 'B' => 16, 'C' => 15, 'D' => 30, 'E' => 15, 'F' => 17, 'G' => 30, 'H' => 17, 'I' => 16];
         foreach ($colWidths as $col => $w) {
             $sheet->getColumnDimension($col)->setWidth($w);
         }
@@ -1095,7 +1105,7 @@ class ExpatMealController extends Controller
 
             foreach ($e['items'] as $i => $item) {
                 $sheet->setCellValue("A{$row}", $i + 1);
-                $sheet->setCellValue("B{$row}", Carbon::parse($item['tanggal'])->format('d-m-Y'));
+                $sheet->setCellValue("B{$row}", Carbon::parse($item['tanggal'])->locale('id')->translatedFormat('j F Y'));
                 $sheet->setCellValue("C{$row}", $item['kategori']);
                 $sheet->setCellValue("D{$row}", $item['makanan']);
                 $sheet->setCellValue("E{$row}", $item['harga']);
