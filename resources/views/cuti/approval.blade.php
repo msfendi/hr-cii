@@ -7,14 +7,14 @@
     <!-- Page Wrapper -->
     @include('sweetalert::alert')
     <div id="wrapper">
-        @include('layout.sidebar-cuti')
+        @include('layout.sidebar')
 
         <!-- Content Wrapper -->
         <div id="content-wrapper" class="d-flex flex-column">
 
             <!-- Main Content -->
             <div id="content">
-                @include('layout.topbar-cuti')
+                @include('layout.navbar')
 
                 <!-- Begin Page Content -->
                 <div class="container-fluid">

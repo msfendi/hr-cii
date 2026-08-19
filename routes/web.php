@@ -1032,11 +1032,11 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
         Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
 
-        // Cuti Approval (Leave Management by session logged in user)
-        Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval');
-        Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve');
-        Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject');
-        Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update');
+        // Cuti Approval (Leave Management by logged in user)
+        Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval')->middleware('auth');
+        Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve')->middleware('auth');
+        Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject')->middleware('auth');
+        Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update')->middleware('auth');
     });
 
     // Insentif 6S

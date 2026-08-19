@@ -18,6 +18,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -103,23 +104,34 @@ class ExpatMealController extends Controller
      * Bangun laporan total biaya makan PER TANGGAL (bukan per expat).
      *
      * @param array $npkFilter Jika tidak kosong, hanya tanggal yang dihadiri
-     *              oleh salah satu expat pada daftar ini yang dimunculkan.
-     *              Filter ini TIDAK mempengaruhi kategori/menu/total biaya
-     *              yang dihitung untuk tanggal tsb — itu selalu dihitung
-     *              dari seluruh expat yang hadir, supaya "habis per hari"
-     *              tetap mencerminkan biaya sesungguhnya hari itu.
+     *              oleh salah satu expat pada daftar ini yang dimunculkan,
+     *              DAN cara hitung biayanya berubah mode (lihat Formula).
      *
      * Formula:
      * - Ambil semua baris peserta (expat_meal_participants) pada rentang
      *   tanggal, dikelompokkan per tanggal.
      * - Untuk tiap tanggal, tentukan kategori yang dihadiri (Sarapan dan/
      *   atau Makan Siang) berdasarkan peserta yang tercatat hari itu.
-     * - Untuk tiap kategori yang dihadiri, ambil semua menu
-     *   (expat_meal_menus) pada tanggal + kategori tsb. Total biaya
-     *   kategori tsb = jumlah harga SEMUA menu (lumpsum), TIDAK dikalikan
-     *   maupun dibagi dengan jumlah expat — baik untuk menu shared maupun
-     *   tidak, karena laporan ini merangkum biaya per hari, bukan per
-     *   expat.
+     *
+     * MODE "semua expat" ($npkFilter kosong):
+     * - Total biaya kategori = jumlah harga SEMUA menu (lumpsum) pada
+     *   tanggal + kategori tsb, TIDAK dikalikan maupun dibagi dengan
+     *   jumlah expat — baik untuk menu shared maupun tidak, karena
+     *   laporan ini merangkum biaya per hari, bukan per expat.
+     *
+     * MODE "filter expat" ($npkFilter tidak kosong):
+     * - HANYA menu SHARED yang dihitung, karena hanya menu shared yang
+     *   bisa diatribusikan/dibagi rata ke expat tertentu. Menu lumpsum
+     *   (non-shared) dikeluarkan sepenuhnya dari perhitungan biaya,
+     *   sebab tidak bisa dipisah porsinya untuk expat yang difilter.
+     * - Tiap menu shared dibagi rata dengan SELURUH expat yang hadir
+     *   pada tanggal + kategori tsb (bukan hanya yang difilter), lalu
+     *   hanya porsi milik expat yang difilter yang diakumulasikan.
+     *   Ini konsisten dengan formula pada buildExpatMealDetailReport().
+     * - Jumlah expat pada baris (jumlah_expat_sarapan/makan_siang) dan
+     *   jumlah_porsi juga disaring: hanya menghitung expat yang ada di
+     *   $npkFilter.
+     *
      * - Total harga per hari = harga sarapan + harga makan siang hari itu.
      */
     protected function buildDailyCostReport(string $start, string $end, array $npkFilter = []): Collection
@@ -136,7 +148,13 @@ class ExpatMealController extends Controller
             ->unique()
             ->values();
 
-        $menusPerTglKategori = ExpatMealMenu::whereIn('tanggal', $tanggalList)
+        $menuQuery = ExpatMealMenu::whereIn('tanggal', $tanggalList);
+        if (! empty($npkFilter)) {
+            // Filter by expat: hanya menu shared yang relevan (lihat
+            // docblock method ini).
+            $menuQuery->where('shared', true);
+        }
+        $menusPerTglKategori = $menuQuery
             ->orderBy('makanan')
             ->get()
             ->groupBy(fn($m) => Carbon::parse($m->tanggal)->format('Y-m-d') . '|' . $m->kategori);
@@ -155,9 +173,9 @@ class ExpatMealController extends Controller
             ->groupBy(fn($p) => $p->tanggal->format('Y-m-d'))
             ->when(
                 $tanggalDifilter !== null,
-                fn(Collection $c) => $c->only($tanggalDifilter->all())
+                fn(Collection $c) => $c->filter(fn($rows, $tanggalKey) => $tanggalDifilter->contains($tanggalKey))
             )
-            ->map(function (Collection $rows, string $tanggalStr) use ($menusPerTglKategori) {
+            ->map(function (Collection $rows, string $tanggalStr) use ($menusPerTglKategori, $npkFilter) {
                 $kategoriHadir = $rows->pluck('kategori')->unique();
 
                 $menuSarapan = $kategoriHadir->contains('Sarapan')
@@ -167,20 +185,34 @@ class ExpatMealController extends Controller
                     ? ($menusPerTglKategori["{$tanggalStr}|Makan Siang"] ?? collect())
                     : collect();
 
-                $hargaSarapan    = round((float) $menuSarapan->sum('harga'), 2);
-                $hargaMakanSiang = round((float) $menuMakanSiang->sum('harga'), 2);
+                $rowsSarapan    = $rows->where('kategori', 'Sarapan');
+                $rowsMakanSiang = $rows->where('kategori', 'Makan Siang');
 
-                // Jumlah expat dipecah per kategori makan (Sarapan / Makan
-                // Siang), karena satu expat bisa hadir di salah satu atau
-                // kedua kategori pada tanggal yang sama.
-                $jumlahExpatSarapan    = $rows->where('kategori', 'Sarapan')->pluck('npk')->unique()->count();
-                $jumlahExpatMakanSiang = $rows->where('kategori', 'Makan Siang')->pluck('npk')->unique()->count();
+                if (empty($npkFilter)) {
+                    // Mode "semua expat": lumpsum seluruh menu (shared
+                    // maupun non-shared) hari itu.
+                    $hargaSarapan    = round((float) $menuSarapan->sum('harga'), 2);
+                    $hargaMakanSiang = round((float) $menuMakanSiang->sum('harga'), 2);
+
+                    $jumlahExpatSarapan    = $rowsSarapan->pluck('npk')->unique()->count();
+                    $jumlahExpatMakanSiang = $rowsMakanSiang->pluck('npk')->unique()->count();
+                    $jumlahPorsi           = $rows->count();
+                } else {
+                    // Mode "filter expat": hanya porsi biaya menu shared
+                    // milik expat yang difilter.
+                    $hargaSarapan    = $this->sumSharedPortionForNpk($rowsSarapan, $menuSarapan, $npkFilter);
+                    $hargaMakanSiang = $this->sumSharedPortionForNpk($rowsMakanSiang, $menuMakanSiang, $npkFilter);
+
+                    $jumlahExpatSarapan    = $rowsSarapan->whereIn('npk', $npkFilter)->pluck('npk')->unique()->count();
+                    $jumlahExpatMakanSiang = $rowsMakanSiang->whereIn('npk', $npkFilter)->pluck('npk')->unique()->count();
+                    $jumlahPorsi           = $rows->whereIn('npk', $npkFilter)->count();
+                }
 
                 return [
                     'tanggal'                  => $tanggalStr,
                     'jumlah_expat_sarapan'     => $jumlahExpatSarapan,
                     'jumlah_expat_makan_siang' => $jumlahExpatMakanSiang,
-                    'jumlah_porsi'             => $rows->count(),
+                    'jumlah_porsi'             => $jumlahPorsi,
                     'menu_sarapan'             => $menuSarapan->pluck('makanan')->implode(', ') ?: '-',
                     'menu_makan_siang'         => $menuMakanSiang->pluck('makanan')->implode(', ') ?: '-',
                     'harga_sarapan'            => $hargaSarapan,
@@ -190,6 +222,36 @@ class ExpatMealController extends Controller
             })
             ->sortKeys()
             ->values();
+    }
+
+    /**
+     * Hitung total porsi biaya menu SHARED yang menjadi bagian expat pada
+     * $npkFilter, untuk satu tanggal + kategori tertentu.
+     *
+     * Tiap menu dibagi rata dengan SELURUH expat yang hadir pada kategori
+     * tsb ($rowsKategori, tidak disaring npk), lalu hanya porsi milik
+     * expat pada $npkFilter yang diambil — setara dengan menjumlah
+     * (harga_menu / jumlah_expat_hadir) sebanyak jumlah expat terfilter
+     * yang hadir.
+     */
+    protected function sumSharedPortionForNpk(Collection $rowsKategori, Collection $menusKategori, array $npkFilter): float
+    {
+        $expatHadir  = $rowsKategori->pluck('npk')->unique();
+        $jumlahExpat = $expatHadir->count();
+
+        if ($jumlahExpat === 0) {
+            return 0.0;
+        }
+
+        $jumlahTerfilter = $expatHadir->intersect($npkFilter)->count();
+
+        if ($jumlahTerfilter === 0) {
+            return 0.0;
+        }
+
+        $totalMenuShared = (float) $menusKategori->sum('harga');
+
+        return round($totalMenuShared * ($jumlahTerfilter / $jumlahExpat), 2);
     }
 
     /**
@@ -482,14 +544,24 @@ class ExpatMealController extends Controller
 
     /**
      * Download template excel dengan 2 sheet sesuai kebutuhan import:
-     * - "Daftar Expat" : npk, nama_expat, tanggal, kategori
-     * - "Makanan"      : makanan, kategori, harga, shared
+     * - "Daftar Expat" : npk (dropdown dari BIODATA), nama_expat (auto-fill
+     *   via VLOOKUP dari BIODATA), tanggal (date picker), kategori (dropdown)
+     * - "Makanan"      : tanggal (date picker), makanan, kategori (dropdown),
+     *   harga, shared (dropdown)
      * Sheet "Lists" (hidden) dipakai sebagai sumber data validation dropdown
-     * kolom kategori, mengikuti pola import multi-sheet yang sudah ada.
+     * kolom kategori & npk, mengikuti pola import multi-sheet yang sudah ada.
      */
     public function downloadTemplate()
     {
         $spreadsheet = new Spreadsheet();
+
+        // Daftar expat aktif dari BIODATA (IS_EXPAT = 1), dipakai sebagai
+        // sumber dropdown kolom nama_expat & auto-fill kolom npk.
+        $expats = DB::table('BIODATA')
+            ->where('IS_EXPAT', 1)
+            ->orderBy('NAMA_KARYAWAN')
+            ->get(['NPK', 'NAMA_KARYAWAN']);
+        $expatLastRow = max($expats->count(), 1);
 
         // --- Sheet 1: Daftar Expat ---
         $sheet1 = $spreadsheet->getActiveSheet();
@@ -500,18 +572,33 @@ class ExpatMealController extends Controller
         $sheet1->getStyle('A1:D1')->getFont()->setBold(true);
         $sheet1->getStyle('A1:D1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
 
-        $sheet1->setCellValue('A2', 'E-001');
-        $sheet1->setCellValue('B2', 'John Doe');
-        $sheet1->setCellValue('C2', now()->format('Y-m-d'));
+        $sheet1->setCellValue('B2', $expats->first()->NAMA_KARYAWAN ?? 'John Doe');
+        $sheet1->setCellValue('C2', ExcelDate::PHPToExcel(now()));
         $sheet1->setCellValue('D2', 'Sarapan');
-        $sheet1->getStyle('C2')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
-        foreach (['A' => 12, 'B' => 24, 'C' => 14, 'D' => 16] as $col => $w) {
+        foreach (['A' => 14, 'B' => 26, 'C' => 14, 'D' => 16] as $col => $w) {
             $sheet1->getColumnDimension($col)->setWidth($w);
         }
 
         // Dropdown kategori pada kolom D, baris 2-1000.
         $this->applyKategoriValidation($sheet1, 'D2:D1000');
+
+        // Dropdown nama_expat (kolom B) bersumber dari sheet Lists, dan
+        // kolom npk (A) diisi otomatis via VLOOKUP berdasarkan nama yang
+        // dipilih. Sheet Lists diisi di bagian bawah (kolom C = nama,
+        // kolom D = npk, agar nama jadi kolom kunci pencarian VLOOKUP).
+        $this->applyListValidation($sheet1, 'B2:B1000', "Lists!\$C\$1:\$C\${$expatLastRow}");
+
+        for ($row = 2; $row <= 1000; $row++) {
+            $sheet1->setCellValue(
+                "A{$row}",
+                "=IFERROR(VLOOKUP(B{$row},Lists!\$C\$1:\$D\${$expatLastRow},2,FALSE),\"\")"
+            );
+        }
+        $sheet1->getStyle('A2:A1000')->getFont()->getColor()->setRGB('8A8FA3');
+
+        // Date picker (kalender) + format tampilan tanggal pada kolom C.
+        $this->applyDateValidation($sheet1, 'C2:C1000');
 
         // --- Sheet 2: Makanan ---
         $sheet2 = $spreadsheet->createSheet();
@@ -521,9 +608,8 @@ class ExpatMealController extends Controller
         $sheet2->fromArray($headers2, null, 'A1');
         $sheet2->getStyle('A1:E1')->getFont()->setBold(true);
         $sheet2->getStyle('A1:E1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
-        $sheet1->getStyle('A2')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
-        $sheet2->setCellValue('A2', now()->format('Y-m-d'));
+        $sheet2->setCellValue('A2', ExcelDate::PHPToExcel(now()));
         $sheet2->setCellValue('B2', 'Nasi Goreng');
         $sheet2->setCellValue('C2', 'Sarapan');
         $sheet2->setCellValue('D2', 200000);
@@ -535,6 +621,9 @@ class ExpatMealController extends Controller
 
         $this->applyKategoriValidation($sheet2, 'C2:C1000');
 
+        // Date picker (kalender) + format tampilan tanggal pada kolom A.
+        $this->applyDateValidation($sheet2, 'A2:A1000');
+
         // Dropdown TRUE/FALSE untuk kolom shared.
         for ($row = 2; $row <= 1000; $row++) {
             $validation = $sheet2->getCell("E{$row}")->getDataValidation();
@@ -545,11 +634,21 @@ class ExpatMealController extends Controller
             $validation->setFormula1('"TRUE,FALSE"');
         }
 
-        // --- Sheet referensi (hidden), sumber dropdown kategori ---
+        // --- Sheet referensi (hidden), sumber dropdown kategori & nama_expat ---
         $sheetList = $spreadsheet->createSheet();
         $sheetList->setTitle('Lists');
         $sheetList->setCellValue('A1', 'Sarapan');
         $sheetList->setCellValue('A2', 'Makan Siang');
+
+        // Kolom C = nama_expat, kolom D = npk. Nama diletakkan lebih dulu
+        // supaya bisa jadi kolom kunci pencarian VLOOKUP dari nama -> npk.
+        $row = 1;
+        foreach ($expats as $expat) {
+            $sheetList->setCellValue("C{$row}", $expat->NAMA_KARYAWAN);
+            $sheetList->setCellValue("D{$row}", $expat->NPK);
+            $row++;
+        }
+
         $sheetList->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
 
         $spreadsheet->setActiveSheetIndex(0);
@@ -567,6 +666,15 @@ class ExpatMealController extends Controller
 
     protected function applyKategoriValidation($sheet, string $range): void
     {
+        $this->applyListValidation($sheet, $range, 'Lists!$A$1:$A$2');
+    }
+
+    /**
+     * Terapkan data validation bertipe LIST (dropdown) pada sebuah range sel,
+     * dengan sumber data berupa formula referensi sheet lain (mis. Lists!$C$1:$C$50).
+     */
+    protected function applyListValidation($sheet, string $range, string $formula): void
+    {
         [$start, $end] = explode(':', $range);
         preg_match('/([A-Z]+)(\d+)/', $start, $mStart);
         preg_match('/([A-Z]+)(\d+)/', $end, $mEnd);
@@ -578,7 +686,47 @@ class ExpatMealController extends Controller
             $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
             $validation->setAllowBlank(true);
             $validation->setShowDropDown(true);
-            $validation->setFormula1('Lists!$A$1:$A$2');
+            $validation->setFormula1($formula);
+        }
+    }
+
+    /**
+     * Terapkan data validation bertipe DATE pada sebuah range sel, sekaligus
+     * format tampilan yyyy-mm-dd. Selain memvalidasi input tanggal, Excel
+     * menampilkan ikon kalender (date picker) di sisi kanan sel saat sel
+     * dengan validation tipe date ini diklik.
+     */
+    protected function applyDateValidation($sheet, string $range): void
+    {
+        [$start, $end] = explode(':', $range);
+        preg_match('/([A-Z]+)(\d+)/', $start, $mStart);
+        preg_match('/([A-Z]+)(\d+)/', $end, $mEnd);
+        $col = $mStart[1];
+
+        // Pakai format bawaan (built-in) Excel untuk kategori "Date", bukan
+        // format custom string. Dengan ini, di Format Cells Excel kolom
+        // tanggal akan tampil sebagai kategori "Date" (bukan "Custom").
+        // FORMAT_DATE_XLSX14 = kode format bawaan Excel utk built-in ID 14
+        // (short date). Karena kodenya persis cocok dengan salah satu format
+        // bawaan Excel, Excel akan mengenalinya sebagai kategori "Date" (dan
+        // menampilkannya sesuai format tanggal singkat regional/lokal
+        // pengguna), bukan "Custom".
+        $sheet->getStyle($range)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_DATE_XLSX14);
+
+        for ($row = (int) $mStart[2]; $row <= (int) $mEnd[2]; $row++) {
+            $validation = $sheet->getCell("{$col}{$row}")->getDataValidation();
+            $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DATE);
+            $validation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_BETWEEN);
+            $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(true);
+            $validation->setShowInputMessage(true);
+            $validation->setShowErrorMessage(true);
+            $validation->setPromptTitle('Pilih tanggal');
+            $validation->setPrompt('Klik ikon kalender di sisi kanan sel (jika tersedia), atau isi manual format dd/mm/yyyy.');
+            $validation->setErrorTitle('Tanggal tidak valid');
+            $validation->setError('Isi tanggal yang valid antara 2020-01-01 s.d. 2099-12-31.');
+            $validation->setFormula1('DATE(2020,1,1)');
+            $validation->setFormula2('DATE(2099,12,31)');
         }
     }
 
@@ -629,7 +777,14 @@ class ExpatMealController extends Controller
 
     /**
      * Import sheet "Daftar Expat" (npk, nama_expat, tanggal, kategori) ke
-     * expat_meal_participants. Baris di-key oleh npk + tanggal + kategori.
+     * expat_meal_participants.
+     *
+     * Strategi import: DELETE lalu INSERT ulang per tanggal. Semua tanggal
+     * yang muncul di template dikumpulkan dulu, lalu SELURUH data lama pada
+     * tanggal-tanggal tsb dihapus, baru data baru dari template di-insert.
+     * Artinya baris pada tanggal yang tidak ada di template tidak akan
+     * tersentuh, tapi tanggal yang ada di template akan sepenuhnya diganti
+     * (bukan digabung/di-merge) dengan isi template.
      */
     protected function importDaftarExpat(Spreadsheet $spreadsheet): array
     {
@@ -639,11 +794,16 @@ class ExpatMealController extends Controller
             return [0, 0, ['Sheet "Daftar Expat" tidak ditemukan di file.']];
         }
 
+        // calculateFormulas = true: kolom npk (formula VLOOKUP) DIHITUNG
+        // LANGSUNG oleh engine formula PhpSpreadsheet saat dibaca, tidak
+        // bergantung pada cache hasil kalkulasi Excel. Ini penting karena
+        // file template baru (belum pernah dibuka & disimpan di Excel)
+        // TIDAK punya cache sama sekali, sehingga kalau calculateFormulas
+        // di-set false, yang terbaca adalah teks formula mentahnya.
         $rows = $sheet->toArray(null, true, true, true);
 
-        $created = 0;
-        $updated = 0;
-        $errors  = [];
+        $validRows = [];
+        $errors    = [];
 
         foreach ($rows as $i => $r) {
             if ($i == 1) {
@@ -657,6 +817,15 @@ class ExpatMealController extends Controller
 
             if ($npk === '' && $nama === '' && ! $tanggal && $kategori === '') {
                 continue; // baris kosong
+            }
+
+            // Jaga-jaga: kalau karena sebab apapun formula VLOOKUP gagal
+            // dihitung (mis. fungsi tidak didukung engine formula
+            // PhpSpreadsheet), jangan sampai teks formula mentah masuk ke
+            // database dan bikin query gagal / data korup.
+            if (str_starts_with($npk, '=')) {
+                $errors[] = "Daftar Expat baris {$i}: kolom npk masih berupa formula (bukan hasil), dilewati. Pastikan nama_expat pada baris ini sudah dipilih dari dropdown.";
+                continue;
             }
 
             if ($npk === '' || $nama === '' || ! $tanggal || $kategori === '') {
@@ -676,25 +845,53 @@ class ExpatMealController extends Controller
                 continue;
             }
 
-            $existing = ExpatMealParticipant::where('npk', $npk)
-                ->where('tanggal', $tanggalParsed)
-                ->where('kategori', $kategoriNormal)
-                ->exists();
+            $validRows[] = [
+                'npk'        => $npk,
+                'nama_expat' => $nama,
+                'tanggal'    => $tanggalParsed,
+                'kategori'   => $kategoriNormal,
+            ];
+        }
 
-            ExpatMealParticipant::updateOrCreate(
-                ['npk' => $npk, 'tanggal' => $tanggalParsed, 'kategori' => $kategoriNormal],
-                ['nama_expat' => $nama]
-            );
+        if (empty($validRows)) {
+            return [0, 0, $errors];
+        }
 
-            $existing ? $updated++ : $created++;
+        // Semua tanggal yang muncul di template.
+        $tanggalList = collect($validRows)->pluck('tanggal')->unique()->values();
+
+        // Dicatat dulu tanggal mana yang sudah punya data sebelum dihapus,
+        // hanya dipakai untuk pelaporan "baru" vs "diperbarui".
+        $tanggalSudahAda = ExpatMealParticipant::whereIn('tanggal', $tanggalList)
+            ->get()
+            ->pluck('tanggal')
+            ->map(fn($t) => $t->format('Y-m-d'))
+            ->unique();
+
+        // Hapus dulu seluruh data lama pada tanggal-tanggal yang ada di
+        // template, baru insert ulang data baru dari template.
+        ExpatMealParticipant::whereIn('tanggal', $tanggalList)->delete();
+
+        $created = 0;
+        $updated = 0;
+
+        foreach ($validRows as $row) {
+            ExpatMealParticipant::create($row);
+
+            $tanggalSudahAda->contains($row['tanggal']) ? $updated++ : $created++;
         }
 
         return [$created, $updated, $errors];
     }
 
     /**
-     * Import sheet "Makanan" (makanan, kategori, harga, shared) ke
-     * expat_meal_menus. Baris di-key oleh makanan + kategori.
+     * Import sheet "Makanan" (tanggal, makanan, kategori, harga, shared) ke
+     * expat_meal_menus.
+     *
+     * Strategi import: DELETE lalu INSERT ulang per tanggal, sama seperti
+     * importDaftarExpat(). Semua tanggal yang muncul di template dikumpulkan
+     * dulu, seluruh menu lama pada tanggal-tanggal tsb dihapus, baru menu
+     * baru dari template di-insert.
      */
     protected function importMakanan(Spreadsheet $spreadsheet): array
     {
@@ -706,30 +903,28 @@ class ExpatMealController extends Controller
 
         $rows = $sheet->toArray(null, true, true, true);
 
-        $created = 0;
-        $updated = 0;
-        $errors  = [];
+        $validRows = [];
+        $errors    = [];
 
         foreach ($rows as $i => $r) {
             if ($i == 1) {
                 continue;
             }
 
-            $tanggal  = $r['A'] ?? null;
+            $tanggal   = $r['A'] ?? null;
             $makanan   = trim((string) ($r['B'] ?? ''));
             $kategori  = trim((string) ($r['C'] ?? ''));
             $harga     = $r['D'] ?? null;
             $sharedRaw = $r['E'] ?? null;
 
+            if ($makanan === '' && $kategori === '' && ($harga === null || $harga === '') && ! $tanggal) {
+                continue; // baris kosong
+            }
 
             $tanggalParsed = $this->parseExcelDate($tanggal);
             if (! $tanggalParsed) {
                 $errors[] = "Makanan baris {$i}: format tanggal tidak valid, dilewati.";
                 continue;
-            }
-
-            if ($makanan === '' && $kategori === '' && ($harga === null || $harga === '')) {
-                continue; // baris kosong
             }
 
             if ($makanan === '' || $kategori === '' || $harga === null || $harga === '') {
@@ -748,18 +943,41 @@ class ExpatMealController extends Controller
                 continue;
             }
 
-            $shared = $this->parseBoolean($sharedRaw);
+            $validRows[] = [
+                'tanggal'  => $tanggalParsed,
+                'makanan'  => $makanan,
+                'kategori' => $kategoriNormal,
+                'harga'    => (float) $harga,
+                'shared'   => $this->parseBoolean($sharedRaw),
+            ];
+        }
 
-            $existing = ExpatMealMenu::where('makanan', $makanan)
-                ->where('kategori', $kategoriNormal)
-                ->exists();
+        if (empty($validRows)) {
+            return [0, 0, $errors];
+        }
 
-            ExpatMealMenu::updateOrCreate(
-                ['makanan' => $makanan, 'kategori' => $kategoriNormal, 'tanggal' => $tanggalParsed,],
-                ['harga' => (float) $harga, 'shared' => $shared]
-            );
+        // Semua tanggal yang muncul di template.
+        $tanggalList = collect($validRows)->pluck('tanggal')->unique()->values();
 
-            $existing ? $updated++ : $created++;
+        // Dicatat dulu tanggal mana yang sudah punya data sebelum dihapus,
+        // hanya dipakai untuk pelaporan "baru" vs "diperbarui".
+        $tanggalSudahAda = ExpatMealMenu::whereIn('tanggal', $tanggalList)
+            ->get()
+            ->pluck('tanggal')
+            ->map(fn($t) => $t->format('Y-m-d'))
+            ->unique();
+
+        // Hapus dulu seluruh menu lama pada tanggal-tanggal yang ada di
+        // template, baru insert ulang menu baru dari template.
+        ExpatMealMenu::whereIn('tanggal', $tanggalList)->delete();
+
+        $created = 0;
+        $updated = 0;
+
+        foreach ($validRows as $row) {
+            ExpatMealMenu::create($row);
+
+            $tanggalSudahAda->contains($row['tanggal']) ? $updated++ : $created++;
         }
 
         return [$created, $updated, $errors];

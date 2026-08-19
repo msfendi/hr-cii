@@ -21,7 +21,6 @@ return new class extends Migration
             $table->boolean('shared')->default(false);
             $table->timestamps();
 
-            $table->unique(['makanan', 'kategori']);
             $table->index('tanggal');
         });
     }

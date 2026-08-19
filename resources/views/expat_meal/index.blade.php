@@ -579,6 +579,7 @@ body{ background-color: #f4f6fb; }
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
@@ -596,6 +597,25 @@ body{ background-color: #f4f6fb; }
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 1,
             });
+        }
+
+        // Format ringkas untuk label langsung di atas bar/di dalam donut
+        // (mis. "Rp 1,2jt", "Rp 850rb") supaya tidak terlalu panjang &
+        // tidak saling tumpuk saat datanya banyak.
+        function formatRupiahCompact(value) {
+            value = Number(value || 0);
+            const abs = Math.abs(value);
+            if (abs >= 1000000) {
+                return 'Rp ' + (value / 1000000).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + 'jt';
+            }
+            if (abs >= 1000) {
+                return 'Rp ' + (value / 1000).toLocaleString('id-ID', { maximumFractionDigits: 0 }) + 'rb';
+            }
+            return formatRupiah(value);
+        }
+
+        if (window.ChartDataLabels) {
+            Chart.register(ChartDataLabels);
         }
 
         // Format tanggal ke gaya Indonesia panjang tanpa leading zero,
@@ -784,11 +804,28 @@ body{ background-color: #f4f6fb; }
                 },
                 options: {
                     maintainAspectRatio: false,
+                    layout: { padding: { top: 24 } },
                     scales: {
                         x: { grid: { display: false, drawBorder: false } },
-                        y: { beginAtZero: true, grid: { color: 'rgb(234, 236, 244)', drawBorder: false, borderDash: [3] }, ticks: { callback: (v) => formatRupiah(v) } },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgb(234, 236, 244)', drawBorder: false, borderDash: [3] },
+                            ticks: { callback: (v) => formatRupiah(v) },
+                            // Beri ruang ekstra di atas supaya label tidak terpotong.
+                            grace: '15%',
+                        },
                     },
-                    plugins: { tooltip: { callbacks: { label: (ctx) => formatRupiah(ctx.raw) } } },
+                    plugins: {
+                        tooltip: { callbacks: { label: (ctx) => formatRupiah(ctx.raw) } },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            clip: false,
+                            color: '#4e4e50',
+                            font: { size: 10, weight: '600' },
+                            formatter: (value) => (value ? formatRupiahCompact(value) : ''),
+                        },
+                    },
                 },
             });
         }
@@ -809,6 +846,13 @@ body{ background-color: #f4f6fb; }
                     plugins: {
                         legend: { position: 'bottom' },
                         tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${formatRupiah(ctx.raw)}` } },
+                        datalabels: {
+                            color: '#fff',
+                            font: { size: 12, weight: 'bold' },
+                            textStrokeColor: 'rgba(0,0,0,.25)',
+                            textStrokeWidth: 2,
+                            formatter: (value) => (value ? formatRupiahCompact(value) : ''),
+                        },
                     },
                 },
             });

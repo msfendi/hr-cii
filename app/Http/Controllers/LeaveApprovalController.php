@@ -13,18 +13,26 @@ use RealRashid\SweetAlert\Facades\Alert;
 
 class LeaveApprovalController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
     /**
      * Tampilkan data leave yang butuh di-approve (atau sudah di-approve)
      * oleh user/admin yang sedang login
      */
     public function index()
     {
-        $npk = session('cuti_employee_npk');
+        $user = Auth::user();
+        $npk = $user->npk;
+
         if (!$npk) {
-            return redirect()->route('pengajuan-cuti.login');
+            Alert::error('Error', 'Akun Anda tidak memiliki NPK yang terdaftar.');
+            return redirect()->back();
         }
 
-        // Cari data karyawan yang login sebagai approver (berdasarkan sesi NPK)
+        // Cari data karyawan yang login sebagai approver (berdasarkan NPK user)
         $employee = DB::connection('cii')
             ->table('BIODATA')
             ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
@@ -33,7 +41,12 @@ class LeaveApprovalController extends Controller
             ->first();
 
         if (!$employee) {
-            return redirect()->route('pengajuan-cuti.login');
+            $employee = (object) [
+                'NPK' => $user->npk,
+                'NAMA_KARYAWAN' => $user->name,
+                'DEPARTEMENT' => '-',
+                'IS_SEWING' => 0
+            ];
         }
 
         $approverNpk = $employee->NPK;

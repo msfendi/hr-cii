@@ -28,20 +28,6 @@
         </a>
     </li>
 
-    <!-- Nav Item - Approval -->
-    {{-- cek dari table approval rule --}}
-    @php
-        $npk_approval = DB::table('approval_rules')->where('approval_id', session('cuti_employee_npk'))->first();
-    @endphp
-    @if($npk_approval)
-    <li class="nav-item {{ request()->routeIs('pengajuan-cuti.approval') ? 'active' : '' }}">
-        <a class="nav-link" href="{{ route('pengajuan-cuti.approval') }}">
-            <i class="fas fa-fw fa-check-double"></i>
-            <span>Approval Pengajuan</span>
-        </a>
-    </li>
-    @endif
-
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
 

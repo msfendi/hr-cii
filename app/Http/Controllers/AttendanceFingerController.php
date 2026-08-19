@@ -48,7 +48,7 @@ class AttendanceFingerController extends Controller
 
 
 
-                // // main query dari biodata (LAST WORK)
+                // // main query dari biodata
                 // $yesterday = Carbon::parse($date)->subDay()->format('Y-m-d');
 
                 // $data = DB::connection('cii')->select("
@@ -95,140 +95,324 @@ class AttendanceFingerController extends Controller
                 //     ORDER BY MIN(a.scan_date) ASC
                 // ", [$date, $yesterday, $date, $date, $date, $yesterday]);
 
-                $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
-                $tomorrow  = \Carbon\Carbon::parse($date)->addDay()->format('Y-m-d');
+                
+                // (LAST WORK)
+                // $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
+                // $tomorrow  = \Carbon\Carbon::parse($date)->addDay()->format('Y-m-d');
 
-                $data = DB::connection('cii')->select("
-                    WITH emp AS (
-                        SELECT
-                            b.BARCODE       AS pin,
-                            b.NAMA_KARYAWAN AS nama,
-                            b.NPK           AS npk,
-                            d.DEPARTEMENT   AS bagian,
-                            b.SECTION       AS section,
-                            b.BAG           AS jabatan,
-                            b.STATUS        AS status,
-                            COALESCE(s.name, 'Normal Shift')    AS shift_name,
-                            COALESCE(s.work_start, '08:00:00')  AS work_start,
-                            COALESCE(s.work_end, '17:00:00')    AS work_end,
-                            COALESCE(ps.work_start, '08:00:00') AS prev_work_start,
-                            COALESCE(ps.work_end, '17:00:00')   AS prev_work_end,
-                            COALESCE(ns.work_start, '08:00:00') AS next_work_start
-                        FROM BIODATA b
-                        LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
+                // $data = DB::connection('cii')->select("
+                //     WITH emp AS (
+                //         SELECT
+                //             b.BARCODE       AS pin,
+                //             b.NAMA_KARYAWAN AS nama,
+                //             b.NPK           AS npk,
+                //             d.DEPARTEMENT   AS bagian,
+                //             b.SECTION       AS section,
+                //             b.BAG           AS jabatan,
+                //             b.STATUS        AS status,
+                //             COALESCE(s.name, 'Normal Shift')    AS shift_name,
+                //             COALESCE(s.work_start, '08:00:00')  AS work_start,
+                //             COALESCE(s.work_end, '17:00:00')    AS work_end,
+                //             COALESCE(ps.work_start, '08:00:00') AS prev_work_start,
+                //             COALESCE(ps.work_end, '17:00:00')   AS prev_work_end,
+                //             COALESCE(ns.work_start, '08:00:00') AS next_work_start
+                //         FROM BIODATA b
+                //         LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
 
-                        -- shift hari ini
-                        LEFT JOIN employee_shifts es
-                            ON es.npk = b.NPK
-                            AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
-                        LEFT JOIN shifts s ON s.id = es.shift_id
+                //         -- shift hari ini
+                //         LEFT JOIN employee_shifts es
+                //             ON es.npk = b.NPK
+                //             AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)
+                //         LEFT JOIN shifts s ON s.id = es.shift_id
 
-                        -- shift kemarin (untuk exclusion window bawah)
-                        LEFT JOIN employee_shifts pes
-                            ON pes.npk = b.NPK
-                            AND CAST(pes.shift_date AS DATE) = CAST(? AS DATE)
-                        LEFT JOIN shifts ps ON ps.id = pes.shift_id
+                //         -- shift kemarin (untuk exclusion window bawah)
+                //         LEFT JOIN employee_shifts pes
+                //             ON pes.npk = b.NPK
+                //             AND CAST(pes.shift_date AS DATE) = CAST(? AS DATE)
+                //         LEFT JOIN shifts ps ON ps.id = pes.shift_id
 
-                        -- shift besok (untuk exclusion window atas)
-                        LEFT JOIN employee_shifts nes
-                            ON nes.npk = b.NPK
-                            AND CAST(nes.shift_date AS DATE) = CAST(? AS DATE)
-                        LEFT JOIN shifts ns ON ns.id = nes.shift_id
-                    ),
-                    emp_bounds AS (
-                        SELECT
-                            e.*,
-                            CAST(? + ' ' + CONVERT(varchar(8), e.work_start, 108) AS DATETIME) AS shift_start_dt,
-                            CASE
-                                WHEN e.work_end < e.work_start
-                                    THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), e.work_end, 108) AS DATETIME))
-                                ELSE CAST(? + ' ' + CONVERT(varchar(8), e.work_end, 108) AS DATETIME)
-                            END AS shift_end_dt,
-                            CASE
-                                WHEN e.prev_work_end < e.prev_work_start
-                                    THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME))
-                                ELSE CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME)
-                            END AS prev_shift_end_dt,
-                            CAST(? + ' ' + CONVERT(varchar(8), e.next_work_start, 108) AS DATETIME) AS next_shift_start_dt
-                        FROM emp e
-                    ),
-                    emp_window AS (
-                        SELECT
-                            eb.*,
-                            -- batas atas window: mana yang lebih dekat, +6 jam dari shift_end
-                            -- ATAU 60 menit sebelum shift berikutnya mulai
-                            CASE
-                                WHEN DATEADD(hour, 6, eb.shift_end_dt) < DATEADD(minute, -60, eb.next_shift_start_dt)
-                                    THEN DATEADD(hour, 6, eb.shift_end_dt)
-                                ELSE DATEADD(minute, -60, eb.next_shift_start_dt)
-                            END AS scan_upper_bound
-                        FROM emp_bounds eb
-                    ),
-                    scans AS (
-                        SELECT
-                            ew.pin, ew.npk,
-                            a.scan_date,
-                            ew.shift_start_dt,
-                            ew.shift_end_dt
-                        FROM emp_window ew
-                        JOIN att_log a
-                            ON CAST(a.pin AS VARCHAR) = CAST(ew.pin AS VARCHAR)
-                            AND a.scan_date >= DATEADD(hour, -4, ew.shift_start_dt)
-                            AND a.scan_date <= ew.scan_upper_bound
-                            AND a.scan_date > DATEADD(minute, 60, ew.prev_shift_end_dt)
-                    ),
-                    scan_ranked AS (
-                        SELECT
-                            npk, scan_date,
-                            ABS(DATEDIFF(minute, scan_date, shift_start_dt)) AS dist_to_start,
-                            ABS(DATEDIFF(minute, scan_date, shift_end_dt))   AS dist_to_end,
-                            ROW_NUMBER() OVER (PARTITION BY npk ORDER BY ABS(DATEDIFF(minute, scan_date, shift_start_dt))) AS rn_masuk,
-                            ROW_NUMBER() OVER (PARTITION BY npk ORDER BY ABS(DATEDIFF(minute, scan_date, shift_end_dt)))   AS rn_pulang,
-                            COUNT(*) OVER (PARTITION BY npk) AS total_scan
-                        FROM scans
-                    )
+                //         -- shift besok (untuk exclusion window atas)
+                //         LEFT JOIN employee_shifts nes
+                //             ON nes.npk = b.NPK
+                //             AND CAST(nes.shift_date AS DATE) = CAST(? AS DATE)
+                //         LEFT JOIN shifts ns ON ns.id = nes.shift_id
+                //     ),
+                //     emp_bounds AS (
+                //         SELECT
+                //             e.*,
+                //             CAST(? + ' ' + CONVERT(varchar(8), e.work_start, 108) AS DATETIME) AS shift_start_dt,
+                //             CASE
+                //                 WHEN e.work_end < e.work_start
+                //                     THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), e.work_end, 108) AS DATETIME))
+                //                 ELSE CAST(? + ' ' + CONVERT(varchar(8), e.work_end, 108) AS DATETIME)
+                //             END AS shift_end_dt,
+                //             CASE
+                //                 WHEN e.prev_work_end < e.prev_work_start
+                //                     THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME))
+                //                 ELSE CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME)
+                //             END AS prev_shift_end_dt,
+                //             CAST(? + ' ' + CONVERT(varchar(8), e.next_work_start, 108) AS DATETIME) AS next_shift_start_dt
+                //         FROM emp e
+                //     ),
+                //     emp_window AS (
+                //         SELECT
+                //             eb.*,
+                //             -- batas atas window: mana yang lebih dekat, +6 jam dari shift_end
+                //             -- ATAU 60 menit sebelum shift berikutnya mulai
+                //             CASE
+                //                 WHEN DATEADD(hour, 6, eb.shift_end_dt) < DATEADD(minute, -60, eb.next_shift_start_dt)
+                //                     THEN DATEADD(hour, 6, eb.shift_end_dt)
+                //                 ELSE DATEADD(minute, -60, eb.next_shift_start_dt)
+                //             END AS scan_upper_bound
+                //         FROM emp_bounds eb
+                //     ),
+                //     scans AS (
+                //         SELECT
+                //             ew.pin, ew.npk,
+                //             a.scan_date,
+                //             ew.shift_start_dt,
+                //             ew.shift_end_dt
+                //         FROM emp_window ew
+                //         JOIN att_log a
+                //             ON CAST(a.pin AS VARCHAR) = CAST(ew.pin AS VARCHAR)
+                //             AND a.scan_date >= DATEADD(hour, -4, ew.shift_start_dt)
+                //             AND a.scan_date <= ew.scan_upper_bound
+                //             AND a.scan_date > DATEADD(minute, 60, ew.prev_shift_end_dt)
+                //     ),
+                //     scan_ranked AS (
+                //         SELECT
+                //             npk, scan_date,
+                //             ABS(DATEDIFF(minute, scan_date, shift_start_dt)) AS dist_to_start,
+                //             ABS(DATEDIFF(minute, scan_date, shift_end_dt))   AS dist_to_end,
+                //             ROW_NUMBER() OVER (PARTITION BY npk ORDER BY ABS(DATEDIFF(minute, scan_date, shift_start_dt))) AS rn_masuk,
+                //             ROW_NUMBER() OVER (PARTITION BY npk ORDER BY ABS(DATEDIFF(minute, scan_date, shift_end_dt)))   AS rn_pulang,
+                //             COUNT(*) OVER (PARTITION BY npk) AS total_scan
+                //         FROM scans
+                //     )
+                //     SELECT
+                //         eb.pin, eb.nama, eb.npk, eb.bagian, eb.section, eb.jabatan, eb.status,
+
+                //         CASE
+                //             WHEN m.scan_date IS NULL THEN 'not scanned'
+                //             WHEN m.total_scan = 1 AND m.dist_to_end < m.dist_to_start THEN 'not scanned'
+                //             ELSE CONVERT(varchar(8), m.scan_date, 108)
+                //         END AS jam_masuk,
+
+                //         CASE
+                //             WHEN p.scan_date IS NULL THEN 'not scanned'
+                //             WHEN p.total_scan = 1 AND p.dist_to_start <= p.dist_to_end THEN 'not scanned'
+                //             ELSE CONVERT(varchar(8), p.scan_date, 108)
+                //         END AS jam_pulang,
+
+                //         COALESCE(m.total_scan, 0) AS total_scan,
+                //         eb.shift_name,
+                //         CONVERT(varchar(8), eb.work_start, 108) AS shift_start,
+
+                //         CASE
+                //             WHEN m.scan_date IS NOT NULL
+                //                 AND NOT (m.total_scan = 1 AND m.dist_to_end < m.dist_to_start)
+                //                 AND m.scan_date > DATEADD(minute, 10, eb.shift_start_dt)
+                //             THEN 1 ELSE 0
+                //         END AS is_late
+
+                //     FROM emp_window eb
+                //     LEFT JOIN scan_ranked m ON m.npk = eb.npk AND m.rn_masuk = 1
+                //     LEFT JOIN scan_ranked p ON p.npk = eb.npk AND p.rn_pulang = 1
+                //     WHERE m.scan_date IS NOT NULL
+                //     ORDER BY eb.bagian ASC, eb.npk ASC
+                // ", [
+                //     $date,          // emp: shift hari ini (es.shift_date)
+                //     $yesterday,     // emp: shift kemarin (pes.shift_date)
+                //     $tomorrow,      // emp: shift besok (nes.shift_date)
+                //     $date,          // emp_bounds: shift_start_dt
+                //     $date,          // emp_bounds: shift_end_dt (overnight)
+                //     $date,          // emp_bounds: shift_end_dt (normal)
+                //     $yesterday,     // emp_bounds: prev_shift_end_dt (overnight)
+                //     $yesterday,     // emp_bounds: prev_shift_end_dt (normal)
+                //     $tomorrow,      // emp_bounds: next_shift_start_dt
+                // ]);
+
+
+            $date      = $request->filled('date') ? $request->date : now()->toDateString();
+            $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
+            // $tomorrow dihapus — tidak diperlukan lagi
+
+            $data = DB::connection('cii')->select("
+                WITH emp AS (
                     SELECT
-                        eb.pin, eb.nama, eb.npk, eb.bagian, eb.section, eb.jabatan, eb.status,
+                        b.BARCODE       AS pin,
+                        b.NAMA_KARYAWAN AS nama,
+                        b.NPK           AS npk,
+                        d.DEPARTEMENT   AS bagian,
+                        b.SECTION       AS section,
+                        b.BAG           AS jabatan,
+                        b.STATUS        AS status,
+                        COALESCE(s.name,  'Normal Shift') AS shift_name,
+                        COALESCE(s.work_start, '08:00:00') AS work_start,
+                        COALESCE(s.work_end,   '17:00:00') AS work_end,
+                        COALESCE(ps.work_start,'08:00:00') AS prev_work_start,
+                        COALESCE(ps.work_end,  '17:00:00') AS prev_work_end
+                        -- DIHAPUS: next_work_start (tidak perlu lagi)
+                    FROM BIODATA b
+                    LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
 
+                    -- Shift hari ini
+                    LEFT JOIN employee_shifts es
+                        ON es.npk = b.NPK
+                        AND CAST(es.shift_date AS DATE) = CAST(? AS DATE)      -- :date
+                    LEFT JOIN shifts s ON s.id = es.shift_id
+
+                    -- Shift kemarin: untuk hitung prev_shift_end_dt
+                    LEFT JOIN employee_shifts pes
+                        ON pes.npk = b.NPK
+                        AND CAST(pes.shift_date AS DATE) = CAST(? AS DATE)     -- :yesterday
+                    LEFT JOIN shifts ps ON ps.id = pes.shift_id
+
+                    -- DIHAPUS: join nes/ns (next shift) tidak diperlukan lagi
+                ),
+
+                emp_bounds AS (
+                    SELECT
+                        e.*,
+
+                        -- Jam mulai shift hari ini
+                        CAST(? + ' ' + CONVERT(varchar(8), e.work_start, 108) AS DATETIME)
+                            AS shift_start_dt,                                  -- :date
+
+                        -- Jam selesai shift hari ini
+                        -- Night shift (work_end < work_start): end = besok
+                        -- Normal shift                        : end = hari ini
                         CASE
-                            WHEN m.scan_date IS NULL THEN 'not scanned'
-                            WHEN m.total_scan = 1 AND m.dist_to_end < m.dist_to_start THEN 'not scanned'
-                            ELSE CONVERT(varchar(8), m.scan_date, 108)
-                        END AS jam_masuk,
+                            WHEN e.work_end < e.work_start
+                                THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), e.work_end, 108) AS DATETIME))
+                            ELSE CAST(? + ' ' + CONVERT(varchar(8), e.work_end, 108) AS DATETIME)
+                        END AS shift_end_dt,                                    -- :date, :date
 
+                        -- Jam selesai shift KEMARIN
+                        -- Jika kemarin night shift: end-nya jatuh di $date (yesterday+1)
+                        -- Jika kemarin normal shift: end-nya di $yesterday
                         CASE
-                            WHEN p.scan_date IS NULL THEN 'not scanned'
-                            WHEN p.total_scan = 1 AND p.dist_to_start <= p.dist_to_end THEN 'not scanned'
-                            ELSE CONVERT(varchar(8), p.scan_date, 108)
-                        END AS jam_pulang,
+                            WHEN e.prev_work_end < e.prev_work_start
+                                THEN DATEADD(day, 1, CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME))
+                            ELSE CAST(? + ' ' + CONVERT(varchar(8), e.prev_work_end, 108) AS DATETIME)
+                        END AS prev_shift_end_dt                                -- :yesterday, :yesterday
 
-                        COALESCE(m.total_scan, 0) AS total_scan,
-                        eb.shift_name,
-                        CONVERT(varchar(8), eb.work_start, 108) AS shift_start,
+                        -- DIHAPUS: next_shift_start_dt
+                    FROM emp e
+                ),
 
-                        CASE
-                            WHEN m.scan_date IS NOT NULL
-                                AND NOT (m.total_scan = 1 AND m.dist_to_end < m.dist_to_start)
-                                AND m.scan_date > DATEADD(minute, 10, eb.shift_start_dt)
-                            THEN 1 ELSE 0
-                        END AS is_late
+                emp_window AS (
+                    SELECT
+                        eb.*,
+                        /*
+                         * FIX UTAMA:
+                         * scan_upper_bound = shift_end_dt + 120 menit
+                         *
+                         * Sebelumnya: MIN(shift_end+6h, next_shift_start–60min)
+                         *   → next_shift_start 08:00 - 60min = 07:00 ← terlalu sempit
+                         *
+                         * Sekarang: shift_end + 120min = 05:30 + 120min = 07:30
+                         *   → scan 07:03 ≤ 07:30 ✓ masuk sebagai jam pulang 18/08
+                         *
+                         * Berlaku sama untuk normal shift:
+                         *   shift_end 17:00 + 120min = 19:00 (cukup untuk lembur ringan)
+                         */
+                        DATEADD(minute, 120, eb.shift_end_dt) AS scan_upper_bound
+                    FROM emp_bounds eb
+                ),
 
-                    FROM emp_window eb
-                    LEFT JOIN scan_ranked m ON m.npk = eb.npk AND m.rn_masuk = 1
-                    LEFT JOIN scan_ranked p ON p.npk = eb.npk AND p.rn_pulang = 1
-                    WHERE m.scan_date IS NOT NULL
-                    ORDER BY eb.bagian ASC, eb.npk ASC
-                ", [
-                    $date,          // emp: shift hari ini (es.shift_date)
-                    $yesterday,     // emp: shift kemarin (pes.shift_date)
-                    $tomorrow,      // emp: shift besok (nes.shift_date)
-                    $date,          // emp_bounds: shift_start_dt
-                    $date,          // emp_bounds: shift_end_dt (overnight)
-                    $date,          // emp_bounds: shift_end_dt (normal)
-                    $yesterday,     // emp_bounds: prev_shift_end_dt (overnight)
-                    $yesterday,     // emp_bounds: prev_shift_end_dt (normal)
-                    $tomorrow,      // emp_bounds: next_shift_start_dt
-                ]);
+                scans AS (
+                    SELECT
+                        ew.pin, ew.npk,
+                        a.scan_date,
+                        ew.shift_start_dt,
+                        ew.shift_end_dt
+                    FROM emp_window ew
+                    JOIN att_log a
+                        ON CAST(a.pin AS VARCHAR) = CAST(ew.pin AS VARCHAR)
+
+                        -- Batas bawah: 4 jam sebelum shift mulai
+                        AND a.scan_date >= DATEADD(hour, -4, ew.shift_start_dt)
+
+                        -- Batas atas: shift_end + 120 menit (SAMA dengan scan_upper_bound)
+                        AND a.scan_date <= ew.scan_upper_bound
+
+                        /*
+                         * FIX SIMETRI:
+                         * Exclusion = prev_shift_end + 120 menit
+                         *
+                         * Sebelumnya: +60 menit → batas 06:30
+                         *   → 07:03 > 06:30 = lolos ke 19/08 ← BUG
+                         *
+                         * Sekarang: +120 menit → batas 07:30
+                         *   → 07:03 < 07:30 = diblokir dari 19/08 ✓
+                         *
+                         * Simetris dengan scan_upper_bound di atas:
+                         *   batas atas  18/08 = shift_end      + 120min = 07:30
+                         *   batas bawah 19/08 = prev_shift_end + 120min = 07:30
+                         *   → tidak ada dead zone, tidak ada overlap ✓
+                         */
+                        AND a.scan_date > DATEADD(minute, 120, ew.prev_shift_end_dt)
+                ),
+
+                scan_ranked AS (
+                    SELECT
+                        npk, scan_date,
+                        ABS(DATEDIFF(minute, scan_date, shift_start_dt)) AS dist_to_start,
+                        ABS(DATEDIFF(minute, scan_date, shift_end_dt))   AS dist_to_end,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY npk
+                            ORDER BY ABS(DATEDIFF(minute, scan_date, shift_start_dt))
+                        ) AS rn_masuk,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY npk
+                            ORDER BY ABS(DATEDIFF(minute, scan_date, shift_end_dt))
+                        ) AS rn_pulang,
+                        COUNT(*) OVER (PARTITION BY npk) AS total_scan
+                    FROM scans
+                )
+
+                SELECT
+                    eb.pin, eb.nama, eb.npk, eb.bagian, eb.section, eb.jabatan, eb.status,
+
+                    CASE
+                        WHEN m.scan_date IS NULL                                      THEN 'not scanned'
+                        WHEN m.total_scan = 1 AND m.dist_to_end < m.dist_to_start    THEN 'not scanned'
+                        ELSE CONVERT(varchar(8), m.scan_date, 108)
+                    END AS jam_masuk,
+
+                    CASE
+                        WHEN p.scan_date IS NULL                                      THEN 'not scanned'
+                        WHEN p.total_scan = 1 AND p.dist_to_start <= p.dist_to_end   THEN 'not scanned'
+                        ELSE CONVERT(varchar(8), p.scan_date, 108)
+                    END AS jam_pulang,
+
+                    COALESCE(m.total_scan, 0)               AS total_scan,
+                    eb.shift_name,
+                    CONVERT(varchar(8), eb.work_start, 108) AS shift_start,
+
+                    CASE
+                        WHEN m.scan_date IS NOT NULL
+                            AND NOT (m.total_scan = 1 AND m.dist_to_end < m.dist_to_start)
+                            AND m.scan_date > DATEADD(minute, 10, eb.shift_start_dt)
+                        THEN 1 ELSE 0
+                    END AS is_late
+
+                FROM emp_window eb
+                LEFT JOIN scan_ranked m ON m.npk = eb.npk AND m.rn_masuk  = 1
+                LEFT JOIN scan_ranked p ON p.npk = eb.npk AND p.rn_pulang = 1
+                WHERE m.scan_date IS NOT NULL
+                ORDER BY eb.bagian ASC, eb.npk ASC
+            ", [
+                $date,       // emp: es.shift_date  → shift hari ini
+                $yesterday,  // emp: pes.shift_date → shift kemarin
+                $date,       // emp_bounds: shift_start_dt
+                $date,       // emp_bounds: shift_end_dt CASE night (DATEADD +1 day)
+                $date,       // emp_bounds: shift_end_dt CASE normal
+                $yesterday,  // emp_bounds: prev_shift_end_dt CASE night (DATEADD +1 day → jadi $date)
+                $yesterday,  // emp_bounds: prev_shift_end_dt CASE normal
+                // $tomorrow DIHAPUS
+            ]);
 
                 return datatables()->of($data)->addIndexColumn()->make(true);
             } catch (\Exception $e) {
