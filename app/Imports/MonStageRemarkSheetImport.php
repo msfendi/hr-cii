@@ -17,25 +17,36 @@ use Maatwebsite\Excel\Concerns\WithValidation;
  * MonStageRemarkImport::sheets() -- sheet tersembunyi "Lists" tidak lewat
  * class ini sama sekali.
  *
- * Setiap baris valid langsung di-insert sebagai baris baru (tidak
- * upsert/replace -- 1 OCF boleh punya beberapa remark per department dari
- * waktu ke waktu, riwayatnya tetap disimpan semua).
+ * Setiap baris valid di-create-or-update (upsert) berdasarkan kombinasi
+ * ocf_no + department_id -- kalau kombinasi tsb sudah ada, remark-nya
+ * di-update; kalau belum ada, dibuatkan baris baru.
  */
 class MonStageRemarkSheetImport implements ToModel, WithHeadingRow, WithValidation, SkipsEmptyRows
 {
     use Importable;
 
-    public function __construct(private MonStageDataService $service)
-    {
-    }
+    public function __construct(private MonStageDataService $service) {}
 
     public function model(array $row)
     {
-        return new MonStageRemark([
-            'ocf_no'        => strtoupper(trim((string) $row['ocf_no'])),
-            'department_id' => trim((string) $row['department_id']),
-            'remark'        => isset($row['remark']) ? trim((string) $row['remark']) : null,
-        ]);
+        $ocfNo        = strtoupper(trim((string) $row['ocf_no']));
+        $departmentId = trim((string) $row['department_id']);
+        $remark       = isset($row['remark']) ? trim((string) $row['remark']) : null;
+
+        // Create-or-update berdasarkan kombinasi ocf_no + department_id.
+        // Di-handle manual (bukan `return new MonStageRemark(...)`) supaya
+        // package tidak selalu insert baris baru.
+        MonStageRemark::updateOrCreate(
+            [
+                'ocf_no'        => $ocfNo,
+                'department_id' => $departmentId,
+            ],
+            [
+                'remark' => $remark,
+            ]
+        );
+
+        return null;
     }
 
     public function rules(): array
