@@ -90,28 +90,24 @@ class LeaveBalanceGenerationService
      * Diambil via Eloquent dulu lalu difilter di PHP agar tidak terpengaruh
      * format kolom tanggal yang tidak konsisten di database sumber (cii).
      */
-    protected function getEligibleEmployees()
+    protected function getEligibleEmployees(int $year)
     {
-        $allEmployees = Biodata::leftJoin('PKWT', 'BIODATA.NPK', '=', 'PKWT.NPK')
-            ->select('BIODATA.NPK', 'BIODATA.NAMA_KARYAWAN', 'PKWT.TMK', 'PKWT.TKK', 'PKWT.JK')
+        // Awal periode cuti
+        $periodDate = Carbon::create($year, 1, 1);
+
+        // Minimal sudah bekerja 1 tahun
+        $minimumTmkDate = $periodDate->copy()->subYear();
+
+        return DB::table('PKWT')
+            ->select(
+                'PKWT.NPK',
+                'PKWT.TMK',
+                'PKWT.TKK',
+                'PKWT.JK'
+            )
+            ->whereNull('PKWT.TKK')
+            ->whereNotNull('PKWT.TMK')
+            ->where('PKWT.TMK', '<=', $minimumTmkDate->format('Y-m-d'))
             ->get();
-
-        return $allEmployees->filter(function ($emp) {
-            $tkkKosong = empty($emp->TKK) || trim($emp->TKK) === '';
-
-            $sudahSetahun = false;
-            if (!empty($emp->TMK) && trim($emp->TMK) !== '') {
-                try {
-                    $tmk = Carbon::parse($emp->TMK);
-                    if ($tmk->diffInYears(now()) >= 1) {
-                        $sudahSetahun = true;
-                    }
-                } catch (\Exception $e) {
-                    // Abaikan jika format error
-                }
-            }
-
-            return $tkkKosong && $sudahSetahun;
-        });
     }
 }
