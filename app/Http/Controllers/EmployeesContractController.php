@@ -301,41 +301,78 @@ class EmployeesContractController extends Controller
         DB::beginTransaction();
 
         try {
-            $old->update(['status_contract' => 'DIPERPANJANG']);
 
+            // Kontrak lama
+            $old->update([
+                'status_contract' => 'DIPERPANJANG',
+            ]);
+
+            // Contract ke berikutnya
             $newContractKe = (int) $old->contract_ke + 1;
-            $newStart = $old->end_date->copy()->addDay();
 
-            $newEnd = $newStart->copy()->addMonths((int) $data['month_duration'])->subDay();
+            // Tanggal mulai kontrak baru
+            $newStart = Carbon::parse($old->end_date)
+                ->addDay();
 
-            // Di bulan tersebut, cek apakah tanggalnya lebih dekat ke 7 atau 20
+            // Tanggal akhir berdasarkan duration
+            $newEnd = $newStart
+                ->copy()
+                ->addMonths((int) $data['month_duration'])
+                ->subDay();
+
+            // Cut-off tanggal 7 / 20
             if ($newEnd->day <= 13) {
                 $newEnd->day(7);
             } else {
                 $newEnd->day(20);
             }
 
-            EmployeesContract::create([
+            // Buat kontrak baru
+            $newContract = EmployeesContract::create([
                 'npk'             => $old->npk,
                 'contract_ke'     => $newContractKe,
                 'start_date'      => $newStart,
                 'end_date'        => $newEnd,
                 'month_duration'  => $data['month_duration'],
-                'day_duration'    => '0', // Otomatis 0 karena mengikuti tgl cutoff
+                'day_duration'    => 0,
                 'status_contract' => 'AKTIF',
-                'salary'          => $data['salary']       ?? $old->salary,
-                'allowance'       => $data['allowance']    ?? $old->allowance,
-                'pph21'           => $data['pph21']        ?? $old->pph21,
-                'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
+
+                'salary'          => $data['salary'] 
+                    ?? $old->salary,
+
+                'allowance'       => $data['allowance'] 
+                    ?? $old->allowance,
+
+                'pph21'           => $data['pph21'] 
+                    ?? $old->pph21,
+
+                'daily_salary'    => $data['daily_salary'] 
+                    ?? $old->daily_salary,
+
                 'type'            => $old->type,
             ]);
 
+            // Pastikan object benar-benar tersimpan
+            if (!$newContract->exists) {
+                throw new \Exception('Kontrak baru gagal dibuat.');
+            }
+
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => 'Kontrak berhasil diperpanjang.', 'data' => $old]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Kontrak berhasil diperpanjang.',
+                'data'    => $newContract,
+            ]);
+
         } catch (\Exception $e) {
+
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
         }
     }
 
