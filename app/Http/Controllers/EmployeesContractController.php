@@ -6,6 +6,7 @@ use App\Exports\EmployeesContractAllExport;
 use App\Exports\EmployeesContractExport;
 use App\Imports\EmployeesContractImport;
 use App\Models\EmployeesContract;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -337,16 +338,16 @@ class EmployeesContractController extends Controller
                 'day_duration'    => 0,
                 'status_contract' => 'AKTIF',
 
-                'salary'          => $data['salary'] 
+                'salary'          => $data['salary']
                     ?? $old->salary,
 
-                'allowance'       => $data['allowance'] 
+                'allowance'       => $data['allowance']
                     ?? $old->allowance,
 
-                'pph21'           => $data['pph21'] 
+                'pph21'           => $data['pph21']
                     ?? $old->pph21,
 
-                'daily_salary'    => $data['daily_salary'] 
+                'daily_salary'    => $data['daily_salary']
                     ?? $old->daily_salary,
 
                 'type'            => $old->type,
@@ -361,10 +362,8 @@ class EmployeesContractController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Kontrak berhasil diperpanjang.',
-                'data'    => $newContract,
+                'message' => 'Kontrak berhasil diperpanjang.'
             ]);
-
         } catch (\Exception $e) {
 
             DB::rollBack();

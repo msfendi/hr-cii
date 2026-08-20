@@ -952,9 +952,13 @@ class MonitoringRekonsiliasiService
      * dengan NEED sebagai baseline (selalu 100% kalau NEED > 0):
      *  - NEED%     : mon_work_orders.request / mon_work_orders.request (patokan, selalu 100%).
      *  - ORDER%    : mon_rekonsiliasis.jumlah_order / mon_work_orders.request (NEED).
-     *  - RECEIVED% : mon_rekonsiliasis.jumlah_doc / mon_work_orders.request (NEED).
-     *  - OUT PROD% : mon_rekonsiliasis.out_req / mon_rekonsiliasis.jumlah_doc.
-     *  - STOCK%    : mon_rekonsiliasis.saldo_gudang / mon_rekonsiliasis.jumlah_doc.
+     *  - RECEIVED% : (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc) / mon_work_orders.request (NEED).
+     *  - OUT PROD% : mon_rekonsiliasis.out_req / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
+     *  - STOCK%    : mon_rekonsiliasis.saldo_gudang / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
+     *
+     * `out_doc` (mon_rekonsiliasis.out_doc) dikurangkan dari jumlah_doc untuk
+     * mendapatkan "jumlah diterima bersih" yang jadi pembagi OUT PROD% &
+     * STOCK%, sekaligus pembilang RECEIVED%.
      *
      * Setiap baris juga dibawakan `barang_category` (dari mon_ms_barangs, via
      * barang_code) supaya frontend bisa memecah chart menjadi 3 card:
@@ -967,6 +971,7 @@ class MonitoringRekonsiliasiService
             ->select('barang_code', 'barang_name')
             ->selectRaw('SUM(jumlah_order) as jumlah_order')
             ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
+            ->selectRaw('SUM(out_doc) as out_doc')
             ->selectRaw('SUM(out_req) as out_req')
             ->selectRaw('SUM(saldo_gudang) as saldo_gudang')
             ->selectRaw('SUM(harga_total) as harga_total')
@@ -998,9 +1003,13 @@ class MonitoringRekonsiliasiService
             : DB::table('mon_ms_barangs')->whereIn('barang_code', $codes)->pluck('barang_category', 'barang_code');
 
         return $rows->map(function ($r) use ($needByCode, $categoryByCode) {
-            $order = (float) $r->jumlah_order;
-            $doc   = (float) $r->jumlah_doc;
-            $need  = (float) ($needByCode[$r->barang_code]->request ?? 0);
+            $order  = (float) $r->jumlah_order;
+            $doc    = (float) $r->jumlah_doc;
+            $outDoc = (float) $r->out_doc;
+            // Jumlah diterima bersih = jumlah_doc - out_doc, dipakai sebagai
+            // pembagi OUT PROD% & STOCK%, dan pembilang RECEIVED%.
+            $netReceived = $doc - $outDoc;
+            $need   = (float) ($needByCode[$r->barang_code]->request ?? 0);
 
             $pct = fn($num, $denom) => $denom > 0 ? round(max(0, (float) $num) / $denom * 100) : 0;
 
@@ -1019,9 +1028,12 @@ class MonitoringRekonsiliasiService
                 // perubahan formula fabricQty().
                 'need_pct'        => $pct($need, $need),
                 'order_pct'       => $pct($order, $need),
-                'received_pct'    => $pct($doc, $need),
-                'out_prod_pct'    => $pct($r->out_req, $doc),
-                'stock_pct'       => $pct($r->saldo_gudang, $doc),
+                // RECEIVED% = (jumlah_doc - out_doc) / need.
+                'received_pct'    => $pct($netReceived, $need),
+                // OUT PROD% = out_req / (jumlah_doc - out_doc).
+                'out_prod_pct'    => $pct($r->out_req, $netReceived),
+                // STOCK% = saldo_gudang / (jumlah_doc - out_doc).
+                'stock_pct'       => $pct($r->saldo_gudang, $netReceived),
             ];
         });
     }

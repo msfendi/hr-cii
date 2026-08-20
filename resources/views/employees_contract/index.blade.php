@@ -868,7 +868,6 @@
                     btn.prop('disabled', false).html('<i class="fas fa-check mr-1"></i>Perpanjang');
                     showToast(res.message, res.success ? 'success' : 'danger');
                     if (res.success) { $('#modalPerpanjang').modal('hide'); reloadTable(); 
-                    console.log(res);
                     }
                 });
             });
