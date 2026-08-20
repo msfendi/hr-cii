@@ -315,6 +315,8 @@ class EmployeesContractController extends Controller
                 $newEnd->day(20);
             }
 
+            dd($newStart, $newEnd, $old);
+
             EmployeesContract::create([
                 'npk'             => $old->npk,
                 'contract_ke'     => $newContractKe,

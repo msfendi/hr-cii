@@ -1235,6 +1235,8 @@ Route::group(['middleware' => 'auth'], function () {
     });
 });
 
+// BATAS ROUTE TANPA AUTH
+
 Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->name('employee-payroll.index');
 Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
 Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
