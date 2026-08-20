@@ -271,7 +271,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'permission']);
 
     Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'permission']);
-    Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'permission']);
+    // Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/generatev2', [PayrollProcessController::class, 'generateV2'])->name('payroll-process.generatev2');
     Route::get('/payroll-process/checkv2/{period_id}', [PayrollProcessController::class, 'checkPayrollV2'])->name('payroll-process.checkv2');
     Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'permission']);
@@ -1213,7 +1213,7 @@ Route::group(['middleware' => 'auth'], function () {
                 Route::post('/import', [ExpatMealController::class, 'import'])->name('import');
 
                 // Export laporan
-                Route::get('/export-excel', [ExpatMealController::class, 'exportRekapExcel'])->name('export-excel');
+                Route::get('/export-excel', [ExpatMealController::class, 'exportMasterFileExcel'])->name('export-excel');
                 Route::get('/detail-makanan', [ExpatMealController::class, 'mealDetailData'])->name('detail-makanan');
                 Route::get('expat-options', [ExpatMealController::class, 'expatOptions'])->name('expat-options');
             });
@@ -1339,3 +1339,5 @@ Route::middleware(['auth', 'permission'])->group(function () {
     Route::post('/salary-approve/{id}/approve', [SalaryApproveController::class, 'approve'])->name('salary-approve.approve');
     Route::post('/salary-approve/{id}/reject', [SalaryApproveController::class, 'reject'])->name('salary-approve.reject');
 });
+
+Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check');
