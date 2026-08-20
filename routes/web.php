@@ -954,27 +954,6 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/import/upload', [OutsourceController::class, 'import'])->name('import');
     });
 
-    Route::prefix('event-invitation')->name('event-invitation.')->group(function () {
-
-        // ---- Admin: kelola master event (bungkus middleware auth/permission kamu sendiri) ----
-        // PENTING: grup ini harus didaftarkan SEBELUM route GET '/{event?}' di bawah,
-        // supaya "/event_invitation/admin" tidak ketangkep sebagai parameter {event}.
-        Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission'])->group(function () {
-            Route::get('/', [EventController::class, 'index'])->name('index');
-            Route::post('/', [EventController::class, 'store'])->name('store');
-            Route::put('/{event}', [EventController::class, 'update'])->name('update');
-            Route::delete('/{event}', [EventController::class, 'destroy'])->name('destroy');
-            Route::post('/{event}/activate', [EventController::class, 'activate'])->name('activate');
-            Route::get('/{event}/peserta', [EventController::class, 'peserta'])->name('peserta');
-            Route::get('/{event}/export', [EventController::class, 'exportPeserta'])->name('export');
-        });
-        Route::get('/scan/{event?}', [EventInvitationController::class, 'scanPage'])->name('scan');
-        Route::post('/scan/{event?}', [EventInvitationController::class, 'storeScan'])->name('scan.store');
-
-        Route::get('/{event?}', [EventInvitationController::class, 'formPage'])->name('form');
-        Route::post('/{event?}/respond', [EventInvitationController::class, 'storeResponse'])->name('respond');
-    });
-
     Route::middleware(['auth', 'permission'])
         ->prefix('monitoring/rekonsiliasi')
         ->name('monitoring.rekonsiliasi.')
@@ -1261,6 +1240,31 @@ Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::cla
 Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
+
+
+
+Route::prefix('event-invitation')->name('event-invitation.')->group(function () {
+
+    // ---- Admin: kelola master event (bungkus middleware auth/permission kamu sendiri) ----
+    // PENTING: grup ini harus didaftarkan SEBELUM route GET '/{event?}' di bawah,
+    // supaya "/event_invitation/admin" tidak ketangkep sebagai parameter {event}.
+    Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [EventController::class, 'index'])->name('index');
+        Route::post('/', [EventController::class, 'store'])->name('store');
+        Route::put('/{event}', [EventController::class, 'update'])->name('update');
+        Route::delete('/{event}', [EventController::class, 'destroy'])->name('destroy');
+        Route::post('/{event}/activate', [EventController::class, 'activate'])->name('activate');
+        Route::get('/{event}/peserta', [EventController::class, 'peserta'])->name('peserta');
+        Route::get('/{event}/export', [EventController::class, 'exportPeserta'])->name('export');
+    });
+    Route::get('/scan/{event?}', [EventInvitationController::class, 'scanPage'])->name('scan');
+    Route::post('/scan/{event?}', [EventInvitationController::class, 'storeScan'])->name('scan.store');
+
+    Route::get('/{event?}', [EventInvitationController::class, 'formPage'])->name('form');
+    Route::post('/{event?}/respond', [EventInvitationController::class, 'storeResponse'])->name('respond');
+});
+
+
 Route::get('/test-reverb', function () {
     event(new NotificationEvent(
         'Test Reverb',
