@@ -332,7 +332,7 @@ class EmployeesContractController extends Controller
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => 'Kontrak berhasil diperpanjang.', , 'data' => $old]);
+            return response()->json(['success' => true, 'message' => 'Kontrak berhasil diperpanjang.', 'data' => $old]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
