@@ -1339,5 +1339,3 @@ Route::middleware(['auth', 'permission'])->group(function () {
     Route::post('/salary-approve/{id}/approve', [SalaryApproveController::class, 'approve'])->name('salary-approve.approve');
     Route::post('/salary-approve/{id}/reject', [SalaryApproveController::class, 'reject'])->name('salary-approve.reject');
 });
-
-Route::get('/overtime/calendar-data', [OvertimeController::class, 'calendarDisplay'])->name('overtime.calendar-data');

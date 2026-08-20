@@ -173,7 +173,11 @@ class AdminLeaveBalanceController extends Controller
      */
     public function generateYearlyBalance(Request $request, LeaveBalanceGenerationService $leaveBalanceGenerationService)
     {
-        $year = (int) $request->input('year', now()->year);
+        $request->validate([
+            'year' => 'required|numeric',
+        ]);
+
+        $year = (int) $request->input('year');
 
         $result = $leaveBalanceGenerationService->generate($year);
 

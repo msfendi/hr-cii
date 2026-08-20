@@ -179,6 +179,10 @@
 
         // ── BUKA MODAL GENERATE ──────────────────────────────────────
         $('#btn-generate').on('click', function () {
+            // Set input modal generate_year mengikuti filter tahun yang sedang dipilih
+            var currentFilterYear = $('#year_filter').val() || new Date().getFullYear();
+            $('#generate_year').val(currentFilterYear);
+
             // Reset result panel tiap buka
             $('#generate_result').addClass('d-none');
             $('#res_employees, #res_created, #res_skipped').text('-');
@@ -217,6 +221,7 @@
                                 $('#res_skipped').text(res.skipped);
                                 $('#generate_result').removeClass('d-none');
                                 $btn.prop('disabled', true).html('<i class="fas fa-check mr-1"></i> Selesai');
+                                table.ajax.reload();
                             } else {
                                 Swal.fire('Gagal', res.message || 'Terjadi kesalahan.', 'error');
                                 $btn.prop('disabled', false).html('<i class="fas fa-play mr-1"></i> Jalankan Generate');
