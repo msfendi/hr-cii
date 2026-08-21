@@ -15,7 +15,7 @@ use Illuminate\Support\Collection;
  *                          + tahap Warehouse (dari kolom `destination`),
  *                          + scrap qty (barang_code = '01SCRP00001') untuk Fabric Usage
  *  - mon_shipments       : Shipment qty & detail dokumen pengeluaran BC
- *  - mon_work_orders     : sumber `request` (NEED) untuk fabric Qty & basis ORDER%
+ *  - mon_work_orders     : sumber NEED (SUM(jumlah_prod * cons) per row) untuk fabric Qty & basis ORDER%
  *                          pada Material Achievement
  *  - mon_ms_barangs          : master `barang_category` (sync dari smartit ms_barang),
  *                          dipakai untuk mengelompokkan card Material Achievement
@@ -687,8 +687,9 @@ class MonitoringRekonsiliasiService
      *  - RECEIVED : SUM(mon_rekonsiliasis.jumlah_doc) WHERE satuan_code = 'KGM'.
      *  - OUT WIP  : SUM(mon_rekonsiliasis.out_req) WHERE satuan_code = 'KGM'.
      *  - STOCK    : SUM(mon_rekonsiliasis.saldo_gudang) WHERE satuan_code = 'KGM'.
-     *  - NEED     : SUM(mon_work_orders.request) WHERE satuan_code = 'KGM',
-     *               di-scope melalui join ke mon_boms (filter uraian).
+     *  - NEED     : SUM(mon_work_orders.jumlah_prod * mon_work_orders.cons)
+     *               WHERE satuan_code = 'KGM', di-scope melalui join ke
+     *               mon_boms (filter uraian).
      *
      * Relasi: mon_work_orders.product_code = mon_boms.barang_jadi (produk jadi)
      *         mon_work_orders.barang_code = mon_boms.barang_code (komponen)
@@ -700,18 +701,18 @@ class MonitoringRekonsiliasiService
         $outWip   = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('out_req') ?? 0);
         $stock    = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('saldo_gudang') ?? 0);
 
-        // NEED dari mon_work_orders.request (kolom `request` = NEED qty hasil
-        // sinkronisasi get_ppic_bom.txt, lihat SyncWorkOrderFromSmartit),
-        // di-scope via mon_boms supaya hanya menghitung material milik CPO
-        // terpilih. mon_work_orders cuma granular sampai level CPO, jadi
-        // OCF/Sub Ref di sini tetap lewat bridge exact-match mon_orders
-        // (filterUraianList()), bukan LIKE ke kolom teks bebas.
+        // NEED dari mon_work_orders: SUM(jumlah_prod * cons) per row (bukan
+        // lagi SUM(request)), di-scope via mon_boms supaya hanya menghitung
+        // material milik CPO terpilih. mon_work_orders cuma granular sampai
+        // level CPO, jadi OCF/Sub Ref di sini tetap lewat bridge exact-match
+        // mon_orders (filterUraianList()), bukan LIKE ke kolom teks bebas.
         $need = 0.0;
         if ($this->hasCpo()) {
             $need = (float) DB::table('mon_work_orders as wo')
                 ->whereIn('wo.uraian', $this->filterUraianList())
                 ->where('wo.satuan_code', 'KGM')
-                ->sum('wo.request') ?? 0;
+                ->selectRaw('SUM(wo.jumlah_prod * wo.cons) as total')
+                ->value('total') ?? 0;
         }
 
         // Perhitungan baru (persentase, konsisten dengan materialAchievement()):
@@ -950,9 +951,9 @@ class MonitoringRekonsiliasiService
     /**
      * "MATERIAL ACHIEVEMENT": persentase tiap tahap dihitung berantai,
      * dengan NEED sebagai baseline (selalu 100% kalau NEED > 0):
-     *  - NEED%     : mon_work_orders.request / mon_work_orders.request (patokan, selalu 100%).
-     *  - ORDER%    : mon_rekonsiliasis.jumlah_order / mon_work_orders.request (NEED).
-     *  - RECEIVED% : (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc) / mon_work_orders.request (NEED).
+     *  - NEED%     : NEED / NEED (patokan, selalu 100%), dengan NEED = SUM(mon_work_orders.jumlah_prod * mon_work_orders.cons).
+     *  - ORDER%    : mon_rekonsiliasis.jumlah_order / NEED.
+     *  - RECEIVED% : (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc) / NEED.
      *  - OUT PROD% : mon_rekonsiliasis.out_req / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
      *  - STOCK%    : mon_rekonsiliasis.saldo_gudang / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
      *
@@ -983,14 +984,15 @@ class MonitoringRekonsiliasiService
             return $rows;
         }
 
-        // NEED per barang_code dari mon_work_orders.request, di-scope ke CPO
-        // yang sama dengan widget lain (lihat fabricQty()).
+        // NEED per barang_code dari mon_work_orders: SUM(jumlah_prod * cons)
+        // per row (bukan lagi SUM(request)), di-scope ke CPO yang sama
+        // dengan widget lain (lihat fabricQty()).
         $needByCode = collect();
         if ($this->hasCpo()) {
             $needByCode = DB::table('mon_work_orders')
                 ->whereIn('uraian', $this->filterUraianList())
                 ->select('barang_code')
-                ->selectRaw('SUM(request) as request')
+                ->selectRaw('SUM(jumlah_prod * cons) as request')
                 ->groupBy('barang_code')
                 ->get()
                 ->keyBy('barang_code');
