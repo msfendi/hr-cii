@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Str;
 
 class EmployeesContractController extends Controller
 {
@@ -280,6 +281,109 @@ class EmployeesContractController extends Controller
      * POST — Perpanjang kontrak.
      * Kontrak lama → DIPERPANJANG, kontrak baru dibuat otomatis ke+1.
      */
+    // public function extend(Request $request, string $id)
+    // {
+    //     $data = $request->validate([
+    //         'month_duration' => 'required|numeric',
+    //         'salary'         => 'nullable|numeric|min:0',
+    //         'allowance'      => 'nullable|numeric|min:0',
+    //         'pph21'          => 'nullable|numeric|min:0',
+    //         'daily_salary'   => 'nullable|numeric|min:0',
+    //     ]);
+
+    //     $old = EmployeesContract::findOrFail($id);
+
+    //     if ($old->status_contract !== 'AKTIF') {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Hanya kontrak AKTIF yang bisa diperpanjang.',
+    //         ], 422);
+    //     }
+
+    //     DB::connection('cii')->beginTransaction();
+
+    //     try {
+
+    //         // Kontrak lama
+    //         $old->update([
+    //             'status_contract' => 'DIPERPANJANG',
+    //         ]);
+
+    //         // Contract ke berikutnya
+    //         $newContractKe = (int) $old->contract_ke + 1;
+
+    //         // Tanggal mulai kontrak baru
+    //         $newStart = Carbon::parse($old->end_date)
+    //             ->addDay();
+
+    //         // Tanggal akhir berdasarkan duration
+    //         $newEnd = $newStart
+    //             ->copy()
+    //             ->addMonths((int) $data['month_duration'])
+    //             ->subDay();
+
+    //         // Cut-off tanggal 7 / 20
+    //         if ($newEnd->day <= 13) {
+    //             $newEnd->day(7);
+    //         } else {
+    //             $newEnd->day(20);
+    //         }
+
+    //         // Buat kontrak baru
+    //         $newContract = EmployeesContract::create([
+    //             'npk'             => $old->npk,
+    //             'contract_ke'     => $newContractKe,
+    //             'start_date'      => $newStart->toDateString(),
+    //             'end_date'        => $newEnd->toDateString(),
+    //             'month_duration'  => (string) $data['month_duration'],
+    //             'day_duration'    => 0,
+    //             'status_contract' => 'AKTIF',
+
+    //             'salary'          => (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '')
+    //                 ? $data['salary'] 
+    //                 : $old->salary,
+
+    //             'allowance'       => (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '')
+    //                 ? $data['allowance'] 
+    //                 : $old->allowance,
+
+    //             'pph21'           => (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '')
+    //                 ? $data['pph21'] 
+    //                 : $old->pph21,
+
+    //             'daily_salary'    => (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '')
+    //                 ? $data['daily_salary'] 
+    //                 : $old->daily_salary,
+
+    //             'type'            => $old->type,
+    //         ]);
+
+    //         // Pastikan object benar-benar tersimpan
+    //         if (!$newContract->exists) {
+    //             throw new \Exception('Kontrak baru gagal dibuat.');
+    //         }
+
+    //         DB::connection('cii')->commit();
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Kontrak berhasil diperpanjang.',
+    //             'data'    => $newContract,
+    //         ]);
+
+    //     } catch (\Exception $e) {
+
+    //         DB::connection('cii')->rollBack();
+
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => $e->getMessage(),
+    //         ], 500);
+    //     }
+    // }
+
+
+
     public function extend(Request $request, string $id)
     {
         $data = $request->validate([
@@ -290,7 +394,14 @@ class EmployeesContractController extends Controller
             'daily_salary'   => 'nullable|numeric|min:0',
         ]);
 
-        $old = EmployeesContract::findOrFail($id);
+        $old = DB::connection('cii')->table('employees_contract')->where('id', $id)->first();
+
+        if (!$old) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data kontrak tidak ditemukan.',
+            ], 404);
+        }
 
         if ($old->status_contract !== 'AKTIF') {
             return response()->json([
@@ -299,27 +410,15 @@ class EmployeesContractController extends Controller
             ], 422);
         }
 
-        DB::connection('cii')->beginTransaction();
-
         try {
-
-            // Kontrak lama
-            $old->update([
-                'status_contract' => 'DIPERPANJANG',
-            ]);
-
             // Contract ke berikutnya
             $newContractKe = (int) $old->contract_ke + 1;
 
             // Tanggal mulai kontrak baru
-            $newStart = Carbon::parse($old->end_date)
-                ->addDay();
+            $newStart = Carbon::parse($old->end_date)->addDay();
 
             // Tanggal akhir berdasarkan duration
-            $newEnd = $newStart
-                ->copy()
-                ->addMonths((int) $data['month_duration'])
-                ->subDay();
+            $newEnd = $newStart->copy()->addMonths((int) $data['month_duration'])->subDay();
 
             // Cut-off tanggal 7 / 20
             if ($newEnd->day <= 13) {
@@ -328,8 +427,31 @@ class EmployeesContractController extends Controller
                 $newEnd->day(20);
             }
 
-            // Buat kontrak baru
-            $newContract = EmployeesContract::create([
+            // 1. Update status kontrak lama menjadi DIPERPANJANG
+            DB::connection('cii')->table('employees_contract')
+                ->where('id', $old->id)
+                ->update([
+                    'status_contract' => 'DIPERPANJANG',
+                    'updated_at'      => now(),
+                ]);
+
+            // 2. Buat kontrak baru
+            $newId = (string) Str::uuid();
+            $salary = (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '')
+                ? $data['salary']
+                : ($old->salary ?? 0);
+            $allowance = (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '')
+                ? $data['allowance']
+                : ($old->allowance ?? 0);
+            $pph21 = (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '')
+                ? $data['pph21']
+                : ($old->pph21 ?? 0);
+            $dailySalary = (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '')
+                ? $data['daily_salary']
+                : ($old->daily_salary ?? 0);
+
+            DB::connection('cii')->table('employees_contract')->insert([
+                'id'              => $newId,
                 'npk'             => $old->npk,
                 'contract_ke'     => $newContractKe,
                 'start_date'      => $newStart->toDateString(),
@@ -337,46 +459,32 @@ class EmployeesContractController extends Controller
                 'month_duration'  => (string) $data['month_duration'],
                 'day_duration'    => 0,
                 'status_contract' => 'AKTIF',
-
-                'salary'          => (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '')
-                    ? $data['salary'] 
-                    : $old->salary,
-
-                'allowance'       => (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '')
-                    ? $data['allowance'] 
-                    : $old->allowance,
-
-                'pph21'           => (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '')
-                    ? $data['pph21'] 
-                    : $old->pph21,
-
-                'daily_salary'    => (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '')
-                    ? $data['daily_salary'] 
-                    : $old->daily_salary,
-
-                'type'            => $old->type,
+                'salary'          => $salary,
+                'allowance'       => $allowance,
+                'pph21'           => $pph21,
+                'daily_salary'    => $dailySalary,
+                'type'            => $old->type ?? 'CONTRACT',
+                'created_at'      => now(),
+                'updated_at'      => now(),
             ]);
-
-            // Pastikan object benar-benar tersimpan
-            if (!$newContract->exists) {
-                throw new \Exception('Kontrak baru gagal dibuat.');
-            }
-
-            DB::connection('cii')->commit();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Kontrak berhasil diperpanjang.',
-                'data'    => $newContract,
+                'data'    => [
+                    'id'              => $newId,
+                    'npk'             => $old->npk,
+                    'contract_ke'     => $newContractKe,
+                    'start_date'      => $newStart->toDateString(),
+                    'end_date'        => $newEnd->toDateString(),
+                    'status_contract' => 'AKTIF',
+                ],
             ]);
 
         } catch (\Exception $e) {
-
-            DB::connection('cii')->rollBack();
-
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Gagal memperpanjang kontrak: ' . $e->getMessage(),
             ], 500);
         }
     }
