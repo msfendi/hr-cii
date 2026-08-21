@@ -299,7 +299,7 @@ class EmployeesContractController extends Controller
             ], 422);
         }
 
-        DB::beginTransaction();
+        DB::connection('cii')->beginTransaction();
 
         try {
 
@@ -332,23 +332,27 @@ class EmployeesContractController extends Controller
             $newContract = EmployeesContract::create([
                 'npk'             => $old->npk,
                 'contract_ke'     => $newContractKe,
-                'start_date'      => $newStart,
-                'end_date'        => $newEnd,
-                'month_duration'  => $data['month_duration'],
+                'start_date'      => $newStart->toDateString(),
+                'end_date'        => $newEnd->toDateString(),
+                'month_duration'  => (string) $data['month_duration'],
                 'day_duration'    => 0,
                 'status_contract' => 'AKTIF',
 
-                'salary'          => $data['salary'] 
-                    ?? $old->salary,
+                'salary'          => (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '')
+                    ? $data['salary'] 
+                    : $old->salary,
 
-                'allowance'       => $data['allowance'] 
-                    ?? $old->allowance,
+                'allowance'       => (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '')
+                    ? $data['allowance'] 
+                    : $old->allowance,
 
-                'pph21'           => $data['pph21'] 
-                    ?? $old->pph21,
+                'pph21'           => (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '')
+                    ? $data['pph21'] 
+                    : $old->pph21,
 
-                'daily_salary'    => $data['daily_salary'] 
-                    ?? $old->daily_salary,
+                'daily_salary'    => (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '')
+                    ? $data['daily_salary'] 
+                    : $old->daily_salary,
 
                 'type'            => $old->type,
             ]);
@@ -358,7 +362,7 @@ class EmployeesContractController extends Controller
                 throw new \Exception('Kontrak baru gagal dibuat.');
             }
 
-            DB::commit();
+            DB::connection('cii')->commit();
 
             return response()->json([
                 'success' => true,
@@ -368,7 +372,7 @@ class EmployeesContractController extends Controller
 
         } catch (\Exception $e) {
 
-            DB::rollBack();
+            DB::connection('cii')->rollBack();
 
             return response()->json([
                 'success' => false,
@@ -403,7 +407,7 @@ class EmployeesContractController extends Controller
             ], 422);
         }
 
-        DB::beginTransaction();
+        DB::connection('cii')->beginTransaction();
 
         try {
             // split_date berupa YYYY-MM, set ke tanggal 7 bulan tersebut, reset waktu agar komparasi akurat
@@ -430,7 +434,7 @@ class EmployeesContractController extends Controller
 
             // Update adjustment lama: end_date di tgl 7, durasi diperbarui
             $old->update([
-                'end_date'        => $oldEnd,
+                'end_date'        => $oldEnd->toDateString(),
                 'month_duration'  => (string) $oldMonthDuration,
                 'day_duration'    => (string) $oldDayDuration,
                 'status_contract' => 'ADJUSTMENT'
@@ -450,23 +454,23 @@ class EmployeesContractController extends Controller
             EmployeesContract::create([
                 'npk'             => $old->npk,
                 'contract_ke'     => $old->contract_ke,
-                'start_date'      => $newStart,
-                'end_date'        => $newEnd,
+                'start_date'      => $newStart->toDateString(),
+                'end_date'        => $newEnd->toDateString(),
                 'month_duration'  => (string) $newMonthDuration,
                 'day_duration'    => (string) $newDayDuration,
                 'status_contract' => 'AKTIF',
                 'type'            => 'CONTRACT',
-                'salary'          => $data['salary'] ?? $old->salary,
-                'allowance'       => $data['allowance'] ?? $old->allowance,
-                'pph21'           => $data['pph21'] ?? $old->pph21,
-                'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
+                'salary'          => (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '') ? $data['salary'] : $old->salary,
+                'allowance'       => (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '') ? $data['allowance'] : $old->allowance,
+                'pph21'           => (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '') ? $data['pph21'] : $old->pph21,
+                'daily_salary'    => (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '') ? $data['daily_salary'] : $old->daily_salary,
             ]);
 
-            DB::commit();
+            DB::connection('cii')->commit();
 
             return response()->json(['success' => true, 'message' => 'Kontrak berhasil displit.']);
         } catch (\Exception $e) {
-            DB::rollBack();
+            DB::connection('cii')->rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
