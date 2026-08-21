@@ -754,40 +754,34 @@
                         render: (d, t, r) => {
                             const isAktif = r.status_contract === 'AKTIF';
                             if (!isAktif) {
-                                // return '<span class="text-muted small">—</span>';
                                 return `
                             <div class="btn-group btn-group-sm">
                                  ${r.can_edit ? `
-                                <button class="btn btn-warning btn-xs"
-                                    onclick='openFinansial(${JSON.stringify(r).replace(/'/g, "\\'")})'
+                                <button class="btn btn-warning btn-xs btn-act-finansial"
                                     title="Update Finansial">
                                     <i class="fas fa-money-bill-wave"></i>
                                 </button>
                                 ` : ''}
-                            </div>`
+                            </div>`;
                             }
 
                             return `
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-success btn-xs"
-                                onclick="openPerpanjang('${r.id}','${r.nama}','${r.npk}',${r.contract_ke},'${r.salary || 0}','${r.allowance || 0}','${r.pph21 || 0}','${r.daily_salary || 0}')"
+                            <button class="btn btn-success btn-xs btn-act-perpanjang"
                                 title="Perpanjang">
                                 <i class="fas fa-redo"></i>
                             </button>
-                            <button class="btn btn-secondary btn-xs"
-                                onclick="doFinish('${r.id}','${r.nama}')"
+                            <button class="btn btn-secondary btn-xs btn-act-finish"
                                 title="Selesai">
                                 <i class="fas fa-check"></i>
                             </button>
-                            <button class="btn btn-danger btn-xs"
-                                onclick="doStop('${r.id}','${r.nama}')"
+                            <button class="btn btn-danger btn-xs btn-act-stop"
                                 title="Akhiri">
                                 <i class="fas fa-ban"></i>
                             </button>
                             
                             ${r.can_edit ? `
-                            <button class="btn btn-warning btn-xs"
-                                onclick='openFinansial(${JSON.stringify(r).replace(/'/g, "\\'")})'
+                            <button class="btn btn-warning btn-xs btn-act-finansial"
                                 title="Update Finansial">
                                 <i class="fas fa-money-bill-wave"></i>
                             </button>
@@ -980,6 +974,31 @@
             // ── Export All ────────────────────────────────────────────────────────────
             $('#btnExportAll').on('click', function () {
                 window.location.href = ROUTES.exportAllUrl;
+            });
+
+            // ── Table Action Button Listeners ──────────────────────────────────────────
+            $(document).on('click', '.btn-act-perpanjang', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                openPerpanjang(row.id, row.nama, row.npk, row.contract_ke, row.salary || 0, row.allowance || 0, row.pph21 || 0, row.daily_salary || 0);
+            });
+
+            $(document).on('click', '.btn-act-finish', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                doFinish(row.id, row.nama);
+            });
+
+            $(document).on('click', '.btn-act-stop', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                doStop(row.id, row.nama);
+            });
+
+            $(document).on('click', '.btn-act-finansial', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                openFinansial(row);
             });
         });
 
