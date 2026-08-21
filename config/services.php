@@ -48,5 +48,19 @@ return [
         'property_id' => env('GA4_PROPERTY_ID'),
         'credentials' => env('GA4_CREDENTIALS_PATH', storage_path('app/ga4-service-account.json')),
     ],
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model'   => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
+    ],
+
+    'deepseek' => [
+        'api_key' => env('DEEPSEEK_API_KEY'),
+        'model'   => env('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
+    ],
+
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model'   => env('GEMINI_MODEL', 'gemini-3.5-flash'),
+    ],
 
 ];

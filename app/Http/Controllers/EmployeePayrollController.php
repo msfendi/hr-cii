@@ -359,6 +359,8 @@ class EmployeePayrollController extends Controller
             ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
             ->toArray();
 
+        $usedLogKeys = [];
+
         foreach ($dates as $date) {
 
             $tanggal = $date->format('Y-m-d');
@@ -428,6 +430,18 @@ class EmployeePayrollController extends Controller
         | pada TANGGAL YANG SAMA (jam masuk), dan scan TERDEKAT
         | dengan work_end dari log pada TANGGAL BERIKUTNYA
         | (jam pulang).
+        |
+        | ⭐ FIX: satu scan fisik cuma boleh dipakai SEKALI. Tanpa
+        | ini, scan pulang shift H-1 (yang jatuh di tanggal H pagi)
+        | bisa "dipinjam" lagi jadi scan masuk shift H, dan scan
+        | masuk shift H+1 bisa "dipinjam" jadi scan pulang shift H
+        | — padahal scan itu sudah menjadi milik shift tetangga.
+        | Maka log yang sudah dipakai (tersimpan di $usedLogKeys)
+        | dikeluarkan dari kandidat, dan kandidat yang tersisa
+        | hanya diterima kalau jaraknya ke jam shift masih wajar
+        | (<= $maxScanToleranceSeconds). Kalau tidak ada kandidat
+        | yang valid, dianggap TIDAK ADA fingerprint untuk shift
+        | ini (bukan dipaksakan pakai scan milik shift lain).
         ======================================================
         */
                 $tanggalPulang = Carbon::parse($tanggal)
@@ -435,34 +449,52 @@ class EmployeePayrollController extends Controller
                     ->format('Y-m-d');
 
                 $candidatesIn = $logs->filter(
-                    fn($log) =>
-                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
-                )->values();
+                    fn($log, $key) =>
+                    !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                );
 
                 $candidatesOut = $logs->filter(
-                    fn($log) =>
-                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggalPulang
-                )->values();
+                    fn($log, $key) =>
+                    !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggalPulang
+                );
 
-                $findNearest = function ($candidates, Carbon $anchor) {
+                $maxScanToleranceSeconds = 4 * 3600;
+
+                $findNearest = function ($candidates, Carbon $anchor, $maxDiff) {
+                    $bestKey = null;
                     $best = null;
                     $bestDiff = PHP_INT_MAX;
 
-                    foreach ($candidates as $log) {
+                    foreach ($candidates as $key => $log) {
                         $scan = Carbon::parse($log->scan_date);
                         $diff = abs($scan->diffInSeconds($anchor));
 
                         if ($diff < $bestDiff) {
                             $bestDiff = $diff;
                             $best = $log;
+                            $bestKey = $key;
                         }
                     }
 
-                    return $best;
+                    if ($best === null || $bestDiff > $maxDiff) {
+                        return [null, null];
+                    }
+
+                    return [$best, $bestKey];
                 };
 
-                $bestIn  = $findNearest($candidatesIn, $shiftStartDT);
-                $bestOut = $findNearest($candidatesOut, $shiftEndDT);
+                [$bestIn, $bestInKey]   = $findNearest($candidatesIn, $shiftStartDT, $maxScanToleranceSeconds);
+                [$bestOut, $bestOutKey] = $findNearest($candidatesOut, $shiftEndDT, $maxScanToleranceSeconds);
+
+                if ($bestInKey !== null) {
+                    $usedLogKeys[$bestInKey] = true;
+                }
+
+                if ($bestOutKey !== null) {
+                    $usedLogKeys[$bestOutKey] = true;
+                }
 
                 $dailyLogs = collect(array_filter([$bestIn, $bestOut]))
                     ->sortBy('scan_date')
@@ -1443,6 +1475,8 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
             ->toArray();
 
+        $usedLogKeys = [];
+
         foreach ($dates as $date) {
 
             $tanggal = $date->format('Y-m-d');
@@ -1481,35 +1515,58 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                     ->addDay()
                     ->format('Y-m-d');
 
+                // ⭐ FIX: log yang sudah dipakai shift lain (tersimpan di
+                // $usedLogKeys) tidak boleh dipakai lagi, dan kandidat yang
+                // tersisa hanya diterima kalau jaraknya ke jam shift masih
+                // wajar (<= $maxScanToleranceSeconds). Lihat showSlip()
+                // untuk penjelasan lengkap.
                 $candidatesIn = $logs->filter(
-                    fn($log) =>
-                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
-                )->values();
+                    fn($log, $key) =>
+                    !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                );
 
                 $candidatesOut = $logs->filter(
-                    fn($log) =>
-                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggalPulang
-                )->values();
+                    fn($log, $key) =>
+                    !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggalPulang
+                );
 
-                $findNearest = function ($candidates, Carbon $anchor) {
+                $maxScanToleranceSeconds = 4 * 3600;
+
+                $findNearest = function ($candidates, Carbon $anchor, $maxDiff) {
+                    $bestKey = null;
                     $best = null;
                     $bestDiff = PHP_INT_MAX;
 
-                    foreach ($candidates as $log) {
+                    foreach ($candidates as $key => $log) {
                         $scan = Carbon::parse($log->scan_date);
                         $diff = abs($scan->diffInSeconds($anchor));
 
                         if ($diff < $bestDiff) {
                             $bestDiff = $diff;
                             $best = $log;
+                            $bestKey = $key;
                         }
                     }
 
-                    return $best;
+                    if ($best === null || $bestDiff > $maxDiff) {
+                        return [null, null];
+                    }
+
+                    return [$best, $bestKey];
                 };
 
-                $bestIn  = $findNearest($candidatesIn, $shiftStartDT);
-                $bestOut = $findNearest($candidatesOut, $shiftEndDT);
+                [$bestIn, $bestInKey]   = $findNearest($candidatesIn, $shiftStartDT, $maxScanToleranceSeconds);
+                [$bestOut, $bestOutKey] = $findNearest($candidatesOut, $shiftEndDT, $maxScanToleranceSeconds);
+
+                if ($bestInKey !== null) {
+                    $usedLogKeys[$bestInKey] = true;
+                }
+
+                if ($bestOutKey !== null) {
+                    $usedLogKeys[$bestOutKey] = true;
+                }
 
                 $dailyLogs = collect(array_filter([$bestIn, $bestOut]))
                     ->sortBy('scan_date')

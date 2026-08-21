@@ -108,6 +108,8 @@ use App\Http\Controllers\MonitoringRekonsiliasiController;
 use App\Http\Controllers\MonStageDataController;
 use App\Http\Controllers\OrderImportController;
 use App\Http\Controllers\OutsourceController;
+use App\Http\Controllers\PdfDocumentController;
+use App\Http\Controllers\PdfExtractionController;
 use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
 
@@ -1339,3 +1341,5 @@ Route::middleware(['auth', 'permission'])->group(function () {
     Route::post('/salary-approve/{id}/approve', [SalaryApproveController::class, 'approve'])->name('salary-approve.approve');
     Route::post('/salary-approve/{id}/reject', [SalaryApproveController::class, 'reject'])->name('salary-approve.reject');
 });
+
+Route::get('/pdf-extractor', [PdfExtractionController::class, 'index'])->name('pdf.index')->middleware(['auth']);
