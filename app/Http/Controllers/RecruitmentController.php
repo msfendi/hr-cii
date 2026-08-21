@@ -175,6 +175,102 @@ class RecruitmentController extends Controller
         return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap', 'pkwtRecords', 'exPkwtKtp', 'approvers', 'salaryMap'));
     }
 
+    /**
+     * AJAX endpoint dipanggil dari modal "Detail" dan modal "Pengajuan Gaji"
+     * di recruitment.index. Sebelumnya data ini (recruitment + pkwt + salary)
+     * di-json_encode() ke SETIAP baris tabel lewat data-attribute, padahal
+     * cuma dipakai untuk 1 pelamar yang detail-nya sedang dibuka. Endpoint
+     * ini mengambil data yang sama persis (kolom & logic sama seperti di
+     * index()/edit()), hanya saja on-demand per id, bukan untuk semua baris.
+     */
+    public function detailData($id)
+    {
+        $recruitment = DB::connection('cii')->table('PELAMAR')
+            ->leftJoin('pelamar_details as pd', 'pd.id_pelamar', '=', 'PELAMAR.ID')
+            ->where('PELAMAR.ID', $id)
+            ->select(
+                'PELAMAR.*',
+                'pd.id as detail_id',
+                'pd.nomor_sim',
+                'pd.warga_negara',
+                'pd.ikut_kb',
+                'pd.bakat_hobby',
+                'pd.mode_transportasi',
+                'pd.jabatan',
+                'pd.department',
+                'pd.bpjs_tk',
+                'pd.bpjs_kes',
+                'pd.alamat_skrg',
+                'pd.kabupaten_kota_skrg',
+                'pd.status_domisili',
+                'pd.nama_ktk_darurat',
+                'pd.hubungan',
+                'pd.no_telp_darurat',
+                'pd.pengalaman_kerja',
+                'pd.data_ayah',
+                'pd.data_ibu',
+                'pd.saudara_kandung',
+                'pd.data_anak',
+                'pd.riwayat_pendidikan',
+                'pd.motivasi',
+                'pd.kegiatan_ekstra',
+                'pd.file_surat_lamaran',
+                'pd.file_cv',
+                'pd.file_ktp',
+                'pd.file_kk',
+                'pd.file_ijasah',
+                'pd.file_akta_kelahiran',
+                'pd.file_skck',
+                'pd.file_surat_sehat',
+                'pd.file_pas_foto',
+                'pd.tgl_test',
+                'pd.tgl_interview',
+                'pd.tgl_kesehatan',
+                'pd.tgl_diterima',
+                'pd.status_apply',
+                'pd.is_test',
+                'pd.is_interview',
+                'pd.is_kesehatan',
+                'pd.result_test',
+                'pd.comment_test',
+                'pd.result_kesehatan',
+                'pd.comment_kesehatan',
+                'pd.result_interview',
+                'pd.comment_interview',
+                'pd.result_user',
+                'pd.comment_user',
+                'pd.file_test',
+                'pd.created_at'
+            )
+            ->first();
+
+        if (!$recruitment) {
+            return response()->json(['error' => 'Data pelamar tidak ditemukan'], 404);
+        }
+
+        $pkwt = DB::connection('cii')->table('PKWT')
+            ->where('KTP', $recruitment->NIK)
+            ->select('KTP', 'NAMA', 'TMK', 'TKK', 'KETERANGAN', 'leave_reasons')
+            ->get();
+
+        // Pengajuan gaji terbaru untuk pelamar ini (sama seperti $salaryMap di
+        // index(), tapi diambil satuan karena cuma butuh 1 pelamar).
+        $sal = SalaryApprove::where('id_pelamar', $id)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($sal) {
+            $approverNameMap = $this->resolveApproverNames(collect([$sal]));
+            $sal->setAttribute('steps', $this->buildStepsDisplay($sal->progress ?? [], $approverNameMap));
+        }
+
+        return response()->json([
+            'recruitment' => $recruitment,
+            'pkwt'        => $pkwt,
+            'salary'      => $sal,
+        ]);
+    }
+
     public function updatePenilaian(Request $request)
     {
         $request->validate([
@@ -192,7 +288,7 @@ class RecruitmentController extends Controller
             'comment_user' => $request->comment_user,
         ];
 
-                
+
         $now = date('Y-m-d');
 
         if ($request->filled('result_interview')) {
@@ -311,7 +407,7 @@ class RecruitmentController extends Controller
         return back()->with('error', 'Failed to send WhatsApp message: ' . ($response['reason'] ?? 'Unknown error'));
     }
 
-    
+
     public function edit($id)
     {
         $pelamar = DB::connection('cii')->table('PELAMAR')
@@ -443,7 +539,6 @@ class RecruitmentController extends Controller
 
             Alert::success('Berhasil', 'Data pelamar berhasil diperbarui!');
             return redirect()->route('recruitment.index');
-
         } catch (\Exception $e) {
             DB::connection('cii')->rollBack();
             Alert::error('Gagal', 'Terjadi kesalahan: ' . $e->getMessage());

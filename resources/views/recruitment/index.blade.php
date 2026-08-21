@@ -1140,10 +1140,7 @@
                                                                                         </a>
                                                                                         @endcanRoute
                                                                                         <button type="button" class="act-btn act-det btn-detail"
-                                                                                            data-recruitment="{{ json_encode($recruitment) }}"
-                                                                                            data-pkwt="{{ isset($pkwtRecords[$recruitment->NIK]) ? json_encode($pkwtRecords[$recruitment->NIK]) : 'null' }}"
-                                                                                            data-salary="{{ $sal ? json_encode($sal) : 'null' }}"
-                                                                                            data-toggle="modal" data-target="#detailModal">
+                                                                                            data-id="{{ $recruitment->ID }}">
                                                                                             <i class="fas fa-eye"></i> Detail
                                                                                         </button>
 
@@ -1178,8 +1175,7 @@
                                                                                                     data-nama="{{ $recruitment->NAMA }}"
                                                                                                     data-jabatan="{{ $recruitment->jabatan ?? '-' }}"
                                                                                                     data-dept="{{ $recruitment->department ?? $recruitment->dept ?? '-' }}"
-                                                                                                    data-salary='@json($salEditable ? $sal : null)'
-                                                                                                    data-toggle="modal" data-target="#salaryModal">
+                                                                                                    data-editable="{{ $salEditable ? '1' : '0' }}">
                                                                                                     <i class="fas fa-money-bill-wave"></i>
                                                                                                     {{ $salEditable ? 'Update Pengajuan Gaji' : 'Ajukan Gaji' }}
                                                                                                 </button>
@@ -2188,17 +2184,34 @@
 
             /* ── Salary modal (create / update) ── */
             $(document).on('click', '.btn-salary', function () {
-                let sal = $(this).data('salary');
-                if (typeof sal === 'string') {
-                    try { sal = JSON.parse(sal); } catch (e) { sal = null; }
-                }
-                $('#sal_id_pelamar').val($(this).data('id'));
-                $('#sal_nama').val($(this).data('nama'));
-                $('#sal_jabatan').val($(this).data('jabatan'));
-                $('#sal_department').val($(this).data('dept'));
+                const $btn = $(this);
+                const id = $btn.data('id');
+                const isEditable = $btn.data('editable') == '1' || $btn.data('editable') === 1;
 
-                // Simpan di elemen modal, dipakai nanti di shown.bs.modal
-                $('#salaryModal').data('editSal', (sal && typeof sal === 'object') ? sal : null);
+                $('#sal_id_pelamar').val(id);
+                $('#sal_nama').val($btn.data('nama'));
+                $('#sal_jabatan').val($btn.data('jabatan'));
+                $('#sal_department').val($btn.data('dept'));
+
+                if (!isEditable || !id) {
+                    // Mode "Ajukan Gaji" baru — tidak ada data lama yang perlu di-fetch.
+                    $('#salaryModal').data('editSal', null).modal('show');
+                    return;
+                }
+
+                // Mode "Update Pengajuan Gaji" — ambil data pengajuan yang sudah ada
+                // dulu (on-demand, cuma untuk 1 pelamar ini), baru buka modalnya.
+                $btn.prop('disabled', true);
+                $.getJSON('{{ url('recruitment') }}/' + id + '/detail')
+                    .done(function (resp) {
+                        $('#salaryModal').data('editSal', resp.salary || null).modal('show');
+                    })
+                    .fail(function () {
+                        alert('Gagal mengambil data pengajuan gaji. Silakan coba lagi.');
+                    })
+                    .always(function () {
+                        $btn.prop('disabled', false);
+                    });
             });
 
             $('#salaryModal').on('shown.bs.modal', function () {
@@ -2311,17 +2324,41 @@
                 return '<span class="badge badge-secondary">Belum Diajukan</span>';
             }
 
-            /* ── Detail modal ── */
+            /* ── Detail modal ──
+               Data diambil on-demand lewat AJAX saat tombol "Detail" diklik
+               (bukan lagi di-dump ke setiap baris tabel via data-attribute),
+               supaya halaman index tidak perlu memuat data lengkap semua
+               pelamar sekaligus. */
             $(document).on('click', '.btn-detail', function () {
-                const d = $(this).data('recruitment');
+                const id = $(this).data('id');
+                if (!id) return;
+
+                const $btn = $(this);
+                $btn.prop('disabled', true);
+
+                $.getJSON('{{ url('recruitment') }}/' + id + '/detail')
+                    .done(function (resp) {
+                        renderDetailModal(resp);
+                        $('#detailModal').modal('show');
+                    })
+                    .fail(function () {
+                        alert('Gagal mengambil data detail pelamar. Silakan coba lagi.');
+                    })
+                    .always(function () {
+                        $btn.prop('disabled', false);
+                    });
+            });
+
+            function renderDetailModal(resp) {
+                const d = resp.recruitment;
 
                 // Reset tabs
                 $('.det-tab').removeClass('active').first().addClass('active');
                 $('.det-pane').removeClass('active').first().addClass('active');
 
                 // Handle PKWT data
-                const pkwt = $(this).data('pkwt');
-                if (pkwt && pkwt !== 'null') {
+                const pkwt = resp.pkwt;
+                if (pkwt && pkwt.length) {
                     $('#tab-pkwt-header').show();
                     let pkwtRows = [];
                     let pkwtArr = toArr(pkwt);
@@ -2348,8 +2385,8 @@
                     $('#tab-salary-header').hide();
                 }
 
-                const sal = $(this).data('salary');
-                if (sal && sal !== 'null') {
+                const sal = resp.salary;
+                if (sal) {
                     $('#sg_status_badge').html(salaryStatusBadge(sal.status));
                     $('#sg_expected').text(sal.expected_salary ? 'Rp ' + Number(sal.expected_salary).toLocaleString('id-ID') : '-');
                     $('#sg_approved').text(sal.approved_salary ? 'Rp ' + Number(sal.approved_salary).toLocaleString('id-ID') : '-');
@@ -2550,7 +2587,7 @@
                     }
                 });
                 $('#doc_grid_modal').html(dh || '<span class="text-muted"><i class="fas fa-folder-open mr-1"></i>Tidak ada dokumen tersedia</span>');
-            });
+            }
         });
 
 
