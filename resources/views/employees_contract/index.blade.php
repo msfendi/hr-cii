@@ -385,7 +385,7 @@
                     </div>
 
                     <hr class="mt-0 mb-3">
-                    
+
                     {{-- Tanggal Mulai & Berakhir --}}
                     <div class="row">
                         <div class="col-md-6">
@@ -743,15 +743,15 @@
                             if (!isAktif) {
                                 // return '<span class="text-muted small">—</span>';
                                 return `
-                                <div class="btn-group btn-group-sm">
-                                    ${r.can_edit ? `
-                                    <button class="btn btn-warning btn-xs"
-                                        onclick='openFinansial(${JSON.stringify(r).replace(/'/g, "\\'")})'
-                                        title="Update Finansial">
-                                        <i class="fas fa-money-bill-wave"></i>
-                                    </button>
-                                    ` : ''}
-                                </div>`
+                            <div class="btn-group btn-group-sm">
+                                 ${r.can_edit ? `
+                                <button class="btn btn-warning btn-xs"
+                                    onclick='openFinansial(${JSON.stringify(r).replace(/'/g, "\\'")})'
+                                    title="Update Finansial">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </button>
+                                ` : ''}
+                            </div>`
                             }
 
                             return `
@@ -867,8 +867,7 @@
                 }).then(res => {
                     btn.prop('disabled', false).html('<i class="fas fa-check mr-1"></i>Perpanjang');
                     showToast(res.message, res.success ? 'success' : 'danger');
-                    if (res.success) { $('#modalPerpanjang').modal('hide'); reloadTable(); 
-                    }
+                    if (res.success) { $('#modalPerpanjang').modal('hide'); reloadTable(); }
                 });
             });
 
@@ -893,12 +892,12 @@
                     pph21: parseRupiah($('#uf_pph21').val()),
                     daily_salary: parseRupiah($('#uf_daily_salary').val()),
                 };
-                
+
                 // Sertakan tanggal hanya jika diisi
                 const ufStart = $('#uf_start_date').val();
-                const ufEnd   = $('#uf_end_date').val();
+                const ufEnd = $('#uf_end_date').val();
                 if (ufStart) payload.start_date = ufStart;
-                if (ufEnd)   payload.end_date   = ufEnd;
+                if (ufEnd) payload.end_date = ufEnd;
 
                 if (isSplit) {
                     url = ROUTES.splitUrl + '/' + $('#uf_id').val();

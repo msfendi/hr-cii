@@ -785,6 +785,7 @@ body.modal-open {
                                     <th style="min-width:140px;">Agama / Status</th>
                                     <th style="min-width:140px;">Departemen / Posisi</th>
                                     <th style="min-width:110px;">Tanggal Apply</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -1140,10 +1141,6 @@ body.modal-open {
             $('#applicantsPositionTitle').text(vacancy.position + ' • ' + vacancy.department);
             $('#applicantsSummary').html('<div class="col-12 text-center py-3 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i>Memuat data pelamar...</div>');
 
-            if (applicantsDataTable) {
-                applicantsDataTable.clear().destroy();
-                $('#applicantsTable tbody').empty();
-            }
             applicantsStore = [];
 
             fetch(routes.applicants(id))

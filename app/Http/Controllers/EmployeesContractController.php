@@ -338,16 +338,16 @@ class EmployeesContractController extends Controller
                 'day_duration'    => 0,
                 'status_contract' => 'AKTIF',
 
-                'salary'          => $data['salary']
+                'salary'          => $data['salary'] 
                     ?? $old->salary,
 
-                'allowance'       => $data['allowance']
+                'allowance'       => $data['allowance'] 
                     ?? $old->allowance,
 
-                'pph21'           => $data['pph21']
+                'pph21'           => $data['pph21'] 
                     ?? $old->pph21,
 
-                'daily_salary'    => $data['daily_salary']
+                'daily_salary'    => $data['daily_salary'] 
                     ?? $old->daily_salary,
 
                 'type'            => $old->type,
@@ -362,8 +362,10 @@ class EmployeesContractController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Kontrak berhasil diperpanjang.'
+                'message' => 'Kontrak berhasil diperpanjang.',
+                'data'    => $newContract,
             ]);
+
         } catch (\Exception $e) {
 
             DB::rollBack();
@@ -439,7 +441,6 @@ class EmployeesContractController extends Controller
 
             // End date adjustment baru meneruskan sisa dari kontrak lama
             $newEnd = $originalEnd;
-
             // Hitung durasi sisa untuk adjustment baru
             $newMonthDuration = $newStart->diffInMonths($newEnd->copy()->addDay());
             $newExactEnd = $newStart->copy()->addMonths($newMonthDuration)->subDay();
@@ -454,11 +455,11 @@ class EmployeesContractController extends Controller
                 'month_duration'  => (string) $newMonthDuration,
                 'day_duration'    => (string) $newDayDuration,
                 'status_contract' => 'AKTIF',
+                'type'            => 'CONTRACT',
                 'salary'          => $data['salary'] ?? $old->salary,
                 'allowance'       => $data['allowance'] ?? $old->allowance,
                 'pph21'           => $data['pph21'] ?? $old->pph21,
                 'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
-                'type'            => $old->type,
             ]);
 
             DB::commit();
