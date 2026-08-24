@@ -507,10 +507,31 @@ class EmployeePayrollController extends Controller
                 $shiftEndDT = Carbon::parse($tanggal)
                     ->setTimeFrom($workEnd);
 
+                /*
+                ======================================================
+                ⭐ FIX: scan yang sudah "dipinjam" oleh shift malam hari
+                sebelumnya (tersimpan di $usedLogKeys, biasanya jam
+                pulang shift malam yang jatuh pada dini hari tanggal
+                ini) tidak boleh dihitung lagi sebagai finger di hari
+                ini — terutama kalau hari ini libur/weekend/holiday
+                dan karyawan tidak benar-benar masuk kerja hari itu,
+                cuma "nyisa" dari pulang shift malam semalam.
+                ======================================================
+                */
                 $dailyLogs = $logs->filter(
-                    fn($log) =>
-                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                    fn($log, $key) =>
+                    !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
                 )->values();
+
+                foreach ($logs as $key => $log) {
+                    if (
+                        !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                    ) {
+                        $usedLogKeys[$key] = true;
+                    }
+                }
             }
 
             /*
@@ -1579,10 +1600,31 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 $shiftEndDT = Carbon::parse($tanggal)
                     ->setTimeFrom($workEnd);
 
+                /*
+                ======================================================
+                ⭐ FIX: scan yang sudah "dipinjam" oleh shift malam hari
+                sebelumnya (tersimpan di $usedLogKeys, biasanya jam
+                pulang shift malam yang jatuh pada dini hari tanggal
+                ini) tidak boleh dihitung lagi sebagai finger di hari
+                ini — terutama kalau hari ini libur/weekend/holiday
+                dan karyawan tidak benar-benar masuk kerja hari itu,
+                cuma "nyisa" dari pulang shift malam semalam.
+                ======================================================
+                */
                 $dailyLogs = $logs->filter(
-                    fn($log) =>
-                    Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                    fn($log, $key) =>
+                    !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
                 )->values();
+
+                foreach ($logs as $key => $log) {
+                    if (
+                        !isset($usedLogKeys[$key]) &&
+                        Carbon::parse($log->scan_date)->format('Y-m-d') == $tanggal
+                    ) {
+                        $usedLogKeys[$key] = true;
+                    }
+                }
             }
 
             $jamMasuk = null;
