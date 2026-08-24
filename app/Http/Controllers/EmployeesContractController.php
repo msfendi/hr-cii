@@ -48,6 +48,7 @@ class EmployeesContractController extends Controller
         $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Payroll_All') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -73,7 +74,7 @@ class EmployeesContractController extends Controller
             ]);
 
         // ── Role-based filtering ──────────────────────────────────────────────
-        if (!$roleAdmin) {
+        if ((!$roleAdmin) || (!$rolePayrollAll)) {
             $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing) {
                 if ($roleStaff) {
                     $q->orWhere('b.IS_STAFF', 1);
@@ -143,7 +144,7 @@ class EmployeesContractController extends Controller
             CASE WHEN c.status_contract = 'AKTIF' THEN 0 ELSE 1 END
         ")->orderBy('c.end_date', 'asc')
             ->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
                 $sisa = (int) $row->sisa_hari;
                 $day  = (int) $row->end_day;
 
@@ -158,7 +159,7 @@ class EmployeesContractController extends Controller
 
                 // Transform financial data based on role
                 $canSeeSalary = false;
-                if ($roleAdmin) {
+                if (($roleAdmin) || ($rolePayrollAll)) {
                     $canSeeSalary = true;
                 } elseif ($roleStaff && $row->IS_STAFF == 1) {
                     $canSeeSalary = true;
@@ -198,6 +199,7 @@ class EmployeesContractController extends Controller
         $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Payroll_All') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -207,10 +209,10 @@ class EmployeesContractController extends Controller
             ->orderBy('c.contract_ke', 'asc');
 
         $rows = $query->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
                 // Transform financial data based on role
                 $canSeeSalary = false;
-                if ($roleAdmin) {
+                if (($roleAdmin) || ($rolePayrollAll)) {
                     $canSeeSalary = true;
                 } elseif ($roleStaff && $row->IS_STAFF == 1) {
                     $canSeeSalary = true;
@@ -377,7 +379,6 @@ class EmployeesContractController extends Controller
                     'status_contract' => 'AKTIF',
                 ],
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -598,11 +599,12 @@ class EmployeesContractController extends Controller
         $roleNonStaff  = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing    = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Payroll_All') : false;
 
         $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
 
         return Excel::download(
-            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing),
+            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll),
             $filename
         );
     }
