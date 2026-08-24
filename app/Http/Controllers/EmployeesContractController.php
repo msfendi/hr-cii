@@ -48,7 +48,7 @@ class EmployeesContractController extends Controller
         $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
-        $rolePayrollAll = $user ? $user->hasRole('Payroll_All') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Payroll_ALL') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -199,7 +199,7 @@ class EmployeesContractController extends Controller
         $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
-        $rolePayrollAll = $user ? $user->hasRole('Payroll_All') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Payroll_ALL') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -599,7 +599,7 @@ class EmployeesContractController extends Controller
         $roleNonStaff  = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing    = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
-        $rolePayrollAll = $user ? $user->hasRole('Payroll_All') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Payroll_ALL') : false;
 
         $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
 
