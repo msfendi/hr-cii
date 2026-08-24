@@ -1031,7 +1031,7 @@ class MonitoringRekonsiliasiService
                 'need_pct'        => $pct($need, $need),
                 'order_pct'       => $pct($order, $need),
                 // RECEIVED% = (jumlah_doc - out_doc) / need.
-                'received_pct'    => $pct($netReceived, $order),
+                'received_pct'    => $pct($doc, $order),
                 // OUT PROD% = out_req / (jumlah_doc - out_doc).
                 'out_prod_pct'    => $pct($r->out_req, $netReceived),
                 // STOCK% = saldo_gudang / (jumlah_doc - out_doc).
