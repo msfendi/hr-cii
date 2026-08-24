@@ -96,7 +96,7 @@ class EmployeesContractController extends Controller
                     });
                 }
                 // Jika tidak punya akses sama sekali, filter habis
-                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing) {
+                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing && !$rolePayrollAll) {
                     $q->whereRaw('1 = 0');
                 }
             });
