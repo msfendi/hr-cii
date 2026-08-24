@@ -74,8 +74,11 @@ class EmployeesContractController extends Controller
             ]);
 
         // ── Role-based filtering ──────────────────────────────────────────────
-        if ((!$roleAdmin) || (!$rolePayrollAll)) {
-            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing) {
+        if (!$roleAdmin) {
+            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
+                if ($rolePayrollAll) {
+                    $q;
+                }
                 if ($roleStaff) {
                     $q->orWhere('b.IS_STAFF', 1);
                 }
