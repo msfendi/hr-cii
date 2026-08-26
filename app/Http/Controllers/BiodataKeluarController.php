@@ -31,22 +31,25 @@ class BiodataKeluarController extends Controller
         return response()->json(['data' => $data]);
     }
 
-    // Update hanya kolom KETERANGAN di PKWT berdasarkan NPK
-    public function updateKeterangan(Request $request, $npk)
+    // Update data di PKWT berdasarkan NPK
+    public function update(Request $request, $npk)
     {
         $request->validate([
-            'keterangan' => 'required|in:SPD,HK,MA',
+            'keterangan'    => 'required|in:SPD,HK,MA',
+            'tkk'           => 'required|date',
+            'leave_reasons' => 'nullable|string',
         ]);
 
         try {
             DB::connection('cii')->table('PKWT')
                 ->where('NPK', strtoupper($npk))
                 ->update([
-                    'KETERANGAN' => $request->keterangan,
-                    'leave_reasons' => $request->leave_reasons
+                    'KETERANGAN'    => $request->keterangan,
+                    'leave_reasons' => $request->leave_reasons,
+                    'TKK'           => $request->tkk,
                 ]);
 
-            return response()->json(['status' => 'success', 'message' => 'Keterangan berhasil diperbarui.']);
+            return response()->json(['status' => 'success', 'message' => 'Data berhasil diperbarui.']);
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }

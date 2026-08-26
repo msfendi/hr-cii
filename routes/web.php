@@ -181,8 +181,7 @@ Route::group(['middleware' => 'auth'], function () {
     // BIODATA KELUAR
     Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'permission']);
     Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'permission']);
-    Route::post('/biodata-keluar/update-keterangan/{npk}', [BiodataKeluarController::class, 'updateKeterangan'])->name('biodata_keluar.update-keterangan')->middleware(['auth', 'permission']);
-
+    Route::post('/biodata-keluar/update/{npk}', [BiodataKeluarController::class, 'update'])->name('biodata_keluar.update')->middleware(['auth', 'permission']);
     // ========================================
     // Riwayat Karyawan Keluar
     Route::get('/employee-exit-history/index', [EmployeeExitHistoryController::class, 'index'])->name('employee_exit_history.index')->middleware(['auth', 'permission']);
@@ -199,6 +198,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store')->middleware(['auth', 'permission']);
         Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop')->middleware(['auth', 'permission']);
         Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish')->middleware(['auth', 'permission']);
+        Route::post('/undo/{id}',       [EmployeesContractController::class, 'undo'])->name('employees-contract.undo')->middleware(['auth', 'permission']);
         Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend')->middleware(['auth', 'permission']);
         Route::post('/split/{id}',      [EmployeesContractController::class, 'split'])->name('employees-contract.split')->middleware(['auth', 'permission']);
         Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary')->middleware(['auth', 'permission']);

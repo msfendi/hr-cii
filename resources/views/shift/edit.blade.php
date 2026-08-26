@@ -67,6 +67,13 @@
                         <option value="ALL" {{ $shift->gender == 'ALL' ? 'selected' : '' }}>All</option>
                         </select>
                      </div>
+                     <div class="form-group mt-3">
+                        <label>Status Hari Libur :</label>
+                        <select class="form-control" id="is_holiday" name="is_holiday">
+                           <option value="0" {{ ($shift->is_holiday ?? 0) == 0 ? 'selected' : '' }}>Tidak Libur</option>
+                           <option value="1" {{ ($shift->is_holiday ?? 0) == 1 ? 'selected' : '' }}>Libur</option>
+                        </select>
+                     </div>
                      <br>
                      <button class="btn btn-primary btn-block">
                      Update

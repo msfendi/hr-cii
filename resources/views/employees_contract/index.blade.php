@@ -567,6 +567,7 @@
             store: "{{ route('employees-contract.store') }}",
             stop: "{{ url('employees-contract/stop') }}",
             finish: "{{ url('employees-contract/finish') }}",
+            undo: "{{ url('employees-contract/undo') }}",
             extend: "{{ url('employees-contract/extend') }}",
             bagian: "{{ route('employees-contract.bagian') }}",
             importUrl: "{{ route('employees-contract.import') }}",
@@ -760,6 +761,10 @@
                                 <button class="btn btn-warning btn-xs btn-act-finansial"
                                     title="Update Finansial">
                                     <i class="fas fa-money-bill-wave"></i>
+                                </button>
+                                <button class="btn btn-info btn-xs btn-act-undo"
+                                    title="Re-Activate Contract">
+                                    <i class="fas fa-undo"></i>
                                 </button>
                                 ` : ''}
                             </div>`;
@@ -995,6 +1000,12 @@
                 doStop(row.id, row.nama);
             });
 
+            $(document).on('click', '.btn-act-undo', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                doUndo(row.id, row.nama, row.status_contract);
+            });
+
             $(document).on('click', '.btn-act-finansial', function () {
                 const row = table.row($(this).closest('tr')).data();
                 if (!row) return;
@@ -1050,6 +1061,25 @@
             }).then(result => {
                 if (!result.isConfirmed) return;
                 apiPost(ROUTES.stop + '/' + id, {}).then(res => {
+                    showToast(res.message, res.success ? 'success' : 'danger');
+                    if (res.success) reloadTable();
+                });
+            });
+        }
+        
+        function doUndo(id, nama, statusLama) {
+            Swal.fire({
+                title: 'Kembalikan ke AKTIF?',
+                html: `Status kontrak <strong>${nama}</strong> (saat ini: <span class="badge badge-secondary">${statusLama}</span>) akan dikembalikan menjadi <span class="badge badge-success">AKTIF</span>.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#36b9cc',
+                confirmButtonText: '<i class="fas fa-undo mr-1"></i> Ya, Kembalikan ke AKTIF',
+                cancelButtonText: 'Batal',
+                reverseButtons: true,
+            }).then(result => {
+                if (!result.isConfirmed) return;
+                apiPost(ROUTES.undo + '/' + id, {}).then(res => {
                     showToast(res.message, res.success ? 'success' : 'danger');
                     if (res.success) reloadTable();
                 });

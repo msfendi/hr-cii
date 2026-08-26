@@ -281,6 +281,17 @@ class EmployeesContractController extends Controller
 
         return response()->json(['success' => true, 'message' => 'Kontrak telah selesai.']);
     }
+    
+    /**
+     * POST — Kembalikan status kontrak ke AKTIF (Undo).
+     */
+    public function undo(string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+        $contract->update(['status_contract' => 'AKTIF']);
+
+        return response()->json(['success' => true, 'message' => 'Status kontrak berhasil dikembalikan ke AKTIF.']);
+    }
 
     /**
      * POST — Perpanjang kontrak.

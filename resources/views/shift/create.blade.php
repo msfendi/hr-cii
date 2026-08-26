@@ -48,6 +48,13 @@
                            <option value="ALL">All</option>
                         </select>
                      </div>
+                     <div class="form-group mt-3">
+                        <label>Status Hari Libur :</label>
+                        <select class="form-control" id="is_holiday" name="is_holiday">
+                           <option value="0">Tidak Libur</option>
+                           <option value="1">Libur</option>
+                        </select>
+                     </div>
                      <br>
                      <button type="submit" class="btn btn-primary btn-block">
                      Create
