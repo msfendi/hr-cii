@@ -101,11 +101,17 @@ use Illuminate\Support\Facades\DB;
  * - Hari kerja biasa (bukan weekend/holiday) tetap pakai formula lama:
  *   JAM_SIANG = jam_akhir_shift + istirahat tetap 30 menit + jam_lembur + jitter.
  *
- * OVERRIDE IJIN MENINGGALKAN PEKERJAAN:
- * - Kalau ada row di ijin_meninggalkan_pekerjaans utk NPK+tanggal tsb, dan
- *   jam_kembali NULL atau '17:00:00.0000000' (sentinel "belum kembali") ->
- *   JAM_SIANG dipaksa null, berapa pun hasil perhitungan di atas (JAM_PAGI
- *   & STATUS tidak terpengaruh, override ini murni untuk JAM_SIANG).
+ * OVERRIDE IJIN MENINGGALKAN PEKERJAAN (JAM_PAGI & STATUS TIDAK terpengaruh,
+ * override ini murni untuk JAM_SIANG):
+ * - Kalau ada row di ijin_meninggalkan_pekerjaans utk NPK+tanggal tsb:
+ *   - `rencana_kembali` NULL (karyawan TIDAK berencana kembali ke kantor
+ *     setelah keluar, misal pulang karena sakit) -> JAM_SIANG diisi
+ *     `jam_keluar` (jam pulang beneran, dari tabel ini).
+ *   - `rencana_kembali` ADA (berencana kembali) TAPI `jam_kembali` NULL -> JAM_SIANG
+ *     diisi string `'-'` (cuma JAM_PAGI yang bermakna ditampilkan hari itu).
+ *   - `rencana_kembali` ADA DAN `jam_kembali` ADA (karyawan sudah betulan
+ *     kembali ke kantor) -> TIDAK di-override, JAM_SIANG tetap hasil
+ *     perhitungan normal (none/numeric/half_day) seperti biasa.
  *
  * CATATAN PENTING (asumsi yang dipakai, tolong disesuaikan bila keliru):
  * - "Hari libur" = weekend (Sabtu & Minggu, via Carbon::isWeekend()) ATAU
@@ -176,19 +182,19 @@ class AuditRecapService
     {
         $periodQuery = DB::table('payroll_periods')->where('id', $periodId);
 
-        // if (!$forceClosed) {
-        //     $periodQuery->where('is_closed', 0);
-        // }
+        if (!$forceClosed) {
+            $periodQuery->where('is_closed', 0);
+        }
 
         $period = $periodQuery->first();
 
-        // if (!$period) {
-        //     throw new \RuntimeException(
-        //         $forceClosed
-        //             ? 'Periode payroll tidak ditemukan.'
-        //             : 'Periode payroll tidak ditemukan atau sudah closed. Kalau memang ingin generate ulang periode yang sudah closed, centang opsi "Izinkan generate periode closed".'
-        //     );
-        // }
+        if (!$period) {
+            throw new \RuntimeException(
+                $forceClosed
+                    ? 'Periode payroll tidak ditemukan.'
+                    : 'Periode payroll tidak ditemukan atau sudah closed. Kalau memang ingin generate ulang periode yang sudah closed, centang opsi "Izinkan generate periode closed".'
+            );
+        }
 
         $start = Carbon::parse($period->start_date)->startOfDay();
         $end   = Carbon::parse($period->end_date)->endOfDay();
@@ -214,7 +220,7 @@ class AuditRecapService
         $lateMap          = $this->getLateMap($start, $end);
         $scanMap          = $this->getScanMap($start, $end);
         $holidays         = $this->getHolidayDates($start, $end);
-        $leaveNoReturnMap = $this->getLeaveNoReturnMap($start, $end);
+        $leavePermissionMap = $this->getLeavePermissionMap($start, $end);
 
         $buffer = [];
         $totalRows = 0;
@@ -226,7 +232,7 @@ class AuditRecapService
             $isDayOff = $cursor->isWeekend() || in_array($dateKey, $holidays, true);
 
             foreach ($employees as $npk => $emp) {
-                $buffer[] = $this->buildRow($npk, $emp, $dateKey, $isDayOff, $overtimeMap, $shiftMap, $lateMap, $scanMap, $leaveNoReturnMap);
+                $buffer[] = $this->buildRow($npk, $emp, $dateKey, $isDayOff, $overtimeMap, $shiftMap, $lateMap, $scanMap, $leavePermissionMap);
 
                 if (count($buffer) >= self::UPSERT_CHUNK) {
                     $this->upsert($buffer);
@@ -256,7 +262,7 @@ class AuditRecapService
     /**
      * Susun satu baris AUDIT untuk 1 NPK + 1 tanggal.
      */
-    protected function buildRow(string $npk, array $emp, string $dateKey, bool $isDayOff, array $overtimeMap, array $shiftMap, array $lateMap, array $scanMap, array $leaveNoReturnMap): array
+    protected function buildRow(string $npk, array $emp, string $dateKey, bool $isDayOff, array $overtimeMap, array $shiftMap, array $lateMap, array $scanMap, array $leavePermissionMap): array
     {
         $ot = $overtimeMap[$npk][$dateKey] ?? null;
 
@@ -358,12 +364,24 @@ class AuditRecapService
             }
         }
 
-        // Override: kalau ada data di ijin_meninggalkan_pekerjaans untuk NPK+tanggal ini
-        // dan jam_kembali kosong/null atau '17:00:00.0000000' (sentinel "belum kembali"),
-        // JAM_SIANG dipaksa null berapa pun hasil perhitungan di atas. JAM_PAGI & STATUS
-        // tidak terpengaruh.
-        if (isset($leaveNoReturnMap[$npk][$dateKey])) {
-            $jamSiang = null;
+        // Override dari ijin_meninggalkan_pekerjaans (kalau NPK+tanggal ini ada
+        // row-nya): JAM_PAGI & STATUS tidak terpengaruh, override ini murni
+        // untuk JAM_SIANG. Lihat getLeavePermissionMap() untuk detail aturannya.
+        $leavePermission = $leavePermissionMap[$npk][$dateKey] ?? null;
+        if ($leavePermission !== null) {
+            if ($leavePermission['action'] === 'use_jam_keluar') {
+                // rencana_kembali NULL (tidak berencana kembali) -> JAM_SIANG
+                // = jam_keluar (jam pulang beneran dari tabel ini).
+                $jamSiang = $this->toHHMM($leavePermission['value']);
+            } elseif ($leavePermission['action'] === 'dash') {
+                // rencana_kembali ADA (berencana kembali) tapi jam_kembali
+                // NULL (belum/tidak kembali) -> JAM_SIANG = '-', cuma JAM_PAGI
+                // yang bermakna ditampilkan.
+                $jamSiang = '-';
+            }
+            // action lain (rencana_kembali ADA dan jam_kembali ADA, artinya
+            // karyawan sudah kembali) -> tidak override apa-apa, JAM_SIANG
+            // tetap hasil perhitungan normal di atas.
         }
 
         // Prioritas NAMA_KARYAWAN / SUBDIVISI / DEPT_GROUP: dari overtimes kalau row-nya ada,
@@ -672,30 +690,52 @@ class AuditRecapService
         ", [$start->format('Y-m-d'), $end->format('Y-m-d')]);
 
         return array_map(
-            fn($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
+            fn ($row) => Carbon::parse($row->holiday_date)->format('Y-m-d'),
             $rows
         );
     }
 
     /**
-     * Ambil daftar NPK+tanggal yang punya record di ijin_meninggalkan_pekerjaans
-     * dengan jam_kembali kosong/null ATAU '17:00:00.0000000' (sentinel "belum
-     * kembali" yang dipakai sistem ini). Kalau NPK+tanggal ada di map ini,
-     * JAM_SIANG di AUDIT dipaksa null (lihat buildRow()).
+     * Ambil daftar NPK+tanggal yang punya record di ijin_meninggalkan_pekerjaans,
+     * beserta action apa yang harus diterapkan ke JAM_SIANG (lihat buildRow()):
+     *
+     * - `rencana_kembali` NULL (karyawan TIDAK berencana kembali ke kantor
+     *   setelah keluar) -> action='use_jam_keluar', JAM_SIANG diisi
+     *   `jam_keluar` (jam pulang beneran, dari tabel ini).
+     * - `rencana_kembali` ADA (berencana kembali) TAPI `jam_kembali` NULL ->
+     *   action='dash', JAM_SIANG diisi string `'-'` (cuma JAM_PAGI yang
+     *   bermakna ditampilkan hari itu).
+     * - `rencana_kembali` ADA DAN `jam_kembali` ADA (karyawan sudah betulan
+     *   kembali) -> row TIDAK dimasukkan ke map ini sama sekali, supaya
+     *   JAM_SIANG tetap dihitung normal (tidak di-override).
      */
-    protected function getLeaveNoReturnMap(Carbon $start, Carbon $end): array
+    protected function getLeavePermissionMap(Carbon $start, Carbon $end): array
     {
         $rows = DB::select("
-            SELECT npk, tanggal
+            SELECT npk, tanggal, rencana_kembali, jam_kembali,
+                   CONVERT(varchar(8), jam_keluar, 108) AS jam_keluar
             FROM ijin_meninggalkan_pekerjaans
             WHERE tanggal >= ? AND tanggal <= ?
-              AND (jam_kembali IS NULL OR CONVERT(varchar(8), jam_kembali, 108) = '17:00:00')
         ", [$start->format('Y-m-d'), $end->format('Y-m-d')]);
 
         $map = [];
         foreach ($rows as $row) {
             $day = Carbon::parse($row->tanggal)->format('Y-m-d');
-            $map[$row->npk][$day] = true;
+
+            if ($row->rencana_kembali === null) {
+                $map[$row->npk][$day] = [
+                    'action' => 'use_jam_keluar',
+                    'value'  => $row->jam_keluar,
+                ];
+                continue;
+            }
+
+            if ($row->jam_kembali === null) {
+                $map[$row->npk][$day] = ['action' => 'dash'];
+            }
+
+            // else: rencana_kembali ADA dan jam_kembali ADA -> sengaja tidak
+            // dimasukkan ke $map, supaya JAM_SIANG tetap dihitung normal.
         }
 
         return $map;
