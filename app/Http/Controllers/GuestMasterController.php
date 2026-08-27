@@ -3,11 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Exports\GuestMasterExport;
-use App\Models\ForeignGuest;
 use App\Models\GuestMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
@@ -15,25 +13,20 @@ class GuestMasterController extends Controller
 {
     public function index()
     {
-        $data = GuestMaster::select('guest_masters.*', 'foreign_guests.guest_name', 'foreign_guests.return', 'foreign_guests.visa_type', 'foreign_guests.visa_status')->leftJoin('foreign_guests', 'guest_masters.foreign_guest_id', '=', 'foreign_guests.id')->get();
+        $data = GuestMaster::latest()->get();
 
         return view('guest_master.index', compact('data'));
     }
 
     public function create()
     {
-        $guests = DB::table('foreign_guests')
-            ->select('id', 'guest_name')
-            ->orderBy('guest_name')
-            ->get();
-
-        return view('guest_master.create', compact('guests'));
+        return view('guest_master.create');
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'foreign_guest_id' => 'integer',
+            'name' => 'required|string|max:255',
             'gender' => 'nullable|string|max:20',
             'place' => 'nullable|string|max:255',
             'date_of_birth' => 'nullable|date',
@@ -48,7 +41,7 @@ class GuestMasterController extends Controller
         ]);
 
         GuestMaster::create([
-            'foreign_guest_id' => $request->id,
+            'name' => $request->name,
             'gender' => $request->gender,
             'place' => $request->place,
             'date_of_birth' => $request->date_of_birth,
@@ -71,12 +64,14 @@ class GuestMasterController extends Controller
     public function update(Request $request)
     {
         $request->validate([
-            'id' => 'required'
+            'id' => 'required',
+            'name' => 'required|string|max:255',
         ]);
 
         DB::table('guest_masters')
             ->where('id', $request->id)
             ->update([
+                'name'           => $request->name,
                 'gender'         => $request->gender,
                 'place'          => $request->place,
                 'date_of_birth'  => $request->date_of_birth,
@@ -98,16 +93,7 @@ class GuestMasterController extends Controller
 
     public function edit($id)
     {
-        $data = GuestMaster::query()
-            ->leftJoin('foreign_guests', 'guest_masters.foreign_guest_id', '=', 'foreign_guests.id')
-            ->where('guest_masters.id', $id)
-            ->select(
-                'guest_masters.*',
-                'foreign_guests.guest_name',
-                'foreign_guests.id as foreign_guest_id_master'
-            )
-            ->firstOrFail();
-        // dd($data);
+        $data = GuestMaster::findOrFail($id);
 
         return view('guest_master.edit', compact('data'));
     }
@@ -115,21 +101,6 @@ class GuestMasterController extends Controller
     public function destroy($id)
     {
         $guest = GuestMaster::findOrFail($id);
-
-        foreach (
-            [
-                'photo',
-                'passport',
-                'visa_application',
-                'hotel_file'
-            ] as $file
-        ) {
-
-            if ($guest->$file) {
-                Storage::disk('public')->delete($guest->$file);
-            }
-        }
-
         $guest->delete();
 
         return redirect()

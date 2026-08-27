@@ -62,7 +62,7 @@ class ExpatTransportSheet implements
 
     /*
     |--------------------------------------------------------------------------
-    | COLLECTION (LOGIC TIDAK DIUBAH)
+    | COLLECTION (LOGIC LAMA TETAP + TAMBAHAN DARI expat_cost)
     |--------------------------------------------------------------------------
     */
     public function collection()
@@ -70,6 +70,11 @@ class ExpatTransportSheet implements
         $components = DB::table('expat_cost_components')
             ->pluck('component', 'id');
 
+        /*
+        |----------------------------------------------------------------
+        | 1) DATA DARI expat_onleave (LOGIC LAMA, TIDAK DIUBAH)
+        |----------------------------------------------------------------
+        */
         $data = DB::table('expat_onleave as l')
             ->join('expat_master as m', 'm.npk', '=', 'l.npk')
             ->whereBetween('l.onleave_start', [$this->start, $this->end])
@@ -103,10 +108,50 @@ class ExpatTransportSheet implements
                     'leave_end' => $row->onleave_end,
                     'component' => $components[$componentId] ?? $componentId,
                     'amount' => $amountArray[$i] ?? 0,
-                    'transactions_date' => $dateArray[$i] ?? null,
+                    'transactions_date' => $row->transactions_date ? $dateArray[$i] ?? null : null,
                     'remark' => $row->remark,
                 ]);
             }
+        }
+
+        /*
+        |----------------------------------------------------------------
+        | 2) DATA TAMBAHAN DARI expat_cost DENGAN component_type = 'transport'
+        |----------------------------------------------------------------
+        */
+        $costData = DB::table('expat_cost as c')
+            ->join('expat_master as m', 'm.npk', '=', 'c.npk')
+            ->join('expat_cost_components as cc', 'cc.id', '=', 'c.component')
+            ->leftJoin('expat_onleave as l', function ($join) {
+                $join->on('l.npk', '=', 'c.npk')
+                    ->whereColumn('c.transactions_date', '>=', 'l.onleave_start')
+                    ->whereColumn('c.transactions_date', '<=', 'l.onleave_end');
+            })
+            ->where('cc.component_type', '=', 'transport')
+            ->whereBetween('c.transactions_date', [$this->start, $this->end])
+            ->select(
+                'c.npk',
+                'm.name',
+                'l.onleave_start',
+                'l.onleave_end',
+                'cc.component',
+                'c.amount',
+                'c.transactions_date',
+                'c.remark'
+            )
+            ->get();
+
+        foreach ($costData as $row) {
+            $rows->push([
+                'npk' => $row->npk,
+                'name' => $row->name,
+                'leave_start' => $row->onleave_start,
+                'leave_end' => $row->onleave_end,
+                'component' => $row->component,
+                'amount' => $row->amount,
+                'transactions_date' => $row->transactions_date,
+                'remark' => $row->remark,
+            ]);
         }
 
         return new Collection($rows);

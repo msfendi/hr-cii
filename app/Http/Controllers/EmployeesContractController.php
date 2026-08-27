@@ -6,10 +6,12 @@ use App\Exports\EmployeesContractAllExport;
 use App\Exports\EmployeesContractExport;
 use App\Imports\EmployeesContractImport;
 use App\Models\EmployeesContract;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Str;
 
 class EmployeesContractController extends Controller
 {
@@ -43,8 +45,10 @@ class EmployeesContractController extends Controller
 
         $roleAdmin = $user ? $user->hasRole('Admin') : false;
         $roleStaff = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -68,6 +72,35 @@ class EmployeesContractController extends Controller
                 DB::raw("DATEDIFF(DAY, CAST(GETDATE() AS DATE), c.end_date) AS sisa_hari"),
                 DB::raw("DAY(c.end_date) AS end_day"),
             ]);
+
+        // ── Role-based filtering ──────────────────────────────────────────────
+        if (!$roleAdmin) {
+            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
+                if ($rolePayrollAll) {
+                    $q;
+                }
+                if ($roleStaff) {
+                    $q->orWhere('b.IS_STAFF', 1);
+                }
+                if ($roleNonStaff) {
+                    $q->orWhere('b.IS_STAFF', 0);
+                }
+                if ($roleSewing) {
+                    $q->orWhere(function ($q2) {
+                        $q2->where('d.IS_SEWING', 0)->where('b.IS_STAFF', 0);
+                    });
+                }
+                if ($roleNonSewing) {
+                    $q->orWhere(function ($q2) {
+                        $q2->where('d.IS_SEWING', 1)->where('b.IS_STAFF', 0);
+                    });
+                }
+                // Jika tidak punya akses sama sekali, filter habis
+                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing && !$rolePayrollAll) {
+                    $q->whereRaw('1 = 0');
+                }
+            });
+        }
 
         // ── Filter utama ──────────────────────────────────────────────────────
         if ($npk !== '') {
@@ -114,7 +147,7 @@ class EmployeesContractController extends Controller
             CASE WHEN c.status_contract = 'AKTIF' THEN 0 ELSE 1 END
         ")->orderBy('c.end_date', 'asc')
             ->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
                 $sisa = (int) $row->sisa_hari;
                 $day  = (int) $row->end_day;
 
@@ -129,9 +162,11 @@ class EmployeesContractController extends Controller
 
                 // Transform financial data based on role
                 $canSeeSalary = false;
-                if ($roleAdmin) {
+                if (($roleAdmin) || ($rolePayrollAll)) {
                     $canSeeSalary = true;
                 } elseif ($roleStaff && $row->IS_STAFF == 1) {
+                    $canSeeSalary = true;
+                } elseif ($roleNonStaff && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
                 } elseif ($roleSewing && $row->IS_SEWING == 0 && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
@@ -164,8 +199,10 @@ class EmployeesContractController extends Controller
 
         $roleAdmin = $user ? $user->hasRole('Admin') : false;
         $roleStaff = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -175,12 +212,14 @@ class EmployeesContractController extends Controller
             ->orderBy('c.contract_ke', 'asc');
 
         $rows = $query->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
                 // Transform financial data based on role
                 $canSeeSalary = false;
-                if ($roleAdmin) {
+                if (($roleAdmin) || ($rolePayrollAll)) {
                     $canSeeSalary = true;
                 } elseif ($roleStaff && $row->IS_STAFF == 1) {
+                    $canSeeSalary = true;
+                } elseif ($roleNonStaff && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
                 } elseif ($roleSewing && $row->IS_SEWING == 0 && $row->IS_STAFF == 0) {
                     $canSeeSalary = true;
@@ -242,6 +281,17 @@ class EmployeesContractController extends Controller
 
         return response()->json(['success' => true, 'message' => 'Kontrak telah selesai.']);
     }
+    
+    /**
+     * POST — Kembalikan status kontrak ke AKTIF (Undo).
+     */
+    public function undo(string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+        $contract->update(['status_contract' => 'AKTIF']);
+
+        return response()->json(['success' => true, 'message' => 'Status kontrak berhasil dikembalikan ke AKTIF.']);
+    }
 
     /**
      * POST — Perpanjang kontrak.
@@ -257,7 +307,14 @@ class EmployeesContractController extends Controller
             'daily_salary'   => 'nullable|numeric|min:0',
         ]);
 
-        $old = EmployeesContract::findOrFail($id);
+        $old = DB::connection('cii')->table('employees_contract')->where('id', $id)->first();
+
+        if (!$old) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data kontrak tidak ditemukan.',
+            ], 404);
+        }
 
         if ($old->status_contract !== 'AKTIF') {
             return response()->json([
@@ -266,44 +323,81 @@ class EmployeesContractController extends Controller
             ], 422);
         }
 
-        DB::beginTransaction();
-
         try {
-            $old->update(['status_contract' => 'DIPERPANJANG']);
-
+            // Contract ke berikutnya
             $newContractKe = (int) $old->contract_ke + 1;
-            $newStart = $old->end_date->copy()->addDay();
 
+            // Tanggal mulai kontrak baru
+            $newStart = Carbon::parse($old->end_date)->addDay();
+
+            // Tanggal akhir berdasarkan duration
             $newEnd = $newStart->copy()->addMonths((int) $data['month_duration'])->subDay();
 
-            // Di bulan tersebut, cek apakah tanggalnya lebih dekat ke 7 atau 20
+            // Cut-off tanggal 7 / 20
             if ($newEnd->day <= 13) {
                 $newEnd->day(7);
             } else {
                 $newEnd->day(20);
             }
 
-            EmployeesContract::create([
+            // 1. Update status kontrak lama menjadi DIPERPANJANG
+            DB::connection('cii')->table('employees_contract')
+                ->where('id', $old->id)
+                ->update([
+                    'status_contract' => 'DIPERPANJANG',
+                    'updated_at'      => now(),
+                ]);
+
+            // 2. Buat kontrak baru
+            $newId = (string) Str::uuid();
+            $salary = (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '')
+                ? $data['salary']
+                : ($old->salary ?? 0);
+            $allowance = (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '')
+                ? $data['allowance']
+                : ($old->allowance ?? 0);
+            $pph21 = (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '')
+                ? $data['pph21']
+                : ($old->pph21 ?? 0);
+            $dailySalary = (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '')
+                ? $data['daily_salary']
+                : ($old->daily_salary ?? 0);
+
+            DB::connection('cii')->table('employees_contract')->insert([
+                'id'              => $newId,
                 'npk'             => $old->npk,
                 'contract_ke'     => $newContractKe,
-                'start_date'      => $newStart,
-                'end_date'        => $newEnd,
-                'month_duration'  => $data['month_duration'],
-                'day_duration'    => '0', // Otomatis 0 karena mengikuti tgl cutoff
+                'start_date'      => $newStart->toDateString(),
+                'end_date'        => $newEnd->toDateString(),
+                'month_duration'  => (string) $data['month_duration'],
+                'day_duration'    => 0,
                 'status_contract' => 'AKTIF',
-                'type'            => 'CONTRACT',
-                'salary'          => $data['salary']       ?? $old->salary,
-                'allowance'       => $data['allowance']    ?? $old->allowance,
-                'pph21'           => $data['pph21']        ?? $old->pph21,
-                'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
+                'salary'          => $salary,
+                'allowance'       => $allowance,
+                'pph21'           => $pph21,
+                'daily_salary'    => $dailySalary,
+                'type'            => $old->type ?? 'CONTRACT',
+                'created_at'      => now(),
+                'updated_at'      => now(),
             ]);
 
-            DB::commit();
-
-            return response()->json(['success' => true, 'message' => 'Kontrak berhasil diperpanjang.']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Kontrak berhasil diperpanjang.',
+                'data'    => [
+                    'id'              => $newId,
+                    'npk'             => $old->npk,
+                    'contract_ke'     => $newContractKe,
+                    'start_date'      => $newStart->toDateString(),
+                    'end_date'        => $newEnd->toDateString(),
+                    'status_contract' => 'AKTIF',
+                ],
+            ]);
         } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memperpanjang kontrak: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
@@ -333,7 +427,7 @@ class EmployeesContractController extends Controller
             ], 422);
         }
 
-        DB::beginTransaction();
+        DB::connection('cii')->beginTransaction();
 
         try {
             // split_date berupa YYYY-MM, set ke tanggal 7 bulan tersebut, reset waktu agar komparasi akurat
@@ -360,7 +454,7 @@ class EmployeesContractController extends Controller
 
             // Update adjustment lama: end_date di tgl 7, durasi diperbarui
             $old->update([
-                'end_date'        => $oldEnd,
+                'end_date'        => $oldEnd->toDateString(),
                 'month_duration'  => (string) $oldMonthDuration,
                 'day_duration'    => (string) $oldDayDuration,
                 'status_contract' => 'ADJUSTMENT'
@@ -380,23 +474,23 @@ class EmployeesContractController extends Controller
             EmployeesContract::create([
                 'npk'             => $old->npk,
                 'contract_ke'     => $old->contract_ke,
-                'start_date'      => $newStart,
-                'end_date'        => $newEnd,
+                'start_date'      => $newStart->toDateString(),
+                'end_date'        => $newEnd->toDateString(),
                 'month_duration'  => (string) $newMonthDuration,
                 'day_duration'    => (string) $newDayDuration,
                 'status_contract' => 'AKTIF',
                 'type'            => 'CONTRACT',
-                'salary'          => $data['salary'] ?? $old->salary,
-                'allowance'       => $data['allowance'] ?? $old->allowance,
-                'pph21'           => $data['pph21'] ?? $old->pph21,
-                'daily_salary'    => $data['daily_salary'] ?? $old->daily_salary,
+                'salary'          => (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '') ? $data['salary'] : $old->salary,
+                'allowance'       => (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '') ? $data['allowance'] : $old->allowance,
+                'pph21'           => (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '') ? $data['pph21'] : $old->pph21,
+                'daily_salary'    => (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '') ? $data['daily_salary'] : $old->daily_salary,
             ]);
 
-            DB::commit();
+            DB::connection('cii')->commit();
 
             return response()->json(['success' => true, 'message' => 'Kontrak berhasil displit.']);
         } catch (\Exception $e) {
-            DB::rollBack();
+            DB::connection('cii')->rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -418,12 +512,12 @@ class EmployeesContractController extends Controller
 
         $contract = EmployeesContract::findOrFail($id);
 
-        if ($contract->status_contract !== 'AKTIF') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya kontrak AKTIF yang bisa diupdate.',
-            ], 422);
-        }
+        // if ($contract->status_contract !== 'AKTIF') {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Hanya kontrak AKTIF yang bisa diupdate.',
+        //     ], 422);
+        // }
 
 
         // Calculate duration if dates are updated
@@ -516,13 +610,15 @@ class EmployeesContractController extends Controller
 
         $roleAdmin     = $user ? $user->hasRole('Admin') : false;
         $roleStaff     = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff  = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing    = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
 
         $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
 
         return Excel::download(
-            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleSewing, $roleNonSewing),
+            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll),
             $filename
         );
     }

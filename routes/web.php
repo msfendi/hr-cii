@@ -25,6 +25,9 @@ use App\Http\Controllers\CuttingInsentifMasterController;
 use App\Http\Controllers\DokterAntrianController;
 use App\Http\Controllers\PengajuanCutiController;
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\AttendanceExpatController;
+use App\Http\Controllers\AuditRecapController;
+use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\BiodataKeluarController;
 use App\Http\Controllers\BpjsExceptionController;
 use App\Http\Controllers\BreakMasterController;
@@ -91,10 +94,24 @@ use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
+use App\Http\Controllers\CanteenReportController;
 use App\Http\Controllers\DoorprizeController;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventInvitationController;
+use App\Http\Controllers\ExchangeRateController;
+use App\Http\Controllers\ExpatMealController;
 use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
+use App\Http\Controllers\MonitoringDashboardController;
+use App\Http\Controllers\MonitoringRekonsiliasiController;
+use App\Http\Controllers\MonStageDataController;
+use App\Http\Controllers\OrderImportController;
+use App\Http\Controllers\OutsourceController;
+use App\Http\Controllers\PdfDocumentController;
+use App\Http\Controllers\PdfExtractionController;
+use App\Http\Controllers\SalaryApproveController;
+use App\Http\Controllers\SpeechController;
 
 /*
 |--------------------------------------------------------------------------
@@ -112,6 +129,7 @@ use App\Http\Controllers\MonitoringController;
 // });
 
 Route::get('/', [HomeController::class, 'index'])->name('/');
+Route::get('/welcome', [HomeController::class, 'welcome'])->name('welcome');
 // Route::get('/template/auditsewing', [TemplateController::class, 'auditsewing'])->name('template.auditsewing');
 // Route::get('/template/auditnonsewing', [TemplateController::class, 'auditnonsewing'])->name('template.auditnonsewing');
 
@@ -163,8 +181,7 @@ Route::group(['middleware' => 'auth'], function () {
     // BIODATA KELUAR
     Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'permission']);
     Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'permission']);
-    Route::post('/biodata-keluar/update-keterangan/{npk}', [BiodataKeluarController::class, 'updateKeterangan'])->name('biodata_keluar.update-keterangan')->middleware(['auth', 'permission']);
-
+    Route::post('/biodata-keluar/update/{npk}', [BiodataKeluarController::class, 'update'])->name('biodata_keluar.update')->middleware(['auth', 'permission']);
     // ========================================
     // Riwayat Karyawan Keluar
     Route::get('/employee-exit-history/index', [EmployeeExitHistoryController::class, 'index'])->name('employee_exit_history.index')->middleware(['auth', 'permission']);
@@ -185,6 +202,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/store',           [EmployeesContractController::class, 'store'])->name('employees-contract.store')->middleware(['auth', 'permission']);
         Route::post('/stop/{id}',       [EmployeesContractController::class, 'stop'])->name('employees-contract.stop')->middleware(['auth', 'permission']);
         Route::post('/finish/{id}',     [EmployeesContractController::class, 'finish'])->name('employees-contract.finish')->middleware(['auth', 'permission']);
+        Route::post('/undo/{id}',       [EmployeesContractController::class, 'undo'])->name('employees-contract.undo')->middleware(['auth', 'permission']);
         Route::post('/extend/{id}',     [EmployeesContractController::class, 'extend'])->name('employees-contract.extend')->middleware(['auth', 'permission']);
         Route::post('/split/{id}',      [EmployeesContractController::class, 'split'])->name('employees-contract.split')->middleware(['auth', 'permission']);
         Route::post('/update-salary/{id}', [EmployeesContractController::class, 'updateSalary'])->name('employees-contract.update-salary')->middleware(['auth', 'permission']);
@@ -257,9 +275,14 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Payroll Process
     Route::get('/payroll-process/index', [PayrollProcessController::class, 'index'])->name('payroll-process.index')->middleware(['auth', 'permission']);
+
     Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/generatev2', [PayrollProcessController::class, 'generateV2'])->name('payroll-process.generatev2');
+    Route::get('/payroll-process/checkv2/{period_id}', [PayrollProcessController::class, 'checkPayrollV2'])->name('payroll-process.checkv2');
     Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'permission']);
+    Route::post('/payroll-process/processv2', [PayrollProcessController::class, 'processV2'])->name('payroll-process.processv2')->middleware(['auth', 'permission']);
+
     Route::get('/payroll-process/details/{id}', [PayrollProcessController::class, 'details'])->name('payroll-process.details')->middleware(['auth', 'permission']);
     Route::delete('/payroll-process/delete/{period_id}', [PayrollProcessController::class, 'destroy'])->name('payroll-process.destroy')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/edit/{id}', [PayrollProcessController::class, 'edit'])->name('payroll-process.edit')->middleware(['auth', 'permission']);
@@ -274,6 +297,10 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-process/update-pph21', [PayrollProcessController::class, 'updatePph21'])->name('payroll-process.update-pph21')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/update-pph-by-contract/{run_id}', [PayrollProcessController::class, 'updatePphByContract'])->name('payroll-process.update-pph-by-contract')->middleware(['auth', 'permission']);
     Route::post('/payroll-process/recreate-document/{run_id}', [PayrollProcessController::class, 'recreateDocument'])->name('payroll-process.recreate-document')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/data-freshness/{period_id}', [PayrollProcessController::class, 'dataFreshness'])->name('payroll-process.data-freshness')->middleware(['auth', 'permission']);
+
+    // Payroll Audit
+    Route::get('/payroll/exportaudit/{run_id}', [PayrollProcessController::class, 'exportAudit'])->name('payroll.exportaudit.export')->middleware(['auth', 'permission']);
 
     //Payroll Master
     Route::get('/payroll-master', [PayrollMasterController::class, 'index'])->name('payroll-master.index')->middleware(['auth', 'permission']);
@@ -604,6 +631,10 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/store', [ApprovalController::class, 'store'])->name('approval.store');
         Route::post('/update/{id}', [ApprovalController::class, 'update'])->name('approval.update');
         Route::post('/destroy/{id}', [ApprovalController::class, 'destroy'])->name('approval.destroy');
+        // Import
+        Route::get('/download-template', [ApprovalController::class, 'downloadTemplate'])->name('approval.download-template')->middleware(['auth', 'permission']);
+        Route::post('/import', [ApprovalController::class, 'import'])->name('approval.import')->middleware(['auth', 'permission']);
+
 
         // Nested Rule inside Group
         Route::post('/rule/store', [ApprovalController::class, 'storeRule'])->name('approval.rule.store');
@@ -668,6 +699,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Recruitment
     Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'permission']);
+    Route::get('/recruitment/get-data', [RecruitmentController::class, 'getData'])->name('recruitment.getData')->middleware(['auth', 'permission']);
     Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'permission']);
     Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'permission']);
     Route::get('/recruitment/edit/{id}', [RecruitmentController::class, 'edit'])->name('recruitment.edit')->middleware(['auth', 'permission']);
@@ -705,10 +737,10 @@ Route::group(['middleware' => 'auth'], function () {
         });
 
     /*
-|--------------------------------------------------------------------------
-| Canteen Management
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | Canteen Management
+    |--------------------------------------------------------------------------
+    */
     Route::get('/canteens', [CanteenController::class, 'index'])->middleware(['auth', 'permission'])->name('canteens.index');
     Route::get('/canteens/create', [CanteenController::class, 'create'])->middleware(['auth', 'permission'])->name('canteens.create');
     Route::post('/canteens', [CanteenController::class, 'store'])->middleware(['auth', 'permission'])->name('canteens.store');
@@ -798,6 +830,23 @@ Route::group(['middleware' => 'auth'], function () {
 
         Route::get('expat/rekap/export', [ExpatController::class, 'exportRekap'])->name('expat.rekap.export')->middleware(['auth', 'permission']);
     });
+
+    Route::prefix('expat-dashboard')->name('expat-dashboard.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [ExpatController::class, 'dashboard'])->name('index');
+        Route::get('/chart-data', [ExpatController::class, 'chartData'])->name('chart-data');
+        Route::get('/recap-data', [ExpatController::class, 'recapData'])->name('recap-data');
+        Route::get('/document-data', [ExpatController::class, 'documentData'])->name('document-data');
+        Route::get('/search-employee', [ExpatController::class, 'searchEmployee'])->name('search-employee');
+        Route::get('/transaction-detail', [ExpatController::class, 'transactionDetail'])->name('transaction-detail');
+    });
+
+    // Foreign Guest dashboard data
+    Route::get('/guest-master/dashboard-data', [ForeignGuestController::class, 'dashboardData'])->name('guest-master.dashboard-data')->middleware(['auth', 'permission']);
+    Route::get('/guest-master/dashboard-detail/{id}', [ForeignGuestController::class, 'dashboardDetail'])->name('guest-master.dashboard-detail')->middleware(['auth', 'permission']);
+
+    // Chu Family dashboard data
+    Route::get('/chu-family/dashboard-data', [ChuFamilyController::class, 'dashboardData'])->name('chu-family.dashboard-data')->middleware(['auth', 'permission']);
+    Route::get('/chu-family/dashboard-detail/{id}', [ChuFamilyController::class, 'dashboardDetail'])->name('chu-family.dashboard-detail')->middleware(['auth', 'permission']);
 
     Route::prefix('chu-family')->group(function () {
         Route::get('/', [ChuFamilyController::class, 'index'])->name('chu-family.index')->middleware(['auth', 'permission']);
@@ -899,167 +948,330 @@ Route::group(['middleware' => 'auth'], function () {
     Route::put('/employee-shift/update/{id}', [EmployeeShiftController::class, 'update'])->name('employee-shift.update');
     Route::post('/employee-shift/store', [EmployeeShiftController::class, 'store'])->name('employee-shift.store');
     Route::get('/employee-shift/delete/{id}', [EmployeeShiftController::class, 'delete'])->name('employee-shift.delete');
-});
-
-Route::prefix('insentif-threshold')->group(function () {
-    Route::get('/', [InsentifThresholdController::class, 'index'])->name('insentif.threshold.index')->middleware(['auth', 'permission']);
-    Route::get('/create', [InsentifThresholdController::class, 'create'])->name('insentif.threshold.create')->middleware(['auth', 'permission']);
-    Route::post('/store', [InsentifThresholdController::class, 'store'])->name('insentif.threshold.store')->middleware(['auth', 'permission']);
-    Route::get('/edit/{id}', [InsentifThresholdController::class, 'edit'])->name('insentif.threshold.edit')->middleware(['auth', 'permission']);
-    Route::post('/update/{id}', [InsentifThresholdController::class, 'update'])->name('insentif.threshold.update')->middleware(['auth', 'permission']);
-    Route::get('/delete/{id}', [InsentifThresholdController::class, 'delete'])->name('insentif.threshold.delete')->middleware(['auth', 'permission']);
-});
-
-Route::prefix('sewing-violations')->group(function () {
-    Route::get('/', [SewingViolationController::class, 'index'])->name('sewing-violations.index');
-    Route::get('/create', [SewingViolationController::class, 'create'])->name('sewing-violations.create');
-    Route::post('/store', [SewingViolationController::class, 'store'])->name('sewing-violations.store');
-    Route::get('/edit/{id}', [SewingViolationController::class, 'edit'])->name('sewing-violations.edit');
-    Route::post('/update', [SewingViolationController::class, 'update'])->name('sewing-violations.update');
-    Route::get('/delete/{id}', [SewingViolationController::class, 'delete'])->name('sewing-violations.delete');
-});
-
-// ========================================
-// PENGAJUAN CUTI ONLINE
-// ========================================
-Route::prefix('pengajuan-cuti')->group(function () {
-    Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
-    Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
-    Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
-    Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
-    Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
-    Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
-    Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
-    Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
-    Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
-
-    // Cuti Approval (Leave Management by session logged in user)
-    Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval');
-    Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve');
-    Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject');
-});
-
-// Insentif 6S
-Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'permission']);
-Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::class, 'create'])->name('employee6s.create')->middleware(['auth', 'permission']);
-Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::class, 'store'])->name('employee6s.store')->middleware(['auth', 'permission']);
-Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'permission']);
-Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'permission']);
-Route::get('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'permission']);
-Route::get('/employee-6s-assignment/{period}/check', [Employee6sAssignmentController::class, 'check'])->name('employee6s.check')->middleware(['auth', 'permission']);
-
-Route::prefix('employee-violation')->name('employee-violation.')->group(function () {
-    Route::get('/', [EmployeeViolationController::class, 'index'])->name('index')->middleware(['auth', 'permission']);
-    Route::get('/create', [EmployeeViolationController::class, 'create'])->name('create')->middleware(['auth', 'permission']);
-    Route::post('/store', [EmployeeViolationController::class, 'store'])->name('store')->middleware(['auth', 'permission']);
-    Route::get('/edit/{id}', [EmployeeViolationController::class, 'edit'])->name('edit')->middleware(['auth', 'permission']);
-    Route::put('/update/{id}', [EmployeeViolationController::class, 'update'])->name('update')->middleware(['auth', 'permission']);
-    Route::get('/delete/{id}', [EmployeeViolationController::class, 'delete'])->name('delete')->middleware(['auth', 'permission']);
-});
-
-Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'permission'])->group(function () {
-
-    Route::get('/', [BpjsExceptionController::class, 'index'])->name('index');
-    Route::get('/create', [BpjsExceptionController::class, 'create'])->name('create');
-    Route::post('/store', [BpjsExceptionController::class, 'store'])->name('store');
-    Route::get('/edit/{id}', [BpjsExceptionController::class, 'edit'])->name('edit');
-    Route::put('/update/{id}', [BpjsExceptionController::class, 'update'])->name('update');
-    Route::delete('/delete/{id}', [BpjsExceptionController::class, 'destroy'])->name('destroy');
-});
 
 
-Route::prefix('payroll/recap')->name('payroll-recap.')->middleware(['auth', 'permission'])->group(function () {
-    Route::get('/', [PayrollRecapController::class, 'index'])->name('index');
-    Route::get('/chart-data', [PayrollRecapController::class, 'chartData'])->name('chart-data');
-    Route::get('/search-employee', [PayrollRecapController::class, 'searchEmployee'])->name('search-employee');
-    Route::get('/detail-data', [PayrollRecapController::class, 'detailData'])->name('detail-data');
-    Route::get('/overtime-data', [PayrollRecapController::class, 'overtimeData'])->name('overtime-data');
-});
-
-Route::prefix('role-payroll')->name('role-payroll.')->middleware(['auth', 'permission'])->group(function () {
-    Route::get('/', [RolePayrollController::class, 'index'])->name('index');
-    Route::post('/', [RolePayrollController::class, 'store'])->name('store');
-    Route::get('/{id}/users-for-edit', [RolePayrollController::class, 'usersForEdit'])->name('users-for-edit');
-    Route::put('/{id}', [RolePayrollController::class, 'update'])->name('update');
-    Route::delete('/{id}', [RolePayrollController::class, 'destroy'])->name('destroy');
-});
-
-Route::middleware(['auth', 'permission']) // ganti/tambahkan middleware role admin sesuai project Anda
-    ->group(function () {
-        Route::get('/admin/qr-devices', [QrDeviceController::class, 'index'])->name('qr-devices.index');
-        Route::post('/admin/qr-devices', [QrDeviceController::class, 'store'])->name('qr-devices.store');
-        Route::put('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'update'])->name('qr-devices.update');
-        Route::patch('/admin/qr-devices/{qrDevice}/toggle', [QrDeviceController::class, 'toggle'])->name('qr-devices.toggle');
-        Route::delete('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'destroy'])->name('qr-devices.destroy');
-        Route::patch('/admin/qr-devices/{qrDevice}/rename', [QrDeviceController::class, 'rename'])->name('qr-devices.rename');
-        Route::delete('qr-devices/pending/{uuid}', [QrDeviceController::class, 'destroyPendingAttempt'])->name('qr-devices.pending.destroy');
+    Route::prefix('outsource')->name('outsource.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [OutsourceController::class, 'index'])->name('index');
+        Route::get('/create', [OutsourceController::class, 'create'])->name('create');
+        Route::post('/', [OutsourceController::class, 'store'])->name('store');
+        Route::get('/{id}/edit', [OutsourceController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [OutsourceController::class, 'update'])->name('update');
+        Route::delete('/{id}', [OutsourceController::class, 'destroy'])->name('destroy');
+        Route::get('/template/download', [OutsourceController::class, 'template'])->name('template');
+        Route::post('/import/upload', [OutsourceController::class, 'import'])->name('import');
     });
 
-Route::prefix('doorprize')
-    ->name('doorprize.')
-    ->middleware(['auth', 'permission'])
-    ->group(function () {
+    Route::middleware(['auth', 'permission'])
+        ->prefix('monitoring/rekonsiliasi')
+        ->name('monitoring.rekonsiliasi.')
+        ->group(function () {
 
-        // Scan QR NPK
-        Route::get('/scan', [DoorprizeController::class, 'scanPage'])->name('scan');
-        Route::post('/scan', [DoorprizeController::class, 'storeScan'])->name('scan.store');
+            // ... route index/data/sync/calendar/dll yang sudah ada tetap di sini ...
 
-        // Undian doorprize
-        Route::get('/draw', [DoorprizeController::class, 'drawPage'])->name('draw');
-        Route::post('/draw', [DoorprizeController::class, 'draw'])->name('draw.run');
-        Route::get('/winners', [DoorprizeController::class, 'winnersList'])->name('winners');
-        Route::post('/winners/{winner}/void', [DoorprizeController::class, 'voidWinner'])->name('winners.void');
+            // ===== Stage Remark (mon_stage_remarks) =====
+            Route::get('stage-remark/template', [MonStageDataController::class, 'templateStageRemark'])
+                ->name('stage-remark.template');
+            Route::post('stage-remark/import', [MonStageDataController::class, 'importStageRemark'])
+                ->name('stage-remark.import');
 
-        // Reset data (sebaiknya dibatasi role admin saja)
-        Route::post('/reset-scans', [DoorprizeController::class, 'resetScans'])->name('reset-scans');
-        Route::post('/reset-winners', [DoorprizeController::class, 'resetWinners'])->name('reset-winners');
+            // ===== Prod QC (mon_prod_qc) =====
+            Route::get('prod-qc/template', [MonStageDataController::class, 'templateProdQc'])
+                ->name('prod-qc.template');
+            Route::post('prod-qc/import', [MonStageDataController::class, 'importProdQc'])
+                ->name('prod-qc.import');
+        });
+
+    Route::get('/speech/index', [SpeechController::class, 'index'])->name('speech.index')->middleware(['auth', 'permission']);
+    Route::post('/speech/generate', [\App\Http\Controllers\SpeechController::class, 'generate'])
+        ->name('speech.generate')
+        ->middleware(['auth', 'permission']);
+
+    Route::prefix('insentif-threshold')->group(function () {
+        Route::get('/', [InsentifThresholdController::class, 'index'])->name('insentif.threshold.index')->middleware(['auth', 'permission']);
+        Route::get('/create', [InsentifThresholdController::class, 'create'])->name('insentif.threshold.create')->middleware(['auth', 'permission']);
+        Route::post('/store', [InsentifThresholdController::class, 'store'])->name('insentif.threshold.store')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [InsentifThresholdController::class, 'edit'])->name('insentif.threshold.edit')->middleware(['auth', 'permission']);
+        Route::post('/update/{id}', [InsentifThresholdController::class, 'update'])->name('insentif.threshold.update')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [InsentifThresholdController::class, 'delete'])->name('insentif.threshold.delete')->middleware(['auth', 'permission']);
+    });
+
+    Route::prefix('sewing-violations')->group(function () {
+        Route::get('/', [SewingViolationController::class, 'index'])->name('sewing-violations.index');
+        Route::get('/create', [SewingViolationController::class, 'create'])->name('sewing-violations.create');
+        Route::post('/store', [SewingViolationController::class, 'store'])->name('sewing-violations.store');
+        Route::get('/edit/{id}', [SewingViolationController::class, 'edit'])->name('sewing-violations.edit');
+        Route::post('/update', [SewingViolationController::class, 'update'])->name('sewing-violations.update');
+        Route::get('/delete/{id}', [SewingViolationController::class, 'delete'])->name('sewing-violations.delete');
+    });
+
+    // ========================================
+    // PENGAJUAN CUTI ONLINE
+    // ========================================
+    Route::prefix('pengajuan-cuti')->group(function () {
+        Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
+        Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
+        Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
+        Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
+        Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
+        Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
+        Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
+        Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
+        Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
+
+        // Cuti Approval (Leave Management by logged in user)
+        Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval')->middleware('auth');
+        Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve')->middleware('auth');
+        Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject')->middleware('auth');
+        Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update')->middleware('auth');
+    });
+
+    // Insentif 6S
+    Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'permission']);
+    Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::class, 'create'])->name('employee6s.create')->middleware(['auth', 'permission']);
+    Route::post('/employee-6s-assignment/store', [Employee6sAssignmentController::class, 'store'])->name('employee6s.store')->middleware(['auth', 'permission']);
+    Route::get('/employee-6s-assignment/edit/{id}', [Employee6sAssignmentController::class, 'edit'])->name('employee6s.edit')->middleware(['auth', 'permission']);
+    Route::put('/employee-6s-assignment/update/{id}', [Employee6sAssignmentController::class, 'update'])->name('employee6s.update')->middleware(['auth', 'permission']);
+    Route::get('/employee-6s-assignment/delete/{id}', [Employee6sAssignmentController::class, 'destroy'])->name('employee6s.destroy')->middleware(['auth', 'permission']);
+    Route::get('/employee-6s-assignment/{period}/check', [Employee6sAssignmentController::class, 'check'])->name('employee6s.check')->middleware(['auth', 'permission']);
+
+    Route::prefix('employee-violation')->name('employee-violation.')->group(function () {
+        Route::get('/', [EmployeeViolationController::class, 'index'])->name('index')->middleware(['auth', 'permission']);
+        Route::get('/create', [EmployeeViolationController::class, 'create'])->name('create')->middleware(['auth', 'permission']);
+        Route::post('/store', [EmployeeViolationController::class, 'store'])->name('store')->middleware(['auth', 'permission']);
+        Route::get('/edit/{id}', [EmployeeViolationController::class, 'edit'])->name('edit')->middleware(['auth', 'permission']);
+        Route::put('/update/{id}', [EmployeeViolationController::class, 'update'])->name('update')->middleware(['auth', 'permission']);
+        Route::get('/delete/{id}', [EmployeeViolationController::class, 'delete'])->name('delete')->middleware(['auth', 'permission']);
+    });
+
+    Route::prefix('bpjs-exceptions')->name('bpjs-exceptions.')->middleware(['auth', 'permission'])->group(function () {
+
+        Route::get('/', [BpjsExceptionController::class, 'index'])->name('index');
+        Route::get('/create', [BpjsExceptionController::class, 'create'])->name('create');
+        Route::post('/store', [BpjsExceptionController::class, 'store'])->name('store');
+        Route::get('/edit/{id}', [BpjsExceptionController::class, 'edit'])->name('edit');
+        Route::put('/update/{id}', [BpjsExceptionController::class, 'update'])->name('update');
+        Route::delete('/delete/{id}', [BpjsExceptionController::class, 'destroy'])->name('destroy');
     });
 
 
-Route::prefix('monitoring')->middleware(['auth', 'permission'])->group(function () {
-    Route::get('/', [MonitoringController::class, 'index'])->name('monitoring.index');
-    Route::get('/api/stats', [MonitoringController::class, 'stats'])->name('monitoring.stats');
+    Route::prefix('payroll/recap')->name('payroll-recap.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [PayrollRecapController::class, 'index'])->name('index');
+        Route::get('/chart-data', [PayrollRecapController::class, 'chartData'])->name('chart-data');
+        Route::get('/search-employee', [PayrollRecapController::class, 'searchEmployee'])->name('search-employee');
+        Route::get('/detail-data', [PayrollRecapController::class, 'detailData'])->name('detail-data');
+        Route::get('/overtime-data', [PayrollRecapController::class, 'overtimeData'])->name('overtime-data');
+    });
+
+    Route::prefix('role-payroll')->name('role-payroll.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [RolePayrollController::class, 'index'])->name('index');
+        Route::post('/', [RolePayrollController::class, 'store'])->name('store');
+        Route::get('/{id}/users-for-edit', [RolePayrollController::class, 'usersForEdit'])->name('users-for-edit');
+        Route::put('/{id}', [RolePayrollController::class, 'update'])->name('update');
+        Route::delete('/{id}', [RolePayrollController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::middleware(['auth', 'permission']) // ganti/tambahkan middleware role admin sesuai project Anda
+        ->group(function () {
+            Route::get('/admin/qr-devices', [QrDeviceController::class, 'index'])->name('qr-devices.index');
+            Route::post('/admin/qr-devices', [QrDeviceController::class, 'store'])->name('qr-devices.store');
+            Route::put('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'update'])->name('qr-devices.update');
+            Route::patch('/admin/qr-devices/{qrDevice}/toggle', [QrDeviceController::class, 'toggle'])->name('qr-devices.toggle');
+            Route::delete('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'destroy'])->name('qr-devices.destroy');
+            Route::patch('/admin/qr-devices/{qrDevice}/rename', [QrDeviceController::class, 'rename'])->name('qr-devices.rename');
+            Route::delete('qr-devices/pending/{uuid}', [QrDeviceController::class, 'destroyPendingAttempt'])->name('qr-devices.pending.destroy');
+        });
+
+    Route::prefix('doorprize')
+        ->name('doorprize.')
+        ->middleware(['auth', 'permission'])
+        ->group(function () {
+
+            // Scan QR NPK
+            Route::get('/scan', [DoorprizeController::class, 'scanPage'])->name('scan');
+            Route::post('/scan', [DoorprizeController::class, 'storeScan'])->name('scan.store');
+
+            // Undian doorprize
+            Route::get('/draw', [DoorprizeController::class, 'drawPage'])->name('draw');
+            Route::post('/draw', [DoorprizeController::class, 'draw'])->name('draw.run');
+            Route::get('/winners', [DoorprizeController::class, 'winnersList'])->name('winners');
+            Route::post('/winners/{winner}/void', [DoorprizeController::class, 'voidWinner'])->name('winners.void');
+
+            // Reset data (sebaiknya dibatasi role admin saja)
+            Route::post('/reset-scans', [DoorprizeController::class, 'resetScans'])->name('reset-scans');
+            Route::post('/reset-winners', [DoorprizeController::class, 'resetWinners'])->name('reset-winners');
+        });
+
+
+    Route::prefix('monitoring')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [MonitoringController::class, 'index'])->name('monitoring.index');
+        Route::get('/api/stats', [MonitoringController::class, 'stats'])->name('monitoring.stats');
+    });
+
+
+    Route::get('/employee-late', [EmployeeLateController::class, 'index'])->name('employee-late.index')->middleware(['auth', 'permission']);
+    Route::get('/employee-late/create', [EmployeeLateController::class, 'create'])->name('employee-late.create')->middleware(['auth', 'permission']);
+    Route::post('/employee-late', [EmployeeLateController::class, 'store'])->name('employee-late.store')->middleware(['auth', 'permission']);
+    Route::get('/employee-late/{id}/edit', [EmployeeLateController::class, 'edit'])->name('employee-late.edit')->middleware(['auth', 'permission']);
+    Route::put('/employee-late/{id}', [EmployeeLateController::class, 'update'])->name('employee-late.update')->middleware(['auth', 'permission']);
+    Route::delete('/employee-late/{id}', [EmployeeLateController::class, 'destroy'])->name('employee-late.delete')->middleware(['auth', 'permission']);
+    Route::get('/employee-late/template', [EmployeeLateController::class, 'template'])->name('employee-late.template')->middleware(['auth', 'permission']);
+    Route::post('/employee-late/import', [EmployeeLateController::class, 'import'])->name('employee-late.import')->middleware(['auth', 'permission']);
+    Route::get('/employee-late/search-npk', [EmployeeLateController::class, 'searchNpk'])->name('employee-late.search-npk')->middleware(['auth', 'permission']);
+
+    // Payroll 
+    Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
+    // Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
+
+    // Employee Payroll
+    Route::get('/employee-payroll/show-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlipAudit'])->name('employee-payroll.view-slip-audit');
+    Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
+    Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
+    Route::get('/payroll-process/slip-live/{period_id}/{npk}', [EmployeePayrollController::class, 'showSlipLive'])->name('payroll-process.slip-live');
+
+    // Employee Thr
+    Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.view-slip');
+    Route::post('/employee-thr/{npk}/show-slip', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.show-slip');
+    Route::post('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
+    Route::get('/employee-thr', [EmployeeThrController::class, 'index'])->name('employee-thr.index');
+    Route::get('/employee-thr/qr-login', [EmployeeThrController::class, 'qrLogin'])->name('employee-thr.qr-login');
+    Route::get('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
+    Route::get('/employee-thr/api/period', [EmployeeThrController::class, 'apiPeriods'])->name('employee-thr-api.period');
+
+    // Employee Evaluation
+    Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class, 'submit'])->name('evaluation-employee.submit');
+    Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cbt'])->name('evaluation-employee.cbt');
+    Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
+    Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');
+
+    Route::prefix('monitoring')->name('monitoring.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/dashboard', [MonitoringDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard/data', [MonitoringDashboardController::class, 'data'])->name('dashboard.data');
+
+        Route::get('/order/import', [OrderImportController::class, 'form'])->name('order.import.form');
+        Route::post('/order/import', [OrderImportController::class, 'store'])->name('order.import.store');
+        Route::get('order-import/progress/{batchId}', [OrderImportController::class, 'progress'])
+            ->name('order.import.progress');
+        Route::get('order-import/data', [OrderImportController::class, 'data'])->name('order.import.data');
+        Route::post('sync-bom', [MonitoringDashboardController::class, 'syncBom'])->name('sync.bom');
+        Route::post('sync-po', [MonitoringDashboardController::class, 'syncPo'])->name('sync.po');
+        Route::get('dashboard/calendar', [MonitoringDashboardController::class, 'calendar'])->name('dashboard.calendar');
+        Route::get('dashboard/calendar-detail', [MonitoringDashboardController::class, 'calendarDetail'])->name('dashboard.calendar.detail');
+
+        Route::get('/rekonsiliasi', [MonitoringRekonsiliasiController::class, 'index'])->name('rekonsiliasi');
+        Route::get('/rekonsiliasiocf', [MonitoringRekonsiliasiController::class, 'indexocf'])->name('rekonsiliasiocf');
+        Route::get('/rekonsiliasi/data', [MonitoringRekonsiliasiController::class, 'data'])->name('rekonsiliasi.data');
+        Route::post('/rekonsiliasi/sync', [MonitoringRekonsiliasiController::class, 'syncRekonsiliasi'])->name('rekonsiliasi.sync');
+        Route::post('/rekonsiliasi/sync-prod-line', [MonitoringRekonsiliasiController::class, 'syncProdLine'])->name('rekonsiliasi.sync-prod-line');
+        Route::post('/rekonsiliasi/sync-shipment', [MonitoringRekonsiliasiController::class, 'syncShipment'])->name('rekonsiliasi.sync-shipment');
+        Route::post('/rekonsiliasi/sync-work-order', [MonitoringRekonsiliasiController::class, 'syncWorkOrder'])->name('rekonsiliasi.sync-work-order');
+        Route::post('/rekonsiliasi/sync-ms-barang', [MonitoringRekonsiliasiController::class, 'syncMsBarang'])->name('rekonsiliasi.sync-ms-barang');
+        Route::post('/rekonsiliasi/sync-subkon', [MonitoringRekonsiliasiController::class, 'syncSubkon'])->name('rekonsiliasi.sync-subkon');
+        Route::delete('/rekonsiliasi/stage-remark/{id}', [MonitoringRekonsiliasiController::class, 'destroyStageRemark'])->name('rekonsiliasi.stage-remark.destroy');
+
+        // -- Kalender "Shipment Date" (mirip kalender Production Delivery di dashboard Gabungan) --
+        Route::get('rekonsiliasi/calendar', [MonitoringRekonsiliasiController::class, 'calendar'])->name('rekonsiliasi.calendar');
+        Route::get('rekonsiliasi/calendar-detail', [MonitoringRekonsiliasiController::class, 'calendarDetail'])->name('rekonsiliasi.calendar.detail');
+
+        // -- Sync Master Negara & Master Supplier (2 tabel baru, jadi total 7 tabel di Sync All) --
+        Route::post('rekonsiliasi/sync-ms-negara', [MonitoringRekonsiliasiController::class, 'syncMsNegara'])->name('rekonsiliasi.sync-ms-negara');
+        Route::post('rekonsiliasi/sync-ms-supplier', [MonitoringRekonsiliasiController::class, 'syncMsSupplier'])->name('rekonsiliasi.sync-ms-supplier');
+
+        Route::get('rekonsiliasi/negara-options', [MonitoringRekonsiliasiController::class, 'negaraOptions'])->name('rekonsiliasi.negara-options');
+    });
+
+    Route::middleware(['auth', 'permission'])->prefix('exchange-rates')->name('exchange-rates.')->group(function () {
+        Route::get('/', [ExchangeRateController::class, 'index'])->name('index');
+        Route::get('/today', [ExchangeRateController::class, 'today'])->name('today');
+        Route::post('/sync', [ExchangeRateController::class, 'sync'])->name('sync');
+    });
+
+    Route::middleware(['auth', 'permission'])->group(function () {
+        Route::get('/canteen-report', [CanteenReportController::class, 'index'])->name('canteen-report.index');
+        Route::get('/canteen-report/summary', [CanteenReportController::class, 'summaryData'])->name('canteen-report.summary');
+        Route::get('/canteen-report/detail', [CanteenReportController::class, 'detailData'])->name('canteen-report.detail');
+        Route::get('/canteen-report/duplicate', [CanteenReportController::class, 'duplicateData'])->name('canteen-report.duplicate');
+        Route::post('canteen-report/move', [CanteenReportController::class, 'moveScan'])->name('canteen-report.move');
+        Route::post('canteen-report/delete', [CanteenReportController::class, 'deleteScan'])->name('canteen-report.delete');
+        Route::post('/canteen-report/manual-store', [CanteenReportController::class, 'manualStore'])->name('canteen-report.manual-store');
+        Route::get('/canteen-report/employee-options', [CanteenReportController::class, 'employeeOptions'])->name('canteen-report.employee-options');
+        Route::get('/canteen-report/outsource-options', [CanteenReportController::class, 'outsourceOptions'])->name('canteen-report.outsource-options');
+
+        Route::prefix('expat-meal')
+            ->name('expat-meal.')
+            ->group(function () {
+                Route::get('/', [ExpatMealController::class, 'index'])->name('index');
+
+                // Dashboard & laporan
+                Route::get('/summary', [ExpatMealController::class, 'summaryData'])->name('summary');
+                Route::get('/detail', [ExpatMealController::class, 'detailData'])->name('detail');
+
+                // Daftar peserta makan (expat_meal_participants)
+                Route::get('/participants', [ExpatMealController::class, 'participantData'])->name('participants');
+                Route::post('/participants', [ExpatMealController::class, 'participantStore'])->name('participants.store');
+                Route::post('/participants/delete', [ExpatMealController::class, 'participantDestroy'])->name('participants.delete');
+
+                // Menu makanan (expat_meal_menus)
+                Route::get('/menu', [ExpatMealController::class, 'menuData'])->name('menu');
+                Route::post('/menu', [ExpatMealController::class, 'menuStore'])->name('menu.store');
+                Route::post('/menu/delete', [ExpatMealController::class, 'menuDestroy'])->name('menu.delete');
+
+                // Template & import excel (2 sheet: Daftar Expat & Makanan)
+                Route::get('/template', [ExpatMealController::class, 'downloadTemplate'])->name('template');
+                Route::post('/import', [ExpatMealController::class, 'import'])->name('import');
+
+                // Export laporan
+                Route::get('/export-excel', [ExpatMealController::class, 'exportMasterFileExcel'])->name('export-excel');
+                Route::get('/detail-makanan', [ExpatMealController::class, 'mealDetailData'])->name('detail-makanan');
+                Route::get('expat-options', [ExpatMealController::class, 'expatOptions'])->name('expat-options');
+            });
+
+
+        // Template & import excel shift siang/malam
+        Route::get('/canteen-report/template', [CanteenReportController::class, 'downloadTemplate'])->name('canteen-report.template');
+        Route::post('/canteen-report/import', [CanteenReportController::class, 'importShift'])->name('canteen-report.import');
+
+        // Export rekap PDF (format "Realisasi Kantin")
+        Route::get('/canteen-report/export-pdf', [CanteenReportController::class, 'exportRekapPdf'])->name('canteen-report.export-pdf');
+        Route::get('canteen-report/export-excel', [CanteenReportController::class, 'exportRekapExcel'])->name('canteen-report.export-excel');
+    });
+
+    Route::middleware(['auth', 'permission'])->prefix('audit-trail')->name('audit-trail.')->group(function () {
+        Route::get('/', [AuditTrailController::class, 'index'])->name('index');
+        Route::get('/data', [AuditTrailController::class, 'data'])->name('data');
+        Route::get('/{auditTrail}', [AuditTrailController::class, 'show'])->name('show');
+    });
 });
 
+// BATAS ROUTE TANPA AUTH
 
-Route::get('/employee-late', [EmployeeLateController::class, 'index'])->name('employee-late.index')->middleware(['auth', 'permission']);
-Route::get('/employee-late/create', [EmployeeLateController::class, 'create'])->name('employee-late.create')->middleware(['auth', 'permission']);
-Route::post('/employee-late', [EmployeeLateController::class, 'store'])->name('employee-late.store')->middleware(['auth', 'permission']);
-Route::get('/employee-late/{id}/edit', [EmployeeLateController::class, 'edit'])->name('employee-late.edit')->middleware(['auth', 'permission']);
-Route::put('/employee-late/{id}', [EmployeeLateController::class, 'update'])->name('employee-late.update')->middleware(['auth', 'permission']);
-Route::delete('/employee-late/{id}', [EmployeeLateController::class, 'destroy'])->name('employee-late.delete')->middleware(['auth', 'permission']);
-Route::get('/employee-late/template', [EmployeeLateController::class, 'template'])->name('employee-late.template')->middleware(['auth', 'permission']);
-Route::post('/employee-late/import', [EmployeeLateController::class, 'import'])->name('employee-late.import')->middleware(['auth', 'permission']);
-Route::get('/employee-late/search-npk', [EmployeeLateController::class, 'searchNpk'])->name('employee-late.search-npk')->middleware(['auth', 'permission']);
-
-// Payroll 
-Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
-// Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
-
-// Employee Payroll
-Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
-Route::get('/employee-payroll/show-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlipAudit'])->name('employee-payroll.view-slip-audit');
-Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->name('employee-payroll.index');
+Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
+Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
-Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
-Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
 
-// Employee Thr
-Route::get('/employee-thr/show/{run_id}/{npk}', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.view-slip');
-Route::post('/employee-thr/{npk}/show-slip', [EmployeeThrController::class, 'showSlip'])->name('employee-thr.show-slip');
-Route::post('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
-Route::get('/employee-thr', [EmployeeThrController::class, 'index'])->name('employee-thr.index');
-Route::get('/employee-thr/qr-login', [EmployeeThrController::class, 'qrLogin'])->name('employee-thr.qr-login');
-Route::get('/employee-thr/view', [EmployeeThrController::class, 'verifyPassword'])->name('employee-thr.verify-password');
-Route::get('/employee-thr/api/period', [EmployeeThrController::class, 'apiPeriods'])->name('employee-thr-api.period');
 
-// Employee Evaluation
-Route::post('/evaluation-employee/submit', [EvaluationEmployeeController::class, 'submit'])->name('evaluation-employee.submit');
-Route::get('/evaluation-employee/cbt', [EvaluationEmployeeController::class, 'cbt'])->name('evaluation-employee.cbt');
-Route::get('/evaluation-employee/portal', [EvaluationEmployeeController::class, 'portal'])->name('evaluation-employee.portal');
-Route::get('/evaluation-employee/thankyou', [EvaluationEmployeeController::class, 'thankyou'])->name('evaluation-employee.thankyou');
+
+Route::prefix('event-invitation')->name('event-invitation.')->group(function () {
+
+    // ---- Admin: kelola master event (bungkus middleware auth/permission kamu sendiri) ----
+    // PENTING: grup ini harus didaftarkan SEBELUM route GET '/{event?}' di bawah,
+    // supaya "/event_invitation/admin" tidak ketangkep sebagai parameter {event}.
+    Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [EventController::class, 'index'])->name('index');
+        Route::post('/', [EventController::class, 'store'])->name('store');
+        Route::put('/{event}', [EventController::class, 'update'])->name('update');
+        Route::delete('/{event}', [EventController::class, 'destroy'])->name('destroy');
+        Route::post('/{event}/activate', [EventController::class, 'activate'])->name('activate');
+        Route::get('/{event}/peserta', [EventController::class, 'peserta'])->name('peserta');
+        Route::get('/{event}/export', [EventController::class, 'exportPeserta'])->name('export');
+    });
+    Route::get('/scan/{event?}', [EventInvitationController::class, 'scanPage'])->name('scan');
+    Route::post('/scan/{event?}', [EventInvitationController::class, 'storeScan'])->name('scan.store');
+
+    Route::get('/{event?}', [EventInvitationController::class, 'formPage'])->name('form');
+    Route::post('/{event?}/respond', [EventInvitationController::class, 'storeResponse'])->name('respond');
+});
 
 
 Route::get('/test-reverb', function () {
@@ -1105,3 +1317,34 @@ Route::post('/food-orders/scan', [FoodOrderController::class, 'verifyScan'])
     ->middleware('throttle:10,1') // batasi percobaan scan/manual per menit
     ->name('food-orders.scan.verify');
 Route::post('/food-orders/logout-scan', [FoodOrderController::class, 'logoutScan'])->name('food-orders.logout-scan');
+
+
+/*
+    |--------------------------------------------------------------------------
+    | Audit Recap
+    |--------------------------------------------------------------------------
+    */
+Route::get('/audit-recap', [AuditRecapController::class, 'index'])->name('audit-recap.index');
+Route::post('/audit-recap/generate', [AuditRecapController::class, 'generate'])->name('audit-recap.generate');
+Route::post('/audit-recap/export', [AuditRecapController::class, 'export'])->name('audit-recap.export');
+Route::get('/audit-recap/report', [AuditRecapController::class, 'report'])->name('audit-recap.report');
+Route::get('/audit-recap/export-view', [AuditRecapController::class, 'export_view'])->name('audit-recap.export-view');
+Route::get('/audit-recap/export-pdf', [AuditRecapController::class, 'export_pdf'])->name('audit-recap.export-pdf');
+
+
+Route::prefix('attendance-expat')->name('attendance.expat.')->group(function () {
+    Route::get('/', [AttendanceExpatController::class, 'index'])->name('index');
+    Route::get('/data', [AttendanceExpatController::class, 'data'])->name('data');
+    Route::get('/export', [AttendanceExpatController::class, 'export'])->name('export');
+});
+
+Route::middleware(['auth', 'permission'])->group(function () {
+    Route::post('/recruitment/salary-approve', [SalaryApproveController::class, 'store'])->name('salary-approve.store');
+    Route::post('/salary-approve', [SalaryApproveController::class, 'store']);
+    Route::put('/salary-approve/{id}', [SalaryApproveController::class, 'update'])->name('salary-approve.update');
+    Route::get('/salary-approve', [SalaryApproveController::class, 'index'])->name('salary-approve.index');
+    Route::post('/salary-approve/{id}/approve', [SalaryApproveController::class, 'approve'])->name('salary-approve.approve');
+    Route::post('/salary-approve/{id}/reject', [SalaryApproveController::class, 'reject'])->name('salary-approve.reject');
+});
+
+Route::get('/pdf-extractor', [PdfExtractionController::class, 'index'])->name('pdf.index')->middleware(['auth']);

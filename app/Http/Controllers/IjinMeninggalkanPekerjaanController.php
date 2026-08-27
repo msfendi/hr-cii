@@ -23,10 +23,14 @@ class IjinMeninggalkanPekerjaanController extends Controller
                 $join->on('biodata.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk');
             })
             ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'biodata.ID_DEPT')
+            ->leftJoin('break_masters', 'break_masters.id', '=', 'ijin_meninggalkan_pekerjaans.id_break')
             ->select(
                 'ijin_meninggalkan_pekerjaans.*',
                 'biodata.NAMA_KARYAWAN',
-                'DEPT.DEPARTEMENT'
+                'DEPT.DEPARTEMENT',
+                'break_masters.sesi as break_sesi',
+                'break_masters.time_start as break_time_start',
+                'break_masters.time_end as break_time_end'
             )
             ->get();
 
@@ -35,19 +39,10 @@ class IjinMeninggalkanPekerjaanController extends Controller
 
     public function create()
     {
-        $biodatas = DB::query()
-            ->fromSub(
-                DB::table('BIODATA')
-                    ->select('NPK', 'NAMA_KARYAWAN')
-                    ->union(
-                        DB::table('BIODATA_KELUAR')
-                            ->select('NPK', 'NAMA_KARYAWAN')
-                    ),
-                'emp'
-            )
-            ->orderBy('NPK')
-            ->get();
-        return view('ijin_meninggalkan_pekerjaan.create', compact('biodatas'));
+        $biodatas = $this->getBiodatas();
+        $breaks = $this->getBreaks();
+
+        return view('ijin_meninggalkan_pekerjaan.create', compact('biodatas', 'breaks'));
     }
 
     public function store(Request $request)
@@ -56,6 +51,8 @@ class IjinMeninggalkanPekerjaanController extends Controller
             'npk' => 'required',
             'tanggal' => 'required',
             'jam_keluar' => 'required',
+            'id_break' => 'nullable|exists:break_masters,id',
+            'is_deduction' => 'required|boolean',
         ]);
 
         IjinMeninggalkanPekerjaan::create([
@@ -64,6 +61,8 @@ class IjinMeninggalkanPekerjaanController extends Controller
             'jam_keluar' => $request->jam_keluar,
             'rencana_kembali' => $request->rencana_kembali,
             'jam_kembali' => $request->jam_kembali,
+            'id_break' => $request->id_break,
+            'is_deduction' => $request->boolean('is_deduction'),
             'reason' => $request->reason,
         ]);
 
@@ -75,20 +74,10 @@ class IjinMeninggalkanPekerjaanController extends Controller
     public function edit($id)
     {
         $data = IjinMeninggalkanPekerjaan::findOrFail($id);
-        $biodatas = DB::query()
-            ->fromSub(
-                DB::table('BIODATA')
-                    ->select('NPK', 'NAMA_KARYAWAN')
-                    ->union(
-                        DB::table('BIODATA_KELUAR')
-                            ->select('NPK', 'NAMA_KARYAWAN')
-                    ),
-                'emp'
-            )
-            ->orderBy('NPK')
-            ->get();
+        $biodatas = $this->getBiodatas();
+        $breaks = $this->getBreaks();
 
-        return view('ijin_meninggalkan_pekerjaan.edit', compact('data', 'biodatas'));
+        return view('ijin_meninggalkan_pekerjaan.edit', compact('data', 'biodatas', 'breaks'));
     }
 
     public function update(Request $request, $id)
@@ -99,12 +88,23 @@ class IjinMeninggalkanPekerjaanController extends Controller
             'jam_keluar' => 'required',
             'rencana_kembali' => 'nullable',
             'jam_kembali' => 'nullable',
+            'id_break' => 'nullable|exists:break_masters,id',
+            'is_deduction' => 'required|boolean',
             'reason' => 'nullable',
         ]);
 
         $data = IjinMeninggalkanPekerjaan::findOrFail($id);
 
-        $data->update($request->all());
+        $data->update([
+            'npk' => $request->npk,
+            'tanggal' => $request->tanggal,
+            'jam_keluar' => $request->jam_keluar,
+            'rencana_kembali' => $request->rencana_kembali,
+            'jam_kembali' => $request->jam_kembali,
+            'id_break' => $request->id_break,
+            'is_deduction' => $request->boolean('is_deduction'),
+            'reason' => $request->reason,
+        ]);
 
         Alert::success('Success', 'Ijin Meninggalkan Pekerjaan successfully updated!');
         return redirect()
@@ -121,5 +121,35 @@ class IjinMeninggalkanPekerjaanController extends Controller
         return redirect()
             ->route('ijin-meninggalkan-pekerjaan.index')
             ->with('success', 'Data berhasil dihapus');
+    }
+
+    /**
+     * Union of active + resigned employees for the NPK dropdown.
+     */
+    private function getBiodatas()
+    {
+        return DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NPK')
+            ->get();
+    }
+
+    /**
+     * Break master list for the id_break dropdown.
+     */
+    private function getBreaks()
+    {
+        return DB::table('break_masters')
+            ->select('id', 'sesi', 'time_start', 'time_end')
+            ->orderBy('time_start')
+            ->get();
     }
 }

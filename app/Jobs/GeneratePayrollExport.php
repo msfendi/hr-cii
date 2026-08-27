@@ -571,6 +571,7 @@ class GeneratePayrollExport implements ShouldQueue
             ]);
 
             $pdf = App::make('snappy.pdf.wrapper');
+            $pdf->setTimeout(600);
             $pdf->loadHTML($htmlRekap)
                 ->setPaper('a4')
                 ->setOrientation('landscape')
@@ -578,6 +579,7 @@ class GeneratePayrollExport implements ShouldQueue
                 ->setOption('no-stop-slow-scripts', true)
                 ->setOption('encoding', 'UTF-8');
             $pdfPeng = App::make('snappy.pdf.wrapper');
+            $pdfPeng->setTimeout(600);
             $pdfPeng->loadHTML($htmlPeng)
                 ->setPaper('a4')
                 ->setOption('enable-local-file-access', true);

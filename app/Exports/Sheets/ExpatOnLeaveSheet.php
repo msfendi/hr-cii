@@ -25,7 +25,7 @@ class ExpatOnLeaveSheet implements
 {
     public function title(): string
     {
-        return 'expat_onleave';
+        return 'expat_leave_expense';
     }
 
     protected $start;

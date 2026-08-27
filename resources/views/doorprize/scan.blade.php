@@ -61,8 +61,26 @@
         <div class="card-scan-header">
             <h5 class="mb-1"><i class="fas fa-qrcode mr-1"></i> Scan QR Code Karyawan</h5>
             <p class="small mb-0" style="opacity:.9;">Arahkan kamera ke QR code pada ID card Anda</p>
+            @if($event)
+                <p class="small mb-0 mt-1" style="opacity:.85;">
+                    <i class="fas fa-calendar-check mr-1"></i> Event: <b>{{ $event->name }}</b>
+                </p>
+            @endif
         </div>
         <div class="card-body p-4 text-center">
+            @if(!$event)
+                <div class="alert alert-warning mb-0">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    Tidak ada event doorprize yang sedang aktif. Hubungi admin untuk mengaktifkan event terlebih dahulu.
+                </div>
+            @elseif(!$eventDateOk)
+                <div class="alert alert-warning mb-0">
+                    <i class="fas fa-calendar-times mr-1"></i>
+                    Event <b>{{ $event->nama_event }}</b> dijadwalkan pada
+                    <b>{{ $eventDateLabel }}</b>. Scan QR belum bisa dilakukan hari ini,
+                    silakan kembali pada tanggal tersebut.
+                </div>
+            @else
             <div class="scan-ring">
                 <div class="camera-box-sm">
                     <video id="video"></video>
@@ -78,6 +96,7 @@
             </div>
 
             <ul id="scan-log" class="list-group mt-3"></ul>
+            @endif
         </div>
     </div>
 </div>
@@ -167,6 +186,12 @@ function startScanning() {
                                 title: 'QR Sudah Pernah Discan!',
                                 html: `NPK <b>${npkShown}</b> sudah discan pada <br><b>${data.scanned_at ?? '-'}</b>`,
                             });
+                        } else if (data.status === 'event_not_today' || data.status === 'no_active_event') {
+                            // Tanggal event sudah lewat / event dinonaktifkan saat halaman
+                            // masih terbuka -> hentikan kamera, jangan lanjut scan lagi.
+                            Swal.fire({ icon: 'error', title: 'Scan Ditutup', text: data.message })
+                                .then(() => { location.reload(); });
+                            return;
                         } else {
                             Swal.fire({ icon: 'error', title: 'Gagal', text: data.message });
                         }
@@ -201,7 +226,9 @@ function startScanning() {
     });
 }
 
+@if($event && $eventDateOk)
 startScanning();
+@endif
 
 // Hentikan kamera saat pindah halaman / tab ditutup, biar resource tidak bocor
 window.addEventListener('beforeunload', stopScanner);

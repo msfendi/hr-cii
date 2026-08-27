@@ -252,6 +252,8 @@ class HeatInsentifMasterController extends Controller
         $periodStart = $period->start_date;
         $periodEnd   = $period->end_date;
 
+        // dd($periodStart, $periodEnd);
+
 
         /*
         |--------------------------------------------------------------------------
@@ -355,13 +357,14 @@ class HeatInsentifMasterController extends Controller
                 $employee->role,
             );
 
-            // if ($heat <= 0) continue;
+            if ($heat <= 0) continue;
 
             $results[] = [
                 'npk' => $employee->NPK,
                 'name' => $employee->NAMA_KARYAWAN,
                 'heat_insentif' => $heat,
                 'dept' => $employee->DEPARTEMENT,
+                'role' => $employee->role,
                 'tkk' => $employee->tkk,
                 'status' => $status
             ];
@@ -523,29 +526,25 @@ class HeatInsentifMasterController extends Controller
             $employeeDates = DB::table('heat_efficiencies')
                 ->where('period_id', $period->id)
                 ->where('npk', $employee->NPK)
+                ->where('role', $role) // <-- tambahkan ini: hanya tanggal saat dia berperan sebagai $role (non-operator)
                 ->pluck('date')
                 ->unique()
                 ->toArray();
-            // dd($employee);
 
             /*
-            |----------------------------------
-            | TOTAL DEPT INSENTIF
-            | ONLY VALID OPERATOR
-            |----------------------------------
-            */
+    |----------------------------------
+    | TOTAL DEPT INSENTIF
+    | ONLY VALID OPERATOR
+    |----------------------------------
+    */
             $totalDeptInsentif = 0;
-
 
             $operators = DB::table('heat_efficiencies')
                 ->where('period_id', $period->id)
                 ->where('role', '=', 'operator')
                 ->whereBetween('date', [$period->start_date, $period->end_date])
-                ->whereIn('date', $employeeDates)
+                ->whereIn('date', $employeeDates) // sekarang hanya tanggal saat NPK ini jadi $role, bukan semua tanggal NPK
                 ->get();
-
-            // dd($operators);
-
 
             foreach ($operators as $operator) {
                 if ($tkkDate && $operator->date >= $tkkDate) {
@@ -562,18 +561,16 @@ class HeatInsentifMasterController extends Controller
                 );
 
                 $totalDeptInsentif += $rate * $operator->piece;
-
-                // dd($totalDeptInsentif);
             }
 
             /*
-                |----------------------------------
-                | DENOMINATOR (ALL OPERATOR)
-                |----------------------------------
-                */
+    |----------------------------------
+    | DENOMINATOR (ALL OPERATOR)
+    |----------------------------------
+    */
             $jumlahOperator = DB::table('heat_efficiencies as he')
                 ->where('he.period_id', $period->id)
-                ->whereIn('he.date', $employeeDates)
+                ->whereIn('he.date', $employeeDates) // ikut pakai $employeeDates yang sudah difilter role
                 ->where('he.role', '=', 'operator')
                 ->pluck('he.npk')
                 ->unique()
@@ -586,6 +583,7 @@ class HeatInsentifMasterController extends Controller
                 $jumlahOperator
             );
         }
+        // dd($jumlahOperator, $totalDeptInsentif, $amount, $role);
 
 
         return $amount;

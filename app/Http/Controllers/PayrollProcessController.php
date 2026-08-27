@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Events\NotificationEvent;
 use App\Jobs\GeneratePayrollCheck;
 use App\Jobs\GeneratePayrollExport;
+use App\Jobs\GeneratePayrollExportAudit;
 use App\Jobs\GeneratePayrollProcess;
+use App\Jobs\GeneratePayrollProcessV2;
 use App\Jobs\GeneratePayrollRekap;
 use App\Models\InsentifApproval;
 use App\Models\PayrollApprove;
@@ -90,6 +92,7 @@ class PayrollProcessController extends Controller
                 'payroll_exports.file_pdf',
                 'payroll_exports.file_bank_active',
                 'payroll_exports.file_bank_resign',
+                'payroll_exports.file_bank_mangkir',
                 'payroll_exports.file_peng',
                 'payroll_approve.status as approve_status'
             );
@@ -143,6 +146,31 @@ class PayrollProcessController extends Controller
         ));
     }
 
+    public function generatev2()
+    {
+        $user    = Auth::user();
+        $role    = PayrollRoleFilterService::getRole($user);
+        // $isAdmin = $user->hasRole('Admin');
+
+        // $noRoleAssigned = !$isAdmin && !PayrollRoleFilterService::isRegistered($role);
+        $noRoleAssigned = !PayrollRoleFilterService::isRegistered($role);
+
+        // Kalau user belum terdaftar di role_payrolls (dan bukan Admin),
+        // halaman generate payroll tidak menampilkan periode apapun --
+        // form pilih periode / check / process jadi tidak bisa dipakai.
+        $periods = $noRoleAssigned
+            ? collect()
+            : PayrollPeriod::orderBy('start_date')->where('is_closed', 0)->get();
+
+        $payrollRoleLabel = $role ? (RolePayroll::ROLES[$role] ?? $role) : null;
+
+        return view('payroll.processv2', compact(
+            'periods',
+            'noRoleAssigned',
+            'payrollRoleLabel'
+        ));
+    }
+
     public function checkPayroll($period_id)
     {
         $period = PayrollPeriod::findOrFail($period_id);
@@ -151,6 +179,23 @@ class PayrollProcessController extends Controller
         // karena job dijalankan sinkron di request yang sama sehingga
         // Auth::user() valid di sana. Tidak perlu filter ulang di sini.
         $service = new GeneratePayrollProcess($period->id);
+        $raw     = $service->simulation();
+
+        $payrollResults = collect($raw['data'] ?? $raw);
+
+        return response()->json([
+            'data' => $payrollResults->values()
+        ]);
+    }
+
+    public function checkPayrollV2($period_id)
+    {
+        $period = PayrollPeriod::findOrFail($period_id);
+
+        // Filter payroll_role sudah dilakukan DI DALAM job (mode simulation),
+        // karena job dijalankan sinkron di request yang sama sehingga
+        // Auth::user() valid di sana. Tidak perlu filter ulang di sini.
+        $service = new GeneratePayrollProcessV2($period->id);
         $raw     = $service->simulation();
 
         $payrollResults = collect($raw['data'] ?? $raw);
@@ -516,6 +561,98 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
         ]);
     }
 
+    public function dataFreshness($periodId)
+    {
+        /*
+        ============================================
+        CEK TANGGAL DATA TERAKHIR (ATT_LOG, OVERTIMES, INSENTIF)
+        DIBANDINGKAN DENGAN HARI INI
+        ============================================
+        */
+
+        $period = DB::table('payroll_periods')
+            ->where('id', $periodId)
+            ->first();
+
+        $today = Carbon::today();
+
+        /*
+        ============================================
+        ATT_LOG (FINGER KARYAWAN)
+        ============================================
+        */
+
+        $lastAttLog = DB::table('att_log')->max('scan_date');
+
+        /*
+        ============================================
+        OVERTIMES
+        ============================================
+        */
+
+        $lastOvertime = DB::table('overtimes')
+            ->whereRaw('TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NOT NULL')
+            ->max('updated_at');
+
+        /*
+        ============================================
+        INSENTIF (SUMBER DATA EFFICIENCY PER JENIS)
+        ============================================
+        */
+
+        $insentifTables = [
+            'line'    => ['table' => 'line_efficiencies',    'label' => 'Line (Sewing) Efficiency'],
+            'pad'     => ['table' => 'pad_efficiencies',      'label' => 'Pad Print Efficiency'],
+            'cutting' => ['table' => 'cutting_efficiencies',  'label' => 'Cutting Efficiency'],
+            'heat'    => ['table' => 'heat_efficiencies',     'label' => 'Heat Press Efficiency'],
+        ];
+
+        $insentifDetail = [];
+        $insentifDates  = [];
+
+        foreach ($insentifTables as $key => $info) {
+
+            $lastDate = DB::table($info['table'])->max('date');
+
+            $insentifDetail[$key] = [
+                'label'     => $info['label'],
+                'last_date' => $lastDate,
+                'days_diff' => $lastDate ? (int) Carbon::parse($lastDate)->diffInDays($today, false) : null,
+            ];
+
+            if ($lastDate) {
+                $insentifDates[] = $lastDate;
+            }
+        }
+
+        $lastInsentif = count($insentifDates) > 0
+            ? collect($insentifDates)->map(fn($d) => Carbon::parse($d))->max()
+            : null;
+
+        return response()->json([
+            'today' => $today->toDateString(),
+            'period' => $period ? [
+                'start_date' => $period->start_date,
+                'end_date'   => $period->end_date,
+            ] : null,
+            'att_log' => [
+                'label'     => 'ATT_LOG (Finger Karyawan)',
+                'last_date' => $lastAttLog,
+                'days_diff' => $lastAttLog ? (int) Carbon::parse($lastAttLog)->diffInDays($today, false) : null,
+            ],
+            'overtimes' => [
+                'label'     => 'Overtimes',
+                'last_date' => $lastOvertime,
+                'days_diff' => $lastOvertime ? (int) Carbon::parse($lastOvertime)->diffInDays($today, false) : null,
+            ],
+            'insentif' => [
+                'last_date' => $lastInsentif ? $lastInsentif->toDateString() : null,
+                'days_diff' => $lastInsentif ? (int) $lastInsentif->diffInDays($today, false) : null,
+                'detail'    => $insentifDetail,
+            ],
+        ]);
+    }
+
     public function process(Request $request)
     {
         $payrollResults = [];
@@ -541,6 +678,36 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
         event(new NotificationEvent(
             'Process Payroll!',
             'Users : ' . $user->name . ' has been process Payroll ' . $period->name . '!',
+            'success'
+        ));
+        return redirect('payroll-process/index');
+    }
+
+    public function processV2(Request $request)
+    {
+        $payrollResults = [];
+        $user = Auth::user();
+        $period = PayrollPeriod::findOrFail($request->period_id);
+
+        // PROTEKSI: cek apakah payroll sudah pernah digenerate
+        $exists = PayrollRun::where('period_id', $period->id)->exists();
+
+        if ($exists) {
+            Alert::error('Gagal', 'Payroll untuk periode ini sudah tergenerate sebelumnya.');
+            return redirect()->back();
+        }
+
+        $run = PayrollRun::create([
+            'period_id' => $period->id,
+            'processed_at' => now(),
+        ]);
+
+        GeneratePayrollProcessV2::dispatch($run->id);
+
+        // return response()->json($payrollResults);
+        event(new NotificationEvent(
+            'Process Payroll V2!',
+            'Users : ' . $user->name . ' has been process Payroll V2 ' . $period->name . '!',
             'success'
         ));
         return redirect('payroll-process/index');
@@ -733,6 +900,45 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             ->orderBy('overtimes.OVERTIME_DATE')
             ->get()
             ->groupBy('NPK');
+
+        /*
+        |--------------------------------------------------------------------------
+        | ABAIKAN overtimes.JUMLAH_JAM_LEMBUR (NUMERIK) JIKA ADA IJIN YANG BELUM
+        | KEMBALI (ijin_meninggalkan_pekerjaans.jam_kembali = NULL) DI NPK &
+        | TANGGAL YANG SAMA
+        |--------------------------------------------------------------------------
+        | overtime_hours & special_overtime_hours di atas hanya terisi (bukan 0)
+        | kalau JUMLAH_JAM_LEMBUR numerik (TRY_CAST(...) IS NOT NULL). Kalau pada
+        | NPK & tanggal yang sama ternyata karyawan tsb punya baris di
+        | ijin_meninggalkan_pekerjaans dengan jam_kembali masih NULL (belum
+        | kembali dari ijin), maka JUMLAH_JAM_LEMBUR pada tanggal itu dianggap
+        | tidak valid untuk dihitung -> overtime_hours & special_overtime_hours
+        | dinolkan di sini (post-process di PHP karena ijin_meninggalkan_pekerjaans
+        | ada di connection DB yang berbeda dari `overtimes`/`cii`).
+        |--------------------------------------------------------------------------
+        */
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->whereBetween('tanggal', [$periodStart, $periodEnd])
+            ->whereNull('jam_kembali')
+            ->select('npk', DB::raw('CAST(tanggal AS DATE) as tanggal'))
+            ->get()
+            ->map(function ($row) {
+                return $row->npk . '|' . Carbon::parse($row->tanggal)->format('Y-m-d');
+            })
+            ->flip();
+
+        $overtimeDetails = $overtimeDetails->map(function ($rows) use ($openIjinDates) {
+            return $rows->map(function ($ot) use ($openIjinDates) {
+                $key = $ot->NPK . '|' . Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
+
+                if (isset($openIjinDates[$key])) {
+                    $ot->overtime_hours = 0;
+                    $ot->special_overtime_hours = 0;
+                }
+
+                return $ot;
+            });
+        });
 
         $lateDetails =
             DB::connection('cii')
@@ -960,6 +1166,35 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
         /*
     |--------------------------------------------------------------------------
+    | NIGHT SHIFT DETAILS (untuk modal detail Night Shift Compensation)
+    |--------------------------------------------------------------------------
+    */
+        $nightShiftDetails = DB::connection('cii')
+            ->table('employee_shifts as es')
+            ->join('shifts as s', 'es.shift_id', '=', 's.id')
+            ->leftJoinSub($employeeUnion, 'bio', function ($join) {
+                $join->on('es.npk', '=', 'bio.NPK');
+            })
+            ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
+            ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
+            ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->select(
+                'es.npk as NPK',
+                'bio.NAMA_KARYAWAN',
+                'd.DEPARTEMENT',
+                DB::raw('CAST(es.shift_date AS DATE) as shift_date'),
+                's.name as shift_name',
+                DB::raw('CAST(s.work_start AS TIME) as work_start'),
+                DB::raw('CAST(s.work_end AS TIME) as work_end')
+            )
+            ->orderBy('es.npk')
+            ->orderBy('es.shift_date')
+            ->get()
+            ->groupBy('NPK');
+
+        /*
+    |--------------------------------------------------------------------------
     | BASE QUERY
     |--------------------------------------------------------------------------
     */
@@ -1020,6 +1255,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             $overtimeDetails,
             $lateDetails,
             $ijinDetails,
+            $nightShiftDetails,
             $componentTypeMap,
             $periodStart,
             $periodEnd
@@ -1119,6 +1355,11 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                 $ijinDetails->get($item->employee_npk, collect())
                 ->values();
 
+            // push detail night shift
+            $item->night_shift_details =
+                $nightShiftDetails->get($item->employee_npk, collect())
+                ->values();
+
             return $item;
         });
 
@@ -1191,12 +1432,21 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
         foreach ($components as $code => $value) {
 
-            $type = $componentTypes[$code] ?? 'earning';
+            // Komponen bisa tersimpan dalam format baru { amount, type }
+            // atau format lama (scalar langsung). Normalisasi ke scalar
+            // supaya konsisten dipakai number_format() di blade slip.
+            if (is_array($value) && array_key_exists('amount', $value)) {
+                $amount = $value['amount'];
+                $type   = $value['type'] ?? ($componentTypes[$code] ?? 'earning');
+            } else {
+                $amount = $value;
+                $type   = $componentTypes[$code] ?? 'earning';
+            }
 
             if ($type == 'earning') {
-                $earnings[$code] = $value;
+                $earnings[$code] = $amount;
             } else {
-                $deductions[$code] = $value;
+                $deductions[$code] = $amount;
             }
         }
 
@@ -1228,6 +1478,33 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
         // dd($exportPeriod);
 
         GeneratePayrollExport::dispatch($export->id, $type);
+
+        Alert::success('Sukses', 'Export payroll selesai diproses!');
+
+        event(new NotificationEvent(
+            'Export Payroll!',
+            'Users : ' . $user->name . ' has been export Payroll ' . $exportPeriod . '!',
+            'success'
+        ));
+        return redirect('payroll-process/index');
+        // return response()->json([
+        //     'message' => 'Export started',
+        //     'export_id' => $export->id
+        // ]);
+    }
+
+    public function exportAudit($run_id)
+    {
+        $user = Auth::user();
+        // dd($exportPeriod);
+        $export = PayrollExport::where('run_id', $run_id)->first();
+
+        $exportPeriod = PayrollExport::leftJoin('payroll_runs', 'payroll_runs.id', '=', 'payroll_exports.run_id')->leftJoin('payroll_periods', 'payroll_runs.period_id', '=', 'payroll_periods.id')->where('payroll_exports.run_id', '=', $run_id)->pluck('payroll_periods.name');
+        $type = 'process';
+
+        // dd($exportPeriod);
+
+        GeneratePayrollExportAudit::dispatch($export->id, $type);
 
         Alert::success('Sukses', 'Export payroll selesai diproses!');
 
@@ -1465,6 +1742,8 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                     ($components['pad_insentif'] ?? 0) +
                     ($components['cutting_insentif'] ?? 0) +
                     ($components['heat_insentif'] ?? 0) +
+                    ($components['sixs_insentif'] ?? 0) +
+                    ($components['night_shift_compensation'] ?? 0) +
                     ($components['adjusment'] ?? 0);
 
                 $deduction =

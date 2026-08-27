@@ -96,7 +96,7 @@ class LoginController extends Controller
             $request->session()->regenerate();
 
             Alert::success('Login Successfully!', 'Welcome To Chutex HRIS Sistem');
-            return redirect()->intended('/home');
+            return redirect()->intended('/welcome');
         }
 
         return back()->withErrors([

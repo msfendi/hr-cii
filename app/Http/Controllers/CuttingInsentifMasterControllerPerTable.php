@@ -1,0 +1,710 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Events\NotificationEvent;
+use Illuminate\Http\Request;
+use App\Models\InsentifMaster;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\InsentifMasterTemplateExport;
+use App\Exports\InsentifTemplateExport;
+use App\Exports\CuttingInsentifTemplateExport;
+use App\Imports\InsentifImport;
+use App\Imports\InsentifMasterImport;
+use App\Imports\CuttingInsentifImport;
+use App\Imports\PadInsentifImport;
+use App\Models\CuttingEfficiency;
+use App\Models\InsentifApproval;
+use App\Models\InsentifRoleFormula;
+use App\Models\PayrollComponent;
+use App\Models\PayrollPeriod;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use RealRashid\SweetAlert\Facades\Alert;
+
+class CuttingInsentifMasterController extends Controller
+{
+    public function index()
+    {
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+
+        $data = DB::table('employee_cutting_assignments as eca')
+
+            ->leftJoin('cutting_efficiencies as c', function ($join) {
+                $join->on('eca.period_id', '=', 'c.period_id')
+                    ->on('eca.table_number', '=', 'c.table_number')
+                    ->whereNotNull('eca.table_number')
+                    ->whereColumn('eca.start_date', 'c.date');
+            })
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('eca.NPK', '=', 'bio.NPK');
+            })
+
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.ID_DEPT')
+
+            ->join('payroll_periods as pp', 'c.period_id', '=', 'pp.id')
+            ->select(
+                'eca.id',
+                'pp.name as period',
+                'eca.npk',
+                'bio.NAMA_KARYAWAN as nama',
+                'd.DEPARTEMENT as dept',
+                'c.efficiency',
+                'c.table_number',
+                'c.date'
+            )
+            ->where('pp.is_closed', 0)
+            ->orderBy('c.date')
+            ->get();
+
+        $periods = PayrollPeriod::select('id', 'name')
+            ->where('is_closed', 0)
+            ->orderBy('id', 'desc')
+            ->get();
+
+        return view('cutting_insentif_master.index', compact('data', 'periods'));
+    }
+    public function getData($period)
+    {
+        $periods = PayrollPeriod::findOrFail($period);
+        $periodEnd = $periods->end_date;
+        $biodataUnion = DB::connection('cii')
+            ->table('BIODATA')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            ->unionAll(
+                DB::connection('cii')
+                    ->table('BIODATA_KELUAR')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'))
+            );
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
+
+        $data = DB::table('employee_cutting_assignments as eca')
+
+            ->leftJoin('cutting_efficiencies as c', function ($join) {
+                $join->on('eca.period_id', '=', 'c.period_id')
+                    ->on('eca.table_number', '=', 'c.table_number')
+                    ->whereNotNull('eca.table_number')
+                    ->whereColumn('eca.start_date', 'c.date');
+            })
+
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('eca.NPK', '=', 'bio.NPK');
+            })
+
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('bio.NPK', '=', 'em.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE bio.ID_DEPT
+            END
+        ")
+                );
+            })
+
+
+            ->join('payroll_periods as pp', 'c.period_id', '=', 'pp.id')
+            ->select(
+                'eca.id',
+                'pp.name as period',
+                'eca.npk',
+                'bio.NAMA_KARYAWAN as nama',
+                'd.DEPARTEMENT as dept',
+                'eca.role',
+                'c.efficiency',
+                'c.date'
+            )
+            ->where('c.period_id', $period)
+            ->orderBy('c.date')
+            ->get();
+
+        return response()->json($data);
+    }
+
+    public function create()
+    {
+        return view('cutting_insentif_master.create');
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'npk' => 'required',
+            'type' => 'required',
+            'efficiency' => 'nullable|numeric',
+            'piece' => 'nullable|numeric',
+        ]);
+
+        InsentifMaster::create($request->all());
+
+        return redirect()->route('cutting-insentif-master.index')
+            ->with('success', 'Data berhasil disimpan');
+    }
+
+    public function edit($id)
+    {
+        $data = InsentifMaster::findOrFail($id);
+        return view('cutting-insentif-master.edit', compact('data'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'npk' => 'required',
+            'type' => 'required',
+            'efficiency' => 'nullable|numeric',
+            'piece' => 'nullable|numeric',
+        ]);
+
+        $data = InsentifMaster::findOrFail($id);
+        $data->update($request->all());
+
+        return redirect()->route('cutting-insentif-master.index')
+            ->with('success', 'Data berhasil diupdate');
+    }
+
+    public function destroy($id)
+    {
+        $user = Auth::user();
+        $data = CuttingEfficiency::findOrFail($id);
+        $data->delete();
+
+        event(new NotificationEvent(
+            'Cutting Insentif!',
+            'User : ' . $user->name . ' has deleted Cutting Insentif!',
+            'danger'
+        ));
+
+        Alert::success('Deleted Successfully!', 'Cutting Insentif succesfully deleted!');
+
+
+        return redirect()->route('cutting-insentif-master.index')
+            ->with('success', 'Data berhasil dihapus');
+    }
+
+    public function template()
+    {
+        return Excel::download(new CuttingInsentifTemplateExport, 'template_cutting_insentif_master.xlsx');
+    }
+
+    public function import(Request $request)
+    {
+        $user = Auth::user();
+        $period = PayrollPeriod::where('id', '=', $request->period_id)->first();
+        $request->validate([
+            'period_id'   => 'required|exists:payroll_periods,id',
+            'is_insentif' => 'required|in:0,1',
+            'file'        => 'required_if:is_insentif,1|mimes:xlsx,xls'
+        ]);
+
+        $component = 'cutting_insentif';
+
+        /*
+    =====================================
+    JIKA INSENTIF → IMPORT EXCEL
+    =====================================
+    */
+        // CuttingEfficiency::where('period_id', $period->id)->delete();
+        if ($request->is_insentif == 1) {
+
+            Excel::import(
+                new CuttingInsentifImport($request->period_id),
+                $request->file('file')
+            );
+        }
+
+        /*
+    =====================================
+    GET APPROVAL SETTING
+    =====================================
+    */
+
+        $setting = DB::table('payroll_settings')
+            ->where('component', $component)
+            ->first();
+
+        if ($setting) {
+
+            $approvalArray = json_decode($setting->approval, true);
+
+            $approval = [
+                json_encode($approvalArray)
+            ];
+
+            $waitingStatus = array_fill(
+                0,
+                count($approvalArray),
+                'waiting'
+            );
+
+            $progress = [
+                [
+                    'npk' => json_encode($approvalArray),
+                    'status' => json_encode($waitingStatus),
+                ]
+            ];
+
+            /*
+        =====================================
+        STATUS AUTO FINISH JIKA NO INSENTIF
+        =====================================
+        */
+
+            // $status = $request->is_insentif == 1
+            //     ? 'pending'
+            //     : 'finish';
+
+            InsentifApproval::updateOrCreate(
+                [
+                    'period_id' => $request->period_id,
+                    'payroll_component' => $component
+                ],
+                [
+                    'approval'     => $approval,
+                    'progress'     => $progress,
+                    'approved_at'  => null,
+                    'status'       => 'pending'
+                ]
+            );
+        }
+
+        event(new NotificationEvent(
+            'Cutting Insentif!',
+            'User : ' . $user->name . ' has imported Cutting Insentif ' . $period->name . '!',
+            'success'
+        ));
+
+        return back()->with('success', 'Process berhasil dijalankan');
+    }
+
+    public function check($period_id)
+    {
+        $period = PayrollPeriod::findOrFail($period_id);
+
+        $periodStart = $period->start_date;
+        $periodEnd   = $period->end_date;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | AMBIL NPK YANG BENAR-BENAR ADA ASSIGNMENT
+        |--------------------------------------------------------------------------
+        */
+
+        $assignmentNpk = DB::table(DB::raw("
+        (
+            SELECT * FROM employee_cutting_assignments
+        ) eca
+    "))->where('eca.period_id', $period->id);
+
+        // dd($assignmentNpk->toArray());
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | EMPLOYEE SOURCE (TETAP SAMA LOGIC)
+    |--------------------------------------------------------------------------
+    */
+
+        $nextMutation = DB::table('employee_mutations as em1')
+            ->select(
+                'em1.npk',
+                'em1.from_dept',
+                'em1.to_dept',
+                'em1.date'
+            )
+            ->where('em1.date', '>', $periodEnd)
+            ->whereRaw('em1.id = (
+        SELECT MIN(em2.id)
+        FROM employee_mutations em2
+        WHERE em2.npk = em1.npk
+        AND em2.date > ?
+    )', [$periodEnd]);
+
+        $employeeBase = DB::connection('cii')
+            ->table('PKWT as p')
+
+            ->join(DB::raw("
+        (
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA
+            UNION ALL
+            SELECT NPK, NAMA_KARYAWAN, ID_DEPT, SECTION FROM BIODATA_KELUAR
+        ) emp
+    "), 'p.NPK', '=', 'emp.NPK')
+            ->leftJoinSub($assignmentNpk, 'anpk', function ($join) {
+                $join->on('p.NPK', '=', 'anpk.npk');
+            })
+            ->leftJoinSub($nextMutation, 'em', function ($join) {
+                $join->on('emp.NPK', '=', 'em.npk');
+            })
+
+            ->leftJoin('DEPT as d', function ($join) {
+                $join->on(
+                    'd.ID_DEPT',
+                    '=',
+                    DB::raw("
+            CASE
+                WHEN em.from_dept IS NOT NULL
+                THEN em.from_dept
+                ELSE emp.ID_DEPT
+            END
+        ")
+                );
+            })
+            ->joinSub(
+                DB::table('insentif_role_formulas')
+                    ->select('role')
+                    ->distinct(),
+                'irf',
+                function ($join) {
+                    $join->on('anpk.role', '=', 'irf.role');
+                }
+            )
+            ->leftJoin('cutting_efficiencies as ce', function ($join) {
+                $join->on('ce.period_id', '=', 'anpk.period_id')
+                    ->on('ce.table_number', '=', 'anpk.table_number')
+                    ->on('ce.date', '=', 'anpk.start_date');
+            })
+            // ->where('p.NPK', '=', 'C-00795')
+            ->where(function ($q) use ($periodStart, $periodEnd) {
+                $q->whereNull('p.TKK')
+                    ->orWhereBetween('p.TKK', [$periodStart, $periodEnd]);
+            })
+
+            ->select(
+                'p.NPK',
+                'emp.NAMA_KARYAWAN',
+                'anpk.role',
+                'p.TMK',
+                'p.TKK as tkk',
+                'emp.ID_DEPT',
+                'd.DEPARTEMENT as DEPARTEMENT',
+                // DB::raw('COALESCE(ev.violation_percentage, 0) as violation_percentage'),
+                DB::raw("
+                CASE
+                    WHEN em.from_dept IS NOT NULL
+                    THEN em.from_dept
+                    ELSE emp.ID_DEPT
+                END as payroll_dept
+                "),
+            );
+
+        $employees = DB::connection('cii')
+            ->query()
+            ->fromSub($employeeBase, 'emp')
+            ->distinct()
+            ->get();
+
+        // dd($employees);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | FORMULA (TETAP)
+    |--------------------------------------------------------------------------
+    */
+
+        $cuttingInsentifFormula = json_decode(
+            PayrollComponent::where('code', 'cutting_insentif')
+                ->value('formula'),
+            true
+        );
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CALCULATION (LOGIC TIDAK DIUBAH)
+    |--------------------------------------------------------------------------
+    */
+
+        $results = [];
+
+        foreach ($employees as $employee) {
+            $status = $employee->tkk ? 'Resign' : 'Active';
+
+            $cutting = $this->calculateCutting(
+                $employee,
+                $period,
+                $cuttingInsentifFormula,
+                $employee->role,
+            );
+
+            if ($cutting <= 0) continue;
+
+            $results[] = [
+                'npk' => $employee->NPK,
+                'name' => $employee->NAMA_KARYAWAN,
+                'cutting_insentif' => $cutting,
+                'dept' => $employee->DEPARTEMENT,
+                'tkk' => $employee->tkk,
+                'status' => $status
+            ];
+        }
+
+        return response()->json([
+            'data' => $results
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ENGINE (COPY PAYROLL)
+    |--------------------------------------------------------------------------
+    */
+
+    private function getInsentifByEfficiency($efficiency, $rules)
+    {
+        krsort($rules);
+
+        foreach ($rules as $threshold => $value) {
+            if ($efficiency >= $threshold) {
+                return $value;
+            }
+        }
+
+        return 0;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CUTTING INSENTIF (COPY PAYROLL)
+    |--------------------------------------------------------------------------
+    */
+
+    private function calculateCutting($employee, $period, $formula, $role)
+    {
+        $amount = 0;
+
+        /*
+        |--------------------------------------------------------------------------
+        | TKK (RESIGN DATE)
+        |--------------------------------------------------------------------------
+        */
+        $tkkDate = !empty($employee->tkk)
+            ? Carbon::parse($employee->tkk)->format('Y-m-d')
+            : null;
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET MUTATIONS EMPLOYEE
+        |--------------------------------------------------------------------------
+        */
+        $mutations = DB::table('employee_mutations')
+            ->leftJoin('DEPT as d', 'employee_mutations.to_dept', '=', 'd.ID_DEPT')
+            ->where('npk', $employee->NPK)
+            ->orderBy('date')
+            ->get();
+
+        /*
+    |--------------------------------------------------------------------------
+    | LOAD OVERTIME (ONLY ONCE)
+    |--------------------------------------------------------------------------
+    */
+        $overtimes = DB::table('overtimes')
+            ->where('NPK', $employee->NPK)
+            ->whereBetween('OVERTIME_DATE', [
+                $period->start_date,
+                $period->end_date
+            ])
+            ->get()
+            ->keyBy(fn($o) => $o->OVERTIME_DATE);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | VALIDATE OVERTIME
+    |--------------------------------------------------------------------------
+    */
+        $isValidOvertime = function ($date) use ($overtimes) {
+
+            // tidak ada record → tetap dihitung
+            if (!isset($overtimes[$date])) {
+                return true;
+            }
+
+            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
+
+            // NULL / kosong → tetap dihitung
+            if ($lembur === null || $lembur === '') {
+                return true;
+            }
+
+            // angka → tetap dihitung
+            if (is_numeric($lembur)) {
+                return true;
+            }
+
+            // MA / CT / BR / S1 dll → skip
+            return false;
+        };
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | LOAD CUTTING EFFICIENCY
+    |--------------------------------------------------------------------------
+    */
+        $employeeDates = DB::table('employee_cutting_assignments')
+            ->where('period_id', $period->id)
+            ->where('npk', $employee->NPK)
+            ->pluck('start_date')
+            ->unique()
+            ->toArray();
+
+        $cuttingEfficiencies = DB::table('cutting_efficiencies')
+            ->where('period_id', $period->id)
+            ->whereBetween('date', [
+                $period->start_date,
+                $period->end_date
+            ])
+            ->whereIn('date', $employeeDates)
+            ->get();
+
+        // dd($cuttingEfficiencies);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CALCULATE INSENTIF
+    |--------------------------------------------------------------------------
+    */
+        foreach ($cuttingEfficiencies as $row) {
+            /*
+            |--------------------------------------------------------------------------
+            | CHECK RESIGN (NEW)
+            |--------------------------------------------------------------------------
+            */
+            if ($tkkDate && $row->date >= $tkkDate) {
+                continue;
+            }
+
+            /*
+        |----------------------------------
+        | CHECK OVERTIME
+        |----------------------------------
+        */
+            if (!$isValidOvertime($row->date)) {
+                continue;
+            }
+
+            /*
+        |----------------------------------
+        | GET INSENTIF BY EFFICIENCY
+        |----------------------------------
+        */
+            $insentif = $this->getInsentifByEfficiency(
+                $row->efficiency,
+                $formula
+            );
+
+            /*
+        |----------------------------------
+        | ADD AMOUNT BASED ROLE
+        |----------------------------------
+        */
+            $amount += $this->calculateRoleCuttingInsentif(
+                $role,
+                'cutting',
+                $insentif
+            );
+        }
+
+        return $amount;
+    }
+
+    private function calculateRoleCuttingInsentif(
+        $role,
+        $dept,
+        $insentif
+    ) {
+
+        /*
+    |--------------------------------------------------------------------------
+    | GET FORMULA FROM DB (CACHE)
+    |--------------------------------------------------------------------------
+    */
+
+        $formula = Cache::remember(
+            "insentif_formula_{$dept}_{$role}",
+            300,
+            function () use ($role, $dept) {
+
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', $dept)
+                    ->value('formula');
+            }
+        );
+
+        /*
+    |--------------------------------------------------------------------------
+    | DEFAULT FALLBACK
+    |--------------------------------------------------------------------------
+    */
+
+        if (!$formula) {
+            return $insentif;
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | VARIABLE REPLACEMENT
+    |--------------------------------------------------------------------------
+    */
+
+        $variables = [
+            'insentif' => $insentif,
+        ];
+
+        foreach ($variables as $key => $value) {
+            $formula = str_replace($key, $value, $formula);
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | SAFE EVALUATION
+    |--------------------------------------------------------------------------
+    */
+
+        try {
+
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+
+            return $insentif;
+        }
+    }
+}

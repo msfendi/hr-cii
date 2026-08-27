@@ -9,7 +9,7 @@ class GuestMaster extends Model
     protected $table = 'guest_masters';
 
     protected $fillable = [
-        'foreign_guest_id',
+        'name',
         'gender',
         'place',
         'date_of_birth',
@@ -30,12 +30,4 @@ class GuestMaster extends Model
         'arrival_date' => 'date',
         'visa_expiry' => 'date',
     ];
-
-    // Contoh relasi
-    /*
-    public function foreignGuest()
-    {
-        return $this->belongsTo(ForeignGuest::class);
-    }
-    */
 }

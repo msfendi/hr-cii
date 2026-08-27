@@ -37,6 +37,7 @@
                               <th>End Time</th>
                               <th>Start Date</th>
                               <th>End Date</th>
+                              <th>Status Libur</th>
                               <th>Action</th>
                            </tr>
                         </thead>
@@ -50,6 +51,13 @@
                               <td>{{ $shift->work_end }}</td>
                               <td>{{ $shift->start_date }}</td>
                               <td>{{ $shift->end_date }}</td>
+                              <td>
+                                 @if($shift->is_holiday)
+                                    <span class="badge badge-danger">Libur</span>
+                                 @else
+                                    <span class="badge badge-success">Tidak Libur</span>
+                                 @endif
+                               </td>
                               <td class="text-center">
                                  @canRoute('shift.edit')
                                  <a href="{{ route('shift.edit',$shift->id) }}"

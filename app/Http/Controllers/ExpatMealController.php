@@ -1,0 +1,2371 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\ExpatMealMenu;
+use App\Models\ExpatMealParticipant;
+use Carbon\Carbon;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Worksheet\Table;
+use PhpOffice\PhpSpreadsheet\Worksheet\Table\TableStyle;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
+class ExpatMealController extends Controller
+{
+    /** Daftar kategori makan yang valid. */
+    protected array $kategoriList = ['Sarapan', 'Makan Siang', 'Makan Malam'];
+
+    /**
+     * Daftar kolom kategori pada export "Master File" (Daily Meal Entry &
+     * pivot). Kategori yang belum didukung aplikasi (Dinner, Coffee
+     * Support, Bread, Biscuit) akan selalu bernilai 0 sampai kategori
+     * tsb ditambahkan ke $kategoriList.
+     */
+    protected array $kolomKategoriExcel = ['breakfast', 'lunch', 'dinner', 'coffee_support', 'bread', 'biscuit', 'other'];
+
+    public function index(): View
+    {
+        return view('expat_meal.index', [
+            'defaultStartDate' => now()->startOfMonth()->format('Y-m-d'),
+            'defaultEndDate'   => now()->format('Y-m-d'),
+            'kategoriList'     => $this->kategoriList,
+        ]);
+    }
+
+/* =========================================================================
+ * 1) DASHBOARD: RINGKASAN & DETAIL LAPORAN BIAYA MAKAN
+ * ========================================================================= */
+
+    /**
+     * KPI + rekap total biaya makan expat per tanggal & per kategori.
+     */
+    public function summaryData(Request $request): JsonResponse
+    {
+        [$start, $end, $npk] = $this->parseFilters($request);
+
+        $report = $this->buildDailyCostReport($start, $end, $npk);
+
+        $participantsQuery = ExpatMealParticipant::whereBetween('tanggal', [$start, $end]);
+        if (! empty($npk)) {
+            $participantsQuery->whereIn('npk', $npk);
+        }
+        $participantsFiltered = $participantsQuery->get();
+
+        $totalBiaya = $report->sum('total_harga');
+        $totalExpat = $participantsFiltered->pluck('npk')->unique()->count();
+        $totalHari  = $report->count();
+        $totalPorsi = $participantsFiltered->count();
+
+        $recapPerDate = $report
+            ->map(fn(array $r) => [
+                'tanggal'                  => $r['tanggal'],
+                'jumlah_expat_sarapan'     => $r['jumlah_expat_sarapan'],
+                'jumlah_expat_makan_siang' => $r['jumlah_expat_makan_siang'],
+                'jumlah_porsi'             => $r['jumlah_porsi'],
+                'total_harga'              => $r['total_harga'],
+            ])
+            ->values();
+
+        $recapPerKategori = [
+            'sarapan'     => $report->sum('harga_sarapan'),
+            'makan_siang' => $report->sum('harga_makan_siang'),
+        ];
+
+        return response()->json([
+            'total_biaya'        => $totalBiaya,
+            'total_expat'        => $totalExpat,
+            'total_hari'         => $totalHari,
+            'total_porsi'        => $totalPorsi,
+            'recap_per_date'     => $recapPerDate,
+            'recap_per_kategori' => $recapPerKategori,
+        ]);
+    }
+
+    /**
+     * Detail laporan biaya PER HARI (bukan per expat), dipakai oleh
+     * DataTable tab "Laporan & Biaya". Tiap baris merangkum satu tanggal:
+     * menu apa saja yang tersedia untuk Sarapan & Makan Siang hari itu,
+     * beserta total biayanya (habis per hari, tidak dipecah per expat).
+     */
+    public function detailData(Request $request): JsonResponse
+    {
+        [$start, $end, $npk] = $this->parseFilters($request);
+
+        $report = $this->buildDailyCostReport($start, $end, $npk);
+
+        return response()->json(['data' => $report]);
+    }
+
+    /**
+     * Bangun laporan total biaya makan PER TANGGAL (bukan per expat).
+     *
+     * @param array $npkFilter Jika tidak kosong, hanya tanggal yang dihadiri
+     *              oleh salah satu expat pada daftar ini yang dimunculkan,
+     *              DAN cara hitung biayanya berubah mode (lihat Formula).
+     *
+     * Formula:
+     * - Ambil semua baris peserta (expat_meal_participants) pada rentang
+     *   tanggal, dikelompokkan per tanggal.
+     * - Untuk tiap tanggal, tentukan kategori yang dihadiri (Sarapan dan/
+     *   atau Makan Siang) berdasarkan peserta yang tercatat hari itu.
+     *
+     * MODE "semua expat" ($npkFilter kosong):
+     * - Total biaya kategori = jumlah harga SEMUA menu (lumpsum) pada
+     *   tanggal + kategori tsb, TIDAK dikalikan maupun dibagi dengan
+     *   jumlah expat — baik untuk menu shared maupun tidak, karena
+     *   laporan ini merangkum biaya per hari, bukan per expat.
+     *
+     * MODE "filter expat" ($npkFilter tidak kosong):
+     * - HANYA menu SHARED yang dihitung, karena hanya menu shared yang
+     *   bisa diatribusikan/dibagi rata ke expat tertentu. Menu lumpsum
+     *   (non-shared) dikeluarkan sepenuhnya dari perhitungan biaya,
+     *   sebab tidak bisa dipisah porsinya untuk expat yang difilter.
+     * - Tiap menu shared dibagi rata dengan SELURUH expat yang hadir
+     *   pada tanggal + kategori tsb (bukan hanya yang difilter), lalu
+     *   hanya porsi milik expat yang difilter yang diakumulasikan.
+     *   Ini konsisten dengan formula pada buildExpatMealDetailReport().
+     * - Jumlah expat pada baris (jumlah_expat_sarapan/makan_siang) dan
+     *   jumlah_porsi juga disaring: hanya menghitung expat yang ada di
+     *   $npkFilter.
+     *
+     * - Total harga per hari = harga sarapan + harga makan siang hari itu.
+     */
+    protected function buildDailyCostReport(string $start, string $end, array $npkFilter = []): Collection
+    {
+        $allParticipants = ExpatMealParticipant::whereBetween('tanggal', [$start, $end])->get();
+
+        if ($allParticipants->isEmpty()) {
+            return collect();
+        }
+
+        $tanggalList = $allParticipants
+            ->pluck('tanggal')
+            ->map(fn($t) => $t->format('Y-m-d'))
+            ->unique()
+            ->values();
+
+        $menuQuery = ExpatMealMenu::whereIn('tanggal', $tanggalList);
+        if (! empty($npkFilter)) {
+            // Filter by expat: hanya menu shared yang relevan (lihat
+            // docblock method ini).
+            $menuQuery->where('shared', true);
+        }
+        $menusPerTglKategori = $menuQuery
+            ->orderBy('makanan')
+            ->get()
+            ->groupBy(fn($m) => Carbon::parse($m->tanggal)->format('Y-m-d') . '|' . $m->kategori);
+
+        // Tanggal yang dihadiri oleh salah satu expat pada filter, dipakai
+        // untuk menyaring baris yang dimunculkan (tidak mengubah isi baris).
+        $tanggalDifilter = empty($npkFilter)
+            ? null
+            : $allParticipants
+            ->whereIn('npk', $npkFilter)
+            ->pluck('tanggal')
+            ->map(fn($t) => $t->format('Y-m-d'))
+            ->unique();
+
+        return $allParticipants
+            ->groupBy(fn($p) => $p->tanggal->format('Y-m-d'))
+            ->when(
+                $tanggalDifilter !== null,
+                fn(Collection $c) => $c->filter(fn($rows, $tanggalKey) => $tanggalDifilter->contains($tanggalKey))
+            )
+            ->map(function (Collection $rows, string $tanggalStr) use ($menusPerTglKategori, $npkFilter) {
+                $kategoriHadir = $rows->pluck('kategori')->unique();
+
+                $menuSarapan = $kategoriHadir->contains('Sarapan')
+                    ? ($menusPerTglKategori["{$tanggalStr}|Sarapan"] ?? collect())
+                    : collect();
+                $menuMakanSiang = $kategoriHadir->contains('Makan Siang')
+                    ? ($menusPerTglKategori["{$tanggalStr}|Makan Siang"] ?? collect())
+                    : collect();
+
+                $rowsSarapan    = $rows->where('kategori', 'Sarapan');
+                $rowsMakanSiang = $rows->where('kategori', 'Makan Siang');
+
+                if (empty($npkFilter)) {
+                    // Mode "semua expat": lumpsum seluruh menu (shared
+                    // maupun non-shared) hari itu.
+                    $hargaSarapan    = round((float) $menuSarapan->sum('harga'), 2);
+                    $hargaMakanSiang = round((float) $menuMakanSiang->sum('harga'), 2);
+
+                    $jumlahExpatSarapan    = $rowsSarapan->pluck('npk')->unique()->count();
+                    $jumlahExpatMakanSiang = $rowsMakanSiang->pluck('npk')->unique()->count();
+                    $jumlahPorsi           = $rows->count();
+                } else {
+                    // Mode "filter expat": hanya porsi biaya menu shared
+                    // milik expat yang difilter.
+                    $hargaSarapan    = $this->sumSharedPortionForNpk($rowsSarapan, $menuSarapan, $npkFilter);
+                    $hargaMakanSiang = $this->sumSharedPortionForNpk($rowsMakanSiang, $menuMakanSiang, $npkFilter);
+
+                    $jumlahExpatSarapan    = $rowsSarapan->whereIn('npk', $npkFilter)->pluck('npk')->unique()->count();
+                    $jumlahExpatMakanSiang = $rowsMakanSiang->whereIn('npk', $npkFilter)->pluck('npk')->unique()->count();
+                    $jumlahPorsi           = $rows->whereIn('npk', $npkFilter)->count();
+                }
+
+                return [
+                    'tanggal'                  => $tanggalStr,
+                    'jumlah_expat_sarapan'     => $jumlahExpatSarapan,
+                    'jumlah_expat_makan_siang' => $jumlahExpatMakanSiang,
+                    'jumlah_porsi'             => $jumlahPorsi,
+                    'menu_sarapan'             => $menuSarapan->pluck('makanan')->implode(', ') ?: '-',
+                    'menu_makan_siang'         => $menuMakanSiang->pluck('makanan')->implode(', ') ?: '-',
+                    'harga_sarapan'            => $hargaSarapan,
+                    'harga_makan_siang'        => $hargaMakanSiang,
+                    'total_harga'              => round($hargaSarapan + $hargaMakanSiang, 2),
+                ];
+            })
+            ->sortKeys()
+            ->values();
+    }
+
+    /**
+     * Hitung total porsi biaya menu SHARED yang menjadi bagian expat pada
+     * $npkFilter, untuk satu tanggal + kategori tertentu.
+     *
+     * Tiap menu dibagi rata dengan SELURUH expat yang hadir pada kategori
+     * tsb ($rowsKategori, tidak disaring npk), lalu hanya porsi milik
+     * expat pada $npkFilter yang diambil — setara dengan menjumlah
+     * (harga_menu / jumlah_expat_hadir) sebanyak jumlah expat terfilter
+     * yang hadir.
+     */
+    protected function sumSharedPortionForNpk(Collection $rowsKategori, Collection $menusKategori, array $npkFilter): float
+    {
+        $expatHadir  = $rowsKategori->pluck('npk')->unique();
+        $jumlahExpat = $expatHadir->count();
+
+        if ($jumlahExpat === 0) {
+            return 0.0;
+        }
+
+        $jumlahTerfilter = $expatHadir->intersect($npkFilter)->count();
+
+        if ($jumlahTerfilter === 0) {
+            return 0.0;
+        }
+
+        $totalMenuShared = (float) $menusKategori->sum('harga');
+
+        return round($totalMenuShared * ($jumlahTerfilter / $jumlahExpat), 2);
+    }
+
+    /**
+     * Detail makanan pada satu tanggal (satu hari penuh), dipakai oleh
+     * tombol "Detail" pada tabel "Detail Biaya per Hari". Menampilkan tiap
+     * item menu untuk Sarapan & Makan Siang hari itu:
+     * - shared = true  -> dirinci per expat yang hadir pada kategori tsb
+     *                      (harga menu dibagi rata / expat), dan ikut
+     *                      diakumulasi ke `expat_totals`.
+     * - shared = false -> tidak dirinci per expat, cukup ditampilkan harga
+     *                      lumpsum-nya saja untuk hari itu (tidak masuk
+     *                      hitungan `expat_totals`, karena memang tidak
+     *                      bisa diatribusikan ke expat tertentu).
+     *
+     * `expat_totals` = akumulasi total biaya menu SHARED tiap expat pada
+     * tanggal tsb (dari seluruh menu Sarapan + Makan Siang hari itu).
+     *
+     * Total biaya = jumlah harga asli semua menu hari itu (habis per hari,
+     * bukan hasil kali/bagi dengan jumlah expat).
+     */
+    public function mealDetailData(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'tanggal' => 'required|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 422);
+        }
+
+        $tanggal = $request->input('tanggal');
+
+        $kategoriHadir = ExpatMealParticipant::whereDate('tanggal', $tanggal)
+            ->pluck('kategori')
+            ->unique()
+            ->sort()
+            ->values();
+
+        if ($kategoriHadir->isEmpty()) {
+            return response()->json(['data' => [], 'expat_totals' => [], 'total_harga' => 0]);
+        }
+
+        $items       = [];
+        $totalHarga  = 0.0;
+        $expatTotals = []; // npk => ['npk' => ..., 'nama' => ..., 'total' => ...]
+
+        foreach ($kategoriHadir as $kategori) {
+            $expatHadir = ExpatMealParticipant::whereDate('tanggal', $tanggal)
+                ->where('kategori', $kategori)
+                ->get(['npk', 'nama_expat'])
+                ->unique('npk')
+                ->values();
+            $jumlahExpat = $expatHadir->count();
+
+            $menus = ExpatMealMenu::whereDate('tanggal', $tanggal)
+                ->where('kategori', $kategori)
+                ->orderBy('makanan')
+                ->get();
+
+            foreach ($menus as $menu) {
+                $hargaAsli = (float) $menu->harga;
+
+                // Rincian & akumulasi per expat HANYA untuk menu shared.
+                // Menu non-shared adalah lumpsum, tidak bisa diatribusikan
+                // ke expat tertentu.
+                $detailExpat = null;
+                if ($menu->shared) {
+                    $hargaPerExpat = $jumlahExpat > 0 ? $hargaAsli / $jumlahExpat : 0.0;
+                    $detailExpat   = $expatHadir
+                        ->map(function ($p) use ($hargaPerExpat, &$expatTotals) {
+                            $share = round($hargaPerExpat, 2);
+
+                            if (! isset($expatTotals[$p->npk])) {
+                                $expatTotals[$p->npk] = ['npk' => $p->npk, 'nama' => $p->nama_expat, 'total' => 0.0];
+                            }
+                            $expatTotals[$p->npk]['total'] += $share;
+
+                            return [
+                                'npk'   => $p->npk,
+                                'nama'  => $p->nama_expat,
+                                'harga' => $share,
+                            ];
+                        })
+                        ->values();
+                }
+
+                $items[] = [
+                    'kategori'     => $kategori,
+                    'makanan'      => $menu->makanan,
+                    'harga_asli'   => round($hargaAsli, 2),
+                    'shared'       => (bool) $menu->shared,
+                    'jumlah_expat' => $jumlahExpat,
+                    'detail_expat' => $detailExpat,
+                ];
+
+                // Total biaya hari itu = jumlah harga asli tiap menu
+                // (lumpsum per hari), tidak dikalikan/dibagi jumlah expat.
+                $totalHarga += $hargaAsli;
+            }
+        }
+
+        $expatTotals = collect($expatTotals)
+            ->map(fn($e) => ['npk' => $e['npk'], 'nama' => $e['nama'], 'total' => round($e['total'], 2)])
+            ->sortBy('nama')
+            ->values();
+
+        return response()->json([
+            'tanggal'      => Carbon::parse($tanggal)->format('Y-m-d'),
+            'data'         => $items,
+            'expat_totals' => $expatTotals,
+            'total_harga'  => round($totalHarga, 2),
+        ]);
+    }
+
+    /**
+     * Daftar expat unik (npk + nama) untuk mengisi dropdown filter "Expat"
+     * pada tab Laporan & Biaya. Diambil dari seluruh riwayat peserta makan,
+     * tidak dibatasi rentang tanggal filter, supaya expat tetap bisa dipilih
+     * meski sedang tidak muncul pada periode yang sedang dilihat.
+     */
+    public function expatOptions(): JsonResponse
+    {
+        $rows = ExpatMealParticipant::select('npk', 'nama_expat')
+            ->distinct()
+            ->orderBy('nama_expat')
+            ->get()
+            ->map(fn($r) => [
+                'npk'        => $r->npk,
+                'nama_expat' => $r->nama_expat,
+            ]);
+
+        return response()->json(['data' => $rows]);
+    }
+
+    /* =========================================================================
+ * 2) DAFTAR PESERTA MAKAN (expat_meal_participants) - CRUD manual
+ * ========================================================================= */
+
+    public function participantData(Request $request): JsonResponse
+    {
+        [$start, $end, $npk] = $this->parseFilters($request);
+
+        $rows = ExpatMealParticipant::whereBetween('tanggal', [$start, $end])
+            ->when(! empty($npk), fn($q) => $q->whereIn('npk', $npk))
+            ->orderBy('tanggal')
+            ->orderBy('npk')
+            ->get()
+            ->map(fn($r) => [
+                'id'         => $r->id,
+                'npk'        => $r->npk,
+                'nama_expat' => $r->nama_expat,
+                'tanggal'    => $r->tanggal->format('Y-m-d'),
+                'kategori'   => $r->kategori,
+            ]);
+
+        return response()->json(['data' => $rows]);
+    }
+
+    /**
+     * Tambah / update satu baris peserta makan secara manual (mis. lupa
+     * diimport, atau koreksi data). Di-key oleh npk + tanggal + kategori,
+     * sama seperti pada saat import.
+     */
+    public function participantStore(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'id'         => 'nullable|integer|exists:expat_meal_participants,id',
+            'npk'        => 'required|string|max:20',
+            'nama_expat' => 'required|string|max:100',
+            'tanggal'    => 'required|date',
+            'kategori'   => 'required|in:' . implode(',', $this->kategoriList),
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 422);
+        }
+
+        // Jika edit baris tertentu (ada id), update baris itu langsung supaya
+        // tidak bentrok dengan unique constraint npk+tanggal+kategori.
+        if ($request->filled('id')) {
+            $row = ExpatMealParticipant::find($request->input('id'));
+            if (! $row) {
+                return response()->json(['message' => 'Data peserta tidak ditemukan.'], 404);
+            }
+            $row->npk        = $request->input('npk');
+            $row->nama_expat = $request->input('nama_expat');
+            $row->tanggal    = $request->input('tanggal');
+            $row->kategori   = $request->input('kategori');
+            $row->save();
+
+            return response()->json(['message' => 'Data peserta makan berhasil diperbarui.']);
+        }
+
+        ExpatMealParticipant::updateOrCreate(
+            [
+                'npk'      => $request->input('npk'),
+                'tanggal'  => $request->input('tanggal'),
+                'kategori' => $request->input('kategori'),
+            ],
+            ['nama_expat' => $request->input('nama_expat')]
+        );
+
+        return response()->json(['message' => 'Data peserta makan berhasil disimpan.']);
+    }
+
+    public function participantDestroy(Request $request): JsonResponse
+    {
+        $row = ExpatMealParticipant::find($request->input('id'));
+
+        if (! $row) {
+            return response()->json(['message' => 'Data peserta tidak ditemukan.'], 404);
+        }
+
+        $row->delete();
+
+        return response()->json(['message' => 'Data peserta makan berhasil dihapus.']);
+    }
+
+    /* =========================================================================
+ * 3) MENU MAKANAN (expat_meal_menus) - CRUD manual
+ * ========================================================================= */
+
+    public function menuData(): JsonResponse
+    {
+        $rows = ExpatMealMenu::orderBy('tanggal', 'desc')
+            ->orderBy('kategori')
+            ->orderBy('makanan')
+            ->get()
+            ->map(fn($r) => [
+                'id'       => $r->id,
+                'makanan'  => $r->makanan,
+                'kategori' => $r->kategori,
+                'tanggal'  => Carbon::parse($r->tanggal)->format('Y-m-d'),
+                'harga'    => (float) $r->harga,
+                'shared'   => (bool) $r->shared,
+            ]);
+
+        return response()->json(['data' => $rows]);
+    }
+
+    public function menuStore(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'id'       => 'nullable|integer|exists:expat_meal_menus,id',
+            'makanan'  => 'required|string|max:150',
+            'kategori' => 'required|in:' . implode(',', $this->kategoriList),
+            'tanggal'  => 'required|date',
+            'harga'    => 'required|numeric|min:0',
+            'shared'   => 'required|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 422);
+        }
+
+        $row = $request->filled('id')
+            ? ExpatMealMenu::find($request->input('id'))
+            : new ExpatMealMenu();
+
+        if (! $row) {
+            return response()->json(['message' => 'Data makanan tidak ditemukan.'], 404);
+        }
+
+        $row->makanan  = $request->input('makanan');
+        $row->kategori = $request->input('kategori');
+        $row->tanggal  = $request->input('tanggal');
+        $row->harga    = $request->input('harga');
+        $row->shared   = $request->boolean('shared');
+        $row->save();
+
+        return response()->json(['message' => 'Data makanan berhasil disimpan.']);
+    }
+
+    public function menuDestroy(Request $request): JsonResponse
+    {
+        $row = ExpatMealMenu::find($request->input('id'));
+
+        if (! $row) {
+            return response()->json(['message' => 'Data makanan tidak ditemukan.'], 404);
+        }
+
+        $row->delete();
+
+        return response()->json(['message' => 'Data makanan berhasil dihapus.']);
+    }
+
+/* =========================================================================
+ * 4) TEMPLATE EXCEL & IMPORT (2 SHEET: "Daftar Expat" & "Makanan")
+ * ========================================================================= */
+
+    /**
+     * Download template excel dengan 2 sheet sesuai kebutuhan import:
+     * - "Daftar Expat" : npk (dropdown dari BIODATA), nama_expat (auto-fill
+     *   via VLOOKUP dari BIODATA), tanggal (date picker), kategori (dropdown)
+     * - "Makanan"      : tanggal (date picker), makanan, kategori (dropdown),
+     *   harga, shared (dropdown)
+     * Sheet "Lists" (hidden) dipakai sebagai sumber data validation dropdown
+     * kolom kategori & npk, mengikuti pola import multi-sheet yang sudah ada.
+     */
+    public function downloadTemplate()
+    {
+        $spreadsheet = new Spreadsheet();
+
+        // Daftar expat aktif dari BIODATA (IS_EXPAT = 1), dipakai sebagai
+        // sumber dropdown kolom nama_expat & auto-fill kolom npk.
+        $expats = DB::table('BIODATA')
+            ->where('IS_EXPAT', 1)
+            ->orderBy('NAMA_KARYAWAN')
+            ->get(['NPK', 'NAMA_KARYAWAN']);
+        $expatLastRow = max($expats->count(), 1);
+
+        // --- Sheet 1: Daftar Expat ---
+        $sheet1 = $spreadsheet->getActiveSheet();
+        $sheet1->setTitle('Daftar Expat');
+
+        $headers1 = ['npk', 'nama_expat', 'tanggal', 'kategori'];
+        $sheet1->fromArray($headers1, null, 'A1');
+        $sheet1->getStyle('A1:D1')->getFont()->setBold(true);
+        $sheet1->getStyle('A1:D1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+
+        $sheet1->setCellValue('B2', $expats->first()->NAMA_KARYAWAN ?? 'John Doe');
+        $sheet1->setCellValue('C2', ExcelDate::PHPToExcel(now()));
+        $sheet1->setCellValue('D2', 'Sarapan');
+
+        foreach (['A' => 14, 'B' => 26, 'C' => 14, 'D' => 16] as $col => $w) {
+            $sheet1->getColumnDimension($col)->setWidth($w);
+        }
+
+        // Dropdown kategori pada kolom D, baris 2-1000.
+        $this->applyKategoriValidation($sheet1, 'D2:D1000');
+
+        // Dropdown nama_expat (kolom B) bersumber dari sheet Lists, dan
+        // kolom npk (A) diisi otomatis via VLOOKUP berdasarkan nama yang
+        // dipilih. Sheet Lists diisi di bagian bawah (kolom C = nama,
+        // kolom D = npk, agar nama jadi kolom kunci pencarian VLOOKUP).
+        $this->applyListValidation($sheet1, 'B2:B1000', "Lists!\$C\$1:\$C\${$expatLastRow}");
+
+        for ($row = 2; $row <= 1000; $row++) {
+            $sheet1->setCellValue(
+                "A{$row}",
+                "=IFERROR(VLOOKUP(B{$row},Lists!\$C\$1:\$D\${$expatLastRow},2,FALSE),\"\")"
+            );
+        }
+        $sheet1->getStyle('A2:A1000')->getFont()->getColor()->setRGB('8A8FA3');
+
+        // Date picker (kalender) + format tampilan tanggal pada kolom C.
+        $this->applyDateValidation($sheet1, 'C2:C1000');
+
+        // --- Sheet 2: Makanan ---
+        $sheet2 = $spreadsheet->createSheet();
+        $sheet2->setTitle('Makanan');
+
+        $headers2 = ['tanggal', 'makanan', 'kategori', 'harga', 'shared'];
+        $sheet2->fromArray($headers2, null, 'A1');
+        $sheet2->getStyle('A1:E1')->getFont()->setBold(true);
+        $sheet2->getStyle('A1:E1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+
+        $sheet2->setCellValue('A2', ExcelDate::PHPToExcel(now()));
+        $sheet2->setCellValue('B2', 'Nasi Goreng');
+        $sheet2->setCellValue('C2', 'Sarapan');
+        $sheet2->setCellValue('D2', 200000);
+        $sheet2->setCellValue('E2', 'TRUE');
+
+        foreach (['A' => 28, 'B' => 16, 'C' => 14, 'D' => 12, 'E' => 12] as $col => $w) {
+            $sheet2->getColumnDimension($col)->setWidth($w);
+        }
+
+        $this->applyKategoriValidation($sheet2, 'C2:C1000');
+
+        // Date picker (kalender) + format tampilan tanggal pada kolom A.
+        $this->applyDateValidation($sheet2, 'A2:A1000');
+
+        // Dropdown TRUE/FALSE untuk kolom shared.
+        for ($row = 2; $row <= 1000; $row++) {
+            $validation = $sheet2->getCell("E{$row}")->getDataValidation();
+            $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+            $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(true);
+            $validation->setShowDropDown(true);
+            $validation->setFormula1('"TRUE,FALSE"');
+        }
+
+        // --- Sheet referensi (hidden), sumber dropdown kategori & nama_expat ---
+        $sheetList = $spreadsheet->createSheet();
+        $sheetList->setTitle('Lists');
+        foreach ($this->kategoriList as $i => $kategori) {
+            $sheetList->setCellValue('A' . ($i + 1), $kategori);
+        }
+
+        // Kolom C = nama_expat, kolom D = npk. Nama diletakkan lebih dulu
+        // supaya bisa jadi kolom kunci pencarian VLOOKUP dari nama -> npk.
+        $row = 1;
+        foreach ($expats as $expat) {
+            $sheetList->setCellValue("C{$row}", $expat->NAMA_KARYAWAN);
+            $sheetList->setCellValue("D{$row}", $expat->NPK);
+            $row++;
+        }
+
+        $sheetList->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        $writer   = new Xlsx($spreadsheet);
+        $fileName = 'template_expat_meal_import.xlsx';
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $fileName . '"');
+        header('Cache-Control: max-age=0');
+
+        $writer->save('php://output');
+        exit;
+    }
+
+    protected function applyKategoriValidation($sheet, string $range): void
+    {
+        $lastRow = count($this->kategoriList);
+        $this->applyListValidation($sheet, $range, "Lists!\$A\$1:\$A\${$lastRow}");
+    }
+
+    /**
+     * Terapkan data validation bertipe LIST (dropdown) pada sebuah range sel,
+     * dengan sumber data berupa formula referensi sheet lain (mis. Lists!$C$1:$C$50).
+     */
+    protected function applyListValidation($sheet, string $range, string $formula): void
+    {
+        [$start, $end] = explode(':', $range);
+        preg_match('/([A-Z]+)(\d+)/', $start, $mStart);
+        preg_match('/([A-Z]+)(\d+)/', $end, $mEnd);
+        $col = $mStart[1];
+
+        for ($row = (int) $mStart[2]; $row <= (int) $mEnd[2]; $row++) {
+            $validation = $sheet->getCell("{$col}{$row}")->getDataValidation();
+            $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+            $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(true);
+            $validation->setShowDropDown(true);
+            $validation->setFormula1($formula);
+        }
+    }
+
+    /**
+     * Terapkan data validation bertipe DATE pada sebuah range sel, sekaligus
+     * format tampilan yyyy-mm-dd. Selain memvalidasi input tanggal, Excel
+     * menampilkan ikon kalender (date picker) di sisi kanan sel saat sel
+     * dengan validation tipe date ini diklik.
+     */
+    protected function applyDateValidation($sheet, string $range): void
+    {
+        [$start, $end] = explode(':', $range);
+        preg_match('/([A-Z]+)(\d+)/', $start, $mStart);
+        preg_match('/([A-Z]+)(\d+)/', $end, $mEnd);
+        $col = $mStart[1];
+
+        // Pakai format bawaan (built-in) Excel untuk kategori "Date", bukan
+        // format custom string. Dengan ini, di Format Cells Excel kolom
+        // tanggal akan tampil sebagai kategori "Date" (bukan "Custom").
+        // FORMAT_DATE_XLSX14 = kode format bawaan Excel utk built-in ID 14
+        // (short date). Karena kodenya persis cocok dengan salah satu format
+        // bawaan Excel, Excel akan mengenalinya sebagai kategori "Date" (dan
+        // menampilkannya sesuai format tanggal singkat regional/lokal
+        // pengguna), bukan "Custom".
+        $sheet->getStyle($range)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_DATE_XLSX14);
+
+        for ($row = (int) $mStart[2]; $row <= (int) $mEnd[2]; $row++) {
+            $validation = $sheet->getCell("{$col}{$row}")->getDataValidation();
+            $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DATE);
+            $validation->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_BETWEEN);
+            $validation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(true);
+            $validation->setShowInputMessage(true);
+            $validation->setShowErrorMessage(true);
+            $validation->setPromptTitle('Pilih tanggal');
+            $validation->setPrompt('Klik ikon kalender di sisi kanan sel (jika tersedia), atau isi manual format dd/mm/yyyy.');
+            $validation->setErrorTitle('Tanggal tidak valid');
+            $validation->setError('Isi tanggal yang valid antara 2020-01-01 s.d. 2099-12-31.');
+            $validation->setFormula1('DATE(2020,1,1)');
+            $validation->setFormula2('DATE(2099,12,31)');
+        }
+    }
+
+    /**
+     * Import file excel berisi 2 sheet ("Daftar Expat" & "Makanan") sekaligus.
+     * Masing-masing sheet diproses independen; jika salah satu sheet tidak
+     * ditemukan, sheet tsb dilewati (bukan gagal total).
+     */
+    public function import(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|mimes:xlsx,xls,csv',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 422);
+        }
+
+        try {
+            $spreadsheet = IOFactory::load($request->file('file')->getRealPath());
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'File tidak dapat dibaca: ' . $e->getMessage()], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            [$pCreated, $pUpdated, $pErrors] = $this->importDaftarExpat($spreadsheet);
+            [$mCreated, $mUpdated, $mErrors] = $this->importMakanan($spreadsheet);
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal import: ' . $e->getMessage()], 500);
+        }
+
+        $errors = array_merge($pErrors, $mErrors);
+        if (! empty($errors)) {
+            session()->flash('import_errors', $errors);
+        }
+
+        return response()->json([
+            'message' => "Import selesai. Daftar Expat: {$pCreated} baru, {$pUpdated} diperbarui. "
+                . "Makanan: {$mCreated} baru, {$mUpdated} diperbarui."
+                . (! empty($errors) ? ' (' . count($errors) . ' baris dilewati, lihat detail di log import.)' : ''),
+            'errors' => $errors,
+        ]);
+    }
+
+    /**
+     * Import sheet "Daftar Expat" (npk, nama_expat, tanggal, kategori) ke
+     * expat_meal_participants.
+     *
+     * Strategi import: DELETE lalu INSERT ulang per tanggal. Semua tanggal
+     * yang muncul di template dikumpulkan dulu, lalu SELURUH data lama pada
+     * tanggal-tanggal tsb dihapus, baru data baru dari template di-insert.
+     * Artinya baris pada tanggal yang tidak ada di template tidak akan
+     * tersentuh, tapi tanggal yang ada di template akan sepenuhnya diganti
+     * (bukan digabung/di-merge) dengan isi template.
+     */
+    protected function importDaftarExpat(Spreadsheet $spreadsheet): array
+    {
+        $sheet = $spreadsheet->getSheetByName('Daftar Expat');
+
+        if (! $sheet) {
+            return [0, 0, ['Sheet "Daftar Expat" tidak ditemukan di file.']];
+        }
+
+        // calculateFormulas = true: kolom npk (formula VLOOKUP) DIHITUNG
+        // LANGSUNG oleh engine formula PhpSpreadsheet saat dibaca, tidak
+        // bergantung pada cache hasil kalkulasi Excel. Ini penting karena
+        // file template baru (belum pernah dibuka & disimpan di Excel)
+        // TIDAK punya cache sama sekali, sehingga kalau calculateFormulas
+        // di-set false, yang terbaca adalah teks formula mentahnya.
+        $rows = $sheet->toArray(null, true, true, true);
+
+        $validRows = [];
+        $errors    = [];
+
+        foreach ($rows as $i => $r) {
+            if ($i == 1) {
+                continue; // skip header
+            }
+
+            $npk      = trim((string) ($r['A'] ?? ''));
+            $nama     = trim((string) ($r['B'] ?? ''));
+            $tanggal  = $r['C'] ?? null;
+            $kategori = trim((string) ($r['D'] ?? ''));
+
+            if ($npk === '' && $nama === '' && ! $tanggal && $kategori === '') {
+                continue; // baris kosong
+            }
+
+            // Jaga-jaga: kalau karena sebab apapun formula VLOOKUP gagal
+            // dihitung (mis. fungsi tidak didukung engine formula
+            // PhpSpreadsheet), jangan sampai teks formula mentah masuk ke
+            // database dan bikin query gagal / data korup.
+            if (str_starts_with($npk, '=')) {
+                $errors[] = "Daftar Expat baris {$i}: kolom npk masih berupa formula (bukan hasil), dilewati. Pastikan nama_expat pada baris ini sudah dipilih dari dropdown.";
+                continue;
+            }
+
+            if ($npk === '' || $nama === '' || ! $tanggal || $kategori === '') {
+                $errors[] = "Daftar Expat baris {$i}: npk/nama_expat/tanggal/kategori wajib diisi, dilewati.";
+                continue;
+            }
+
+            $kategoriNormal = $this->normalizeKategori($kategori);
+            if (! $kategoriNormal) {
+                $errors[] = "Daftar Expat baris {$i}: kategori '{$kategori}' tidak dikenali (harus Sarapan / Makan Siang), dilewati.";
+                continue;
+            }
+
+            $tanggalParsed = $this->parseExcelDate($tanggal);
+            if (! $tanggalParsed) {
+                $errors[] = "Daftar Expat baris {$i}: format tanggal tidak valid, dilewati.";
+                continue;
+            }
+
+            $validRows[] = [
+                'npk'        => $npk,
+                'nama_expat' => $nama,
+                'tanggal'    => $tanggalParsed,
+                'kategori'   => $kategoriNormal,
+            ];
+        }
+
+        if (empty($validRows)) {
+            return [0, 0, $errors];
+        }
+
+        // Semua tanggal yang muncul di template.
+        $tanggalList = collect($validRows)->pluck('tanggal')->unique()->values();
+
+        // Dicatat dulu tanggal mana yang sudah punya data sebelum dihapus,
+        // hanya dipakai untuk pelaporan "baru" vs "diperbarui".
+        $tanggalSudahAda = ExpatMealParticipant::whereIn('tanggal', $tanggalList)
+            ->get()
+            ->pluck('tanggal')
+            ->map(fn($t) => $t->format('Y-m-d'))
+            ->unique();
+
+        // Hapus dulu seluruh data lama pada tanggal-tanggal yang ada di
+        // template, baru insert ulang data baru dari template.
+        ExpatMealParticipant::whereIn('tanggal', $tanggalList)->delete();
+
+        $created = 0;
+        $updated = 0;
+
+        foreach ($validRows as $row) {
+            ExpatMealParticipant::create($row);
+
+            $tanggalSudahAda->contains($row['tanggal']) ? $updated++ : $created++;
+        }
+
+        return [$created, $updated, $errors];
+    }
+
+    /**
+     * Import sheet "Makanan" (tanggal, makanan, kategori, harga, shared) ke
+     * expat_meal_menus.
+     *
+     * Strategi import: DELETE lalu INSERT ulang per tanggal, sama seperti
+     * importDaftarExpat(). Semua tanggal yang muncul di template dikumpulkan
+     * dulu, seluruh menu lama pada tanggal-tanggal tsb dihapus, baru menu
+     * baru dari template di-insert.
+     */
+    protected function importMakanan(Spreadsheet $spreadsheet): array
+    {
+        $sheet = $spreadsheet->getSheetByName('Makanan');
+
+        if (! $sheet) {
+            return [0, 0, ['Sheet "Makanan" tidak ditemukan di file.']];
+        }
+
+        $rows = $sheet->toArray(null, true, true, true);
+
+        $validRows = [];
+        $errors    = [];
+
+        foreach ($rows as $i => $r) {
+            if ($i == 1) {
+                continue;
+            }
+
+            $tanggal   = $r['A'] ?? null;
+            $makanan   = trim((string) ($r['B'] ?? ''));
+            $kategori  = trim((string) ($r['C'] ?? ''));
+            $harga     = $r['D'] ?? null;
+            $sharedRaw = $r['E'] ?? null;
+
+            if ($makanan === '' && $kategori === '' && ($harga === null || $harga === '') && ! $tanggal) {
+                continue; // baris kosong
+            }
+
+            $tanggalParsed = $this->parseExcelDate($tanggal);
+            if (! $tanggalParsed) {
+                $errors[] = "Makanan baris {$i}: format tanggal tidak valid, dilewati.";
+                continue;
+            }
+
+            if ($makanan === '' || $kategori === '' || $harga === null || $harga === '') {
+                $errors[] = "Makanan baris {$i}: makanan/kategori/harga wajib diisi, dilewati.";
+                continue;
+            }
+
+            if (! is_numeric($harga)) {
+                $errors[] = "Makanan baris {$i}: harga '{$harga}' bukan angka, dilewati.";
+                continue;
+            }
+
+            $kategoriNormal = $this->normalizeKategori($kategori);
+            if (! $kategoriNormal) {
+                $errors[] = "Makanan baris {$i}: kategori '{$kategori}' tidak dikenali (harus Sarapan / Makan Siang), dilewati.";
+                continue;
+            }
+
+            $validRows[] = [
+                'tanggal'  => $tanggalParsed,
+                'makanan'  => $makanan,
+                'kategori' => $kategoriNormal,
+                'harga'    => (float) $harga,
+                'shared'   => $this->parseBoolean($sharedRaw),
+            ];
+        }
+
+        if (empty($validRows)) {
+            return [0, 0, $errors];
+        }
+
+        // Semua tanggal yang muncul di template.
+        $tanggalList = collect($validRows)->pluck('tanggal')->unique()->values();
+
+        // Dicatat dulu tanggal mana yang sudah punya data sebelum dihapus,
+        // hanya dipakai untuk pelaporan "baru" vs "diperbarui".
+        $tanggalSudahAda = ExpatMealMenu::whereIn('tanggal', $tanggalList)
+            ->get()
+            ->pluck('tanggal')
+            ->map(fn($t) => $t->format('Y-m-d'))
+            ->unique();
+
+        // Hapus dulu seluruh menu lama pada tanggal-tanggal yang ada di
+        // template, baru insert ulang menu baru dari template.
+        ExpatMealMenu::whereIn('tanggal', $tanggalList)->delete();
+
+        $created = 0;
+        $updated = 0;
+
+        foreach ($validRows as $row) {
+            ExpatMealMenu::create($row);
+
+            $tanggalSudahAda->contains($row['tanggal']) ? $updated++ : $created++;
+        }
+
+        return [$created, $updated, $errors];
+    }
+
+    /**
+     * Normalisasi teks kategori dari excel ('sarapan', 'Makan Siang', 'siang',
+     * dsb) menjadi salah satu nilai baku: 'Sarapan' atau 'Makan Siang'.
+     * Return null jika tidak dikenali.
+     */
+    protected function normalizeKategori(string $value): ?string
+    {
+        $value = Str::lower(trim($value));
+
+        return match (true) {
+            in_array($value, ['sarapan', 'breakfast', 'pagi'], true)        => 'Sarapan',
+            in_array($value, ['makan siang', 'siang', 'lunch'], true)       => 'Makan Siang',
+            default                                                        => null,
+        };
+    }
+
+    /**
+     * Parse nilai tanggal dari excel, baik berupa serial date number, objek
+     * DateTime, maupun string tanggal biasa.
+     */
+    protected function parseExcelDate($value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->format('Y-m-d');
+        }
+
+        if (is_numeric($value)) {
+            try {
+                return Carbon::instance(ExcelDate::excelToDateTimeObject($value))->format('Y-m-d');
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    protected function parseBoolean($value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $value = Str::lower(trim((string) $value));
+
+        return in_array($value, ['1', 'true', 'ya', 'yes', 'shared'], true);
+    }
+
+/* =========================================================================
+ * 5) EXPORT REKAP EXCEL
+ * ========================================================================= */
+
+    /**
+     * Export laporan biaya makan PER HARI ke excel (1 sheet).
+     */
+    public function exportRekapExcel(Request $request)
+    {
+        [$start, $end, $npk] = $this->parseFilters($request);
+
+        $report = $this->buildDailyCostReport($start, $end, $npk);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Laporan Makan Expat');
+
+        $periode = Carbon::parse($start)->locale('id')->translatedFormat('j F Y')
+            . ' - ' . Carbon::parse($end)->locale('id')->translatedFormat('j F Y');
+
+        $sheet->mergeCells('A1:I1');
+        $sheet->setCellValue('A1', 'LAPORAN BIAYA MAKAN EXPAT');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->mergeCells('A2:I2');
+        $sheet->setCellValue('A2', 'Periode: ' . $periode);
+        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $headerRow = 4;
+        $headers = ['NO.', 'TANGGAL', 'JML EXPAT SARAPAN', 'MENU SARAPAN', 'HARGA SARAPAN', 'JML EXPAT MAKAN SIANG', 'MENU MAKAN SIANG', 'HARGA MAKAN SIANG', 'TOTAL HARGA'];
+        $sheet->fromArray($headers, null, "A{$headerRow}");
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $row = $headerRow + 1;
+        foreach ($report as $i => $r) {
+            $sheet->setCellValue("A{$row}", $i + 1);
+            $sheet->setCellValue("B{$row}", Carbon::parse($r['tanggal'])->locale('id')->translatedFormat('j F Y'));
+            $sheet->setCellValue("C{$row}", $r['jumlah_expat_sarapan']);
+            $sheet->setCellValue("D{$row}", $r['menu_sarapan']);
+            $sheet->setCellValue("E{$row}", $r['harga_sarapan']);
+            $sheet->setCellValue("F{$row}", $r['jumlah_expat_makan_siang']);
+            $sheet->setCellValue("G{$row}", $r['menu_makan_siang']);
+            $sheet->setCellValue("H{$row}", $r['harga_makan_siang']);
+            $sheet->setCellValue("I{$row}", $r['total_harga']);
+            $row++;
+        }
+
+        $lastDataRow = $row - 1;
+
+        if ($report->isEmpty()) {
+            $sheet->mergeCells("A{$row}:I{$row}");
+            $sheet->setCellValue("A{$row}", 'Tidak ada data.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        $sheet->mergeCells("A{$row}:H{$row}");
+        $sheet->setCellValue("A{$row}", 'TOTAL');
+        $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->setCellValue("I{$row}", $report->sum('total_harga'));
+        $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:I{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+
+        $totalRow = $row;
+
+        $sheet->getStyle("A{$headerRow}:I{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("E" . ($headerRow + 1) . ":E{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        $sheet->getStyle("H" . ($headerRow + 1) . ":H{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        $sheet->getStyle("I" . ($headerRow + 1) . ":I{$totalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        $sheet->getStyle("A" . ($headerRow + 1) . ":C{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("F" . ($headerRow + 1) . ":F{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $colWidths = ['A' => 5, 'B' => 16, 'C' => 15, 'D' => 30, 'E' => 15, 'F' => 17, 'G' => 30, 'H' => 17, 'I' => 16];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+
+        $this->writeExpatSheet($spreadsheet, $start, $end, $npk, $periode);
+        $spreadsheet->setActiveSheetIndex(0);
+
+        $writer   = new Xlsx($spreadsheet);
+        $fileName = 'laporan_makan_expat_' . $start . '_sd_' . $end . '.xlsx';
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $fileName . '"');
+        header('Cache-Control: max-age=0');
+
+        $writer->save('php://output');
+        exit;
+    }
+
+    /**
+     * Bangun rincian & total biaya makan PER EXPAT untuk rentang tanggal
+     * tertentu, dikelompokkan per expat. HANYA menu SHARED yang dirinci
+     * per expat (dibagi rata dengan jumlah expat yang hadir pada tanggal +
+     * kategori tsb) — menu non-shared adalah lumpsum dan tidak bisa
+     * diatribusikan ke expat tertentu, jadi tidak diikutsertakan di sini.
+     * Formula ini konsisten dengan mealDetailData().
+     *
+     * @param array $npkFilter Jika tidak kosong, hanya expat pada daftar
+     *              ini yang dimunculkan sebagai blok di laporan. Jumlah
+     *              expat pembagi tiap menu tetap dihitung dari SELURUH
+     *              expat yang hadir hari itu (tidak dipengaruhi filter),
+     *              supaya nilai bagi rata tiap expat konsisten dengan
+     *              laporan lain.
+     *
+     * @return Collection<int, array{npk:string,nama:string,items:array,total:float}>
+     */
+    protected function buildExpatMealDetailReport(string $start, string $end, array $npkFilter = []): Collection
+    {
+        $allParticipants = ExpatMealParticipant::whereBetween('tanggal', [$start, $end])->get();
+
+        if ($allParticipants->isEmpty()) {
+            return collect();
+        }
+
+        $tanggalList = $allParticipants
+            ->pluck('tanggal')
+            ->map(fn($t) => $t->format('Y-m-d'))
+            ->unique()
+            ->values();
+
+        $menusPerTglKategori = ExpatMealMenu::whereIn('tanggal', $tanggalList)
+            ->where('shared', true)
+            ->orderBy('makanan')
+            ->get()
+            ->groupBy(fn($m) => Carbon::parse($m->tanggal)->format('Y-m-d') . '|' . $m->kategori);
+
+        $npkDitampilkan = empty($npkFilter)
+            ? $allParticipants->pluck('npk')->unique()
+            : collect($npkFilter);
+
+        $perExpat = []; // npk => ['npk' => ..., 'nama' => ..., 'items' => [...], 'total' => ...]
+
+        $allParticipants
+            ->groupBy(fn($p) => $p->tanggal->format('Y-m-d') . '|' . $p->kategori)
+            ->each(function (Collection $rows, string $key) use ($menusPerTglKategori, $npkDitampilkan, &$perExpat) {
+                [$tanggalStr, $kategori] = explode('|', $key, 2);
+
+                $expatHadir  = $rows->unique('npk')->values();
+                $jumlahExpat = $expatHadir->count();
+                $menusHari   = $menusPerTglKategori[$key] ?? collect();
+
+                foreach ($menusHari as $menu) {
+                    $hargaPerExpat = $jumlahExpat > 0 ? round(((float) $menu->harga) / $jumlahExpat, 2) : 0.0;
+
+                    foreach ($expatHadir as $p) {
+                        if (! $npkDitampilkan->contains($p->npk)) {
+                            continue;
+                        }
+
+                        if (! isset($perExpat[$p->npk])) {
+                            $perExpat[$p->npk] = ['npk' => $p->npk, 'nama' => $p->nama_expat, 'items' => [], 'total' => 0.0];
+                        }
+
+                        $perExpat[$p->npk]['items'][] = [
+                            'tanggal'  => $tanggalStr,
+                            'kategori' => $kategori,
+                            'makanan'  => $menu->makanan,
+                            'harga'    => $hargaPerExpat,
+                        ];
+                        $perExpat[$p->npk]['total'] += $hargaPerExpat;
+                    }
+                }
+            });
+
+        return collect($perExpat)
+            ->map(function (array $e) {
+                $e['total'] = round($e['total'], 2);
+                $e['items'] = collect($e['items'])
+                    ->sortBy('makanan')
+                    ->sortBy('kategori')
+                    ->sortBy('tanggal')
+                    ->values()
+                    ->all();
+
+                return $e;
+            })
+            ->sortBy('nama')
+            ->values();
+    }
+
+    /**
+     * Tulis sheet ke-2 pada file export: "Rincian per Expat". Berisi dua
+     * bagian — (1) rekap TOTAL biaya makan tiap expat pada periode
+     * terpilih, dan (2) RINCIAN tiap menu yang dikonsumsi tiap expat
+     * (satu blok per expat, lengkap dengan subtotalnya).
+     */
+    protected function writeExpatSheet(Spreadsheet $spreadsheet, string $start, string $end, array $npk, string $periode): void
+    {
+        $expatReport = $this->buildExpatMealDetailReport($start, $end, $npk);
+
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Rincian per Expat');
+
+        $sheet->mergeCells('A1:E1');
+        $sheet->setCellValue('A1', 'RINCIAN & TOTAL BIAYA MAKAN PER EXPAT');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->mergeCells('A2:E2');
+        $sheet->setCellValue('A2', 'Periode: ' . $periode);
+        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->mergeCells('A3:E3');
+        $sheet->setCellValue('A3', 'Catatan: hanya mencakup menu shared (dibagi rata per expat). Menu lumpsum (non-shared) tidak diatribusikan ke expat tertentu.');
+        $sheet->getStyle('A3')->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('8A8FA3');
+        $sheet->getStyle('A3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        /* ---------- Bagian 1: Total per Expat ---------- */
+        $sheet->mergeCells('A5:D5');
+        $sheet->setCellValue('A5', 'TOTAL PER EXPAT');
+        $sheet->getStyle('A5')->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A5')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D4EDDA');
+
+        $totalHeaderRow = 6;
+        $sheet->fromArray(['NO.', 'NPK', 'NAMA EXPAT', 'TOTAL BIAYA'], null, "A{$totalHeaderRow}");
+        $sheet->getStyle("A{$totalHeaderRow}:D{$totalHeaderRow}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$totalHeaderRow}:D{$totalHeaderRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+        $sheet->getStyle("A{$totalHeaderRow}:D{$totalHeaderRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $row = $totalHeaderRow + 1;
+        foreach ($expatReport as $i => $e) {
+            $sheet->setCellValue("A{$row}", $i + 1);
+            $sheet->setCellValue("B{$row}", $e['npk']);
+            $sheet->setCellValue("C{$row}", $e['nama']);
+            $sheet->setCellValue("D{$row}", $e['total']);
+            $row++;
+        }
+
+        if ($expatReport->isEmpty()) {
+            $sheet->mergeCells("A{$row}:D{$row}");
+            $sheet->setCellValue("A{$row}", 'Tidak ada data.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        $totalPerExpatLastRow = $row - 1;
+
+        $sheet->mergeCells("A{$row}:C{$row}");
+        $sheet->setCellValue("A{$row}", 'TOTAL KESELURUHAN');
+        $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->setCellValue("D{$row}", $expatReport->sum('total'));
+        $sheet->getStyle("A{$row}:D{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:D{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+
+        $grandTotalRow = $row;
+
+        $sheet->getStyle("A{$totalHeaderRow}:D{$grandTotalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("D" . ($totalHeaderRow + 1) . ":D{$grandTotalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+        if ($totalPerExpatLastRow >= $totalHeaderRow + 1) {
+            $sheet->getStyle("A" . ($totalHeaderRow + 1) . ":B{$totalPerExpatLastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
+
+        /* ---------- Bagian 2: Rincian per Expat ---------- */
+        $row = $grandTotalRow + 3;
+
+        $sheet->mergeCells("A{$row}:E{$row}");
+        $sheet->setCellValue("A{$row}", 'RINCIAN PER EXPAT');
+        $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D4EDDA');
+        $row += 2;
+
+        if ($expatReport->isEmpty()) {
+            $sheet->mergeCells("A{$row}:E{$row}");
+            $sheet->setCellValue("A{$row}", 'Tidak ada data.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
+
+        foreach ($expatReport as $e) {
+            $sheet->mergeCells("A{$row}:E{$row}");
+            $sheet->setCellValue("A{$row}", $e['nama'] . ' (' . $e['npk'] . ')');
+            $sheet->getStyle("A{$row}")->getFont()->setBold(true);
+            $sheet->getStyle("A{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('EEF1FD');
+            $row++;
+
+            $itemHeaderRow = $row;
+            $sheet->fromArray(['NO.', 'TANGGAL', 'KATEGORI', 'MENU', 'HARGA'], null, "A{$row}");
+            $sheet->getStyle("A{$row}:E{$row}")->getFont()->setBold(true);
+            $sheet->getStyle("A{$row}:E{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F0F0F0');
+            $sheet->getStyle("A{$row}:E{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+
+            foreach ($e['items'] as $i => $item) {
+                $sheet->setCellValue("A{$row}", $i + 1);
+                $sheet->setCellValue("B{$row}", Carbon::parse($item['tanggal'])->locale('id')->translatedFormat('j F Y'));
+                $sheet->setCellValue("C{$row}", $item['kategori']);
+                $sheet->setCellValue("D{$row}", $item['makanan']);
+                $sheet->setCellValue("E{$row}", $item['harga']);
+                $row++;
+            }
+
+            $itemLastRow = $row - 1;
+
+            $sheet->mergeCells("A{$row}:D{$row}");
+            $sheet->setCellValue("A{$row}", 'Subtotal ' . $e['nama']);
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $sheet->setCellValue("E{$row}", $e['total']);
+            $sheet->getStyle("A{$row}:E{$row}")->getFont()->setBold(true);
+            $sheet->getStyle("A{$row}:E{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+
+            $subtotalRow = $row;
+
+            $sheet->getStyle("A{$itemHeaderRow}:E{$subtotalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+            $sheet->getStyle("E" . ($itemHeaderRow + 1) . ":E{$subtotalRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+            if ($itemLastRow >= $itemHeaderRow + 1) {
+                $sheet->getStyle("A" . ($itemHeaderRow + 1) . ":A{$itemLastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            }
+
+            $row += 2; // spasi antar blok expat
+        }
+
+        $colWidths = ['A' => 26, 'B' => 13, 'C' => 14, 'D' => 30, 'E' => 16];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+    }
+
+    /* =========================================================================
+ * 3) EXPORT: "MASTER FILE" (format sama seperti file Excel referensi
+ *    CII_Master_file_Expat_Meal_Report). 5 sheet: Master Expat, Daily Meal
+ *    Entry, Daily Pivot, Monthly Pivot, Monthly Pivot Summary.
+ *
+ *    HANYA menu shared = true yang dihitung/diikutsertakan di export ini.
+ *    Menu lumpsum (non-shared) dikeluarkan sepenuhnya, karena tidak bisa
+ *    diatribusikan/dibagi rata ke expat tertentu (konsisten dengan
+ *    buildExpatMealDetailReport()).
+ *
+ *    CATATAN PIVOT: PhpSpreadsheet tidak punya API untuk menulis objek
+ *    PivotTable Excel, jadi sheet "Daily Pivot" & "Monthly Pivot" dibangun
+ *    dua tahap: (1) PhpSpreadsheet menulis nilai hasil agregasi sebagai
+ *    tampilan awal (persis bentuk pivot yang sudah di-collapse), lalu
+ *    (2) injectPivotTables() menyisipkan bagian XML PivotTable Excel asli
+ *    (pivotCacheDefinition, pivotCacheRecords, pivotTable) langsung ke
+ *    dalam paket .xlsx yang dihasilkan, bersumber dari Excel Table
+ *    "DailyMealEntryTable" pada sheet "Daily Meal Entry". Hasilnya adalah
+ *    PivotTable sungguhan: field list-nya muncul di Excel, field-nya bisa
+ *    di-drag/drop, dan bisa di-refresh — bukan lagi tabel SUMIFS biasa.
+ *    Style pivot memakai "PivotStyleLight16" (built-in Excel), sama
+ *    seperti yang dipakai file referensi CII_Master_file_Expat_Meal_Report.
+ * ========================================================================= */
+
+    public function exportMasterFileExcel(Request $request)
+    {
+        [$start, $end, $npk] = $this->parseFilters($request);
+
+        $entries    = $this->buildDailyMealEntryReport($start, $end, $npk);
+        $aggregates = $this->buildPivotAggregates($entries);
+
+        $spreadsheet = new Spreadsheet();
+
+        $this->writeMasterExpatSheet($spreadsheet, $entries);
+        $this->writeDailyMealEntrySheet($spreadsheet, $entries);
+        $this->writeDailyPivotSheet($spreadsheet, $entries);
+        $this->writeMonthlyPivotSheet($spreadsheet, $aggregates['byMonth']);
+        $this->writeMonthlyPivotSummarySheet($spreadsheet);
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        // Ditulis dulu ke file sementara (bukan langsung php://output) supaya
+        // bisa dibuka lagi sebagai ZIP oleh injectPivotTables() untuk
+        // disisipi objek PivotTable asli.
+        $tempPath = tempnam(sys_get_temp_dir(), 'expat_meal_master_') . '.xlsx';
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempPath);
+
+        $this->injectPivotTables($tempPath, $entries);
+
+        $fileName = 'expat_meal_master_' . $start . '_sd_' . $end . '.xlsx';
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $fileName . '"');
+        header('Cache-Control: max-age=0');
+        header('Content-Length: ' . filesize($tempPath));
+
+        readfile($tempPath);
+        unlink($tempPath);
+        exit;
+    }
+
+    /**
+     * Map kategori aplikasi -> kolom kategori pada sheet Excel. Kategori
+     * yang belum dikenal (di luar Sarapan/Makan Siang) otomatis masuk ke
+     * kolom "Other", supaya aman jika suatu saat $kategoriList bertambah.
+     */
+    protected function kategoriToColumnKey(string $kategori): string
+    {
+        return match ($kategori) {
+            'Sarapan'     => 'breakfast',
+            'Makan Siang' => 'lunch',
+            'Makan Malam' => 'dinner',
+            default       => 'other',
+        };
+    }
+
+    /** Header kolom kategori (urutan sesuai kolom D..J pada "Daily Meal Entry"). */
+    protected function kategoriExcelHeaders(): array
+    {
+        return [
+            'breakfast'      => 'Breakfast',
+            'lunch'          => 'Lunch',
+            'dinner'         => 'Dinner',
+            'coffee_support' => 'Coffee Support',
+            'bread'          => 'Bread',
+            'biscuit'        => 'Biscuit',
+            'other'          => 'Other',
+        ];
+    }
+
+    /**
+     * Bangun baris "Daily Meal Entry": satu baris per (tanggal, expat),
+     * dengan kolom per kategori (Breakfast, Lunch, Dinner, Coffee Support,
+     * Bread, Biscuit, Other).
+     *
+     * HANYA menu shared = true yang dihitung. Tiap menu shared dibagi rata
+     * dengan SELURUH expat yang hadir pada tanggal + kategori tsb (bukan
+     * hanya yang difilter npk), lalu expat yang difilter saja yang
+     * dimunculkan sebagai baris — konsisten dengan
+     * sumSharedPortionForNpk() / buildExpatMealDetailReport().
+     */
+    protected function buildDailyMealEntryReport(string $start, string $end, array $npkFilter = []): Collection
+    {
+        $allParticipants = ExpatMealParticipant::whereBetween('tanggal', [$start, $end])->get();
+
+        if ($allParticipants->isEmpty()) {
+            return collect();
+        }
+
+        $tanggalList = $allParticipants->pluck('tanggal')->map(fn($t) => $t->format('Y-m-d'))->unique()->values();
+
+        // Hanya menu shared = true.
+        $menusPerTglKategori = ExpatMealMenu::whereIn('tanggal', $tanggalList)
+            ->where('shared', true)
+            ->get()
+            ->groupBy(fn($m) => Carbon::parse($m->tanggal)->format('Y-m-d') . '|' . $m->kategori);
+
+        // Jumlah expat hadir per tanggal+kategori dihitung dari SELURUH
+        // peserta (tidak disaring npk) supaya nilai bagi rata konsisten.
+        $hadirPerTglKategori = $allParticipants
+            ->groupBy(fn($p) => $p->tanggal->format('Y-m-d') . '|' . $p->kategori)
+            ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
+
+        $sharePerTglKategori = $menusPerTglKategori->map(function (Collection $menus, string $key) use ($hadirPerTglKategori) {
+            $jumlahExpat = $hadirPerTglKategori[$key] ?? 0;
+
+            return $jumlahExpat > 0
+                ? round(((float) $menus->sum('harga')) / $jumlahExpat, 2)
+                : 0.0;
+        });
+
+        $peserta = empty($npkFilter) ? $allParticipants : $allParticipants->whereIn('npk', $npkFilter)->values();
+
+        if ($peserta->isEmpty()) {
+            return collect();
+        }
+
+        return $peserta
+            ->groupBy(fn($p) => $p->tanggal->format('Y-m-d') . '|' . $p->npk)
+            ->map(function (Collection $rowsPerExpat) use ($sharePerTglKategori) {
+                $first      = $rowsPerExpat->first();
+                $tanggalStr = $first->tanggal->format('Y-m-d');
+
+                $kolom = array_fill_keys($this->kolomKategoriExcel, 0.0);
+
+                foreach ($rowsPerExpat->pluck('kategori')->unique() as $kategori) {
+                    $nilai = $sharePerTglKategori[$tanggalStr . '|' . $kategori] ?? 0.0;
+                    $kolom[$this->kategoriToColumnKey($kategori)] += $nilai;
+                }
+
+                return array_merge([
+                    'tanggal' => $tanggalStr,
+                    'npk'     => $first->npk,
+                    'nama'    => $first->nama_expat,
+                ], $kolom);
+            })
+            ->values()
+            ->sortBy([['tanggal', 'asc'], ['nama', 'asc']])
+            ->values();
+    }
+
+    /** Sheet 1: "Master Expat" - daftar unik nama expat pada periode. */
+    protected function writeMasterExpatSheet(Spreadsheet $spreadsheet, Collection $entries): void
+    {
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Master Expat');
+
+        $sheet->setCellValue('A1', 'Expat Name');
+        $sheet->getStyle('A1')->getFont()->setBold(true);
+
+        $row = 2;
+        foreach ($entries->pluck('nama')->unique()->sort()->values() as $nama) {
+            $sheet->setCellValue("A{$row}", $nama);
+            $row++;
+        }
+
+        $sheet->getColumnDimension('A')->setWidth(30);
+    }
+
+    /**
+     * Sheet 2: "Daily Meal Entry" - data mentah, satu baris per (tanggal,
+     * expat). Kolom: Date, Month, Expat Name, 7 kolom kategori, Total
+     * Daily Cost, Remarks. Sheet ini sumber SUMIFS untuk seluruh pivot.
+     */
+    protected function writeDailyMealEntrySheet(Spreadsheet $spreadsheet, Collection $entries): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Daily Meal Entry');
+
+        $headers = array_merge(['Date', 'Month', 'Expat Name'], array_values($this->kategoriExcelHeaders()), ['Total Daily Cost', 'Remarks']);
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:L1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:L1')->getFont()->getColor()->setRGB('000000');
+        $sheet->getStyle('A1:L1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('DCE6F1');
+
+        $rupiah = '_-"Rp"* #,##0_-;\-"Rp"* #,##0_-;_-"Rp"* "-"_-;_-@_-';
+
+        $row = 2;
+        foreach ($entries as $e) {
+            $sheet->setCellValue("A{$row}", ExcelDate::PHPToExcel(Carbon::parse($e['tanggal'])));
+            $sheet->getStyle("A{$row}")->getNumberFormat()->setFormatCode('d-mmm');
+            $sheet->setCellValue("B{$row}", "=TEXT(A{$row},\"MMM\")");
+            $sheet->setCellValue("C{$row}", $e['nama']);
+            $sheet->setCellValue("D{$row}", $e['breakfast']);
+            $sheet->setCellValue("E{$row}", $e['lunch']);
+            $sheet->setCellValue("F{$row}", $e['dinner']);
+            $sheet->setCellValue("G{$row}", $e['coffee_support']);
+            $sheet->setCellValue("H{$row}", $e['bread']);
+            $sheet->setCellValue("I{$row}", $e['biscuit']);
+            $sheet->setCellValue("J{$row}", $e['other']);
+            $sheet->setCellValue("K{$row}", "=SUM(D{$row}:J{$row})");
+            $sheet->setCellValue("L{$row}", null);
+            $sheet->getStyle("D{$row}:K{$row}")->getNumberFormat()->setFormatCode($rupiah);
+            $row++;
+        }
+
+        $colWidths = ['A' => 12, 'B' => 8, 'C' => 22, 'D' => 13, 'E' => 13, 'F' => 13, 'G' => 15, 'H' => 13, 'I' => 12, 'J' => 12, 'K' => 15, 'L' => 22];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+
+        $lastRow = $row - 1;
+        if ($lastRow >= 2) {
+            $this->addExcelTable($sheet, "A1:L{$lastRow}", 'DailyMealEntryTable');
+        }
+    }
+
+    /**
+     * Bungkus sebuah range data (header + baris data) menjadi objek Excel
+     * Table (ListObject) asli — bergaris pita warna, tombol filter di
+     * header, bisa di-sort/filter langsung dari Excel. Bukan sekadar data
+     * biasa yang diberi border manual.
+     */
+    protected function addExcelTable($sheet, string $range, string $tableName): void
+    {
+        $table = new Table($range, $tableName);
+        $table->setShowHeaderRow(true);
+        $table->setShowTotalsRow(false); // dihindari: totals row PhpSpreadsheet dilaporkan bisa memicu Excel "repair" pada beberapa versi.
+
+        // "Light 9" = tema biru muda bawaan Excel dengan teks header hitam.
+        // (Tema "Medium" seperti MEDIUM7 sebelumnya tampil oranye & memaksa
+        // teks header jadi putih saat dibuka di Excel, menimpa format font
+        // hitam yang sudah di-set manual di atas.)
+        $tableStyle = new TableStyle();
+        $tableStyle->setTheme(TableStyle::TABLE_STYLE_LIGHT9);
+        $tableStyle->setShowRowStripes(true);
+        $tableStyle->setShowColumnStripes(false);
+        $table->setStyle($tableStyle);
+
+        $sheet->addTable($table);
+
+        // Set ulang warna font header row menjadi hitam SETELAH tabel
+        // ditambahkan, supaya tidak ditimpa oleh format bawaan tema tabel.
+        [$startCell] = explode(':', $range);
+        $headerRowNum = (int) preg_replace('/[A-Z]+/', '', $startCell);
+        $lastCol = $sheet->getHighestColumn();
+        $sheet->getStyle("A{$headerRowNum}:{$lastCol}{$headerRowNum}")->getFont()->getColor()->setRGB('000000');
+    }
+
+    /**
+     * Agregasi nilai per kategori, dikelompokkan per tanggal (byDate) dan
+     * per bulan (byMonth). Dipakai untuk (1) menulis tampilan awal sheet
+     * "Daily Pivot" / "Monthly Pivot", dan (2) sumber angka min/max & isi
+     * pivotCacheRecords pada injectPivotTables().
+     *
+     * CATATAN: berbeda dari versi SUMIFS sebelumnya, "Monthly Pivot" di
+     * sini HANYA memuat bulan yang benar-benar ada datanya (bukan selalu
+     * 12 baris Jan-Dec) — ini konsisten dengan perilaku asli PivotTable
+     * Excel, yang secara default hanya menampilkan item yang punya data.
+     */
+    protected function buildPivotAggregates(Collection $entries): array
+    {
+        $catCols = $this->kolomKategoriExcel;
+
+        $byDate = [];
+        foreach ($entries as $e) {
+            $tgl = $e['tanggal'];
+            if (! isset($byDate[$tgl])) {
+                $byDate[$tgl] = array_fill_keys($catCols, 0.0);
+            }
+            foreach ($catCols as $c) {
+                $byDate[$tgl][$c] += (float) $e[$c];
+            }
+        }
+        ksort($byDate);
+
+        $bulanUrutan = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        $byMonth = [];
+        foreach ($entries as $e) {
+            $bln = Carbon::parse($e['tanggal'])->format('M');
+            if (! isset($byMonth[$bln])) {
+                $byMonth[$bln] = array_fill_keys($catCols, 0.0);
+            }
+            foreach ($catCols as $c) {
+                $byMonth[$bln][$c] += (float) $e[$c];
+            }
+        }
+        uksort($byMonth, fn($a, $b) => array_search($a, $bulanUrutan) <=> array_search($b, $bulanUrutan));
+
+        return ['byDate' => $byDate, 'byMonth' => $byMonth];
+    }
+
+    /**
+     * Sheet 3: "Daily Pivot" - rekap per tanggal + expat + bulan (nested
+     * rows, sesuai field list Rows: Date > Expat Name > Month). Menulis
+     * nilai hasil agregasi (bukan formula) karena baris ini akan jadi
+     * bagian dari lokasi PivotTable Excel asli yang disisipkan oleh
+     * injectPivotTables() — tampilan awal ini akan otomatis digambar ulang
+     * oleh PivotTable asli (refreshOnLoad="1") begitu dibuka. Urutan kolom
+     * kategori: Breakfast, Lunch, Dinner, Bread, Coffee Support, Biscuit,
+     * Other, Total Daily Cost. Format tanggal "d-mmm" (mis. "1-Apr").
+     *
+     * $entries HARUS sudah terurut per (tanggal, nama expat) — urutan yang
+     * sama dipakai saat membangun kombinasi rowItems di injectPivotTables().
+     */
+    protected function writeDailyPivotSheet(Spreadsheet $spreadsheet, Collection $entries): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Daily Pivot');
+
+        $headers = ['Row Labels', 'Jumlah dari Breakfast', 'Jumlah dari Lunch', 'Jumlah dari Dinner', 'Jumlah dari Bread', 'Jumlah dari Coffee Support', 'Jumlah dari Biscuit', 'Jumlah dari Other', 'Jumlah dari Total Daily Cost'];
+        $sheet->fromArray($headers, null, 'A3');
+
+        $rupiah = '_-"Rp"* #,##0_-;\-"Rp"* #,##0_-;_-"Rp"* "-"_-;_-@_-';
+
+        $sorted = $entries->sortBy(fn($e) => $e['tanggal'] . '|' . $e['nama'])->values();
+
+        $row   = 4;
+        $grand = array_fill_keys($this->kolomKategoriExcel, 0.0);
+
+        foreach ($sorted as $e) {
+            $sheet->setCellValue("A{$row}", ExcelDate::PHPToExcel(Carbon::parse($e['tanggal'])));
+            $sheet->getStyle("A{$row}")->getNumberFormat()->setFormatCode('d-mmm');
+            $sheet->setCellValue("B{$row}", $e['breakfast']);
+            $sheet->setCellValue("C{$row}", $e['lunch']);
+            $sheet->setCellValue("D{$row}", $e['dinner']);
+            $sheet->setCellValue("E{$row}", $e['bread']);
+            $sheet->setCellValue("F{$row}", $e['coffee_support']);
+            $sheet->setCellValue("G{$row}", $e['biscuit']);
+            $sheet->setCellValue("H{$row}", $e['other']);
+            $total = $e['breakfast'] + $e['lunch'] + $e['dinner'] + $e['bread'] + $e['coffee_support'] + $e['biscuit'] + $e['other'];
+            $sheet->setCellValue("I{$row}", $total);
+            $sheet->getStyle("B{$row}:I{$row}")->getNumberFormat()->setFormatCode($rupiah);
+
+            foreach ($this->kolomKategoriExcel as $c) {
+                $grand[$c] += $e[$c];
+            }
+            $row++;
+        }
+
+        // Baris "Grand Total" adalah bagian resmi dari location PivotTable
+        // (rowItems terakhir bertipe "grand"), bukan baris terpisah.
+        $sheet->setCellValue("A{$row}", 'Grand Total');
+        $sheet->setCellValue("B{$row}", $grand['breakfast']);
+        $sheet->setCellValue("C{$row}", $grand['lunch']);
+        $sheet->setCellValue("D{$row}", $grand['dinner']);
+        $sheet->setCellValue("E{$row}", $grand['bread']);
+        $sheet->setCellValue("F{$row}", $grand['coffee_support']);
+        $sheet->setCellValue("G{$row}", $grand['biscuit']);
+        $sheet->setCellValue("H{$row}", $grand['other']);
+        $sheet->setCellValue("I{$row}", array_sum($grand));
+        $sheet->getStyle("B{$row}:I{$row}")->getNumberFormat()->setFormatCode($rupiah);
+        $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+
+        $colWidths = ['A' => 14, 'B' => 18, 'C' => 18, 'D' => 18, 'E' => 18, 'F' => 20, 'G' => 16, 'H' => 16, 'I' => 22];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+    }
+
+    /**
+     * Sheet 4: "Monthly Pivot" - rekap per bulan (hanya bulan yang ada
+     * datanya). Sama seperti Daily Pivot, menulis nilai hasil agregasi
+     * karena akan jadi bagian dari lokasi PivotTable Excel asli.
+     */
+    protected function writeMonthlyPivotSheet(Spreadsheet $spreadsheet, array $byMonth): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Monthly Pivot');
+
+        $headers = ['Row Labels', 'Jumlah dari Breakfast', 'Jumlah dari Lunch', 'Jumlah dari Dinner', 'Jumlah dari Bread', 'Jumlah dari Coffee Support', 'Jumlah dari Biscuit', 'Jumlah dari Other', 'Jumlah dari Grand Total'];
+        $sheet->fromArray($headers, null, 'A3');
+
+        $rupiah = '_-"Rp"* #,##0_-;\-"Rp"* #,##0_-;_-"Rp"* "-"_-;_-@_-';
+
+        $row   = 4;
+        $grand = array_fill_keys($this->kolomKategoriExcel, 0.0);
+
+        foreach ($byMonth as $bln => $vals) {
+            $sheet->setCellValue("A{$row}", $bln);
+            $sheet->setCellValue("B{$row}", $vals['breakfast']);
+            $sheet->setCellValue("C{$row}", $vals['lunch']);
+            $sheet->setCellValue("D{$row}", $vals['dinner']);
+            $sheet->setCellValue("E{$row}", $vals['bread']);
+            $sheet->setCellValue("F{$row}", $vals['coffee_support']);
+            $sheet->setCellValue("G{$row}", $vals['biscuit']);
+            $sheet->setCellValue("H{$row}", $vals['other']);
+            $sheet->setCellValue("I{$row}", array_sum($vals));
+            $sheet->getStyle("B{$row}:I{$row}")->getNumberFormat()->setFormatCode($rupiah);
+
+            foreach ($this->kolomKategoriExcel as $c) {
+                $grand[$c] += $vals[$c];
+            }
+            $row++;
+        }
+
+        $sheet->setCellValue("A{$row}", 'Grand Total');
+        $sheet->setCellValue("B{$row}", $grand['breakfast']);
+        $sheet->setCellValue("C{$row}", $grand['lunch']);
+        $sheet->setCellValue("D{$row}", $grand['dinner']);
+        $sheet->setCellValue("E{$row}", $grand['bread']);
+        $sheet->setCellValue("F{$row}", $grand['coffee_support']);
+        $sheet->setCellValue("G{$row}", $grand['biscuit']);
+        $sheet->setCellValue("H{$row}", $grand['other']);
+        $sheet->setCellValue("I{$row}", array_sum($grand));
+        $sheet->getStyle("B{$row}:I{$row}")->getNumberFormat()->setFormatCode($rupiah);
+        $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+
+        $colWidths = ['A' => 13, 'B' => 20, 'C' => 19, 'D' => 18, 'E' => 14, 'F' => 22, 'G' => 16, 'H' => 16, 'I' => 22];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+    }
+
+    /**
+     * Sheet 5: "Monthly Pivot Summary" - rekap per bulan, dibungkus Excel
+     * Table. Urutan kolom kategori: Breakfast, Lunch, Dinner, Coffee
+     * Support, Bread, Biscuit, Other, Grand Total (persis header file
+     * referensi).
+     */
+    protected function writeMonthlyPivotSummarySheet(Spreadsheet $spreadsheet): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Monthly Pivot Summary');
+
+        $headers = ['Month', 'Breakfast', 'Lunch', 'Dinner', 'Coffee Support', 'Bread', 'Biscuit', 'Other', 'Grand Total'];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:I1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:I1')->getFont()->getColor()->setRGB('000000');
+        $sheet->getStyle('A1:I1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('DCE6F1');
+
+        $rupiah = '_-"Rp"* #,##0_-;\-"Rp"* #,##0_-;_-"Rp"* "-"_-;_-@_-';
+        $bulan  = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        $row = 2;
+        foreach ($bulan as $b) {
+            $sheet->setCellValue("A{$row}", $b);
+            $sheet->setCellValue("B{$row}", "=SUMIFS('Daily Meal Entry'!D:D,'Daily Meal Entry'!\$B:\$B,A{$row})");
+            $sheet->setCellValue("C{$row}", "=SUMIFS('Daily Meal Entry'!E:E,'Daily Meal Entry'!\$B:\$B,A{$row})");
+            $sheet->setCellValue("D{$row}", "=SUMIFS('Daily Meal Entry'!F:F,'Daily Meal Entry'!\$B:\$B,A{$row})");
+            $sheet->setCellValue("E{$row}", "=SUMIFS('Daily Meal Entry'!G:G,'Daily Meal Entry'!\$B:\$B,A{$row})");
+            $sheet->setCellValue("F{$row}", "=SUMIFS('Daily Meal Entry'!H:H,'Daily Meal Entry'!\$B:\$B,A{$row})");
+            $sheet->setCellValue("G{$row}", "=SUMIFS('Daily Meal Entry'!I:I,'Daily Meal Entry'!\$B:\$B,A{$row})");
+            $sheet->setCellValue("H{$row}", "=SUMIFS('Daily Meal Entry'!J:J,'Daily Meal Entry'!\$B:\$B,A{$row})");
+            $sheet->setCellValue("I{$row}", "=SUM(B{$row}:H{$row})");
+            $sheet->getStyle("B{$row}:I{$row}")->getNumberFormat()->setFormatCode($rupiah);
+            $row++;
+        }
+
+        $colWidths = ['A' => 22, 'B' => 14, 'C' => 14, 'D' => 14, 'E' => 16, 'F' => 14, 'G' => 14, 'H' => 14, 'I' => 16];
+        foreach ($colWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+
+        $lastRow = $row - 1;
+        $this->addExcelTable($sheet, "A1:I{$lastRow}", 'MonthlyPivotSummaryTable');
+    }
+
+    /* =========================================================================
+ * PIVOTTABLE EXCEL ASLI (Daily Pivot & Monthly Pivot)
+ *
+ * PhpSpreadsheet tidak menyediakan API untuk menulis objek PivotTable
+ * Excel, jadi bagian XML pivot (pivotCacheDefinition, pivotCacheRecords,
+ * pivotTable) disisipkan manual ke dalam paket .xlsx (format ZIP) yang
+ * sudah ditulis PhpSpreadsheet. Strukturnya meniru persis apa yang
+ * ditemukan pada sheet "Monthly Pivot" file referensi
+ * CII_Master_file_Expat_Meal_Report (satu pivot field sebagai Row Labels,
+ * beberapa dataField ber-subtotal SUM), hanya disederhanakan menjadi satu
+ * shared pivot cache utk kedua pivot ("Daily Pivot" pakai field Date
+ * sbg baris, "Monthly Pivot" pakai field Month sbg baris), bersumber dari
+ * Excel Table "DailyMealEntryTable" pada sheet "Daily Meal Entry".
+ * ========================================================================= */
+
+    /**
+     * Susun 12 <pivotField>, sesuai urutan kolom pada "Daily Meal Entry":
+     * 0 Date, 1 Month, 2 Expat Name, 3-9 tujuh kategori, 10 Total Daily
+     * Cost, 11 Remarks. Field ke-$axisFieldIndex jadi Row Labels (axisRow)
+     * dengan $axisItemCount item; field 3-10 jadi dataField (nilai SUM);
+     * sisanya field biasa (tidak dipakai, tapi tetap wajib ada di XML).
+     */
+    protected function pivotFieldsXml(int $axisFieldIndex, int $axisItemCount): string
+    {
+        $xml = '';
+        for ($i = 0; $i < 12; $i++) {
+            if ($i === $axisFieldIndex) {
+                $items = '<item x="0"/>';
+                for ($k = 1; $k < $axisItemCount; $k++) {
+                    $items .= '<item x="' . $k . '"/>';
+                }
+                $items .= '<item t="default"/>';
+                $xml .= '<pivotField axis="axisRow" showAll="0"><items count="' . ($axisItemCount + 1) . '">' . $items . '</items></pivotField>';
+            } elseif ($i >= 3 && $i <= 10) {
+                $xml .= '<pivotField dataField="1" showAll="0"/>';
+            } else {
+                $xml .= '<pivotField showAll="0"/>';
+            }
+        }
+
+        return $xml;
+    }
+
+    /** Susun <rowItems>: satu <i> per item Row Labels + satu baris Grand Total. */
+    protected function pivotRowItemsXml(int $itemCount): string
+    {
+        $xml = '<i><x/></i>';
+        for ($k = 1; $k < $itemCount; $k++) {
+            $xml .= '<i><x v="' . $k . '"/></i>';
+        }
+        $xml .= '<i t="grand"><x/></i>';
+
+        return $xml;
+    }
+
+    /**
+     * <colFields>/<colItems> tetap (field x="-2" = placeholder "Σ Nilai"
+     * bawaan Excel ketika ada lebih dari satu dataField), dan <dataFields>
+     * (8 kolom nilai: 7 kategori + Total Daily Cost), sesuai urutan kolom
+     * "Jumlah dari ..." yang sudah dipakai pada sheet Daily/Monthly Pivot.
+     */
+    protected function pivotColAndDataFieldsXml(): string
+    {
+        $colItems = '<i><x/></i>';
+        for ($k = 1; $k <= 7; $k++) {
+            $colItems .= '<i i="' . $k . '"><x v="' . $k . '"/></i>';
+        }
+
+        // [label, indeks cacheField] — urutan & indeks field sesuai kolom
+        // Daily Meal Entry: 3 Breakfast, 4 Lunch, 5 Dinner, 6 Coffee
+        // Support, 7 Bread, 8 Biscuit, 9 Other, 10 Total Daily Cost.
+        $dataFieldMap = [
+            ['Breakfast', 3],
+            ['Lunch', 4],
+            ['Dinner', 5],
+            ['Bread', 7],
+            ['Coffee Support', 6],
+            ['Biscuit', 8],
+            ['Other', 9],
+            ['Total Daily Cost', 10],
+        ];
+        $dataFields = '';
+        foreach ($dataFieldMap as [$label, $fld]) {
+            $name = htmlspecialchars('Jumlah dari ' . $label, ENT_QUOTES | ENT_XML1);
+            // numFmtId="3" = format bawaan Excel "#,##0" (pemisah ribuan,
+            // tanpa desimal). Tanpa ini nilai pecahan hasil bagi rata
+            // (mis. 33333.33) tampil apa adanya di PivotTable.
+            $dataFields .= '<dataField name="' . $name . '" fld="' . $fld . '" baseField="0" baseItem="0" numFmtId="3"/>';
+        }
+
+        return '<colFields count="1"><field x="-2"/></colFields>'
+            . '<colItems count="8">' . $colItems . '</colItems>'
+            . '<dataFields count="8">' . $dataFields . '</dataFields>';
+    }
+
+    /** Rangkai satu dokumen XML lengkap <pivotTableDefinition>. */
+    protected function buildPivotTableXml(string $name, int $cacheId, int $axisFieldIndex, int $axisItemCount, string $location): string
+    {
+        $pivotFields = $this->pivotFieldsXml($axisFieldIndex, $axisItemCount);
+        $rowItems    = $this->pivotRowItemsXml($axisItemCount);
+        $colAndData  = $this->pivotColAndDataFieldsXml();
+
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            . 'name="' . htmlspecialchars($name, ENT_QUOTES | ENT_XML1) . '" cacheId="' . $cacheId . '" '
+            . 'applyNumberFormats="0" applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" '
+            . 'applyAlignmentFormats="0" applyWidthHeightFormats="1" dataCaption="Values" updatedVersion="6" '
+            . 'minRefreshableVersion="3" useAutoFormatting="1" itemPrintTitles="1" createdVersion="6" indent="0" '
+            . 'outline="1" outlineData="1" multipleFieldFilters="0">'
+            . '<location ref="' . $location . '" firstHeaderRow="0" firstDataRow="1" firstDataCol="1"/>'
+            . '<pivotFields count="12">' . $pivotFields . '</pivotFields>'
+            . '<rowFields count="1"><field x="' . $axisFieldIndex . '"/></rowFields>'
+            . '<rowItems count="' . ($axisItemCount + 1) . '">' . $rowItems . '</rowItems>'
+            . $colAndData
+            . '<pivotTableStyleInfo name="PivotStyleLight16" showRowHeaders="1" showColHeaders="1" showRowStripes="0" showColStripes="0" showLastColumn="1"/>'
+            . '</pivotTableDefinition>';
+    }
+
+    /**
+     * Versi multi-field dari pivotFieldsXml(): dipakai khusus "Daily Pivot"
+     * yang punya 3 field di Rows sekaligus (Date, Expat Name, Month —
+     * sesuai urutan pada gambar "Baris"). $axisFields: peta indeks field
+     * (0-11) -> ['itemCount' => n, 'subtotal' => bool, 'numFmtId' => ?int].
+     * "subtotal" false artinya field itu TIDAK menampilkan baris "...
+     * Total" (defaultSubtotal="0"), supaya rowItems cukup berisi baris
+     * leaf (kombinasi asli) + Grand Total saja, tanpa baris subtotal per
+     * grup yang butuh entri rowItems tambahan.
+     */
+    protected function pivotFieldsMultiXml(array $axisFields): string
+    {
+        $xml = '';
+        for ($i = 0; $i < 12; $i++) {
+            if (isset($axisFields[$i])) {
+                $def       = $axisFields[$i];
+                $itemCount = $def['itemCount'];
+                $subtotal  = $def['subtotal'] ?? true;
+                $numFmtId  = $def['numFmtId'] ?? null;
+
+                $items = '<item x="0"/>';
+                for ($k = 1; $k < $itemCount; $k++) {
+                    $items .= '<item x="' . $k . '"/>';
+                }
+                $items .= '<item t="default"/>';
+
+                $attrs = 'axis="axisRow" showAll="0"';
+                if (! $subtotal) {
+                    $attrs .= ' defaultSubtotal="0"';
+                }
+                if ($numFmtId !== null) {
+                    $attrs .= ' numFmtId="' . $numFmtId . '"';
+                }
+
+                $xml .= '<pivotField ' . $attrs . '><items count="' . ($itemCount + 1) . '">' . $items . '</items></pivotField>';
+            } elseif ($i >= 3 && $i <= 10) {
+                $xml .= '<pivotField dataField="1" showAll="0"/>';
+            } else {
+                $xml .= '<pivotField showAll="0"/>';
+            }
+        }
+
+        return $xml;
+    }
+
+    /**
+     * Versi multi-level dari pivotRowItemsXml(): $combos adalah daftar
+     * baris leaf, tiap baris array indeks item per level sesuai urutan
+     * $rowFields (mis. [dateIdx, expatIdx, monthIdx]), TERURUT supaya
+     * baris dengan prefix level yang sama saling berdekatan (dipakai utk
+     * kompresi atribut "r" ala OOXML: jumlah level awal yang sama dgn
+     * baris sebelumnya tidak perlu ditulis ulang).
+     */
+    protected function pivotRowItemsMultiXml(array $combos, int $levels): string
+    {
+        $xml  = '';
+        $prev = null;
+        foreach ($combos as $c) {
+            $matchLen = 0;
+            if ($prev !== null) {
+                for ($lvl = 0; $lvl < $levels; $lvl++) {
+                    if ($c[$lvl] !== $prev[$lvl]) {
+                        break;
+                    }
+                    $matchLen++;
+                }
+            }
+
+            $x = '';
+            for ($lvl = $matchLen; $lvl < $levels; $lvl++) {
+                $v = $c[$lvl];
+                $x .= $v === 0 ? '<x/>' : '<x v="' . $v . '"/>';
+            }
+
+            $xml .= $matchLen > 0 ? '<i r="' . $matchLen . '">' . $x . '</i>' : '<i>' . $x . '</i>';
+            $prev = $c;
+        }
+        $xml .= '<i t="grand"><x/></i>';
+
+        return $xml;
+    }
+
+    /** Versi multi-field dari buildPivotTableXml(): rowFields > 1 field (nested). */
+    protected function buildPivotTableXmlMulti(string $name, int $cacheId, array $rowFieldIndexes, array $axisFields, array $combos, string $location): string
+    {
+        $levels      = count($rowFieldIndexes);
+        $pivotFields = $this->pivotFieldsMultiXml($axisFields);
+        $rowItems    = $this->pivotRowItemsMultiXml($combos, $levels);
+        $colAndData  = $this->pivotColAndDataFieldsXml();
+
+        $rowFieldsXml = '';
+        foreach ($rowFieldIndexes as $fx) {
+            $rowFieldsXml .= '<field x="' . $fx . '"/>';
+        }
+
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            . 'name="' . htmlspecialchars($name, ENT_QUOTES | ENT_XML1) . '" cacheId="' . $cacheId . '" '
+            . 'applyNumberFormats="0" applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" '
+            . 'applyAlignmentFormats="0" applyWidthHeightFormats="1" dataCaption="Values" updatedVersion="6" '
+            . 'minRefreshableVersion="3" useAutoFormatting="1" itemPrintTitles="1" createdVersion="6" indent="0" '
+            . 'outline="1" outlineData="1" multipleFieldFilters="0">'
+            . '<location ref="' . $location . '" firstHeaderRow="0" firstDataRow="1" firstDataCol="' . $levels . '"/>'
+            . '<pivotFields count="12">' . $pivotFields . '</pivotFields>'
+            . '<rowFields count="' . $levels . '">' . $rowFieldsXml . '</rowFields>'
+            . '<rowItems count="' . (count($combos) + 1) . '">' . $rowItems . '</rowItems>'
+            . $colAndData
+            . '<pivotTableStyleInfo name="PivotStyleLight16" showRowHeaders="1" showColHeaders="1" showRowStripes="0" showColStripes="0" showLastColumn="1"/>'
+            . '</pivotTableDefinition>';
+    }
+
+    /** Format angka utk atribut XML (hindari notasi ilmiah / trailing zero). */
+    protected function pivotNumAttr(float $v): string
+    {
+        if ($v == (int) $v) {
+            return (string) (int) $v;
+        }
+
+        return rtrim(rtrim(sprintf('%.6F', $v), '0'), '.');
+    }
+
+    /**
+     * Sisipkan PivotTable Excel asli ke sheet "Daily Pivot" & "Monthly
+     * Pivot" pada file .xlsx yang sudah ditulis PhpSpreadsheet di
+     * $filePath. Membaca ulang $entries (baris "Daily Meal Entry") utk
+     * membangun pivot cache (Row Labels = Date utk Daily Pivot, Month utk
+     * Monthly Pivot; 8 dataField = SUM tiap kategori + Total Daily Cost).
+     *
+     * Jika terjadi kegagalan (mis. struktur workbook tak terduga), fungsi
+     * ini berhenti dengan aman tanpa melempar exception — file export
+     * tetap terunduh dgn tampilan pivot (versi nilai statis), hanya tanpa
+     * objek PivotTable asli.
+     */
+    protected function injectPivotTables(string $filePath, Collection $entries): void
+    {
+        if ($entries->isEmpty()) {
+            return;
+        }
+
+        $catCols     = $this->kolomKategoriExcel;
+        $headersMap  = $this->kategoriExcelHeaders();
+        $bulanUrutan = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        $uniqueDates  = $entries->pluck('tanggal')->unique()->sort()->values()->all();
+        $bulanHadir   = $entries->map(fn($e) => Carbon::parse($e['tanggal'])->format('M'))->unique();
+        $uniqueMonths = array_values(array_filter($bulanUrutan, fn($b) => $bulanHadir->contains($b)));
+        $uniqueExpats = $entries->pluck('nama')->unique()->sort()->values()->all();
+
+        if (empty($uniqueDates) || empty($uniqueMonths) || empty($uniqueExpats)) {
+            return;
+        }
+
+        $dateIdx  = array_flip($uniqueDates);
+        $monthIdx = array_flip($uniqueMonths);
+        $expatIdx = array_flip($uniqueExpats);
+
+        $catMin = [];
+        $catMax = [];
+        $totalMin = null;
+        $totalMax = null;
+        $records  = [];
+
+        foreach ($entries as $e) {
+            $bln   = Carbon::parse($e['tanggal'])->format('M');
+            $total = 0.0;
+            $catVals = [];
+
+            foreach ($catCols as $c) {
+                $v = (float) $e[$c];
+                $catVals[] = $v;
+                $total += $v;
+                $catMin[$c] = array_key_exists($c, $catMin) ? min($catMin[$c], $v) : $v;
+                $catMax[$c] = array_key_exists($c, $catMax) ? max($catMax[$c], $v) : $v;
+            }
+            $totalMin = $totalMin === null ? $total : min($totalMin, $total);
+            $totalMax = $totalMax === null ? $total : max($totalMax, $total);
+
+            $records[] = array_merge([
+                $dateIdx[$e['tanggal']],
+                $monthIdx[$bln],
+                $expatIdx[$e['nama']],
+            ], $catVals, [$total]);
+        }
+
+        $esc = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_XML1);
+
+        /* ---------- pivotCacheDefinition ---------- */
+        $cacheFields = '<cacheField name="Date" numFmtId="16"><sharedItems containsSemiMixedTypes="0" '
+            . 'containsNonDate="0" containsDate="1" containsString="0" minDate="' . $uniqueDates[0] . 'T00:00:00" '
+            . 'maxDate="' . end($uniqueDates) . 'T00:00:00" count="' . count($uniqueDates) . '">';
+        foreach ($uniqueDates as $d) {
+            $cacheFields .= '<d v="' . $d . 'T00:00:00"/>';
+        }
+        $cacheFields .= '</sharedItems></cacheField>';
+
+        $cacheFields .= '<cacheField name="Month" numFmtId="0"><sharedItems count="' . count($uniqueMonths) . '">';
+        foreach ($uniqueMonths as $m) {
+            $cacheFields .= '<s v="' . $esc($m) . '"/>';
+        }
+        $cacheFields .= '</sharedItems></cacheField>';
+
+        $cacheFields .= '<cacheField name="Expat Name" numFmtId="0"><sharedItems count="' . count($uniqueExpats) . '">';
+        foreach ($uniqueExpats as $n) {
+            $cacheFields .= '<s v="' . $esc($n) . '"/>';
+        }
+        $cacheFields .= '</sharedItems></cacheField>';
+
+        foreach ($catCols as $c) {
+            $mn = $this->pivotNumAttr($catMin[$c] ?? 0.0);
+            $mx = $this->pivotNumAttr($catMax[$c] ?? 0.0);
+            $cacheFields .= '<cacheField name="' . $esc($headersMap[$c]) . '" numFmtId="42">'
+                . '<sharedItems containsSemiMixedTypes="0" containsString="0" containsNumber="1" minValue="' . $mn . '" maxValue="' . $mx . '"/></cacheField>';
+        }
+        $cacheFields .= '<cacheField name="Total Daily Cost" numFmtId="42"><sharedItems containsSemiMixedTypes="0" '
+            . 'containsString="0" containsNumber="1" minValue="' . $this->pivotNumAttr($totalMin ?? 0.0) . '" maxValue="' . $this->pivotNumAttr($totalMax ?? 0.0) . '"/></cacheField>';
+        $cacheFields .= '<cacheField name="Remarks" numFmtId="0"><sharedItems containsNonDate="0" containsString="0" containsBlank="1"/></cacheField>';
+
+        $pivotCacheDefinitionXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            . 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1" '
+            . 'refreshOnLoad="1" recordCount="' . count($records) . '">'
+            . '<cacheSource type="worksheet"><worksheetSource name="DailyMealEntryTable"/></cacheSource>'
+            . '<cacheFields count="12">' . $cacheFields . '</cacheFields>'
+            . '</pivotCacheDefinition>';
+
+        /* ---------- pivotCacheRecords ---------- */
+        $recXml = '';
+        foreach ($records as $r) {
+            $recXml .= '<r><x v="' . $r[0] . '"/><x v="' . $r[1] . '"/><x v="' . $r[2] . '"/>';
+            for ($i = 3; $i <= 10; $i++) {
+                $recXml .= '<n v="' . $this->pivotNumAttr($r[$i]) . '"/>';
+            }
+            $recXml .= '<m/></r>';
+        }
+        $pivotCacheRecordsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            . 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" count="' . count($records) . '">'
+            . $recXml . '</pivotCacheRecords>';
+
+        /* ---------- pivotTable Daily Pivot: Rows = Date, Expat Name, Month (nested, sesuai gambar) ---------- */
+        // Urutkan entries per (tanggal, nama) supaya baris dgn tanggal/expat
+        // yang sama saling berdekatan — dibutuhkan utk kompresi rowItems.
+        $dailySorted = $entries->sortBy(function ($e) use ($dateIdx, $expatIdx) {
+            return sprintf('%08d-%08d', $dateIdx[$e['tanggal']], $expatIdx[$e['nama']]);
+        })->values();
+
+        $dailyCombos = [];
+        foreach ($dailySorted as $e) {
+            $bln           = Carbon::parse($e['tanggal'])->format('M');
+            $dailyCombos[] = [$dateIdx[$e['tanggal']], $expatIdx[$e['nama']], $monthIdx[$bln]];
+        }
+
+        $dailyAxisFields = [
+            0 => ['itemCount' => count($uniqueDates), 'subtotal' => false, 'numFmtId' => 16], // Date
+            2 => ['itemCount' => count($uniqueExpats), 'subtotal' => false],                  // Expat Name
+            1 => ['itemCount' => count($uniqueMonths), 'subtotal' => false],                  // Month
+        ];
+
+        $dailyLastRow   = 3 + count($dailyCombos) + 1;
+        $monthlyLastRow = 3 + count($uniqueMonths) + 1;
+
+        // Daily Pivot: 3 row field (Date, Expat Name, Month) di layout
+        // outline, tiap field pakai 1 kolom sendiri (A-C) sebelum 8 kolom
+        // data dimulai (D-K) -> rentang location wajib sampai kolom K,
+        // BUKAN kolom I (kolom I hanya cukup utk 1 row field seperti pada
+        // Monthly Pivot). Rentang yang kependekan inilah yang bikin Excel
+        // menandai pivotTable1.xml rusak & minta "Perbaiki".
+        $dailyLastCol   = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(3 + 8); // 3 row field + 8 dataField
+        $pivotTable1Xml = $this->buildPivotTableXmlMulti('DailyPivotTable', 1, [0, 2, 1], $dailyAxisFields, $dailyCombos, "A3:{$dailyLastCol}{$dailyLastRow}");
+        $pivotTable2Xml = $this->buildPivotTableXml('MonthlyPivotTable', 1, 1, count($uniqueMonths), "A3:I{$monthlyLastRow}");
+
+        /* ---------- Buka & edit paket .xlsx (ZIP) ---------- */
+        $zip = new \ZipArchive();
+        if ($zip->open($filePath) !== true) {
+            return;
+        }
+
+        $workbookXml = $zip->getFromName('xl/workbook.xml');
+        $relsXml     = $zip->getFromName('xl/_rels/workbook.xml.rels');
+        if ($workbookXml === false || $relsXml === false) {
+            $zip->close();
+            return;
+        }
+
+        // Peta nama sheet -> r:id, dari <sheet name="..." ... r:id="..."/>.
+        preg_match_all('/<sheet\b([^>]*)\/>/', $workbookXml, $sheetTags);
+        $sheetRid = [];
+        foreach ($sheetTags[1] as $attrs) {
+            if (preg_match('/name="([^"]*)"/', $attrs, $mName) && preg_match('/r:id="([^"]*)"/', $attrs, $mRid)) {
+                $sheetRid[$mName[1]] = $mRid[1];
+            }
+        }
+
+        // Peta r:id -> target file, dari xl/_rels/workbook.xml.rels.
+        preg_match_all('/<Relationship\b([^>]*)\/>/', $relsXml, $relTags);
+        $ridTarget = [];
+        $usedRidNums = [];
+        foreach ($relTags[1] as $attrs) {
+            if (preg_match('/Id="rId(\d+)"/', $attrs, $mNum)) {
+                $usedRidNums[] = (int) $mNum[1];
+            }
+            if (preg_match('/Id="([^"]*)"/', $attrs, $mId) && preg_match('/Target="([^"]*)"/', $attrs, $mTarget)) {
+                $ridTarget[$mId[1]] = $mTarget[1];
+            }
+        }
+
+        if (
+            ! isset($sheetRid['Daily Pivot'], $sheetRid['Monthly Pivot'])
+            || ! isset($ridTarget[$sheetRid['Daily Pivot']], $ridTarget[$sheetRid['Monthly Pivot']])
+        ) {
+            $zip->close();
+            return;
+        }
+
+        $dailySheetFile   = 'xl/' . $ridTarget[$sheetRid['Daily Pivot']];
+        $monthlySheetFile = 'xl/' . $ridTarget[$sheetRid['Monthly Pivot']];
+
+        $dailyRelsPath   = dirname($dailySheetFile) . '/_rels/' . basename($dailySheetFile) . '.rels';
+        $monthlyRelsPath = dirname($monthlySheetFile) . '/_rels/' . basename($monthlySheetFile) . '.rels';
+
+        // rId baru (belum dipakai) utk relationship pivotCacheDefinition pd workbook.
+        $newRidNum = empty($usedRidNums) ? 1 : (max($usedRidNums) + 1);
+        $newRid    = 'rId' . $newRidNum;
+
+        $relsXml = str_replace(
+            '</Relationships>',
+            '<Relationship Id="' . $newRid . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition1.xml"/></Relationships>',
+            $relsXml
+        );
+
+        $workbookXml = str_replace(
+            '</workbook>',
+            '<pivotCaches><pivotCache cacheId="1" r:id="' . $newRid . '"/></pivotCaches></workbook>',
+            $workbookXml
+        );
+
+        $contentTypesXml = $zip->getFromName('[Content_Types].xml');
+        if ($contentTypesXml === false) {
+            $zip->close();
+            return;
+        }
+        $extraTypes = '<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>'
+            . '<Override PartName="/xl/pivotCache/pivotCacheRecords1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/>'
+            . '<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/>'
+            . '<Override PartName="/xl/pivotTables/pivotTable2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/>';
+        $contentTypesXml = str_replace('</Types>', $extraTypes . '</Types>', $contentTypesXml);
+
+        $dailyRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable" Target="../pivotTables/pivotTable1.xml"/>'
+            . '</Relationships>';
+        $monthlyRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable" Target="../pivotTables/pivotTable2.xml"/>'
+            . '</Relationships>';
+
+        $pivotCacheRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords" Target="pivotCacheRecords1.xml"/>'
+            . '</Relationships>';
+
+        $replace = function (string $path, string $content) use ($zip): void {
+            if ($zip->locateName($path) !== false) {
+                $zip->deleteName($path);
+            }
+            $zip->addFromString($path, $content);
+        };
+
+        $replace('xl/workbook.xml', $workbookXml);
+        $replace('xl/_rels/workbook.xml.rels', $relsXml);
+        $replace('[Content_Types].xml', $contentTypesXml);
+        $replace($dailyRelsPath, $dailyRelsXml);
+        $replace($monthlyRelsPath, $monthlyRelsXml);
+        $replace('xl/pivotCache/pivotCacheDefinition1.xml', $pivotCacheDefinitionXml);
+        $replace('xl/pivotCache/pivotCacheRecords1.xml', $pivotCacheRecordsXml);
+        $replace('xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels', $pivotCacheRelsXml);
+        $replace('xl/pivotTables/pivotTable1.xml', $pivotTable1Xml);
+        $replace('xl/pivotTables/pivotTable2.xml', $pivotTable2Xml);
+
+        $zip->close();
+    }
+
+    /* =========================================================================
+ * HELPERS
+ * ========================================================================= */
+
+    /**
+     * Parse filter tanggal & npk dari query string.
+     *
+     * npk dikirim sebagai array (npk[]=...&npk[]=...) dari filter multi-select
+     * pada halaman. Nilai kosong/duplikat dibuang. Array kosong berarti
+     * "semua expat" (tidak difilter).
+     */
+    protected function parseFilters(Request $request): array
+    {
+        $start = $request->input('start_date', now()->startOfMonth()->format('Y-m-d'));
+        $end   = $request->input('end_date', now()->format('Y-m-d'));
+
+        $npk = $request->input('npk', []);
+        if (! is_array($npk)) {
+            $npk = ($npk === null || $npk === '') ? [] : [$npk];
+        }
+        $npk = collect($npk)
+            ->map(fn($v) => trim((string) $v))
+            ->filter(fn($v) => $v !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        return [$start, $end, $npk];
+    }
+}

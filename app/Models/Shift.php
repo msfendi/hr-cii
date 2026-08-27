@@ -13,6 +13,7 @@ class Shift extends Model
         'gender',
         'start_date',
         'end_date',
+        'is_holiday',
     ];
 
     public function employeeShifts()

@@ -78,7 +78,7 @@ class UserController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|max:255',
-            'npk' => 'required|max:255',
+            // 'npk' => 'required|max:255',
             'email' => 'required|email|max:255|',
             'password' => 'nullable|min:8',
         ]);
@@ -95,6 +95,8 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => $request->password ? Hash::make($request->password) : $user->password,
         ]);
+
+        // dd($user, $request->password);
 
         $user->save();
 

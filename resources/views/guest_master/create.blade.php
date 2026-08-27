@@ -50,17 +50,11 @@
                                     <div class="col-md-12">
                                         <div class="form-group">
                                             <label>Guest Name</label>
-                                            <select name="id"
-                                                class="form-control select2"
+                                            <input type="text"
+                                                name="name"
+                                                class="form-control"
+                                                value="{{ old('name') }}"
                                                 required>
-
-                                                @foreach($guests as $guest)
-                                                    <option value="{{ $guest->id }}">
-                                                        {{ $guest->guest_name }}
-                                                    </option>
-                                                @endforeach
-
-                                            </select>
                                         </div>
                                     </div>
 
@@ -175,21 +169,6 @@
 
         </div>
     </div>
-
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"
-        rel="stylesheet" />
-
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-    <script>
-        $(document).ready(function() {
-            $('.select2').select2({
-                width: '100%'
-            });
-        });
-    </script>
 
 </body>
 

@@ -11,6 +11,7 @@ class EmployeesContract extends Model
 {
     use HasFactory;
 
+    protected $connection = 'cii';
     protected $table      = 'employees_contract';
     protected $primaryKey = 'id';
     protected $keyType    = 'string';

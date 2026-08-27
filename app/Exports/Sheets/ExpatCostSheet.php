@@ -49,6 +49,7 @@ class ExpatCostSheet implements
             ->join('expat_master as m', 'm.npk', '=', 'c.npk')
             ->join('expat_cost_components as cc', 'cc.id', '=', 'c.component')
             ->where('cc.component_type', '!=', 'meal')
+            ->where('cc.component_type', '!=', 'transport')
             ->whereBetween('c.transactions_date', [$this->start, $this->end])
             ->select(
                 'c.npk',

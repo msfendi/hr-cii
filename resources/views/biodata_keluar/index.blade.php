@@ -44,6 +44,7 @@
                                             <th>TMK</th>
                                             <th class="text-center">TKK</th>
                                             <th class="text-center" style="width:200px;">Keterangan</th>
+                                            <th class="text-center">Alasan Keluar</th>
                                             <th class="text-center" style="width:80px;">Aksi</th>
                                         </tr>
                                     </thead>
@@ -118,6 +119,13 @@
                     }
                 },
                 {
+                    data: 'leave_reasons',
+                    className: 'text-center',
+                    render: function (data) {
+                        return data ? data : '-';
+                    }
+                },
+                {
                     data: null,
                     className: 'text-center',
                     orderable: false,
@@ -153,11 +161,20 @@
             $('#detail_ktp').text(row.KTP || '-');
             $('#detail_bagian').text(row.BAGIAN || '-');
             $('#detail_tmk').text(fmtTgl(row.TMK));
-            $('#detail_tkk').text(fmtTgl(row.TKK));
+
+            // Set input TKK
+            var tkkVal = '';
+            if (row.TKK) {
+                tkkVal = String(row.TKK).split('T')[0].split(' ')[0];
+            }
+            $('#modal_tkk').val(tkkVal);
 
             // Set select value
             var current = row.KETERANGAN || '';
             $('#modal_keterangan').val(current);
+
+            var currentAlasan = row.leave_reasons || '';
+            $('#modal_alasan_keluar').val(currentAlasan);
 
             // Store NPK for save
             $('#btnSaveKeterangan').data('npk', row.NPK);
@@ -165,11 +182,18 @@
             $('#editKeteranganModal').modal('show');
         });
 
-        // Simpan keterangan dari modal
+        // Simpan keterangan & TKK dari modal
         $('#btnSaveKeterangan').on('click', function () {
             var npk = $(this).data('npk');
             var val = $('#modal_keterangan').val();
+            var tkk = $('#modal_tkk').val();
+            var alasan = $('#modal_alasan_keluar').val();
             var btn = $(this);
+
+            if (!tkk) {
+                Swal.fire('Peringatan', 'Harap isi Tanggal Keluar (TKK).', 'warning');
+                return;
+            }
 
             if (!val) {
                 Swal.fire('Peringatan', 'Harap pilih Status Keluar.', 'warning');
@@ -179,11 +203,13 @@
             btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Menyimpan...');
 
             $.ajax({
-                url: '/biodata-keluar/update-keterangan/' + npk,
+                url: '/biodata-keluar/update/' + npk,
                 type: 'POST',
                 data: {
                     _token: '{{ csrf_token() }}',
-                    keterangan: val
+                    tkk: tkk,
+                    keterangan: val,
+                    leave_reasons: alasan
                 },
                 success: function (res) {
                     if (res.status === 'success') {
@@ -222,7 +248,7 @@
                     <h5 class="modal-title font-weight-bold text-danger mb-0">
                         <i class="fas fa-user-times mr-2"></i>Detail Karyawan Keluar
                     </h5>
-                    <p class="text-muted small mb-0 mt-1">Update status keluar karyawan</p>
+                    <p class="text-muted small mb-0 mt-1">Update status & tanggal keluar karyawan</p>
                 </div>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
@@ -251,9 +277,8 @@
                         <div class="form-control bg-light px-3" id="detail_tmk" style="min-height:38px;">-</div>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="small font-weight-bold text-muted ml-1">TKK (Tanggal Keluar)</label>
-                        <div class="form-control bg-light px-3 text-danger font-weight-bold" id="detail_tkk"
-                            style="min-height:38px;">-</div>
+                        <label class="small font-weight-bold text-danger ml-1">TKK (Tanggal Keluar) <span class="text-danger">*</span></label>
+                        <input type="date" id="modal_tkk" class="form-control px-3 border-danger font-weight-bold">
                     </div>
                 </div>
                 <hr class="my-2">
@@ -268,6 +293,10 @@
                             <option value="HK">HK — Habis Kontrak</option>
                             <option value="MA">MA — Mangkir</option>
                         </select>
+                    </div>
+                    <div class="col-md-12 mb-2">
+                        <label class="small font-weight-bold text-danger ml-1">Alasan Keluar</label>
+                        <textarea id="modal_alasan_keluar" class="form-control px-3 border-danger text-danger" rows="3" placeholder="Masukkan alasan keluar..."></textarea>
                     </div>
                 </div>
             </div>

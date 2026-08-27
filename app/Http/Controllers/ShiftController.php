@@ -27,9 +27,9 @@ class ShiftController extends Controller
             'name' => 'required',
             'work_start' => 'required',
             'work_end' => 'required',
-            'gender' => 'required'
+            'gender' => 'required',
+            'is_holiday' => 'nullable|in:0,1'
         ]);
-
 
         Shift::create($request->all());
 
@@ -46,6 +46,14 @@ class ShiftController extends Controller
 
     public function update(Request $request, $id)
     {
+        $request->validate([
+            'name' => 'required',
+            'work_start' => 'required',
+            'work_end' => 'required',
+            'gender' => 'required',
+            'is_holiday' => 'nullable|in:0,1'
+        ]);
+
         $shift = Shift::findOrFail($id);
 
         $shift->update($request->all());

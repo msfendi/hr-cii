@@ -34,6 +34,16 @@ class PKWT extends Model
         'TMPTLAHIR',
         'NOREK',
         'JURUSAN',
-        'FASKES'
+        'FASKES',
+        'leave_reasons',
+        'file_surat_lamaran',
+        'file_cv',
+        'file_ktp',
+        'file_kk',
+        'file_ijazah',
+        'file_akta_kelahiran',
+        'file_skck',
+        'file_surat_sehat',
+        'file_pas_foto'
     ];
 }

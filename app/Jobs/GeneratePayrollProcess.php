@@ -30,14 +30,25 @@ class GeneratePayrollProcess implements ShouldQueue
     public $runId;
 
     /**
+     * NPK spesifik untuk mode "per NPK" (single employee).
+     * - null  -> mode ALL (semua karyawan, dipakai untuk generate payroll
+     *            sungguhan / check payroll biasa).
+     * - 'xxx' -> mode PER NPK (hanya 1 karyawan, dipakai untuk live slip
+     *            preview) — query dibatasi dari awal, TIDAK compute
+     *            seluruh karyawan lalu difilter belakangan.
+     */
+    public $npk;
+
+    /**
      * Throttle timestamp for progress updates (avoid 1 UPDATE query per
      * employee x component, which was previously hammering the DB).
      */
     private $lastProgressUpdate = 0;
 
-    public function __construct($runId)
+    public function __construct($runId, $npk = null)
     {
         $this->runId = $runId;
+        $this->npk   = $npk;
     }
 
     public function handle()
@@ -45,9 +56,14 @@ class GeneratePayrollProcess implements ShouldQueue
         $this->processPayroll(false);
     }
 
-    public function simulation()
+    /**
+     * @param  string|null $npk  Override NPK per-panggilan. Jika null,
+     *                           pakai $this->npk dari constructor (bisa
+     *                           juga null -> mode ALL).
+     */
+    public function simulation($npk = null)
     {
-        return $this->processPayroll(true);
+        return $this->processPayroll(true, $npk ?? $this->npk);
     }
 
     /**
@@ -74,7 +90,7 @@ class GeneratePayrollProcess implements ShouldQueue
         $this->lastProgressUpdate = $now;
     }
 
-    private function processPayroll($isCheck = false)
+    private function processPayroll($isCheck = false, $npk = null)
     {
         $payrollResults = [];
         if (!$isCheck) {
@@ -146,7 +162,21 @@ class GeneratePayrollProcess implements ShouldQueue
             })
 
             ->where('p.NPK', '!=', 'C-00017')
-            // ->where('p.NPK', '=', 'C-04554')
+            // ->where('p.NPK', '=', 'C-04477')
+
+            /*
+            |----------------------------------------------------------------
+            | MODE PER NPK
+            |----------------------------------------------------------------
+            | Kalau $npk diisi (live slip preview), batasi dari root query
+            | paling awal supaya seluruh subquery turunan & loop di bawah
+            | hanya memproses 1 karyawan — bukan compute semua karyawan
+            | dulu baru difilter belakangan (lambat).
+            |----------------------------------------------------------------
+            */
+            ->when($npk, function ($q) use ($npk) {
+                $q->where('p.NPK', $npk);
+            })
 
             ->select(
                 'p.NPK',
@@ -165,6 +195,26 @@ class GeneratePayrollProcess implements ShouldQueue
             )
             ->distinct();
 
+        /*
+        |--------------------------------------------------------------------------
+        | PKWT AKTIF (NPK, TMK, TKK) -- DIPAKAI UNTUK:
+        | 1. Membatasi absence_days (H/MA/P1/SD) dari `overtimes` agar hanya
+        |    valid jika tanggalnya berada di antara TMK - TKK karyawan.
+        | 2. Menjadi acuan tanggal untuk perhitungan BR (sebelum TMK) dan OUT
+        |    (setelah/mulai TKK) yang sekarang dihitung otomatis dari tanggal,
+        |    bukan dari teks 'BR'/'OUT' di table overtimes lagi.
+        |--------------------------------------------------------------------------
+        */
+        $pkwtActive = DB::connection('cii')
+            ->table('PKWT as p')
+            ->select('p.NPK', 'p.TMK', 'p.TKK')
+            ->where('p.TMK', '<=', $periodEnd)
+            ->where(function ($q) use ($periodStart) {
+                $q->whereNull('p.TKK')
+                    ->orWhere('p.TKK', '>=', $periodStart);
+            })
+            ->where('p.NPK', '!=', 'C-00017');
+
         $latestContract = DB::table('employees_contract as ec1')
             ->select(
                 'ec1.npk',
@@ -175,7 +225,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.daily_salary'
             )
             ->where('ec1.npk', '!=', 'C-00017')
-            // ->where('ec1.npk', '=', 'C-04554')
+            // ->where('ec1.npk', '=', 'C-04477')
 
             // ✅ contract harus masuk range periode
             ->whereDate('ec1.start_date', '<=', $periodEnd)
@@ -206,6 +256,9 @@ class GeneratePayrollProcess implements ShouldQueue
             ->leftJoinSub($latestContract, 'ec', function ($join) {
                 $join->on('overtimes.NPK', '=', 'ec.npk');
             })
+            ->leftJoinSub($pkwtActive, 'pk', function ($join) {
+                $join->on('overtimes.NPK', '=', 'pk.NPK');
+            })
             ->leftJoin('holidays as h', function ($join) {
                 $join->on(
                     DB::raw('CAST(overtimes.OVERTIME_DATE AS DATE)'),
@@ -217,15 +270,24 @@ class GeneratePayrollProcess implements ShouldQueue
             ->select(
                 'overtimes.NPK',
 
+                // BR & OUT TIDAK LAGI DIAMBIL DARI OVERTIMES (dihitung otomatis
+                // dari TMK/TKK di PKWT, lihat foreach($employees) di bawah).
+                // H/MA/P1 hanya valid (dihitung) jika tanggalnya berada di
+                // antara TMK - TKK karyawan (data di luar rentang itu dianggap
+                // tidak valid, mis. MA/P1 setelah TKK atau sebelum TMK).
                 DB::raw("
             SUM(
                 CASE
                     WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
+                        AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+                        AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                         THEN 0.5
 
                     WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                         AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
+                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1')
+                        AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+                        AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                         THEN 1
 
                     ELSE 0
@@ -239,6 +301,8 @@ class GeneratePayrollProcess implements ShouldQueue
                     WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                         AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
                         AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'SD'
+                        AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+                        AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                         THEN 1
 
                     ELSE 0
@@ -255,6 +319,9 @@ class GeneratePayrollProcess implements ShouldQueue
             })
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('overtimes.NPK', '=', 'bio.NPK');
+            })
+            ->leftJoinSub($pkwtActive, 'pk', function ($join) {
+                $join->on('overtimes.NPK', '=', 'pk.NPK');
             })
             ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
             ->leftJoin('holidays as h', function ($join) {
@@ -326,19 +393,30 @@ CASE
 END AS special_overtime_hours
 "),
 
+                // BR & OUT tidak lagi dihitung dari overtimes (lihat auto BR/OUT
+                // dari TMK/TKK di foreach($employees)). H/MA/P1 hanya valid jika
+                // tanggalnya di antara TMK - TKK karyawan.
                 DB::raw("
             CASE
                 WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
+                    AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+                    AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                     THEN 0.5
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1')
+                    AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
+                    AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                     THEN 1
 
                 ELSE 0
             END AS absence_days
         "),
+                // absence_status TETAP menampilkan kode aslinya (H, MA, P1, BR,
+                // OUT, SD) apa adanya sebagai referensi/audit trail, meskipun
+                // entry tsb di luar TMK-TKK (tidak valid) sehingga TIDAK ikut
+                // dihitung di absence_days di atas.
                 DB::raw("
             CASE
                 WHEN UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) = 'H'
@@ -355,6 +433,45 @@ END AS special_overtime_hours
             ->orderBy('overtimes.OVERTIME_DATE')
             ->get()
             ->groupBy('NPK');
+
+        /*
+        |--------------------------------------------------------------------------
+        | ABAIKAN overtimes.JUMLAH_JAM_LEMBUR (NUMERIK) JIKA ADA IJIN YANG BELUM
+        | KEMBALI (ijin_meninggalkan_pekerjaans.jam_kembali = NULL) DI NPK & TANGGAL
+        | YANG SAMA
+        |--------------------------------------------------------------------------
+        | overtime_hours & special_overtime_hours di atas hanya terisi (bukan 0)
+        | kalau JUMLAH_JAM_LEMBUR numerik (TRY_CAST(...) IS NOT NULL). Kalau pada
+        | NPK & tanggal yang sama ternyata karyawan tsb punya baris di
+        | ijin_meninggalkan_pekerjaans dengan jam_kembali masih NULL (belum
+        | kembali dari ijin), maka JUMLAH_JAM_LEMBUR pada tanggal itu dianggap
+        | tidak valid untuk dihitung -> overtime_hours & special_overtime_hours
+        | dinolkan di sini (post-process di PHP karena ijin_meninggalkan_pekerjaans
+        | ada di connection DB yang berbeda dari `overtimes`/`cii`).
+        |--------------------------------------------------------------------------
+        */
+        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+            ->whereBetween('tanggal', [$periodStart, $periodEnd])
+            ->whereNull('jam_kembali')
+            ->select('npk', DB::raw('CAST(tanggal AS DATE) as tanggal'))
+            ->get()
+            ->map(function ($row) {
+                return $row->npk . '|' . Carbon::parse($row->tanggal)->format('Y-m-d');
+            })
+            ->flip();
+
+        $overtimeDetails = $overtimeDetails->map(function ($rows) use ($openIjinDates) {
+            return $rows->map(function ($ot) use ($openIjinDates) {
+                $key = $ot->NPK . '|' . Carbon::parse($ot->OVERTIME_DATE)->format('Y-m-d');
+
+                if (isset($openIjinDates[$key])) {
+                    $ot->overtime_hours = 0;
+                    $ot->special_overtime_hours = 0;
+                }
+
+                return $ot;
+            });
+        });
 
         /*
 |--------------------------------------------------------------------------
@@ -434,7 +551,7 @@ END AS special_overtime_hours
         calc.reason,
         calc.late_actual,
         CASE
-            WHEN calc.late_actual > 240 THEN 240
+            WHEN calc.late_actual > 240 THEN calc.late_actual
             ELSE calc.late_actual
         END as late_minute
     ")
@@ -515,7 +632,7 @@ END AS special_overtime_hours
         calc.npk,
         SUM(
             CASE
-                WHEN calc.raw_late_minute > 240 THEN 240
+                WHEN calc.raw_late_minute > 240 THEN calc.raw_late_minute
                 ELSE calc.raw_late_minute
             END
         ) as late_minutes,
@@ -568,53 +685,76 @@ END AS special_overtime_hours
 
         $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans as imp')
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
-            ->leftJoin('dept_breaktimes as db', 'db.id_dept', '=', 'b.ID_DEPT')
-            ->leftJoin('break_masters as bm', 'bm.id', '=', 'db.id_break')
+            ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
+            ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
+            ->leftJoin('employee_shifts as ijes', function ($join) {
+                $join->on('ijes.npk', '=', 'imp.npk')
+                    ->on(
+                        DB::raw('CAST(ijes.shift_date AS DATE)'),
+                        '=',
+                        DB::raw('CAST(imp.tanggal AS DATE)')
+                    );
+            })
+            ->leftJoin('shifts as ijs', function ($join) {
+                $join->on('ijes.shift_id', '=', 'ijs.id')
+                    ->whereNotNull('ijes.shift_id');
+            })
             ->selectRaw("
         imp.npk,
 
         SUM(
+            DATEDIFF(
+                MINUTE,
+                imp.jam_keluar,
+                COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00')
+            )
+            -
             CASE
-                WHEN imp.jam_kembali IS NULL THEN 0
-                ELSE
-                    DATEDIFF(MINUTE, imp.jam_keluar, imp.jam_kembali)
-                    -
-                    CASE
-                        WHEN imp.jam_keluar < bm.time_end
-                         AND imp.jam_kembali > bm.time_start
-                        THEN
-                            DATEDIFF(
-                                MINUTE,
-                                CASE
-                                    WHEN imp.jam_keluar > bm.time_start
-                                        THEN imp.jam_keluar
-                                    ELSE bm.time_start
-                                END,
-                                CASE
-                                    WHEN imp.jam_kembali < bm.time_end
-                                        THEN imp.jam_kembali
-                                    ELSE bm.time_end
-                                END
-                            )
-                        ELSE 0
-                    END
+                WHEN imp.jam_keluar < bm.time_end
+                 AND COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00') > bm.time_start
+                THEN
+                    DATEDIFF(
+                        MINUTE,
+                        CASE
+                            WHEN imp.jam_keluar > bm.time_start
+                                THEN imp.jam_keluar
+                            ELSE bm.time_start
+                        END,
+                        CASE
+                            WHEN COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00') < bm.time_end
+                                THEN COALESCE(imp.jam_kembali, CAST(ijs.work_end AS TIME), '17:00:00')
+                            ELSE bm.time_end
+                        END
+                    )
+                ELSE 0
             END
         ) as total_ijin_minutes
     ")
             ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])
+            ->where('imp.is_deduction', true)
             ->groupBy('imp.npk');
 
         // dd($ijinSummary->get());
 
         $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans as imp')
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
-            ->leftJoin('dept_breaktimes as db', 'db.id_dept', '=', 'b.ID_DEPT')
-            ->leftJoin('break_masters as bm', 'bm.id', '=', 'db.id_break')
+            ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
+            ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
+            ->leftJoin('employee_shifts as ijdes', function ($join) {
+                $join->on('ijdes.npk', '=', 'imp.npk')
+                    ->on(
+                        DB::raw('CAST(ijdes.shift_date AS DATE)'),
+                        '=',
+                        DB::raw('CAST(imp.tanggal AS DATE)')
+                    );
+            })
+            ->leftJoin('shifts as ijds', function ($join) {
+                $join->on('ijdes.shift_id', '=', 'ijds.id')
+                    ->whereNotNull('ijdes.shift_id');
+            })
             ->selectRaw("
         imp.npk,
         b.NAMA_KARYAWAN,
-        d.DEPARTEMENT,
         imp.tanggal,
         imp.jam_keluar,
         imp.rencana_kembali,
@@ -622,34 +762,36 @@ END AS special_overtime_hours
         imp.reason,
         bm.time_start,
         bm.time_end,
+        db.DEPARTEMENT,
 
+        DATEDIFF(
+            MINUTE,
+            imp.jam_keluar,
+            COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00')
+        )
+        -
         CASE
-            WHEN imp.jam_kembali IS NULL THEN 0
-            ELSE
-                DATEDIFF(MINUTE, imp.jam_keluar, imp.jam_kembali)
-                -
-                CASE
-                    WHEN imp.jam_keluar < bm.time_end
-                     AND imp.jam_kembali > bm.time_start
-                    THEN
-                        DATEDIFF(
-                            MINUTE,
-                            CASE
-                                WHEN imp.jam_keluar > bm.time_start
-                                    THEN imp.jam_keluar
-                                ELSE bm.time_start
-                            END,
-                            CASE
-                                WHEN imp.jam_kembali < bm.time_end
-                                    THEN imp.jam_kembali
-                                ELSE bm.time_end
-                            END
-                        )
-                    ELSE 0
-                END
+            WHEN imp.jam_keluar < bm.time_end
+             AND COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00') > bm.time_start
+            THEN
+                DATEDIFF(
+                    MINUTE,
+                    CASE
+                        WHEN imp.jam_keluar > bm.time_start
+                            THEN imp.jam_keluar
+                        ELSE bm.time_start
+                    END,
+                    CASE
+                        WHEN COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00') < bm.time_end
+                            THEN COALESCE(imp.jam_kembali, CAST(ijds.work_end AS TIME), '17:00:00')
+                        ELSE bm.time_end
+                    END
+                )
+            ELSE 0
         END AS ijin_minutes
     ")
             ->whereBetween('imp.tanggal', [$periodStart, $periodEnd])
+            ->where('imp.is_deduction', true)
             ->orderBy('imp.tanggal', 'asc')
             ->get()
             ->groupBy('npk');
@@ -703,6 +845,79 @@ END AS special_overtime_hours
             )
             ->where('period_id', $period->id)
             ->groupBy('npk');
+
+        /*
+        |--------------------------------------------------------------------------
+        | NIGHT SHIFT SUMMARY (untuk komponen Night Shift Compensation)
+        |--------------------------------------------------------------------------
+        | Dihitung dari jumlah baris employee_shifts (per NPK) dalam periode
+        | payroll berjalan, dimana shift yang bersangkutan (shifts.work_start)
+        | dimulai LEBIH dari jam 18:00. Shift dengan nama mengandung kata
+        | "Security" DIKECUALIKAN dari perhitungan ini — pengecekan nama
+        | dilakukan case-insensitive (LOWER) supaya tidak lolos hanya karena
+        | perbedaan huruf besar/kecil, mis. "security", "SECURITY", "Security".
+        |--------------------------------------------------------------------------
+        */
+        $nightShiftSummary = DB::connection('cii')
+            ->table('employee_shifts as es')
+            ->join('shifts as s', 'es.shift_id', '=', 's.id')
+            ->leftJoin('overtimes as o', function ($join) {
+                $join->on('o.NPK', '=', 'es.npk')
+                    ->on(DB::raw('CAST(o.OVERTIME_DATE AS DATE)'), '=', DB::raw('CAST(es.shift_date AS DATE)'));
+            })
+            ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
+            ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
+            ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->where(function ($q) {
+                $q->whereNull('o.JUMLAH_JAM_LEMBUR')
+                    ->orWhereRaw("TRY_CAST(o.JUMLAH_JAM_LEMBUR AS DECIMAL(10,2)) IS NOT NULL");
+            })
+            ->select(
+                'es.npk',
+                DB::raw('COUNT(*) as night_shift_count')
+            )
+            ->groupBy('es.npk');
+
+        /*
+        |--------------------------------------------------------------------------
+        | NIGHT SHIFT DETAILS (untuk modal detail Night Shift Compensation)
+        |--------------------------------------------------------------------------
+        | Rincian per-baris shift malam (per NPK) yang menjadi dasar
+        | $nightShiftSummary di atas -- dipakai untuk menampilkan modal
+        | detail di halaman Payroll Processing / Payroll Approve.
+        |--------------------------------------------------------------------------
+        */
+        $nightShiftDetails = DB::connection('cii')
+            ->table('employee_shifts as es')
+            ->join('shifts as s', 'es.shift_id', '=', 's.id')
+            ->leftJoinSub($biodataUnion, 'bio', function ($join) {
+                $join->on('es.npk', '=', 'bio.NPK');
+            })
+            ->leftJoin('DEPT as d', 'bio.ID_DEPT', '=', 'd.ID_DEPT')
+            ->leftJoin('overtimes as o', function ($join) {
+                $join->on('o.NPK', '=', 'es.npk')
+                    ->on(DB::raw('CAST(o.OVERTIME_DATE AS DATE)'), '=', DB::raw('CAST(es.shift_date AS DATE)'));
+            })
+            ->whereBetween(DB::raw('CAST(es.shift_date AS DATE)'), [$periodStart, $periodEnd])
+            ->where(DB::raw('CAST(s.work_start AS TIME)'), '>=', '15:00:00')
+            ->whereRaw("LOWER(LTRIM(RTRIM(s.name))) NOT LIKE '%security%'")
+            ->where(function ($q) {
+                $q->whereNull('o.JUMLAH_JAM_LEMBUR')
+                    ->orWhereRaw("TRY_CAST(o.JUMLAH_JAM_LEMBUR AS DECIMAL(10,2)) IS NOT NULL");
+            })
+            ->select(
+                'es.npk as NPK',
+                'bio.NAMA_KARYAWAN',
+                'd.DEPARTEMENT',
+                DB::raw('CAST(es.shift_date AS DATE) as shift_date'),
+                's.name as shift_name',
+                DB::raw('CAST(s.work_start AS TIME) as work_start'),
+                DB::raw('CAST(s.work_end AS TIME) as work_end')
+            )
+            ->orderBy('es.npk')
+            ->orderBy('es.shift_date')
+            ->get()
+            ->groupBy('NPK');
 
         $employeesQuery = DB::connection('cii')
             ->query()
@@ -763,6 +978,14 @@ END AS special_overtime_hours
                 );
             })
 
+            ->leftJoinSub($nightShiftSummary, 'ns', function ($join) {
+                $join->on(
+                    DB::raw('CAST(emp.NPK AS VARCHAR(50))'),
+                    '=',
+                    DB::raw('CAST(ns.npk AS VARCHAR(50))')
+                );
+            })
+
             ->select(
                 'emp.NPK',
                 'emp.NAMA_KARYAWAN',
@@ -805,6 +1028,7 @@ END AS special_overtime_hours
                 DB::raw('COALESCE(lt.late_minutes,0) as late_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) as total_ijin_minutes'),
                 DB::raw('COALESCE(ij.total_ijin_minutes,0) / 60 as total_ijin_hours'),
+                DB::raw('COALESCE(ns.night_shift_count,0) as night_shift_count'),
 
                 DB::raw("DATEDIFF(YEAR, emp.TMK, '$periodEnd') as working_years")
             );
@@ -839,6 +1063,12 @@ END AS special_overtime_hours
         }
 
         $employees = $employeesQuery
+            ->when($npk, function ($q) use ($npk) {
+                // Safety-net: employeeBase sudah difilter di root query,
+                // tapi tetap dijaga di sini juga supaya query akhir yang
+                // benar-benar dieksekusi pasti hanya 1 NPK.
+                $q->where('emp.NPK', $npk);
+            })
             ->orderBy('emp.ID_DEPT', 'asc')
             ->orderBy('emp.NPK', 'asc')
             ->get();
@@ -996,6 +1226,48 @@ END AS special_overtime_hours
             $tmk = $employee->TMK ? Carbon::parse($employee->TMK) : null;
             $tkk = $employee->TKK ? Carbon::parse($employee->TKK) : null;
 
+            /**
+             * BR & OUT SEKARANG DIHITUNG OTOMATIS DARI TANGGAL TMK/TKK (PKWT),
+             * BUKAN dari teks literal 'BR'/'OUT' di table overtimes.
+             * - BR  : hari kerja (Senin-Jumat) SEBELUM tanggal TMK, dimulai
+             *         dari awal periode payroll berjalan.
+             *         Contoh: TMK 7 Juli -> BR diambil dari tanggal 1-6 Juli,
+             *         Sabtu/Minggu dilewati.
+             * - OUT : hari kerja (Senin-Jumat) MULAI tanggal TKK s/d akhir
+             *         periode payroll berjalan.
+             *         Contoh: TKK 28 Juli -> OUT diambil dari tanggal 28-31
+             *         Juli, Sabtu/Minggu dilewati.
+             */
+            $autoBrDays = 0;
+            if ($tmk && $tmk->between($periodStart, $periodEnd)) {
+                $cursor = $periodStart->copy();
+                $limit  = $tmk->copy()->subDay();
+
+                while ($cursor->lte($limit)) {
+                    if (!$cursor->isWeekend()) {
+                        $autoBrDays++;
+                    }
+                    $cursor->addDay();
+                }
+            }
+
+            $autoOutDays = 0;
+            if ($tkk && $tkk->between($periodStart, $periodEnd)) {
+                $cursor = $tkk->copy();
+
+                while ($cursor->lte($periodEnd)) {
+                    if (!$cursor->isWeekend()) {
+                        $autoOutDays++;
+                    }
+                    $cursor->addDay();
+                }
+            }
+
+            // $employee->absence_days sekarang HANYA berisi H/MA/P1 yang valid
+            // dari overtimes (sudah difilter di rentang TMK-TKK pada query
+            // $overtimeSummary). BR & OUT otomatis ditambahkan di sini.
+            $absenceDaysRaw = (float) $employee->absence_days + $autoBrDays + $autoOutDays;
+
             $isJoinOrResignInPeriod =
                 ($tmk && $tmk->between($periodStart, $periodEnd)) ||
                 ($tkk && $tkk->between($periodStart, $periodEnd));
@@ -1014,9 +1286,15 @@ END AS special_overtime_hours
                 }
 
                 // rumus: (21 - hari kerja periode) + absence karyawan
-                $absenceDays = (21 - $workingDays) + $employee->absence_days;
+                if ($absenceDaysRaw <= ($workingDays - 21)) {
+                    $absenceDays = 0;
+                } else {
+
+                    // $absenceDays = (21 - $workingDays) + $absenceDaysRaw;
+                    $absenceDays = (21 - $workingDays) + $absenceDaysRaw;
+                }
             } else {
-                $absenceDays = $employee->absence_days;
+                $absenceDays = $absenceDaysRaw;
             }
 
             $isJoinOrResignInPeriod =
@@ -1029,7 +1307,7 @@ END AS special_overtime_hours
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
-                'absence_days_asli'   => (float) $employee->absence_days,
+                'absence_days_asli'   => (float) $absenceDaysRaw,
                 'absence_days'   => (float) $absenceDays,
                 'sick_days'   => (float) $employee->sick_days,
                 'working_years'  => (float) $employee->working_years,
@@ -1042,6 +1320,7 @@ END AS special_overtime_hours
 
                 'violation_percentage' => (float) $employee->violation_percentage,
                 'total_ijin'     => (float) $employee->total_ijin_minutes,
+                'night_shift_count' => (float) $employee->night_shift_count,
                 'is_contract' => Str::ucfirst(Str::lower($employee->type)) === 'Contract' ? 1 : 0,
                 'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                 'late_minutes'     => (float) $employee->late_minutes,
@@ -1648,20 +1927,24 @@ END AS special_overtime_hours
                                 $employeeDates = DB::table('heat_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('npk', $employee->NPK)
+                                    ->where('role', $assignment->role)
                                     ->pluck('date')
                                     ->unique()
                                     ->toArray();
-
                                 $totalDeptInsentif = 0;
 
                                 $operators = DB::table('heat_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('role', '=', 'operator')
                                     ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereIn('date', $employeeDates)
+                                    ->whereIn('date', $employeeDates) // sekarang hanya tanggal saat NPK ini jadi $role, bukan semua tanggal NPK
                                     ->get();
 
                                 foreach ($operators as $operator) {
+                                    if ($tkkDate && $operator->date >= $tkkDate) {
+                                        continue;
+                                    }
+                                    // FILTER HANYA NUMERATOR
                                     if (!$isValidOvertime($operator->npk, $operator->date)) {
                                         continue;
                                     }
@@ -1673,10 +1956,9 @@ END AS special_overtime_hours
 
                                     $totalDeptInsentif += $rate * $operator->piece;
                                 }
-
                                 $jumlahOperator = DB::table('heat_efficiencies as he')
                                     ->where('he.period_id', $period->id)
-                                    ->whereIn('he.date', $employeeDates)
+                                    ->whereIn('he.date', $employeeDates) // ikut pakai $employeeDates yang sudah difilter role
                                     ->where('he.role', '=', 'operator')
                                     ->pluck('he.npk')
                                     ->unique()
@@ -1697,6 +1979,30 @@ END AS special_overtime_hours
 
                 // 🔹 PERBAIKAN: bulatkan setiap komponen
                 $amount = round((float) $amount, 0);
+
+                /*
+                |--------------------------------------------------------------------------
+                | GUARD: absence_deduction TIDAK BOLEH NEGATIF
+                |--------------------------------------------------------------------------
+                | absence_deduction adalah komponen bertipe "deduction" yang secara
+                | semantik selalu diperlakukan sebagai nilai yang DIKURANGKAN dari
+                | grandTotal (lihat blok "if earning / else deduction" di bawah:
+                | $grandTotal -= $amount).
+                |
+                | Kalau formula-nya menghasilkan angka NEGATIF (mis. -500000), maka
+                | $grandTotal -= (-500000) akan menjadi $grandTotal + 500000 —
+                | tanda minus ketemu minus jadi PLUS, sehingga gaji malah naik alih-
+                | alih dipotong (mis. 1000000 - (-500000) = 1500000, padahal
+                | seharusnya tetap 1000000 / tidak dipotong).
+                |
+                | Fix: kalau absence_deduction hasilnya negatif, jangan dihitung —
+                | anggap 0, supaya tidak terbalik jadi penambahan.
+                |--------------------------------------------------------------------------
+                */
+                // if ($component->code === 'absence_deduction' && $amount < 0) {
+                //     $amount = 0;
+                // }
+
                 $results[$component->code] = $amount;
 
                 if ($component->type === 'earning') {
@@ -1762,8 +2068,10 @@ END AS special_overtime_hours
                     'is_daily'    => Str::ucfirst(Str::lower($employee->type)) === 'Daily' ? 1 : 0,
                     'is_expat'       => $employee->IS_EXPAT == '1' ? 1 : 0,
                     'salary_daily_contract' => $salaryDailyContract,
-                    'absence_days_asli'   => (float) $employee->absence_days,
+                    'absence_days_asli'   => (float) $absenceDaysRaw,
                     'absence_days'   => (float) $absenceDays,
+                    'br_days_auto'   => (float) $autoBrDays,
+                    'out_days_auto'  => (float) $autoOutDays,
                     'sick_days'   => (float) $employee->sick_days,
                     'count_days'    => $count_days,
                     'type' => Str::ucfirst(Str::lower($employee->type)),
@@ -1777,6 +2085,7 @@ END AS special_overtime_hours
                     'late_summary' => $employee->total_telat,
                     'violation_percentage' => (float) $employee->violation_percentage,
                     'total_ijin'     => (float) $employee->total_ijin_minutes,
+                    'night_shift_count' => (float) $employee->night_shift_count,
                     'is_sewing'       => $employee->IS_SEWING == '1' ? 1 : 0,
                     'is_staff'       => $employee->IS_STAFF == '1' ? 1 : 0,
                     'bpjskesex' => $employee->percentkes === null ? 1 : (float) $employee->percentkes,
@@ -1823,6 +2132,8 @@ END AS special_overtime_hours
                     'late_details' => ($lateDetails[$employee->NPK] ?? collect())
                         ->values(),
                     'ijin_details' => ($ijinDetails[$employee->NPK] ?? collect())->values(),
+                    'night_shift_details' => ($nightShiftDetails[$employee->NPK] ?? collect())
+                        ->values(),
                     'total_salary'  => $grandTotal
                 ];
             }

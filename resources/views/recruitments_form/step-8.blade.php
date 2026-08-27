@@ -184,6 +184,58 @@ Scan Ijazah, Scan Akta Kelahiran, Scan SKCK, Scan Blanko Kesehatan
         .animate-spin {
             animation: spin .8s linear infinite;
         }
+
+        /* ---------- NIK limit rejection modal ---------- */
+        @keyframes rfModalPop {
+            from {
+                opacity: 0;
+                transform: translateY(14px) scale(.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .rf-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            background: rgba(20, 20, 28, .55);
+            backdrop-filter: blur(3px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .rf-modal-card {
+            width: 100%;
+            max-width: 26rem;
+            background: #fff;
+            border-radius: 1.25rem;
+            box-shadow: 0 1.5rem 4rem rgba(20, 20, 28, .35);
+            overflow: hidden;
+            animation: rfModalPop .3s cubic-bezier(.2, .8, .2, 1) both;
+        }
+
+        .rf-modal-icon-ring {
+            width: 4.25rem;
+            height: 4.25rem;
+            border-radius: 9999px;
+            background: #ffdad6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.1rem;
+        }
+
+        .rf-modal-icon-ring .material-symbols-outlined {
+            font-size: 2.25rem;
+            color: #ba1a1a;
+            font-variation-settings: 'FILL' 1;
+        }
     </style>
 @endpush
 
@@ -230,10 +282,57 @@ Scan Ijazah, Scan Akta Kelahiran, Scan SKCK, Scan Blanko Kesehatan
 
     @include('layouts_recruitments.partials._stepper', ['currentStep' => $currentStep, 'steps' => $steps])
 
+    {{-- ============================================================
+         NIK REJECTION MODAL
+         Muncul ketika controller mendeteksi NIK pelamar sudah tercatat
+         mengajukan lamaran 2 kali (session flash: nik_rejected).
+    ============================================================ --}}
+    @if(session('nik_rejected'))
+        <div class="rf-modal-backdrop" id="nikRejectedBackdrop">
+            <div class="rf-modal-card">
+                <div class="px-8 pt-10 pb-7 text-center">
+                    <div class="rf-modal-icon-ring">
+                        <span class="material-symbols-outlined">block</span>
+                    </div>
+
+                    <h3 class="text-headline-md font-bold text-on-surface mb-1">
+                        Pengajuan Lamaran Ditolak
+                    </h3>
+                    <div class="w-10 h-1 rounded-full bg-error/60 mx-auto mb-5"></div>
+
+                    <div class="text-body-md text-on-surface-variant leading-relaxed text-left space-y-3">
+                        <p>
+                            Terima kasih atas antusiasme dan minat Anda untuk bergabung dengan
+                            <strong class="text-on-surface">PT Chutex International Indonesia</strong>.
+                        </p>
+                        <p>
+                            Berdasarkan data pada sistem, Anda telah mencapai batas maksimal
+                            pengajuan lamaran (<strong class="text-error">2 kali</strong>).
+                            Oleh karena itu, Anda tidak dapat mengajukan lamaran kembali melalui
+                            sistem.
+                        </p>
+                        <p>
+                            Terima kasih atas pengertian Anda. Tetap semangat mengembangkan
+                            potensi Anda dan semoga sukses dalam perjalanan karier Anda.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="px-8 pb-8">
+                    <button type="button" onclick="document.getElementById('nikRejectedBackdrop').remove()"
+                        class="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full
+                               bg-primary text-on-primary font-bold text-label-lg
+                               hover:bg-primary/90 transition-colors duration-200">
+                        <span class="material-symbols-outlined" style="font-size:1.1rem;">check</span>
+                        Saya Mengerti
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div
-        class="bg-surface-container-lowest rounded-xl
-                                                                                    shadow-[0_.15rem_1.75rem_0_rgba(58,59,69,.15)]
-                                                                                    border-l-4 border-primary overflow-hidden mb-8">
+        class="bg-surface-container-lowest rounded-xl shadow-[0_.15rem_1.75rem_0_rgba(58,59,69,.15)] border-l-4 border-primary overflow-hidden mb-8">
 
         {{-- Card Header --}}
         <div class="flex items-center gap-3 px-8 py-5 border-b border-outline-variant bg-surface-container-low">

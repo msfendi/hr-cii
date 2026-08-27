@@ -34,6 +34,7 @@ class PayrollApproveController extends Controller
                 'payroll_periods.name as period_name',
                 'payroll_exports.file_bank_active',
                 'payroll_exports.file_bank_resign',
+                'payroll_exports.file_bank_mangkir',
                 'payroll_exports.file_excel',
                 'payroll_exports.file_pdf',
                 'payroll_exports.file_peng',
@@ -367,14 +368,37 @@ class PayrollApproveController extends Controller
         $this->createBankCSV($resignEmployees, $period->name, $resignPath);
         $this->createBankCSV($mangkirEmployees, $period->name, $mangkirPath);
 
+        // 🔥 Map nama file per status, key 'ALL' = file gabungan semua role.
+        // Kalau ada split, value-nya diganti jadi array of filename oleh loop di bawah.
+        $bankFilesByStatus = [
+            'AKTIF'   => ['ALL' => $activeFileName],
+            'RESIGN'  => ['ALL' => $resignFileName],
+            'MANGKIR' => ['ALL' => $mangkirFileName],
+        ];
+
         /*
     |--------------------------------------------------------------------------
-    | GROUP BY ROLE (STAFF / SEWING / NON SEWING / NON STAFF)
+    | FILTER PER ROLE
+    |--------------------------------------------------------------------------
+    | STAFF, SEWING, NON SEWING = eksklusif satu sama lain.
+    | NON STAFF = union SEWING + NON SEWING (semua karyawan IS_STAFF=0,
+    |             tanpa peduli IS_SEWING-nya), dipakai untuk file bank
+    |             konsolidasi non-staff. Makanya karyawan bisa muncul di
+    |             folder SEWING/NON_SEWING sekaligus di folder NON_STAFF.
     |--------------------------------------------------------------------------
     */
-        $groupedActive  = $activeEmployees->groupBy(fn($emp) => $this->resolveGroup($emp));
-        $groupedResign  = $resignEmployees->groupBy(fn($emp) => $this->resolveGroup($emp));
-        $groupedMangkir = $mangkirEmployees->groupBy(fn($emp) => $this->resolveGroup($emp));
+        $roleFilters = [
+            'STAFF'      => fn($e) => (int) $e->IS_STAFF === 1,
+            'SEWING'     => fn($e) => (int) $e->IS_STAFF === 0 && !is_null($e->IS_SEWING) && (int) $e->IS_SEWING === 0,
+            'NON SEWING' => fn($e) => (int) $e->IS_STAFF === 0 && !is_null($e->IS_SEWING) && (int) $e->IS_SEWING === 1,
+            'NON STAFF'  => fn($e) => (int) $e->IS_STAFF === 0,
+        ];
+
+        $sourceByStatus = [
+            'AKTIF'   => $activeEmployees,
+            'RESIGN'  => $resignEmployees,
+            'MANGKIR' => $mangkirEmployees,
+        ];
 
         /*
     |--------------------------------------------------------------------------
@@ -382,42 +406,72 @@ class PayrollApproveController extends Controller
     | Disimpan di payroll/{PERIODE}/{ROLE}/
     |--------------------------------------------------------------------------
     */
-        $roles = ['STAFF', 'SEWING', 'NON SEWING', 'NON STAFF'];
+        // 🔥 Role yang wajib di-split berdasarkan maksimum total_salary per file
+        $splitRoles      = ['STAFF', 'NON STAFF'];
+        $maxTotalPerFile = 3000000000; // 3 Milyar
 
-        foreach ($roles as $role) {
+        foreach ($roleFilters as $role => $filter) {
             $roleFolder = str_replace(' ', '_', $role); // NON_SEWING, NON_STAFF, dst
             $basePath   = "payroll/{$cleanPeriod}/{$roleFolder}";
 
-            $statuses = [
-                'AKTIF'   => $groupedActive->get($role, collect()),
-                'RESIGN'  => $groupedResign->get($role, collect()),
-                'MANGKIR' => $groupedMangkir->get($role, collect()),
-            ];
+            foreach ($sourceByStatus as $statusLabel => $source) {
+                $employees = $source->filter($filter)->values();
 
-            foreach ($statuses as $statusLabel => $employees) {
                 if ($employees->isEmpty()) {
                     continue; // skip, tidak buat file kosong
                 }
 
-                $roleFileName = "PERMATA_{$cleanPeriod}_{$roleFolder}_{$statusLabel}.csv";
-                $roleFilePath = "{$basePath}/{$roleFileName}";
+                if (in_array($role, $splitRoles)) {
+                    // 🔥 SPLIT CSV: total_salary per file maksimum $maxTotalPerFile
+                    $chunks    = $this->splitByMaxTotalSalary($employees, $maxTotalPerFile);
+                    $partNames = [];
 
-                $this->createBankCSV($employees, $period->name, $roleFilePath);
+                    foreach ($chunks as $index => $chunkEmployees) {
+                        $part = $index + 1;
+
+                        $roleFileName = count($chunks) > 1
+                            ? "PERMATA_{$cleanPeriod}_{$roleFolder}_{$statusLabel}_PART{$part}.csv"
+                            : "PERMATA_{$cleanPeriod}_{$roleFolder}_{$statusLabel}.csv";
+
+                        $roleFilePath = "{$basePath}/{$roleFileName}";
+
+                        $this->createBankCSV($chunkEmployees, $period->name, $roleFilePath);
+
+                        $partNames[] = $roleFileName;
+                    }
+
+                    // 🔥 1 part = simpan sebagai string biasa, lebih dari 1 = simpan sebagai array
+                    $bankFilesByStatus[$statusLabel][$roleFolder] = count($partNames) > 1
+                        ? $partNames
+                        : $partNames[0];
+                } else {
+                    $roleFileName = "PERMATA_{$cleanPeriod}_{$roleFolder}_{$statusLabel}.csv";
+                    $roleFilePath = "{$basePath}/{$roleFileName}";
+
+                    $this->createBankCSV($employees, $period->name, $roleFilePath);
+
+                    $bankFilesByStatus[$statusLabel][$roleFolder] = $roleFileName;
+                }
             }
         }
 
         /*
     |--------------------------------------------------------------------------
     | UPDATE EXPORT TABLE
-    | Hanya nama file umum (gabungan semua role) yang disimpan
+    |--------------------------------------------------------------------------
+    | file_bank_active / file_bank_resign / file_bank_mangkir disimpan sebagai
+    | JSON per role (mirip format file_compensation), contoh:
+    | {"ALL":"PERMATA_JULI_2026_AKTIF.csv",
+    |  "STAFF":"PERMATA_JULI_2026_STAFF_AKTIF.csv",
+    |  "NON_STAFF":["PERMATA_JULI_2026_NON_STAFF_AKTIF_PART1.csv","PERMATA_JULI_2026_NON_STAFF_AKTIF_PART2.csv"]}
     |--------------------------------------------------------------------------
     */
         DB::table('payroll_exports')->updateOrInsert(
             ['run_id' => $runId],
             [
-                'file_bank_active'  => $activeFileName,
-                'file_bank_resign'  => $resignFileName,
-                'file_bank_mangkir' => $mangkirFileName,
+                'file_bank_active'  => json_encode($bankFilesByStatus['AKTIF']),
+                'file_bank_resign'  => json_encode($bankFilesByStatus['RESIGN']),
+                'file_bank_mangkir' => json_encode($bankFilesByStatus['MANGKIR']),
             ]
         );
 
@@ -431,29 +485,42 @@ class PayrollApproveController extends Controller
         return true;
     }
 
-    /*
-|--------------------------------------------------------------------------
-| RESOLVE GROUP / ROLE MAPPING
-|--------------------------------------------------------------------------
-| STAFF      : IS_STAFF = 1
-| SEWING     : IS_STAFF = 0 && IS_SEWING = 0
-| NON SEWING : IS_STAFF = 0 && IS_SEWING = 1
-| NON STAFF  : IS_STAFF = 0 && IS_SEWING = null (dept tidak ketemu / kosong)
-|--------------------------------------------------------------------------
-*/
-    private function resolveGroup($emp)
+
+    // |--------------------------------------------------------------------------
+    // | SPLIT EMPLOYEES BY MAX TOTAL_SALARY PER FILE
+    // |--------------------------------------------------------------------------
+    // | Karyawan diakumulasi sesuai urutan (dept, npk) ke dalam 1 file selama
+    // | total_salary belum melebihi $maxTotal. Begitu penambahan karyawan
+    // | berikutnya membuat total melebihi batas, file baru dibuka.
+    // | Contoh: total 8.000.000, max 3.000.000 -> otomatis jadi 3 file.
+    // |--------------------------------------------------------------------------
+    // */
+    private function splitByMaxTotalSalary($employees, $maxTotal)
     {
-        if ((int) $emp->IS_STAFF === 1) {
-            return 'STAFF';
-        } elseif ((int) $emp->IS_SEWING === 0 && (int) $emp->IS_STAFF === 0) {
-            return 'SEWING';
-        } elseif ((int) $emp->IS_SEWING === 1 && (int) $emp->IS_STAFF === 0) {
-            return 'NON SEWING';
-        } elseif (is_null($emp->IS_SEWING) && (int) $emp->IS_STAFF === 0) {
-            return 'NON STAFF';
+        $chunks       = [];
+        $currentChunk = collect();
+        $currentTotal = 0;
+
+        foreach ($employees as $emp) {
+            $salary = (float) ($emp->total_salary ?? 0);
+
+            // kalau nambahin karyawan ini bikin total melebihi batas,
+            // tutup chunk yang sekarang dan mulai chunk baru
+            if ($currentChunk->isNotEmpty() && ($currentTotal + $salary) > $maxTotal) {
+                $chunks[]     = $currentChunk;
+                $currentChunk = collect();
+                $currentTotal = 0;
+            }
+
+            $currentChunk->push($emp);
+            $currentTotal += $salary;
         }
 
-        return '-';
+        if ($currentChunk->isNotEmpty()) {
+            $chunks[] = $currentChunk;
+        }
+
+        return $chunks;
     }
 
     private function createBankCSV($employees, $periodName, $path)

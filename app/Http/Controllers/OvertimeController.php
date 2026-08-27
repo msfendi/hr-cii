@@ -9,6 +9,7 @@ use App\Exports\OvertimeCalendarTemplateExport;
 use App\Exports\OvertimeTemplateExport;
 use App\Models\Overtime;
 use App\Imports\OvertimeImport;
+use App\Models\PayrollPeriod;
 use App\Models\PKWT;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +22,9 @@ class OvertimeController extends Controller
     public function index()
     {
         $departments = Overtime::select('BAGIAN')->distinct()->get();
+        $payrollPeriods = PayrollPeriod::where('is_closed', 0)->get();
 
-        return view('overtime.index', compact('departments'));
+        return view('overtime.index', compact('departments', 'payrollPeriods'));
     }
 
     public function calendarOvertime()
@@ -59,7 +61,7 @@ class OvertimeController extends Controller
 
             $file = $request->file('file');
             $deptGroup = $request->input('dept_group');
-            $month = $request->input('month');
+            $month = Carbon::parse($request->input('month'))->format('Y-m');
 
             Excel::import(new OvertimeImport($deptGroup, $month), $file);
 
@@ -322,7 +324,7 @@ class OvertimeController extends Controller
             foreach ($grupKaryawan as $record) {
                 $tglValue = $record->OVERTIME_DATE;
                 $tglStr   = $tglValue instanceof \DateTimeInterface ? $tglValue->format('Y-m-d') : substr((string)$tglValue, 0, 10);
-                
+
                 if (isset($row[$tglStr]) && ($row[$tglStr] === 'BR' || $row[$tglStr] === 'OUT')) {
                     continue;
                 }

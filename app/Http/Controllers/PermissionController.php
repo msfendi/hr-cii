@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Route as RouteFacadeAlias;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
+use RealRashid\SweetAlert\Facades\Alert;
 
 class PermissionController extends Controller
 {
@@ -51,6 +52,7 @@ class PermissionController extends Controller
 
         Permission::create($validated);
 
+        Alert::success('Create Successfully!', 'Permission ' . $request->route_name . ' successfully created!');
         return redirect()->route('permission.index')->with('success', 'Permission berhasil dibuat.');
     }
 
@@ -83,6 +85,7 @@ class PermissionController extends Controller
 
         $permission->update($validated);
 
+        Alert::success('Update Successfully!', 'Permission ' . $request->route_name . ' successfully updated!');
         return redirect()->route('permission.index')->with('success', 'Permission berhasil diupdate.');
     }
 

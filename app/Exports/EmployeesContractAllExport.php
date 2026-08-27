@@ -15,6 +15,7 @@ class EmployeesContractAllExport implements FromCollection, WithHeadings, WithMa
     public function __construct(
         private bool $roleAdmin,
         private bool $roleStaff,
+        private bool $roleNonStaff,
         private bool $roleSewing,
         private bool $roleNonSewing
     ) {}
@@ -48,6 +49,9 @@ class EmployeesContractAllExport implements FromCollection, WithHeadings, WithMa
             $query->where(function ($q) {
                 if ($this->roleStaff) {
                     $q->orWhere('b.IS_STAFF', 1);
+                }
+                if ($this->roleNonStaff) {
+                    $q->orWhere('b.IS_STAFF', 0);
                 }
                 if ($this->roleSewing) {
                     $q->orWhere(function ($q2) {

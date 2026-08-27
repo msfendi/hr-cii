@@ -23,6 +23,20 @@ class PayrollMADetailSheet
             ->toArray();
     }
 
+    /**
+     * Tentukan tabel payroll_run_details yang dipakai berdasarkan route saat ini.
+     * - payroll.exportaudit.export -> payroll_run_details_audit
+     * - payroll.export.export (default) -> payroll_run_details
+     */
+    protected function detailsTable(): string
+    {
+        $routeName = optional(request()->route())->getName();
+
+        return $routeName === 'payroll.exportaudit.export'
+            ? 'payroll_run_details_audit'
+            : 'payroll_run_details';
+    }
+
     public function title(): string
     {
         return 'Payroll_MA';
@@ -138,7 +152,7 @@ class PayrollMADetailSheet
 
         $biodataUnion = $this->baseBiodataQuery();
 
-        return DB::table('payroll_run_details as prd')
+        return DB::table($this->detailsTable() . ' as prd')
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
@@ -177,6 +191,7 @@ class PayrollMADetailSheet
             'cutting_insentif',
             'heat_insentif',
             'sixs_insentif',
+            'night_shift_compensation',
             'adjusment',
             'bpjs_kesehatan',
             'bpjs_ketenagakerjaan',
@@ -235,6 +250,7 @@ class PayrollMADetailSheet
             'Cutting Insentif',
             'Heat Seal Insentif',
             'Six S Insentif',
+            'Night Shift Compensation',
             'Adjusment',
             'BPJS Kesehatan',
             'BPJS Ketenagakerjaan',

@@ -385,7 +385,7 @@
                     </div>
 
                     <hr class="mt-0 mb-3">
-                    
+
                     {{-- Tanggal Mulai & Berakhir --}}
                     <div class="row">
                         <div class="col-md-6">
@@ -567,6 +567,7 @@
             store: "{{ route('employees-contract.store') }}",
             stop: "{{ url('employees-contract/stop') }}",
             finish: "{{ url('employees-contract/finish') }}",
+            undo: "{{ url('employees-contract/undo') }}",
             extend: "{{ url('employees-contract/extend') }}",
             bagian: "{{ route('employees-contract.bagian') }}",
             importUrl: "{{ route('employees-contract.import') }}",
@@ -588,7 +589,20 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
                 body: JSON.stringify(payload),
-            }).then(r => r.json());
+            }).then(async r => {
+                let data;
+                try {
+                    data = await r.json();
+                } catch (e) {
+                    data = { success: false, message: 'Respon server tidak valid (' + r.status + ')' };
+                }
+                if (!r.ok && data.success === undefined) {
+                    data.success = false;
+                }
+                return data;
+            }).catch(err => {
+                return { success: false, message: 'Gagal terhubung ke server: ' + err.message };
+            });
         }
 
         function fmtDate(d) {
@@ -740,29 +754,39 @@
                         className: 'text-center',
                         render: (d, t, r) => {
                             const isAktif = r.status_contract === 'AKTIF';
-                            if (!isAktif) return '<span class="text-muted small">—</span>';
+                            if (!isAktif) {
+                                return `
+                            <div class="btn-group btn-group-sm">
+                                 ${r.can_edit ? `
+                                <button class="btn btn-warning btn-xs btn-act-finansial"
+                                    title="Update Finansial">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </button>
+                                <button class="btn btn-info btn-xs btn-act-undo"
+                                    title="Re-Activate Contract">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                ` : ''}
+                            </div>`;
+                            }
 
                             return `
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-success btn-xs"
-                                onclick="openPerpanjang('${r.id}','${r.nama}','${r.npk}',${r.contract_ke},'${r.salary || 0}','${r.allowance || 0}','${r.pph21 || 0}','${r.daily_salary || 0}')"
+                            <button class="btn btn-success btn-xs btn-act-perpanjang"
                                 title="Perpanjang">
                                 <i class="fas fa-redo"></i>
                             </button>
-                            <button class="btn btn-secondary btn-xs"
-                                onclick="doFinish('${r.id}','${r.nama}')"
+                            <button class="btn btn-secondary btn-xs btn-act-finish"
                                 title="Selesai">
                                 <i class="fas fa-check"></i>
                             </button>
-                            <button class="btn btn-danger btn-xs"
-                                onclick="doStop('${r.id}','${r.nama}')"
+                            <button class="btn btn-danger btn-xs btn-act-stop"
                                 title="Akhiri">
                                 <i class="fas fa-ban"></i>
                             </button>
                             
                             ${r.can_edit ? `
-                            <button class="btn btn-warning btn-xs"
-                                onclick='openFinansial(${JSON.stringify(r).replace(/'/g, "\\'")})'
+                            <button class="btn btn-warning btn-xs btn-act-finansial"
                                 title="Update Finansial">
                                 <i class="fas fa-money-bill-wave"></i>
                             </button>
@@ -844,17 +868,30 @@
 
             // ── Perpanjang kontrak ────────────────────────────────────────────────────
             $('#btnKonfirmasiPerpanjang').on('click', function () {
+                const dur = $('#ext_duration').val();
+                if (!dur) {
+                    showToast('Silakan pilih durasi perpanjangan terlebih dahulu.', 'danger');
+                    return;
+                }
+
                 const btn = $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Memproses…');
 
-                apiPost(ROUTES.extend + '/' + $('#ext_id').val(), {
-                    month_duration: $('#ext_duration').val(),
-                    salary: $('#ext_salary').val() || 0,
-                    allowance: $('#ext_allowance').val() || 0,
-                    pph21: $('#ext_pph21').val() || 0,
-                    daily_salary: $('#ext_daily_salary').val() || 0,
-                }).then(res => {
+                const payload = {
+                    month_duration: dur,
+                };
+                const s = $('#ext_salary').val();
+                const a = $('#ext_allowance').val();
+                const p = $('#ext_pph21').val();
+                const d = $('#ext_daily_salary').val();
+
+                if (s !== '' && s !== null) payload.salary = s;
+                if (a !== '' && a !== null) payload.allowance = a;
+                if (p !== '' && p !== null) payload.pph21 = p;
+                if (d !== '' && d !== null) payload.daily_salary = d;
+
+                apiPost(ROUTES.extend + '/' + $('#ext_id').val(), payload).then(res => {
                     btn.prop('disabled', false).html('<i class="fas fa-check mr-1"></i>Perpanjang');
-                    showToast(res.message, res.success ? 'success' : 'danger');
+                    showToast(res.message || (res.success ? 'Berhasil' : 'Gagal'), res.success ? 'success' : 'danger');
                     if (res.success) { $('#modalPerpanjang').modal('hide'); reloadTable(); }
                 });
             });
@@ -880,12 +917,12 @@
                     pph21: parseRupiah($('#uf_pph21').val()),
                     daily_salary: parseRupiah($('#uf_daily_salary').val()),
                 };
-                
+
                 // Sertakan tanggal hanya jika diisi
                 const ufStart = $('#uf_start_date').val();
-                const ufEnd   = $('#uf_end_date').val();
+                const ufEnd = $('#uf_end_date').val();
                 if (ufStart) payload.start_date = ufStart;
-                if (ufEnd)   payload.end_date   = ufEnd;
+                if (ufEnd) payload.end_date = ufEnd;
 
                 if (isSplit) {
                     url = ROUTES.splitUrl + '/' + $('#uf_id').val();
@@ -943,6 +980,37 @@
             $('#btnExportAll').on('click', function () {
                 window.location.href = ROUTES.exportAllUrl;
             });
+
+            // ── Table Action Button Listeners ──────────────────────────────────────────
+            $(document).on('click', '.btn-act-perpanjang', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                openPerpanjang(row.id, row.nama, row.npk, row.contract_ke, row.salary || 0, row.allowance || 0, row.pph21 || 0, row.daily_salary || 0);
+            });
+
+            $(document).on('click', '.btn-act-finish', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                doFinish(row.id, row.nama);
+            });
+
+            $(document).on('click', '.btn-act-stop', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                doStop(row.id, row.nama);
+            });
+
+            $(document).on('click', '.btn-act-undo', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                doUndo(row.id, row.nama, row.status_contract);
+            });
+
+            $(document).on('click', '.btn-act-finansial', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                openFinansial(row);
+            });
         });
 
         // ─────────────────────────────────────────────────────────────────────────────
@@ -993,6 +1061,25 @@
             }).then(result => {
                 if (!result.isConfirmed) return;
                 apiPost(ROUTES.stop + '/' + id, {}).then(res => {
+                    showToast(res.message, res.success ? 'success' : 'danger');
+                    if (res.success) reloadTable();
+                });
+            });
+        }
+        
+        function doUndo(id, nama, statusLama) {
+            Swal.fire({
+                title: 'Kembalikan ke AKTIF?',
+                html: `Status kontrak <strong>${nama}</strong> (saat ini: <span class="badge badge-secondary">${statusLama}</span>) akan dikembalikan menjadi <span class="badge badge-success">AKTIF</span>.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#36b9cc',
+                confirmButtonText: '<i class="fas fa-undo mr-1"></i> Ya, Kembalikan ke AKTIF',
+                cancelButtonText: 'Batal',
+                reverseButtons: true,
+            }).then(result => {
+                if (!result.isConfirmed) return;
+                apiPost(ROUTES.undo + '/' + id, {}).then(res => {
                     showToast(res.message, res.success ? 'success' : 'danger');
                     if (res.success) reloadTable();
                 });

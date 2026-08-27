@@ -18,6 +18,12 @@ class HomeController extends Controller
         return view('home');
     }
 
+
+    public function welcome()
+    {
+        return view('loginwelcome');
+    }
+
     public function getPKWTChart()
     {
         $pkwts = DB::connection('cii')->table('PKWT')

@@ -197,7 +197,7 @@ return [
         App\Providers\RouteServiceProvider::class,
         App\Providers\BladePermissionServiceProvider::class,
         SimpleSoftwareIO\QrCode\QrCodeServiceProvider::class,
-
+        App\Providers\AuditTrailServiceProvider::class,
 
     ],
 

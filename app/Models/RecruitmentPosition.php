@@ -9,5 +9,5 @@ class RecruitmentPosition extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['position', 'dept', 'is_aktif'];
+    protected $fillable = ['position', 'dept', 'is_aktif', 'is_staff'];
 }

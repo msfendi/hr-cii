@@ -1308,11 +1308,11 @@ body{
                     const totalAktif   = data.aktif_values.reduce((a, b) => a + b, 0);
                     const totalKeluar  = data.keluar_values.reduce((a, b) => a + b, 0);
                     const totalMangkir = data.mangkir_values.reduce((a, b) => a + b, 0);
-                    $('#footerAktifCount').text(Math.max(...data.aktif_counts));
+                    $('#footerAktifCount').text("-");
                     $('#footerAktifTotal').text(rupiah(totalAktif));
-                    $('#footerKeluarCount').text(Math.max(...data.keluar_counts));
+                    $('#footerKeluarCount').text("-");
                     $('#footerKeluarTotal').text(rupiah(totalKeluar));
-                    $('#footerMangkirCount').text(Math.max(...data.mangkir_counts));
+                    $('#footerMangkirCount').text("-");
                     $('#footerMangkirTotal').text(rupiah(totalMangkir));
                     $('#footerTotal').text(rupiah(data.grand_total));
                 })
@@ -2026,13 +2026,21 @@ body{
                     url: "{{ route('payroll-recap.search-employee') }}",
                     dataType: 'json',
                     delay: 300,
-                    data: params => ({ q: params.term }),
+                    data: params => ({ q: params.term, dept: $('#deptSelect').val() }),
                     processResults: data => ({ results: data.results })
                 },
                 minimumInputLength: 0
             });
             $('#deptSelect').select2({ placeholder: 'Semua Department', allowClear: true });
             $('#componentSelect').select2({ minimumResultsForSearch: 0 });
+
+            // Ganti department -> daftar karyawan di filter NPK hanya
+            // menampilkan karyawan dari department tsb. Pilih "Semua
+            // Department" (value kosong) untuk mengembalikan filter karyawan
+            // ke semua karyawan lagi.
+            $('#deptSelect').on('change', function () {
+                $('#npkSelect').val(null).trigger('change');
+            });
 
             $('#filterForm').on('submit', function (e) {
                 e.preventDefault();
@@ -2055,13 +2063,18 @@ body{
                     url: "{{ route('payroll-recap.search-employee') }}",
                     dataType: 'json',
                     delay: 300,
-                    data: params => ({ q: params.term }),
+                    data: params => ({ q: params.term, dept: $('#detailDeptSelect').val() }),
                     processResults: data => ({ results: data.results })
                 },
                 minimumInputLength: 0
             });
             $('#detailDeptSelect').select2({ placeholder: 'Semua Department', allowClear: true });
             $('#detailComponentSelect').select2({ minimumResultsForSearch: 0 });
+
+            // Sama seperti section 1: ganti department -> reset filter karyawan.
+            $('#detailDeptSelect').on('change', function () {
+                $('#detailNpkSelect').val(null).trigger('change');
+            });
 
             $('#detailFilterForm').on('submit', function (e) {
                 e.preventDefault();

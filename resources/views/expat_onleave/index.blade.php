@@ -3,15 +3,15 @@
         <div id="content"> @include('layout.navbar') <div class="container-fluid">
             <!-- TITLE -->
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
-              <h1 class="h3 mb-0 text-gray-800">Expat On Leave</h1>
+              <h1 class="h3 mb-0 text-gray-800">Expat Leave Expense</h1>
               <a href="{{ route('expat.onleave.create') }}" class="btn btn-sm btn-primary shadow-sm">
-                <i class="fas fa-plus fa-sm text-white-50"></i> Create Expat On Leave </a>
+                <i class="fas fa-plus fa-sm text-white-50"></i> Create Expat Leave Expense </a>
             </div>
             <div class="card shadow mb-4">
               <!-- HEADER -->
               <div class="card-header py-3">
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
-                  <h6 class="m-0 font-weight-bold text-primary"> Expat On Leave Data </h6>
+                  <h6 class="m-0 font-weight-bold text-primary"> Expat Leave Expense Data </h6>
                   <div class="d-flex align-items-center">
                           @canRoute('expat.template.onleave')
                     <a href="{{ route('expat.template.onleave') }}" class="btn btn-info btn-sm mr-2">
@@ -45,7 +45,7 @@
                       <tr>
                         <th width="50">ID</th>
                         <th>Nama Karyawan</th>
-                        <th>On Leave Period</th>
+                        <th>Leave Expense Period</th>
                         <th>Leave Type</th>
                         <th>Component</th>
                         <th>Amount</th>

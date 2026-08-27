@@ -670,7 +670,7 @@ body.modal-open {
                         </div>
 
                         <div class="row">
-                            <div class="col-md-6 form-group">
+                            <div class="col-md-4 form-group">
                                 <label class="small font-weight-bold text-gray-600">Department</label>
                                 <select id="fDepartment" name="department_id" class="form-control" style="width:100%">
                                     <option value="">Pilih Department</option>
@@ -679,7 +679,7 @@ body.modal-open {
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-6 form-group">
+                            <div class="col-md-4 form-group">
                                 <label class="small font-weight-bold text-gray-600">Tipe Pekerjaan <span class="text-danger">*</span></label>
                                 <select id="fType" name="employment_type" class="form-control" style="width:100%" required>
                                     <option value="full_time">Full Time</option>
@@ -687,6 +687,14 @@ body.modal-open {
                                     <option value="contract">Kontrak</option>
                                     <option value="internship">Magang</option>
                                     <option value="daily_worker">Harian Lepas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold text-gray-600">Level <span class="text-danger">*</span></label>
+                                <select id="fIsStaff" name="is_staff" class="form-control" style="width:100%" required>
+                                    <option value="" selected disabled>Pilih Level</option>
+                                    <option value="0">Non-Staff</option>
+                                    <option value="1">Staff</option>
                                 </select>
                             </div>
                         </div>
@@ -777,6 +785,7 @@ body.modal-open {
                                     <th style="min-width:140px;">Agama / Status</th>
                                     <th style="min-width:140px;">Departemen / Posisi</th>
                                     <th style="min-width:110px;">Tanggal Apply</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -1047,7 +1056,9 @@ body.modal-open {
 
             const tglCell = `<div class="cell-title">${escapeHtml(a.applied_at_formatted || '-')}</div>`;
 
-            return [a.no, nameCell, nikCell, eduCell, fisikCell, kontakCell, agamaCell, deptCell, tglCell];
+            // Kolom ke-10 (index 9) berisi nilai mentah 'Y-m-d H:i' yang dipakai
+            // khusus untuk sorting kolom Tanggal Apply (kolom 8), bukan untuk ditampilkan.
+            return [a.no, nameCell, nikCell, eduCell, fisikCell, kontakCell, agamaCell, deptCell, tglCell, a.applied_at || ''];
         }
 
         function initApplicantsTable() {
@@ -1059,6 +1070,29 @@ body.modal-open {
                 pageLength: 10,
                 lengthMenu: [5, 10, 25, 50],
                 order: [[5, 'desc']],
+                columns: [
+                    { data: 0 },
+                    { data: 1 },
+                    { data: 2 },
+                    { data: 3 },
+                    { data: 4 },
+                    { data: 5 },
+                    { data: 6 },
+                    { data: 7 },
+                    {
+                        // Tampilkan teks tanggal yang sudah diformat, tapi urutkan
+                        // berdasarkan nilai mentah 'Y-m-d H:i' di kolom tersembunyi (index 9)
+                        // supaya sort mengikuti tanggal-bulan-tahun asli, bukan teks tanggal.
+                        data: 8,
+                        render: function (data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                return row[9] || '';
+                            }
+                            return data;
+                        },
+                    },
+                    { data: 9, visible: false, searchable: false },
+                ],
                 language: {
                     search: 'Cari:',
                     lengthMenu: 'Tampilkan _MENU_ data',
@@ -1107,10 +1141,6 @@ body.modal-open {
             $('#applicantsPositionTitle').text(vacancy.position + ' • ' + vacancy.department);
             $('#applicantsSummary').html('<div class="col-12 text-center py-3 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i>Memuat data pelamar...</div>');
 
-            if (applicantsDataTable) {
-                applicantsDataTable.clear().destroy();
-                $('#applicantsTable tbody').empty();
-            }
             applicantsStore = [];
 
             fetch(routes.applicants(id))
@@ -1482,6 +1512,7 @@ body.modal-open {
             $('#vacancyId').val('');
             $('#fDepartment').val('').trigger('change');
             $('#fType').val('full_time').trigger('change');
+            $('#fIsStaff').val('0').trigger('change');
             $('#fStatus').val('open').trigger('change');
             $('#criteriaWrapper').empty();
             $('#documentWrapper').empty();
@@ -1499,6 +1530,7 @@ body.modal-open {
             $('#fPosition').val(v.position);
             $('#fDepartment').val(v.department_id || '').trigger('change');
             $('#fType').val(v.employment_type).trigger('change');
+            $('#fIsStaff').val(v.is_staff ? '1' : '0').trigger('change');
             $('#fTotalNeeded').val(v.total_needed);
             $('#fStatus').val(v.status).trigger('change');
             $('#fOpenDate').val(v.open_date);
@@ -1795,6 +1827,7 @@ body.modal-open {
                     position: $('#fPosition').val(),
                     department_id: $('#fDepartment').val(),
                     employment_type: $('#fType').val(),
+                    is_staff: $('#fIsStaff').val(),
                     total_needed: $('#fTotalNeeded').val(),
                     status: $('#fStatus').val(),
                     open_date: $('#fOpenDate').val(),

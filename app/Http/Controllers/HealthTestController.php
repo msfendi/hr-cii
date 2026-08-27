@@ -140,6 +140,8 @@ class HealthTestController extends Controller
                 ->where('id_pelamar', $pelamar->ID)
                 ->update([
                     'file_surat_sehat' => $relativePath,
+                    'result_kesehatan' => $request->kesimpulan ? 'TRUE' : 'FALSE',
+                    'comment_kesehatan' => $request->remark,
                     'updated_at' => now()
                 ]);
         }
@@ -290,6 +292,8 @@ class HealthTestController extends Controller
                 ->where('id_pelamar', $pelamar->ID)
                 ->update([
                     'file_surat_sehat' => $relativePath,
+                    'result_kesehatan' => $request->kesimpulan ? 'TRUE' : 'FALSE',
+                    'comment_kesehatan' => $request->remark,
                     'updated_at' => now()
                 ]);
         }

@@ -70,10 +70,10 @@ class Handler extends ExceptionHandler
 
     public function report(Throwable $e)
     {
-        ActivityLogger::log([
-            'action' => 'error',
-            'description' => $e->getMessage(),
-        ]);
+        // ActivityLogger::log([
+        //     'action' => 'error',
+        //     'description' => $e->getMessage(),
+        // ]);
 
         parent::report($e);
     }
