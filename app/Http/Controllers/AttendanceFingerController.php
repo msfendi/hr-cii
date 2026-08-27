@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Exports\AttendanceExport;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Maatwebsite\Excel\Facades\Excel;
 
 class AttendanceFingerController extends Controller
@@ -18,8 +19,6 @@ class AttendanceFingerController extends Controller
     {
         if ($request->ajax()) {
             try {
-                $date = $request->filled('date') ? $request->date : now()->toDateString();
-
                 // main query dari att_log
                 // $data = DB::connection('cii')->select("
                 //     SELECT
@@ -648,5 +647,299 @@ class AttendanceFingerController extends Controller
         $fileName = "Template_Manual_Attendance_{$sewingLabel}_{$year}_{$month}.xlsx";
 
         return Excel::download(new \App\Exports\AttendanceManualTemplateExport($month, $year, $is_sewing), $fileName);
+    }
+
+    // ================================================================
+    // BARU — Export Bulanan / Per Departemen
+    // Terpisah TOTAL dari export() (harian) di atas. Tidak menyentuh
+    // export()/AttendanceExport/AttendanceFingerExport yang sudah ada.
+    // ================================================================
+
+    /**
+     * List departemen untuk dropdown di modal export bulanan.
+     * GET /attendance-finger/departments
+     */
+    public function getDepartments()
+    {
+        try {
+            $depts = DB::connection('cii')->table('DEPT')
+                ->select('ID_DEPT as id_dept', 'DEPARTEMENT as departement')
+                ->whereNotNull('DEPARTEMENT')
+                ->orderBy('DEPARTEMENT')
+                ->get();
+
+            return response()->json($depts);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Export attendance bulanan / rentang tanggal custom, difilter per
+     * departemen (kosongkan dept_id untuk semua departemen).
+     *
+     * GET /attendance-finger/export-monthly?start_date=...&end_date=...&dept_id=...
+     */
+    public function exportMonthlyByDept(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
+            'dept_id'    => 'nullable|string',
+        ]);
+
+        $deptId = $request->filled('dept_id') ? $request->dept_id : null;
+
+        [$dates, $employees, $deptLabel] = $this->buildMonthlyPivotByDept(
+            $request->start_date,
+            $request->end_date,
+            $deptId
+        );
+
+        $periodLabel = Carbon::parse($request->start_date)->translatedFormat('d M Y')
+            . ' - ' . Carbon::parse($request->end_date)->translatedFormat('d M Y');
+
+        $safeDept = preg_replace('/[^A-Za-z0-9]+/', '_', $deptLabel);
+        $filename = "Attendance_{$safeDept}_{$request->start_date}_to_{$request->end_date}.xlsx";
+
+        return Excel::download(
+            new \App\Exports\AttendanceMonthlyByDeptExport($dates, $employees, $deptLabel, $periodLabel),
+            $filename
+        );
+    }
+
+    /**
+     * Bangun [dates[], employees[], deptLabel] untuk rentang tanggal +
+     * filter departemen opsional.
+     *
+     * @return array{0: array<int,string>, 1: array<int,array>, 2: string}
+     */
+    private function buildMonthlyPivotByDept(string $startDate, string $endDate, ?string $deptId): array
+    {
+        $bindings = [$startDate, $endDate]; // DateSeries
+
+        if ($deptId) {
+            $bindings[] = $deptId; // filter dept di CTE emp
+        }
+
+        $bindings = array_merge($bindings, [
+            $startDate, $endDate, // att_log_window
+            $startDate, $endDate, // candidate (klip ke rentang display)
+        ]);
+
+        $rows = DB::connection('cii')->select($this->pivotSqlMonthly($deptId), $bindings);
+
+        $dates = [];
+        foreach (CarbonPeriod::create($startDate, $endDate) as $day) {
+            $dates[] = $day->format('Y-m-d');
+        }
+
+        $employees = [];
+        $deptLabel = null;
+
+        foreach ($rows as $row) {
+            $npk = $row->npk;
+
+            if (!isset($employees[$npk])) {
+                $employees[$npk] = [
+                    'npk'        => $row->npk,
+                    'nama'       => $row->nama,
+                    'bagian'     => $row->bagian,
+                    'attendance' => [],
+                ];
+            }
+
+            if ($deptId && $deptLabel === null) {
+                $deptLabel = $row->bagian;
+            }
+
+            $workDate = Carbon::parse($row->work_date)->format('Y-m-d');
+
+            $employees[$npk]['attendance'][$workDate] = [
+                'masuk'   => $row->jam_masuk,
+                'pulang'  => $row->jam_pulang,
+                'is_late' => (bool) $row->is_late,
+            ];
+        }
+
+        foreach ($employees as &$emp) {
+            foreach ($dates as $d) {
+                if (!isset($emp['attendance'][$d])) {
+                    $emp['attendance'][$d] = [
+                        'masuk'   => 'not scanned',
+                        'pulang'  => 'not scanned',
+                        'is_late' => false,
+                    ];
+                }
+            }
+            ksort($emp['attendance']);
+        }
+        unset($emp);
+
+        $employees = array_values($employees);
+        usort($employees, fn ($a, $b) => [$a['bagian'], $a['npk']] <=> [$b['bagian'], $b['npk']]);
+
+        if ($deptLabel === null) {
+            $deptLabel = 'Semua Departemen';
+        }
+
+        return [$dates, $employees, $deptLabel];
+    }
+
+    /**
+     * Query pivot bulanan/range, opsional filter departemen.
+     * Adaptasi dari query single-day di index() (shift hari ini + kemarin,
+     * window ±120 menit simetris) — TANPA join shift besok, sama seperti
+     * index() versi final kamu.
+     *
+     * Strategi performa "candidate": perhitungan shift (join
+     * employee_shifts/shifts) hanya dijalankan untuk (npk, tanggal) yang
+     * benar-benar dekat dengan scan di att_log (candidate/cand_emp), bukan
+     * untuk semua kombinasi karyawan x tanggal — supaya tidak berat untuk
+     * karyawan yang banyak "not scanned"-nya (lihat CTE "grid" di bagian
+     * akhir untuk tampilan penuh semua tanggal, yang murah/tanpa join berat).
+     *
+     * Params (urut): start_date, end_date, [dept_id jika difilter],
+     *                start_date, end_date, start_date, end_date
+     */
+    private function pivotSqlMonthly(?string $deptId): string
+    {
+        $deptFilter = $deptId ? 'WHERE d.ID_DEPT = ?' : '';
+
+        return "
+            ;WITH DateSeries AS (
+                SELECT CAST(? AS DATE) AS work_date
+                UNION ALL
+                SELECT DATEADD(DAY, 1, work_date)
+                FROM DateSeries
+                WHERE work_date < CAST(? AS DATE)
+            ),
+            emp AS (
+                SELECT
+                    b.BARCODE       AS pin,
+                    b.NPK           AS npk,
+                    b.NAMA_KARYAWAN AS nama,
+                    d.DEPARTEMENT   AS bagian
+                FROM BIODATA b
+                LEFT JOIN DEPT d ON d.ID_DEPT = b.ID_DEPT
+                {$deptFilter}
+            ),
+            att_log_window AS (
+                SELECT pin, scan_date
+                FROM att_log
+                WHERE scan_date >= DATEADD(DAY, -1, CAST(? AS DATETIME))
+                  AND scan_date <  DATEADD(DAY, 2, CAST(? AS DATETIME))
+            ),
+            candidate AS (
+                SELECT DISTINCT npk, work_date FROM (
+                    SELECT e.npk, CAST(a.scan_date AS DATE) AS work_date
+                    FROM emp e JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
+                    UNION ALL
+                    SELECT e.npk, DATEADD(DAY, -1, CAST(a.scan_date AS DATE))
+                    FROM emp e JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
+                    UNION ALL
+                    SELECT e.npk, DATEADD(DAY, 1, CAST(a.scan_date AS DATE))
+                    FROM emp e JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
+                ) x
+                WHERE work_date BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
+            ),
+            cand_emp AS (
+                SELECT e.pin, e.npk, e.nama, e.bagian, c.work_date
+                FROM candidate c
+                JOIN emp e ON e.npk = c.npk
+            ),
+            emp_shift AS (
+                SELECT
+                    ce.*,
+                    COALESCE(s.work_start, '08:00:00')  AS work_start,
+                    COALESCE(s.work_end, '17:00:00')    AS work_end,
+                    COALESCE(ps.work_start, '08:00:00') AS prev_work_start,
+                    COALESCE(ps.work_end, '17:00:00')   AS prev_work_end
+                FROM cand_emp ce
+                LEFT JOIN employee_shifts es
+                    ON es.npk = ce.npk AND CAST(es.shift_date AS DATE) = ce.work_date
+                LEFT JOIN shifts s ON s.id = es.shift_id
+                LEFT JOIN employee_shifts pes
+                    ON pes.npk = ce.npk AND CAST(pes.shift_date AS DATE) = DATEADD(DAY, -1, ce.work_date)
+                LEFT JOIN shifts ps ON ps.id = pes.shift_id
+            ),
+            emp_bounds AS (
+                SELECT
+                    es.*,
+                    CAST(CONVERT(VARCHAR(10), es.work_date, 120) + ' ' + CONVERT(VARCHAR(8), es.work_start, 108) AS DATETIME) AS shift_start_dt,
+                    CASE
+                        WHEN es.work_end < es.work_start
+                            THEN DATEADD(DAY, 1, CAST(CONVERT(VARCHAR(10), es.work_date, 120) + ' ' + CONVERT(VARCHAR(8), es.work_end, 108) AS DATETIME))
+                        ELSE CAST(CONVERT(VARCHAR(10), es.work_date, 120) + ' ' + CONVERT(VARCHAR(8), es.work_end, 108) AS DATETIME)
+                    END AS shift_end_dt,
+                    CASE
+                        WHEN es.prev_work_end < es.prev_work_start
+                            THEN DATEADD(DAY, 1, CAST(CONVERT(VARCHAR(10), DATEADD(DAY, -1, es.work_date), 120) + ' ' + CONVERT(VARCHAR(8), es.prev_work_end, 108) AS DATETIME))
+                        ELSE CAST(CONVERT(VARCHAR(10), DATEADD(DAY, -1, es.work_date), 120) + ' ' + CONVERT(VARCHAR(8), es.prev_work_end, 108) AS DATETIME)
+                    END AS prev_shift_end_dt
+                FROM emp_shift es
+            ),
+            emp_window AS (
+                SELECT
+                    eb.*,
+                    DATEADD(MINUTE, 120, eb.shift_end_dt) AS scan_upper_bound
+                FROM emp_bounds eb
+            ),
+            scans AS (
+                SELECT
+                    ew.pin, ew.npk, ew.work_date,
+                    a.scan_date,
+                    ew.shift_start_dt,
+                    ew.shift_end_dt
+                FROM emp_window ew
+                JOIN att_log_window a
+                    ON CAST(a.pin AS VARCHAR) = CAST(ew.pin AS VARCHAR)
+                    AND a.scan_date >= DATEADD(HOUR, -4, ew.shift_start_dt)
+                    AND a.scan_date <= ew.scan_upper_bound
+                    AND a.scan_date > DATEADD(MINUTE, 120, ew.prev_shift_end_dt)
+            ),
+            scan_ranked AS (
+                SELECT
+                    npk, work_date, scan_date, shift_start_dt,
+                    ABS(DATEDIFF(MINUTE, scan_date, shift_start_dt)) AS dist_to_start,
+                    ABS(DATEDIFF(MINUTE, scan_date, shift_end_dt))   AS dist_to_end,
+                    ROW_NUMBER() OVER (PARTITION BY npk, work_date ORDER BY ABS(DATEDIFF(MINUTE, scan_date, shift_start_dt))) AS rn_masuk,
+                    ROW_NUMBER() OVER (PARTITION BY npk, work_date ORDER BY ABS(DATEDIFF(MINUTE, scan_date, shift_end_dt)))   AS rn_pulang,
+                    COUNT(*) OVER (PARTITION BY npk, work_date) AS total_scan
+                FROM scans
+            ),
+            grid AS (
+                SELECT e.pin, e.npk, e.nama, e.bagian, ds.work_date
+                FROM emp e
+                CROSS JOIN DateSeries ds
+            )
+            SELECT
+                g.npk, g.nama, g.bagian, g.work_date,
+
+                CASE
+                    WHEN m.scan_date IS NULL THEN 'not scanned'
+                    WHEN m.total_scan = 1 AND m.dist_to_end < m.dist_to_start THEN 'not scanned'
+                    ELSE CONVERT(VARCHAR(8), m.scan_date, 108)
+                END AS jam_masuk,
+
+                CASE
+                    WHEN p.scan_date IS NULL THEN 'not scanned'
+                    WHEN p.total_scan = 1 AND p.dist_to_start <= p.dist_to_end THEN 'not scanned'
+                    ELSE CONVERT(VARCHAR(8), p.scan_date, 108)
+                END AS jam_pulang,
+
+                CASE
+                    WHEN m.scan_date IS NOT NULL
+                        AND NOT (m.total_scan = 1 AND m.dist_to_end < m.dist_to_start)
+                        AND m.scan_date > DATEADD(MINUTE, 10, m.shift_start_dt)
+                    THEN 1 ELSE 0
+                END AS is_late
+
+            FROM grid g
+            LEFT JOIN scan_ranked m ON m.npk = g.npk AND m.work_date = g.work_date AND m.rn_masuk = 1
+            LEFT JOIN scan_ranked p ON p.npk = g.npk AND p.work_date = g.work_date AND p.rn_pulang = 1
+            ORDER BY g.bagian ASC, g.npk ASC, g.work_date ASC
+            OPTION (MAXRECURSION 400)
+        ";
     }
 }

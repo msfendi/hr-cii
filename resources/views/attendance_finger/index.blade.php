@@ -46,6 +46,9 @@
                                 <button class="btn btn-info ml-1" data-toggle="modal" data-target="#modalDownloadTemplate">
                                     <i class="fas fa-download mr-1"></i> Template Manual
                                 </button>
+                                <button class="btn btn-primary ml-1" data-toggle="modal" data-target="#modalExportMonthly">
+                                    <i class="fas fa-calendar-check mr-1"></i> Export Bulanan/Dept
+                                </button>
                             </div>
                         </div>
                         <div class="table-responsive">
@@ -147,6 +150,63 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modal Export Bulanan / Per Departemen (BARU) -->
+        <div class="modal fade" id="modalExportMonthly" tabindex="-1" role="dialog" aria-labelledby="modalExportMonthlyLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalExportMonthlyLabel">Export Attendance - Bulanan / Per Departemen</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="exportMonthlyDept">Departemen</label>
+                            <select id="exportMonthlyDept" class="form-control">
+                                <option value="">-- Semua Departemen --</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="d-block">Rentang Waktu</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="export_mode" id="modeMonthly" value="monthly" checked>
+                                <label class="form-check-label" for="modeMonthly">Bulanan</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="export_mode" id="modeCustom" value="custom">
+                                <label class="form-check-label" for="modeCustom">Custom Range</label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="groupExportMonthlyMonth">
+                            <label for="exportMonthlyMonth">Bulan</label>
+                            <input type="month" class="form-control" id="exportMonthlyMonth" value="{{ date('Y-m') }}">
+                        </div>
+
+                        <div class="form-row" id="groupExportMonthlyRange" style="display:none;">
+                            <div class="form-group col-md-6">
+                                <label for="exportMonthlyStart">Dari</label>
+                                <input type="date" class="form-control" id="exportMonthlyStart">
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="exportMonthlyEnd">Sampai</label>
+                                <input type="date" class="form-control" id="exportMonthlyEnd">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                        <button type="button" class="btn btn-primary" id="btnSubmitExportMonthly">
+                            <i class="fas fa-file-excel mr-1"></i> Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
 @include('layout.footer')
 </body>
 <!-- Page level plugins -->
@@ -406,6 +466,107 @@
             .catch(() => {
                 Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong during export!' });
             });
+        });
+
+    });
+</script>
+
+<!-- ================================================================
+     BARU — Export Bulanan / Per Departemen
+     Ditambahkan sebagai blok <script> terpisah, tidak menyentuh
+     $(document).ready(...) di atas sama sekali.
+     ================================================================ -->
+<script>
+    $(function () {
+
+        // Isi dropdown departemen sekali saja saat modal pertama dibuka
+        $('#modalExportMonthly').on('show.bs.modal', function () {
+            var $dept = $('#exportMonthlyDept');
+            if ($dept.data('loaded')) return;
+
+            $.getJSON("{{ route('attendance-finger.departments') }}", function (depts) {
+                var options = '<option value="">-- Semua Departemen --</option>';
+                depts.forEach(function (d) {
+                    options += '<option value="' + d.id_dept + '">' + d.departement + '</option>';
+                });
+                $dept.html(options).data('loaded', true);
+            }).fail(function () {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal memuat daftar departemen.' });
+            });
+        });
+
+        // Toggle field Bulanan vs Custom Range
+        $('input[name="export_mode"]').on('change', function () {
+            if ($(this).val() === 'monthly') {
+                $('#groupExportMonthlyMonth').show();
+                $('#groupExportMonthlyRange').hide();
+            } else {
+                $('#groupExportMonthlyMonth').hide();
+                $('#groupExportMonthlyRange').show();
+            }
+        });
+
+        function endOfMonth(startDateStr) {
+            var d = new Date(startDateStr + 'T00:00:00');
+            var last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+            return last.toISOString().slice(0, 10);
+        }
+
+        $('#btnSubmitExportMonthly').on('click', function () {
+            var mode = $('input[name="export_mode"]:checked').val();
+            var start, end;
+
+            if (mode === 'monthly') {
+                var month = $('#exportMonthlyMonth').val();
+                if (!month) {
+                    Swal.fire({ icon: 'error', title: 'Oops', text: 'Pilih bulan terlebih dahulu.' });
+                    return;
+                }
+                start = month + '-01';
+                end = endOfMonth(start);
+            } else {
+                start = $('#exportMonthlyStart').val();
+                end   = $('#exportMonthlyEnd').val();
+                if (!start || !end) {
+                    Swal.fire({ icon: 'error', title: 'Oops', text: 'Pilih rentang tanggal terlebih dahulu.' });
+                    return;
+                }
+                if (end < start) {
+                    Swal.fire({ icon: 'error', title: 'Oops', text: 'Tanggal akhir tidak boleh sebelum tanggal mulai.' });
+                    return;
+                }
+            }
+
+            var deptId = $('#exportMonthlyDept').val(); // '' = semua departemen
+
+            var qs = $.param({ start_date: start, end_date: end, dept_id: deptId });
+            var url = "{{ route('attendance-finger.export-monthly') }}?" + qs;
+
+            Swal.fire({ title: 'Menyiapkan file...', text: 'Mohon tunggu', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            fetch(url)
+                .then(function (response) {
+                    if (!response.ok) {
+                        return response.json().then(function (err) {
+                            throw new Error(err.message || err.error || 'Gagal membuat file export.');
+                        });
+                    }
+                    return response.blob();
+                })
+                .then(function (blob) {
+                    Swal.close();
+                    var dlUrl = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = dlUrl;
+                    a.download = 'attendance_' + start + '_to_' + end + '.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    $('#modalExportMonthly').modal('hide');
+                })
+                .catch(function (err) {
+                    Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+                });
         });
 
     });

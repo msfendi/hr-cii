@@ -533,6 +533,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'permission']);
     Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'permission']);
     Route::post('/attendance-finger/download-template-manual', [AttendanceFingerController::class, 'downloadTemplateManual'])->name('attendance-finger.download-template-manual')->middleware(['auth', 'permission']);
+    Route::get('attendance-finger/departments', [AttendanceFingerController::class, 'getDepartments'])->name('attendance-finger.departments')->middleware(['auth', 'permission']);
+    Route::get('attendance-finger/export-monthly', [AttendanceFingerController::class, 'exportMonthlyByDept'])->name('attendance-finger.export-monthly')->middleware(['auth', 'permission']);
 
     /*
 |--------------------------------------------------------------------------
