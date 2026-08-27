@@ -84,6 +84,7 @@ class HealthTestController extends Controller
         */
         $pelamar = DB::table('pelamar')
             ->where('NIK', $request->nik)
+            ->latest()
             ->first();
 
         if ($pelamar) {
