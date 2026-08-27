@@ -584,70 +584,84 @@ class PadInsentifMasterController extends Controller
         |--------------------------------------------------------------------------
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
+        | Operator pembanding diambil PER TANGGAL, mengikuti kolom "tim" milik
+        | employee (non operator) itu sendiri pada tanggal tsb:
+        |   - tim = 1  -> hanya operator dengan tim = 1
+        |   - tim = 2  -> hanya operator dengan tim = 2
+        |   - tim null -> semua operator (tanpa filter tim)
+        |--------------------------------------------------------------------------
         */ else {
-            $employeeDates = DB::table('pad_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('npk', $employee->NPK)
-                ->pluck('date')
-                ->unique()
-                ->toArray();
-            // dd($employeeDates);
+            // Assignment milik employee (non operator) ini sendiri, dikelompokkan per tanggal
+            $employeeAssignmentsByDate = $assignments->groupBy('date');
+            // dd($employeeAssignmentsByDate);
 
-            /*
-            |----------------------------------
-            | TOTAL DEPT INSENTIF
-            | ONLY VALID OPERATOR
-            |----------------------------------
-            */
             $totalDeptInsentif = 0;
+            $operatorNpks = [];
 
+            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
 
-            $operators = DB::table('pad_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('role', '=', 'operator')
-                ->whereBetween('date', [$period->start_date, $period->end_date])
-                ->whereIn('date', $employeeDates)
-                ->get();
-
-            // dd($operators);
-
-
-            foreach ($operators as $operator) {
                 /*
                 |--------------------------------------------------------------------------
                 | CHECK RESIGN (NEW)
                 |--------------------------------------------------------------------------
                 */
-                if ($tkkDate && $operator->date >= $tkkDate) {
-                    continue;
-                }
-                // FILTER HANYA NUMERATOR
-                if (!$isValidOvertime($operator->npk, $operator->date)) {
+                if ($tkkDate && $date >= $tkkDate) {
                     continue;
                 }
 
-                $rate = $this->getInsentifByEfficiency(
-                    $operator->efficiency,
-                    $formula
-                );
+                /*
+                |--------------------------------------------------------------------------
+                | AMBIL TIM EMPLOYEE UNTUK TANGGAL INI
+                |--------------------------------------------------------------------------
+                */
+                $tim = $rowsForDate
+                    ->pluck('tim')
+                    ->filter(fn($t) => $t !== null && $t !== '')
+                    ->first();
 
-                $totalDeptInsentif += $rate * $operator->piece;
+                /*
+                |----------------------------------
+                | TOTAL DEPT INSENTIF (NUMERATOR)
+                | ONLY VALID OPERATOR, TIM SAMA (JIKA ADA)
+                |----------------------------------
+                */
+                $operatorQuery = DB::table('pad_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->where('role', '=', 'operator')
+                    ->where('date', $date);
 
-                // dd($totalDeptInsentif);
+                if (!is_null($tim)) {
+                    $operatorQuery->where('tim', $tim);
+                }
+
+                $operatorsForDate = $operatorQuery->get();
+
+                // dd($tim, $operatorsForDate);
+
+                foreach ($operatorsForDate as $operator) {
+                    // FILTER HANYA NUMERATOR
+                    if (!$isValidOvertime($operator->npk, $operator->date)) {
+                        continue;
+                    }
+
+                    $rate = $this->getInsentifByEfficiency(
+                        $operator->efficiency,
+                        $formula
+                    );
+
+                    $totalDeptInsentif += $rate * $operator->piece;
+                    $operatorNpks[] = $operator->npk;
+
+                    // dd($totalDeptInsentif);
+                }
             }
 
             /*
                 |----------------------------------
-                | DENOMINATOR (ALL OPERATOR)
+                | DENOMINATOR (ALL OPERATOR, TIM SAMA PER TANGGAL)
                 |----------------------------------
                 */
-            $jumlahOperator = DB::table('pad_efficiencies as pe')
-                ->where('pe.period_id', $period->id)
-                ->whereIn('pe.date', $employeeDates)
-                ->where('pe.role', '=', 'operator')
-                ->pluck('pe.npk')
-                ->unique()
-                ->count();
+            $jumlahOperator = collect($operatorNpks)->unique()->count();
 
             // dd($totalDeptInsentif, $jumlahOperator);
 

@@ -29,6 +29,7 @@ class PadEfficiencyImport implements ToModel, WithHeadingRow
                 'period_id'   => $this->periodId,
             ],
             [
+                'tim'   => $row['tim'],
                 'efficiency' => $row['efficiency'],
                 'piece' => $row['piece']
             ]
