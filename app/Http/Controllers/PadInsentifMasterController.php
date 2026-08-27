@@ -539,10 +539,18 @@ class PadInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
+    | Difilter berdasarkan $role yang sedang dihitung. Karyawan bisa punya
+    | lebih dari satu role dalam 1 periode (mis. operator tgl 3-4 Agustus,
+    | lalu jadi leader mulai tgl 5) — calculatePad() dipanggil terpisah per
+    | (npk, role) dari check(), jadi assignment yang diambil di sini juga
+    | harus dibatasi ke role tsb saja supaya tanggal role lain tidak ikut
+    | tercampur ke perhitungan.
+    |--------------------------------------------------------------------------
     */
         $assignments = DB::table('pad_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
+            ->where('role', $role)
             ->whereBetween('date', [$period->start_date, $period->end_date])
             ->get();
 

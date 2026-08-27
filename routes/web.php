@@ -408,6 +408,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/ijin-meninggalkan-pekerjaan/{id}/edit', [IjinMeninggalkanPekerjaanController::class, 'edit'])->name('ijin-meninggalkan-pekerjaan.edit')->middleware(['auth', 'permission']);
     Route::put('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'update'])->name('ijin-meninggalkan-pekerjaan.update')->middleware(['auth', 'permission']);
     Route::get('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'destroy'])->name('ijin-meninggalkan-pekerjaan.delete')->middleware(['auth', 'permission']);
+    Route::get('/ijin-meninggalkan-pekerjaan/export/excel', [IjinMeninggalkanPekerjaanController::class, 'export'])->name('ijin-meninggalkan-pekerjaan.export')->middleware(['auth', 'permission']);
+
 
     //  Evaluation Employee
     Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index')->middleware(['auth', 'permission']);

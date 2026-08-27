@@ -1740,17 +1740,11 @@ END AS special_overtime_hours
                             }
                         }
                     } else if ($component->code === 'pad_insentif') {
-
-                        $query = DB::table('pad_efficiencies')
+                        $assignments = DB::table('pad_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date]);
-
-                        $isOperator = (clone $query)->value('role') === 'operator';
-
-                        $assignments = $isOperator
-                            ? $query->get()
-                            : $query->limit(1)->get();
+                            ->whereBetween('date', [$period->start_date, $period->end_date])
+                            ->get();
 
                         $amount = 0;
 
@@ -1761,42 +1755,70 @@ END AS special_overtime_hours
                             return $isValidOvertimeFor($npk, $date);
                         };
 
-                        foreach ($assignments as $assignment) {
+                        /*
+                        |----------------------------------------------------------------
+                        | OPERATOR DAYS
+                        |----------------------------------------------------------------
+                        */
+                        foreach ($assignments->where('role', 'operator') as $assignment) {
 
-                            if (empty($assignment->role)) {
+                            if (!$isValidOvertime($assignment->npk, $assignment->date)) {
                                 continue;
                             }
-                            if ($assignment->role === 'operator') {
 
-                                if (!$isValidOvertime($assignment->npk, $assignment->date)) {
-                                    continue;
-                                }
+                            $rate = $this->getInsentifByEfficiency(
+                                $assignment->efficiency,
+                                $padInsentifFormula
+                            );
 
-                                $rate = $this->getInsentifByEfficiency(
-                                    $assignment->efficiency,
-                                    $padInsentifFormula
-                                );
+                            $amount += $rate * $assignment->piece;
+                        }
 
-                                $amount += $rate * $assignment->piece;
-                            } else {
+                        /*
+                        |----------------------------------------------------------------
+                        | NON OPERATOR DAYS (SPV / LEADER / HELPER)
+                        |----------------------------------------------------------------
+                        | Dikelompokkan per role dulu (kalau role berubah di tengah
+                        | periode), lalu per tanggal — supaya tanggal saat karyawan
+                        | masih jadi operator TIDAK ikut masuk ke perhitungan non
+                        | operator. Operator pembanding diambil PER TANGGAL, mengikuti
+                        | kolom "tim" milik employee non operator itu sendiri pada
+                        | tanggal tsb:
+                        |   - tim = 1  -> hanya operator dengan tim = 1
+                        |   - tim = 2  -> hanya operator dengan tim = 2
+                        |   - tim null -> semua operator (tanpa filter tim)
+                        |----------------------------------------------------------------
+                        */
+                        $nonOperatorAssignments = $assignments->filter(
+                            fn($a) => !empty($a->role) && $a->role !== 'operator'
+                        );
 
-                                $employeeDates = DB::table('pad_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('npk', $employee->NPK)
-                                    ->pluck('date')
-                                    ->unique()
-                                    ->toArray();
+                        foreach ($nonOperatorAssignments->groupBy('role') as $role => $roleAssignments) {
 
-                                $totalDeptInsentif = 0;
+                            $employeeAssignmentsByDate = $roleAssignments->groupBy('date');
 
-                                $operators = DB::table('pad_efficiencies')
+                            $totalDeptInsentif = 0;
+                            $operatorNpks = [];
+
+                            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
+
+                                $tim = $rowsForDate
+                                    ->pluck('tim')
+                                    ->filter(fn($t) => $t !== null && $t !== '')
+                                    ->first();
+
+                                $operatorQuery = DB::table('pad_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('role', '=', 'operator')
-                                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereIn('date', $employeeDates)
-                                    ->get();
+                                    ->where('date', $date);
 
-                                foreach ($operators as $operator) {
+                                if (!is_null($tim)) {
+                                    $operatorQuery->where('tim', $tim);
+                                }
+
+                                $operatorsForDate = $operatorQuery->get();
+
+                                foreach ($operatorsForDate as $operator) {
                                     if (!$isValidOvertime($operator->npk, $operator->date)) {
                                         continue;
                                     }
@@ -1807,23 +1829,18 @@ END AS special_overtime_hours
                                     );
 
                                     $totalDeptInsentif += $rate * $operator->piece;
+                                    $operatorNpks[] = $operator->npk;
                                 }
-
-                                $jumlahOperator = DB::table('pad_efficiencies as pe')
-                                    ->where('pe.period_id', $period->id)
-                                    ->whereIn('pe.date', $employeeDates)
-                                    ->where('pe.role', '=', 'operator')
-                                    ->pluck('pe.npk')
-                                    ->unique()
-                                    ->count();
-
-                                $amount += $this->calculateRolePadInsentif(
-                                    $assignment->role,
-                                    'pad',
-                                    $totalDeptInsentif,
-                                    $jumlahOperator
-                                );
                             }
+
+                            $jumlahOperator = collect($operatorNpks)->unique()->count();
+
+                            $amount += $this->calculateRolePadInsentif(
+                                $role,
+                                'pad',
+                                $totalDeptInsentif,
+                                $jumlahOperator
+                            );
                         }
                     } else if ($component->code === 'cutting_insentif') {
                         $assignmentNpk = DB::table('employee_cutting_assignments as eca')
