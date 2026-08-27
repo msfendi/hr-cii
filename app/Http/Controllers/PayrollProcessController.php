@@ -612,7 +612,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
         foreach ($insentifTables as $key => $info) {
 
-            $lastDate = DB::table($info['table'])->max('date');
+            $lastDate = DB::table($info['table'])->max('updated_at');
 
             $insentifDetail[$key] = [
                 'label'     => $info['label'],

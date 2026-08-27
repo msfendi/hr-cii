@@ -754,44 +754,42 @@
                         className: 'text-center',
                         render: (d, t, r) => {
                             const isAktif = r.status_contract === 'AKTIF';
-                            if (!isAktif) {
+                            const isEnded = r.status_contract === 'HABIS' || r.status_contract === 'DIAKHIRI';
+
+                            if (isAktif) {
                                 return `
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-success btn-xs btn-act-perpanjang" title="Perpanjang">
+                                        <i class="fas fa-redo"></i>
+                                    </button>
+                                    <button class="btn btn-secondary btn-xs btn-act-finish" title="Selesai">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-danger btn-xs btn-act-stop" title="Akhiri">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                    ${r.can_edit ? `
+                                    <button class="btn btn-warning btn-xs btn-act-finansial" title="Update Finansial">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </button>
+                                    ` : ''}
+                                </div>`;
+                            }
+
+                            // Status bukan AKTIF (termasuk HABIS/DIAKHIRI dan status lainnya)
+                            return `
                             <div class="btn-group btn-group-sm">
-                                 ${r.can_edit ? `
-                                <button class="btn btn-warning btn-xs btn-act-finansial"
-                                    title="Update Finansial">
-                                    <i class="fas fa-money-bill-wave"></i>
-                                </button>
-                                <button class="btn btn-info btn-xs btn-act-undo"
-                                    title="Re-Activate Contract">
+                                ${isEnded ? `
+                                <button class="btn btn-info btn-xs btn-act-undo" title="Re-Activate Contract">
                                     <i class="fas fa-undo"></i>
                                 </button>
                                 ` : ''}
+                                ${r.can_edit ? `
+                                <button class="btn btn-warning btn-xs btn-act-finansial" title="Update Finansial">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </button>
+                                ` : ''}
                             </div>`;
-                            }
-
-                            return `
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-success btn-xs btn-act-perpanjang"
-                                title="Perpanjang">
-                                <i class="fas fa-redo"></i>
-                            </button>
-                            <button class="btn btn-secondary btn-xs btn-act-finish"
-                                title="Selesai">
-                                <i class="fas fa-check"></i>
-                            </button>
-                            <button class="btn btn-danger btn-xs btn-act-stop"
-                                title="Akhiri">
-                                <i class="fas fa-ban"></i>
-                            </button>
-                            
-                            ${r.can_edit ? `
-                            <button class="btn btn-warning btn-xs btn-act-finansial"
-                                title="Update Finansial">
-                                <i class="fas fa-money-bill-wave"></i>
-                            </button>
-                            ` : ''}
-                        </div>`;
                         },
                     },
                 ],
