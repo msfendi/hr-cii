@@ -22,6 +22,7 @@ class HealthTestController extends Controller
                 'pelamar.NAMA as nama',
                 'pelamar_details.file_surat_sehat'
             )
+            ->whereNotNull('file_surat_kesehatan')
             ->latest('health_tests.created_at')
             ->get();
 
