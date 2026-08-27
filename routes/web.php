@@ -695,6 +695,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Recruitment
     Route::get('/recruitment/index', [RecruitmentController::class, 'index'])->name('recruitment.index')->middleware(['auth', 'permission']);
+    Route::get('/recruitment/get-data', [RecruitmentController::class, 'getData'])->name('recruitment.getData')->middleware(['auth', 'permission']);
     Route::post('/recruitment/send-whatsapp', [RecruitmentController::class, 'sendWhatsApp'])->name('recruitment.sendWhatsApp')->middleware(['auth', 'permission']);
     Route::post('/recruitment/update-penilaian', [RecruitmentController::class, 'updatePenilaian'])->name('recruitment.updatePenilaian')->middleware(['auth', 'permission']);
     Route::get('/recruitment/edit/{id}', [RecruitmentController::class, 'edit'])->name('recruitment.edit')->middleware(['auth', 'permission']);
