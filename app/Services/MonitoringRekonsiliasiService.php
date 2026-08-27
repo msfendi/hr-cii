@@ -186,6 +186,30 @@ class MonitoringRekonsiliasiService
         return $this->cpoListExcluding(['negara']);
     }
 
+    /**
+     * Versi khusus untuk scopeByCodeProd() (mon_prod_lines/mon_prod_qc):
+     * kecualikan Negara, OCF, DAN Sub Ref dari bridge mon_orders.uraian --
+     * BUKAN cuma Negara seperti filterUraianListExcludingNegara().
+     *
+     * scopeByCodeProd() sudah men-scope OCF/Sub Ref/Negara LANGSUNG ke
+     * kolom `code_prod` (LIKE sederhana, tanpa bridge -- lihat komentar di
+     * scopeByCodeProd()), sama seperti rekonQuery() yang juga meng-exclude
+     * ['ocf', 'sub_ref'] dari cpoListExcluding()-nya. Kalau OCF/Sub Ref
+     * TETAP diikutkan di sini juga, hasilnya di-AND dua kali dengan basis
+     * matching yang beda (bridge via mon_orders.uraian vs LIKE langsung ke
+     * code_prod) -- begitu code_prod TIDAK memuat teks uraian yang sama
+     * persis (mis. mon_prod_qc.code_prod cuma berisi kode OCF apa adanya,
+     * bukan uraian), whereIn-style OR-LIKE dari bridge otomatis gagal
+     * match apapun (atau malah balikin array kosong kalau OCF itu tidak
+     * ketemu persis di mon_orders.ocf_no) dan MEMAKSA 1=0 walau filter
+     * OCF langsungnya sebenarnya cocok. Makanya OCF/Sub Ref harus
+     * di-exclude dari bridge ini juga.
+     */
+    private function filterUraianListForCodeProdScope(): ?array
+    {
+        return $this->cpoListExcluding(['negara', 'ocf', 'sub_ref']);
+    }
+
     private function hasCpo(): bool
     {
         return count($this->filterUraianList()) > 0;
@@ -760,7 +784,7 @@ class MonitoringRekonsiliasiService
             $query = DB::table('mon_prod_lines')
                 ->where('barang_code', '01SCRP00001')
                 ->selectRaw('SUM(jumlah) as jumlah');
-            $this->scopeByCodeProd($query, $this->filterUraianListExcludingNegara());
+            $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
             $scrapQty = (float) ($query->value('jumlah') ?? 0);
 
             // Output Cutting = qty yang destination-nya Sewing (keluar dari Cutting menuju Sewing).
@@ -1246,7 +1270,7 @@ class MonitoringRekonsiliasiService
             ->groupBy('mon_prod_lines.department_id', 'mon_prod_lines.barang_code', 'mon_prod_lines.barang_name')
             ->orderBy('mon_prod_lines.barang_name');
 
-        $this->scopeByCodeProd($query, $this->filterUraianListExcludingNegara());
+        $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
 
         // Baris dengan barang_name berawalan "Pot" (mis. "Pot Lengan") TIDAK
         // lagi diabaikan (where 'not like Pot%' sudah dihapus) -- datanya tetap
@@ -1286,7 +1310,7 @@ class MonitoringRekonsiliasiService
                 ->where('mon_ms_barangs.barang_category', $barangCategory);
         }
 
-        $this->scopeByCodeProd($query, $this->filterUraianListExcludingNegara());
+        $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
 
         return (float) ($query->value('jumlah') ?? 0);
     }
@@ -1306,7 +1330,7 @@ class MonitoringRekonsiliasiService
                 ->where('mon_ms_barangs.barang_category', $barangCategory);
         }
 
-        $this->scopeByCodeProd($query, $this->filterUraianListExcludingNegara());
+        $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
 
         return (float) ($query->value('jumlah') ?? 0);
     }
@@ -1328,7 +1352,7 @@ class MonitoringRekonsiliasiService
             ->where('mon_prod_qc.department_id', $departmentId)
             ->selectRaw('SUM(mon_prod_qc.jumlah) as jumlah');
 
-        // $this->scopeByCodeProd($query, $this->filterUraianListExcludingNegara());
+        $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
 
         return (float) ($query->value('jumlah') ?? 0);
     }
