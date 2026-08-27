@@ -834,6 +834,366 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        @foreach ($recruitments as $recruitment)
+                                                                            @php
+                                                                                $initial = strtoupper(mb_substr($recruitment->NAMA ?? 'X', 0, 1));
+                                                                                $isMale = strtoupper($recruitment->JENIS_KELAMIN ?? '') === 'L';
+                                                                                // Catatan: kolom status ada di pelamar_details (pd.status_apply,
+                                                                                // lowercase), bukan di PELAMAR — sebelumnya dicek pakai
+                                                                                // STATUS_APPLY (uppercase) yang tidak pernah ada sehingga
+                                                                                // $sa selalu null dan badge selalu jatuh ke default.
+                                                                                $sa = $recruitment->status_apply ?? null;
+
+                                                                                $sClass = match ($sa) {
+                                                                                    'APPLIED' => 's-applied',
+                                                                                    'INVITATION TEST' => 's-test',
+                                                                                    'CALLED TO INTERVIEW' => 's-interview',
+                                                                                    'READY FOR SALARY' => 's-salary',
+                                                                                    'ONBOARDING' => 's-onboard',
+                                                                                    'REJECTED' => 's-reject',
+                                                                                    default => 's-default',
+                                                                                };
+                                                                                $sIcon = match ($sa) {
+                                                                                    'APPLIED' => 'fa-inbox',
+                                                                                    'INVITATION TEST' => 'fa-vial',
+                                                                                    'CALLED TO INTERVIEW' => 'fa-comments',
+                                                                                    'READY FOR SALARY' => 'fa-money-check-alt',
+                                                                                    'ONBOARDING' => 'fa-check-circle',
+                                                                                    'REJECTED' => 'fa-times-circle',
+                                                                                    default => 'fa-circle',
+                                                                                };
+
+                                                                                $docs = [
+                                                                                    'Surat Lamaran' => $recruitment->file_surat_lamaran,
+                                                                                    'CV' => $recruitment->file_cv,
+                                                                                    'KTP' => $recruitment->file_ktp,
+                                                                                    'KK' => $recruitment->file_kk,
+                                                                                    'Pas Foto' => $recruitment->file_pas_foto,
+                                                                                    'Ijazah' => $recruitment->file_ijasah,
+                                                                                    'Akta Lahir' => $recruitment->file_akta_kelahiran,
+                                                                                    'SKCK' => $recruitment->file_skck,
+                                                                                    'Surat Sehat' => $recruitment->file_surat_sehat,
+                                                                                ];
+                                                                                $docCount = collect($docs)->filter()->count()
+                                                                                    + (isset($healthTestMap[$recruitment->NIK]) ? 1 : 0);
+
+                                                                                // Pengajuan gaji terbaru untuk pelamar ini (kalau ada)
+                                                                                $sal = $salaryMap[$recruitment->ID] ?? null;
+                                                                            @endphp
+                                                                            <tr>
+                                                                                {{-- # --}}
+                                                                                <td class="text-center text-muted">{{ $loop->iteration }}</td>
+
+                                                                                {{-- Nama --}}
+                                                                                <td>
+                                                                                    <div class="d-flex align-items-center" style="gap:10px;">
+                                                                                        <div class="av {{ $isMale ? 'av-m' : 'av-f' }}">{{ $initial }}</div>
+                                                                                        <div>
+                                                                                            <div class="name-main" {!! in_array($recruitment->NIK, $exPkwtKtp ?? []) ? 'style="color: red;" title="Pernah Terdaftar di PKWT"' : '' !!}>{{ $recruitment->NAMA }}</div>
+                                                                                            <div class="name-sub">
+                                                                                                {{ $isMale ? '♂ Laki-laki' : '♀ Perempuan' }}
+                                                                                            </div>
+                                                                                            @if($recruitment->jabatan)
+                                                                                                <div class="name-sub"><i class="fas fa-briefcase mr-1"
+                                                                                                        style="font-size:10px;"></i>{{ $recruitment->jabatan }}
+                                                                                                </div>
+                                                                                            @endif
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </td>
+
+                                                                                {{-- NIK / TTL --}}
+                                                                                <td>
+                                                                                    <div
+                                                                                        style="font-size:12.5px; font-weight:600; font-family:monospace; color:#2d3748; letter-spacing:.5px;">
+                                                                                        {{ $recruitment->NIK ?? '-' }}
+                                                                                    </div>
+                                                                                    <div class="name-sub"><i class="fas fa-map-marker-alt mr-1"
+                                                                                            style="font-size:10px;"></i>{{ $recruitment->TMPT_LAHIR ?? '-' }}
+                                                                                    </div>
+                                                                                    <div class="name-sub">
+                                                                                        <i class="fas fa-calendar mr-1" style="font-size:10px;"></i>
+                                                                                        {{ $recruitment->TGL_LAHIR ? \Carbon\Carbon::parse($recruitment->TGL_LAHIR)->format('d M Y') : '-' }}
+                                                                                    </div>
+                                                                                    <div class="name-sub" style="color:#94a3b8;">
+                                                                                        {{ $recruitment->UMUR ?? '-' }}
+                                                                                    </div>
+                                                                                </td>
+
+                                                                                {{-- Pendidikan --}}
+                                                                                <td>
+                                                                                    <span class="badge badge-light border"
+                                                                                        style="font-size:12px; padding:4px 8px; font-weight:700;">{{ $recruitment->PENDIDIKAN ?? '-' }}</span>
+                                                                                    <div class="name-sub mt-1">{{ $recruitment->JURUSAN ?? '-' }}</div>
+                                                                                    <div class="name-sub">{{ $recruitment->NAMA_SEKOLAH ?? '-' }}</div>
+                                                                                    @if($recruitment->KABUPATEN_SEKOLAH)
+                                                                                        <div class="name-sub" style="color:#94a3b8;">
+                                                                                            {{ $recruitment->KABUPATEN_SEKOLAH }}
+                                                                                        </div>
+                                                                                    @endif
+                                                                                </td>
+
+                                                                                {{-- Fisik --}}
+                                                                                <td class="text-center">
+                                                                                    <div style="font-size:13px; font-weight:700; color:#2d3748;">
+                                                                                        <i class="fas fa-ruler-vertical text-info mr-1"
+                                                                                            style="font-size:11px;"></i>{{ $recruitment->TINGGI_BADAN ?? '-' }}
+                                                                                        cm
+                                                                                    </div>
+                                                                                    <div style="font-size:13px; font-weight:700; color:#2d3748;">
+                                                                                        <i class="fas fa-weight text-warning mr-1"
+                                                                                            style="font-size:11px;"></i>{{ $recruitment->BERAT_BADAN ?? '-' }}
+                                                                                        kg
+                                                                                    </div>
+                                                                                </td>
+
+                                                                                {{-- Kontak --}}
+                                                                                <td>
+                                                                                    <div style="font-size:13px; font-weight:700; color:#2d3748;">
+                                                                                        {{ $recruitment->HP ?? '-' }}
+                                                                                    </div>
+                                                                                    <div class="name-sub"><i class="fas fa-map-pin mr-1"
+                                                                                            style="font-size:10px;"></i>{{ $recruitment->KABUPATEN ?? '-' }}
+                                                                                    </div>
+                                                                                    @if($recruitment->ALAMAT_DOMISILI)
+                                                                                        <div class="name-sub" style="color:#94a3b8;">Domisili:
+                                                                                            {{ $recruitment->ALAMAT_DOMISILI }}
+                                                                                        </div>
+                                                                                    @endif
+                                                                                </td>
+
+                                                                                {{-- Agama / Status --}}
+                                                                                <td>
+                                                                                    <div class="name-main" style="font-size:13px;">
+                                                                                        {{ $recruitment->AGAMA ?? '-' }}
+                                                                                    </div>
+                                                                                    <div class="name-sub">{{ $recruitment->STATUS ?? '-' }}</div>
+                                                                                    <div class="name-sub">{{ $recruitment->TANGGUNGAN ?? '0' }} tanggungan
+                                                                                    </div>
+                                                                                </td>
+
+                                                                                {{-- Departemen / Posisi --}}
+                                                                                <td>
+                                                                                    <div class="name-main" style="font-size:13px;">
+                                                                                        {{ $recruitment->department ?? '-' }}
+                                                                                    </div>
+                                                                                    <div class="name-sub">{{ $recruitment->jabatan ?? '-' }}</div>
+                                                                                </td>
+
+                                                                                {{-- Tanggal Apply --}}
+                                                                                <td data-order="{{ $recruitment->created_at ? \Carbon\Carbon::parse($recruitment->created_at)->timestamp : 0 }}">
+                                                                                    <div class="name-main" style="font-size:13px;">
+                                                                                        {{ $recruitment->created_at ? \Carbon\Carbon::parse($recruitment->created_at)->format('d-m-Y') : '-' }}
+                                                                                    </div>
+                                                                                </td>
+
+
+                                                                                {{-- Status Apply --}}
+                                                                                <td>
+                                                                                    <span class="s-pill {{ $sClass }}">
+                                                                                        <i
+                                                                                            class="fas {{ $sIcon }}"></i>{{ $recruitment->status_apply ?? $sa ?? '-' }}
+                                                                                        <br>
+                                                                                        @if($recruitment->status_apply == 'ONBOARDING')
+                                                                                            @if($recruitment->tgl_diterima != null)
+                                                                                                <i class="fas fa-check-circle"
+                                                                                                    style="font-size:13px;">{{ \Carbon\Carbon::parse($recruitment->tgl_diterima)->format('d F Y') }}</i>
+                                                                                            @else
+                                                                                                <i class="fas fa-exclamation-circle" style="font-size:13px;">Tanggal
+                                                                                                    Diterima Belum Diisi</i>
+                                                                                            @endif
+                                                                                        @endif
+                                                                                    </span>
+                                                                                </td>
+
+                                                                                {{-- Hasil Test --}}
+                                                                                <td>
+                                                                                    @php
+                                                                                        $stepResults = [
+                                                                                            'Interview' => $recruitment->result_interview ?? null,
+                                                                                            'Kesehatan' => $recruitment->result_kesehatan ?? null,
+                                                                                            'Teknis' => $recruitment->result_test ?? null,
+                                                                                            'User' => $recruitment->result_user ?? null,
+                                                                                        ];
+                                                                                        $hasAnyResult = collect($stepResults)->filter(fn($v) => !is_null($v) && $v !== '')->isNotEmpty();
+
+                                                                                        // Gaji (kalau staff & sudah pernah diajukan) ditampilkan sebagai
+                                                                                        // baris tambahan di kolom yang sama, bukan badge terpisah di Aksi.
+                                                                                        if ($sal) {
+                                                                                            $gStyle = match ($sal->status) {
+                                                                                                'finish' => 'background:#dcfce7; color:#166534; border:1px solid #bbf7d0;',
+                                                                                                'rejected' => 'background:#fee2e2; color:#991b1b; border:1px solid #fecaca;',
+                                                                                                default => 'background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe;',
+                                                                                            };
+                                                                                            $gIcon = match ($sal->status) {
+                                                                                                'finish' => 'fa-check-circle',
+                                                                                                'rejected' => 'fa-times-circle',
+                                                                                                default => 'fa-hourglass-half',
+                                                                                            };
+                                                                                            $gStepLabel = ($sal->current_step === 0)
+                                                                                                ? 'Management Dept'
+                                                                                                : (($sal->current_step === 1) ? 'General Manager' : '');
+                                                                                            $gText = match ($sal->status) {
+                                                                                                'finish' => 'Gaji: Rp ' . number_format($sal->approved_salary, 0, ',', '.'),
+                                                                                                'rejected' => 'Gaji Ditolak',
+                                                                                                default => 'Gaji: Menunggu ' . $gStepLabel,
+                                                                                            };
+                                                                                        }
+                                                                                    @endphp
+                                                                                    @if($hasAnyResult || $sal)
+                                                                                        <div style="display:flex; flex-direction:column; gap:3px;">
+                                                                                            @foreach($stepResults as $label => $val)
+                                                                                                @if(!is_null($val) && $val !== '')
+                                                                                                    @php
+                                                                                                        $rStyle = match (strtoupper($val)) {
+                                                                                                            'TRUE' => 'background:#dcfce7; color:#166534; border:1px solid #bbf7d0;',
+                                                                                                            'FALSE' => 'background:#fee2e2; color:#991b1b; border:1px solid #fecaca;',
+                                                                                                            'SKIP' => 'background:#fef9c3; color:#854d0e; border:1px solid #fef08a;',
+                                                                                                            default => 'background:#f1f5f9; color:#475569; border:1px solid #e2e8f0;',
+                                                                                                        };
+                                                                                                        $rIcon = match (strtoupper($val)) {
+                                                                                                            'TRUE' => 'fa-check-circle',
+                                                                                                            'FALSE' => 'fa-times-circle',
+                                                                                                            'SKIP' => 'fa-forward',
+                                                                                                            default => 'fa-circle',
+                                                                                                        };
+                                                                                                        $rText = match (strtoupper($val)) {
+                                                                                                            'TRUE' => 'LOLOS',
+                                                                                                            'FALSE' => 'TIDAK LOLOS',
+                                                                                                            'SKIP' => 'DILEWATI',
+                                                                                                            default => $val,
+                                                                                                        };
+                                                                                                    @endphp
+                                                                                                    <div
+                                                                                                        style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; {{ $rStyle }}">
+                                                                                                        <i class="fas {{ $rIcon }}" style="font-size:10px;"></i>
+                                                                                                        <span style="flex:1;">{{ $label }}</span>
+                                                                                                        <span>{{ $rText }}</span>
+                                                                                                    </div>
+                                                                                                @endif
+                                                                                            @endforeach
+                                                                                            @if($sal)
+                                                                                                <div
+                                                                                                    style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; {{ $gStyle }}">
+                                                                                                    <i class="fas {{ $gIcon }}" style="font-size:10px;"></i>
+                                                                                                    <span style="flex:1;">{{ $gText }}</span>
+                                                                                                </div>
+                                                                                            @endif
+                                                                                        </div>
+                                                                                    @else
+                                                                                        <span class="text-muted" style="font-size:12px;">—</span>
+                                                                                    @endif
+                                                                                </td>
+
+                                                                                {{-- Dokumen --}}
+                                                                                <td class="text-center">
+                                                                                    @if ($docCount > 0)
+                                                                                        <div class="dropdown">
+                                                                                            <button class="doc-fold-btn dropdown-toggle" type="button"
+                                                                                                data-toggle="dropdown">
+                                                                                                <i class="fas fa-folder-open text-warning"></i>
+                                                                                                <span class="badge badge-primary"
+                                                                                                    style="font-size:9px;">{{ $docCount }}</span>
+                                                                                            </button>
+                                                                                            <div class="dropdown-menu dropdown-menu-right shadow-sm"
+                                                                                                style="min-width:160px;">
+                                                                                                @foreach ($docs as $label => $path)
+                                                                                                    @if ($path)
+                                                                                                        @php
+                                                                                                            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                                                                                                            $isImgExt = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp']);
+                                                                                                            $fileUrl = asset('storage/' . $path);
+                                                                                                        @endphp
+                                                                                                        <a class="dropdown-item d-flex align-items-center {{ $isImgExt ? 'img-viewer-link' : '' }}"
+                                                                                                            style="font-size:12.5px; gap:8px;" href="{{ $fileUrl }}"
+                                                                                                            data-url="{{ $fileUrl }}" data-label="{{ $label }}"
+                                                                                                            @if(!$isImgExt) target="_blank" @endif>
+                                                                                                            <i
+                                                                                                                class="fas {{ $isImgExt ? 'fa-image text-purple' : 'fa-file-pdf text-danger' }}"></i>
+                                                                                                            {{ $label }}
+                                                                                                        </a>
+                                                                                                    @endif
+                                                                                                @endforeach
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    @else
+                                                                                        <span class="doc-zero"><i class="fas fa-folder"></i></span>
+                                                                                    @endif
+                                                                                </td>
+
+                                                                                {{-- Aksi --}}
+                                                                                <td>
+                                                                                    <div style="display:flex; flex-direction:column; gap:5px;">
+                                                                                        <button type="button" class="act-btn act-wa btn-whatsapp"
+                                                                                            data-nama="{{ $recruitment->NAMA }}"
+                                                                                            data-phone="{{ $recruitment->HP }}"
+                                                                                            data-npk="{{ $recruitment->NPK }}"
+                                                                                            data-id="{{ $recruitment->ID }}"
+                                                                                            data-jabatan="{{ $recruitment->jabatan ?? '-' }}"
+                                                                                            data-dept="{{ $recruitment->dept ?? '-' }}" data-toggle="modal"
+                                                                                            data-target="#whatsappModal">
+                                                                                            <i class="fab fa-whatsapp"></i> WA
+                                                                                        </button>
+                                                                                        @canRoute('recruitment.edit')
+                                                                                        <a href="{{ route('recruitment.edit', $recruitment->ID) }}"
+                                                                                            class="act-btn act-edit">
+                                                                                            <i class="fas fa-edit"></i> Edit
+                                                                                        </a>
+                                                                                        @endcanRoute
+                                                                                        <button type="button" class="act-btn act-det btn-detail"
+                                                                                            data-recruitment='@json($recruitment)'
+                                                                                            data-pkwt='@json(isset($pkwtRecords[$recruitment->NIK]) ? $pkwtRecords[$recruitment->NIK] : null)'
+                                                                                            data-salary='@json($sal)'
+                                                                                            data-toggle="modal" data-target="#detailModal">
+                                                                                            <i class="fas fa-eye"></i> Detail
+                                                                                        </button>
+
+                                                                                        {{--
+                                                                                        Pengajuan Gaji Karyawan Baru — hanya untuk posisi staff
+                                                                                        (PELAMAR.is_staff, diturunkan dari recruitment_position saat
+                                                                                        input jabatan/dept pelamar).
+
+                                                                                        - Belum pernah ajukan / pengajuan sebelumnya ditolak -> tombol
+                                                                                        buka modal buat pengajuan BARU.
+                                                                                        - Sudah ada pengajuan tapi belum ada satupun approver yang
+                                                                                        memproses (progress step 0 masih 'pending') -> tombol tetap
+                                                                                        tampil tapi jadi mode UPDATE, HR masih bisa ubah nominal /
+                                                                                        approver selama belum diproses.
+                                                                                        - Sudah mulai diproses (minimal 1 approver sudah approve) atau
+                                                                                        sudah selesai (finish) -> tombol disembunyikan; status &
+                                                                                        nominalnya sudah terlihat di kolom "Hasil Test".
+                                                                                        --}}
+                                                                                        @php
+                                                                                            $isStaff = (int) ($recruitment->is_staff ?? $recruitment->IS_STAFF ?? 0) === 1;
+                                                                                        @endphp
+                                                                                        @if($isStaff)
+                                                                                            @php
+                                                                                                $salEditable = $sal
+                                                                                                    && $sal->status === 'pending'
+                                                                                                    && (($sal->progress[0]['status'] ?? null) === 'pending');
+                                                                                                $showSalaryButton = !$sal || $sal->status === 'rejected' || $salEditable;
+                                                                                            @endphp
+                                                                                            @if($showSalaryButton)
+                                                                                                <button type="button" class="act-btn act-salary btn-salary"
+                                                                                                    data-id="{{ $recruitment->ID }}"
+                                                                                                    data-nama="{{ $recruitment->NAMA }}"
+                                                                                                    data-jabatan="{{ $recruitment->jabatan ?? '-' }}"
+                                                                                                    data-dept="{{ $recruitment->department ?? $recruitment->dept ?? '-' }}"
+                                                                                                    data-salary='@json($salEditable ? $sal : null)'
+                                                                                                    data-toggle="modal" data-target="#salaryModal">
+                                                                                                    <i class="fas fa-money-bill-wave"></i>
+                                                                                                    {{ $salEditable ? 'Update Pengajuan Gaji' : 'Ajukan Gaji' }}
+                                                                                                </button>
+                                                                                            @elseif($sal && $sal->status === 'pending')
+                                                                                                <span class="salary-badge salary-badge-pending">
+                                                                                                    <i class="fas fa-lock"></i> Sedang diproses approval
+                                                                                                </span>
+                                                                                            @endif
+                                                                                        @endif
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                        @endforeach
                                     </tbody>
                                 </table>
                             </div>
@@ -1694,37 +2054,9 @@
         $(document).ready(function () {
 
             /* ── DataTable ── */
-            const _dtAjaxUrl = '{{ route('recruitment.getData') }}';
-            const _dtStatus  = '{{ $status ?? '' }}';
-            const _dtTgl     = '{{ request()->query('tgl_pendaftaran', '') }}';
-
             $('#dataTable').DataTable({
                 pageLength: 10,
                 order: [],
-                serverSide: true,
-                processing: true,
-                ajax: {
-                    url: _dtAjaxUrl,
-                    data: function (d) {
-                        if (_dtStatus) d.status = _dtStatus;
-                        if (_dtTgl)    d.tgl_pendaftaran = _dtTgl;
-                    }
-                },
-                columns: [
-                    { data: 'DT_RowIndex',   name: 'DT_RowIndex',   orderable: false, searchable: false, width: '40px', className: 'text-center text-muted' },
-                    { data: 'col_nama',       name: 'PELAMAR.NAMA',  orderable: true },
-                    { data: 'col_nik',        name: 'PELAMAR.NIK',   orderable: true },
-                    { data: 'col_pendidikan', name: 'PELAMAR.PENDIDIKAN', orderable: false },
-                    { data: 'col_fisik',      name: 'PELAMAR.TINGGI_BADAN', orderable: false, className: 'text-center' },
-                    { data: 'col_kontak',     name: 'PELAMAR.HP',    orderable: false },
-                    { data: 'col_agama',      name: 'PELAMAR.AGAMA', orderable: false },
-                    { data: 'col_dept',       name: 'pd.department', orderable: false },
-                    { data: 'col_tgl_apply',  name: 'pd.created_at', orderable: true },
-                    { data: 'col_status',     name: 'pd.status_apply', orderable: false },
-                    { data: 'col_hasil',      name: 'col_hasil',     orderable: false },
-                    { data: 'col_dokumen',    name: 'col_dokumen',   orderable: false, className: 'text-center' },
-                    { data: 'col_aksi',       name: 'col_aksi',      orderable: false, className: 'text-center' },
-                ],
                 language: {
                     search: 'Cari:',
                     searchPlaceholder: 'Nama, NIK, HP...',
@@ -1732,14 +2064,12 @@
                     info: 'Data _START_–_END_ dari _TOTAL_ pelamar',
                     infoEmpty: 'Tidak ada data',
                     zeroRecords: 'Tidak ada data ditemukan',
-                    paginate: { previous: '‹ Prev', next: 'Next ›' },
-                    processing: '<i class="fas fa-spinner fa-spin mr-2"></i> Memuat data...'
+                    paginate: { previous: '‹ Prev', next: 'Next ›' }
                 },
                 drawCallback: function () {
                     $('#tbl-count').text(this.api().page.info().recordsTotal + ' pelamar');
                 }
             });
-
 
             /* ── Tab switching ── */
             $(document).on('click', '.det-tab', function () {

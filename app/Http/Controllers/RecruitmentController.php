@@ -14,6 +14,7 @@ use App\Services\FonnteService;
 use Carbon\Carbon;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Str;
+use Yajra\DataTables\Facades\DataTables;
 
 class RecruitmentController extends Controller
 {
@@ -29,12 +30,52 @@ class RecruitmentController extends Controller
     public function index(Request $request)
     {
         $status = $request->query('status');
+
+        // Daftar approver untuk modal "Pengajuan Gaji" — diambil dinamis dari tabel users
+        $approvers = [
+            'management' => User::whereNotNull('npk')->where('npk', '!=', '')->get(['npk', 'name']),
+            'gm'         => User::where('npk', 'C-00001')->get(['npk', 'name']),
+        ];
+
+        return view('recruitment.index', compact('status', 'approvers'));
+    }
+
+    /**
+     * Server-side DataTables AJAX endpoint for the recruitment table.
+     * Handles status & tgl_pendaftaran filters forwarded via DataTables ajax.data().
+     */
+    public function getData(Request $request)
+    {
+        $status         = $request->query('status');
         $tglPendaftaran = $request->query('tgl_pendaftaran');
+
         $query = DB::connection('cii')->table('PELAMAR')
             ->where('PELAMAR.IS_KONTRAK', 'FALSE')
             ->leftJoin('pelamar_details as pd', 'pd.id_pelamar', '=', 'PELAMAR.ID')
             ->select(
-                'PELAMAR.*',
+                'PELAMAR.ID',
+                'PELAMAR.NPK',
+                'PELAMAR.NAMA',
+                'PELAMAR.NIK',
+                'PELAMAR.NO_KK',
+                'PELAMAR.JENIS_KELAMIN',
+                'PELAMAR.TMPT_LAHIR',
+                'PELAMAR.TGL_LAHIR',
+                'PELAMAR.UMUR',
+                'PELAMAR.STATUS',
+                'PELAMAR.TANGGUNGAN',
+                'PELAMAR.AGAMA',
+                'PELAMAR.HP',
+                'PELAMAR.ALAMAT_LENGKAP',
+                'PELAMAR.KABUPATEN',
+                'PELAMAR.ALAMAT_DOMISILI',
+                'PELAMAR.PENDIDIKAN',
+                'PELAMAR.JURUSAN',
+                'PELAMAR.NAMA_SEKOLAH',
+                'PELAMAR.KABUPATEN_SEKOLAH',
+                'PELAMAR.TINGGI_BADAN',
+                'PELAMAR.BERAT_BADAN',
+                'PELAMAR.is_staff',
                 'pd.id as detail_id',
                 'pd.nomor_sim',
                 'pd.warga_negara',
@@ -88,6 +129,7 @@ class RecruitmentController extends Controller
                 'pd.created_at'
             );
 
+        // ── Status filter ──────────────────────────────────────────────────
         if ($status === 'never_confirm') {
             $query->where('pd.status_apply', 'APPLIED');
         } elseif ($status === 'step_interview') {
@@ -123,152 +165,338 @@ class RecruitmentController extends Controller
             $query->whereDate('pd.created_at', $tglPendaftaran);
         }
 
-        $recruitments = $query->orderByDesc('PELAMAR.id')->get();
+        return DataTables::of($query)
+            ->orderColumn('PELAMAR.id', 'PELAMAR.id $1')
 
-        // Check which NIKs ever existed in PKWT table
-        $niks = $recruitments->pluck('NIK')->filter()->unique()->toArray();
-        $pkwtRecords = DB::connection('cii')->table('PKWT')
-            ->whereIn('KTP', $niks)
-            ->select('KTP', 'NAMA', 'TMK', 'TKK', 'KETERANGAN', 'leave_reasons')
-            ->get()
-            ->groupBy('KTP');
+            // ── Nomor urut ─────────────────────────────────────────────────
+            ->addIndexColumn()
 
-        $exPkwtKtp = $pkwtRecords->keys()->toArray();
+            // ── Kolom: Nama Pelamar ────────────────────────────────────────
+            ->addColumn('col_nama', function ($row) {
+                $isMale  = strtoupper($row->JENIS_KELAMIN ?? '') === 'L';
+                $initial = strtoupper(mb_substr($row->NAMA ?? 'X', 0, 1));
+                $avClass = $isMale ? 'av-m' : 'av-f';
+                $gender  = $isMale ? '♂ Laki-laki' : '♀ Perempuan';
 
-        // Map health test IDs by NIK for quick lookup in the blade
-        $healthTestMap = HealthTest::select('id', 'nik')
-            ->get()
-            ->keyBy('nik')
-            ->map(fn($h) => $h->id);
+                // Ambil PKWT data untuk baris ini
+                $isExPkwt = false;
+                if ($row->NIK) {
+                    $isExPkwt = DB::connection('cii')->table('PKWT')
+                        ->where('KTP', $row->NIK)
+                        ->exists();
+                }
 
-        // ── Pengajuan Gaji Karyawan Baru ──────────────────────────────────
-        // salary_approve ada di koneksi default, jadi gak bisa di-join lewat
-        // query builder ke PELAMAR (koneksi cii). Ambil per id_pelamar lalu
-        // tempelkan ke setiap baris recruitment di blade.
-        $pelamarIds = $recruitments->pluck('ID')->filter()->unique()->values()->toArray();
+                $nameStyle = $isExPkwt ? ' style="color: red;" title="Pernah Terdaftar di PKWT"' : '';
+                $jabatanHtml = $row->jabatan
+                    ? '<div class="name-sub"><i class="fas fa-briefcase mr-1" style="font-size:10px;"></i>' . e($row->jabatan) . '</div>'
+                    : '';
 
-        $salaryMap = SalaryApprove::whereIn('id_pelamar', $pelamarIds)
-            ->orderByDesc('id')
-            ->get()
-            ->unique('id_pelamar') // ambil pengajuan terbaru per pelamar
-            ->keyBy('id_pelamar');
+                return '<div class="d-flex align-items-center" style="gap:10px;">
+                    <div class="av ' . $avClass . '">' . e($initial) . '</div>
+                    <div>
+                        <div class="name-main"' . $nameStyle . '>' . e($row->NAMA) . '</div>
+                        <div class="name-sub">' . $gender . '</div>
+                        ' . $jabatanHtml . '
+                    </div>
+                </div>';
+            })
 
-        $approverNameMap = $this->resolveApproverNames($salaryMap);
+            // ── Kolom: NIK / TTL ───────────────────────────────────────────
+            ->addColumn('col_nik', function ($row) {
+                $tgl = $row->TGL_LAHIR ? Carbon::parse($row->TGL_LAHIR)->format('d M Y') : '-';
+                return '<div style="font-size:12.5px; font-weight:600; font-family:monospace; color:#2d3748; letter-spacing:.5px;">' . e($row->NIK ?? '-') . '</div>
+                    <div class="name-sub"><i class="fas fa-map-marker-alt mr-1" style="font-size:10px;"></i>' . e($row->TMPT_LAHIR ?? '-') . '</div>
+                    <div class="name-sub"><i class="fas fa-calendar mr-1" style="font-size:10px;"></i>' . $tgl . '</div>
+                    <div class="name-sub" style="color:#94a3b8;">' . e($row->UMUR ?? '-') . '</div>';
+            })
 
-        foreach ($salaryMap as $sal) {
-            // Ditempel sebagai attribute tambahan supaya ikut ke-encode saat
-            // json_encode($sal) dipakai di data-salary="" pada blade.
-            $sal->setAttribute('steps', $this->buildStepsDisplay($sal->progress ?? [], $approverNameMap));
-        }
+            // ── Kolom: Pendidikan ──────────────────────────────────────────
+            ->addColumn('col_pendidikan', function ($row) {
+                $html = '<span class="badge badge-light border" style="font-size:12px; padding:4px 8px; font-weight:700;">' . e($row->PENDIDIKAN ?? '-') . '</span>';
+                $html .= '<div class="name-sub mt-1">' . e($row->JURUSAN ?? '-') . '</div>';
+                $html .= '<div class="name-sub">' . e($row->NAMA_SEKOLAH ?? '-') . '</div>';
+                if ($row->KABUPATEN_SEKOLAH) {
+                    $html .= '<div class="name-sub" style="color:#94a3b8;">' . e($row->KABUPATEN_SEKOLAH) . '</div>';
+                }
+                return $html;
+            })
 
-        // Daftar approver untuk modal "Pengajuan Gaji" — diambil dinamis dari tabel users
-        // TODO: sesuaikan filter kolom (department/jabatan/role) dengan struktur users kamu.
-        // Saat ini "management" masih menampilkan SEMUA user yang punya npk, dan "gm" masih
-        // hardcode ke satu npk tertentu sebagai placeholder.
-        $approvers = [
-            'management' => User::whereNotNull('npk')->where('npk', '!=', '')->get(['npk', 'name']),
-            'gm' => User::where('npk', 'C-00001')->get(['npk', 'name']),
-        ];
+            // ── Kolom: Fisik ───────────────────────────────────────────────
+            ->addColumn('col_fisik', function ($row) {
+                return '<div style="font-size:13px; font-weight:700; color:#2d3748;">
+                        <i class="fas fa-ruler-vertical text-info mr-1" style="font-size:11px;"></i>' . e($row->TINGGI_BADAN ?? '-') . ' cm
+                    </div>
+                    <div style="font-size:13px; font-weight:700; color:#2d3748;">
+                        <i class="fas fa-weight text-warning mr-1" style="font-size:11px;"></i>' . e($row->BERAT_BADAN ?? '-') . ' kg
+                    </div>';
+            })
 
-        // dd($recruitments);
+            // ── Kolom: Kontak ──────────────────────────────────────────────
+            ->addColumn('col_kontak', function ($row) {
+                $html = '<div style="font-size:13px; font-weight:700; color:#2d3748;">' . e($row->HP ?? '-') . '</div>';
+                $html .= '<div class="name-sub"><i class="fas fa-map-pin mr-1" style="font-size:10px;"></i>' . e($row->KABUPATEN ?? '-') . '</div>';
+                if ($row->ALAMAT_DOMISILI) {
+                    $html .= '<div class="name-sub" style="color:#94a3b8;">Domisili: ' . e($row->ALAMAT_DOMISILI) . '</div>';
+                }
+                return $html;
+            })
 
-        return view('recruitment.index', compact('recruitments', 'status', 'healthTestMap', 'pkwtRecords', 'exPkwtKtp', 'approvers', 'salaryMap'));
-    }
+            // ── Kolom: Agama / Status ──────────────────────────────────────
+            ->addColumn('col_agama', function ($row) {
+                return '<div class="name-main" style="font-size:13px;">' . e($row->AGAMA ?? '-') . '</div>
+                    <div class="name-sub">' . e($row->STATUS ?? '-') . '</div>
+                    <div class="name-sub">' . e($row->TANGGUNGAN ?? '0') . ' tanggungan</div>';
+            })
 
-    /**
-     * AJAX endpoint dipanggil dari modal "Detail" dan modal "Pengajuan Gaji"
-     * di recruitment.index. Sebelumnya data ini (recruitment + pkwt + salary)
-     * di-json_encode() ke SETIAP baris tabel lewat data-attribute, padahal
-     * cuma dipakai untuk 1 pelamar yang detail-nya sedang dibuka. Endpoint
-     * ini mengambil data yang sama persis (kolom & logic sama seperti di
-     * index()/edit()), hanya saja on-demand per id, bukan untuk semua baris.
-     */
-    public function detailData($id)
-    {
-        $recruitment = DB::connection('cii')->table('PELAMAR')
-            ->leftJoin('pelamar_details as pd', 'pd.id_pelamar', '=', 'PELAMAR.ID')
-            ->where('PELAMAR.ID', $id)
-            ->select(
-                'PELAMAR.*',
-                'pd.id as detail_id',
-                'pd.nomor_sim',
-                'pd.warga_negara',
-                'pd.ikut_kb',
-                'pd.bakat_hobby',
-                'pd.mode_transportasi',
-                'pd.jabatan',
-                'pd.department',
-                'pd.bpjs_tk',
-                'pd.bpjs_kes',
-                'pd.alamat_skrg',
-                'pd.kabupaten_kota_skrg',
-                'pd.status_domisili',
-                'pd.nama_ktk_darurat',
-                'pd.hubungan',
-                'pd.no_telp_darurat',
-                'pd.pengalaman_kerja',
-                'pd.data_ayah',
-                'pd.data_ibu',
-                'pd.saudara_kandung',
-                'pd.data_anak',
-                'pd.riwayat_pendidikan',
-                'pd.motivasi',
-                'pd.kegiatan_ekstra',
-                'pd.file_surat_lamaran',
-                'pd.file_cv',
-                'pd.file_ktp',
-                'pd.file_kk',
-                'pd.file_ijasah',
-                'pd.file_akta_kelahiran',
-                'pd.file_skck',
-                'pd.file_surat_sehat',
-                'pd.file_pas_foto',
-                'pd.tgl_test',
-                'pd.tgl_interview',
-                'pd.tgl_kesehatan',
-                'pd.tgl_diterima',
-                'pd.status_apply',
-                'pd.is_test',
-                'pd.is_interview',
-                'pd.is_kesehatan',
-                'pd.result_test',
-                'pd.comment_test',
-                'pd.result_kesehatan',
-                'pd.comment_kesehatan',
-                'pd.result_interview',
-                'pd.comment_interview',
-                'pd.result_user',
-                'pd.comment_user',
-                'pd.file_test',
-                'pd.created_at'
-            )
-            ->first();
+            // ── Kolom: Departemen / Posisi ─────────────────────────────────
+            ->addColumn('col_dept', function ($row) {
+                return '<div class="name-main" style="font-size:13px;">' . e($row->department ?? '-') . '</div>
+                    <div class="name-sub">' . e($row->jabatan ?? '-') . '</div>';
+            })
 
-        if (!$recruitment) {
-            return response()->json(['error' => 'Data pelamar tidak ditemukan'], 404);
-        }
+            // ── Kolom: Tanggal Apply ───────────────────────────────────────
+            ->addColumn('col_tgl_apply', function ($row) {
+                $ts  = $row->created_at ? Carbon::parse($row->created_at)->timestamp : 0;
+                $fmt = $row->created_at ? Carbon::parse($row->created_at)->format('d-m-Y') : '-';
+                return '<span data-order="' . $ts . '">' . $fmt . '</span>';
+            })
 
-        $pkwt = DB::connection('cii')->table('PKWT')
-            ->where('KTP', $recruitment->NIK)
-            ->select('KTP', 'NAMA', 'TMK', 'TKK', 'KETERANGAN', 'leave_reasons')
-            ->get();
+            // ── Kolom: Status Apply ────────────────────────────────────────
+            ->addColumn('col_status', function ($row) {
+                $sa = $row->status_apply ?? null;
+                $sClass = match ($sa) {
+                    'APPLIED'            => 's-applied',
+                    'INVITATION TEST'    => 's-test',
+                    'CALLED TO INTERVIEW'=> 's-interview',
+                    'READY FOR SALARY'   => 's-salary',
+                    'ONBOARDING'         => 's-onboard',
+                    'REJECTED'           => 's-reject',
+                    default              => 's-default',
+                };
+                $sIcon = match ($sa) {
+                    'APPLIED'            => 'fa-inbox',
+                    'INVITATION TEST'    => 'fa-vial',
+                    'CALLED TO INTERVIEW'=> 'fa-comments',
+                    'READY FOR SALARY'   => 'fa-money-check-alt',
+                    'ONBOARDING'         => 'fa-check-circle',
+                    'REJECTED'           => 'fa-times-circle',
+                    default              => 'fa-circle',
+                };
+                $extra = '';
+                if ($sa === 'ONBOARDING') {
+                    if ($row->tgl_diterima) {
+                        $extra = '<br><i class="fas fa-check-circle" style="font-size:13px;">' . Carbon::parse($row->tgl_diterima)->format('d F Y') . '</i>';
+                    } else {
+                        $extra = '<br><i class="fas fa-exclamation-circle" style="font-size:13px;">Tanggal Diterima Belum Diisi</i>';
+                    }
+                }
+                return '<span class="s-pill ' . $sClass . '"><i class="fas ' . $sIcon . '"></i> ' . e($sa ?? '-') . $extra . '</span>';
+            })
 
-        // Pengajuan gaji terbaru untuk pelamar ini (sama seperti $salaryMap di
-        // index(), tapi diambil satuan karena cuma butuh 1 pelamar).
-        $sal = SalaryApprove::where('id_pelamar', $id)
-            ->orderByDesc('id')
-            ->first();
+            // ── Kolom: Hasil Test ──────────────────────────────────────────
+            ->addColumn('col_hasil', function ($row) {
+                $stepResults = [
+                    'Interview' => $row->result_interview ?? null,
+                    'Kesehatan' => $row->result_kesehatan ?? null,
+                    'Teknis'    => $row->result_test ?? null,
+                    'User'      => $row->result_user ?? null,
+                ];
+                $hasAny = collect($stepResults)->filter(fn($v) => !is_null($v) && $v !== '')->isNotEmpty();
 
-        if ($sal) {
-            $approverNameMap = $this->resolveApproverNames(collect([$sal]));
-            $sal->setAttribute('steps', $this->buildStepsDisplay($sal->progress ?? [], $approverNameMap));
-        }
+                // Salary info
+                $sal = SalaryApprove::where('id_pelamar', $row->ID)
+                    ->orderByDesc('id')->first();
+                $salHtml = '';
+                if ($sal) {
+                    $sal->setAttribute('steps', $this->buildStepsDisplay(
+                        $sal->progress ?? [],
+                        $this->resolveApproverNames(collect([$row->ID => $sal])->keyBy(fn($s, $k) => $k))
+                    ));
+                    $gStyle = match ($sal->status) {
+                        'finish'   => 'background:#dcfce7; color:#166534; border:1px solid #bbf7d0;',
+                        'rejected' => 'background:#fee2e2; color:#991b1b; border:1px solid #fecaca;',
+                        default    => 'background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe;',
+                    };
+                    $gIcon = match ($sal->status) {
+                        'finish'   => 'fa-check-circle',
+                        'rejected' => 'fa-times-circle',
+                        default    => 'fa-hourglass-half',
+                    };
+                    $gStepLabel = $sal->current_step === 0 ? 'Management Dept' : ($sal->current_step === 1 ? 'General Manager' : '');
+                    $gText = match ($sal->status) {
+                        'finish'   => 'Gaji: Rp ' . number_format($sal->approved_salary, 0, ',', '.'),
+                        'rejected' => 'Gaji Ditolak',
+                        default    => 'Gaji: Menunggu ' . $gStepLabel,
+                    };
+                    $salHtml = '<div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; ' . $gStyle . '">
+                        <i class="fas ' . $gIcon . '" style="font-size:10px;"></i>
+                        <span style="flex:1;">' . e($gText) . '</span>
+                    </div>';
+                }
 
-        return response()->json([
-            'recruitment' => $recruitment,
-            'pkwt'        => $pkwt,
-            'salary'      => $sal,
-        ]);
+                if (!$hasAny && !$salHtml) {
+                    return '<span class="text-muted" style="font-size:12px;">—</span>';
+                }
+
+                $html = '<div style="display:flex; flex-direction:column; gap:3px;">';
+                foreach ($stepResults as $label => $val) {
+                    if (is_null($val) || $val === '') continue;
+                    $rStyle = match (strtoupper($val)) {
+                        'TRUE'  => 'background:#dcfce7; color:#166534; border:1px solid #bbf7d0;',
+                        'FALSE' => 'background:#fee2e2; color:#991b1b; border:1px solid #fecaca;',
+                        'SKIP'  => 'background:#fef9c3; color:#854d0e; border:1px solid #fef08a;',
+                        default => 'background:#f1f5f9; color:#475569; border:1px solid #e2e8f0;',
+                    };
+                    $rIcon = match (strtoupper($val)) {
+                        'TRUE'  => 'fa-check-circle',
+                        'FALSE' => 'fa-times-circle',
+                        'SKIP'  => 'fa-forward',
+                        default => 'fa-circle',
+                    };
+                    $rText = match (strtoupper($val)) {
+                        'TRUE'  => 'LOLOS',
+                        'FALSE' => 'TIDAK LOLOS',
+                        'SKIP'  => 'DILEWATI',
+                        default => $val,
+                    };
+                    $html .= '<div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; ' . $rStyle . '">
+                        <i class="fas ' . $rIcon . '" style="font-size:10px;"></i>
+                        <span style="flex:1;">' . e($label) . '</span>
+                        <span>' . e($rText) . '</span>
+                    </div>';
+                }
+                $html .= $salHtml . '</div>';
+                return $html;
+            })
+
+            // ── Kolom: Dokumen ─────────────────────────────────────────────
+            ->addColumn('col_dokumen', function ($row) {
+                $docs = [
+                    'Surat Lamaran' => $row->file_surat_lamaran,
+                    'CV'            => $row->file_cv,
+                    'KTP'           => $row->file_ktp,
+                    'KK'            => $row->file_kk,
+                    'Pas Foto'      => $row->file_pas_foto,
+                    'Ijazah'        => $row->file_ijasah,
+                    'Akta Lahir'    => $row->file_akta_kelahiran,
+                    'SKCK'          => $row->file_skck,
+                    'Surat Sehat'   => $row->file_surat_sehat,
+                ];
+                $healthId = HealthTest::where('nik', $row->NIK)->value('id');
+                $docCount = collect($docs)->filter()->count() + ($healthId ? 1 : 0);
+
+                if ($docCount === 0) {
+                    return '<span class="doc-zero"><i class="fas fa-folder"></i></span>';
+                }
+
+                $items = '';
+                foreach ($docs as $label => $path) {
+                    if (!$path) continue;
+                    $ext      = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                    $isImg    = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp']);
+                    $fileUrl  = asset('storage/' . $path);
+                    $imgClass = $isImg ? ' img-viewer-link' : '';
+                    $target   = !$isImg ? ' target="_blank"' : '';
+                    $icon     = $isImg ? 'fa-image text-purple' : 'fa-file-pdf text-danger';
+                    $items   .= '<a class="dropdown-item d-flex align-items-center' . $imgClass . '" style="font-size:12.5px; gap:8px;" href="' . $fileUrl . '" data-url="' . $fileUrl . '" data-label="' . e($label) . '"' . $target . '>
+                        <i class="fas ' . $icon . '"></i> ' . e($label) . '
+                    </a>';
+                }
+
+                return '<div class="dropdown">
+                    <button class="doc-fold-btn dropdown-toggle" type="button" data-toggle="dropdown">
+                        <i class="fas fa-folder-open text-warning"></i>
+                        <span class="badge badge-primary" style="font-size:9px;">' . $docCount . '</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right shadow-sm" style="min-width:160px;">' . $items . '</div>
+                </div>';
+            })
+
+            // ── Kolom: Aksi ────────────────────────────────────────────────
+            ->addColumn('col_aksi', function ($row) {
+                // PKWT records untuk data-pkwt
+                $pkwtRecords = null;
+                if ($row->NIK) {
+                    $pkwtCollection = DB::connection('cii')->table('PKWT')
+                        ->where('KTP', $row->NIK)
+                        ->select('KTP', 'NAMA', 'TMK', 'TKK', 'KETERANGAN', 'leave_reasons')
+                        ->get();
+                    $pkwtRecords = $pkwtCollection->isNotEmpty() ? $pkwtCollection->values() : null;
+                }
+
+                // Salary
+                $sal = SalaryApprove::where('id_pelamar', $row->ID)->orderByDesc('id')->first();
+                if ($sal) {
+                    $sal->setAttribute('steps', $this->buildStepsDisplay(
+                        $sal->progress ?? [],
+                        $this->resolveApproverNames(collect([$row->ID => $sal]))
+                    ));
+                }
+
+                $recruitmentJson = json_encode($row);
+                $pkwtJson        = json_encode($pkwtRecords);
+                $salaryJson      = json_encode($sal);
+
+                // Edit link
+                $editRoute  = route('recruitment.edit', $row->ID);
+                $editButton = '<a href="' . $editRoute . '" class="act-btn act-edit"><i class="fas fa-edit"></i> Edit</a>';
+
+                // Salary button (staff only)
+                $isStaff = (int) ($row->is_staff ?? 0) === 1;
+                $salaryButton = '';
+                if ($isStaff) {
+                    $salEditable  = $sal && $sal->status === 'pending' && (($sal->progress[0]['status'] ?? null) === 'pending');
+                    $showSalBtn   = !$sal || $sal->status === 'rejected' || $salEditable;
+                    if ($showSalBtn) {
+                        $salLabel   = $salEditable ? 'Update Pengajuan Gaji' : 'Ajukan Gaji';
+                        $salDataSal = htmlspecialchars(json_encode($salEditable ? $sal : null), ENT_QUOTES, 'UTF-8');
+                        $salaryButton = '<button type="button" class="act-btn act-salary btn-salary"
+                            data-id="' . $row->ID . '"
+                            data-nama="' . e($row->NAMA) . '"
+                            data-jabatan="' . e($row->jabatan ?? '-') . '"
+                            data-dept="' . e($row->department ?? '-') . '"
+                            data-salary="' . $salDataSal . '"
+                            data-toggle="modal" data-target="#salaryModal">
+                            <i class="fas fa-money-bill-wave"></i> ' . $salLabel . '
+                        </button>';
+                    } elseif ($sal && $sal->status === 'pending') {
+                        $salaryButton = '<span class="salary-badge salary-badge-pending"><i class="fas fa-lock"></i> Sedang diproses approval</span>';
+                    }
+                }
+
+                $recruitmentAttr = htmlspecialchars($recruitmentJson, ENT_QUOTES, 'UTF-8');
+                $pkwtAttr        = htmlspecialchars($pkwtJson, ENT_QUOTES, 'UTF-8');
+                $salaryAttr      = htmlspecialchars($salaryJson, ENT_QUOTES, 'UTF-8');
+
+                return '<div style="display:flex; flex-direction:column; gap:5px;">
+                    <button type="button" class="act-btn act-wa btn-whatsapp"
+                        data-nama="' . e($row->NAMA) . '"
+                        data-phone="' . e($row->HP) . '"
+                        data-npk="' . e($row->NPK) . '"
+                        data-id="' . $row->ID . '"
+                        data-jabatan="' . e($row->jabatan ?? '-') . '"
+                        data-dept="' . e($row->department ?? '-') . '"
+                        data-toggle="modal" data-target="#whatsappModal">
+                        <i class="fab fa-whatsapp"></i> WA
+                    </button>
+                    ' . $editButton . '
+                    <button type="button" class="act-btn act-det btn-detail"
+                        data-recruitment="' . $recruitmentAttr . '"
+                        data-pkwt="' . $pkwtAttr . '"
+                        data-salary="' . $salaryAttr . '"
+                        data-toggle="modal" data-target="#detailModal">
+                        <i class="fas fa-eye"></i> Detail
+                    </button>
+                    ' . $salaryButton . '
+                </div>';
+            })
+
+            ->rawColumns([
+                'col_nama', 'col_nik', 'col_pendidikan', 'col_fisik',
+                'col_kontak', 'col_agama', 'col_dept', 'col_tgl_apply',
+                'col_status', 'col_hasil', 'col_dokumen', 'col_aksi',
+            ])
+            ->make(true);
     }
 
     public function updatePenilaian(Request $request)
@@ -288,7 +516,7 @@ class RecruitmentController extends Controller
             'comment_user' => $request->comment_user,
         ];
 
-
+                
         $now = date('Y-m-d');
 
         if ($request->filled('result_interview')) {
@@ -407,7 +635,7 @@ class RecruitmentController extends Controller
         return back()->with('error', 'Failed to send WhatsApp message: ' . ($response['reason'] ?? 'Unknown error'));
     }
 
-
+    
     public function edit($id)
     {
         $pelamar = DB::connection('cii')->table('PELAMAR')
@@ -539,6 +767,7 @@ class RecruitmentController extends Controller
 
             Alert::success('Berhasil', 'Data pelamar berhasil diperbarui!');
             return redirect()->route('recruitment.index');
+
         } catch (\Exception $e) {
             DB::connection('cii')->rollBack();
             Alert::error('Gagal', 'Terjadi kesalahan: ' . $e->getMessage());
