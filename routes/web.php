@@ -412,6 +412,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/ijin-meninggalkan-pekerjaan/{id}/edit', [IjinMeninggalkanPekerjaanController::class, 'edit'])->name('ijin-meninggalkan-pekerjaan.edit')->middleware(['auth', 'permission']);
     Route::put('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'update'])->name('ijin-meninggalkan-pekerjaan.update')->middleware(['auth', 'permission']);
     Route::get('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'destroy'])->name('ijin-meninggalkan-pekerjaan.delete')->middleware(['auth', 'permission']);
+    Route::get('/ijin-meninggalkan-pekerjaan/export/excel', [IjinMeninggalkanPekerjaanController::class, 'export'])->name('ijin-meninggalkan-pekerjaan.export')->middleware(['auth', 'permission']);
 
     //  Evaluation Employee
     Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index')->middleware(['auth', 'permission']);
@@ -537,6 +538,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/attendance-finger/export-not-finger', [AttendanceFingerController::class, 'exportNotFinger'])->name('attendance-finger.export-not-finger')->middleware(['auth', 'permission']);
     Route::post('/attendance-finger/assign-attendance', [AttendanceFingerController::class, 'assignAttendance'])->name('attendance-finger.assign-attendance')->middleware(['auth', 'permission']);
     Route::post('/attendance-finger/download-template-manual', [AttendanceFingerController::class, 'downloadTemplateManual'])->name('attendance-finger.download-template-manual')->middleware(['auth', 'permission']);
+    Route::get('attendance-finger/departments', [AttendanceFingerController::class, 'getDepartments'])->name('attendance-finger.departments')->middleware(['auth', 'permission']);
+    Route::get('attendance-finger/export-monthly', [AttendanceFingerController::class, 'exportMonthlyByDept'])->name('attendance-finger.export-monthly')->middleware(['auth', 'permission']);
 
     /*
 |--------------------------------------------------------------------------

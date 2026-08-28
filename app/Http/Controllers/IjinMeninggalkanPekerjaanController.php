@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\IjinMeninggalkanExport;
 use App\Models\IjinMeninggalkanPekerjaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class IjinMeninggalkanPekerjaanController extends Controller
@@ -28,9 +30,9 @@ class IjinMeninggalkanPekerjaanController extends Controller
                 'ijin_meninggalkan_pekerjaans.*',
                 'biodata.NAMA_KARYAWAN',
                 'DEPT.DEPARTEMENT',
-                'break_masters.sesi as break_sesi',
-                'break_masters.time_start as break_time_start',
-                'break_masters.time_end as break_time_end'
+                'break_masters.sesi',
+                'break_masters.time_start',
+                'break_masters.time_end'
             )
             ->get();
 
@@ -151,5 +153,64 @@ class IjinMeninggalkanPekerjaanController extends Controller
             ->select('id', 'sesi', 'time_start', 'time_end')
             ->orderBy('time_start')
             ->get();
+    }
+
+    // BUAT EXPORT TO EXCEL
+    public function export(Request $request)
+    {
+        $request->validate([
+            'mode'       => 'required|in:monthly,custom',
+            'month'      => 'required_if:mode,monthly',
+            'start_date' => 'required_if:mode,custom|nullable|date',
+            'end_date'   => 'required_if:mode,custom|nullable|date|after_or_equal:start_date',
+        ]);
+
+        if ($request->mode === 'monthly') {
+            // month = "YYYY-MM"
+            $start_date = $request->month . '-01';
+            $end_date   = \Carbon\Carbon::parse($start_date)->endOfMonth()->toDateString();
+            $label      = \Carbon\Carbon::parse($start_date)->translatedFormat('F Y');
+        } else {
+            $start_date = $request->start_date;
+            $end_date   = $request->end_date;
+            $label      = $start_date . ' s/d ' . $end_date;
+        }
+
+        // ambil data dari database
+        $employee = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            );
+
+        $data = DB::table('ijin_meninggalkan_pekerjaans as im')
+            ->leftJoinSub($employee, 'biodata', function ($join) {
+                $join->on('biodata.NPK', '=', 'im.npk');
+            })
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'biodata.ID_DEPT')
+            ->leftJoin('break_masters as bm', 'bm.id', '=', 'im.id_break')
+            ->select(
+                'im.*',
+                'biodata.NAMA_KARYAWAN',
+                'd.DEPARTEMENT',
+                'bm.sesi',
+                'bm.time_start',
+                'bm.time_end'
+            )
+            ->whereBetween('im.tanggal', [$start_date, $end_date])
+            ->orderBy('im.tanggal')
+            ->get();
+
+        if ($data->isEmpty()) {
+            return response()->json(['error' => 'Tidak ada data untuk periode tersebut.'], 404);
+        }
+
+        $filename = 'Ijin_Meninggalkan_' . str_replace([' ', '/'], '_', $label) . '.xlsx';
+
+        return Excel::download(
+            new IjinMeninggalkanExport($data, $label),
+            $filename
+        );
     }
 }
