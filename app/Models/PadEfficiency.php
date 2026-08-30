@@ -15,6 +15,7 @@ class PadEfficiency extends Model
         'role',
         'efficiency',
         'piece',
+        'tim',
         'date'
     ];
 

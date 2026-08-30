@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   @include('layout.header')
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
   <body id="page-top">
   @include('sweetalert::alert')
   <div id="wrapper">
@@ -34,7 +35,14 @@
                   <div class="form-group row">
                     <label for="npk" class="col-sm-2 col-form-label">NPK</label>
                     <div class="col-sm-10">
-                      <input type="text" name="npk" id="npk" class="form-control" value="{{ old('npk') }}" placeholder="Masukkan NPK karyawan" required>
+                      <select name="npk" id="npk" class="form-control select2" required>
+                        <option value="">Pilih Karyawan</option>
+                        @foreach($biodatas as $biodata)
+                          <option value="{{ $biodata->NPK }}" {{ old('npk') == $biodata->NPK ? 'selected' : '' }}>
+                            {{ $biodata->NPK }} - {{ $biodata->NAMA_KARYAWAN }}
+                          </option>
+                        @endforeach
+                      </select>
                     </div>
                   </div>
                   <div class="form-group row">
@@ -71,5 +79,13 @@
         </div>
         </div>
     @include('layout.footer')
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+      $(document).ready(function() {
+        $('.select2').select2({
+          width: '100%'
+        });
+      });
+    </script>
   </body>
 </html>

@@ -76,6 +76,7 @@
                       <tr>
                         <th width="50">ID</th>
                         <th>NPK</th>
+                        <th>Nama Karyawan</th>
                         <th>Date</th>
                         <th>Arrival Time</th>
                         <th>Reason</th>
@@ -85,6 +86,7 @@
                     <tbody> @foreach($data as $row) <tr>
                         <td>{{ $row->id }}</td>
                         <td>{{ $row->npk }}</td>
+                        <td>{{ $row->NAMA_KARYAWAN ?? '-' }}</td>
                         <td>{{ \Carbon\Carbon::parse($row->date)->format('d-m-Y') }}</td>
                         <td>{{ \Carbon\Carbon::parse($row->arrival_time)->format('H:i') }}</td>
                         <td>{{ $row->reason }}</td>
