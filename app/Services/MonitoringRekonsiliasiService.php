@@ -720,7 +720,7 @@ class MonitoringRekonsiliasiService
      */
     public function fabricQty(): array
     {
-        $order    = 91813;
+        $order    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('jumlah_order') ?? 0);
         $received = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_in') ?? 0);
         $outWip   = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_req') ?? 0) + ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_doc') ?? 0);
         $stock    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_gudang') ?? 0);
@@ -1002,6 +1002,7 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(out_req) as out_req')
             ->selectRaw('SUM(total_gudang) as saldo_gudang')
             ->selectRaw('SUM(harga_total) as harga_total')
+            ->where('jumlah_order', '!=', 0)
             ->groupBy('barang_code', 'barang_name')
             ->orderBy('barang_name')
             ->get();
@@ -1014,9 +1015,11 @@ class MonitoringRekonsiliasiService
         // per row (bukan lagi SUM(request)), di-scope ke CPO yang sama
         // dengan widget lain (lihat fabricQty()).
         $needByCode = collect();
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
         if ($this->hasCpo()) {
             $needByCode = DB::table('mon_work_orders')
-                ->whereIn('uraian', $this->filterUraianList())
+                // ->whereIn('uraian', $this->filterUraianList())
+                ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%'])
                 ->select('barang_code')
                 ->selectRaw('SUM(jumlah_prod * cons) as request')
                 ->groupBy('barang_code')
