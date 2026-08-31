@@ -722,7 +722,7 @@ class MonitoringRekonsiliasiService
     {
         $order    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('jumlah_order') ?? 0);
         $received = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('jumlah_doc') ?? 0);
-        $outWip   = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('out_req') ?? 0);
+        $outWip   = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('out_req') ?? 0) + ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_doc') ?? 0);
         $stock    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_gudang') ?? 0);
 
         // NEED dari mon_work_orders: SUM(jumlah_prod * cons) per row (bukan
@@ -751,7 +751,7 @@ class MonitoringRekonsiliasiService
         return [
             'need'     => $need,
             'order'    => $pct($order, $need),
-            'received' => $pct($received, $need),
+            'received' => $pct($received, $order),
             'out_wip'  => $pct($outWip, $received),
             'stock'    => $pct($stock, $received),
         ];
