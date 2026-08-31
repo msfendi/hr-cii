@@ -52,7 +52,7 @@ use Illuminate\Support\Collection;
  *   - Kalau CPO & OCF dua-duanya aktif -> keduanya di-AND-kan (uraian
  *     match DAN kolom teks bebas match OCF-nya).
  */
-class MonitoringRekonsiliasiService
+class MonitoringRekonsiliasiServiceFromMon_Rekonsiliasis
 {
     /** TTL cache untuk dropdown filter OCF (jarang berubah, aman di-cache). */
     private const FILTER_OPTIONS_TTL = 300; // 5 menit
