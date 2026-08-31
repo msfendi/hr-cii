@@ -731,9 +731,11 @@ class MonitoringRekonsiliasiService
         // level CPO, jadi OCF/Sub Ref di sini tetap lewat bridge exact-match
         // mon_orders (filterUraianList()), bukan LIKE ke kolom teks bebas.
         $need = 0.0;
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
         if ($this->hasCpo()) {
             $need = (float) DB::table('mon_work_orders as wo')
-                ->whereIn('wo.uraian', $this->filterUraianList())
+                ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%'])
+                // ->whereIn('wo.uraian', $this->filterUraianList())
                 ->where('wo.satuan_code', 'KGM')
                 ->selectRaw('SUM(wo.jumlah_prod * wo.cons) as total')
                 ->value('total') ?? 0;
