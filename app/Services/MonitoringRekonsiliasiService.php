@@ -720,7 +720,7 @@ class MonitoringRekonsiliasiService
      */
     public function fabricQty(): array
     {
-        $order    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->whereRaw('jumlah_doc <> 0')->sum('jumlah_order') ?? 0);
+        $order    = (float) ($this->rekonQuery()->whereRaw('jumlah_doc <> 0')->where('satuan_order', 'KGM')->sum('jumlah_order') ?? 0);
         $received = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_in') ?? 0);
         $outWip   = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_req') ?? 0) + ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_doc') ?? 0);
         $stock    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_gudang') ?? 0);
