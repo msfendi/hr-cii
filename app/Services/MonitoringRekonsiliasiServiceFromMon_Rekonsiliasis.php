@@ -265,7 +265,7 @@ class MonitoringRekonsiliasiService
      */
     private function rekonQuery()
     {
-        $query = DB::table('mon_purchase_orders');
+        $query = DB::table('mon_rekonsiliasis');
 
         if (!$this->hasAnyFilterInput()) {
             return $query;
@@ -720,10 +720,10 @@ class MonitoringRekonsiliasiService
      */
     public function fabricQty(): array
     {
-        $order    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('jumlah_order') ?? 0);
-        $received = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('jumlah_doc') ?? 0);
-        $outWip   = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('out_req') ?? 0);
-        $stock    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_gudang') ?? 0);
+        $order    = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('jumlah_order') ?? 0);
+        $received = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('jumlah_doc') ?? 0);
+        $outWip   = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('out_req') ?? 0);
+        $stock    = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('saldo_gudang') ?? 0);
 
         // NEED dari mon_work_orders: SUM(jumlah_prod * cons) per row (bukan
         // lagi SUM(request)), di-scope via mon_boms supaya hanya menghitung
@@ -776,7 +776,7 @@ class MonitoringRekonsiliasiService
      */
     public function fabricUsage(): array
     {
-        $totalOutReq = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('out_req') ?? 0);
+        $totalOutReq = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('out_req') ?? 0);
 
         $scrapQty = 0.0;
         $outputCutting = 0.0;
@@ -998,7 +998,7 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
             ->selectRaw('SUM(out_doc) as out_doc')
             ->selectRaw('SUM(out_req) as out_req')
-            ->selectRaw('SUM(total_gudang) as saldo_gudang')
+            ->selectRaw('SUM(saldo_gudang) as saldo_gudang')
             ->selectRaw('SUM(harga_total) as harga_total')
             ->groupBy('barang_code', 'barang_name')
             ->orderBy('barang_name')
@@ -1451,9 +1451,9 @@ class MonitoringRekonsiliasiService
     {
         return $this->rekonQuery()
             ->select('barang_name')
-            ->selectRaw('SUM(total_gudang) as saldo_gudang')
+            ->selectRaw('SUM(saldo_gudang) as saldo_gudang')
             ->groupBy('barang_name')
-            ->havingRaw('SUM(total_gudang) > 0')
+            ->havingRaw('SUM(saldo_gudang) > 0')
             ->orderByDesc('saldo_gudang')
             ->limit($limit)
             ->get();
@@ -1468,30 +1468,30 @@ class MonitoringRekonsiliasiService
 
         $query = $this->rekonQuery()
             ->leftJoinSub($shipmentAgg, 'ship', function ($join) {
-                $join->on('ship.barang_code', '=', 'mon_purchase_orders.barang_code');
+                $join->on('ship.barang_code', '=', 'mon_rekonsiliasis.barang_code');
             });
 
         return $query
             ->select(
-                'mon_purchase_orders.no_po',
-                'mon_purchase_orders.jenis_po',
-                'mon_purchase_orders.tgl_po',
-                'mon_purchase_orders.tgl_pengiriman',
-                'mon_purchase_orders.supplier_name',
-                'mon_purchase_orders.barang_code',
-                'mon_purchase_orders.barang_name',
-                'mon_purchase_orders.satuan_order',
-                'mon_purchase_orders.jumlah_order',
-                'mon_purchase_orders.jumlah_doc',
-                'mon_purchase_orders.out_req',
-                'mon_purchase_orders.out_prod',
-                'mon_purchase_orders.sisa',
-                // 'mon_purchase_orders.saldo_wip',
-                // 'mon_purchase_orders.saldo_gudang',
-                'mon_purchase_orders.harga_total'
+                'mon_rekonsiliasis.no_po',
+                'mon_rekonsiliasis.jenis_po',
+                'mon_rekonsiliasis.tgl_po',
+                'mon_rekonsiliasis.tgl_pengiriman',
+                'mon_rekonsiliasis.supplier_name',
+                'mon_rekonsiliasis.barang_code',
+                'mon_rekonsiliasis.barang_name',
+                'mon_rekonsiliasis.satuan_order',
+                'mon_rekonsiliasis.jumlah_order',
+                'mon_rekonsiliasis.jumlah_doc',
+                'mon_rekonsiliasis.out_req',
+                'mon_rekonsiliasis.out_prod',
+                'mon_rekonsiliasis.sisa',
+                'mon_rekonsiliasis.saldo_wip',
+                'mon_rekonsiliasis.saldo_gudang',
+                'mon_rekonsiliasis.harga_total'
             )
             ->selectRaw('COALESCE(ship.out_doc, 0) as out_doc')
-            ->orderBy('mon_purchase_orders.barang_name')
+            ->orderBy('mon_rekonsiliasis.barang_name')
             ->get();
     }
 
