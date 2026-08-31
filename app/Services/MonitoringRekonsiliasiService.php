@@ -1002,7 +1002,7 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(out_req) as out_req')
             ->selectRaw('SUM(total_gudang) as saldo_gudang')
             ->selectRaw('SUM(harga_total) as harga_total')
-            ->where('jumlah_order', '!=', 0)
+            ->where('jumlah_doc', '!=', 0)
             ->groupBy('barang_code', 'barang_name')
             ->orderBy('barang_name')
             ->get();
