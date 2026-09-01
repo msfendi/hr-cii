@@ -1342,8 +1342,8 @@ function updateFormulaWithColors() {
         { label: 'NEED%', desc: 'Kebutuhan (Work Order Request) -- patokan 100%', color: '#6c757d' },
         { label: 'ORDER%', desc: 'Jumlah Order ÷ Need', color: '#1f6f8b' },
         { label: 'RECEIVED%', desc: '(Jumlah Diterima - Out Doc) ÷ Need', color: '#e07b39' },
-        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ (Jumlah Diterima - Out Doc)', color: '#44af69' },
-        { label: 'STOCK%', desc: 'Saldo Gudang ÷ (Jumlah Diterima - Out Doc)', color: '#f5a623' }
+        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Need', color: '#44af69' },
+        { label: 'STOCK%', desc: 'Saldo Gudang ÷ Need', color: '#f5a623' }
     ];
     formulaDiv.innerHTML = items.map(item =>
         `<span><span style="display:inline-block;width:12px;height:12px;background:${item.color};border-radius:2px;margin-right:4px;"></span><strong>${item.label}</strong> = ${item.desc}</span>`
