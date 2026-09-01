@@ -1235,7 +1235,10 @@
 
     const labels = rows.map(r => wrapLabel(r.barang_name));
     // Warna baru sesuai palet FABRIC USAGE PERCENTAGE
-    const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
+    // qtyKey menunjuk ke field qty mentah (bukan persentase) yang dikirim
+    // service (need_qty/order_qty/dst) supaya tooltip bisa menampilkan qty
+    // asli di samping persentase saat bar di-hover.
+    const mk = (key, color, label, qtyKey) => ({ label, data: rows.map(r => r[key]), backgroundColor: color, qtyKey });
 
     if (meta.chart) meta.chart.destroy();
     meta.chart = new Chart(ctx, {
@@ -1243,11 +1246,11 @@
         data: {
             labels,
             datasets: [
-                mk('need_pct', '#6c757d', 'NEED%'),
-                mk('order_pct', '#1f6f8b', 'ORDER%'),
-                mk('received_pct', '#e07b39', 'RECEIVED%'),
-                mk('out_prod_pct', '#44af69', 'OUT PROD%'),
-                mk('stock_pct', '#f5a623', 'STOCK%'),
+                mk('need_pct', '#6c757d', 'NEED%', 'need_qty'),
+                mk('order_pct', '#1f6f8b', 'ORDER%', 'order_qty'),
+                mk('received_pct', '#e07b39', 'RECEIVED%', 'received_qty'),
+                mk('out_prod_pct', '#44af69', 'OUT PROD%', 'out_prod_qty'),
+                mk('stock_pct', '#f5a623', 'STOCK%', 'stock_qty'),
             ],
         },
         options: {
@@ -1280,7 +1283,16 @@
                             if (!r || r.harga_total === undefined || r.harga_total === null) return '';
                             return 'Harga: Rp ' + fmtNum(r.harga_total);
                         },
-                        label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%`
+                        // Baris qty ditambahkan setelah persentase, mengambil
+                        // nilai qty mentah dari field yang ditunjuk qtyKey
+                        // (mis. 'need_qty' untuk dataset NEED%).
+                        label: (c) => {
+                            const r = rows[c.dataIndex];
+                            const qtyKey = c.dataset.qtyKey;
+                            const qty = (r && qtyKey) ? r[qtyKey] : undefined;
+                            const qtyStr = (qty === undefined || qty === null) ? '' : `  |  Qty: ${fmtNum(qty)}`;
+                            return `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%${qtyStr}`;
+                        }
                     }
                 },
             },

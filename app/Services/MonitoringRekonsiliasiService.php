@@ -751,9 +751,9 @@ class MonitoringRekonsiliasiService
         return [
             'need'     => $need,
             'order'    => $pct($order, $need),
-            'received' => $pct($received, $order),
-            'out_wip'  => $pct($outWip, $received),
-            'stock'    => $pct($stock, $received),
+            'received' => $pct($received, $need),
+            'out_wip'  => $pct($outWip, $need),
+            'stock'    => $pct($stock, $need),
         ];
     }
 
@@ -1060,11 +1060,19 @@ class MonitoringRekonsiliasiService
                 'need_pct'        => $pct($need, $need),
                 'order_pct'       => $pct($order, $need),
                 // RECEIVED% = (jumlah_doc - out_doc) / need.
-                'received_pct'    => $pct($doc, $order),
+                'received_pct'    => $pct($doc, $need),
                 // OUT PROD% = out_req / (jumlah_doc - out_doc).
-                'out_prod_pct'    => $pct($r->out_req, $netReceived),
+                'out_prod_pct'    => $pct($r->out_req, $need),
                 // STOCK% = saldo_gudang / (jumlah_doc - out_doc).
-                'stock_pct'       => $pct($r->saldo_gudang, $netReceived),
+                'stock_pct'       => $pct($r->saldo_gudang, $need),
+                // Qty mentah (bukan persentase) untuk masing-masing bar --
+                // dipakai frontend supaya tooltip chart Material Achievement
+                // bisa menampilkan qty asli di samping persentase saat di-hover.
+                'need_qty'        => $need,
+                'order_qty'       => $order,
+                'received_qty'    => $doc,
+                'out_prod_qty'    => (float) $r->out_req,
+                'stock_qty'       => (float) $r->saldo_gudang,
             ];
         });
     }
