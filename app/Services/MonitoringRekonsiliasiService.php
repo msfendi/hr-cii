@@ -1062,9 +1062,9 @@ class MonitoringRekonsiliasiService
                 // RECEIVED% = (jumlah_doc - out_doc) / need.
                 'received_pct'    => $pct($doc, $need),
                 // OUT PROD% = out_req / (jumlah_doc - out_doc).
-                'out_prod_pct'    => $pct($r->out_req, $need),
+                'out_prod_pct'    => $pct($r->out_req, $netReceived),
                 // STOCK% = saldo_gudang / (jumlah_doc - out_doc).
-                'stock_pct'       => $pct($r->saldo_gudang, $need),
+                'stock_pct'       => $pct($r->saldo_gudang, $netReceived),
                 // Qty mentah (bukan persentase) untuk masing-masing bar --
                 // dipakai frontend supaya tooltip chart Material Achievement
                 // bisa menampilkan qty asli di samping persentase saat di-hover.
