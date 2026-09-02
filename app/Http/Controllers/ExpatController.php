@@ -13,7 +13,9 @@ use App\Exports\ExpatOnleaveTemplateExport;
 use App\Exports\ExpatRekapExport;
 use App\Models\ExpatCost;
 use App\Models\ExpatCostComponent;
+use App\Models\ExpatDocument;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class ExpatController extends Controller
@@ -480,12 +482,20 @@ class ExpatController extends Controller
         $familyNationalities = \App\Models\ChuFamily::whereNotNull('nationality')
             ->distinct()->orderBy('nationality')->pluck('nationality');
 
+        // TAMBAHAN untuk section 6: Kontrak Expat & Upload Dokumen
+        $expats = DB::table('BIODATA')
+            ->where('IS_EXPAT', 1)
+            ->select('NPK', 'NAMA_KARYAWAN')
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
+
         return view('expat_dashboard.index', compact(
             'years',
             'nationalities',
             'components',
             'guestNationalities',
-            'familyNationalities'
+            'familyNationalities',
+            'expats'
         ));
     }
 
@@ -764,6 +774,142 @@ class ExpatController extends Controller
             'expiring_count' => $expiring->count(),
             'expiring' => $expiring,
             'count_by_type' => collect($docTypes)->mapWithKeys(fn($label) => [$label => $countByType[$label] ?? 0]),
+        ]);
+    }
+
+    /*
+|--------------------------------------------------------------------------
+| SECTION 6: Kontrak Expat & Upload Dokumen
+|--------------------------------------------------------------------------
+*/
+
+    /**
+     * Daftar expat (BIODATA.IS_EXPAT = 1) dengan ringkasan jumlah kontrak
+     * (dari employees_contract) dan jumlah dokumen (dari expat_documents)
+     * per NPK. Detail masing-masing dibuka lewat modal (lihat contractDetail()
+     * dan expatDocumentList()).
+     */
+    public function contractData(Request $request)
+    {
+        $nationality = $request->nationality;
+
+        $contractCounts = DB::table('employees_contract')
+            ->select('npk', DB::raw('COUNT(*) as total'))
+            ->groupBy('npk');
+
+        $documentCounts = DB::table('expat_documents')
+            ->select('npk', DB::raw('COUNT(*) as total'))
+            ->groupBy('npk');
+
+        $data = DB::table('BIODATA')
+            ->where('BIODATA.IS_EXPAT', 1)
+            ->leftJoin('expat_master', 'BIODATA.NPK', '=', 'expat_master.npk')
+            ->leftJoinSub($contractCounts, 'cc', fn($join) => $join->on('BIODATA.NPK', '=', 'cc.npk'))
+            ->leftJoinSub($documentCounts, 'dc', fn($join) => $join->on('BIODATA.NPK', '=', 'dc.npk'))
+            ->when($nationality, fn($q) => $q->where('expat_master.nationality', $nationality))
+            ->select(
+                'BIODATA.NPK as npk',
+                'BIODATA.NAMA_KARYAWAN as name',
+                'expat_master.nationality',
+                DB::raw('COALESCE(cc.total, 0) as contract_count'),
+                DB::raw('COALESCE(dc.total, 0) as document_count')
+            )
+            ->orderBy('BIODATA.NAMA_KARYAWAN')
+            ->get();
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Detail seluruh kontrak milik satu expat (1 expat bisa punya beberapa kontrak).
+     * Diurutkan dari kontrak terlama ke terbaru.
+     */
+    public function contractDetail($npk)
+    {
+        $data = DB::table('employees_contract')
+            ->where('npk', $npk)
+            ->select(
+                'contract_ke',
+                'type',
+                'start_date',
+                'end_date',
+                'month_duration',
+                'status_contract'
+            )
+            ->orderBy('start_date', 'asc')
+            ->get();
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Daftar dokumen expat yang sudah diupload. Bisa difilter per NPK
+     * (dipakai oleh modal detail dokumen di tabel kontrak expat).
+     */
+    public function expatDocumentList(Request $request)
+    {
+        $npk = $request->npk;
+
+        $data = ExpatDocument::leftJoin('BIODATA', 'expat_documents.npk', '=', 'BIODATA.NPK')
+            ->when($npk, fn($q) => $q->where('expat_documents.npk', $npk))
+            ->select('expat_documents.*', 'BIODATA.NAMA_KARYAWAN as name')
+            ->orderByDesc('expat_documents.created_at')
+            ->get()
+            ->map(function ($row) {
+                $row->file_url = Storage::disk('public')->url($row->file_path);
+                return $row;
+            });
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Simpan upload dokumen expat baru.
+     */
+    public function storeExpatDocument(Request $request)
+    {
+        $request->validate([
+            'npk' => 'required',
+            'document_type' => 'required|string|max:50',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'notes' => 'nullable|string',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('expat-documents/' . $request->npk, 'public');
+
+        ExpatDocument::create([
+            'npk' => $request->npk,
+            'document_type' => $request->document_type,
+            'file_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'file_size' => $file->getSize(),
+            'notes' => $request->notes,
+            'uploaded_by' => auth()->id(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dokumen expat berhasil diupload',
+        ]);
+    }
+
+    /**
+     * Hapus dokumen expat (file + record).
+     */
+    public function destroyExpatDocument($id)
+    {
+        $doc = ExpatDocument::findOrFail($id);
+
+        if ($doc->file_path) {
+            Storage::disk('public')->delete($doc->file_path);
+        }
+
+        $doc->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dokumen expat berhasil dihapus',
         ]);
     }
 }

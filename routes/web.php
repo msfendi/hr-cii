@@ -95,6 +95,7 @@ use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
 use App\Http\Controllers\CanteenReportController;
+use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\DoorprizeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventInvitationController;
@@ -838,7 +839,14 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/document-data', [ExpatController::class, 'documentData'])->name('document-data');
         Route::get('/search-employee', [ExpatController::class, 'searchEmployee'])->name('search-employee');
         Route::get('/transaction-detail', [ExpatController::class, 'transactionDetail'])->name('transaction-detail');
+        Route::get('/contract-data', [ExpatController::class, 'contractData'])->name('contract-data');
+        Route::get('/contract-detail/{npk}', [ExpatController::class, 'contractDetail'])->name('contract-detail');
+        Route::get('/document-list', [ExpatController::class, 'expatDocumentList'])->name('document-list');
+        Route::post('/document', [ExpatController::class, 'storeExpatDocument'])->name('document-store');
+        Route::delete('/document/{id}', [ExpatController::class, 'destroyExpatDocument'])->name('document-destroy');
     });
+
+
 
     // Foreign Guest dashboard data
     Route::get('/guest-master/dashboard-data', [ForeignGuestController::class, 'dashboardData'])->name('guest-master.dashboard-data')->middleware(['auth', 'permission']);
@@ -1272,6 +1280,15 @@ Route::prefix('event-invitation')->name('event-invitation.')->group(function () 
     Route::get('/{event?}', [EventInvitationController::class, 'formPage'])->name('form');
     Route::post('/{event?}/respond', [EventInvitationController::class, 'storeResponse'])->name('respond');
 });
+
+Route::prefix('chatbot')->name('chatbot.')->middleware(['auth'])->group(function () {
+    Route::get('/', [ChatbotController::class, 'index'])->name('index');
+    Route::post('/sessions', [ChatbotController::class, 'storeSession'])->name('sessions.store');
+    Route::get('/sessions/{chatbotSession}/messages', [ChatbotController::class, 'messages'])->name('sessions.messages');
+    Route::post('/sessions/{chatbotSession}/send', [ChatbotController::class, 'send'])->name('sessions.send');
+    Route::delete('/sessions/{chatbotSession}', [ChatbotController::class, 'destroySession'])->name('sessions.destroy');
+});
+
 
 
 Route::get('/test-reverb', function () {
