@@ -285,7 +285,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                     WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                         AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1')
+                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','HD')
                         AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
                         AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                         THEN 1
@@ -405,7 +405,7 @@ END AS special_overtime_hours
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','HD')
                     AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
                     AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                     THEN 1
@@ -424,7 +424,7 @@ END AS special_overtime_hours
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','HD','H','BR','OUT','SD')
                     THEN JUMLAH_JAM_LEMBUR
             END AS absence_status
         ")
