@@ -1231,7 +1231,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
     */
 
         if (!$user->hasRole('Admin')) {
-            \App\Services\PayrollRoleFilterService::applyToQuery($query, $payrollRole, 'prd.IS_STAFF', 'd.IS_SEWING');
+            \App\Services\PayrollRoleFilterService::applyToQuery($query, $payrollRole, 'prd.employee_staff', 'd.IS_SEWING');
         }
 
         /*
