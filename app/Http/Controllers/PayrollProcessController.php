@@ -1218,7 +1218,8 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                 'd.DEPARTEMENT as dept',
                 'prd.components',
                 'prd.total_salary',
-                'emp.IS_STAFF',
+                'prd.employee_staff as IS_STAFF',
+                'prd.employee_expat as IS_EXPAT',
                 'd.IS_SEWING',
                 'p.KETERANGAN'
             );
@@ -1230,7 +1231,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
     */
 
         if (!$user->hasRole('Admin')) {
-            \App\Services\PayrollRoleFilterService::applyToQuery($query, $payrollRole, 'emp.IS_STAFF', 'd.IS_SEWING');
+            \App\Services\PayrollRoleFilterService::applyToQuery($query, $payrollRole, 'prd.IS_STAFF', 'd.IS_SEWING');
         }
 
         /*
