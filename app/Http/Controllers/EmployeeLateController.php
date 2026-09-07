@@ -17,7 +17,25 @@ class EmployeeLateController extends Controller
      */
     public function index()
     {
-        $data = EmployeeLate::orderBy('date', 'desc')->get();
+        $employee = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            );
+
+        $data = DB::table('employee_lates')
+            ->leftJoinSub($employee, 'biodata', function ($join) {
+                $join->on('biodata.NPK', '=', 'employee_lates.npk');
+            })
+            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'biodata.ID_DEPT')
+            ->select(
+                'employee_lates.*',
+                'biodata.NAMA_KARYAWAN',
+                'DEPT.DEPARTEMENT'
+            )
+            ->orderBy('employee_lates.date', 'desc')
+            ->get();
 
         return view('employee_late.index', compact('data'));
     }
@@ -27,7 +45,9 @@ class EmployeeLateController extends Controller
      */
     public function create()
     {
-        return view('employee_late.create');
+        $biodatas = $this->getBiodatas();
+
+        return view('employee_late.create', compact('biodatas'));
     }
 
     /**
@@ -67,13 +87,9 @@ class EmployeeLateController extends Controller
     public function edit($id)
     {
         $row = EmployeeLate::findOrFail($id);
+        $biodatas = $this->getBiodatas();
 
-        // Ambil detail karyawan (nama & departemen) untuk pre-selected option di select2
-        $employee = $this->employeeQuery()
-            ->where('emp.NPK', $row->npk)
-            ->first();
-
-        return view('employee_late.edit', compact('row', 'employee'));
+        return view('employee_late.edit', compact('row', 'biodatas'));
     }
 
     /**
@@ -196,6 +212,25 @@ class EmployeeLateController extends Controller
         });
 
         return response()->json(['results' => $results]);
+    }
+
+    /**
+     * Union of active + resigned employees for the NPK dropdown.
+     */
+    private function getBiodatas()
+    {
+        return DB::query()
+            ->fromSub(
+                DB::table('BIODATA')
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->union(
+                        DB::table('BIODATA_KELUAR')
+                            ->select('NPK', 'NAMA_KARYAWAN')
+                    ),
+                'emp'
+            )
+            ->orderBy('NPK')
+            ->get();
     }
 
     /**
