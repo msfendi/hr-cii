@@ -12,6 +12,10 @@ class AuditTrailService
     protected static array $alwaysExcluded = [
         AuditTrail::class,
         \Illuminate\Notifications\DatabaseNotification::class,
+        \App\Models\RagChatMessage::class,
+        \App\Models\RagChatSession::class,
+        \App\Models\RagKnowledgeChunk::class,
+        \App\Models\RagKnowledgeBase::class,
     ];
 
     public static function record(string $event, Model $model): void

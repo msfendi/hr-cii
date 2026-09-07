@@ -38,13 +38,14 @@
         </div>
    </li>
 
-   {{-- DASHBOARD (selalu tampil, tidak butuh permission) --}}
-   <!-- <li class="nav-item active">
-      <a class="nav-link" href="{{ route('home') }}">
-         <i class="fas fa-tachometer-alt"></i>
-         <span>Dashboard</span>
+   {{-- AI ASSISTANT MENU --}}
+   <li class="nav-item {{ request()->routeIs('rag-chat.*') ? 'active' : '' }}" data-menu-item data-menu-name="ai assistant rag bot">
+      <a class="nav-link" href="{{ route('rag-chat.index') }}">
+         <i class="fas fa-robot text-warning"></i>
+         <span class="font-weight-bold">AI Assistant & RAG</span>
       </a>
-   </li> -->
+   </li>
+   <hr class="sidebar-divider my-1">
 
    {{-- MENU DINAMIS DARI DATABASE --}}
 @foreach ($sidebarMenus as $menu)

@@ -8,6 +8,7 @@ use App\Http\Controllers\AttendanceFingerController;
 use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginController;
+use App\Http\Controllers\RagChatController;
 use App\Http\Controllers\PelamarController;
 use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
@@ -1351,3 +1352,18 @@ Route::middleware(['auth', 'permission'])->group(function () {
 });
 
 Route::get('/pdf-extractor', [PdfExtractionController::class, 'index'])->name('pdf.index')->middleware(['auth']);
+
+/*
+|--------------------------------------------------------------------------
+| AI Assistant, RAG Knowledge Base & Document Generator
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->prefix('ai-assistant')->name('rag-chat.')->group(function () {
+    Route::get('/', [RagChatController::class, 'index'])->name('index');
+    Route::post('/send', [RagChatController::class, 'sendMessage'])->name('send');
+    Route::post('/upload', [RagChatController::class, 'uploadKnowledge'])->name('upload');
+    Route::get('/download/{filename}', [RagChatController::class, 'downloadDocument'])->name('download');
+    Route::post('/clear', [RagChatController::class, 'clearSession'])->name('clear');
+    Route::delete('/knowledge/{id}', [RagChatController::class, 'deleteKnowledge'])->name('delete-knowledge');
+});
+
