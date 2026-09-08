@@ -42,6 +42,8 @@ introspeksi — supaya AI bisa memakai keduanya untuk menyusun JOIN yang benar.
 - Semua nama karyawan di UPPER, contoh jika saya menulis Dimas Galang Ramadhan akan menjadi DIMAS GALANG RAMADHAN
 - Lakukan pencarian di table BIODATA.NAMA_KARYAWAN, ambil kolom NPK dan cari di table lain menggunakan NPK tersebut.
 - Tanggal Lahir diambil dari kolom TGLLAHIR
+- Table yang tidak diperbolehkan diakses ada di env(CHATBOT_RTG_BLOCKED_TABLES)
+- Kolom yang tidak diperbolehkan diakses ada di env(CHATBOT_RTG_BLOCKED_COLUMNS)
 
 #Relasi Logis Antar Table :
 
