@@ -638,12 +638,12 @@ class EmployeesContractController extends Controller
     {
         $contract = EmployeesContract::findOrFail($id);
 
-        if (!$this->canModifyContract($contract)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki hak akses untuk mengunggah dokumen kontrak ini.',
-            ], 403);
-        }
+        // if (!$this->canModifyContract($contract)) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Anda tidak memiliki hak akses untuk mengunggah dokumen kontrak ini.',
+        //     ], 403);
+        // }
 
         $request->validate([
             'file_contract' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
@@ -691,12 +691,12 @@ class EmployeesContractController extends Controller
     {
         $contract = EmployeesContract::findOrFail($id);
 
-        if (!$this->canModifyContract($contract)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda tidak memiliki hak akses untuk menghapus dokumen kontrak ini.',
-            ], 403);
-        }
+        // if (!$this->canModifyContract($contract)) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Anda tidak memiliki hak akses untuk menghapus dokumen kontrak ini.',
+        //     ], 403);
+        // }
 
         try {
             if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
