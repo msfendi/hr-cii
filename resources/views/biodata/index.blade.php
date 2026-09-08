@@ -1290,12 +1290,24 @@
                     $menu.html('<span class="dropdown-item text-muted small">Loading...</span>');
 
                     $.get('/biodata/soft-files/' + npk, function (res) {
+                        $btn.find('.doc-count').text(res.count);
+
+                        // Item khusus untuk Generate PDF Biodata Diri
+                        var html = '<a class="dropdown-item d-flex align-items-center font-weight-bold text-danger" style="font-size:12.5px; gap:8px;" href="/biodata/generate-pdf/' + npk + '" target="_blank"><i class="fas fa-file-pdf text-danger"></i> Biodata Diri (PDF)</a>';
+
+                        var canExport = (res.can_export_all !== undefined) ? res.can_export_all : {{ !empty($canExportAllDocs) ? 'true' : 'false' }};
+
                         if (!res.count) {
-                            $menu.html('<span class="dropdown-item text-muted small">No documents</span>');
+                            html += '<div class="dropdown-divider my-1"></div><span class="dropdown-item text-muted small">No other documents</span>';
+                            if (canExport) {
+                                html += '<div class="dropdown-divider my-1"></div>';
+                                html += '<a class="dropdown-item d-flex align-items-center font-weight-bold" style="font-size:12.5px; gap:8px; color:#28a745;" href="/biodata/export-all-docs/' + npk + '" target="_blank"><i class="fas fa-file-download" style="color:#28a745;"></i> Download Semua Dokumen (PDF)</a>';
+                            }
+                            $menu.html(html);
                             return;
                         }
 
-                        var html = '';
+                        html += '<div class="dropdown-divider my-1"></div>';
                         $.each(res.docs, function (label, url) {
                             var ext = url.split('.').pop().toLowerCase();
                             var icon = ['jpg', 'jpeg', 'png', 'webp'].indexOf(ext) !== -1
@@ -1304,7 +1316,19 @@
                             html += '<a class="dropdown-item d-flex align-items-center" style="font-size:12.5px; gap:8px;" href="' + url + '" target="_blank"><i class="fas ' + icon + '"></i> ' + label + '</a>';
                         });
 
-                        $btn.find('.doc-count').text(res.count);
+                        // Download Semua Dokumen di paling bawah jika diizinkan oleh permission
+                        if (canExport) {
+                            html += '<div class="dropdown-divider my-1"></div>';
+                            html += '<a class="dropdown-item d-flex align-items-center font-weight-bold" style="font-size:12.5px; gap:8px; color:#28a745;" href="/biodata/export-all-docs/' + npk + '" target="_blank"><i class="fas fa-file-download" style="color:#28a745;"></i> Download Semua Dokumen (PDF)</a>';
+                        }
+
+                        $menu.html(html);
+                    }).fail(function () {
+                        var html = '<a class="dropdown-item d-flex align-items-center font-weight-bold text-danger" style="font-size:12.5px; gap:8px;" href="/biodata/generate-pdf/' + npk + '" target="_blank"><i class="fas fa-file-pdf text-danger"></i> Biodata Diri (PDF)</a>';
+                        if ({{ !empty($canExportAllDocs) ? 'true' : 'false' }}) {
+                            html += '<div class="dropdown-divider my-1"></div>';
+                            html += '<a class="dropdown-item d-flex align-items-center font-weight-bold" style="font-size:12.5px; gap:8px; color:#28a745;" href="/biodata/export-all-docs/' + npk + '" target="_blank"><i class="fas fa-file-download" style="color:#28a745;"></i> Download Semua Dokumen (PDF)</a>';
+                        }
                         $menu.html(html);
                     });
                 });

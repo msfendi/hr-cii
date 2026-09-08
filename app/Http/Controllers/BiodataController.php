@@ -11,11 +11,46 @@ use RealRashid\SweetAlert\Facades\Alert;
 use App\Exports\PKWTExport;
 use App\Models\EmployeeMutation;
 use App\Models\PayrollMaster;
+use App\Models\Permission;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
+use setasign\Fpdi\Fpdi;
 
 class BiodataController extends Controller
 {
+    /**
+     * Cek apakah user saat ini memiliki izin untuk export semua dokumen.
+     * Mengacu pada tabel permissions ('biodata.export-all-docs') dan tabel pivot role_permission.
+     */
+    public function hasExportAllDocsPermission(): bool
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        $permission = Permission::where('route_name', 'biodata.export-all-docs')->first();
+
+        if (!$permission) {
+            return false;
+        }
+
+        $userRoleIds = $user->roles()->pluck('id');
+        if ($userRoleIds->isEmpty()) {
+            return false;
+        }
+
+        return DB::table('role_permission')
+            ->where('permission_id', $permission->id)
+            ->whereIn('role_id', $userRoleIds)
+            ->exists();
+    }
     /**
      * Display a listing of the resource.
      */
@@ -572,6 +607,413 @@ class BiodataController extends Controller
             'npk'   => $npk,
             'count' => count($docs),
             'docs'  => $docs,
+            'can_export_all' => $this->hasExportAllDocsPermission(),
         ]);
+    }
+
+    /**
+     * Helper to prepare data for Biodata Diri PDF.
+     * Returns [$data, $empName] or null if not found.
+     */
+    private function buildBiodataPdfData($npk)
+    {
+        $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $npk)->first();
+        $biodata = DB::connection('cii')->table('BIODATA')->where('NPK', $npk)->first();
+
+        if (!$pkwt && !$biodata) {
+            return null;
+        }
+
+        // Resolusi Department & Section
+        $deptName = null;
+        $sectionName = null;
+        $lineInfo = null;
+
+        if ($biodata) {
+            if (!empty($biodata->ID_DEPT)) {
+                $dept = DB::connection('cii')->table('DEPT')->where('ID_DEPT', $biodata->ID_DEPT)->first();
+                $deptName = $dept->DEPARTEMENT ?? null;
+            }
+
+            if (!empty($biodata->SECTION)) {
+                $sec = DB::table('sections')->where('id', $biodata->SECTION)->first();
+                if ($sec) {
+                    $sectionName = $sec->name;
+                    if (!empty($sec->line_start) || !empty($sec->line_end)) {
+                        $lineInfo = 'Line ' . $sec->line_start . ($sec->line_end ? ' - ' . $sec->line_end : '');
+                    }
+                } else {
+                    $sectionName = $biodata->SECTION;
+                }
+            }
+        }
+        if (!$deptName && $pkwt) {
+            $deptName = $pkwt->BAGIAN ?? null;
+        }
+
+        // Cari data PELAMAR & pelamar_details dengan JOIN langsung via NPK
+        $ktp = trim($pkwt->KTP ?? ($biodata->KTP ?? ''));
+
+        $pelamar = DB::connection('cii')->table('PELAMAR')
+            ->where('NPK', $npk)
+            ->first();
+
+        // Fallback jika NPK belum terisi di PELAMAR, cari via NIK/KTP
+        if (!$pelamar && !empty($ktp)) {
+            $pelamar = DB::connection('cii')->table('PELAMAR')
+                ->where('NIK', $ktp)
+                ->first();
+        }
+
+        // Ambil ID dari pelamar (support ID kapital di SQL Server atau lowercase id)
+        $pelamarId = $pelamar->ID ?? ($pelamar->id ?? null);
+
+        // Ambil data pelamar_details berdasarkan id_pelamar
+        $pelamarDetail = null;
+        if ($pelamarId) {
+            $pelamarDetail = DB::connection('cii')->table('pelamar_details')
+                ->where('id_pelamar', $pelamarId)
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        // Jika belum dapat, JOIN langsung pelamar_details dengan PELAMAR berdasarkan NPK
+        if (!$pelamarDetail) {
+            $pelamarDetail = DB::connection('cii')->table('pelamar_details')
+                ->join('PELAMAR', function ($join) {
+                    $join->on('pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
+                        ->orOn('pelamar_details.id_pelamar', '=', 'PELAMAR.id');
+                })
+                ->where('PELAMAR.NPK', $npk)
+                ->select('pelamar_details.*')
+                ->orderByDesc('pelamar_details.id')
+                ->first();
+        }
+
+        // Fallback: JOIN via NIK/KTP
+        if (!$pelamarDetail && !empty($ktp)) {
+            $pelamarDetail = DB::connection('cii')->table('pelamar_details')
+                ->join('PELAMAR', function ($join) {
+                    $join->on('pelamar_details.id_pelamar', '=', 'PELAMAR.ID')
+                        ->orOn('pelamar_details.id_pelamar', '=', 'PELAMAR.id');
+                })
+                ->where('PELAMAR.NIK', $ktp)
+                ->select('pelamar_details.*')
+                ->orderByDesc('pelamar_details.id')
+                ->first();
+        }
+
+        // Jika pelamarDetail ketemu tapi pelamar belum, ambil dari id_pelamar
+        if (!$pelamar && $pelamarDetail && !empty($pelamarDetail->id_pelamar)) {
+            $pelamar = DB::connection('cii')->table('PELAMAR')
+                ->where('ID', $pelamarDetail->id_pelamar)
+                ->orWhere('id', $pelamarDetail->id_pelamar)
+                ->first();
+        }
+
+        // Riwayat Kontrak & Rekening
+        $contract = DB::connection('cii')->table('employees_contract')
+            ->where('npk', $npk)
+            ->orderBy('contract_ke', 'desc')
+            ->first();
+
+        $bankAccount = PayrollMaster::where('npk', $npk)->value('bank_account') ?: ($pkwt->NOREK ?? null);
+
+        // Helper untuk parse JSON dengan aman
+        $safeJson = function ($raw) {
+            if (empty($raw)) {
+                return [];
+            }
+            if (is_array($raw)) {
+                return $raw;
+            }
+            if (is_object($raw)) {
+                return (array) $raw;
+            }
+            if (is_string($raw)) {
+                $raw = trim($raw);
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+                if (is_string($decoded)) {
+                    $decoded2 = json_decode($decoded, true);
+                    if (is_array($decoded2)) {
+                        return $decoded2;
+                    }
+                }
+                $decoded = json_decode(stripslashes($raw), true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+                $decoded = json_decode(html_entity_decode($raw), true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+            return [];
+        };
+
+        // Data Array / JSON
+        $riwayatPendidikan = $safeJson($pelamarDetail->riwayat_pendidikan ?? null);
+        if (empty($riwayatPendidikan) && $pkwt && !empty($pkwt->PDDK)) {
+            $riwayatPendidikan[] = [
+                'tingkat'   => $pkwt->PDDK,
+                'institusi' => $pelamar->NAMA_SEKOLAH ?? ($pelamar->KABUPATEN_SEKOLAH ?? '-'),
+                'jurusan'   => $pkwt->JURUSAN ?? ($pelamar->JURUSAN ?? '-'),
+                'dari'      => '-',
+                'sampai'    => '-',
+                'lulus'     => 1,
+            ];
+        }
+
+        $pengalamanKerja = $safeJson($pelamarDetail->pengalaman_kerja ?? null);
+
+        $dataAyah = $safeJson($pelamarDetail->data_ayah ?? null);
+        $dataIbu = $safeJson($pelamarDetail->data_ibu ?? null);
+        if (empty($dataIbu['nama']) && (!empty($pkwt->IBU) || !empty($pelamar->IBU))) {
+            $dataIbu['nama'] = $pkwt->IBU ?? $pelamar->IBU;
+        }
+
+        $saudaraKandung = $safeJson($pelamarDetail->saudara_kandung ?? null);
+        $dataAnak = $safeJson($pelamarDetail->data_anak ?? null);
+
+        // Pas Foto Karyawan (Cari file lalu encode ke Base64)
+        $photoBase64 = null;
+        $possiblePhotoPaths = [];
+
+        $empName = trim($pkwt->NAMA ?? ($biodata->NAMA_KARYAWAN ?? ''));
+        if (!empty($deptName) && !empty($empName)) {
+            $possiblePhotoPaths[] = storage_path('app/public/img/profile/' . trim($deptName) . '/' . $npk . '_' . $empName . '.jpg');
+        }
+        $profileDir = storage_path('app/public/img/profile');
+        if (is_dir($profileDir)) {
+            $globMatches = glob($profileDir . '/*/' . $npk . '_*.jpg');
+            if (!empty($globMatches)) {
+                $possiblePhotoPaths = array_merge($possiblePhotoPaths, $globMatches);
+            }
+        }
+        if (!empty($pkwt->file_pas_foto)) {
+            $possiblePhotoPaths[] = storage_path('app/public/' . $pkwt->file_pas_foto);
+        }
+        if ($pelamarDetail && !empty($pelamarDetail->file_pas_foto)) {
+            $possiblePhotoPaths[] = storage_path('app/public/' . $pelamarDetail->file_pas_foto);
+        }
+
+        foreach ($possiblePhotoPaths as $path) {
+            if (file_exists($path) && is_readable($path) && filesize($path) > 0) {
+                $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                $mime = ($ext === 'jpg' || $ext === 'jpeg') ? 'image/jpeg' : ($ext === 'png' ? 'image/png' : 'image/jpeg');
+                $photoBase64 = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($path));
+                break;
+            }
+        }
+
+        // Logo Perusahaan ke Base64
+        $logoBase64 = null;
+        $logoPath = public_path('img/chutex_logo.png');
+        if (file_exists($logoPath) && is_readable($logoPath)) {
+            $logoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath));
+        }
+
+        $data = compact(
+            'npk',
+            'pkwt',
+            'biodata',
+            'deptName',
+            'sectionName',
+            'lineInfo',
+            'pelamar',
+            'pelamarDetail',
+            'contract',
+            'bankAccount',
+            'photoBase64',
+            'logoBase64',
+            'riwayatPendidikan',
+            'pengalamanKerja',
+            'dataAyah',
+            'dataIbu',
+            'saudaraKandung',
+            'dataAnak'
+        );
+
+        return [$data, $empName];
+    }
+
+    /**
+     * Export ALL documents (Biodata Diri + PKWT files + contracts) into a single merged PDF.
+     * 1. Biodata Diri (PDF) hasil generate sistem ditempatkan di halaman pertama.
+     * 2. Soft files dari PKWT (KTP, Ijazah, dll) dan kontrak kerja disatukan.
+     * 3. Images dikonversi ke PDF page via DomPDF.
+     * 4. Semua PDF digabungkan menggunakan FPDI.
+     */
+    public function exportAllDocs($npk)
+    {
+        if (!$this->hasExportAllDocsPermission()) {
+            abort(403, 'Anda tidak memiliki akses untuk mendownload semua dokumen.');
+        }
+
+        $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $npk)->first();
+        $empName = trim($pkwt->NAMA ?? 'Karyawan');
+
+        // File-file temporary yang dibuat dan harus dibersihkan setelah proses selesai
+        $cleanupFiles = [];
+        $tempPdfs = [];
+
+        // 1. Dokumen Pertama: Biodata Diri (PDF) hasil generate sistem
+        $bioRes = $this->buildBiodataPdfData($npk);
+        if ($bioRes) {
+            list($bioData, $bioEmpName) = $bioRes;
+            if ($bioEmpName && $empName === 'Karyawan') {
+                $empName = $bioEmpName;
+            }
+            try {
+                $bioPdf = Pdf::loadView('biodata.pdf_biodata', $bioData)->setPaper('a4', 'portrait');
+                $tmpBioPath = tempnam(sys_get_temp_dir(), 'biodata_') . '.pdf';
+                file_put_contents($tmpBioPath, $bioPdf->output());
+                $tempPdfs[] = $tmpBioPath;
+                $cleanupFiles[] = $tmpBioPath;
+            } catch (\Throwable $e) {
+                Log::warning("exportAllDocs: Gagal generate PDF biodata: " . $e->getMessage());
+            }
+        }
+
+        // 2. Kumpulkan soft files dari PKWT
+        $labels = [
+            'file_surat_lamaran'  => 'Surat Lamaran',
+            'file_cv'             => 'CV',
+            'file_ktp'            => 'KTP',
+            'file_kk'             => 'KK',
+            'file_ijazah'         => 'Ijazah',
+            'file_akta_kelahiran' => 'Akta Kelahiran',
+            'file_skck'           => 'SKCK',
+            'file_surat_sehat'    => 'Surat Sehat',
+            'file_pas_foto'       => 'Pas Foto',
+        ];
+
+        $otherFiles = [];
+
+        if ($pkwt) {
+            foreach ($labels as $field => $label) {
+                $relativePath = $pkwt->$field ?? null;
+                if (empty($relativePath)) continue;
+
+                $absPath = storage_path('app/public/' . $relativePath);
+                if (file_exists($absPath) && filesize($absPath) > 0) {
+                    $otherFiles[] = ['label' => $label, 'path' => $absPath];
+                }
+            }
+        }
+
+        // 3. Kontrak karyawan dari employees_contract
+        $contracts = DB::connection('cii')->table('employees_contract')
+            ->where('npk', $npk)
+            ->whereNotNull('file_contract')
+            ->where('file_contract', '!=', '')
+            ->orderBy('contract_ke', 'asc')
+            ->get();
+
+        foreach ($contracts as $contract) {
+            $absPath = storage_path('app/public/' . $contract->file_contract);
+            if (file_exists($absPath) && filesize($absPath) > 0) {
+                $otherFiles[] = [
+                    'label' => 'Kontrak ke-' . ($contract->contract_ke ?? '?'),
+                    'path'  => $absPath,
+                ];
+            }
+        }
+
+        // 4. Konversi file gambar ke PDF & kumpulkan semua file PDF
+        $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+
+        foreach ($otherFiles as $file) {
+            $ext = strtolower(pathinfo($file['path'], PATHINFO_EXTENSION));
+
+            if ($ext === 'pdf') {
+                $tempPdfs[] = $file['path'];
+            } elseif (in_array($ext, $imageExtensions)) {
+                $imgData = @file_get_contents($file['path']);
+                if (!$imgData) continue;
+
+                $imgBase64 = base64_encode($imgData);
+                $mime = ($ext === 'png') ? 'image/png'
+                    : (($ext === 'gif') ? 'image/gif'
+                    : (($ext === 'webp') ? 'image/webp'
+                    : 'image/jpeg'));
+
+                $html = '<html><body style="margin:0;padding:0;text-align:center;">';
+                $html .= '<p style="font-family:sans-serif;font-size:11px;color:#666;margin:10px 0;">' . e($file['label']) . '</p>';
+                $html .= '<img src="data:' . $mime . ';base64,' . $imgBase64 . '" style="max-width:96%;max-height:92%;">';
+                $html .= '</body></html>';
+
+                try {
+                    $imgPdf = Pdf::loadHTML($html)->setPaper('a4', 'portrait');
+                    $tmpImgPath = tempnam(sys_get_temp_dir(), 'imgpdf_') . '.pdf';
+                    file_put_contents($tmpImgPath, $imgPdf->output());
+                    $tempPdfs[] = $tmpImgPath;
+                    $cleanupFiles[] = $tmpImgPath;
+                } catch (\Throwable $e) {
+                    Log::warning("exportAllDocs: Gagal konversi gambar ke PDF {$file['path']}: " . $e->getMessage());
+                }
+            }
+        }
+
+        if (empty($tempPdfs)) {
+            abort(404, "Tidak ada dokumen yang bisa diproses untuk NPK {$npk}.");
+        }
+
+        // 5. Merge semua PDF menggunakan FPDI
+        $merger = new Fpdi();
+
+        foreach ($tempPdfs as $pdfPath) {
+            try {
+                $pageCount = $merger->setSourceFile($pdfPath);
+                for ($i = 1; $i <= $pageCount; $i++) {
+                    $tplId = $merger->importPage($i);
+                    $size = $merger->getTemplateSize($tplId);
+
+                    $orientation = ($size['width'] > $size['height']) ? 'L' : 'P';
+                    $merger->AddPage($orientation, [$size['width'], $size['height']]);
+                    $merger->useTemplate($tplId);
+                }
+            } catch (\Throwable $e) {
+                Log::warning("exportAllDocs: Gagal merge {$pdfPath}: " . $e->getMessage());
+                continue;
+            }
+        }
+
+        // Cleanup temporary files
+        foreach ($cleanupFiles as $f) {
+            if (file_exists($f)) {
+                @unlink($f);
+            }
+        }
+
+        $cleanName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $empName ?: 'Karyawan');
+        $fileName = "AllDocs_{$npk}_{$cleanName}.pdf";
+
+        return response($merger->Output('S'), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+        ]);
+    }
+
+    /**
+     * Generate PDF Formulir Biodata Diri Karyawan
+     * menggabungkan data PKWT, BIODATA, PELAMAR, dan pelamar_details berdasarkan NPK.
+     */
+    public function generatePdf($npk)
+    {
+        $res = $this->buildBiodataPdfData($npk);
+        if (!$res) {
+            abort(404, "Data karyawan dengan NPK {$npk} tidak ditemukan.");
+        }
+
+        list($data, $empName) = $res;
+        $cleanName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $empName ?: 'Karyawan');
+        $pdf = Pdf::loadView('biodata.pdf_biodata', $data)
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->stream("Biodata_{$npk}_{$cleanName}.pdf");
     }
 }

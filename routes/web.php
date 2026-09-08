@@ -174,6 +174,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'permission']);
     Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'permission']);
     Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
+    Route::get('/biodata/generate-pdf/{npk}', [BiodataController::class, 'generatePdf'])->name('biodata.generate-pdf')->middleware(['auth', 'permission']);
+    Route::get('/biodata/export-all-docs/{npk}', [BiodataController::class, 'exportAllDocs'])->name('biodata.export-all-docs')->middleware(['auth', 'permission']);
+
 
 
     // PKWT
