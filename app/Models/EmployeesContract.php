@@ -31,6 +31,7 @@ class EmployeesContract extends Model
         'daily_salary',
         'allowance',
         'pph21',
+        'file_contract',
     ];
 
     protected $casts = [

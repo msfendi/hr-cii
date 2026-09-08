@@ -552,6 +552,105 @@
         </div>
     </div>
 
+    {{-- ═══════════════════════════════════════════════════
+    MODAL: UPLOAD DOKUMEN KONTRAK
+    ════════════════════════════════════════════════════ --}}
+    <div class="modal fade" id="modalUploadContract" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white py-3">
+                    <h6 class="modal-title font-weight-bold mb-0">
+                        <i class="fas fa-file-contract mr-2"></i>Dokumen Kontrak Karyawan
+                    </h6>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="doc_contract_id">
+
+                    {{-- Info Karyawan --}}
+                    <div class="card bg-light border-0 mb-3">
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <h6 class="font-weight-bold text-gray-800 mb-0" id="doc_emp_nama">—</h6>
+                                <span id="doc_contract_status_badge"></span>
+                            </div>
+                            <div class="small text-muted">
+                                <span>NPK: <strong id="doc_emp_npk">—</strong></span>
+                                <span class="mx-2">•</span>
+                                <span>Bagian: <span id="doc_emp_bagian">—</span></span>
+                            </div>
+                            <hr class="my-2">
+                            <div class="small d-flex justify-content-between text-muted">
+                                <span>Kontrak Ke: <strong id="doc_contract_ke">—</strong></span>
+                                <span>Periode: <strong id="doc_contract_periode">—</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Berkas Saat Ini --}}
+                    <div class="mb-3" id="doc_current_wrapper">
+                        <label class="small font-weight-bold text-gray-700 mb-1">Berkas Kontrak Saat Ini</label>
+                        <div id="doc_existing_box" class="p-3 border rounded bg-white">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center text-truncate mr-2">
+                                    <i class="fas fa-file-pdf text-danger fa-2x mr-2"></i>
+                                    <div class="text-truncate">
+                                        <div class="font-weight-bold small text-truncate" id="doc_file_name">—</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Status: Terlampir</div>
+                                    </div>
+                                </div>
+                                <div class="d-flex" style="gap: 4px;">
+                                    <a href="#" target="_blank" id="btnDocPreview" class="btn btn-outline-primary btn-sm" title="Lihat Berkas">
+                                        <i class="fas fa-external-link-alt"></i>
+                                    </a>
+                                    <a href="#" download id="btnDocDownload" class="btn btn-outline-secondary btn-sm" title="Unduh Berkas">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    <button type="button" id="btnDocDelete" class="btn btn-outline-danger btn-sm" title="Hapus Berkas">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="doc_empty_box" class="alert alert-secondary py-2 px-3 small mb-0 d-none">
+                            <i class="fas fa-info-circle mr-1"></i> Belum ada dokumen kontrak yang diunggah.
+                        </div>
+                    </div>
+
+                    {{-- Form Upload --}}
+                    <div id="doc_upload_wrapper">
+                        <label class="small font-weight-bold text-gray-700 mb-1">
+                            <span id="doc_upload_title">Unggah Dokumen Kontrak</span> <span class="text-danger">*</span>
+                        </label>
+                        <div class="custom-file mb-1">
+                            <input type="file" class="custom-file-input" id="inp_doc_file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                            <label class="custom-file-label text-truncate" for="inp_doc_file" id="lbl_doc_file">Pilih berkas dokumen…</label>
+                        </div>
+                        <small class="text-muted d-block">
+                            Format diperbolehkan: <strong>PDF, JPG, PNG, DOC, DOCX</strong> (Maks. 10 MB)
+                        </small>
+                        <div id="doc_upload_progress" class="progress mt-2 d-none" style="height: 6px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    <div id="doc_readonly_notice" class="alert alert-warning py-2 px-3 small mb-0 d-none">
+                        <i class="fas fa-lock mr-1"></i> Anda tidak memiliki izin untuk mengunggah atau mengganti dokumen ini.
+                    </div>
+
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Tutup</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSubmitUploadDoc">
+                        <i class="fas fa-upload mr-1"></i>Unggah Berkas
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- Toast container --}}
     <div style="position:fixed;top:20px;right:20px;z-index:9999;" id="toastWrap"></div>
 
@@ -575,6 +674,8 @@
             exportAllUrl: "{{ route('employees-contract.export-all') }}",
             salaryUrl: "{{ url('employees-contract/update-salary') }}",
             splitUrl: "{{ url('employees-contract/split') }}",
+            uploadDoc: "{{ url('employees-contract/upload') }}",
+            deleteDoc: "{{ url('employees-contract/delete-file') }}",
         };
         const CSRF = "{{ csrf_token() }}";
 
@@ -755,6 +856,10 @@
                         render: (d, t, r) => {
                             const isAktif = r.status_contract === 'AKTIF';
                             const isEnded = r.status_contract === 'HABIS' || r.status_contract === 'DIAKHIRI';
+                            const btnDoc = r.file_contract
+                                ? `<button class="btn btn-primary btn-xs btn-act-upload" title="Dokumen Kontrak (Ada Berkas)"><i class="fas fa-file-contract"></i></button>`
+                                : (r.can_edit ? `<button class="btn btn-outline-secondary btn-xs btn-act-upload" title="Upload Dokumen Kontrak"><i class="fas fa-file-upload"></i></button>` : '');
+
 
                             if (isAktif) {
                                 return `
@@ -768,6 +873,7 @@
                                     <button class="btn btn-danger btn-xs btn-act-stop" title="Akhiri">
                                         <i class="fas fa-ban"></i>
                                     </button>
+                                    ${btnDoc}
                                     ${r.can_edit ? `
                                     <button class="btn btn-warning btn-xs btn-act-finansial" title="Update Finansial">
                                         <i class="fas fa-money-bill-wave"></i>
@@ -784,6 +890,7 @@
                                     <i class="fas fa-undo"></i>
                                 </button>
                                 ` : ''}
+                                ${btnDoc}
                                 ${r.can_edit ? `
                                 <button class="btn btn-warning btn-xs btn-act-finansial" title="Update Finansial">
                                     <i class="fas fa-money-bill-wave"></i>
@@ -1009,11 +1116,152 @@
                 if (!row) return;
                 openFinansial(row);
             });
+
+            $(document).on('click', '.btn-act-upload', function () {
+                const row = table.row($(this).closest('tr')).data();
+                if (!row) return;
+                openModalDoc(row);
+            });
         });
 
         // ─────────────────────────────────────────────────────────────────────────────
         // Action handlers (dipanggil dari render kolom)
         // ─────────────────────────────────────────────────────────────────────────────
+
+        function openModalDoc(row) {
+            $('#doc_contract_id').val(row.id);
+            $('#doc_emp_nama').text(row.nama);
+            $('#doc_emp_npk').text(row.npk);
+            $('#doc_emp_bagian').text(row.bagian || '—');
+            $('#doc_contract_ke').text(row.contract_ke || '—');
+            $('#doc_contract_periode').text(fmtDate(row.start_date) + ' s/d ' + fmtDate(row.end_date));
+            $('#doc_contract_status_badge').html(statusBadge(row.status_contract));
+
+            // Reset file input & UI
+            $('#inp_doc_file').val('');
+            $('#lbl_doc_file').text('Pilih berkas dokumen…');
+            $('#doc_upload_progress').addClass('d-none');
+
+            // Cek apakah file sudah ada
+            if (row.file_contract) {
+                $('#doc_existing_box').removeClass('d-none');
+                $('#doc_empty_box').addClass('d-none');
+                $('#doc_file_name').text(row.file_name || row.file_contract.split('/').pop());
+
+                const fileUrl = row.file_contract_url || ("{{ url('employees-contract/file') }}/" + row.id);
+                $('#btnDocPreview').attr('href', fileUrl);
+                $('#btnDocDownload').attr('href', fileUrl);
+
+                $('#doc_upload_title').text('Ganti Dokumen Kontrak');
+            } else {
+                $('#doc_existing_box').addClass('d-none');
+                $('#doc_empty_box').removeClass('d-none');
+                $('#doc_upload_title').text('Unggah Dokumen Kontrak');
+            }
+
+            // Atur tampilan berdasarkan hak akses edit user
+            if (row.can_edit) {
+                $('#btnDocDelete').removeClass('d-none');
+                $('#doc_upload_wrapper').removeClass('d-none');
+                $('#btnSubmitUploadDoc').removeClass('d-none');
+                $('#doc_readonly_notice').addClass('d-none');
+            } else {
+                $('#btnDocDelete').addClass('d-none');
+                $('#doc_upload_wrapper').addClass('d-none');
+                $('#btnSubmitUploadDoc').addClass('d-none');
+                $('#doc_readonly_notice').removeClass('d-none');
+            }
+
+            $('#modalUploadContract').modal('show');
+        }
+
+        // Custom file input label update
+        $(document).on('change', '#inp_doc_file', function () {
+            const fileName = $(this).val().split('\\').pop();
+            $('#lbl_doc_file').text(fileName || 'Pilih berkas dokumen…');
+        });
+
+        // Submit Upload Dokumen Kontrak
+        $(document).on('click', '#btnSubmitUploadDoc', function () {
+            const fileInput = $('#inp_doc_file')[0];
+            const file = fileInput.files[0];
+            const contractId = $('#doc_contract_id').val();
+
+            if (!file) {
+                showToast('Silakan pilih berkas dokumen terlebih dahulu.', 'warning');
+                return;
+            }
+
+            // Validasi ukuran max 10MB (10 * 1024 * 1024 bytes)
+            if (file.size > 10 * 1024 * 1024) {
+                showToast('Ukuran berkas melebihi batas maksimal 10 MB.', 'danger');
+                return;
+            }
+
+            const fd = new FormData();
+            fd.append('file_contract', file);
+            fd.append('_token', CSRF);
+
+            const btn = $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>Mengunggah…');
+            $('#doc_upload_progress').removeClass('d-none');
+
+            fetch(ROUTES.uploadDoc + '/' + contractId, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(async r => {
+                let data;
+                try {
+                    data = await r.json();
+                } catch (e) {
+                    data = { success: false, message: 'Respon server tidak valid (' + r.status + ')' };
+                }
+                return data;
+            })
+            .then(res => {
+                btn.prop('disabled', false).html('<i class="fas fa-upload mr-1"></i>Unggah Berkas');
+                $('#doc_upload_progress').addClass('d-none');
+
+                showToast(res.message, res.success ? 'success' : 'danger');
+                if (res.success) {
+                    $('#modalUploadContract').modal('hide');
+                    reloadTable();
+                }
+            })
+            .catch(err => {
+                btn.prop('disabled', false).html('<i class="fas fa-upload mr-1"></i>Unggah Berkas');
+                $('#doc_upload_progress').addClass('d-none');
+                showToast('Terjadi kesalahan jaringan: ' + err.message, 'danger');
+            });
+        });
+
+        // Hapus Dokumen Kontrak
+        $(document).on('click', '#btnDocDelete', function () {
+            const contractId = $('#doc_contract_id').val();
+            const empName = $('#doc_emp_nama').text();
+
+            Swal.fire({
+                title: 'Hapus Dokumen Kontrak?',
+                html: `Dokumen kontrak untuk <strong>${empName}</strong> akan dihapus.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e74a3b',
+                confirmButtonText: '<i class="fas fa-trash mr-1"></i> Ya, Hapus',
+                cancelButtonText: 'Batal',
+                reverseButtons: true,
+            }).then(result => {
+                if (!result.isConfirmed) return;
+
+                apiPost(ROUTES.deleteDoc + '/' + contractId, {}).then(res => {
+                    showToast(res.message, res.success ? 'success' : 'danger');
+                    if (res.success) {
+                        $('#modalUploadContract').modal('hide');
+                        reloadTable();
+                    }
+                });
+            });
+        });
 
         function openPerpanjang(id, nama, npk, contractKe, salary, allowance, pph21, daily_salary) {
             $('#ext_id').val(id);

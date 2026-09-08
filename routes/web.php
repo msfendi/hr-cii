@@ -209,6 +209,9 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template')->middleware(['auth', 'permission']);
         Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import')->middleware(['auth', 'permission']);
         Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export')->middleware(['auth', 'permission']);
+        Route::post('/upload/{id}',      [EmployeesContractController::class, 'uploadDocument'])->name('employees-contract.upload')->middleware(['auth', 'permission']);
+        Route::post('/delete-file/{id}', [EmployeesContractController::class, 'deleteDocument'])->name('employees-contract.delete-file')->middleware(['auth', 'permission']);
+        Route::get('/file/{id}',         [EmployeesContractController::class, 'viewDocument'])->name('employees-contract.file')->middleware(['auth', 'permission']);
         Route::get('/export-all',       [EmployeesContractController::class, 'exportAll'])->name('employees-contract.export-all');
     });
 
