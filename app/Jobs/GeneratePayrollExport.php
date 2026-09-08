@@ -180,7 +180,8 @@ class GeneratePayrollExport implements ShouldQueue
                 'pp.end_date',
                 'p.TKK',
                 'p.TMK',
-                'emp.IS_STAFF',
+                'prd.employee_staff as IS_STAFF',
+                'prd.employee_expat as IS_EXPAT',
                 'd.IS_SEWING',
                 'p.KETERANGAN',
 

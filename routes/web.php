@@ -113,6 +113,7 @@ use App\Http\Controllers\PdfDocumentController;
 use App\Http\Controllers\PdfExtractionController;
 use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
+use App\Http\Controllers\QcInsentifMasterController;
 
 /*
 |--------------------------------------------------------------------------
@@ -1288,6 +1289,19 @@ Route::prefix('chatbot')->name('chatbot.')->middleware(['auth'])->group(function
     Route::post('/sessions/{chatbotSession}/send', [ChatbotController::class, 'send'])->name('sessions.send');
     Route::delete('/sessions/{chatbotSession}', [ChatbotController::class, 'destroySession'])->name('sessions.destroy');
 });
+
+
+Route::get('qc-insentif-master/index', [QcInsentifMasterController::class, 'index'])->name('qc-insentif-master.index')->middleware(['auth', 'permission']);
+Route::get('qc-insentif-master/create', [QcInsentifMasterController::class, 'create'])->name('qc-insentif-master.create')->middleware(['auth', 'permission']);
+Route::post('qc-insentif-master/store', [QcInsentifMasterController::class, 'store'])->name('qc-insentif-master.store')->middleware(['auth', 'permission']);
+Route::get('qc-insentif-master/delete/{id}', [QcInsentifMasterController::class, 'destroy'])->name('qc-insentif-master.delete')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/edit/{id}', [QcInsentifMasterController::class, 'edit'])->name('qc-insentif-master.edit')->middleware(['auth', 'permission']);
+Route::post('qc-insentif-master/import', [QcInsentifMasterController::class, 'import'])->name('qc-insentif-master.import')->middleware(['auth', 'permission']);
+Route::get('qc-insentif-master/export', [QcInsentifMasterController::class, 'export'])->name('qc-insentif-master.export')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/template', [QcInsentifMasterController::class, 'template'])->name('qc-insentif-master.template')->middleware(['auth', 'permission']);
+Route::post('/qc-insentif-master/import', [QcInsentifMasterController::class, 'import'])->name('qc-insentif-master.import')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/{period}/check', [QcInsentifMasterController::class, 'check'])->name('qc-insentif-master.check')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/{period}/data', [QcInsentifMasterController::class, 'getData'])->name('qc-insentif-master.data')->middleware(['auth', 'permission']);
 
 
 

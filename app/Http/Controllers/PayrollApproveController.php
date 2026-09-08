@@ -269,12 +269,18 @@ class PayrollApproveController extends Controller
     |--------------------------------------------------------------------------
     | BASE QUERY PAYROLL
     |--------------------------------------------------------------------------
+    | DEPT di-join dari union BIODATA (bio.id_dept), BUKAN dari
+    | prd.employee_dept langsung -- supaya DEPARTEMENT/IS_SEWING
+    | selalu ikut data dept karyawan yang sebenarnya (aktif/keluar),
+    | termasuk untuk karyawan resign/mangkir yang employee_dept di
+    | payroll_run_details-nya bisa saja tidak sinkron.
+    |--------------------------------------------------------------------------
     */
         $baseQuery = DB::table('payroll_run_details as prd')
             ->leftJoinSub($union, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
-            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'bio.id_dept')
             ->leftJoinSub(
                 DB::table('payroll_masters')->select('npk', 'bank_name', 'bank_account'),
                 'pm',
@@ -407,7 +413,7 @@ class PayrollApproveController extends Controller
     |--------------------------------------------------------------------------
     */
         // 🔥 Role yang wajib di-split berdasarkan maksimum total_salary per file
-        $splitRoles      = ['STAFF', 'NON STAFF'];
+        $splitRoles      = ['STAFF', 'SEWING', 'NON SEWING', 'NON STAFF'];
         $maxTotalPerFile = 3000000000; // 3 Milyar
 
         foreach ($roleFilters as $role => $filter) {

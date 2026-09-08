@@ -204,12 +204,15 @@
                                             @if($period->approve_status == 'finish' && $period->export_status == 'approved' && (auth()->user()->hasRole('Accounting') || auth()->user()->hasRole('Admin')))
                                                 @php
                                                     // 🔥 HARDCODE DULU: hanya Accounting/Admin yang lihat section ini,
-                                                    // jadi cukup tampilkan role STAFF & NON_STAFF saja.
+                                                    // jadi cukup tampilkan role STAFF, SEWING, NON_SEWING & NON_STAFF saja.
                                                     // file_bank_active/resign/mangkir disimpan sebagai JSON per role, contoh:
-                                                    // {"ALL":"...csv","STAFF":"...csv","NON_STAFF":["...PART1.csv","...PART2.csv"]}
+                                                    // {"ALL":"...csv","STAFF":"...csv","SEWING":"...csv",
+                                                    //  "NON_SEWING":"...csv","NON_STAFF":["...PART1.csv","...PART2.csv"]}
                                                     $bankGroups = [
-                                                        'STAFF'     => 'Staff',
-                                                        'NON_STAFF' => 'Non Staff',
+                                                        'STAFF'      => 'Staff',
+                                                        'SEWING'     => 'Sewing',
+                                                        'NON_SEWING' => 'Non Sewing',
+                                                        'NON_STAFF'  => 'Non Staff',
                                                     ];
                                                     $bankStatuses = [
                                                         'AKTIF'   => ['label' => 'Active',  'class' => 'btn-primary',   'source' => $period->file_bank_active],
@@ -387,6 +390,7 @@
                                         <th>Long Service</th>
                                         <th>Allowance</th>
                                         <th>Sewing Insentif</th>
+                                        <th>QC Insentif</th>
                                         <th>Pad Print Insentif</th>
                                         <th>Cutting Insentif</th>
                                         <th>Heat Insentif</th>
@@ -409,6 +413,7 @@
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -1078,6 +1083,11 @@ $(document).on('click','.btn-export',function(e){
                     return formatRupiahColored(data ?? 0, row.components?.sewing_insentif?.type);
                 }
             },
+            { data:'components.qc_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.qc_insentif?.type);
+                }
+            },
             { data:'components.pad_insentif.amount', defaultContent:0, render:function(data,type,row){
                     if(type !== 'display'){ return data ?? 0; }
                     return formatRupiahColored(data ?? 0, row.components?.pad_insentif?.type);
@@ -1241,9 +1251,9 @@ $(document).on('click','.btn-export',function(e){
                 4,5,6,7,8,
                 9,10,11,12,
                 13,
-                14,15,
-                16,17,18,19,20,
-                21,22,23,24
+                14,15,16,
+                17,18,19,20,21,
+                22,23,24,25
             ];
 
             cols.forEach(function(colIndex){

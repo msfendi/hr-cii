@@ -259,6 +259,7 @@
                                     <th>Long Service</th>
                                     <th>Allowance</th>
                                     <th>Sewing Insentif</th>
+                                    <th>QC Insentif</th>
                                     <th>Pad Print Insentif</th>
                                     <th>Cutting Insentif</th>
                                     <th>Heat Insentif</th>
@@ -288,6 +289,7 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -1097,7 +1099,7 @@ buttons: [
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
                 11,12,13,14,15,16,17,18,
-                19,20,21,22,23,24,25,26,27,28
+                19,20,21,22,23,24,25,26,27,28,29
             ],
 
             format: {
@@ -1274,6 +1276,19 @@ buttons: [
                     }
 
                     return salaryMaskColored(data ?? 0, row.components?.sewing_insentif?.type);
+                }
+            },
+
+            {
+                data:'components.qc_insentif.amount',
+                defaultContent:0,
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMaskColored(data ?? 0, row.components?.qc_insentif?.type);
                 }
             },
 
@@ -1755,19 +1770,20 @@ buttons: [
         {index:10, field:'long_service_allowance'},
         {index:11, field:'allowance'},
         {index:12, field:'sewing_insentif'},
-        {index:13, field:'pad_insentif'},
-        {index:14, field:'cutting_insentif'},
-        {index:15, field:'heat_insentif'},
-        {index:16, field:'sixs_insentif'},
-        {index:17, field:'night_shift_compensation'},
-        {index:18, field:'adjusment'},
-        {index:19, field:'bpjs_kesehatan'},
-        {index:20, field:'bpjs_ketenagakerjaan'},
-        {index:21, field:'pph_21'},
-        {index:22, field:'pph_21_deduction'},
-        {index:23, field:'absence_deduction'},
-        {index:24, field:'late_deduction'},
-        {index:25, field:'work_leave_deduction'}
+        {index:13, field:'qc_insentif'},
+        {index:14, field:'pad_insentif'},
+        {index:15, field:'cutting_insentif'},
+        {index:16, field:'heat_insentif'},
+        {index:17, field:'sixs_insentif'},
+        {index:18, field:'night_shift_compensation'},
+        {index:19, field:'adjusment'},
+        {index:20, field:'bpjs_kesehatan'},
+        {index:21, field:'bpjs_ketenagakerjaan'},
+        {index:22, field:'pph_21'},
+        {index:23, field:'pph_21_deduction'},
+        {index:24, field:'absence_deduction'},
+        {index:25, field:'late_deduction'},
+        {index:26, field:'work_leave_deduction'}
     ];
 
     currencyFields.forEach(function(cfg){

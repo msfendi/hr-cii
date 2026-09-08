@@ -154,7 +154,7 @@ class PayrollDetailSewingSheet
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
-            ->where('bio.IS_STAFF', 0)
+            ->where('prd.employee_staff', 0)
             ->where('d.IS_SEWING', 0)
             ->where(function ($query) {
                 $query->whereNull('bio.TKK')
@@ -181,6 +181,7 @@ class PayrollDetailSewingSheet
             'cutting_insentif',
             'heat_insentif',
             'sixs_insentif',
+            'qc_insentif',
             'night_shift_compensation',
             'adjusment',
             'bpjs_kesehatan',
@@ -240,6 +241,7 @@ class PayrollDetailSewingSheet
             'Cutting Insentif',
             'Heat Seal Insentif',
             'Six S Insentif',
+            'QC Insentif',
             'Night Shift Compensation',
             'Adjusment',
             'BPJS Kesehatan',

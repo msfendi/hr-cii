@@ -63,4 +63,39 @@ return [
         'model'   => env('GEMINI_MODEL', 'gemini-3.5-flash'),
     ],
 
+    'router9' => [
+        'api_key' => env('ROUTER9_API_KEY'),
+        'model'   => env('ROUTER9_MODEL', 'router-default'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI Provider — Import (Packing List)
+    |--------------------------------------------------------------------------
+    |
+    | Sumber tunggal daftar pilihan AI yang muncul di form import (baik
+    | Import PL MDS System maupun Import Final Packing List / PPIC).
+    | Set 'enabled' => false untuk MENYEMBUNYIKAN sebuah provider dari
+    | pilihan tanpa perlu menyentuh view. 'order' menentukan urutan tampil.
+    | Value 'enabled' bisa dikontrol lewat .env supaya tidak perlu deploy
+    | ulang kode hanya untuk mematikan satu provider.
+    |
+    */
+    'ai_providers' => [
+        'router9' => [
+            // Pintu utama: semua request lewat sini, 9 Router yang menentukan
+            // AI/model mana yang dipakai di baliknya. Enabled true by default
+            // supaya jadi satu-satunya pilihan yang tampil di form.
+            'enabled'     => env('AI_PROVIDER_ROUTER9_ENABLED', true),
+            'order'       => 1,
+            'label'       => '9 Router',
+            'description' => 'Pintu utama — AI yang dipakai ditentukan otomatis oleh 9 Router.',
+        ],
+    ],
+
+    'ai_import' => [
+        // Jumlah baris per request AI, kecilkan jika file besar / token terbatas
+        'chunk_size' => env('AI_IMPORT_CHUNK_SIZE', 25),
+    ],
+
 ];

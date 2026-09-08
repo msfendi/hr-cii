@@ -16,6 +16,9 @@ return new class extends Migration
             $table->foreignId('run_id')->constrained('payroll_runs');
             $table->string('employee_npk');
             $table->string('employee_name');
+            $table->string('employee_dept');
+            $table->string('employee_staff');
+            $table->string('employee_expat');
 
             $table->json('components'); // hasil komponen payroll
             $table->decimal('total_salary', 18, 2);

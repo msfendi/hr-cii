@@ -1,4 +1,80 @@
 <!-- Topbar -->
+<style>
+    .ai-assistant-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 18px;
+        border-radius: 50px;
+        background: linear-gradient(135deg, #6a4cff 0%, #a24bff 45%, #ff4ccb 100%);
+        background-size: 200% 200%;
+        color: #fff !important;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-decoration: none !important;
+        box-shadow: 0 4px 14px rgba(122, 74, 255, 0.4);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background-position 0.4s ease;
+        animation: ai-btn-gradient 4s ease infinite;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .ai-assistant-btn:hover,
+    .ai-assistant-btn:focus {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(122, 74, 255, 0.55);
+        color: #fff !important;
+        background-position: 100% 50%;
+    }
+
+    .ai-assistant-btn i {
+        font-size: 1rem;
+        animation: ai-btn-sparkle 1.8s ease-in-out infinite;
+    }
+
+    .ai-assistant-btn .ai-btn-text {
+        white-space: nowrap;
+    }
+
+    .ai-assistant-btn::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -75%;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+        transform: skewX(-20deg);
+        animation: ai-btn-shine 3s ease-in-out infinite;
+    }
+
+    @keyframes ai-btn-gradient {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    @keyframes ai-btn-sparkle {
+        0%, 100% { transform: scale(1) rotate(0deg); }
+        50% { transform: scale(1.15) rotate(8deg); }
+    }
+
+    @keyframes ai-btn-shine {
+        0% { left: -75%; }
+        50% { left: 125%; }
+        100% { left: 125%; }
+    }
+
+    @media (max-width: 575.98px) {
+        .ai-assistant-btn .ai-btn-text {
+            display: none;
+        }
+        .ai-assistant-btn {
+            padding: 8px 12px;
+        }
+    }
+</style>
+
 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
 
     <!-- Sidebar Toggle (Topbar) -->
@@ -15,6 +91,14 @@
 
     <!-- Topbar Navbar -->
     <ul class="navbar-nav ml-auto">
+
+        <!-- Nav Item - AI Assistant -->
+        <li class="nav-item d-flex align-items-center mr-2">
+            <a href="{{ route('chatbot.index') }}" class="ai-assistant-btn">
+                <i class="fas fa-robot"></i>
+                <span class="ai-btn-text">AI Assistant</span>
+            </a>
+        </li>
 
         <!-- Nav Item - Search Dropdown (Visible Only XS) -->
         <li class="nav-item dropdown no-arrow d-sm-none">

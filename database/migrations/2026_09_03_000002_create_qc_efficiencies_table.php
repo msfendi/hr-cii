@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('qc_efficiencies', function (Blueprint $table) {
             $table->id();
             $table->integer('line_number');
+            $table->string('buyer')->nullable();
             $table->unsignedBigInteger('period_id');
             $table->float('efficiency')->nullable();
             $table->date('date');

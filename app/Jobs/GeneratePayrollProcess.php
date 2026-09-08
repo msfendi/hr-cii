@@ -1097,6 +1097,9 @@ END AS special_overtime_hours
         $sewingInsentifComponent = PayrollComponent::where('code', 'sewing_insentif')->first();
         $sewingInsentifFormula = json_decode($sewingInsentifComponent->formula, true);
 
+        $qcInsentifComponent = PayrollComponent::where('code', 'qc_insentif')->first();
+        $qcInsentifFormula = json_decode($qcInsentifComponent->formula, true);
+
         $cuttingInsentifComponent = PayrollComponent::where('code', 'cutting_insentif')->first();
         $cuttingInsentifFormula = json_decode($cuttingInsentifComponent->formula, true);
 
@@ -1739,6 +1742,398 @@ END AS special_overtime_hours
                                 }
                             }
                         }
+                    } else if ($component->code === 'qc_insentif') {
+                        $assignmentNpk = DB::table('employee_qc_assignments as ela')
+                            ->select('ela.npk', 'ela.role')
+                            ->where('ela.period_id', $period->id)
+                            ->where('ela.npk', $employee->NPK)
+                            ->distinct()
+                            ->get();
+
+                        $tkkDate = !empty($employee->TKK)
+                            ? Carbon::parse($employee->TKK)->format('Y-m-d')
+                            : null;
+
+                        $amount = 0;
+
+                        /*
+                        |----------------------------------------------------
+                        | LOAD THRESHOLD
+                        |----------------------------------------------------
+                        */
+                        $thresholds = DB::table('insentif_thresholds')
+                            ->where('insentif_type', 'QC')
+                            ->where('type', 'Percentage')
+                            ->pluck('minimum', 'days');
+
+                        $getMinEfficiency = function ($dayIndex) use ($thresholds) {
+
+                            if (isset($thresholds[$dayIndex])) {
+                                return $thresholds[$dayIndex];
+                            }
+
+                            return $thresholds->max();
+                        };
+
+                        // Validasi overtime pakai data yang sudah di-prefetch
+                        // sebelum loop (lihat $isValidOvertimeFor).
+                        $isValidOvertime = function ($date) use ($employee, $isValidOvertimeFor) {
+                            return $isValidOvertimeFor($employee->NPK, $date);
+                        };
+
+                        /*
+                        |----------------------------------------------------
+                        | OPERATOR
+                        |----------------------------------------------------
+                        | SPV dipindahkan ke cabang CHIEF/QA (section-based)
+                        | karena formula QC SPV = (Total QC Incentive 1 Section
+                        | / Total Line) * 50%, bukan per-line seperti Operator.
+                        |----------------------------------------------------
+                        */
+                        $lineViolations = 0;
+                        foreach ($assignmentNpk as $assignment) {
+                            if (empty($assignment->role)) {
+                                continue;
+                            }
+                            if ($assignment->role == 'operator') {
+
+                                preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
+                                $defaultLine = $matches[0] ?? null;
+
+                                $lineefficiencies = DB::table('employee_qc_assignments as ela')
+                                    ->leftJoin('qc_efficiencies as le', function ($join) {
+                                        $join->on('le.period_id', '=', 'ela.period_id')
+                                            ->on('le.line_number', '=', 'ela.line_number')
+                                            ->on('le.date', '=', 'ela.start_date');
+                                    })
+
+                                    ->leftJoinSub(
+                                        DB::table('employee_qc_assignments')
+                                            ->select(
+                                                'period_id',
+                                                'line_number',
+                                                'start_date',
+                                                DB::raw('MAX(work_hours) as max_work_hours')
+                                            )
+                                            ->groupBy(
+                                                'period_id',
+                                                'line_number',
+                                                'start_date'
+                                            ),
+                                        'max_wh',
+                                        function ($join) {
+                                            $join->on('max_wh.period_id', '=', 'ela.period_id')
+                                                ->on('max_wh.line_number', '=', 'ela.line_number')
+                                                ->on('max_wh.start_date', '=', 'ela.start_date');
+                                        }
+                                    )
+
+                                    ->where('ela.period_id', $period->id)
+                                    ->where('ela.npk', $employee->NPK)
+                                    ->whereBetween('le.date', [$period->start_date, $period->end_date])
+
+                                    ->select(
+                                        'ela.npk',
+                                        'le.line_number',
+                                        'le.efficiency',
+                                        'le.date',
+                                        'ela.work_hours',
+                                        'max_wh.max_work_hours'
+                                    )
+
+                                    ->orderBy('le.date')
+                                    ->get();
+
+                                // NOTE: reuses sewing_violations (sama seperti Line Insentif)
+                                // karena belum ada tabel violations khusus QC.
+                                // Cabang ini sekarang hanya menangani role 'operator'
+                                // (SPV sudah dipindahkan ke cabang CHIEF/QA di bawah).
+                                $lineViolations = ($sewingViolationsByDept[$employee->ID_DEPT] ?? collect())->count();
+
+                                foreach ($lineefficiencies as $row) {
+
+                                    if ($tkkDate && $row->date >= $tkkDate) {
+                                        continue;
+                                    }
+
+                                    if (!$isValidOvertime($row->date)) {
+                                        continue;
+                                    }
+
+                                    // CUTOFF: jika QC efficiency line/hari ini > 2%,
+                                    // insentif untuk line/hari tersebut 0 (bukan
+                                    // dihitung dari tabel tier seperti biasa).
+                                    $lineInsentif = ($row->efficiency > 2)
+                                        ? 0
+                                        : $this->getInsentifByDefectRate($row->efficiency, $qcInsentifFormula) * $row->work_hours / $row->max_work_hours;
+
+                                    $amount += $this->calculateRoleSewingInsentif(
+                                        $assignment->role,
+                                        'qc',
+                                        $lineInsentif,
+                                        1,
+                                        $lineViolations,
+                                        $employee->violation_percentage
+                                    );
+                                }
+                            } else {
+
+                                /*
+                                |--------------------------------------------
+                                | CHIEF / QA / SPV (SECTION-BASED)
+                                |--------------------------------------------
+                                | SPV masuk ke sini karena formula QC SPV
+                                | berbasis Total QC Incentive dalam 1 Section
+                                | dibagi Total Line (sama seperti Chief & QA).
+                                |--------------------------------------------
+                                */
+                                $validRoles = ['chief', 'qa', 'spv'];
+
+                                if (!in_array($assignment->role, $validRoles)) {
+                                    continue;
+                                }
+
+                                if ($assignment->role === 'qa') {
+
+                                    /*
+                                    |----------------------------------------
+                                    | QA: line ditentukan dari kolom BUYER di
+                                    | employee_qc_assignments (bukan lagi dari
+                                    | line_setup CSV).
+                                    |
+                                    | Tiap row assignment qa (1 row = 1 tanggal)
+                                    | punya buyer sendiri, mis. tanggal 1 buyer
+                                    | = "muji". Line & jumlahLine untuk tanggal
+                                    | itu diambil dari qc_efficiencies pada
+                                    | tanggal yang sama dengan buyer yang sama
+                                    | (bukan dari daftar line manual).
+                                    |----------------------------------------
+                                    */
+                                    $qaAssignments = DB::table('employee_qc_assignments')
+                                        ->where('npk', $employee->NPK)
+                                        ->where('period_id', $period->id)
+                                        ->where('role', 'qa')
+                                        ->whereBetween('start_date', [
+                                            $period->start_date,
+                                            $period->end_date
+                                        ])
+                                        ->select('start_date as date', 'buyer')
+                                        ->orderBy('start_date')
+                                        ->get();
+
+                                    if ($qaAssignments->isEmpty()) {
+                                        continue;
+                                    }
+
+                                    // Untuk tiap tanggal, ambil line-line di
+                                    // qc_efficiencies yang buyer-nya sama dengan
+                                    // buyer assignment tanggal itu. Sekalian
+                                    // kumpulkan union line_number (dipakai untuk
+                                    // lineViolations, sama seperti sebelumnya).
+                                    $qaByDate = collect([]);
+                                    $allLineNumbers = collect([]);
+
+                                    foreach ($qaAssignments as $qaAssignment) {
+
+                                        if (empty($qaAssignment->buyer)) {
+                                            continue;
+                                        }
+
+                                        $linesOfDay = DB::table('qc_efficiencies')
+                                            ->where('period_id', $period->id)
+                                            ->where('date', $qaAssignment->date)
+                                            ->where('buyer', $qaAssignment->buyer)
+                                            ->get();
+
+                                        if ($linesOfDay->isEmpty()) {
+                                            continue;
+                                        }
+
+                                        $qaByDate->push((object) [
+                                            'date'  => $qaAssignment->date,
+                                            'lines' => $linesOfDay,
+                                        ]);
+
+                                        $allLineNumbers = $allLineNumbers->merge($linesOfDay->pluck('line_number'));
+                                    }
+
+                                    if ($qaByDate->isEmpty()) {
+                                        continue;
+                                    }
+
+                                    $allLineNumbers = $allLineNumbers->unique()->values()->all();
+
+                                    // NOTE: reuses sewing_violations, sama seperti chief/spv,
+                                    // cuma filter line-nya pakai gabungan seluruh line hasil
+                                    // pencarian buyer sepanjang periode (IN), bukan range
+                                    // section (BETWEEN).
+                                    $lineViolations = DB::table('sewing_violations')
+                                        ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
+                                        ->whereBetween('sewing_violations.tanggal', [
+                                            $period->start_date,
+                                            $period->end_date
+                                        ])
+                                        ->where('d.DEPARTEMENT', 'like', 'LINE %')
+                                        ->whereIn(
+                                            DB::raw("CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)"),
+                                            $allLineNumbers
+                                        )
+                                        ->count();
+
+                                    $collectionDay = collect([]);
+                                    $collectionLines = collect([]);
+
+                                    foreach ($qaByDate as $day) {
+
+                                        if ($tkkDate && $day->date >= $tkkDate) {
+                                            continue;
+                                        }
+
+                                        if (!$isValidOvertime($day->date)) {
+                                            continue;
+                                        }
+
+                                        $totalLineInsentif = 0;
+
+                                        foreach ($day->lines as $line) {
+
+                                            // CUTOFF: jika QC efficiency line ini > 2%,
+                                            // line ini tidak menyumbang insentif (0).
+                                            $totalLineInsentif += ($line->efficiency > 2)
+                                                ? 0
+                                                : $this->getInsentifByDefectRate($line->efficiency, $qcInsentifFormula);
+
+                                            if ($totalLineInsentif <= 0) {
+                                                continue;
+                                            }
+
+                                            $collectionLines->push($totalLineInsentif);
+                                        }
+
+                                        // jumlahLine dihitung PER TANGGAL, dari
+                                        // jumlah line di qc_efficiencies yang
+                                        // buyer-nya sama dengan buyer assignment
+                                        // tanggal itu.
+                                        $jumlahLine = $day->lines->count();
+
+                                        $amount += $this->calculateRoleSewingInsentif(
+                                            $assignment->role,
+                                            'qc',
+                                            $totalLineInsentif,
+                                            $jumlahLine,
+                                            $lineViolations,
+                                            $employee->violation_percentage
+                                        );
+
+                                        $collectionDay->push($amount);
+                                    }
+                                } else {
+
+                                    $section = DB::table('sections')
+                                        ->whereRaw('id = ?', [(int) $employee->SECTION])
+                                        ->select('line_start', 'line_end')
+                                        ->first();
+
+                                    if (!$section) {
+                                        continue;
+                                    }
+
+                                    $lineStart = $section->line_start;
+                                    $lineEnd   = $section->line_end;
+
+                                    $grouped = DB::table('employee_qc_assignments as ela')
+                                        ->join('qc_efficiencies as le', function ($join) {
+                                            $join->on('le.period_id', '=', 'ela.period_id')
+                                                ->on('le.date', '=', 'ela.start_date');
+                                        })
+
+                                        ->where('ela.npk', $employee->NPK)
+                                        ->where('ela.period_id', $period->id)
+
+                                        ->whereBetween('ela.start_date', [
+                                            $period->start_date,
+                                            $period->end_date
+                                        ])
+
+                                        ->whereBetween('le.line_number', [
+                                            $lineStart,
+                                            $lineEnd
+                                        ])
+
+                                        ->select(
+                                            'le.date'
+                                        )
+
+                                        ->groupBy(
+                                            'le.date'
+                                        )
+
+                                        ->orderBy('le.date')
+                                        ->get();
+
+                                    // NOTE: reuses sewing_violations (sama seperti Line Insentif)
+                                    // karena belum ada tabel violations khusus QC.
+                                    $lineViolations = $countSewingViolationsForLineRange($lineStart, $lineEnd);
+
+                                    $collectionDay = collect([]);
+                                    $collectionLines = collect([]);
+
+                                    // $jumlahLine = DB::table('qc_efficiencies')
+                                    //     ->where('period_id', $period->id)
+                                    //     ->whereBetween('date', [$period->start_date, $period->end_date])
+                                    //     ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                    //     ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
+                                    //     ->get();
+
+                                    $jumlahLine = $lineEnd - $lineStart + 1;
+
+                                    foreach ($grouped as $day) {
+
+                                        if ($tkkDate && $day->date >= $tkkDate) {
+                                            continue;
+                                        }
+
+                                        if (!$isValidOvertime($day->date)) {
+                                            continue;
+                                        }
+
+                                        $lines = DB::table('qc_efficiencies')
+                                            ->where('period_id', $period->id)
+                                            ->where('date', $day->date)
+                                            ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                            ->get();
+
+                                        $totalLineInsentif = 0;
+
+                                        foreach ($lines as $line) {
+
+                                            // CUTOFF: jika QC efficiency line ini > 2%,
+                                            // line ini tidak menyumbang insentif (0).
+                                            $totalLineInsentif += ($line->efficiency > 2)
+                                                ? 0
+                                                : $this->getInsentifByDefectRate($line->efficiency, $qcInsentifFormula);
+
+                                            if ($totalLineInsentif <= 0) {
+                                                continue;
+                                            }
+
+                                            $collectionLines->push($totalLineInsentif);
+                                        }
+
+                                        $amount += $this->calculateRoleSewingInsentif(
+                                            $assignment->role,
+                                            'qc',
+                                            $totalLineInsentif,
+                                            $jumlahLine,
+                                            $lineViolations,
+                                            $employee->violation_percentage
+                                        );
+
+                                        $collectionDay->push($amount);
+                                    }
+                                }
+                            }
+                        }
                     } else if ($component->code === 'pad_insentif') {
                         $assignments = DB::table('pad_efficiencies')
                             ->where('npk', $employee->NPK)
@@ -2056,12 +2451,14 @@ END AS special_overtime_hours
             }
 
             if (!$isCheck) {
-                $batchSize = 250;
+                $batchSize = 100;
                 $payrollRunDetailRows[] = [
                     'run_id'        => $run->id,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'employee_dept' => $employee->payroll_dept,
+                    'employee_staff' => $employee->IS_STAFF,
+                    'employee_expat' => $employee->IS_EXPAT,
                     'components' => json_encode($componentsWithType),
                     'total_salary'  => $grandTotal,
                     'created_at'    => $now,
@@ -2268,6 +2665,26 @@ END AS special_overtime_hours
 
         foreach ($rules as $threshold => $value) {
             if ($efficiency >= $threshold) {
+                return $value;
+            }
+        }
+
+        return 0;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | QC: arah tier terbalik dari sewing — makin KECIL defect rate makin
+    | BESAR insentif. Formula qc_insentif dibaca sebagai upper-bound tiap
+    | tier, jadi harus ascending + "<=".
+    |--------------------------------------------------------------------------
+    */
+    private function getInsentifByDefectRate($efficiency, $rules)
+    {
+        ksort($rules);
+
+        foreach ($rules as $threshold => $value) {
+            if ($efficiency <= $threshold) {
                 return $value;
             }
         }

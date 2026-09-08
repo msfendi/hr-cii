@@ -530,6 +530,7 @@
                             @php
                                 $labels = [
                                     'sixs_insentif' => '6S Insentif',
+                                    'qc_insentif' => 'QC Insentif',
                                     'night_shift_compensation' => 'Night Shift Compensation',
                                 ];
                                 $label = $labels[$name] ?? ucwords(str_replace('_', ' ', $name));

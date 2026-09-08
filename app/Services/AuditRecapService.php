@@ -33,12 +33,25 @@ use Illuminate\Support\Facades\DB;
  *    fallback (kalau row overtimes tidak ada) pakai payroll_run_details
  *    (employee_dept / employee_name).
  *
+ * OVERRIDE PALING PRIORITAS -- shifts.is_holiday:
+ * - Kalau karyawan punya shift eksplisit di employee_shifts untuk tanggal
+ *   tsb, DAN shift itu sendiri ditandai `shifts.is_holiday = 1`, maka
+ *   karyawan itu LIBUR di tanggal itu: JAM_PAGI & JAM_SIANG TIDAK
+ *   digenerate (tetap null), STATUS = 'LBR'. Ini dicek PALING AWAL di
+ *   buildRow(), SEBELUM overtimes/scan/employee_lates/ijin_meninggalkan_
+ *   pekerjaans sempat dilihat sama sekali -- jadi berlaku mutlak, tidak
+ *   peduli ada data overtime/scan/izin atau tidak, dan tidak peduli
+ *   tanggalnya weekend/weekday/holiday nasional atau bukan. Dipakai untuk
+ *   kasus shift rotasi yang punya "hari libur" sebagai bagian dari pola
+ *   shift itu sendiri (bukan dari kalender weekend/holidays biasa).
+ *
  * ATURAN "TIDAK ADA SCAN" (att_log kosong utk NPK+tanggal tsb, dan tidak ada
  * juga di employee_lates) -- CATATAN: "tidak ada scan" di sini juga mencakup
  * kasus karyawan HANYA punya 1 scan yang jelas merupakan scan pulang (lebih
  * dekat ke jam akhir shift daripada jam mulai shift), karena resolveJamPagi()
  * akan menolak scan seperti itu sebagai kandidat jam masuk (lihat method
- * tsb untuk detail):
+ * tsb untuk detail). Aturan-aturan di bawah ini semua BERADA DI DALAM
+ * kondisi "shift TIDAK ditandai is_holiday" (lihat override di atas):
  * - Kalau JUMLAH_JAM_LEMBUR di overtimes KOSONG/tidak ada row (type='none'):
  *   - Kalau hari itu WEEKEND/holiday DAN karyawan TIDAK punya shift
  *     eksplisit di employee_shifts untuk tanggal itu (jadi pakai shift
@@ -270,118 +283,135 @@ class AuditRecapService
         $shift = $shiftMap[$npk][$dateKey] ?? [
             'work_start' => self::DEFAULT_SHIFT_START,
             'work_end'   => self::DEFAULT_SHIFT_END,
+            'is_holiday' => false,
         ];
 
-        [$type, $value] = $this->classifyOvertime($ot['JUMLAH_JAM_LEMBUR'] ?? null);
-
-        if ($type === 'absent_code') {
-            // CT / P1 / MA / SD / dll -> tidak hadir, jam masuk-pulang null, status = kode apa adanya
+        if ($hasExplicitShift && $shift['is_holiday']) {
+            // Shift yang di-assign ke karyawan ini pada tanggal ini ditandai
+            // shifts.is_holiday = 1 -> karyawan ini LIBUR hari itu, TIDAK PERLU
+            // digenerate jamnya sama sekali. Ini override PALING PRIORITAS,
+            // dicek SEBELUM apa pun (overtime, scan, dst) -- tidak peduli ada
+            // data overtime/scan atau tidak, dan tidak peduli tanggalnya
+            // weekend/weekday/holiday nasional atau bukan. Override
+            // ijin_meninggalkan_pekerjaans juga TIDAK berlaku di kasus ini
+            // (lihat blok override di bawah, ada di else branch).
             $jamPagi  = null;
             $jamSiang = null;
-            $status   = $value;
-        } elseif ($type === 'none') {
-            // Tidak ada JUMLAH_JAM_LEMBUR sama sekali di overtimes.
-            if ($isDayOff && !$hasExplicitShift) {
-                // Weekend/holiday, TIDAK ADA shift eksplisit di employee_shifts (jadi
-                // karyawan ini secara default TIDAK dijadwalkan kerja di hari libur),
-                // DAN tidak ada data overtime sama sekali -> LIBUR, TIDAK PEDULI
-                // ada/tidaknya scan att_log yang ketemu di tanggal ini.
-                // PENTING: kalau di sini kita masih resolve scan seperti biasa, scan
-                // yang ketemu bisa jadi cuma "nyasar" dari checkout shift MALAM hari
-                // sebelumnya (misal shift malam Jumat yang baru checkout jam 03:xx
-                // dinihari Sabtu) -- itu bukan jam masuk asli untuk hari Sabtu ini.
-                // Jadi begitu isDayOff + tidak ada shift eksplisit + tidak ada overtime,
-                // langsung LBR tanpa sempat cek att_log sama sekali.
-                //
-                // CATATAN: kalau karyawan MEMANG dijadwalkan kerja di weekend/holiday
-                // (ada row di employee_shifts, misal shift rotasi security), aturan LBR
-                // ini TIDAK berlaku -- turun ke else branch di bawah, diproses seperti
-                // hari kerja biasa (cek scan asli / estimasi TS).
+            $status   = 'LBR';
+        } else {
+            [$type, $value] = $this->classifyOvertime($ot['JUMLAH_JAM_LEMBUR'] ?? null);
+
+            if ($type === 'absent_code') {
+                // CT / P1 / MA / SD / dll -> tidak hadir, jam masuk-pulang null, status = kode apa adanya
                 $jamPagi  = null;
                 $jamSiang = null;
-                $status   = 'LBR';
+                $status   = $value;
+            } elseif ($type === 'none') {
+                // Tidak ada JUMLAH_JAM_LEMBUR sama sekali di overtimes.
+                if ($isDayOff && !$hasExplicitShift) {
+                    // Weekend/holiday, TIDAK ADA shift eksplisit di employee_shifts (jadi
+                    // karyawan ini secara default TIDAK dijadwalkan kerja di hari libur),
+                    // DAN tidak ada data overtime sama sekali -> LIBUR, TIDAK PEDULI
+                    // ada/tidaknya scan att_log yang ketemu di tanggal ini.
+                    // PENTING: kalau di sini kita masih resolve scan seperti biasa, scan
+                    // yang ketemu bisa jadi cuma "nyasar" dari checkout shift MALAM hari
+                    // sebelumnya (misal shift malam Jumat yang baru checkout jam 03:xx
+                    // dinihari Sabtu) -- itu bukan jam masuk asli untuk hari Sabtu ini.
+                    // Jadi begitu isDayOff + tidak ada shift eksplisit + tidak ada overtime,
+                    // langsung LBR tanpa sempat cek att_log sama sekali.
+                    //
+                    // CATATAN: kalau karyawan MEMANG dijadwalkan kerja di weekend/holiday
+                    // (ada row di employee_shifts, misal shift rotasi security), aturan LBR
+                    // ini TIDAK berlaku -- turun ke else branch di bawah, diproses seperti
+                    // hari kerja biasa (cek scan asli / estimasi TS).
+                    $jamPagi  = null;
+                    $jamSiang = null;
+                    $status   = 'LBR';
+                } else {
+                    $realJamPagi = $this->resolveJamPagi($npk, $dateKey, $shift, $lateMap, $scanMap);
+
+                    if ($realJamPagi !== null) {
+                        // Ada scan asli / izin terlambat -> hadir normal, jam dihitung seperti biasa.
+                        $jamPagi  = $this->normalizeArrival($realJamPagi, $shift['work_start']);
+                        $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
+                        $status   = null;
+                    } else {
+                        // Hari kerja biasa, tidak ada scan & tidak ada data lembur -> tetap
+                        // digenerate mengikuti jam shift-nya (estimasi), sama seperti kasus
+                        // numeric/half_day. STATUS tetap ditandai 'TS' sebagai jejak audit
+                        // bahwa jam ini hasil estimasi, bukan dari scan/izin asli.
+                        $jamPagi  = $this->addMinutesToTime($shift['work_start'], -$this->tsJitter());
+                        $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
+                        $status   = 'TS';
+                    }
+                }
             } else {
+                // numeric (lembur) atau half_day ("H") -> ada data lembur/setengah-hari,
+                // kehadiran sudah dikonfirmasi lewat overtimes, jadi jam TETAP digenerate.
                 $realJamPagi = $this->resolveJamPagi($npk, $dateKey, $shift, $lateMap, $scanMap);
 
                 if ($realJamPagi !== null) {
-                    // Ada scan asli / izin terlambat -> hadir normal, jam dihitung seperti biasa.
-                    $jamPagi  = $this->normalizeArrival($realJamPagi, $shift['work_start']);
-                    $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
-                    $status   = null;
+                    $jamPagi = $this->normalizeArrival($realJamPagi, $shift['work_start']);
                 } else {
-                    // Hari kerja biasa, tidak ada scan & tidak ada data lembur -> tetap
-                    // digenerate mengikuti jam shift-nya (estimasi), sama seperti kasus
-                    // numeric/half_day. STATUS tetap ditandai 'TS' sebagai jejak audit
-                    // bahwa jam ini hasil estimasi, bukan dari scan/izin asli.
-                    $jamPagi  = $this->addMinutesToTime($shift['work_start'], -$this->tsJitter());
-                    $jamSiang = $this->addMinutesToTime($shift['work_end'], $this->jitter());
-                    $status   = 'TS';
+                    // Tidak ada scan/izin asli, tapi overtimes sudah konfirmasi hadir -> estimasi
+                    // JAM_PAGI dari jam mulai shift dikurangi random 0-15 menit (tidak pernah "telat").
+                    $jamPagi = $this->addMinutesToTime($shift['work_start'], -$this->tsJitter());
                 }
-            }
-        } else {
-            // numeric (lembur) atau half_day ("H") -> ada data lembur/setengah-hari,
-            // kehadiran sudah dikonfirmasi lewat overtimes, jadi jam TETAP digenerate.
-            $realJamPagi = $this->resolveJamPagi($npk, $dateKey, $shift, $lateMap, $scanMap);
 
-            if ($realJamPagi !== null) {
-                $jamPagi = $this->normalizeArrival($realJamPagi, $shift['work_start']);
-            } else {
-                // Tidak ada scan/izin asli, tapi overtimes sudah konfirmasi hadir -> estimasi
-                // JAM_PAGI dari jam mulai shift dikurangi random 0-15 menit (tidak pernah "telat").
-                $jamPagi = $this->addMinutesToTime($shift['work_start'], -$this->tsJitter());
-            }
+                if ($type === 'numeric') {
+                    $lemburMinutes = $value * 60;
 
-            if ($type === 'numeric') {
-                $lemburMinutes = $value * 60;
-
-                if ($isDayOff) {
-                    // Lembur di hari libur (weekend/holiday): dihitung dari AWAL shift,
-                    // bukan akhir shift -- karena tidak ada "shift normal" yang sudah
-                    // dijalani duluan, jam lembur itu sendiri = total kehadiran hari itu.
-                    // Potongan istirahat 1 jam hanya kalau lembur > 4 jam.
-                    $restMinutes = ($value > self::HOLIDAY_OVERTIME_REST_THRESHOLD_HOURS)
-                        ? self::HOLIDAY_OVERTIME_REST_MINUTES
-                        : 0;
+                    if ($isDayOff) {
+                        // Lembur di hari libur (weekend/holiday): dihitung dari AWAL shift,
+                        // bukan akhir shift -- karena tidak ada "shift normal" yang sudah
+                        // dijalani duluan, jam lembur itu sendiri = total kehadiran hari itu.
+                        // Potongan istirahat 1 jam hanya kalau lembur > 4 jam.
+                        $restMinutes = ($value > self::HOLIDAY_OVERTIME_REST_THRESHOLD_HOURS)
+                            ? self::HOLIDAY_OVERTIME_REST_MINUTES
+                            : 0;
+                        $jamSiang = $this->addMinutesToTime(
+                            $shift['work_start'],
+                            $lemburMinutes + $restMinutes + $this->jitter()
+                        );
+                    } else {
+                        // Lembur di hari kerja biasa: dihitung dari AKHIR shift (shift normal
+                        // sudah dijalani duluan), ditambah istirahat tetap 30 menit.
+                        $jamSiang = $this->addMinutesToTime(
+                            $shift['work_end'],
+                            self::OVERTIME_REST_MINUTES + $lemburMinutes + $this->jitter()
+                        );
+                    }
+                    $status = null;
+                } else { // half_day ("H")
                     $jamSiang = $this->addMinutesToTime(
                         $shift['work_start'],
-                        $lemburMinutes + $restMinutes + $this->jitter()
+                        (self::HALF_DAY_HOURS * 60) + $this->jitter()
                     );
-                } else {
-                    // Lembur di hari kerja biasa: dihitung dari AKHIR shift (shift normal
-                    // sudah dijalani duluan), ditambah istirahat tetap 30 menit.
-                    $jamSiang = $this->addMinutesToTime(
-                        $shift['work_end'],
-                        self::OVERTIME_REST_MINUTES + $lemburMinutes + $this->jitter()
-                    );
+                    $status = $value; // 'H'
                 }
-                $status = null;
-            } else { // half_day ("H")
-                $jamSiang = $this->addMinutesToTime(
-                    $shift['work_start'],
-                    (self::HALF_DAY_HOURS * 60) + $this->jitter()
-                );
-                $status = $value; // 'H'
             }
-        }
 
-        // Override dari ijin_meninggalkan_pekerjaans (kalau NPK+tanggal ini ada
-        // row-nya): JAM_PAGI & STATUS tidak terpengaruh, override ini murni
-        // untuk JAM_SIANG. Lihat getLeavePermissionMap() untuk detail aturannya.
-        $leavePermission = $leavePermissionMap[$npk][$dateKey] ?? null;
-        if ($leavePermission !== null) {
-            if ($leavePermission['action'] === 'use_jam_keluar') {
-                // rencana_kembali NULL (tidak berencana kembali) -> JAM_SIANG
-                // = jam_keluar (jam pulang beneran dari tabel ini).
-                $jamSiang = $this->toHHMM($leavePermission['value']);
-            } elseif ($leavePermission['action'] === 'dash') {
-                // rencana_kembali ADA (berencana kembali) tapi jam_kembali
-                // NULL (belum/tidak kembali) -> JAM_SIANG = '-', cuma JAM_PAGI
-                // yang bermakna ditampilkan.
-                $jamSiang = '-';
+            // Override dari ijin_meninggalkan_pekerjaans (kalau NPK+tanggal ini ada
+            // row-nya): JAM_PAGI & STATUS tidak terpengaruh, override ini murni
+            // untuk JAM_SIANG. Lihat getLeavePermissionMap() untuk detail aturannya.
+            // Sengaja ditaruh di dalam else ini (bukan di luar), supaya TIDAK
+            // berlaku kalau hari itu sudah ditentukan LBR lewat shifts.is_holiday.
+            $leavePermission = $leavePermissionMap[$npk][$dateKey] ?? null;
+            if ($leavePermission !== null) {
+                if ($leavePermission['action'] === 'use_jam_keluar') {
+                    // rencana_kembali NULL (tidak berencana kembali) -> JAM_SIANG
+                    // = jam_keluar (jam pulang beneran dari tabel ini).
+                    $jamSiang = $this->toHHMM($leavePermission['value']);
+                } elseif ($leavePermission['action'] === 'dash') {
+                    // rencana_kembali ADA (berencana kembali) tapi jam_kembali
+                    // NULL (belum/tidak kembali) -> JAM_SIANG = '-', cuma JAM_PAGI
+                    // yang bermakna ditampilkan.
+                    $jamSiang = '-';
+                }
+                // action lain (rencana_kembali ADA dan jam_kembali ADA, artinya
+                // karyawan sudah kembali) -> tidak override apa-apa, JAM_SIANG
+                // tetap hasil perhitungan normal di atas.
             }
-            // action lain (rencana_kembali ADA dan jam_kembali ADA, artinya
-            // karyawan sudah kembali) -> tidak override apa-apa, JAM_SIANG
-            // tetap hasil perhitungan normal di atas.
         }
 
         // Prioritas NAMA_KARYAWAN / SUBDIVISI / DEPT_GROUP: dari overtimes kalau row-nya ada,
@@ -598,14 +628,18 @@ class AuditRecapService
     }
 
     /**
-     * Ambil shift terjadwal per npk+tanggal dari employee_shifts + shifts.
+     * Ambil shift terjadwal per npk+tanggal dari employee_shifts + shifts,
+     * termasuk shifts.is_holiday -- kalau 1, shift ini menandakan hari libur
+     * untuk karyawan yang di-assign ke shift tsb (lihat buildRow()), TIDAK
+     * PEDULI apakah tanggalnya weekend/weekday/holiday-nasional atau bukan.
      */
     protected function getShiftMap(Carbon $start, Carbon $end): array
     {
         $rows = DB::select("
             SELECT es.npk AS npk, es.shift_date AS shift_date,
                    CONVERT(varchar(8), s.work_start, 108) AS work_start,
-                   CONVERT(varchar(8), s.work_end, 108)   AS work_end
+                   CONVERT(varchar(8), s.work_end, 108)   AS work_end,
+                   s.is_holiday AS is_holiday
             FROM employee_shifts es
             INNER JOIN shifts s ON s.id = es.shift_id
             WHERE es.shift_date >= ? AND es.shift_date <= ?
@@ -617,6 +651,7 @@ class AuditRecapService
             $map[$row->npk][$day] = [
                 'work_start' => $row->work_start,
                 'work_end'   => $row->work_end,
+                'is_holiday' => (bool) $row->is_holiday,
             ];
         }
 

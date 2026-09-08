@@ -246,7 +246,7 @@ class PayrollSummarySewingSheet
             })
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->where('prd.run_id', $this->run_id)
-            ->where('bio.IS_STAFF', 0)
+            ->where('prd.employee_staff', 0)
             ->where('d.IS_SEWING', 0)
             ->select(
                 'bio.NPK',

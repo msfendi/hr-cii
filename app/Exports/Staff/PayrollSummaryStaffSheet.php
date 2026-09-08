@@ -211,7 +211,7 @@ class PayrollSummaryStaffSheet
             })
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->where('prd.run_id', $this->run_id)
-            ->where('bio.IS_STAFF', 1)
+            ->where('prd.employee_staff', 1)
             ->select(
                 'bio.NPK',
                 'prd.components',
