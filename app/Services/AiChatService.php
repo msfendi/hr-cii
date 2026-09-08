@@ -249,8 +249,8 @@ class AiChatService
         if (trim($rawSqlResponse) === 'NO_QUERY') {
             return [
                 'content' => 'Maaf, pertanyaan itu belum bisa saya jawab dari data yang tersedia untuk mode RTG saat ini '
-                    . '(atau menyentuh data yang memang tidak boleh diakses, seperti data akun pengguna). '
-                    . 'Coba ajukan dengan cara lain, atau pindah ke mode Global untuk pertanyaan umum.',
+                    . '(atau menyentuh data yang memang tidak boleh diakses, seperti data akun pengguna, dan gaji). '
+                    . 'Coba ajukan dengan cara lain.',
                 'meta' => ['sql' => null],
             ];
         }

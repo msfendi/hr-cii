@@ -93,12 +93,12 @@
     <ul class="navbar-nav ml-auto">
 
         <!-- Nav Item - AI Assistant -->
-        <li class="nav-item d-flex align-items-center mr-2">
+        <!-- <li class="nav-item d-flex align-items-center mr-2">
             <a href="{{ route('chatbot.index') }}" class="ai-assistant-btn">
                 <i class="fas fa-robot"></i>
                 <span class="ai-btn-text">AI Assistant</span>
             </a>
-        </li>
+        </li> -->
 
         <!-- Nav Item - Search Dropdown (Visible Only XS) -->
         <li class="nav-item dropdown no-arrow d-sm-none">

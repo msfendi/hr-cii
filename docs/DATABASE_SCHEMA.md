@@ -44,6 +44,14 @@ introspeksi — supaya AI bisa memakai keduanya untuk menyusun JOIN yang benar.
 - Tanggal Lahir diambil dari kolom TGLLAHIR
 - Table yang tidak diperbolehkan diakses ada di env(CHATBOT_RTG_BLOCKED_TABLES)
 - Kolom yang tidak diperbolehkan diakses ada di env(CHATBOT_RTG_BLOCKED_COLUMNS)
+- File karyawan ada di table pelamar_details (file_pas_foto, file_ijasah, dll) jangan ambil dari chatbot-exports
+- Jika meminta file ambil path dari table, kemudian berikan feedback berupa filenya dari storage
+  Contoh : Tampilkan foto ANISA CAHYANINGRUM
+    - Table : pelamar_details.file_pas_foto
+    - Path Storage : dari env APP_URL (http://hr-cii.test:8080/)
+    - Path table : pelamar/pas_foto/pas_foto_anisa_cahyaningrum_20260709-161005.png
+    - Format URL : APP_URL + Path Table
+    - URL lengkap : http://hr-cii.test:8080/storage/pelamar/pas_foto/pas_foto_anisa_cahyaningrum_20260709-161005.png (Contoh saja, sesuaikan dengan Path Storage dari env)
 
 #Relasi Logis Antar Table :
 
@@ -60,6 +68,7 @@ introspeksi — supaya AI bisa memakai keduanya untuk menyusun JOIN yang benar.
 - late_compensations.npk = BIODATA.NPK atau BIODATA_KELUAR.NPK (one-to-many: 1 karyawan bisa punya banyak late_compensations)
 - leave_balances.npk = BIODATA.NPK atau BIODATA_KELUAR.NPK (one-to-many: 1 karyawan bisa punya banyak leave_balances)
 - leave_balances.leave_type_id = leave_types.id(one-to-many: 1 leave id bisa punya banyak leave_balances)
+- PELAMAR.ID = pelamar_details.id_pelamar(one-to-one: 1 PELAMAR mempunyai 1 pelamar_details)
 
 #Penjelasan Nama Kolom Table :
 
