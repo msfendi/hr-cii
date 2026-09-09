@@ -1720,7 +1720,7 @@
                     { data: 'col_agama',      name: 'PELAMAR.AGAMA', orderable: false },
                     { data: 'col_dept',       name: 'pd.department', orderable: false },
                     { data: 'col_tgl_apply',  name: 'pd.created_at', orderable: true },
-                    { data: 'col_status',     name: 'pd.status_apply', orderable: false },
+                    { data: 'col_status',     name: 'pd.status_apply', orderable: true },
                     { data: 'col_hasil',      name: 'col_hasil',     orderable: false },
                     { data: 'col_dokumen',    name: 'col_dokumen',   orderable: false, className: 'text-center' },
                     { data: 'col_aksi',       name: 'col_aksi',      orderable: false, className: 'text-center' },
