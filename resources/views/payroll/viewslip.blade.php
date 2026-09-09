@@ -680,7 +680,10 @@
                 ];
                 $day = $hariIndo[$date->format('l')];
                 $isWeekend = $date->isWeekend();
-                $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []);
+                // shifts.is_holiday = 1 (dikirim controller sebagai
+                // $row->is_shift_holiday) membuat hari itu tampil sebagai
+                // hari libur juga, di luar tabel holidays nasional.
+                $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []) || ($row->is_shift_holiday ?? false);
                 $rowClass = '';
                 if($isHoliday){
                     $rowClass = 'holiday';

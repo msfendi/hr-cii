@@ -375,7 +375,7 @@ class EmployeePayrollController extends Controller
                 ->join('shifts as s', 's.id', '=', 'es.shift_id')
                 ->where('es.npk', $employee->employee_npk)
                 ->whereDate('es.shift_date', $tanggal)
-                ->select('s.name', 's.work_start', 's.work_end')
+                ->select('s.name', 's.work_start', 's.work_end', 's.is_holiday')
                 ->first();
 
             /*
@@ -388,8 +388,14 @@ class EmployeePayrollController extends Controller
                     'name' => 'NORMAL',
                     'work_start' => '08:00:00',
                     'work_end'   => '17:00:00',
+                    'is_holiday' => 0,
                 ];
             }
+
+            // ⭐ shifts.is_holiday = 1 -> hari itu dianggap hari libur untuk
+            // karyawan ybs (di luar weekend/tabel holidays nasional), supaya
+            // rekap absensi di slip menampilkan status "Libur".
+            $isShiftHoliday = !empty($shift->is_holiday);
 
             $workStart = Carbon::parse($shift->work_start);
             $workEnd   = Carbon::parse($shift->work_end);
@@ -548,7 +554,7 @@ class EmployeePayrollController extends Controller
             $lembur = $overtimes[$tanggal] ?? null;
 
             $isWeekend = $date->isWeekend();
-            $isHoliday = in_array($tanggal, $holidays);
+            $isHoliday = in_array($tanggal, $holidays) || $isShiftHoliday;
             $isWorkday = !($isWeekend || $isHoliday);
 
             $hasLog = $dailyLogs->count() > 0;
@@ -748,6 +754,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 'status' => $status,
                 'overtime' => $overtime,
                 'is_holiday' => ($isWeekend || $isHoliday),
+                'is_shift_holiday' => $isShiftHoliday,
             ];
         }
 
@@ -1060,7 +1067,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 ->join('shifts as s', 's.id', '=', 'es.shift_id')
                 ->where('es.npk', $employee->employee_npk)
                 ->whereDate('es.shift_date', $tanggal)
-                ->select('s.name', 's.work_start', 's.work_end')
+                ->select('s.name', 's.work_start', 's.work_end', 's.is_holiday')
                 ->first();
 
             if (!$shift) {
@@ -1068,8 +1075,13 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                     'name' => 'NORMAL',
                     'work_start' => '08:00:00',
                     'work_end'   => '17:00:00',
+                    'is_holiday' => 0,
                 ];
             }
+
+            // ⭐ shifts.is_holiday = 1 -> hari itu dianggap hari libur untuk
+            // karyawan ybs (di luar weekend/tabel holidays nasional).
+            $isShiftHoliday = !empty($shift->is_holiday);
 
             $workStart = Carbon::parse($shift->work_start);
 
@@ -1083,7 +1095,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             $lembur = $overtimes[$tanggal] ?? null;
 
             $isWeekend = $date->isWeekend();
-            $isHoliday = in_array($tanggal, $holidays);
+            $isHoliday = in_array($tanggal, $holidays) || $isShiftHoliday;
             $isWorkday = !($isWeekend || $isHoliday);
 
             $isNumericOT = is_numeric($lembur);
@@ -1244,6 +1256,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 'status' => $status,
                 'overtime' => $overtime,
                 'is_holiday' => ($isWeekend || $isHoliday),
+                'is_shift_holiday' => $isShiftHoliday,
             ];
         }
 
@@ -1507,7 +1520,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 ->join('shifts as s', 's.id', '=', 'es.shift_id')
                 ->where('es.npk', $npk)
                 ->whereDate('es.shift_date', $tanggal)
-                ->select('s.name', 's.work_start', 's.work_end')
+                ->select('s.name', 's.work_start', 's.work_end', 's.is_holiday')
                 ->first();
 
             if (!$shift) {
@@ -1515,8 +1528,13 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                     'name' => 'NORMAL',
                     'work_start' => '08:00:00',
                     'work_end'   => '17:00:00',
+                    'is_holiday' => 0,
                 ];
             }
+
+            // ⭐ shifts.is_holiday = 1 -> hari itu dianggap hari libur untuk
+            // karyawan ybs (di luar weekend/tabel holidays nasional).
+            $isShiftHoliday = !empty($shift->is_holiday);
 
             $workStart = Carbon::parse($shift->work_start);
             $workEnd   = Carbon::parse($shift->work_end);
@@ -1635,7 +1653,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
             $lembur = $overtimes[$tanggal] ?? null;
 
             $isWeekend = $date->isWeekend();
-            $isHoliday = in_array($tanggal, $holidays);
+            $isHoliday = in_array($tanggal, $holidays) || $isShiftHoliday;
             $isWorkday = !($isWeekend || $isHoliday);
 
             $hasLog = $dailyLogs->count() > 0;
@@ -1788,6 +1806,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
                 'status' => $status,
                 'overtime' => $overtime,
                 'is_holiday' => ($isWeekend || $isHoliday),
+                'is_shift_holiday' => $isShiftHoliday,
             ];
         }
 
