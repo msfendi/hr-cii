@@ -343,6 +343,15 @@
                                     <i class="fas fa-tasks fa-sm mr-1"></i> Riwayat Pengajuan
                                 </a>
                             </li>
+                            @if (session('cuti_employee_npk') && \App\Models\ApprovalRule::where('approval_id', session('cuti_employee_npk'))->exists())
+                                <li
+                                    class="nav-item {{ request()->routeIs('pengajuan-cuti.portal-approval*') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('pengajuan-cuti.portal-approval') }}">
+                                        <i class="fas fa-fw fa-check-circle"></i>
+                                        <span>Approval Cuti</span>
+                                    </a>
+                                </li>
+                            @endif
                         </ul>
                         <div class="d-flex align-items-center ml-auto">
                             <span class="mr-3 text-white small d-none d-md-inline" style="opacity:0.9;">
@@ -412,11 +421,13 @@
                                             </div>
                                         </div>
 
-                                        {{-- Kontainer blok cuti — diisi lewat JS agar bisa ditambah/dihapus dinamis --}}
+                                        {{-- Kontainer blok cuti — diisi lewat JS agar bisa ditambah/dihapus dinamis
+                                        --}}
                                         <div id="leaves-container"></div>
 
                                         <div class="text-center mb-4">
-                                            <button type="button" class="btn btn-outline-primary btn-sm px-3" id="btnTambahCuti">
+                                            <button type="button" class="btn btn-outline-primary btn-sm px-3"
+                                                id="btnTambahCuti">
                                                 <i class="fas fa-plus mr-1"></i> Tambah Pengajuan Cuti Lain
                                             </button>
                                         </div>

@@ -28,6 +28,23 @@
         </a>
     </li>
 
+    <!-- Nav Item - Approval -->
+    @if (auth()->check() && \App\Models\ApprovalRule::where('approval_id', auth()->user()->npk)->exists())
+    <li class="nav-item {{ request()->routeIs('pengajuan-cuti.approval') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('pengajuan-cuti.approval') }}">
+            <i class="fas fa-fw fa-check-circle"></i>
+            <span>Approval Cuti</span>
+        </a>
+    </li>
+    @elseif (session('cuti_employee_npk') && \App\Models\ApprovalRule::where('approval_id', session('cuti_employee_npk'))->exists())
+    <li class="nav-item {{ request()->routeIs('pengajuan-cuti.portal-approval*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('pengajuan-cuti.portal-approval') }}">
+            <i class="fas fa-fw fa-check-circle"></i>
+            <span>Approval Cuti</span>
+        </a>
+    </li>
+    @endif
+
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
 

@@ -50,11 +50,12 @@
                                             <th width="40">No</th>
                                             <th>Nama Group</th>
                                             <th>Departemen</th>
+                                            <th>Section</th>
                                             <th width="100">Jumlah Level</th>
                                             <th width="130">Aksi</th>
                                         </tr>
-                                        </thead>
-                                        <tbody></tbody>
+                                    </thead>
+                                    <tbody></tbody>
                                 </table>
                             </div>
                         </div>
@@ -106,6 +107,16 @@
                             </select>
                         </div>
 
+                        <div class="form-group">
+                            <label for="group_section">Section <span class="text-muted small">(Opsional)</span></label>
+                            <select class="select2" id="group_section" name="section" style="width: 100%;">
+                                <option value="">-- Pilih Section (Opsional) --</option>
+                                @foreach($sections as $s)
+                                    <option value="{{ $s->id }}">{{ $s->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
@@ -135,10 +146,16 @@
                 </div>
                 <div class="modal-body">
 
-                    {{-- Departments in this group --}}
-                    <div class="mb-3">
-                        <strong class="text-gray-600 small text-uppercase">Departemen:</strong>
-                        <div id="rulesDeptBadges" class="mt-1"></div>
+                    {{-- Departments and Section in this group --}}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong class="text-gray-600 small text-uppercase">Departemen:</strong>
+                            <div id="rulesDeptBadges" class="mt-1"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <strong class="text-gray-600 small text-uppercase">Section:</strong>
+                            <div id="rulesSectionBadge" class="mt-1"></div>
+                        </div>
                     </div>
                     <hr>
 
@@ -423,9 +440,16 @@
             allowClear: true
         });
 
-        // =====  ====================================================
-        // DATATABLE    SETUP
-        // =====   ====================================================
+        $('#group_section').select2({
+            dropdownParent: $('#modalGroup'),
+            theme: 'bootstrap4',
+            placeholder: "Pilih Section (Opsional)...",
+            allowClear: true
+        });
+
+        // =========================================================
+        // DATATABLE SETUP
+        // =========================================================
         var table = $('#approvalTable').DataTable({
             processing: true,
             ajax: {
@@ -433,7 +457,7 @@
                 dataSrc: 'data'
             },
             columns: [
-                // C  olumn 1: Row number
+                // Column 1: Row number
                 {
                     data: null,
                     orderable: false,
@@ -442,7 +466,7 @@
                         return meta.row + 1;
                     }
                 },
-                // Colum n 2: Group name
+                // Column 2: Group name
                 { data: 'name' },
                 // Column 3: Department badges
                 {
@@ -451,7 +475,16 @@
                         return badgeList(value, 'info');
                     }
                 },
-                // Column 4: Number of approval levels
+                // Column 4: Section badge
+                {
+                    data: 'section_name',
+                    render: function (value) {
+                        return value
+                            ? '<span class="badge badge-secondary">' + value + '</span>'
+                            : '<span class="text-muted">-</span>';
+                    }
+                },
+                // Column 5: Number of approval levels
                 {
                     data: 'rules_count',
                     className: 'text-center',
@@ -459,7 +492,7 @@
                         return '<span class="badge badge-primary">' + value + ' level</span>';
                     }
                 },
-                // Column 5: Action buttons (Detail, Edit, Delete)
+                // Column 6: Action buttons (Detail, Edit, Delete)
                 {
                     data: null,
                     orderable: false,
@@ -474,6 +507,7 @@
                             + ' data-id="' + row.id + '"'
                             + ' data-name="' + row.name + '"'
                             + " data-dept='" + JSON.stringify(row.dept) + "'"
+                            + ' data-section="' + (row.section || '') + '"'
                             + ' title="Edit">'
                             + '<i class="fas fa-edit"></i></button>'
 
@@ -495,6 +529,7 @@
             $('#formGroup')[0].reset();
             $('#group_id').val('');
             $('#group_dept').val(null).trigger('change');
+            $('#group_section').val(null).trigger('change');
         });
 
         // =========================================================
@@ -502,6 +537,7 @@
         // =========================================================
         $('#approvalTable').on('click', '.btn-edit', function () {
             var deptIds = $(this).data('dept');
+            var sectionId = $(this).data('section');
 
             $('#modalGroupLabel').text('Edit Approval Group');
             $('#group_id').val($(this).data('id'));
@@ -509,6 +545,7 @@
 
             // Convert dept IDs to strings so Select2 can match them
             $('#group_dept').val(deptIds.map(String)).trigger('change');
+            $('#group_section').val(sectionId ? String(sectionId) : null).trigger('change');
             $('#modalGroup').modal('show');
         });
 
@@ -569,13 +606,17 @@
             // Store group data for later use (e.g. refreshRules)
             currentGroupData = rowData;
 
-            // Populate modal header and department badges
+            // Populate modal header, department badges, and section badge
             $('#rulesGroupName').text(rowData.name);
             $('#rule_group_id').val(rowData.id);
             $('#rulesDeptBadges').html(badgeList(rowData.dept_names, 'info'));
+            var secBadge = rowData.section_name
+                ? '<span class="badge badge-secondary">' + rowData.section_name + '</span>'
+                : '<span class="text-muted">-</span>';
+            $('#rulesSectionBadge').html(secBadge);
 
-                   // R ender rules table and hide the inline form
-               renderRulesTable(rowData.rules);
+            // Render rules table and hide the inline form
+            renderRulesTable(rowData.rules);
             $('#ruleFormContainer').hide();
 
             $('#modalRules').modal('show');

@@ -7,14 +7,22 @@
     <!-- Page Wrapper -->
     @include('sweetalert::alert')
     <div id="wrapper">
-        @include('layout.sidebar')
+        @if (!empty($isPortal))
+            @include('layout.sidebar-cuti')
+        @else
+            @include('layout.sidebar')
+        @endif
 
         <!-- Content Wrapper -->
         <div id="content-wrapper" class="d-flex flex-column">
 
             <!-- Main Content -->
             <div id="content">
-                @include('layout.navbar')
+                @if (!empty($isPortal))
+                    @include('layout.topbar-cuti')
+                @else
+                    @include('layout.navbar')
+                @endif
 
                 <!-- Begin Page Content -->
                 <div class="container-fluid">
@@ -175,12 +183,15 @@
     <script>
         $(document).ready(function () {
 
+            var ajaxUrl = "{{ $ajaxUrl ?? route('pengajuan-cuti.approval') }}";
+            var actionBaseUrl = "{{ $actionBaseUrl ?? url('pengajuan-cuti/approval') }}";
+
             /* Initialize Server-Side DataTable */
             var dtable = $('#dataTable').DataTable({
                 processing: true,
                 serverSide: true,
                 ajax: {
-                    url: "{{ route('pengajuan-cuti.approval') }}",
+                    url: ajaxUrl,
                     data: function (d) {
                         d.start_date = $('#filterStart').val();
                         d.end_date = $('#filterEnd').val();
@@ -298,7 +309,7 @@
                     cancelButtonText: 'Batal'
                 }).then(function (result) {
                     if (result.isConfirmed) {
-                        handleAction('/pengajuan-cuti/approval/approve/' + id, {}, 'Permohonan berhasil disetujui.');
+                        handleAction(actionBaseUrl + '/approve/' + id, {}, 'Permohonan berhasil disetujui.');
                     }
                 });
             });
@@ -328,7 +339,7 @@
                     }
                 }).then(function (result) {
                     if (result.isConfirmed) {
-                        handleAction('/pengajuan-cuti/approval/reject/' + id, { comment: result.value }, 'Permohonan berhasil ditolak.');
+                        handleAction(actionBaseUrl + '/reject/' + id, { comment: result.value }, 'Permohonan berhasil ditolak.');
                     }
                 });
             });
@@ -388,7 +399,7 @@
                     }
                 }).then(function (result) {
                     if (result.isConfirmed) {
-                        handleAction('/pengajuan-cuti/approval/update/' + id, result.value, 'Keputusan berhasil diubah.');
+                        handleAction(actionBaseUrl + '/update/' + id, result.value, 'Keputusan berhasil diubah.');
                     }
                 });
             });

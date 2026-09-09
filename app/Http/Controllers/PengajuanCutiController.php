@@ -164,11 +164,38 @@ class PengajuanCutiController extends Controller
                 'leaves.*.tanggal_selesai.after_or_equal' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
             ]);
 
-            $approval_actors = ApprovalRule::leftJoin('approval_depts', 'approval_rules.rules_id', '=', 'approval_depts.id')
-                ->whereJsonContains('approval_depts.dept', (string) $employee->ID_DEPT)
-                ->select('approval_rules.*')
-                ->orderBy('approval_rules.level', 'asc')
-                ->get();
+            $deptId = (string) $employee->ID_DEPT;
+
+            // Ambil semua approval group yang terkait departemen karyawan (hindari OPENJSON SQL Server)
+            $deptGroups = ApprovalDept::with(['rules' => function ($q) {
+                $q->orderBy('level', 'asc');
+            }])->get()->filter(function ($group) use ($deptId) {
+                $depts = is_array($group->dept) ? $group->dept : (json_decode($group->dept, true) ?? []);
+                return in_array((string) $deptId, array_map('strval', $depts), true);
+            });
+
+            $selectedGroup = null;
+
+            // 1. Jika karyawan memiliki section, prioritaskan approval group khusus section tersebut
+            if (!empty($employee->SECTION)) {
+                $selectedGroup = $deptGroups->first(function ($group) use ($employee) {
+                    return (string) $group->section === (string) $employee->SECTION;
+                });
+            }
+
+            // 2. Jika tidak ada group khusus section, cari group umum departemen (section null/kosong)
+            if (!$selectedGroup) {
+                $selectedGroup = $deptGroups->first(function ($group) {
+                    return empty($group->section);
+                });
+            }
+
+            // 3. Fallback: jika tetap tidak ada, ambil group departemen pertama yang cocok
+            if (!$selectedGroup) {
+                $selectedGroup = $deptGroups->first();
+            }
+
+            $approval_actors = $selectedGroup ? $selectedGroup->rules : collect();
 
             if ($approval_actors->isEmpty()) {
                 Alert::error('Error', 'Approval actors not found. Hubungi HR untuk informasi lebih lanjut.');

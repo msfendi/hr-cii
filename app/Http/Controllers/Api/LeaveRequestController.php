@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ApprovalDept;
 use App\Models\ApprovalRule;
 use App\Models\Biodata;
 use App\Models\Holiday;
@@ -26,11 +27,38 @@ class LeaveRequestController extends Controller
                 ], 404);
             }
 
-            $approval_actors = ApprovalRule::leftJoin('approval_depts', 'approval_rules.rules_id', '=', 'approval_depts.id')
-                ->whereJsonContains('approval_depts.dept', (string) $employee->ID_DEPT)
-                ->select('approval_rules.*')
-                ->orderBy('approval_rules.level', 'asc')
-                ->get();
+            $deptId = (string) $employee->ID_DEPT;
+
+            // Ambil semua approval group yang terkait departemen karyawan (hindari OPENJSON SQL Server)
+            $deptGroups = ApprovalDept::with(['rules' => function ($q) {
+                $q->orderBy('level', 'asc');
+            }])->get()->filter(function ($group) use ($deptId) {
+                $depts = is_array($group->dept) ? $group->dept : (json_decode($group->dept, true) ?? []);
+                return in_array((string) $deptId, array_map('strval', $depts), true);
+            });
+
+            $selectedGroup = null;
+
+            // 1. Jika karyawan memiliki section, prioritaskan approval group khusus section tersebut
+            if (!empty($employee->SECTION)) {
+                $selectedGroup = $deptGroups->first(function ($group) use ($employee) {
+                    return (string) $group->section === (string) $employee->SECTION;
+                });
+            }
+
+            // 2. Jika tidak ada group khusus section, cari group umum departemen (section null/kosong)
+            if (!$selectedGroup) {
+                $selectedGroup = $deptGroups->first(function ($group) {
+                    return empty($group->section);
+                });
+            }
+
+            // 3. Fallback: jika tetap tidak ada, ambil group departemen pertama yang cocok
+            if (!$selectedGroup) {
+                $selectedGroup = $deptGroups->first();
+            }
+
+            $approval_actors = $selectedGroup ? $selectedGroup->rules : collect();
 
             if ($approval_actors->isEmpty()) {
                 return response()->json([

@@ -15,7 +15,12 @@ class LeaveApprovalController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
+        $this->middleware('auth')->except([
+            'portalIndex',
+            'portalApprove',
+            'portalReject',
+            'portalUpdateDecision',
+        ]);
     }
 
     /**
@@ -25,14 +30,44 @@ class LeaveApprovalController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $npk = $user->npk;
+        $npk = $user ? $user->npk : null;
 
         if (!$npk) {
             Alert::error('Error', 'Akun Anda tidak memiliki NPK yang terdaftar.');
             return redirect()->back();
         }
 
-        // Cari data karyawan yang login sebagai approver (berdasarkan NPK user)
+        return $this->renderApprovalList($npk, false);
+    }
+
+    /**
+     * Tampilkan data leave yang butuh di-approve untuk portal karyawan
+     * (tanpa auth middleware, berbasis session cuti_employee_npk)
+     */
+    public function portalIndex()
+    {
+        $npk = session('cuti_employee_npk');
+
+        if (!$npk) {
+            Alert::error('Error', 'Silahkan login terlebih dahulu.');
+            return redirect()->route('pengajuan-cuti.login');
+        }
+
+        $isApprover = \App\Models\ApprovalRule::where('approval_id', $npk)->exists();
+        if (!$isApprover) {
+            Alert::error('Akses Ditolak', 'Anda tidak terdaftar sebagai approver cuti.');
+            return redirect()->route('pengajuan-cuti.form');
+        }
+
+        return $this->renderApprovalList($npk, true);
+    }
+
+    /**
+     * Shared render method for both admin and portal approval views
+     */
+    private function renderApprovalList($npk, $isPortal = false)
+    {
+        // Cari data karyawan yang login sebagai approver (berdasarkan NPK)
         $employee = DB::connection('cii')
             ->table('BIODATA')
             ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
@@ -42,8 +77,8 @@ class LeaveApprovalController extends Controller
 
         if (!$employee) {
             $employee = (object) [
-                'NPK' => $user->npk,
-                'NAMA_KARYAWAN' => $user->name,
+                'NPK' => $npk,
+                'NAMA_KARYAWAN' => $npk,
                 'DEPARTEMENT' => '-',
                 'IS_SEWING' => 0
             ];
@@ -63,7 +98,6 @@ class LeaveApprovalController extends Controller
 
         // Filter tanggal: tampilkan permohonan yang periode cutinya beririsan
         // dengan rentang tanggal yang dipilih (start_date/end_date dari request).
-        // Sesuaikan ke created_at kalau yang dimaksud "per tanggal" adalah tanggal pengajuan.
         if ($startDate = request('start_date')) {
             $query->whereDate('end_date', '>=', $startDate);
         }
@@ -91,7 +125,6 @@ class LeaveApprovalController extends Controller
 
             // Approver cuma boleh mengubah keputusan selama belum ada level
             // berikutnya yang sudah bertindak (biar workflow tetap konsisten).
-            // Harus abaikan row yang statusnya di-void secara otomatis karena reject di level ini.
             $laterLevelActed = LeaveRequest::where('token', $req->token)
                 ->where('approval_level', '>', $req->approval_level)
                 ->where('status', '!=', 'pending')
@@ -148,25 +181,70 @@ class LeaveApprovalController extends Controller
                                '<button type="button" class="btn btn-sm btn-danger btn-reject" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'"><i class="fas fa-times fa-sm"></i> Reject</button>';
                     }
 
-                    $html = $detailBtn;
-
-                    // if ($row['can_update']) {
-                    //     $start = \Carbon\Carbon::parse($row['start_date'])->format('d M Y');
-                    //     $end = \Carbon\Carbon::parse($row['end_date'])->format('d M Y');
-                    //     $komentar = htmlspecialchars($row['comment'] ?? '', ENT_QUOTES, 'UTF-8');
-                    //     $html .= ' <button type="button" class="btn btn-sm btn-outline-secondary btn-ubah" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'" data-status="'.$row['status'].'" data-jenis="'.$row['leave_type'].'" data-mulai="'.$start.'" data-selesai="'.$end.'" data-hari="'.$row['total_days'].'" data-komentar="'.$komentar.'"><i class="fas fa-edit fa-sm"></i> Ubah</button>';
-                    // } 
-                    // else {
-                    //     $html .= '<div class="mt-1"><span class="text-muted small">Sudah diproses</span></div>';
-                    // }
-
-                    return $html;
+                    return $detailBtn;
                 })
                 ->rawColumns(['karyawan', 'status_badge', 'aksi'])
                 ->make(true);
         }
 
-        return view('cuti.approval', compact('employee'));
+        $ajaxUrl = $isPortal ? route('pengajuan-cuti.portal-approval') : route('pengajuan-cuti.approval');
+        $actionBaseUrl = $isPortal ? url('pengajuan-cuti/portal-approval') : url('pengajuan-cuti/approval');
+
+        return view('cuti.approval', compact('employee', 'isPortal', 'ajaxUrl', 'actionBaseUrl'));
+    }
+
+    /**
+     * Portal: Approve cuti dari portal karyawan
+     */
+    public function portalApprove($id)
+    {
+        $npk = session('cuti_employee_npk');
+        if (!$npk) {
+            return response()->json(['success' => false, 'message' => 'Sesi login telah berakhir. Silahkan login kembali.'], 401);
+        }
+
+        $leave = LeaveRequest::findOrFail($id);
+        if ($leave->approval_id !== $npk) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk memproses permohonan ini.'], 403);
+        }
+
+        return $this->approve($id);
+    }
+
+    /**
+     * Portal: Reject cuti dari portal karyawan
+     */
+    public function portalReject(Request $request, $id)
+    {
+        $npk = session('cuti_employee_npk');
+        if (!$npk) {
+            return response()->json(['success' => false, 'message' => 'Sesi login telah berakhir. Silahkan login kembali.'], 401);
+        }
+
+        $leave = LeaveRequest::findOrFail($id);
+        if ($leave->approval_id !== $npk) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk memproses permohonan ini.'], 403);
+        }
+
+        return $this->reject($request, $id);
+    }
+
+    /**
+     * Portal: Ubah keputusan dari portal karyawan
+     */
+    public function portalUpdateDecision(Request $request, $id)
+    {
+        $npk = session('cuti_employee_npk');
+        if (!$npk) {
+            return response()->json(['success' => false, 'message' => 'Sesi login telah berakhir. Silahkan login kembali.'], 401);
+        }
+
+        $leave = LeaveRequest::findOrFail($id);
+        if ($leave->approval_id !== $npk) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk memproses permohonan ini.'], 403);
+        }
+
+        return $this->updateDecision($request, $id);
     }
 
     /**

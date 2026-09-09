@@ -1019,27 +1019,6 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/delete/{id}', [SewingViolationController::class, 'delete'])->name('sewing-violations.delete');
     });
 
-    // ========================================
-    // PENGAJUAN CUTI ONLINE
-    // ========================================
-    Route::prefix('pengajuan-cuti')->group(function () {
-        Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
-        Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
-        Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
-        Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
-        Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
-        Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
-        Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
-        Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
-        Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
-
-        // Cuti Approval (Leave Management by logged in user)
-        Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval')->middleware('auth');
-        Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve')->middleware('auth');
-        Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject')->middleware('auth');
-        Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update')->middleware('auth');
-    });
-
     // Insentif 6S
     Route::get('/employee-6s-assignment', [Employee6sAssignmentController::class, 'index'])->name('employee6s.index')->middleware(['auth', 'permission']);
     Route::get('/employee-6s-assignment/create', [Employee6sAssignmentController::class, 'create'])->name('employee6s.create')->middleware(['auth', 'permission']);
@@ -1385,3 +1364,30 @@ Route::middleware(['auth', 'permission'])->group(function () {
 });
 
 Route::get('/pdf-extractor', [PdfExtractionController::class, 'index'])->name('pdf.index')->middleware(['auth']);
+
+// ========================================
+// PENGAJUAN CUTI ONLINE
+// ========================================
+Route::prefix('pengajuan-cuti')->group(function () {
+    Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
+    Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
+    Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
+    Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
+    Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
+    Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
+    Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
+    Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
+    Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
+
+    // Cuti Approval (Leave Management by logged in user)
+    Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval')->middleware('auth');
+    Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve')->middleware('auth');
+    Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject')->middleware('auth');
+    Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update')->middleware('auth');
+
+    // Cuti Approval (Portal Karyawan / Atasan - tanpa middleware auth, berbasis session cuti)
+    Route::get('/portal-approval', [LeaveApprovalController::class, 'portalIndex'])->name('pengajuan-cuti.portal-approval');
+    Route::post('/portal-approval/approve/{id}', [LeaveApprovalController::class, 'portalApprove'])->name('pengajuan-cuti.portal-approval.approve');
+    Route::post('/portal-approval/reject/{id}', [LeaveApprovalController::class, 'portalReject'])->name('pengajuan-cuti.portal-approval.reject');
+    Route::post('/portal-approval/update/{id}', [LeaveApprovalController::class, 'portalUpdateDecision'])->name('pengajuan-cuti.portal-approval.update');
+});
