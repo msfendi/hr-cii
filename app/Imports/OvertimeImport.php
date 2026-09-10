@@ -60,13 +60,14 @@ class OvertimeImport implements ToCollection
                             $tanggal
                         )->format('Y-m-d');
 
-                        // $existingFromLeave = Overtime::where('NPK', $npk)->where('OVERTIME_DATE', $date)->first();
-                        // if ($existingFromLeave && !empty($existingFromLeave->JUMLAH_JAM_LEMBUR) && !is_numeric(trim($existingFromLeave->JUMLAH_JAM_LEMBUR))) {
-                        //     $existingFromLeave->update([
-                        //         'DEPT_GROUP' => $this->deptGroup,
-                        //     ]);
-                        //     continue;
-                        // }
+                        $existing = Overtime::where('NPK', $npk)
+                            ->where('OVERTIME_DATE', $date)
+                            ->first();
+
+                        // Jika sudah ada data dari pengajuan mandiri karyawan (is_request = 'true'), jangan ditimpa
+                        if ($existing && ($existing->is_request === 'true' || $existing->is_request === true || $existing->is_request === '1')) {
+                            continue;
+                        }
 
                         Overtime::updateOrCreate(
                             [
@@ -79,6 +80,7 @@ class OvertimeImport implements ToCollection
                                 'DAY' => Carbon::parse($date)->translatedFormat('l'),
                                 'JUMLAH_JAM_LEMBUR' => $jamLembur !== '' ? $jamLembur : null,
                                 'DEPT_GROUP' => $this->deptGroup,
+                                'is_request' => 'false',
                             ]
                         );
                     }

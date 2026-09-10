@@ -227,13 +227,28 @@ class OvertimeController extends Controller
 
         $dataLembur = $queryLembur->get();
 
-        // Filter berdasarkan durasi jam lembur (dropdown single value)
+        // Filter berdasarkan durasi jam lembur atau label kode (1 jam, 2 jam, MA, CT, P1, H, SD, SDR, dll)
         if ($duration) {
-            $duration = (int) $duration;
-            $npkCocok = [];
+            $durationStr = trim((string)$duration);
+            $monthStr    = $tanggalAwal->format('Y-m');
+            $npkCocok    = [];
             foreach ($dataLembur as $r) {
-                if (is_numeric($r->JUMLAH_JAM_LEMBUR) && (int)$r->JUMLAH_JAM_LEMBUR === $duration) {
-                    $npkCocok[$r->NPK] = true;
+                $raw = trim((string)$r->JUMLAH_JAM_LEMBUR);
+                if (is_numeric($durationStr) && is_numeric($raw)) {
+                    if ((float)$raw == (float)$durationStr) {
+                        $npkCocok[$r->NPK] = true;
+                    }
+                } elseif (!is_numeric($durationStr)) {
+                    $targetCode = strtoupper($durationStr);
+                    $rowCode    = strtoupper($raw);
+
+                    if ($rowCode === $targetCode) {
+                        $npkCocok[$r->NPK] = true;
+                    } elseif ($targetCode === 'BR' && !empty($r->TMK) && substr((string)$r->TMK, 0, 7) === $monthStr) {
+                        $npkCocok[$r->NPK] = true;
+                    } elseif ($targetCode === 'OUT' && !empty($r->TKK) && substr((string)$r->TKK, 0, 7) === $monthStr) {
+                        $npkCocok[$r->NPK] = true;
+                    }
                 }
             }
             $dataLembur = $dataLembur->whereIn('NPK', array_keys($npkCocok));
@@ -370,7 +385,7 @@ class OvertimeController extends Controller
                     }
 
                     // Hitung Kode Karakter (CT, MA, dll)
-                    $kode = (string) $jamLembur;
+                    $kode = strtoupper(trim((string) $jamLembur));
                     if ($kode !== '') {
                         $lemburKarakter[$kode] = ($lemburKarakter[$kode] ?? 0) + 1;
                     }

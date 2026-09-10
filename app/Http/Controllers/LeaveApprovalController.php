@@ -461,6 +461,7 @@ class LeaveApprovalController extends Controller
                     'DAY' => $date->translatedFormat('l'),
                     'JUMLAH_JAM_LEMBUR' => 'CT',
                     'DEPT_GROUP' => '',
+                    'is_request' => 'true',
                 ]
             );
         }
@@ -485,7 +486,10 @@ class LeaveApprovalController extends Controller
         Overtime::where('NPK', $leave->NPK)
             ->whereBetween('OVERTIME_DATE', [$leave->start_date, $leave->end_date])
             ->where('JUMLAH_JAM_LEMBUR', 'CT')
-            ->delete();
+            ->update([
+                'JUMLAH_JAM_LEMBUR' => null,
+                'is_request' => 'false',
+            ]);
     }
 
     /**
