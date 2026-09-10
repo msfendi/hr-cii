@@ -174,13 +174,31 @@ body{ background-color: #f4f6fb; }
                                                 @endforeach
                                             </select>
                                         </div>
+                                        <div class="col-md-2 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Bulan</label>
+                                            <select id="monthSelect" class="form-control" style="width:100%">
+                                                <option value="">Semua Bulan</option>
+                                                <option value="1">Januari</option>
+                                                <option value="2">Februari</option>
+                                                <option value="3">Maret</option>
+                                                <option value="4">April</option>
+                                                <option value="5">Mei</option>
+                                                <option value="6">Juni</option>
+                                                <option value="7">Juli</option>
+                                                <option value="8">Agustus</option>
+                                                <option value="9">September</option>
+                                                <option value="10">Oktober</option>
+                                                <option value="11">November</option>
+                                                <option value="12">Desember</option>
+                                            </select>
+                                        </div>
                                         <div class="col-md-3 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Expat (NPK)</label>
                                             <select id="npkSelect" class="form-control" style="width:100%">
                                                 <option value="">Semua Expat</option>
                                             </select>
                                         </div>
-                                        <div class="col-md-3 mb-3">
+                                        <div class="col-md-2 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Kewarganegaraan</label>
                                             <select id="nationalitySelect" class="form-control" style="width:100%">
                                                 <option value="">Semua</option>
@@ -189,7 +207,7 @@ body{ background-color: #f4f6fb; }
                                                 @endforeach
                                             </select>
                                         </div>
-                                        <div class="col-md-4 mb-3">
+                                        <div class="col-md-3 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Jenis Biaya</label>
                                             <select id="costTypeSelect" class="form-control" style="width:100%">
                                                 <option value="all">Semua (Direct + Leave Expense)</option>
@@ -300,12 +318,30 @@ body{ background-color: #f4f6fb; }
                             <div class="card-body">
                                 <form id="detailFilterForm" class="filter-form">
                                     <div class="row align-items-start">
-                                        <div class="col-md-3 mb-3">
+                                        <div class="col-md-2 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Tahun</label>
                                             <select id="detailYearSelect" class="form-control" style="width:100%">
                                                 @foreach ($years as $y)
                                                     <option value="{{ $y }}">{{ $y }}</option>
                                                 @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Bulan</label>
+                                            <select id="detailMonthSelect" class="form-control" style="width:100%">
+                                                <option value="">Semua Bulan</option>
+                                                <option value="1">Januari</option>
+                                                <option value="2">Februari</option>
+                                                <option value="3">Maret</option>
+                                                <option value="4">April</option>
+                                                <option value="5">Mei</option>
+                                                <option value="6">Juni</option>
+                                                <option value="7">Juli</option>
+                                                <option value="8">Agustus</option>
+                                                <option value="9">September</option>
+                                                <option value="10">Oktober</option>
+                                                <option value="11">November</option>
+                                                <option value="12">Desember</option>
                                             </select>
                                         </div>
                                         <div class="col-md-4 mb-3">
@@ -314,7 +350,7 @@ body{ background-color: #f4f6fb; }
                                                 <option value="">Semua Expat</option>
                                             </select>
                                         </div>
-                                        <div class="col-md-5 mb-3">
+                                        <div class="col-md-4 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Kewarganegaraan</label>
                                             <select id="detailNationalitySelect" class="form-control" style="width:100%">
                                                 <option value="">Semua</option>
@@ -1085,6 +1121,7 @@ body{ background-color: #f4f6fb; }
         function loadChartData() {
             const params = {
                 year: $('#yearSelect').val(),
+                month: $('#monthSelect').val(),
                 npk: $('#npkSelect').val(),
                 nationality: $('#nationalitySelect').val(),
                 cost_type: $('#costTypeSelect').val(),
@@ -1259,6 +1296,7 @@ body{ background-color: #f4f6fb; }
         function loadDetailData() {
             const params = {
                 year: $('#detailYearSelect').val(),
+                month: $('#detailMonthSelect').val(),
                 npk: $('#detailNpkSelect').val(),
                 nationality: $('#detailNationalitySelect').val(),
             };
@@ -1267,7 +1305,7 @@ body{ background-color: #f4f6fb; }
             fetch("{{ route('expat-dashboard.recap-data') }}?" + new URLSearchParams(params))
                 .then(res => res.json())
                 .then(data => {
-                    $('#detailPeriodLabel').text('Tahun ' + params.year);
+                    $('#detailPeriodLabel').text(params.month ? (formatMonthIndonesia(params.year + '-' + String(params.month).padStart(2, '0'))) : ('Tahun ' + params.year));
 
                     expatRecapTable.clear();
                     expatRecapTable.rows.add(data.recap);
@@ -1917,6 +1955,7 @@ body{ background-color: #f4f6fb; }
 
             // Section 1
             $('#yearSelect').select2({ minimumResultsForSearch: 0 });
+            $('#monthSelect').select2({ minimumResultsForSearch: 0 });
             $('#npkSelect').select2(employeeSelect2Config());
             $('#nationalitySelect').select2({ placeholder: 'Semua', allowClear: true });
             $('#costTypeSelect').select2({ minimumResultsForSearch: 0 });
@@ -1924,6 +1963,7 @@ body{ background-color: #f4f6fb; }
             $('#filterForm').on('submit', function (e) { e.preventDefault(); loadChartData(); });
             $('#resetFilter').on('click', function () {
                 $('#yearSelect').prop('selectedIndex', 0).trigger('change');
+                $('#monthSelect').val('').trigger('change');
                 $('#npkSelect').val(null).trigger('change');
                 $('#nationalitySelect').val(null).trigger('change');
                 $('#costTypeSelect').val('all').trigger('change');
@@ -1932,12 +1972,14 @@ body{ background-color: #f4f6fb; }
 
             // Section 2
             $('#detailYearSelect').select2({ minimumResultsForSearch: 0 });
+            $('#detailMonthSelect').select2({ minimumResultsForSearch: 0 });
             $('#detailNpkSelect').select2(employeeSelect2Config());
             $('#detailNationalitySelect').select2({ placeholder: 'Semua', allowClear: true });
 
             $('#detailFilterForm').on('submit', function (e) { e.preventDefault(); loadDetailData(); });
             $('#detailResetFilter').on('click', function () {
                 $('#detailYearSelect').prop('selectedIndex', 0).trigger('change');
+                $('#detailMonthSelect').val('').trigger('change');
                 $('#detailNpkSelect').val(null).trigger('change');
                 $('#detailNationalitySelect').val(null).trigger('change');
                 loadDetailData();

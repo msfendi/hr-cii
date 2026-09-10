@@ -526,6 +526,7 @@ class ExpatController extends Controller
     public function chartData(Request $request)
     {
         $year = $request->year ?? date('Y');
+        $month = $request->month; // NEW: filter per bulan (1-12), kosong = semua bulan
         $npk = $request->npk;
         $nationality = $request->nationality;
         $costType = $request->cost_type ?? 'all'; // all | direct | onleave
@@ -537,6 +538,7 @@ class ExpatController extends Controller
 
         // ===== DIRECT COST per bulan =====
         $directQuery = ExpatCost::whereYear('transactions_date', $year);
+        if ($month) $directQuery->whereMonth('transactions_date', $month);
         if ($npk) $directQuery->where('npk', $npk);
         if ($npksFilter) $directQuery->whereIn('npk', $npksFilter);
 
@@ -561,6 +563,7 @@ class ExpatController extends Controller
                 if (!$date) continue;
                 $carbon = \Carbon\Carbon::parse($date);
                 if ($carbon->year != $year) continue;
+                if ($month && $carbon->month != $month) continue; // NEW: filter per bulan
 
                 $onleaveByMonth[$carbon->month]['total'] += (float) $amt;
                 $onleaveByMonth[$carbon->month]['jml']++;
@@ -601,7 +604,9 @@ class ExpatController extends Controller
             'grand_total' => $grandTotal,
             'avg_per_month' => $monthsWithData ? round($grandTotal / $monthsWithData, 2) : 0,
             'total_transaksi' => $totalTransaksi,
-            'range' => ['start' => "{$year}-01", 'end' => "{$year}-12"],
+            'range' => $month
+                ? ['start' => sprintf('%04d-%02d', $year, $month), 'end' => sprintf('%04d-%02d', $year, $month)]
+                : ['start' => "{$year}-01", 'end' => "{$year}-12"],
         ]);
     }
 
@@ -614,6 +619,7 @@ class ExpatController extends Controller
     public function recapData(Request $request)
     {
         $year = $request->year ?? date('Y');
+        $month = $request->month; // NEW: filter per bulan (1-12), kosong = semua bulan
         $npk = $request->npk;
         $nationality = $request->nationality;
 
@@ -623,7 +629,10 @@ class ExpatController extends Controller
         $expats = $expatQuery->get();
 
         // Direct cost per npk
-        $directPerNpk = ExpatCost::whereYear('transactions_date', $year)
+        $directQuery = ExpatCost::whereYear('transactions_date', $year);
+        if ($month) $directQuery->whereMonth('transactions_date', $month);
+
+        $directPerNpk = $directQuery
             ->selectRaw('npk, SUM(amount) as total, COUNT(*) as jml')
             ->groupBy('npk')
             ->get()
@@ -636,15 +645,32 @@ class ExpatController extends Controller
 
         foreach ($onleaveRows as $row) {
             $amounts = is_array($row->amount) ? $row->amount : (json_decode($row->amount, true) ?? []);
-            $sum = collect($amounts)->map(fn($v) => (float) $v)->sum();
+            $dates = is_array($row->transactions_date) ? $row->transactions_date : (json_decode($row->transactions_date, true) ?? []);
+
+            if ($month) {
+                // Hanya jumlahkan transaksi yang jatuh pada bulan terpilih
+                $sum = 0;
+                foreach ($amounts as $i => $amt) {
+                    $date = $dates[$i] ?? null;
+                    if (!$date) continue;
+                    if ((int) \Carbon\Carbon::parse($date)->month !== (int) $month) continue;
+                    $sum += (float) $amt;
+                }
+                if ($sum <= 0) continue; // tidak ada transaksi di bulan ini, lewati baris
+            } else {
+                $sum = collect($amounts)->map(fn($v) => (float) $v)->sum();
+            }
 
             $onleavePerNpk[$row->npk] = ($onleavePerNpk[$row->npk] ?? 0) + $sum;
             $onleaveByType[$row->leave_type] = ($onleaveByType[$row->leave_type] ?? 0) + 1;
         }
 
         // Biaya per komponen (direct cost)
-        $costByComponent = ExpatCost::join('expat_cost_components', 'expat_cost.component', '=', 'expat_cost_components.id')
-            ->whereYear('expat_cost.transactions_date', $year)
+        $costByComponentQuery = ExpatCost::join('expat_cost_components', 'expat_cost.component', '=', 'expat_cost_components.id')
+            ->whereYear('expat_cost.transactions_date', $year);
+        if ($month) $costByComponentQuery->whereMonth('expat_cost.transactions_date', $month);
+
+        $costByComponent = $costByComponentQuery
             ->selectRaw('expat_cost_components.component as name, SUM(expat_cost.amount) as total')
             ->groupBy('expat_cost_components.component')
             ->orderByDesc('total')
