@@ -117,13 +117,14 @@ use Illuminate\Support\Facades\DB;
  * OVERRIDE IJIN MENINGGALKAN PEKERJAAN (JAM_PAGI & STATUS TIDAK terpengaruh,
  * override ini murni untuk JAM_SIANG):
  * - Kalau ada row di ijin_meninggalkan_pekerjaans utk NPK+tanggal tsb:
- *   - `jam_kembali` ADA (terisi, karyawan sudah betulan kembali) -> TIDAK
- *     di-override, JAM_SIANG tetap hasil perhitungan normal
- *     (none/numeric/half_day) seperti biasa.
- *   - `jam_kembali` NULL (belum/tidak kembali) -> JAM_SIANG diisi
- *     `jam_keluar` (jam pulang beneran, dari tabel ini). Berlaku SAMA baik
- *     `rencana_kembali` NULL maupun ADA -- kolom `rencana_kembali` TIDAK
- *     lagi memengaruhi JAM_SIANG.
+ *   - `rencana_kembali` NULL (karyawan TIDAK berencana kembali ke kantor
+ *     setelah keluar, misal pulang karena sakit) -> JAM_SIANG diisi
+ *     `jam_keluar` (jam pulang beneran, dari tabel ini).
+ *   - `rencana_kembali` ADA (berencana kembali) TAPI `jam_kembali` NULL -> JAM_SIANG
+ *     diisi string `'-'` (cuma JAM_PAGI yang bermakna ditampilkan hari itu).
+ *   - `rencana_kembali` ADA DAN `jam_kembali` ADA (karyawan sudah betulan
+ *     kembali ke kantor) -> TIDAK di-override, JAM_SIANG tetap hasil
+ *     perhitungan normal (none/numeric/half_day) seperti biasa.
  *
  * CATATAN PENTING (asumsi yang dipakai, tolong disesuaikan bila keliru):
  * - "Hari libur" = weekend (Sabtu & Minggu, via Carbon::isWeekend()) ATAU
@@ -391,14 +392,25 @@ class AuditRecapService
             }
 
             // Override dari ijin_meninggalkan_pekerjaans (kalau NPK+tanggal ini ada
-            // row-nya dengan jam_kembali NULL): JAM_PAGI & STATUS tidak terpengaruh,
-            // override ini murni untuk JAM_SIANG (diisi jam_keluar). Lihat
-            // getLeavePermissionMap() untuk detail aturannya. Sengaja ditaruh di
-            // dalam else ini (bukan di luar), supaya TIDAK berlaku kalau hari itu
-            // sudah ditentukan LBR lewat shifts.is_holiday.
+            // row-nya): JAM_PAGI & STATUS tidak terpengaruh, override ini murni
+            // untuk JAM_SIANG. Lihat getLeavePermissionMap() untuk detail aturannya.
+            // Sengaja ditaruh di dalam else ini (bukan di luar), supaya TIDAK
+            // berlaku kalau hari itu sudah ditentukan LBR lewat shifts.is_holiday.
             $leavePermission = $leavePermissionMap[$npk][$dateKey] ?? null;
-            if ($leavePermission !== null && $leavePermission['action'] === 'use_jam_keluar') {
-                $jamSiang = $this->toHHMM($leavePermission['value']);
+            if ($leavePermission !== null) {
+                if ($leavePermission['action'] === 'use_jam_keluar') {
+                    // rencana_kembali NULL (tidak berencana kembali) -> JAM_SIANG
+                    // = jam_keluar (jam pulang beneran dari tabel ini).
+                    $jamSiang = $this->toHHMM($leavePermission['value']);
+                } elseif ($leavePermission['action'] === 'dash') {
+                    // rencana_kembali ADA (berencana kembali) tapi jam_kembali
+                    // NULL (belum/tidak kembali) -> JAM_SIANG = '-', cuma JAM_PAGI
+                    // yang bermakna ditampilkan.
+                    $jamSiang = '-';
+                }
+                // action lain (rencana_kembali ADA dan jam_kembali ADA, artinya
+                // karyawan sudah kembali) -> tidak override apa-apa, JAM_SIANG
+                // tetap hasil perhitungan normal di atas.
             }
         }
 
@@ -722,18 +734,20 @@ class AuditRecapService
      * Ambil daftar NPK+tanggal yang punya record di ijin_meninggalkan_pekerjaans,
      * beserta action apa yang harus diterapkan ke JAM_SIANG (lihat buildRow()):
      *
-     * - `jam_kembali` ADA (terisi, karyawan sudah betulan kembali ke kantor)
-     *   -> row TIDAK dimasukkan ke map ini sama sekali, supaya JAM_SIANG
-     *   tetap dihitung normal (tidak di-override).
-     * - `jam_kembali` NULL (belum/tidak kembali) -> action='use_jam_keluar',
-     *   JAM_SIANG diisi `jam_keluar` (jam pulang beneran, dari tabel ini).
-     *   Ini berlaku SAMA baik `rencana_kembali` NULL maupun ADA -- kolom
-     *   `rencana_kembali` TIDAK lagi memengaruhi JAM_SIANG.
+     * - `rencana_kembali` NULL (karyawan TIDAK berencana kembali ke kantor
+     *   setelah keluar) -> action='use_jam_keluar', JAM_SIANG diisi
+     *   `jam_keluar` (jam pulang beneran, dari tabel ini).
+     * - `rencana_kembali` ADA (berencana kembali) TAPI `jam_kembali` NULL ->
+     *   action='dash', JAM_SIANG diisi string `'-'` (cuma JAM_PAGI yang
+     *   bermakna ditampilkan hari itu).
+     * - `rencana_kembali` ADA DAN `jam_kembali` ADA (karyawan sudah betulan
+     *   kembali) -> row TIDAK dimasukkan ke map ini sama sekali, supaya
+     *   JAM_SIANG tetap dihitung normal (tidak di-override).
      */
     protected function getLeavePermissionMap(Carbon $start, Carbon $end): array
     {
         $rows = DB::select("
-            SELECT npk, tanggal, jam_kembali,
+            SELECT npk, tanggal, rencana_kembali, jam_kembali,
                    CONVERT(varchar(8), jam_keluar, 108) AS jam_keluar
             FROM ijin_meninggalkan_pekerjaans
             WHERE tanggal >= ? AND tanggal <= ?
@@ -741,17 +755,22 @@ class AuditRecapService
 
         $map = [];
         foreach ($rows as $row) {
-            if ($row->jam_kembali !== null) {
-                // Karyawan sudah betulan kembali -> sengaja tidak dimasukkan
-                // ke $map, JAM_SIANG tetap dihitung normal (tidak di-override).
+            $day = Carbon::parse($row->tanggal)->format('Y-m-d');
+
+            if ($row->rencana_kembali === null) {
+                $map[$row->npk][$day] = [
+                    'action' => 'use_jam_keluar',
+                    'value'  => $row->jam_keluar,
+                ];
                 continue;
             }
 
-            $day = Carbon::parse($row->tanggal)->format('Y-m-d');
-            $map[$row->npk][$day] = [
-                'action' => 'use_jam_keluar',
-                'value'  => $row->jam_keluar,
-            ];
+            if ($row->jam_kembali === null) {
+                $map[$row->npk][$day] = ['action' => 'dash'];
+            }
+
+            // else: rencana_kembali ADA dan jam_kembali ADA -> sengaja tidak
+            // dimasukkan ke $map, supaya JAM_SIANG tetap dihitung normal.
         }
 
         return $map;
