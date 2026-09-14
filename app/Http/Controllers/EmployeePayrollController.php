@@ -230,8 +230,6 @@ class EmployeePayrollController extends Controller
         $startDate = Carbon::parse($period->start_date)->startOfDay();
         $endDate   = Carbon::parse($period->end_date)->endOfDay();
 
-
-
     //     $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
     //         ->selectRaw("
     //     npk,
@@ -249,7 +247,7 @@ class EmployeePayrollController extends Controller
     //         ->get()
     //         ->keyBy('npk');
 
-        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+            $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
             ->selectRaw("
                 ijin_meninggalkan_pekerjaans.npk,
                 SUM(
@@ -296,7 +294,7 @@ class EmployeePayrollController extends Controller
     //         ->groupBy('npk');
 
 
-    $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
+        $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
             ->selectRaw("
                 ijin_meninggalkan_pekerjaans.npk,
                 NAMA_KARYAWAN,
@@ -936,41 +934,92 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         $startDate = Carbon::parse($period->start_date)->startOfDay();
         $endDate   = Carbon::parse($period->end_date)->endOfDay();
 
+        // $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+        //     ->selectRaw("
+        //     npk,
+        //     SUM(
+        //         CASE
+        //             WHEN jam_kembali IS NOT NULL
+        //             THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+        //             ELSE 0
+        //         END
+        //     ) as total_ijin_minutes
+        // ")
+        //     ->whereBetween('tanggal', [$startDate, $endDate])
+        //     ->where('npk', $npk)
+        //     ->groupBy('npk')
+        //     ->get()
+        //     ->keyBy('npk');
+
         $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
             ->selectRaw("
-            npk,
-            SUM(
-                CASE
-                    WHEN jam_kembali IS NOT NULL
-                    THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
-                    ELSE 0
-                END
-            ) as total_ijin_minutes
-        ")
+                ijin_meninggalkan_pekerjaans.npk,
+                SUM(
+                    CASE
+                        WHEN jam_kembali IS NOT NULL
+                        THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+                        ELSE DATEDIFF(MINUTE, jam_keluar, COALESCE(shifts.work_end, '17:00:00'))
+                    END
+                ) as total_ijin_minutes
+            ")
+            ->leftJoin('employee_shifts', function ($join) {
+                $join->on('employee_shifts.npk', '=', 'ijin_meninggalkan_pekerjaans.npk')
+                    ->on('employee_shifts.shift_date', '=', 'ijin_meninggalkan_pekerjaans.tanggal');
+            })
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_shifts.shift_id')
             ->whereBetween('tanggal', [$startDate, $endDate])
-            ->where('npk', $npk)
-            ->groupBy('npk')
+            ->where('ijin_meninggalkan_pekerjaans.npk', $npk)
+            ->groupBy('ijin_meninggalkan_pekerjaans.npk')
             ->get()
             ->keyBy('npk');
 
+        // $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
+        //     ->selectRaw("
+        //     ijin_meninggalkan_pekerjaans.npk,
+        //     NAMA_KARYAWAN,
+        //     DEPARTEMENT,
+        //     tanggal,
+        //     jam_keluar,
+        //     rencana_kembali,
+        //     jam_kembali,
+        //     reason,
+        //     CASE 
+        //         WHEN jam_kembali IS NOT NULL 
+        //         THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+        //         ELSE 0 
+        //     END as ijin_minutes
+        // ")
+        //     ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
+        //     ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
+        //     ->whereBetween('tanggal', [$startDate, $endDate])
+        //     ->where('ijin_meninggalkan_pekerjaans.npk', $npk)
+        //     ->orderBy('tanggal', 'asc')
+        //     ->get()
+        //     ->groupBy('npk');
+
         $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
             ->selectRaw("
-            ijin_meninggalkan_pekerjaans.npk,
-            NAMA_KARYAWAN,
-            DEPARTEMENT,
-            tanggal,
-            jam_keluar,
-            rencana_kembali,
-            jam_kembali,
-            reason,
-            CASE 
-                WHEN jam_kembali IS NOT NULL 
-                THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
-                ELSE 0 
-            END as ijin_minutes
-        ")
+                ijin_meninggalkan_pekerjaans.npk,
+                NAMA_KARYAWAN,
+                DEPARTEMENT,
+                tanggal,
+                jam_keluar,
+                rencana_kembali,
+                jam_kembali,
+                reason,
+                CASE 
+                    WHEN jam_kembali IS NOT NULL 
+                    THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+                    ELSE DATEDIFF(MINUTE, jam_keluar, COALESCE(shifts.work_end, '17:00:00'))
+                END as ijin_minutes
+            ")
             ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
             ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
+            ->leftJoin('employee_shifts', function ($join) {
+                $join->on('employee_shifts.npk', '=', 'ijin_meninggalkan_pekerjaans.npk')
+                    ->on('employee_shifts.shift_date', '=', 'ijin_meninggalkan_pekerjaans.tanggal');
+            })
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_shifts.shift_id')
             ->whereBetween('tanggal', [$startDate, $endDate])
             ->where('ijin_meninggalkan_pekerjaans.npk', $npk)
             ->orderBy('tanggal', 'asc')
