@@ -67,7 +67,7 @@
                                 </div>
                                 <div class="card-body">
                                     <form method="POST" action="{{ route('audit-recap.generate') }}"
-                                        class="form-inline">
+                                        class="form-inline" id="generateForm">
                                         @csrf
                                         <label class="mr-2">Periode Payroll</label>
                                         <select name="period_id" class="form-control mr-3" style="min-width:260px">
@@ -82,8 +82,7 @@
                                             @endforelse
                                         </select>
 
-                                        <button type="submit" class="btn btn-primary" {{ $openPeriods->isEmpty() ? 'disabled' : '' }}
-                                            onclick="return confirm('Generate ulang akan menimpa data rekap yang sudah ada untuk periode ini (termasuk jam yang sudah dirapikan sebelumnya). Lanjutkan?')">
+                                        <button type="submit" id="generateSubmitBtn" class="btn btn-primary" {{ $openPeriods->isEmpty() ? 'disabled' : '' }}>
                                             <i class="fas fa-sync-alt"></i> Generate
                                         </button>
                                     </form>
@@ -322,6 +321,46 @@
             });
 
             window.open('/audit-recap/export-pdf?' + params, '_blank');
+        });
+
+        // ------------------------------------------------------------------
+        // Generate Rekap: tampilkan SweetAlert loading begitu user konfirmasi,
+        // supaya ada indikasi visual bahwa proses generate sedang berjalan
+        // (bukan cuma diam menunggu reload halaman). Form ini submit biasa
+        // (bukan AJAX) -- Swal loading tetap tampil sampai halaman baru
+        // (hasil redirect dari controller) selesai dimuat browser.
+        // ------------------------------------------------------------------
+        $('#generateForm').on('submit', function (e) {
+            var periodSelected = $(this).find('select[name="period_id"]').val();
+
+            if (!periodSelected) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Pilih periode payroll dulu',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+                return false;
+            }
+
+            if (!confirm('Generate ulang akan menimpa data rekap yang sudah ada untuk periode ini (termasuk jam yang sudah dirapikan sebelumnya). Lanjutkan?')) {
+                e.preventDefault();
+                return false;
+            }
+
+            Swal.fire({
+                title: 'Sedang generate rekap audit...',
+                html: 'Mohon tunggu, proses ini bisa memakan waktu beberapa saat tergantung jumlah karyawan &amp; hari dalam periode. Jangan tutup atau refresh halaman ini.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: function () {
+                    Swal.showLoading();
+                }
+            });
+
+            // Tidak preventDefault() -> form tetap lanjut submit normal.
         });
     });
 </script>
