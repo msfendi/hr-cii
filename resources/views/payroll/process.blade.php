@@ -1819,12 +1819,12 @@ buttons: [
 
     });
 
-    // TOTAL SALARY (kolom 26) tetap net, tanpa dibalik tandanya
+    // TOTAL SALARY (kolom 27) tetap net, tanpa dibalik tandanya
     let totalSalarySum = rowsData.reduce(function(sum, rowData){
         return sum + Number(rowData.total_salary || 0);
     }, 0);
 
-    $(api.column(26).footer())
+    $(api.column(27).footer())
         .html(formatRupiah(totalSalarySum));
 
 }
