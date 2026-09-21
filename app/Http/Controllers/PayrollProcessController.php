@@ -605,7 +605,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             'pad'     => ['table' => 'pad_efficiencies',      'label' => 'Pad Print Efficiency'],
             'cutting' => ['table' => 'cutting_efficiencies',  'label' => 'Cutting Efficiency'],
             'heat'    => ['table' => 'heat_efficiencies',     'label' => 'Heat Press Efficiency'],
-            'qc'    => ['table' => 'heat_efficiencies',     'label' => 'Heat Press Efficiency'],
+            'qc'    => ['table' => 'qc_efficiencies',     'label' => 'QC Efficiency'],
         ];
 
         $insentifDetail = [];
