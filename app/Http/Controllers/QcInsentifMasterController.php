@@ -532,6 +532,11 @@ class QcInsentifMasterController extends Controller
 
             // dd($qc);
 
+            // 🔹 PERBAIKAN: bulatkan hasil insentif supaya tidak selisih
+            // dengan job (GeneratePayrollProcess/V2 membulatkan tiap
+            // komponen sebelum dijumlahkan ke grandTotal).
+            $qc = round((float) $qc, 0);
+
             if ($qc <= 0) continue;
 
             $dept = $employee->DEPARTEMENT;
@@ -569,9 +574,79 @@ class QcInsentifMasterController extends Controller
             ];
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | GABUNGKAN PER NPK (FIX: 1 NPK 2 ROLE DALAM 1 BULAN)
+        |--------------------------------------------------------------------------
+        | Dedup per (NPK, role) di atas hanya menghilangkan duplikat baris
+        | employee_qc_assignments untuk role yang SAMA. Kalau 1 NPK punya 2
+        | role berbeda dalam periode yang sama (mis. operator lalu jadi
+        | chief), masing-masing role tetap jadi baris terpisah di $results
+        | dan TIDAK dijumlah. Di sini digabung jadi 1 baris per NPK, insentif
+        | diakumulasi, dan role/line_info ditampilkan gabungan.
+        |--------------------------------------------------------------------------
+        */
+        $results = $this->mergeInsentifByNpk($results, 'qc_insentif');
+
         return response()->json([
             'data' => $results
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | GABUNGKAN HASIL INSENTIF PER NPK (SUM LINTAS ROLE)
+    |--------------------------------------------------------------------------
+    */
+
+    private function mergeInsentifByNpk(array $results, string $amountKey): array
+    {
+        $merged = [];
+
+        foreach ($results as $row) {
+            $npk = $row['npk'];
+
+            if (!isset($merged[$npk])) {
+                $merged[$npk] = $row;
+                $merged[$npk]['role'] = [$row['role']];
+                if (array_key_exists('dept', $row)) {
+                    $merged[$npk]['dept'] = [$row['dept']];
+                }
+                if (array_key_exists('line_info', $row)) {
+                    $merged[$npk]['line_info'] = [$row['line_info']];
+                }
+                continue;
+            }
+
+            $merged[$npk][$amountKey] += $row[$amountKey];
+
+            if (!in_array($row['role'], $merged[$npk]['role'], true)) {
+                $merged[$npk]['role'][] = $row['role'];
+            }
+
+            if (array_key_exists('dept', $row) && !in_array($row['dept'], $merged[$npk]['dept'], true)) {
+                $merged[$npk]['dept'][] = $row['dept'];
+            }
+
+            if (array_key_exists('line_info', $row) && !in_array($row['line_info'], $merged[$npk]['line_info'], true)) {
+                $merged[$npk]['line_info'][] = $row['line_info'];
+            }
+        }
+
+        return array_values(array_map(function ($row) {
+            $row['role'] = implode(', ', array_filter($row['role']));
+
+            if (array_key_exists('dept', $row) && is_array($row['dept'])) {
+                $row['dept'] = implode(' | ', array_unique(array_filter($row['dept'])));
+            }
+
+            if (array_key_exists('line_info', $row) && is_array($row['line_info'])) {
+                $filtered = array_filter($row['line_info'], fn($v) => $v !== null && $v !== '-' && $v !== '');
+                $row['line_info'] = $filtered ? implode(' | ', array_unique($filtered)) : '-';
+            }
+
+            return $row;
+        }, $merged));
     }
 
     /*

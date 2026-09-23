@@ -456,6 +456,50 @@ class LineInsentifMasterController extends Controller
 
         /*
     |--------------------------------------------------------------------------
+    | GROUP PER NPK + ROLE (FIX DUPLIKAT ROW -> INSENTIF DIHITUNG 2X)
+    |--------------------------------------------------------------------------
+    | 1 NPK bisa punya beberapa row employee_line_assignments dengan role
+    | yang SAMA tapi line_number berbeda (mis. line 8 di sebagian besar
+    | hari lalu dipindah sementara ke line 3 di 1 hari). Karena
+    | `assignment_line_number` (anpk.line_number) ikut di-SELECT dan
+    | seluruh query ini di-DISTINCT, baris dengan line_number berbeda
+    | TIDAK collapse jadi 1 baris — malah menghasilkan >1 baris employee
+    | untuk NPK yang sama.
+    |
+    | calculateSewing() sendiri sudah menjumlahkan SEMUA assignment milik
+    | NPK tsb untuk role itu (query di dalamnya hanya filter npk + period_id,
+    | tidak filter per baris/line_number), jadi kalau baris duplikat ini
+    | dibiarkan lolos ke loop di bawah, calculateSewing() akan dipanggil &
+    | menghitung ulang TOTAL YANG SAMA beberapa kali — lalu dijumlahkan lagi
+    | oleh mergeInsentifByNpk() → itulah sebabnya beberapa karyawan (yang
+    | pindah line dalam 1 periode) insentifnya terhitung 2x (atau lebih).
+    |
+    | Fix: group dulu per (NPK, role) SEBELUM dihitung, supaya
+    | calculateSewing() hanya dipanggil SEKALI per kombinasi NPK+role.
+    | Line number dari assignment yang ke-collapse tetap dikumpulkan supaya
+    | info "Line ..." di kolom line_info tidak hilang.
+    |--------------------------------------------------------------------------
+    */
+        $employees = $employees
+            ->groupBy(function ($employee) {
+                return $employee->NPK . '|' . strtolower($employee->role ?? '');
+            })
+            ->map(function ($group) {
+                $employee = $group->first();
+
+                $employee->assignment_lines = $group
+                    ->pluck('assignment_line_number')
+                    ->filter(fn($line) => $line !== null && $line !== '')
+                    ->unique()
+                    ->sort()
+                    ->values();
+
+                return $employee;
+            })
+            ->values();
+
+        /*
+    |--------------------------------------------------------------------------
     | FORMULA
     |--------------------------------------------------------------------------
     */
@@ -497,6 +541,11 @@ class LineInsentifMasterController extends Controller
 
             // dd($sewing);
 
+            // 🔹 PERBAIKAN: bulatkan hasil insentif supaya tidak selisih
+            // dengan job (GeneratePayrollProcess/V2 membulatkan tiap
+            // komponen sebelum dijumlahkan ke grandTotal).
+            $sewing = round((float) $sewing, 0);
+
             if ($sewing <= 0) continue;
 
             $dept = $employee->DEPARTEMENT;
@@ -513,8 +562,8 @@ class LineInsentifMasterController extends Controller
             $roleLower = strtolower($employee->role ?? '');
 
             if (in_array($roleLower, ['operator', 'supervisor'])) {
-                $lineInfo = $employee->assignment_line_number
-                    ? 'Line ' . $employee->assignment_line_number
+                $lineInfo = (isset($employee->assignment_lines) && $employee->assignment_lines->isNotEmpty())
+                    ? 'Line ' . $employee->assignment_lines->implode(', ')
                     : '-';
             } else {
                 $lineInfo = ($employee->line_start !== null && $employee->line_end !== null)
@@ -534,9 +583,78 @@ class LineInsentifMasterController extends Controller
             ];
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | GABUNGKAN PER NPK (FIX: 1 NPK 2 ROLE DALAM 1 BULAN)
+        |--------------------------------------------------------------------------
+        | Sebelum ini, tiap (NPK, role) jadi baris terpisah di $results, jadi
+        | kalau 1 NPK punya 2 role dalam periode yang sama (mis. operator lalu
+        | jadi supervisor), insentifnya muncul sebagai 2 baris berbeda dan
+        | TIDAK dijumlah. Di sini digabung jadi 1 baris per NPK, insentif
+        | diakumulasi, dan role/line_info ditampilkan gabungan.
+        |--------------------------------------------------------------------------
+        */
+        $results = $this->mergeInsentifByNpk($results, 'sewing_insentif');
+
         return response()->json([
             'data' => $results
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | GABUNGKAN HASIL INSENTIF PER NPK (SUM LINTAS ROLE)
+    |--------------------------------------------------------------------------
+    */
+
+    private function mergeInsentifByNpk(array $results, string $amountKey): array
+    {
+        $merged = [];
+
+        foreach ($results as $row) {
+            $npk = $row['npk'];
+
+            if (!isset($merged[$npk])) {
+                $merged[$npk] = $row;
+                $merged[$npk]['role'] = [$row['role']];
+                if (array_key_exists('dept', $row)) {
+                    $merged[$npk]['dept'] = [$row['dept']];
+                }
+                if (array_key_exists('line_info', $row)) {
+                    $merged[$npk]['line_info'] = [$row['line_info']];
+                }
+                continue;
+            }
+
+            $merged[$npk][$amountKey] += $row[$amountKey];
+
+            if (!in_array($row['role'], $merged[$npk]['role'], true)) {
+                $merged[$npk]['role'][] = $row['role'];
+            }
+
+            if (array_key_exists('dept', $row) && !in_array($row['dept'], $merged[$npk]['dept'], true)) {
+                $merged[$npk]['dept'][] = $row['dept'];
+            }
+
+            if (array_key_exists('line_info', $row) && !in_array($row['line_info'], $merged[$npk]['line_info'], true)) {
+                $merged[$npk]['line_info'][] = $row['line_info'];
+            }
+        }
+
+        return array_values(array_map(function ($row) {
+            $row['role'] = implode(', ', array_filter($row['role']));
+
+            if (array_key_exists('dept', $row) && is_array($row['dept'])) {
+                $row['dept'] = implode(' | ', array_unique(array_filter($row['dept'])));
+            }
+
+            if (array_key_exists('line_info', $row) && is_array($row['line_info'])) {
+                $filtered = array_filter($row['line_info'], fn($v) => $v !== null && $v !== '-' && $v !== '');
+                $row['line_info'] = $filtered ? implode(' | ', array_unique($filtered)) : '-';
+            }
+
+            return $row;
+        }, $merged));
     }
 
     /*
