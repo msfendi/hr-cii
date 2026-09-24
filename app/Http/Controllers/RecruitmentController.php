@@ -168,6 +168,14 @@ class RecruitmentController extends Controller
         return DataTables::of($query)
             ->orderColumn('PELAMAR.id', 'PELAMAR.id $1')
 
+            // ── Filter: Departemen / Posisi ────────────────────────────────
+            ->filterColumn('pd.department', function ($query, $keyword) {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('pd.department', 'like', "%{$keyword}%")
+                        ->orWhere('pd.jabatan', 'like', "%{$keyword}%");
+                });
+            })
+
             // ── Nomor urut ─────────────────────────────────────────────────
             ->addIndexColumn()
 
@@ -267,7 +275,7 @@ class RecruitmentController extends Controller
                 $sClass = match ($sa) {
                     'APPLIED'            => 's-applied',
                     'INVITATION TEST'    => 's-test',
-                    'CALLED TO INTERVIEW'=> 's-interview',
+                    'CALLED TO INTERVIEW' => 's-interview',
                     'READY FOR SALARY'   => 's-salary',
                     'ONBOARDING'         => 's-onboard',
                     'REJECTED'           => 's-reject',
@@ -276,7 +284,7 @@ class RecruitmentController extends Controller
                 $sIcon = match ($sa) {
                     'APPLIED'            => 'fa-inbox',
                     'INVITATION TEST'    => 'fa-vial',
-                    'CALLED TO INTERVIEW'=> 'fa-comments',
+                    'CALLED TO INTERVIEW' => 'fa-comments',
                     'READY FOR SALARY'   => 'fa-money-check-alt',
                     'ONBOARDING'         => 'fa-check-circle',
                     'REJECTED'           => 'fa-times-circle',
@@ -492,9 +500,18 @@ class RecruitmentController extends Controller
             })
 
             ->rawColumns([
-                'col_nama', 'col_nik', 'col_pendidikan', 'col_fisik',
-                'col_kontak', 'col_agama', 'col_dept', 'col_tgl_apply',
-                'col_status', 'col_hasil', 'col_dokumen', 'col_aksi',
+                'col_nama',
+                'col_nik',
+                'col_pendidikan',
+                'col_fisik',
+                'col_kontak',
+                'col_agama',
+                'col_dept',
+                'col_tgl_apply',
+                'col_status',
+                'col_hasil',
+                'col_dokumen',
+                'col_aksi',
             ])
             ->make(true);
     }
@@ -516,7 +533,7 @@ class RecruitmentController extends Controller
             'comment_user' => $request->comment_user,
         ];
 
-                
+
         $now = date('Y-m-d');
 
         if ($request->filled('result_interview')) {
@@ -635,7 +652,7 @@ class RecruitmentController extends Controller
         return back()->with('error', 'Failed to send WhatsApp message: ' . ($response['reason'] ?? 'Unknown error'));
     }
 
-    
+
     public function edit($id)
     {
         $pelamar = DB::connection('cii')->table('PELAMAR')
@@ -767,7 +784,6 @@ class RecruitmentController extends Controller
 
             Alert::success('Berhasil', 'Data pelamar berhasil diperbarui!');
             return redirect()->route('recruitment.index');
-
         } catch (\Exception $e) {
             DB::connection('cii')->rollBack();
             Alert::error('Gagal', 'Terjadi kesalahan: ' . $e->getMessage());
