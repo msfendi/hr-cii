@@ -18,6 +18,7 @@ class EmployeeQcAssignment extends Model
         'end_date',
         'work_hours',
         'buyer',
+        'third_party',
     ];
 
     protected $casts = [

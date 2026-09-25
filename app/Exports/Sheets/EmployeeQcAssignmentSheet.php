@@ -28,6 +28,7 @@ class EmployeeQcAssignmentSheet implements WithTitle, WithHeadings, WithEvents
             'date',
             'work_hours',
             'buyer',
+            'third_party',
         ];
     }
 
@@ -37,10 +38,10 @@ class EmployeeQcAssignmentSheet implements WithTitle, WithHeadings, WithEvents
         $spreadsheet = $sheet->getParent();
 
         // bold header
-        $sheet->getStyle('A1:G1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:H1')->getFont()->setBold(true);
 
         // auto width
-        foreach (range('A', 'G') as $column) {
+        foreach (range('A', 'H') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
@@ -113,6 +114,41 @@ class EmployeeQcAssignmentSheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('E8', $date);
         $sheet->setCellValue('F8', '8');
         $sheet->setCellValue('G8', 'MUJI');
+
+        // contoh third_party (kolom H, opsional):
+        // - qa dengan third_party  : line diambil by buyer + third_party
+        // - qa_leader memegang lebih dari 1 third_party pada tanggal yang
+        //   sama => 1 baris per third_party, total insentif dibagi jumlah
+        //   third_party yang dipegang (PQC + TENTAC => dibagi 2).
+        $sheet->setCellValue('A9', 'C-00831');
+        $sheet->setCellValue('B9', 'Contoh QA Third Party');
+        $sheet->setCellValue('C9', '');
+        $date = Date::stringToExcel('2026-01-12');
+        $sheet->setCellValue('D9', 'qa');
+        $sheet->setCellValue('E9', $date);
+        $sheet->setCellValue('F9', '8');
+        $sheet->setCellValue('G9', 'MUJI');
+        $sheet->setCellValue('H9', 'PQC');
+
+        $sheet->setCellValue('A10', 'C-00832');
+        $sheet->setCellValue('B10', 'Contoh QA Leader');
+        $sheet->setCellValue('C10', '');
+        $date = Date::stringToExcel('2026-01-12');
+        $sheet->setCellValue('D10', 'qa_leader');
+        $sheet->setCellValue('E10', $date);
+        $sheet->setCellValue('F10', '8');
+        $sheet->setCellValue('G10', 'MUJI');
+        $sheet->setCellValue('H10', 'PQC');
+
+        $sheet->setCellValue('A11', 'C-00832');
+        $sheet->setCellValue('B11', 'Contoh QA Leader');
+        $sheet->setCellValue('C11', '');
+        $date = Date::stringToExcel('2026-01-12');
+        $sheet->setCellValue('D11', 'qa_leader');
+        $sheet->setCellValue('E11', $date);
+        $sheet->setCellValue('F11', '8');
+        $sheet->setCellValue('G11', 'MUJI');
+        $sheet->setCellValue('H11', 'TENTAC');
 
         // NOTE: sesuaikan value 'qc' pada where('dept', ...) ini
         // dengan nama dept yang benar-benar dipakai untuk role QC

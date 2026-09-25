@@ -1968,49 +1968,69 @@ END AS special_overtime_hours
                                 | dibagi Total Line (sama seperti Chief & QA).
                                 |--------------------------------------------
                                 */
-                                $validRoles = ['chief', 'qa', 'spv'];
+                                $validRoles = ['chief', 'qa', 'qa_leader', 'spv'];
 
                                 if (!in_array($assignment->role, $validRoles)) {
                                     continue;
                                 }
 
-                                if ($assignment->role === 'qa') {
+                                if (in_array($assignment->role, ['qa', 'qa_leader'], true)) {
 
                                     /*
-                                    |----------------------------------------
-                                    | QA: line ditentukan dari kolom BUYER di
-                                    | employee_qc_assignments (bukan lagi dari
-                                    | line_setup CSV).
+                                    |--------------------------------------------------------------------------
+                                    | QA / QA LEADER: line ditentukan dari BUYER + THIRD PARTY di
+                                    | employee_qc_assignments.
                                     |
-                                    | Tiap row assignment qa (1 row = 1 tanggal)
-                                    | punya buyer sendiri, mis. tanggal 1 buyer
-                                    | = "muji". Line & jumlahLine untuk tanggal
-                                    | itu diambil dari qc_efficiencies pada
-                                    | tanggal yang sama dengan buyer yang sama
-                                    | (bukan dari daftar line manual).
-                                    |----------------------------------------
+                                    | - third_party terisi  : lines diambil dari qc_efficiencies dengan
+                                    |                         date + buyer + third_party yang sama.
+                                    | - third_party kosong  : lines diambil berdasarkan date + buyer saja.
+                                    |
+                                    | QA LEADER: total insentif per tanggal dibagi jumlah third_party yang
+                                    | dipegang di tanggal tsb (mis. PQC + TENTAC => total / 2).
+                                    |--------------------------------------------------------------------------
                                     */
                                     $qaAssignments = DB::table('employee_qc_assignments')
                                         ->where('npk', $employee->NPK)
                                         ->where('period_id', $period->id)
-                                        ->where('role', 'qa')
+                                        ->where('role', $assignment->role)
+                                        ->whereNull('line_number') // QA / QA leader: hanya assignment tanpa line_number
                                         ->whereBetween('start_date', [
                                             $period->start_date,
                                             $period->end_date
                                         ])
-                                        ->select('start_date as date', 'buyer')
+                                        ->select('start_date as date', 'buyer', 'third_party')
                                         ->orderBy('start_date')
-                                        ->get();
+                                        ->get()
+                                        ->map(function ($row) {
+                                            $thirdParty = trim((string) ($row->third_party ?? ''));
+                                            $row->third_party = $thirdParty !== '' ? $thirdParty : null;
+
+                                            return $row;
+                                        })
+                                        // Hindari row ganda (tanggal + buyer + third_party sama) terhitung 2x.
+                                        ->unique(fn($row) => $row->date . '|' . strtoupper((string) $row->buyer) . '|' . strtoupper((string) $row->third_party))
+                                        ->values();
 
                                     if ($qaAssignments->isEmpty()) {
                                         continue;
                                     }
 
-                                    // Untuk tiap tanggal, ambil line-line di
-                                    // qc_efficiencies yang buyer-nya sama dengan
-                                    // buyer assignment tanggal itu. Sekalian
-                                    // kumpulkan union line_number (dipakai untuk
-                                    // lineViolations, sama seperti sebelumnya).
+                                    // Jumlah third_party yang dipegang per tanggal (dipakai untuk QA LEADER).
+                                    // Dihitung dari assignment (bukan dari data efficiency), jadi third_party
+                                    // yang dipegang tapi belum ada efficiency-nya tetap ikut sebagai pembagi.
+                                    $jumlahThirdPartyByDate = $qaAssignments
+                                        ->groupBy(fn($row) => (string) $row->date)
+                                        ->map(
+                                            fn($rows) => $rows->pluck('third_party')
+                                                ->filter()
+                                                ->map(fn($tp) => strtoupper($tp))
+                                                ->unique()
+                                                ->count()
+                                        );
+
+                                    // Untuk tiap assignment, ambil line-line di qc_efficiencies sesuai
+                                    // buyer (+ third_party jika ada). Sekalian kumpulkan union line_number
+                                    // (dipakai untuk lineViolations).
                                     $qaByDate = collect([]);
                                     $allLineNumbers = collect([]);
 
@@ -2020,19 +2040,26 @@ END AS special_overtime_hours
                                             continue;
                                         }
 
-                                        $linesOfDay = DB::table('qc_efficiencies')
+                                        $linesQuery = DB::table('qc_efficiencies')
                                             ->where('period_id', $period->id)
                                             ->where('date', $qaAssignment->date)
-                                            ->where('buyer', $qaAssignment->buyer)
-                                            ->get();
+                                            ->where('buyer', $qaAssignment->buyer);
+
+                                        // third_party kosong / null => cukup by buyer saja
+                                        if ($qaAssignment->third_party !== null) {
+                                            $linesQuery->where('third_party', $qaAssignment->third_party);
+                                        }
+
+                                        $linesOfDay = $linesQuery->get();
 
                                         if ($linesOfDay->isEmpty()) {
                                             continue;
                                         }
 
                                         $qaByDate->push((object) [
-                                            'date'  => $qaAssignment->date,
-                                            'lines' => $linesOfDay,
+                                            'date'        => $qaAssignment->date,
+                                            'third_party' => $qaAssignment->third_party,
+                                            'lines'       => $linesOfDay,
                                         ]);
 
                                         $allLineNumbers = $allLineNumbers->merge($linesOfDay->pluck('line_number'));
@@ -2046,7 +2073,7 @@ END AS special_overtime_hours
 
                                     // NOTE: reuses sewing_violations, sama seperti chief/spv,
                                     // cuma filter line-nya pakai gabungan seluruh line hasil
-                                    // pencarian buyer sepanjang periode (IN), bukan range
+                                    // pencarian buyer/third_party sepanjang periode (IN), bukan range
                                     // section (BETWEEN).
                                     $lineViolations = DB::table('sewing_violations')
                                         ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
@@ -2062,52 +2089,69 @@ END AS special_overtime_hours
                                         ->count();
 
                                     $collectionDay = collect([]);
+                                    $collectionTotalLines = collect([]);
                                     $collectionLines = collect([]);
 
-                                    foreach ($qaByDate as $day) {
+                                    // Proses PER TANGGAL: 1 tanggal bisa punya >1 entry (beda third_party).
+                                    foreach ($qaByDate->groupBy(fn($entry) => (string) $entry->date) as $entries) {
 
-                                        if ($tkkDate && $day->date >= $tkkDate) {
+                                        $date = $entries->first()->date;
+
+                                        if ($tkkDate && $date >= $tkkDate) {
                                             continue;
                                         }
 
-                                        if (!$isValidOvertime($day->date)) {
+                                        if (!$isValidOvertime($date)) {
                                             continue;
                                         }
 
-                                        $totalLineInsentif = 0;
+                                        $dayAmount = 0;
 
-                                        foreach ($day->lines as $line) {
+                                        foreach ($entries as $entry) {
 
-                                            // Cutoff di luar tier tertinggi sudah
-                                            // ditangani oleh getInsentifByDefectRate()
-                                            // sendiri, sama seperti controller.
-                                            $totalLineInsentif +=
-                                                $this->getInsentifByDefectRate($line->efficiency, $qcInsentifFormula);
+                                            $totalLineInsentif = 0;
 
-                                            if ($totalLineInsentif <= 0) {
-                                                continue;
+                                            foreach ($entry->lines as $line) {
+
+                                                // Cutoff di luar tier tertinggi sudah ditangani oleh
+                                                // getInsentifByDefectRate() sendiri.
+                                                $totalLineInsentif +=
+                                                    $this->getInsentifByDefectRate($line->efficiency, $qcInsentifFormula);
+
+                                                if ($totalLineInsentif <= 0) {
+                                                    continue;
+                                                }
+
+                                                $collectionLines->push($totalLineInsentif);
                                             }
 
-                                            $collectionLines->push($totalLineInsentif);
+                                            // jumlahLine dihitung per entry (buyer [+ third_party] pada tanggal tsb).
+                                            $jumlahLine = $entry->lines->count();
+
+                                            $dayAmount += $this->calculateRoleSewingInsentif(
+                                                $assignment->role,
+                                                'qc',
+                                                $totalLineInsentif,
+                                                $jumlahLine,
+                                                $lineViolations,
+                                                $employee->violation_percentage
+                                            );
+
+                                            $collectionTotalLines->push($jumlahLine);
                                         }
 
-                                        // jumlahLine dihitung PER TANGGAL, dari
-                                        // jumlah line di qc_efficiencies yang
-                                        // buyer-nya sama dengan buyer assignment
-                                        // tanggal itu.
-                                        $jumlahLine = $day->lines->count();
+                                        // QA LEADER: total insentif dibagi jumlah third_party yang dipegang
+                                        // pada tanggal tsb. Kalau tidak ada third_party => tidak dibagi.
+                                        if ($assignment->role === 'qa_leader') {
+                                            $jumlahThirdParty = max($jumlahThirdPartyByDate[(string) $date] ?? 0, 1);
+                                            $dayAmount = $dayAmount / $jumlahThirdParty;
+                                        }
 
-                                        $amount += $this->calculateRoleSewingInsentif(
-                                            $assignment->role,
-                                            'qc',
-                                            $totalLineInsentif,
-                                            $jumlahLine,
-                                            $lineViolations,
-                                            $employee->violation_percentage
-                                        );
+                                        $amount += $dayAmount;
 
                                         $collectionDay->push($amount);
                                     }
+
                                 } else {
 
                                     $section = DB::table('sections')

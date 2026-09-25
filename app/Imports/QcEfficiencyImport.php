@@ -18,9 +18,16 @@ class QcEfficiencyImport implements ToModel, WithHeadingRow
 
     public function model(array $row)
     {
+        // third_party opsional: kosong / kolom tidak ada => null
+        $thirdParty = isset($row['third_party']) && trim((string) $row['third_party']) !== ''
+            ? trim((string) $row['third_party'])
+            : null;
+
         return QcEfficiency::updateOrCreate(
             [
                 'line_number' => $row['line_number'],
+                'buyer' => $row['buyer'],
+                'third_party' => $thirdParty,
                 'date' =>
                 !empty($row['date'])
                     ? Date::excelToDateTimeObject($row['date'])
@@ -30,7 +37,6 @@ class QcEfficiencyImport implements ToModel, WithHeadingRow
             [
                 'efficiency' => $row['efficiency'],
                 'days'       => $row['days'],
-                'buyer'      => $row['buyer'] ?? null,
             ]
         );
     }

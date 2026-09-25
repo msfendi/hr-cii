@@ -26,6 +26,11 @@ class EmployeeQcAssignmentImport implements ToModel, WithHeadingRow
 
         $sectionId = null;
 
+        // third_party opsional: kosong / kolom tidak ada => null
+        $thirdParty = isset($row['third_party']) && trim((string) $row['third_party']) !== ''
+            ? trim((string) $row['third_party'])
+            : null;
+
         $biodataUnion = DB::connection('cii')
             ->table('BIODATA')
             ->select(
@@ -62,6 +67,8 @@ class EmployeeQcAssignmentImport implements ToModel, WithHeadingRow
             [
                 'npk'         => $row['npk'],
                 'line_number' => $row['line_number'],
+                'buyer' => $row['buyer'],
+                'third_party' => $thirdParty,
                 'start_date'  => $startDate,
                 'period_id'   => $this->periodId,
             ],
@@ -71,7 +78,6 @@ class EmployeeQcAssignmentImport implements ToModel, WithHeadingRow
                 'end_date'   => $startDate,
                 'work_hours' => $row['work_hours'],
                 'section_id' => $sectionId,
-                'buyer'      => $row['buyer'] ?? null,
             ]
         );
     }
