@@ -2412,7 +2412,10 @@ function updateFormulaWithColors() {
         const ta = (s.totals || {}).all || {};
         const tj = (s.totals || {}).barang_jadi || {};
 
-        const catRows = json.shipmentByCategory || [];
+        // Per Kategori Barang: cukup Barang Jadi saja.
+        const isJadi = r => String(r.barang_category ?? '').trim().toLowerCase() === 'barang jadi';
+        const catRows = (Array.isArray(s.by_category) ? s.by_category : (json.shipmentByCategory || []))
+            .filter(isJadi);
         const catTable = dGrid([
             { label: 'Kategori Barang', val: r => dv(r.barang_category) },
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
@@ -2422,6 +2425,15 @@ function updateFormulaWithColors() {
             filter: false,
         });
 
+        // Per Tanggal & No. Bukti: cukup dokumen BC 3.0 saja (service sudah
+        // memfilter; filter di sini menjaga tampilan tetap benar bila payload lama).
+        const isBc30 = r => String(r.jenis_doc ?? '').trim().toUpperCase() === 'BC 3.0';
+        const byDateRows = (s.by_date || []).filter(isBc30);
+        const tb = (s.totals || {}).bc30 || {
+            row_count: dSum(byDateRows, 'row_count'),
+            jumlah_barang: dSum(byDateRows, 'jumlah_barang'),
+            nilai_fob: dSum(byDateRows, 'nilai_fob'),
+        };
         const byDate = dGrid([
             { label: 'Tgl Bukti', val: r => dDate(r.tgl_bukti) },
             { label: 'No. Bukti', val: r => dv(r.no_bukti) },
@@ -2429,10 +2441,17 @@ function updateFormulaWithColors() {
             { label: 'Jml Baris', right: true, val: r => fmtNum(r.row_count) },
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
             { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
-        ], s.by_date, {
-            foot: dFoot(3, [dS(fmtNum(ta.row_count), 'row_count'), dS(fmtNum(ta.jumlah_barang), 'jumlah_barang'), dS(fmtNum(ta.nilai_fob), 'nilai_fob')]),
+        ], byDateRows, {
+            foot: dFoot(3, [dS(fmtNum(tb.row_count), 'row_count'), dS(fmtNum(tb.jumlah_barang), 'jumlah_barang'), dS(fmtNum(tb.nilai_fob), 'nilai_fob')]),
         });
 
+        // Baris Dokumen Shipment: cukup dokumen BC 3.0 saja.
+        const docRows = (s.rows || []).filter(isBc30);
+        const tr = (s.totals || {}).bc30_rows || {
+            row_count: docRows.length,
+            jumlah_barang: dSum(docRows, 'jumlah_barang'),
+            nilai_fob: dSum(docRows, 'nilai_fob'),
+        };
         const rows = dGrid([
             { label: 'Tgl Bukti', val: r => dDate(r.tgl_bukti) },
             { label: 'No. Bukti', val: r => dv(r.no_bukti) },
@@ -2449,18 +2468,18 @@ function updateFormulaWithColors() {
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
             { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
             { label: 'Berat', right: true, val: r => dDec(r.berat, 2) },
-        ], s.rows, {
-            foot: dFoot(12, [dS(fmtNum(ta.jumlah_barang), 'jumlah_barang'), dS(fmtNum(ta.nilai_fob), 'nilai_fob'), '']),
-            total: ta.row_count,
+        ], docRows, {
+            foot: dFoot(12, [dS(fmtNum(tr.jumlah_barang), 'jumlah_barang'), dS(fmtNum(tr.nilai_fob), 'nilai_fob'), '']),
+            total: tr.row_count,
         });
 
         const shipByDateTotal = dSum(json.shipmentByDate || [], 'jumlah_barang');
 
         return dSection('Shipment By Date',
-            dSub('Per Kategori Barang', catTable, dRecon(tj.jumlah_barang, p.shipment, 'Barang Jadi vs Shipment (Total) di pipeline'))
+            dSub('Per Kategori Barang — Barang Jadi', catTable, dRecon(tj.jumlah_barang, p.shipment, 'Barang Jadi vs Shipment (Total) di pipeline'))
             + `<div class="rekon-detail-note mb-2">Grafik memakai semua kategori (${fmtNum(ta.jumlah_barang)} Pcs)${dRecon(ta.jumlah_barang, shipByDateTotal, 'Total breakdown vs total grafik').replace('ml-1', 'ml-1')}; box "Shipment (Total)" di pipeline hanya Barang Jadi (${fmtNum(tj.jumlah_barang)} Pcs).</div>`
-            + dSub('Per Tanggal & No. Bukti (mon_shipments)', byDate)
-            + dSub('Baris Dokumen Shipment (mon_shipments)', rows)
+            + dSub('Per Tanggal & No. Bukti — BC 3.0 (mon_shipments)', byDate)
+            + dSub('Baris Dokumen Shipment — BC 3.0 (mon_shipments)', rows)
         );
     }
 

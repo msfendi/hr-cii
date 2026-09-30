@@ -60,6 +60,10 @@ class MonitoringRekonsiliasiService
     /** Cache hasil resolve daftar uraian (CPO) dari filter Buyer/Style/CPO. */
     private ?array $resolvedUraian = null;
 
+    /** Cache hasil resolve daftar OCF mon_stage_remarks yang relevan dengan filter aktif. */
+    private ?array $resolvedRemarkOcf = null;
+    private bool $remarkOcfResolved = false;
+
     public function __construct(protected array $filters = []) {}
 
     public static function make(array $filters): self
@@ -1372,8 +1376,9 @@ class MonitoringRekonsiliasiService
 
     /**
      * Ambil daftar remark (mon_stage_remarks.id + .remark) untuk 1
-     * department_id, dicocokkan juga dengan filter OCF yang aktif (kolom
-     * mon_stage_remarks.ocf_no) -- dipakai untuk menampilkan remark di
+     * department_id, dicocokkan ke filter aktif lewat OCF (kolom
+     * mon_stage_remarks.ocf_no), termasuk saat filter berupa CPO/uraian
+     * (lihat remarkOcfScope()) -- dipakai untuk menampilkan remark di
      * bawah persentase loss pada tiap stage box di PRODUCTION FLOW /
      * STAGE PIPELINE.
      *
@@ -1389,10 +1394,15 @@ class MonitoringRekonsiliasiService
         $query = DB::table('mon_stage_remarks')
             ->where('department_id', $departmentId);
 
-        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
-        if ($ocf !== '') {
-            $query->whereNotNull('ocf_no')
-                ->whereRaw('UPPER(ocf_no) LIKE ?', ['%' . strtoupper($ocf) . '%']);
+        // mon_stage_remarks HANYA menyimpan `ocf_no` (tidak ada kolom uraian/
+        // CPO). Supaya remark tetap ketemu saat user mencari lewat CPO
+        // (uraian) / Buyer / Style / Negara / Sub Ref -- bukan cuma OCF --
+        // OCF-nya di-resolve dulu dari beberapa tabel yang punya uraian
+        // (lihat remarkOcfScope()).
+        $scope = $this->remarkOcfScope();
+        if ($scope !== null) {
+            // whereIn dengan array kosong otomatis menghasilkan 0 baris.
+            $query->whereIn('ocf_no', $scope);
         }
 
         return $query->orderByDesc('id')
@@ -1401,6 +1411,129 @@ class MonitoringRekonsiliasiService
             ->filter(fn($row) => trim((string) $row->remark) !== '')
             ->map(fn($row) => ['id' => $row->id, 'remark' => $row->remark])
             ->values();
+    }
+
+    /**
+     * Daftar nilai mon_stage_remarks.ocf_no (apa adanya) yang relevan dengan
+     * filter yang sedang aktif. Null = tidak ada filter sama sekali (semua
+     * remark ditampilkan seperti sebelumnya).
+     *
+     *  - Filter OCF          : LIKE '%{ocf}%' langsung ke mon_stage_remarks.ocf_no.
+     *  - Filter CPO(uraian)/Buyer/Style/Negara/Sub Ref : daftar uraian
+     *    di-resolve dulu (cpoListExcluding()), lalu tiap OCF yang ada di
+     *    mon_stage_remarks dicek apakah muncul pada baris-baris dengan
+     *    uraian tsb di beberapa tabel (lihat remarkOcfMatchesUraian()).
+     *  - Kalau OCF & filter lain aktif bersamaan -> IRISAN keduanya.
+     */
+    private function remarkOcfScope(): ?array
+    {
+        if ($this->remarkOcfResolved) {
+            return $this->resolvedRemarkOcf;
+        }
+
+        $this->remarkOcfResolved = true;
+
+        if (!$this->hasAnyFilterInput()) {
+            return $this->resolvedRemarkOcf = null;
+        }
+
+        $remarkOcfs = DB::table('mon_stage_remarks')
+            ->whereNotNull('ocf_no')
+            ->distinct()
+            ->pluck('ocf_no')
+            ->map(fn($v) => (string) $v)
+            ->filter(fn($v) => trim($v) !== '')
+            ->values()
+            ->all();
+
+        $result = $remarkOcfs;
+
+        $ocf = strtoupper(trim((string) ($this->filters['ocf'] ?? '')));
+        if ($ocf !== '') {
+            $result = array_values(array_filter(
+                $result,
+                fn($v) => str_contains(strtoupper($v), $ocf)
+            ));
+        }
+
+        // Filter selain OCF (uraian/brand/style/negara/sub_ref) -> uraian list.
+        $uraianScope = $this->cpoListExcluding(['ocf']);
+        if ($uraianScope !== null) {
+            $result = empty($uraianScope)
+                ? []
+                : array_values(array_filter(
+                    $result,
+                    fn($v) => $this->remarkOcfMatchesUraian($v, $uraianScope)
+                ));
+        }
+
+        return $this->resolvedRemarkOcf = $result;
+    }
+
+    /**
+     * Apakah OCF $ocfNo (dari mon_stage_remarks) terkait dengan salah satu
+     * uraian di $uraianList? Dicek ke beberapa tabel, berhenti di tabel
+     * pertama yang match:
+     *  - mon_orders            : uraian + ocf_no (exact)
+     *  - mon_purchase_orders   : uraian + spesifikasi LIKE OCF
+     *  - mon_rekonsiliasis     : uraian + spesifikasi LIKE OCF
+     *  - mon_shipments         : uraian + (no_ps / spesifikasi) LIKE OCF
+     *  - mon_work_orders       : uraian + code_prod LIKE OCF
+     *  - mon_prod_lines        : code_prod LIKE OCF dan LIKE salah satu uraian
+     *                            (tabel ini tidak punya kolom uraian)
+     */
+    private function remarkOcfMatchesUraian(string $ocfNo, array $uraianList): bool
+    {
+        $like = '%' . strtoupper(trim($ocfNo)) . '%';
+
+        $checks = [
+            fn($ur) => DB::table('mon_orders')
+                ->whereIn('uraian', $ur)->where('ocf_no', trim($ocfNo)),
+            fn($ur) => DB::table('mon_purchase_orders')
+                ->whereIn('uraian', $ur)->whereRaw('UPPER(spesifikasi) LIKE ?', [$like]),
+            fn($ur) => DB::table('mon_rekonsiliasis')
+                ->whereIn('uraian', $ur)->whereRaw('UPPER(spesifikasi) LIKE ?', [$like]),
+            fn($ur) => DB::table('mon_shipments')
+                ->whereIn('uraian', $ur)
+                ->where(function ($q) use ($like) {
+                    $q->whereRaw('UPPER(no_ps) LIKE ?', [$like])
+                        ->orWhereRaw('UPPER(spesifikasi) LIKE ?', [$like]);
+                }),
+            fn($ur) => DB::table('mon_work_orders')
+                ->whereIn('uraian', $ur)->whereRaw('UPPER(code_prod) LIKE ?', [$like]),
+        ];
+
+        // Chunk supaya aman dari batas parameter SQL Server (2100).
+        foreach (array_chunk(array_values($uraianList), 500) as $chunk) {
+            foreach ($checks as $build) {
+                try {
+                    if ($build($chunk)->exists()) {
+                        return true;
+                    }
+                } catch (\Throwable $e) {
+                    // Tabel/kolom sumber belum ada di environment ini -- lewati.
+                    continue;
+                }
+            }
+
+            try {
+                $found = DB::table('mon_prod_lines')
+                    ->whereRaw('UPPER(code_prod) LIKE ?', [$like])
+                    ->where(function ($q) use ($chunk) {
+                        foreach ($chunk as $cpo) {
+                            $q->orWhereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper((string) $cpo) . '%']);
+                        }
+                    })
+                    ->exists();
+                if ($found) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                // dilewati
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2458,7 +2591,8 @@ class MonitoringRekonsiliasiService
      *  - `totals.all`         : semua kategori (= total grafik shipmentByDate()).
      *  - `totals.barang_jadi` : hanya Barang Jadi (= box "Shipment (Total)"
      *                           di pipeline, shipmentSumByCategory(JADI)).
-     *  - `by_date`            : per tanggal + no_bukti.
+     *  - `totals.bc30`        : hanya dokumen BC 3.0 (dasar tabel `by_date`).
+     *  - `by_date`            : per tanggal + no_bukti, HANYA BC 3.0.
      *  - `rows`               : baris dokumen mentah.
      */
     private function shipmentBreakdown(): array
@@ -2475,7 +2609,28 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
             ->first();
 
-        $byDate = $this->shipmentQuery()
+        // Tabel "Per Kategori Barang" hanya menampilkan Barang Jadi.
+        $byCategory = $this->shipmentQuery()
+            ->where('barang_category', MsBarang::CATEGORY_JADI)
+            ->select('barang_category')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->groupBy('barang_category')
+            ->get();
+
+        // Tabel "Per Tanggal & No. Bukti" hanya menampilkan dokumen BC 3.0.
+        $bc30Base = fn() => $this->shipmentQuery()
+            ->whereRaw("UPPER(LTRIM(RTRIM(jenis_doc))) = 'BC 3.0'");
+
+        $bc30 = $bc30Base()
+            ->whereNotNull('tgl_bukti')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->first();
+
+        $byDate = $bc30Base()
             ->whereNotNull('tgl_bukti')
             ->select('tgl_bukti', 'no_bukti', 'jenis_doc')
             ->selectRaw('COUNT(*) as row_count')
@@ -2487,7 +2642,15 @@ class MonitoringRekonsiliasiService
             ->limit(self::DETAIL_ROW_LIMIT)
             ->get();
 
-        $rows = $this->shipmentQuery()
+        // Tabel "Baris Dokumen Shipment" juga hanya BC 3.0 (tanpa syarat
+        // tgl_bukti, jadi totalnya dihitung terpisah dari $bc30 di atas).
+        $bc30Rows = $bc30Base()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->first();
+
+        $rows = $bc30Base()
             ->select(
                 'tgl_bukti',
                 'no_bukti',
@@ -2522,9 +2685,20 @@ class MonitoringRekonsiliasiService
                     'row_count'     => (int) ($jadi->row_count ?? 0),
                     'jumlah_barang' => (float) ($jadi->jumlah_barang ?? 0),
                 ],
+                'bc30_rows' => [
+                    'row_count'     => (int) ($bc30Rows->row_count ?? 0),
+                    'jumlah_barang' => (float) ($bc30Rows->jumlah_barang ?? 0),
+                    'nilai_fob'     => (float) ($bc30Rows->nilai_fob ?? 0),
+                ],
+                'bc30' => [
+                    'row_count'     => (int) ($bc30->row_count ?? 0),
+                    'jumlah_barang' => (float) ($bc30->jumlah_barang ?? 0),
+                    'nilai_fob'     => (float) ($bc30->nilai_fob ?? 0),
+                ],
             ],
-            'by_date' => $byDate,
-            'rows'    => $rows,
+            'by_category' => $byCategory,
+            'by_date'     => $byDate,
+            'rows'        => $rows,
         ];
     }
 }
