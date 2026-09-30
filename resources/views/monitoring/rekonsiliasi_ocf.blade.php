@@ -340,6 +340,22 @@
                     </div>
                 </div> -->
 
+                {{-- ================= ACCORDION: FABRIC ACHIEVEMENT + FABRIC USAGE PERCENTAGE + SHIPMENT BY DATE =================
+                     Ketiga card dibungkus SATU accordion (show/hide), gaya sama dengan DETAIL DATA.
+                     Default terbuka supaya chart langsung tampil; chart di-resize otomatis saat dibuka lagi. --}}
+                <div class="row">
+                    <div class="col-lg-12 mb-4">
+                        <div class="card shadow rekon-detail-accordion">
+                            <div class="card-header py-3 rekon-detail-toggle rekon-acc-toggle"
+                                 role="button" tabindex="0" aria-expanded="true"
+                                 aria-controls="rekon-acc-fabric" data-acc-target="rekon-acc-fabric">
+                                <h6 class="m-0 font-weight-bold text-primary d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-shopping-basket mr-1"></i> FABRIC ACHIEVEMENT &middot; FABRIC USAGE PERCENTAGE &middot; SHIPMENT BY DATE</span>
+                                    <i class="fas fa-chevron-down rekon-detail-caret"></i>
+                                </h6>
+                            </div>
+                            <div id="rekon-acc-fabric">
+                                <div class="card-body">
                 {{-- ================= FABRIC QTY / USAGE ================= --}}
                 <div class="row">
                     <div class="col-lg-4 mb-4">
@@ -443,28 +459,40 @@
                         </div> -->
                     </div>
                 </div>
+                                </div>{{-- /card-body --}}
+                            </div>{{-- /#rekon-acc-fabric --}}
+                        </div>
+                    </div>
+                </div>
 
-                {{-- ================= MATERIAL ACHIEVEMENT & SHIPMENT BY DATE ================= --}}
+                {{-- ================= ACCORDION: MATERIAL ACHIEVEMENT ================= --}}
                 <div class="row">
                     <div class="col-lg-12 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">MATERIAL ACHIEVEMENT</h6>
+                        <div class="card shadow rekon-detail-accordion">
+                            <div class="card-header py-3 rekon-detail-toggle rekon-acc-toggle"
+                                 role="button" tabindex="0" aria-expanded="true"
+                                 aria-controls="rekon-acc-material" data-acc-target="rekon-acc-material">
+                                <h6 class="m-0 font-weight-bold text-primary d-flex justify-content-between align-items-center">
+                                    <span>MATERIAL ACHIEVEMENT</span>
+                                    <i class="fas fa-chevron-down rekon-detail-caret"></i>
+                                </h6>
                             </div>
-                            <div class="card-body">
-                                <div class="rekon-ma-formula mb-3">
-                                </div>
-                                <div class="row">
-                                    <div class="col-lg-6 mb-4 mb-lg-0">
-                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Sewing Trim</h6>
-                                        <div class="chart-area" style="height:320px">
-                                            <canvas id="chart-material-achievement-aksesoris"></canvas>
-                                        </div>
+                            <div id="rekon-acc-material">
+                                <div class="card-body">
+                                    <div class="rekon-ma-formula mb-3">
                                     </div>
-                                    <div class="col-lg-6">
-                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Packing Trim</h6>
-                                        <div class="chart-area" style="height:320px">
-                                            <canvas id="chart-material-achievement-packing"></canvas>
+                                    <div class="row">
+                                        <div class="col-lg-6 mb-4 mb-lg-0">
+                                            <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Sewing Trim</h6>
+                                            <div class="chart-area" style="height:320px">
+                                                <canvas id="chart-material-achievement-aksesoris"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Packing Trim</h6>
+                                            <div class="chart-area" style="height:320px">
+                                                <canvas id="chart-material-achievement-packing"></canvas>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1896,28 +1924,92 @@ function updateFormulaWithColors() {
     }
 
     // Tabel generik. cols: [{label, right, val:(row)=>html, cls:(row)=>string}]
-    // opts: {foot: '<td>..</td>...', total: jumlahBarisSebenarnya}
+    // opts: {
+    //   foot  : dFoot(span, [cell,...]) | string HTML custom,
+    //   total : jumlahBarisSebenarnya (untuk penanda "dipotong"),
+    //   filter: false untuk menyembunyikan kotak cari
+    // }
+    // Cell footer dari dS() membawa fungsi pengambil nilai mentah (g) -- dGrid
+    // menulis nilainya ke `data-v` di tiap sel kolom itu, sehingga footer bisa
+    // dihitung ulang dari baris yang lolos pencarian (lihat dUpdateFoot()).
     function dGrid(cols, rows, opts) {
         opts = opts || {};
         rows = rows || [];
         const id = 'dg' + (++dSeq);
+        const limit = (detailState.json && detailState.json.detailBreakdown && detailState.json.detailBreakdown.row_limit) || 500;
+        const truncated = opts.total !== undefined && opts.total !== null
+            && Number(opts.total) > rows.length && rows.length >= limit;
+
+        const footObj = (opts.foot && typeof opts.foot === 'object') ? opts.foot : null;
+        const getters = {};
+        if (footObj) {
+            footObj.cells.forEach((c, i) => { if (c && typeof c === 'object' && c.g) getters[footObj.span + i] = c; });
+        }
+
         const thead = cols.map(c => `<th class="${c.right ? 'right' : ''}">${c.label}</th>`).join('');
         const body = rows.length
-            ? rows.map(r => `<tr>${cols.map(c => `<td class="${c.right ? 'right' : ''} ${c.cls ? c.cls(r) : ''}">${c.val(r)}</td>`).join('')}</tr>`).join('')
+            ? rows.map(r => `<tr>${cols.map((c, ci) => {
+                const g = getters[ci];
+                return `<td class="${c.right ? 'right' : ''} ${c.cls ? c.cls(r) : ''}"${g ? ` data-v="${g.g(r)}"` : ''}>${c.val(r)}</td>`;
+            }).join('')}</tr>`).join('')
             : `<tr class="rekon-detail-empty"><td colspan="${cols.length}" class="text-center text-muted">Tidak ada data</td></tr>`;
-        const foot = opts.foot ? `<tfoot><tr>${opts.foot}</tr></tfoot>` : '';
-        const filter = rows.length > 8
+
+        let foot = '';
+        if (footObj) {
+            const cells = footObj.cells.map((c, i) => {
+                const t = (c && typeof c === 'object') ? c.t : c;
+                const attrs = (c && typeof c === 'object' && c.g)
+                    ? ` data-col="${footObj.span + i}" data-dec="${c.d === undefined ? '' : c.d}" data-orig="${escapeHtml(t)}"`
+                    : '';
+                return `<td class="right"${attrs}>${t}</td>`;
+            }).join('');
+            foot = `<tfoot><tr><td colspan="${footObj.span}" class="rekon-foot-label" data-orig="Total">Total</td>${cells}</tr></tfoot>`;
+        } else if (opts.foot) {
+            foot = `<tfoot><tr>${opts.foot}</tr></tfoot>`;
+        }
+
+        const filter = (opts.filter !== false && rows.length > 8)
             ? `<input type="search" class="form-control form-control-sm rekon-detail-filter" placeholder="Cari di tabel ini..." data-target="${id}">`
             : '';
-        const limit = (detailState.json && detailState.json.detailBreakdown && detailState.json.detailBreakdown.row_limit) || 500;
-        const note = (opts.total !== undefined && opts.total !== null && Number(opts.total) > rows.length)
-            ? `<div class="rekon-detail-note rekon-detail-note-warn"><i class="fas fa-exclamation-triangle mr-1"></i>Menampilkan ${fmtNum(rows.length)} dari ${fmtNum(opts.total)} baris (dibatasi ${fmtNum(limit)}). Total di footer dihitung dari seluruh baris; persempit filter untuk melihat sisanya.</div>`
+        const note = truncated
+            ? `<div class="rekon-detail-note rekon-detail-note-warn"><i class="fas fa-exclamation-triangle mr-1"></i>Menampilkan ${fmtNum(rows.length)} dari ${fmtNum(opts.total)} baris (dibatasi ${fmtNum(limit)}). Total di footer = seluruh baris; saat memakai pencarian, total dihitung dari baris yang dimuat saja. Persempit filter untuk melihat sisanya.</div>`
             : '';
-        return `${filter}<div class="rekon-detail-box"><table id="${id}" class="table table-bordered table-sm rekon-detail-table"><thead><tr>${thead}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${note}`;
+        return `${filter}<div class="rekon-detail-box"><table id="${id}" class="table table-bordered table-sm rekon-detail-table" data-trunc="${truncated ? 1 : 0}"><thead><tr>${thead}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${note}`;
     }
 
-    const dFoot = (span, cells) =>
-        `<td colspan="${span}">Total</td>` + cells.map(c => `<td class="right">${c}</td>`).join('');
+    // Footer: sel dengan pengambil nilai (dS) ikut dihitung ulang saat pencarian;
+    // sel string biasa / '' tetap statis.
+    const dFoot = (span, cells) => ({ span, cells });
+    const dS = (t, key, dec) => ({ t, g: r => parseFloat(r[key]) || 0, d: dec });
+
+    // Hitung ulang footer dari baris yang masih tampil setelah pencarian.
+    // Query kosong -> kembalikan total asli dari server (seluruh baris).
+    function dUpdateFoot(table, q) {
+        const foot = table.querySelector('tfoot');
+        if (!foot) return;
+        const cells = foot.querySelectorAll('td[data-col]');
+        if (!cells.length) return;
+        const label = foot.querySelector('.rekon-foot-label');
+
+        if (!q) {
+            cells.forEach(td => { td.textContent = td.dataset.orig; });
+            if (label) label.textContent = label.dataset.orig;
+            return;
+        }
+
+        const shown = Array.from(table.querySelectorAll('tbody tr'))
+            .filter(tr => !tr.classList.contains('rekon-detail-empty') && tr.style.display !== 'none');
+        cells.forEach(td => {
+            const col = Number(td.dataset.col);
+            let sum = 0;
+            shown.forEach(tr => { const c = tr.children[col]; if (c) sum += parseFloat(c.dataset.v) || 0; });
+            td.textContent = td.dataset.dec !== '' ? dDec(sum, Number(td.dataset.dec)) : fmtNum(sum);
+        });
+        if (label) {
+            label.textContent = `Total (hasil cari: ${fmtNum(shown.length)} baris)`
+                + (table.dataset.trunc === '1' ? ' — dari baris yang dimuat' : '');
+        }
+    }
 
     const dSub = (title, html, badge) =>
         `<div class="rekon-detail-subtitle">${title}${badge || ''}</div>${html}`;
@@ -1960,7 +2052,7 @@ function updateFormulaWithColors() {
             ];
         const groupFootSpan = isQc ? 2 : 8;
         const groupTable = dGrid(groupCols, d.groups, {
-            foot: dFoot(groupFootSpan, [fmtNum(d.total)]),
+            foot: dFoot(groupFootSpan, [dS(fmtNum(d.total), 'jumlah')]),
             total: null,
         });
 
@@ -1981,7 +2073,7 @@ function updateFormulaWithColors() {
                 { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
             ];
         const rowTable = dGrid(rowCols, d.rows, {
-            foot: dFoot(isQc ? 2 : 7, [fmtNum(d.total)]),
+            foot: dFoot(isQc ? 2 : 7, [dS(fmtNum(d.total), 'jumlah')]),
             total: d.row_count,
         });
 
@@ -2047,22 +2139,6 @@ function updateFormulaWithColors() {
             } },
         ], formulaRows, { filter: false });
 
-        // Contract (mon_orders)
-        const c = bd.contract || { row_count: 0, total: 0, rows: [] };
-        const contractTable = dGrid([
-            { label: 'CPO (Uraian)', val: r => dv(r.uraian) },
-            { label: 'OCF', val: r => dv(r.ocf_no) },
-            { label: 'Sub Ref', val: r => dv(r.sub_ref) },
-            { label: 'Buyer', val: r => dv(r.buyer) },
-            { label: 'Brand', val: r => dv(r.brand) },
-            { label: 'Style', val: r => dv(r.style) },
-            { label: 'Item', val: r => dv(r.item) },
-            { label: 'Tujuan', val: r => dv(r.destination) },
-            { label: 'Prod. Delivery', val: r => dDate(r.production_delivery) },
-            { label: 'Buyer Delivery', val: r => dDate(r.buyer_delivery) },
-            { label: 'Qty Order (Pcs)', right: true, val: r => fmtNum(r.qty_ord) },
-        ], c.rows, { foot: dFoot(10, [fmtNum(c.total)]), total: c.row_count });
-
         // Tab per tahap
         const stageDefs = [
             ['Cutting', 'Cutting', p.dept_cutting, 'Dept Cutting, kategori Bahan Setengah Jadi.'],
@@ -2090,7 +2166,6 @@ function updateFormulaWithColors() {
         return dSection('Work In Process (Chutex)',
             dSub('Rekap Stage', recap)
             + dSub('Komponen Perhitungan', formulaTable)
-            + dSub('Total Contract — Baris Order (mon_orders)', contractTable, dRecon(c.total, p.contract, 'SUM(qty_ord) vs Total Contract'))
             + dSub('Breakdown per Tahap', tabs)
             + dSub('Rincian per Material (Cutting / Sewing / Packing)', prodMatTable)
         );
@@ -2118,7 +2193,7 @@ function updateFormulaWithColors() {
             { label: 'Material Aktual', right: true, val: r => fmtNum(r.qty_material_aktual) },
             { label: 'Hasil Aktual (Warehouse)', right: true, val: r => fmtNum(r.qty_result_aktual) },
         ], s.by_supplier, {
-            foot: dFoot(2, [fmtNum(s.row_count), fmtNum(t.qty_material_order), fmtNum(t.qty_result_order), fmtNum(t.qty_material_aktual), fmtNum(t.qty_result_aktual)]),
+            foot: dFoot(2, [dS(fmtNum(s.row_count), 'row_count'), dS(fmtNum(t.qty_material_order), 'qty_material_order'), dS(fmtNum(t.qty_result_order), 'qty_result_order'), dS(fmtNum(t.qty_material_aktual), 'qty_material_aktual'), dS(fmtNum(t.qty_result_aktual), 'qty_result_aktual')]),
         });
 
         const rowsTable = dGrid([
@@ -2132,7 +2207,7 @@ function updateFormulaWithColors() {
             { label: 'Material Aktual', right: true, val: r => fmtNum(r.qty_material_aktual) },
             { label: 'Hasil Aktual (Warehouse)', right: true, val: r => fmtNum(r.qty_result_aktual) },
         ], s.rows, {
-            foot: dFoot(5, [fmtNum(t.qty_material_order), fmtNum(t.qty_result_order), fmtNum(t.qty_material_aktual), fmtNum(t.qty_result_aktual)]),
+            foot: dFoot(5, [dS(fmtNum(t.qty_material_order), 'qty_material_order'), dS(fmtNum(t.qty_result_order), 'qty_result_order'), dS(fmtNum(t.qty_material_aktual), 'qty_material_aktual'), dS(fmtNum(t.qty_result_aktual), 'qty_result_aktual')]),
             total: s.row_count,
         });
 
@@ -2187,7 +2262,7 @@ function updateFormulaWithColors() {
             { label: 'Stock', right: true, val: r => fmtNum(r.saldo_gudang) },
             { label: 'Harga Total', right: true, val: r => fmtNum(r.harga_total) },
         ], po.rows, {
-            foot: dFoot(10, [fmtNum(t.jumlah_order), fmtNum(t.jumlah_doc), fmtNum(t.out_doc), fmtNum(t.out_req), fmtNum(t.saldo_gudang), fmtNum(t.harga_total)]),
+            foot: dFoot(10, [dS(fmtNum(t.jumlah_order), 'jumlah_order'), dS(fmtNum(t.jumlah_doc), 'jumlah_doc'), dS(fmtNum(t.out_doc), 'out_doc'), dS(fmtNum(t.out_req), 'out_req'), dS(fmtNum(t.saldo_gudang), 'saldo_gudang'), dS(fmtNum(t.harga_total), 'harga_total')]),
             total: po.row_count,
         });
     }
@@ -2204,7 +2279,7 @@ function updateFormulaWithColors() {
             { label: 'Cons', right: true, val: r => dDec(r.cons, 4) },
             { label: 'Need (Jml Prod × Cons)', right: true, val: r => dDec(r.need, 2) },
         ], need.rows, {
-            foot: dFoot(4, [fmtNum(t.jumlah_prod), '', dDec(t.need, 2)]),
+            foot: dFoot(4, [dS(fmtNum(t.jumlah_prod), 'jumlah_prod'), '', dS(dDec(t.need, 2), 'need', 2)]),
             total: need.row_count,
         });
     }
@@ -2296,9 +2371,10 @@ function updateFormulaWithColors() {
             { label: 'Received (KGM)', right: true, val: r => fmtNum(r.jumlah_doc) },
             { label: 'Out Req (KGM)', right: true, val: r => fmtNum(r.out_req) },
         ], o.by_barang, {
-            foot: dFoot(2, [fmtNum(ot.row_count === undefined ? o.row_count : o.row_count), fmtNum(ot.jumlah_order), fmtNum(ot.jumlah_doc), fmtNum(ot.out_req)]),
+            foot: dFoot(2, [dS(fmtNum(o.row_count), 'row_count'), dS(fmtNum(ot.jumlah_order), 'jumlah_order'), dS(fmtNum(ot.jumlah_doc), 'jumlah_doc'), dS(fmtNum(ot.out_req), 'out_req')]),
         });
 
+        const nz = o.nonzero || { row_count: (o.rows || []).length, totals: ot };
         const outRows = dGrid([
             { label: 'No. PO', val: r => dv(r.no_po) },
             { label: 'Tgl PO', val: r => dDate(r.tgl_po) },
@@ -2308,7 +2384,10 @@ function updateFormulaWithColors() {
             { label: 'Order (KGM)', right: true, val: r => fmtNum(r.jumlah_order) },
             { label: 'Received (KGM)', right: true, val: r => fmtNum(r.jumlah_doc) },
             { label: 'Out Req (KGM)', right: true, val: r => fmtNum(r.out_req) },
-        ], o.rows, { foot: dFoot(5, [fmtNum(ot.jumlah_order), fmtNum(ot.jumlah_doc), fmtNum(ot.out_req)]) });
+        ], o.rows, {
+            foot: dFoot(5, [dS(fmtNum(nz.totals.jumlah_order), 'jumlah_order'), dS(fmtNum(nz.totals.jumlah_doc), 'jumlah_doc'), dS(fmtNum(nz.totals.out_req), 'out_req')]),
+            total: nz.row_count,
+        });
 
         const scrapTable = dGrid([
             { label: 'Code Prod (CPO / OCF)', val: r => dv(r.code_prod) },
@@ -2316,7 +2395,7 @@ function updateFormulaWithColors() {
             { label: 'Tujuan', val: r => dv(r.destination) },
             { label: 'Jml Dok', right: true, val: r => fmtNum(r.doc_count) },
             { label: 'Scrap', right: true, val: r => fmtNum(r.jumlah) },
-        ], sc.groups, { foot: dFoot(3, [fmtNum(sc.row_count), fmtNum(sc.total)]) });
+        ], sc.groups, { foot: dFoot(3, [dS(fmtNum(sc.row_count), 'doc_count'), dS(fmtNum(sc.total), 'jumlah')]) });
 
         return dSection('Fabric Usage Percentage',
             dSub('Rekap & Rumus', recap)
@@ -2339,7 +2418,7 @@ function updateFormulaWithColors() {
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
             { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
         ], catRows, {
-            foot: dFoot(1, [fmtNum(dSum(catRows, 'jumlah_barang')), fmtNum(dSum(catRows, 'nilai_fob'))]),
+            foot: dFoot(1, [dS(fmtNum(dSum(catRows, 'jumlah_barang')), 'jumlah_barang'), dS(fmtNum(dSum(catRows, 'nilai_fob')), 'nilai_fob')]),
             filter: false,
         });
 
@@ -2351,7 +2430,7 @@ function updateFormulaWithColors() {
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
             { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
         ], s.by_date, {
-            foot: dFoot(3, [fmtNum(ta.row_count), fmtNum(ta.jumlah_barang), fmtNum(ta.nilai_fob)]),
+            foot: dFoot(3, [dS(fmtNum(ta.row_count), 'row_count'), dS(fmtNum(ta.jumlah_barang), 'jumlah_barang'), dS(fmtNum(ta.nilai_fob), 'nilai_fob')]),
         });
 
         const rows = dGrid([
@@ -2371,7 +2450,7 @@ function updateFormulaWithColors() {
             { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
             { label: 'Berat', right: true, val: r => dDec(r.berat, 2) },
         ], s.rows, {
-            foot: dFoot(12, [fmtNum(ta.jumlah_barang), fmtNum(ta.nilai_fob), '']),
+            foot: dFoot(12, [dS(fmtNum(ta.jumlah_barang), 'jumlah_barang'), dS(fmtNum(ta.nilai_fob), 'nilai_fob'), '']),
             total: ta.row_count,
         });
 
@@ -2404,11 +2483,11 @@ function updateFormulaWithColors() {
         }
 
         body.innerHTML = [
+            dRenderShipment(json, bd),
             dRenderWip(json, bd),
             dRenderSabkon(json, bd),
             dRenderFabricAchievement(json, bd),
             dRenderFabricUsage(json, bd),
-            dRenderShipment(json, bd),
             dRenderMaterialAchievement(json, bd),
         ].join('');
         detailState.dirty = false;
@@ -2451,6 +2530,42 @@ function updateFormulaWithColors() {
             const q = input.value.trim().toLowerCase();
             table.querySelectorAll('tbody tr').forEach(tr => {
                 tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+            });
+            dUpdateFoot(table, q);
+        });
+    })();
+
+    // ========== ACCORDION SECTION (Fabric/Usage/Shipment & Material Achievement) ==========
+    // Toggle show/hide generik untuk semua header `.rekon-acc-toggle[data-acc-target]`.
+    // (DETAIL DATA punya init sendiri di atas karena render isinya ditunda.)
+    // Canvas Chart.js yang ada di dalam panel di-resize setelah panel terbuka,
+    // karena chart yang dibuat saat panel tertutup (display:none) berukuran 0.
+    function resizeChartsIn(panel) {
+        if (typeof Chart === 'undefined' || !Chart.getChart) return;
+        panel.querySelectorAll('canvas').forEach(cv => {
+            const ch = Chart.getChart(cv);
+            if (ch) ch.resize();
+        });
+    }
+
+    (function initSectionAccordions() {
+        document.querySelectorAll('.rekon-acc-toggle[data-acc-target]').forEach(toggle => {
+            const panel = document.getElementById(toggle.dataset.accTarget);
+            if (!panel) return;
+
+            const flip = () => {
+                const open = toggle.getAttribute('aria-expanded') === 'true';
+                toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+                if (open) {
+                    $(panel).stop(true, true).slideUp(180);
+                } else {
+                    $(panel).stop(true, true).slideDown(180, () => resizeChartsIn(panel));
+                }
+            };
+
+            toggle.addEventListener('click', flip);
+            toggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); }
             });
         });
     })();

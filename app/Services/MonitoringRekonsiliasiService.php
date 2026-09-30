@@ -1127,11 +1127,7 @@ class MonitoringRekonsiliasiService
      */
     public function productionPipeline(): array
     {
-        // Total Contract pada stage Production: sumber = mon_work_orders
-        // (SUM jumlah_prod per prod_id DISTINCT), BUKAN lagi mon_orders.
-        // Lihat workOrderContractQty(). KPI `summary.contract_qty` di atas
-        // dashboard tetap dari mon_orders.
-        $contract = $this->workOrderContractQty();
+        $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
 
         $deptCutting = $this->prodLineSumByDepartment('Cutting', MsBarang::CATEGORY_WIP);
         $deptSewing  = $this->prodLineSumByDepartment('Sewing', MsBarang::CATEGORY_JADI);
@@ -1240,47 +1236,6 @@ class MonitoringRekonsiliasiService
             'balance_garment_stock'          => $balanceGarmentStock,
             'balance_garment_stock_remarks'  => $balanceGarmentStockRemarks,
         ];
-    }
-
-    /**
-     * Query dasar mon_work_orders untuk Total Contract stage Production,
-     * di-scope pakai scopeByCodeProd() -- basis matching yang SAMA dengan
-     * semua tahap Cutting..Warehouse (CPO/OCF/Sub Ref/Negara di-LIKE
-     * langsung ke `code_prod`), termasuk pakai filterUraianListForCodeProdScope()
-     * supaya OCF/Sub Ref tidak ikut ter-AND lewat bridge mon_orders.uraian
-     * (kolom `uraian` di mon_work_orders sering kosong).
-     */
-    private function workOrderContractQuery()
-    {
-        $query = DB::table('mon_work_orders')
-            ->whereNotNull('prod_id')
-            ->where('prod_id', '<>', '');
-
-        return $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
-    }
-
-    /**
-     * Total Contract stage Production = SUM(jumlah_prod) dari mon_work_orders
-     * dengan DISTINCT per `prod_id`.
-     *
-     * mon_work_orders berisi 1 baris per item BOM, jadi 1 rencana produksi
-     * (prod_id) muncul berulang dengan `jumlah_prod` yang sama -- SUM langsung
-     * akan menggandakan angka. Makanya di-group per prod_id dulu (MAX =
-     * nilai tunggalnya), baru dijumlahkan. Distinct HANYA per prod_id (bukan
-     * prod_id + uraian) karena ada prod_id yang punya lebih dari satu uraian.
-     */
-    private function workOrderContractQty(): float
-    {
-        if (!$this->hasAnyFilterInput()) {
-            return 0;
-        }
-
-        $perProd = $this->workOrderContractQuery()
-            ->select('prod_id')
-            ->selectRaw('MAX(jumlah_prod) as jumlah_prod')
-            ->groupBy('prod_id');
-
-        return (float) (DB::query()->fromSub($perProd, 'wo')->sum('wo.jumlah_prod') ?? 0);
     }
 
     /**
@@ -2030,28 +1985,19 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * Total Contract: rencana produksi (prod_id DISTINCT) dari mon_work_orders
-     * yang membentuk SUM(jumlah_prod) -- sama dengan
-     * productionPipeline()['contract'] (lihat workOrderContractQty()).
+     * Total Contract: baris mon_orders yang membentuk SUM(qty_ord)
+     * (orderQuery() -- sama dengan productionPipeline()['contract']).
      */
     private function contractDetail(): array
     {
-        $perProd = fn() => $this->workOrderContractQuery()
-            ->select('prod_id')
-            ->selectRaw('MAX(code_prod) as code_prod')
-            ->selectRaw('MAX(product_code) as product_code')
-            ->selectRaw('MAX(tgl_prod) as tgl_prod')
-            ->selectRaw('MAX(jumlah_prod) as jumlah_prod')
-            ->groupBy('prod_id');
-
-        $totals = DB::query()->fromSub($perProd(), 'wo')
-            ->selectRaw('COUNT(*) as row_count, SUM(wo.jumlah_prod) as total')
+        $totals = $this->orderQuery()
+            ->selectRaw('COUNT(*) as row_count, SUM(qty_ord) as total')
             ->first();
 
-        $rows = DB::query()->fromSub($perProd(), 'wo')
-            ->select('wo.prod_id', 'wo.code_prod', 'wo.product_code', 'wo.tgl_prod', 'wo.jumlah_prod')
-            ->orderBy('wo.code_prod')
-            ->orderBy('wo.prod_id')
+        $rows = $this->orderQuery()
+            ->select('uraian', 'ocf_no', 'sub_ref', 'buyer', 'brand', 'style', 'item', 'destination', 'qty_ord', 'production_delivery', 'buyer_delivery')
+            ->orderBy('uraian')
+            ->orderBy('sub_ref')
             ->limit(self::DETAIL_ROW_LIMIT)
             ->get();
 
@@ -2440,8 +2386,19 @@ class MonitoringRekonsiliasiService
             ->limit(self::DETAIL_ROW_LIMIT)
             ->get();
 
-        $outReqRows = $outReqBase()
-            ->where('out_req', '!=', 0)
+        // Baris PO dengan out_req <> 0 -- total & jumlah barisnya dihitung
+        // dari himpunan yang SAMA dengan baris yang ditampilkan, supaya
+        // footer tabel (Order / Received / Out Req) konsisten dengan barisnya.
+        $outReqNonZero = fn() => $outReqBase()->where('out_req', '!=', 0);
+
+        $nonZeroTotals = $outReqNonZero()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_order) as jumlah_order')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
+            ->selectRaw('SUM(out_req) as out_req')
+            ->first();
+
+        $outReqRows = $outReqNonZero()
             ->select('no_po', 'tgl_po', 'supplier_name', 'uraian', 'barang_code', 'barang_name', 'satuan_order', 'jumlah_order', 'jumlah_doc', 'out_req')
             ->orderBy('barang_name')
             ->orderBy('tgl_po')
@@ -2478,6 +2435,14 @@ class MonitoringRekonsiliasiService
                 ],
                 'by_barang' => $outReqByBarang,
                 'rows'      => $outReqRows,
+                'nonzero'   => [
+                    'row_count' => (int) ($nonZeroTotals->row_count ?? 0),
+                    'totals'    => [
+                        'jumlah_order' => (float) ($nonZeroTotals->jumlah_order ?? 0),
+                        'jumlah_doc'   => (float) ($nonZeroTotals->jumlah_doc ?? 0),
+                        'out_req'      => (float) ($nonZeroTotals->out_req ?? 0),
+                    ],
+                ],
             ],
             'scrap' => [
                 'row_count' => (int) ($scrapTotals->row_count ?? 0),
