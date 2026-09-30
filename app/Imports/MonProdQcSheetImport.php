@@ -4,55 +4,44 @@ namespace App\Imports;
 
 use App\Models\MonProdQc;
 use App\Services\MonStageDataService;
-use Illuminate\Validation\Rule;
-use Maatwebsite\Excel\Concerns\Importable;
-use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
-use Maatwebsite\Excel\Concerns\ToModel;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
-use Maatwebsite\Excel\Concerns\WithValidation;
 
 /**
- * Import baris-baris di sheet data ("Template Prod QC", index 0) dari file
- * template mon_prod_qc. Dipanggil HANYA untuk sheet index 0 lewat
- * MonProdQcImport::sheets() -- sheet tersembunyi "Lists" tidak lewat class
- * ini sama sekali.
+ * Import sheet data (index 0) untuk mon_prod_qc.
+ * Kolom: code_prod, department_id, jumlah.
  *
- * Setiap baris valid langsung di-insert sebagai baris baru.
+ * Baris di-createOrUpdate berdasarkan kombinasi code_prod + department_id:
+ * jika sudah ada -> update jumlah, jika belum -> buat baru.
  */
-class MonProdQcSheetImport implements ToModel, WithHeadingRow, WithValidation, SkipsEmptyRows
+class MonProdQcSheetImport implements ToCollection, WithHeadingRow
 {
-    use Importable;
+    public function __construct(private MonStageDataService $service) {}
 
-    public function __construct(private MonStageDataService $service)
+    public function collection(Collection $rows)
     {
-    }
+        DB::transaction(function () use ($rows) {
+            foreach ($rows as $row) {
+                $codeProd     = trim((string) ($row['code_prod'] ?? ''));
+                $departmentId = $row['department_id'] ?? null;
 
-    public function model(array $row)
-    {
-        return new MonProdQc([
-            'code_prod'     => strtoupper(trim((string) $row['code_prod'])),
-            'department_id' => trim((string) $row['department_id']),
-            'jumlah'        => (int) $row['jumlah'],
-        ]);
-    }
+                // lewati baris kosong / tidak lengkap
+                if ($codeProd === '' || $departmentId === null || $departmentId === '') {
+                    continue;
+                }
 
-    public function rules(): array
-    {
-        return [
-            'code_prod'     => ['required', 'string', 'max:100'],
-            'department_id' => ['required', 'string', Rule::in(MonStageDataService::DEPARTMENTS)],
-            'jumlah'        => ['required', 'numeric', 'min:0'],
-        ];
-    }
-
-    public function customValidationMessages(): array
-    {
-        return [
-            'code_prod.required'     => 'code_prod wajib diisi.',
-            'department_id.required' => 'department_id wajib diisi.',
-            'department_id.in'       => 'department_id harus salah satu dari: ' . implode(', ', MonStageDataService::DEPARTMENTS),
-            'jumlah.required'        => 'jumlah wajib diisi.',
-            'jumlah.numeric'         => 'jumlah harus berupa angka.',
-        ];
+                MonProdQc::updateOrCreate(
+                    [
+                        'code_prod'     => $codeProd,
+                        'department_id' => (int) $departmentId,
+                    ],
+                    [
+                        'jumlah' => (int) ($row['jumlah'] ?? 0),
+                    ]
+                );
+            }
+        });
     }
 }
