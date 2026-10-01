@@ -315,6 +315,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store')->middleware(['auth', 'permission']);
     Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import')->middleware(['auth', 'permission']);
     Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template')->middleware(['auth', 'permission']);
+    Route::get('/payroll-master/export', [PayrollMasterController::class, 'export'])->name('payroll-master.export')->middleware(['auth', 'permission']);
 
 
     // Thr Period

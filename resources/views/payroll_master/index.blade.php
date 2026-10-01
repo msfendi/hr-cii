@@ -24,6 +24,11 @@
                   <!-- KANAN -->
                   <div class="d-flex align-items-center">
                     <!-- DOWNLOAD TEMPLATE -->
+                     @canRoute('payroll-master.export')
+                    <a href="{{ route('payroll-master.export') }}" class="btn btn-success btn-sm mr-2">
+                      <i class="fas fa-file-export"></i> Export Excel
+                    </a>
+                    @endcanRoute
                     @canRoute('payroll-master.template')
                     <a href="{{ route('payroll-master.template') }}" class="btn btn-info btn-sm mr-2">
                       <i class="fas fa-download"></i> Download Template </a>

@@ -1642,13 +1642,16 @@ function updateFormulaWithColors() {
             totalLossColorClass = 'loss-positive';
         }
 
+        const totalLossRemarksRow = renderRemarkList(pipeline.total_loss_remarks);
+
         const lossBox = `
             <div class="rekon-pipe-box theme-loss rekon-pipe-total">
-                <div class="rekon-pipe-header">Total Process Loss</div>
+                <div class="rekon-pipe-header">Balance</div>
                 <div class="rekon-pipe-body">
                     <div class="rekon-pipe-output ${totalLossColorClass}">${totalLossSign}${fmtNum(Math.abs(totalLoss))}</div>
                     <div class="rekon-pipe-output-pct ${totalLossColorClass}">${totalLossSign}${fmtPct(Math.abs(totalLossPct))}</div>
                     <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
+                    ${totalLossRemarksRow}
                 </div>
             </div>
         `;

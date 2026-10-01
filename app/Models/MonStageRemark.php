@@ -10,6 +10,7 @@ class MonStageRemark extends Model
 
     protected $fillable = [
         'ocf_no',
+        'cpo',
         'department_id',
         'remark',
     ];

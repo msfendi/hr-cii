@@ -1636,7 +1636,7 @@ END AS special_overtime_hours
                                 | CHIEF / MEKANIK / MEKANIK LEADER
                                 |--------------------------------------------
                                 */
-                                $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
+                                $validRoles = ['chief', 'mekanik', 'mekanik_leader', 'section_head'];
 
                                 if (!in_array($assignment->role, $validRoles)) {
                                     continue;
@@ -2070,7 +2070,6 @@ END AS special_overtime_hours
 
                                         $collectionDay->push($amount);
                                     }
-
                                 } else {
 
                                     $section = DB::table('sections')

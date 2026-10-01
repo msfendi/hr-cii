@@ -60,10 +60,6 @@ class MonitoringRekonsiliasiService
     /** Cache hasil resolve daftar uraian (CPO) dari filter Buyer/Style/CPO. */
     private ?array $resolvedUraian = null;
 
-    /** Cache hasil resolve daftar OCF mon_stage_remarks yang relevan dengan filter aktif. */
-    private ?array $resolvedRemarkOcf = null;
-    private bool $remarkOcfResolved = false;
-
     public function __construct(protected array $filters = []) {}
 
     public static function make(array $filters): self
@@ -1119,7 +1115,8 @@ class MonitoringRekonsiliasiService
      *
      * Setiap department di atas juga dilengkapi `remarks` (koleksi object
      * {id, remark} dari mon_stage_remarks, dicocokkan lewat department_id
-     * -- dan OCF kalau filter OCF aktif) supaya frontend bisa menampilkannya
+     * -- plus OCF (kolom ocf_no) kalau filter OCF aktif, atau CPO (kolom cpo)
+     * kalau filter level CPO aktif) supaya frontend bisa menampilkannya
      * di bawah persentase loss pada masing-masing stage box, LENGKAP dengan
      * `id` supaya tombol hapus per baris remark bisa memanggil route
      * monitoring.rekonsiliasi.stage-remark.destroy.
@@ -1196,12 +1193,17 @@ class MonitoringRekonsiliasiService
         // di mon_stage_remarks, tidak terhubung ke stage produksi manapun).
         $balanceGarmentStockRemarks = $this->stageRemarksByDepartment('Balance Garment Stock');
 
+        // Remark untuk kotak Total Process Loss (department_id khusus
+        // 'Total Process Loss' di mon_stage_remarks).
+        $totalLossRemarks = $this->stageRemarksByDepartment('Total Process Loss');
+
         return [
             'contract'    => $contract,
             'departments' => $departments,
             'shipment'    => $shipment,
             'total_loss'  => $totalLoss,
             'loss_pct'    => $lossPct,
+            'total_loss_remarks' => $totalLossRemarks,
 
             // Cabang Sabkon (Pabrik Luar) -> Warehouse (Sabkon), ditampilkan
             // sebagai grup terpisah di sebelah flow produksi internal.
@@ -1375,80 +1377,61 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * Scope mon_prod_qc ke filter aktif. Beda dengan mon_prod_lines,
-     * mon_prod_qc.code_prod cuma berisi KODE OCF apa adanya (mis.
-     * '266C0051'), bukan teks CPO/uraian -- jadi filter CPO/uraian (atau
-     * Buyer/Style yang resolve ke daftar CPO) TIDAK bisa di-LIKE langsung
-     * ke code_prod. Alurnya:
-     *   1. CPO(s) aktif -> cari OCF-nya di mon_orders (uraian -> ocf_no)
-     *   2. mon_prod_qc di-filter ke OCF hasil langkah 1
-     * Filter OCF / Sub Ref / Negara tetap lewat scopeByCodeProd() seperti
-     * sebelumnya (CPO sengaja dikirim null supaya tidak di-LIKE lagi).
+     * Scope tabel manual-import (mon_prod_qc / mon_stage_remarks) ke filter
+     * aktif. Kedua tabel punya kolom OCF (`code_prod` / `ocf_no`) DAN kolom
+     * `cpo` (diisi dari kolom cpo di file import), jadi scope-nya:
+     *  - Filter OCF aktif                   -> LIKE '%{ocf}%' ke kolom OCF.
+     *  - Filter level CPO (CPO/uraian, Buyer, Style, Negara, Sub Ref)
+     *    di-resolve ke daftar CPO (cpoListExcluding(['ocf'])) -> whereIn ke
+     *    kolom `cpo` -- BUKAN lagi lewat OCF.
+     *  - Keduanya aktif -> di-AND-kan.
+     * Baris lama yang kolom `cpo`-nya masih NULL tidak ikut ketika filter
+     * level CPO aktif (tetap muncul untuk filter OCF saja).
      */
-    private function scopeProdQc($query)
+    private function scopeByCpoOrOcf($query, string $cpoColumn, string $ocfColumn): void
     {
-        $cpoCodes = $this->filterUraianListForCodeProdScope();
-
-        if ($cpoCodes !== null) {
-            $ocfCodes = $this->ocfCodesForCpoList($cpoCodes);
-
-            if (empty($ocfCodes)) {
-                // CPO tidak punya OCF di mon_orders -> tidak ada data QC.
-                $query->whereRaw('1 = 0');
-            } else {
-                // Chunk supaya aman dari batas 2100 parameter SQL Server.
-                $query->where(function ($q) use ($ocfCodes) {
-                    foreach (array_chunk($ocfCodes, 500) as $chunk) {
-                        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-                        $q->orWhereRaw(
-                            "UPPER(LTRIM(RTRIM(mon_prod_qc.code_prod))) IN ($placeholders)",
-                            $chunk
-                        );
-                    }
-                });
-            }
+        $ocf = strtoupper(trim((string) ($this->filters['ocf'] ?? '')));
+        if ($ocf !== '') {
+            $query->whereNotNull($ocfColumn)
+                ->whereRaw("UPPER({$ocfColumn}) LIKE ?", ['%' . $ocf . '%']);
         }
 
-        return $this->scopeByCodeProd($query, null);
+        $cpoList = $this->cpoListExcluding(['ocf']);
+        if ($cpoList === null) {
+            return;
+        }
+
+        if (empty($cpoList)) {
+            // Filter aktif tapi tidak match CPO apapun -> kosong.
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        // Chunk supaya aman dari batas 2100 parameter SQL Server.
+        $query->where(function ($q) use ($cpoColumn, $cpoList) {
+            foreach (array_chunk(array_values($cpoList), 500) as $chunk) {
+                $q->orWhereIn($cpoColumn, $chunk);
+            }
+        });
     }
 
     /**
-     * Daftar OCF (mon_orders.ocf_no, di-UPPER & di-trim) milik CPO(s) yang
-     * diberikan (mon_orders.uraian). Satu CPO bisa punya lebih dari satu OCF.
+     * Scope mon_prod_qc ke filter aktif: OCF -> code_prod, CPO -> cpo
+     * (lihat scopeByCpoOrOcf()).
      */
-    private function ocfCodesForCpoList(array $cpoCodes): array
+    private function scopeProdQc($query)
     {
-        if (empty($cpoCodes)) {
-            return [];
-        }
+        $this->scopeByCpoOrOcf($query, 'mon_prod_qc.cpo', 'mon_prod_qc.code_prod');
 
-        $ocfCodes = [];
-
-        foreach (array_chunk($cpoCodes, 1000) as $chunk) {
-            $found = DB::table('mon_orders')
-                ->whereNotNull('ocf_no')
-                ->whereIn('uraian', $chunk)
-                ->distinct()
-                ->pluck('ocf_no')
-                ->all();
-
-            foreach ($found as $ocf) {
-                $ocf = strtoupper(trim((string) $ocf));
-                if ($ocf !== '') {
-                    $ocfCodes[$ocf] = true;
-                }
-            }
-        }
-
-        return array_keys($ocfCodes);
+        return $query;
     }
 
     /**
      * Ambil daftar remark (mon_stage_remarks.id + .remark) untuk 1
-     * department_id, dicocokkan ke filter aktif lewat OCF (kolom
-     * mon_stage_remarks.ocf_no), termasuk saat filter berupa CPO/uraian
-     * (lihat remarkOcfScope()) -- dipakai untuk menampilkan remark di
-     * bawah persentase loss pada tiap stage box di PRODUCTION FLOW /
+     * department_id, di-scope ke filter aktif lewat scopeByCpoOrOcf():
+     * filter OCF -> kolom ocf_no, filter CPO (dan Buyer/Style/Negara/Sub Ref
+     * yang di-resolve ke CPO) -> kolom cpo. Dipakai untuk menampilkan remark
+     * di bawah persentase loss pada tiap stage box di PRODUCTION FLOW /
      * STAGE PIPELINE.
      *
      * Balikannya berupa Collection of object {id, remark} (BUKAN cuma
@@ -1463,15 +1446,9 @@ class MonitoringRekonsiliasiService
         $query = DB::table('mon_stage_remarks')
             ->where('department_id', $departmentId);
 
-        // mon_stage_remarks HANYA menyimpan `ocf_no` (tidak ada kolom uraian/
-        // CPO). Supaya remark tetap ketemu saat user mencari lewat CPO
-        // (uraian) / Buyer / Style / Negara / Sub Ref -- bukan cuma OCF --
-        // OCF-nya di-resolve dulu dari beberapa tabel yang punya uraian
-        // (lihat remarkOcfScope()).
-        $scope = $this->remarkOcfScope();
-        if ($scope !== null) {
-            // whereIn dengan array kosong otomatis menghasilkan 0 baris.
-            $query->whereIn('ocf_no', $scope);
+        // Tanpa filter apapun, semua remark ditampilkan (perilaku lama).
+        if ($this->hasAnyFilterInput()) {
+            $this->scopeByCpoOrOcf($query, 'cpo', 'ocf_no');
         }
 
         return $query->orderByDesc('id')
@@ -1480,129 +1457,6 @@ class MonitoringRekonsiliasiService
             ->filter(fn($row) => trim((string) $row->remark) !== '')
             ->map(fn($row) => ['id' => $row->id, 'remark' => $row->remark])
             ->values();
-    }
-
-    /**
-     * Daftar nilai mon_stage_remarks.ocf_no (apa adanya) yang relevan dengan
-     * filter yang sedang aktif. Null = tidak ada filter sama sekali (semua
-     * remark ditampilkan seperti sebelumnya).
-     *
-     *  - Filter OCF          : LIKE '%{ocf}%' langsung ke mon_stage_remarks.ocf_no.
-     *  - Filter CPO(uraian)/Buyer/Style/Negara/Sub Ref : daftar uraian
-     *    di-resolve dulu (cpoListExcluding()), lalu tiap OCF yang ada di
-     *    mon_stage_remarks dicek apakah muncul pada baris-baris dengan
-     *    uraian tsb di beberapa tabel (lihat remarkOcfMatchesUraian()).
-     *  - Kalau OCF & filter lain aktif bersamaan -> IRISAN keduanya.
-     */
-    private function remarkOcfScope(): ?array
-    {
-        if ($this->remarkOcfResolved) {
-            return $this->resolvedRemarkOcf;
-        }
-
-        $this->remarkOcfResolved = true;
-
-        if (!$this->hasAnyFilterInput()) {
-            return $this->resolvedRemarkOcf = null;
-        }
-
-        $remarkOcfs = DB::table('mon_stage_remarks')
-            ->whereNotNull('ocf_no')
-            ->distinct()
-            ->pluck('ocf_no')
-            ->map(fn($v) => (string) $v)
-            ->filter(fn($v) => trim($v) !== '')
-            ->values()
-            ->all();
-
-        $result = $remarkOcfs;
-
-        $ocf = strtoupper(trim((string) ($this->filters['ocf'] ?? '')));
-        if ($ocf !== '') {
-            $result = array_values(array_filter(
-                $result,
-                fn($v) => str_contains(strtoupper($v), $ocf)
-            ));
-        }
-
-        // Filter selain OCF (uraian/brand/style/negara/sub_ref) -> uraian list.
-        $uraianScope = $this->cpoListExcluding(['ocf']);
-        if ($uraianScope !== null) {
-            $result = empty($uraianScope)
-                ? []
-                : array_values(array_filter(
-                    $result,
-                    fn($v) => $this->remarkOcfMatchesUraian($v, $uraianScope)
-                ));
-        }
-
-        return $this->resolvedRemarkOcf = $result;
-    }
-
-    /**
-     * Apakah OCF $ocfNo (dari mon_stage_remarks) terkait dengan salah satu
-     * uraian di $uraianList? Dicek ke beberapa tabel, berhenti di tabel
-     * pertama yang match:
-     *  - mon_orders            : uraian + ocf_no (exact)
-     *  - mon_purchase_orders   : uraian + spesifikasi LIKE OCF
-     *  - mon_rekonsiliasis     : uraian + spesifikasi LIKE OCF
-     *  - mon_shipments         : uraian + (no_ps / spesifikasi) LIKE OCF
-     *  - mon_work_orders       : uraian + code_prod LIKE OCF
-     *  - mon_prod_lines        : code_prod LIKE OCF dan LIKE salah satu uraian
-     *                            (tabel ini tidak punya kolom uraian)
-     */
-    private function remarkOcfMatchesUraian(string $ocfNo, array $uraianList): bool
-    {
-        $like = '%' . strtoupper(trim($ocfNo)) . '%';
-
-        $checks = [
-            fn($ur) => DB::table('mon_orders')
-                ->whereIn('uraian', $ur)->where('ocf_no', trim($ocfNo)),
-            fn($ur) => DB::table('mon_purchase_orders')
-                ->whereIn('uraian', $ur)->whereRaw('UPPER(spesifikasi) LIKE ?', [$like]),
-            fn($ur) => DB::table('mon_rekonsiliasis')
-                ->whereIn('uraian', $ur)->whereRaw('UPPER(spesifikasi) LIKE ?', [$like]),
-            fn($ur) => DB::table('mon_shipments')
-                ->whereIn('uraian', $ur)
-                ->where(function ($q) use ($like) {
-                    $q->whereRaw('UPPER(no_ps) LIKE ?', [$like])
-                        ->orWhereRaw('UPPER(spesifikasi) LIKE ?', [$like]);
-                }),
-            fn($ur) => DB::table('mon_work_orders')
-                ->whereIn('uraian', $ur)->whereRaw('UPPER(code_prod) LIKE ?', [$like]),
-        ];
-
-        // Chunk supaya aman dari batas parameter SQL Server (2100).
-        foreach (array_chunk(array_values($uraianList), 500) as $chunk) {
-            foreach ($checks as $build) {
-                try {
-                    if ($build($chunk)->exists()) {
-                        return true;
-                    }
-                } catch (\Throwable $e) {
-                    // Tabel/kolom sumber belum ada di environment ini -- lewati.
-                    continue;
-                }
-            }
-
-            try {
-                $found = DB::table('mon_prod_lines')
-                    ->whereRaw('UPPER(code_prod) LIKE ?', [$like])
-                    ->where(function ($q) use ($chunk) {
-                        foreach ($chunk as $cpo) {
-                            $q->orWhereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper((string) $cpo) . '%']);
-                        }
-                    })
-                    ->exists();
-                if ($found) {
-                    return true;
-                }
-            } catch (\Throwable $e) {
-                // dilewati
-            }
-        }
-
-        return false;
     }
 
     /**

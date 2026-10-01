@@ -10,6 +10,7 @@ use App\Exports\PayrollMasterTemplateExport;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Exports\PayrollMasterExport;
 
 class PayrollMasterController extends Controller
 {
@@ -216,5 +217,13 @@ class PayrollMasterController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function export()
+    {
+        return Excel::download(
+            new PayrollMasterExport,
+            'payroll_master_' . now()->format('Ymd_His') . '.xlsx'
+        );
     }
 }

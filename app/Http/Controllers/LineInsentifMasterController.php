@@ -898,7 +898,7 @@ class LineInsentifMasterController extends Controller
             | CHIEF / MEKANIK / MEKANIK LEADER
             |--------------------------------------------------------------------------
             */
-            $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
+            $validRoles = ['chief', 'mekanik', 'mekanik_leader', 'section_head'];
 
             if (!in_array($role, $validRoles)) {
                 return $amount;
