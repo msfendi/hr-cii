@@ -342,19 +342,19 @@
 
                 {{-- ================= ACCORDION: FABRIC ACHIEVEMENT + FABRIC USAGE PERCENTAGE + SHIPMENT BY DATE =================
                      Ketiga card dibungkus SATU accordion (show/hide), gaya sama dengan DETAIL DATA.
-                     Default terbuka supaya chart langsung tampil; chart di-resize otomatis saat dibuka lagi. --}}
+                     Default tertutup (auto hide); chart di-resize otomatis saat accordion dibuka. --}}
                 <div class="row">
                     <div class="col-lg-12 mb-4">
                         <div class="card shadow rekon-detail-accordion">
                             <div class="card-header py-3 rekon-detail-toggle rekon-acc-toggle"
-                                 role="button" tabindex="0" aria-expanded="true"
+                                 role="button" tabindex="0" aria-expanded="false"
                                  aria-controls="rekon-acc-fabric" data-acc-target="rekon-acc-fabric">
                                 <h6 class="m-0 font-weight-bold text-primary d-flex justify-content-between align-items-center">
                                     <span><i class="fas fa-shopping-basket mr-1"></i> FABRIC ACHIEVEMENT &middot; FABRIC USAGE PERCENTAGE &middot; SHIPMENT BY DATE</span>
                                     <i class="fas fa-chevron-down rekon-detail-caret"></i>
                                 </h6>
                             </div>
-                            <div id="rekon-acc-fabric">
+                            <div id="rekon-acc-fabric" style="display:none">
                                 <div class="card-body">
                 {{-- ================= FABRIC QTY / USAGE ================= --}}
                 <div class="row">
@@ -470,14 +470,14 @@
                     <div class="col-lg-12 mb-4">
                         <div class="card shadow rekon-detail-accordion">
                             <div class="card-header py-3 rekon-detail-toggle rekon-acc-toggle"
-                                 role="button" tabindex="0" aria-expanded="true"
+                                 role="button" tabindex="0" aria-expanded="false"
                                  aria-controls="rekon-acc-material" data-acc-target="rekon-acc-material">
                                 <h6 class="m-0 font-weight-bold text-primary d-flex justify-content-between align-items-center">
                                     <span>MATERIAL ACHIEVEMENT</span>
                                     <i class="fas fa-chevron-down rekon-detail-caret"></i>
                                 </h6>
                             </div>
-                            <div id="rekon-acc-material">
+                            <div id="rekon-acc-material" style="display:none">
                                 <div class="card-body">
                                     <div class="rekon-ma-formula mb-3">
                                     </div>
