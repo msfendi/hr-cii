@@ -50,6 +50,7 @@ class EmployeesContractController extends Controller
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
         $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
+        $roleHRD = $user ? $user->hasRole('HRD') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -77,7 +78,7 @@ class EmployeesContractController extends Controller
 
         // ── Role-based filtering ──────────────────────────────────────────────
         if (!$roleAdmin) {
-            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
+            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD) {
                 if ($rolePayrollAll) {
                     $q;
                 }
@@ -85,6 +86,9 @@ class EmployeesContractController extends Controller
                     $q->orWhere('b.IS_STAFF', 1);
                 }
                 if ($roleNonStaff) {
+                    $q->orWhere('b.IS_STAFF', 0);
+                }
+                if ($roleHRD) {
                     $q->orWhere('b.IS_STAFF', 0);
                 }
                 if ($roleSewing) {
@@ -98,7 +102,7 @@ class EmployeesContractController extends Controller
                     });
                 }
                 // Jika tidak punya akses sama sekali, filter habis
-                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing && !$rolePayrollAll) {
+                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing && !$rolePayrollAll && !$roleHRD) {
                     $q->whereRaw('1 = 0');
                 }
             });
@@ -149,7 +153,7 @@ class EmployeesContractController extends Controller
             CASE WHEN c.status_contract = 'AKTIF' THEN 0 ELSE 1 END
         ")->orderBy('c.end_date', 'asc')
             ->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD) {
                 $sisa = (int) $row->sisa_hari;
                 $day  = (int) $row->end_day;
 
@@ -208,6 +212,7 @@ class EmployeesContractController extends Controller
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
         $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
+        $roleHRD = $user ? $user->hasRole('HRD') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -217,7 +222,7 @@ class EmployeesContractController extends Controller
             ->orderBy('c.contract_ke', 'asc');
 
         $rows = $query->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD) {
                 // Transform financial data based on role
                 $canSeeSalary = false;
                 if (($roleAdmin) || ($rolePayrollAll)) {
@@ -288,7 +293,7 @@ class EmployeesContractController extends Controller
 
         return response()->json(['success' => true, 'message' => 'Kontrak telah selesai.']);
     }
-    
+
     /**
      * POST — Kembalikan status kontrak ke AKTIF (Undo).
      */
@@ -621,16 +626,17 @@ class EmployeesContractController extends Controller
         $roleSewing    = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
         $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
+        $roleHRD = $user ? $user->hasRole('HRD') : false;
 
         $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
 
         return Excel::download(
-            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll),
+            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD),
             $filename
         );
     }
 
-    
+
     /**
      * POST — Unggah atau perbarui dokumen berkas kontrak karyawan.
      */
@@ -731,6 +737,7 @@ class EmployeesContractController extends Controller
         $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $roleHRD = $user ? $user->hasRole('HRD') : false;
 
         if (!$roleAdmin && !$rolePayrollAll) {
             $biodata = DB::table('BIODATA as b')
