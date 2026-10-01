@@ -1035,6 +1035,11 @@
     const syncSubkonUrl = app.dataset.syncSubkonUrl;
     const importStageRemarkUrl = app.dataset.importStageRemarkUrl;
     const importProdQcUrl = app.dataset.importProdQcUrl;
+
+    // Stage yang disembunyikan dari tampilan (box pipeline, rekap stage & tab
+    // breakdown). Hanya tampilan: data & perhitungan tidak berubah. Kosongkan
+    // array ini untuk menampilkannya lagi.
+    const HIDDEN_STAGES = ['QC'];
     const deleteStageRemarkUrl = app.dataset.deleteStageRemarkUrl;
     const canDeleteStageRemark = app.dataset.canDeleteStageRemark === '1';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -1570,7 +1575,7 @@ function updateFormulaWithColors() {
             'Packing':   'QC → Packing',
             'Warehouse': 'Packing → Warehouse',
         };
-        const internalBoxes = (pipeline.departments || []).map(d => {
+        const internalBoxes = (pipeline.departments || []).filter(d => !HIDDEN_STAGES.includes(d.department_id)).map(d => {
             const label = d.department_id ?? '-';
             const step = findStep(internalProcess[label] || '');
             return renderBox(label, d.jumlah, 'green', step, null, d.remarks);
@@ -2108,7 +2113,7 @@ function updateFormulaWithColors() {
             'Packing': 'QC → Packing', 'Warehouse': 'Packing → Warehouse',
         };
         const stageRows = [{ department_id: 'Total Contract', jumlah: pipeline.contract, step: null, remarks: [] }]
-            .concat((pipeline.departments || []).map(d => ({ ...d, step: findStep(wipMap[d.department_id] || '') })));
+            .concat((pipeline.departments || []).filter(d => !HIDDEN_STAGES.includes(d.department_id)).map(d => ({ ...d, step: findStep(wipMap[d.department_id] || '') })));
         const recap = dGrid([
             { label: 'Stage', val: r => dv(r.department_id) },
             { label: 'Input (Pcs)', right: true, val: r => r.step ? fmtNum(r.step.input) : '-' },
@@ -2163,7 +2168,7 @@ function updateFormulaWithColors() {
             ['basis_dest_sewing', 'Basis: Tujuan Sewing', p.dest_sewing, 'Pembanding untuk Loss Sewing (Output Sewing − Tujuan Sewing).'],
             ['basis_dest_packing', 'Basis: Tujuan Packing', p.dest_packing, 'Pembanding untuk Loss Packing (Output Packing − Tujuan Packing).'],
         ];
-        const tabs = dTabs(stageDefs.map(([key, label, sumVal, note]) => ({
+        const tabs = dTabs(stageDefs.filter(([key]) => !HIDDEN_STAGES.includes(key)).map(([key, label, sumVal, note]) => ({
             label,
             html: dStagePane(key, wip[key], sumVal, note),
         })));
