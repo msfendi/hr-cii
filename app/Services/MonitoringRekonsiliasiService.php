@@ -1177,12 +1177,11 @@ class MonitoringRekonsiliasiService
         $shipmentLoss    = $shipment - $contract;
         $shipmentLossPct = $contract > 0 ? round($shipment / $contract * 100, 2) : 0;
 
-        //  - Total process loss   = loss sewing + loss qc + loss packing
+        //  - Total process loss   = loss sewing + loss packing (stage QC di-skip)
         //  - Total process loss % = total process loss / contract total
         $lossSewing  = $deptSewing - $destSewing;
-        $lossQc      = $deptQc - $deptSewing;
         $lossPacking = $deptPacking - $destPacking;
-        $totalLoss   = $lossSewing + $lossQc + $lossPacking;
+        $totalLoss   = $lossSewing + $lossPacking;
         $lossPct     = $contract > 0 ? round($totalLoss / $contract * 100, 2) : 0;
 
         // Balance Garment Stock = (Warehouse [Work In Process] + Warehouse
@@ -1231,7 +1230,6 @@ class MonitoringRekonsiliasiService
 
             // Komponen Total Process Loss.
             'loss_sewing'  => $lossSewing,
-            'loss_qc'      => $lossQc,
             'loss_packing' => $lossPacking,
 
             // Shipment vs Total Contract.
@@ -1631,16 +1629,10 @@ class MonitoringRekonsiliasiService
             $p['dept_sewing'] - $p['dest_sewing']
         ));
 
+        // Stage QC di-skip: Packing langsung menggunakan dept Sewing sebagai basis input.
         $steps->push($this->lossStep(
-            'Sewing → QC',
+            'Sewing → Packing',
             $p['dept_sewing'],
-            $p['dept_qc'],
-            $p['dept_qc'] - $p['dept_sewing']
-        ));
-
-        $steps->push($this->lossStep(
-            'QC → Packing',
-            $p['dept_qc'],
             $p['dept_packing'],
             $p['dept_packing'] - $p['dest_packing']
         ));

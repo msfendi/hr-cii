@@ -1571,8 +1571,7 @@ function updateFormulaWithColors() {
         const internalProcess = {
             'Cutting':   'Contract → Cutting',
             'Sewing':    'Cutting → Sewing',
-            'QC':        'Sewing → QC',
-            'Packing':   'QC → Packing',
+            'Packing':   'Sewing → Packing',
             'Warehouse': 'Packing → Warehouse',
         };
         const internalBoxes = (pipeline.departments || []).filter(d => !HIDDEN_STAGES.includes(d.department_id)).map(d => {
@@ -2109,8 +2108,8 @@ function updateFormulaWithColors() {
 
         // Rekap stage (summary + loss)
         const wipMap = {
-            'Cutting': 'Contract → Cutting', 'Sewing': 'Cutting → Sewing', 'QC': 'Sewing → QC',
-            'Packing': 'QC → Packing', 'Warehouse': 'Packing → Warehouse',
+            'Cutting': 'Contract → Cutting', 'Sewing': 'Cutting → Sewing',
+            'Packing': 'Sewing → Packing', 'Warehouse': 'Packing → Warehouse',
         };
         const stageRows = [{ department_id: 'Total Contract', jumlah: pipeline.contract, step: null, remarks: [] }]
             .concat((pipeline.departments || []).filter(d => !HIDDEN_STAGES.includes(d.department_id)).map(d => ({ ...d, step: findStep(wipMap[d.department_id] || '') })));
@@ -2136,12 +2135,10 @@ function updateFormulaWithColors() {
             ['Output Sewing', 'mon_prod_lines: dept Sewing, Barang Jadi', p.dept_sewing],
             ['Tujuan Sewing', 'mon_prod_lines: tujuan Sewing, Bahan Setengah Jadi', p.dest_sewing],
             ['Loss Sewing', 'Output Sewing − Tujuan Sewing', p.loss_sewing],
-            ['Output QC', 'mon_prod_qc: dept QC', p.dept_qc],
-            ['Loss QC', 'Output QC − Output Sewing', p.loss_qc],
             ['Output Packing', 'mon_prod_lines: dept Packing, Barang Jadi', p.dept_packing],
             ['Tujuan Packing', 'mon_prod_lines: tujuan Packing, Barang Jadi', p.dest_packing],
             ['Loss Packing', 'Output Packing − Tujuan Packing', p.loss_packing],
-            ['Total Process Loss', 'Loss Sewing + Loss QC + Loss Packing', p.total_loss],
+            ['Total Process Loss', 'Loss Sewing + Loss Packing', p.total_loss],
             ['Warehouse (WIP)', 'mon_prod_lines: tujuan Warehouse, Barang Jadi', p.dest_warehouse],
             ['Warehouse (Sabkon)', 'SUM(mon_subkons.qty_result_aktual)', p.sabkon_warehouse],
             ['Shipment (Total)', 'SUM(mon_shipments.jumlah_barang), Barang Jadi', p.shipment],
