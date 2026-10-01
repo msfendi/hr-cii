@@ -1100,6 +1100,14 @@ END AS special_overtime_hours
         $qcInsentifComponent = PayrollComponent::where('code', 'qc_insentif')->first();
         $qcInsentifFormula = json_decode($qcInsentifComponent->formula, true);
 
+        // Total potongan QC violation untuk periode berjalan (tabel qc_violations,
+        // kolom percentage). Dikirim ke formula role QC sebagai variable
+        // `qc_violation`, mis. 50 => ((100-qc_violation)/100) = 0.5.
+        // Beberapa baris pada periode yang sama dijumlahkan, dibatasi 0-100.
+        $qcViolationPercentage = min(100, max(0, (float) DB::table('qc_violations')
+            ->where('period_id', $period->id)
+            ->sum('percentage')));
+
         $cuttingInsentifComponent = PayrollComponent::where('code', 'cutting_insentif')->first();
         $cuttingInsentifFormula = json_decode($cuttingInsentifComponent->formula, true);
 
@@ -1873,7 +1881,8 @@ END AS special_overtime_hours
                                         $lineInsentif,
                                         1,
                                         $lineViolations,
-                                        $employee->violation_percentage
+                                        $employee->violation_percentage,
+                                        $qcViolationPercentage
                                     );
                                 }
                             } else {
@@ -2053,7 +2062,8 @@ END AS special_overtime_hours
                                                 $totalLineInsentif,
                                                 $jumlahLine,
                                                 $lineViolations,
-                                                $employee->violation_percentage
+                                                $employee->violation_percentage,
+                                                $qcViolationPercentage
                                             );
 
                                             $collectionTotalLines->push($jumlahLine);
@@ -2169,7 +2179,8 @@ END AS special_overtime_hours
                                             $totalLineInsentif,
                                             $jumlahLine,
                                             $lineViolations,
-                                            $employee->violation_percentage
+                                            $employee->violation_percentage,
+                                            $qcViolationPercentage
                                         );
 
                                         $collectionDay->push($amount);
@@ -2651,10 +2662,17 @@ END AS special_overtime_hours
         $totalLineInsentif,
         $jumlahLine,
         $violationsCount,
-        $employeeViolations
+        $employeeViolations,
+        $qcViolation = 0
     ) {
 
         $jumlahLine = max($jumlahLine, 1);
+
+        // QC: nominal dasar langsung dipotong qc_violations (persen), rumus role
+        // di insentif_role_formulas (dept 'qc') tidak dievaluasi.
+        if ($dept === 'qc') {
+            return $totalLineInsentif * ((100 - ($qcViolation ?? 0)) / 100);
+        }
 
         $formula = Cache::remember(
             "insentif_formula_{$dept}_{$role}",
@@ -2675,12 +2693,17 @@ END AS special_overtime_hours
             'totalLineInsentif' => $totalLineInsentif,
             'jumlahLine'        => $jumlahLine,
             'violationsCount'   => $violationsCount ?? 0,
-            'violation_percentage' => $employeeViolations ?? 0
+            'violation_percentage' => $employeeViolations ?? 0,
+            // Variable khusus formula role QC (dept 'qc'):
+            // - qc_violation : persentase potongan dari tabel qc_violations
+            // - insentif     : alias totalLineInsentif (dipakai role operator QC)
+            'qc_violation'      => $qcViolation ?? 0,
+            'insentif'          => $totalLineInsentif,
         ];
 
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
+        // strtr() mengganti dari key terpanjang dan tidak me-scan ulang hasil
+        // penggantian, jadi 'totalLineInsentif' tidak bentrok dengan 'insentif'.
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, $variables));
 
         try {
 

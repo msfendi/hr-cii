@@ -868,7 +868,8 @@ class QcInsentifMasterController extends Controller
                     $lineInsentif,
                     1, //karena hanya 1 line
                     $lineViolations,
-                    $employee->violation_percentage
+                    $employee->violation_percentage,
+                    $this->qcViolationPercentage($period)
                 );
             }
         } else {
@@ -1049,7 +1050,8 @@ class QcInsentifMasterController extends Controller
                             $totalLineInsentif,
                             $jumlahLine,
                             $lineViolations,
-                            $employee->violation_percentage
+                            $employee->violation_percentage,
+                            $this->qcViolationPercentage($period)
                         );
 
                         $collectionTotalLines->push($jumlahLine);
@@ -1198,7 +1200,8 @@ class QcInsentifMasterController extends Controller
                         // $jumlahLine->first()->jumlah_line,
                         $jumlahLine,
                         $lineViolations,
-                        $employee->violation_percentage
+                        $employee->violation_percentage,
+                        $this->qcViolationPercentage($period)
                     );
 
                     $collectionDay->push($amount);
@@ -1251,6 +1254,24 @@ class QcInsentifMasterController extends Controller
         return 0;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | QC VIOLATION (qc_violations) PER PERIODE
+    |--------------------------------------------------------------------------
+    | Dikirim ke formula role QC sebagai variable `qc_violation`.
+    | Di-cache per request supaya tidak query ulang untuk tiap karyawan/hari.
+    */
+    private array $qcViolationCache = [];
+
+    private function qcViolationPercentage($period): float
+    {
+        $periodId = is_object($period) ? $period->id : $period;
+
+        return $this->qcViolationCache[$periodId] ??= min(100, max(0, (float) DB::table('qc_violations')
+            ->where('period_id', $periodId)
+            ->sum('percentage')));
+    }
+
     private function calculateRoleQcInsentif(
         $role,
         $dept,
@@ -1258,9 +1279,16 @@ class QcInsentifMasterController extends Controller
         $jumlahLine,
         $violationsCount,
         $employeeViolations,
+        $qcViolation = 0,
     ) {
 
         $jumlahLine = max($jumlahLine, 1);
+
+        // QC: nominal dasar langsung dipotong qc_violations (persen), rumus role
+        // di insentif_role_formulas (dept 'qc') tidak dievaluasi.
+        if ($dept === 'qc') {
+            return $totalLineInsentif * ((100 - ($qcViolation ?? 0)) / 100);
+        }
         // dd($violationsCount);
 
         /*
@@ -1300,12 +1328,17 @@ class QcInsentifMasterController extends Controller
             'totalLineInsentif' => $totalLineInsentif,
             'jumlahLine'        => $jumlahLine,
             'violationsCount'   => $violationsCount ?? 0,
-            'violation_percentage' => $employeeViolations ?? 0
+            'violation_percentage' => $employeeViolations ?? 0,
+            // Variable khusus formula role QC (dept 'qc'):
+            // - qc_violation : persentase potongan dari tabel qc_violations
+            // - insentif     : alias totalLineInsentif (dipakai role operator QC)
+            'qc_violation'      => $qcViolation ?? 0,
+            'insentif'          => $totalLineInsentif,
         ];
 
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
-        }
+        // strtr() mengganti dari key terpanjang dan tidak me-scan ulang hasil
+        // penggantian, jadi 'totalLineInsentif' tidak bentrok dengan 'insentif'.
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, $variables));
 
         /*
     |--------------------------------------------------------------------------
