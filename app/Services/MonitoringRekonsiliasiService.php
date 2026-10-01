@@ -1369,9 +1369,78 @@ class MonitoringRekonsiliasiService
             ->where('mon_prod_qc.department_id', $departmentId)
             ->selectRaw('SUM(mon_prod_qc.jumlah) as jumlah');
 
-        $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
+        $this->scopeProdQc($query);
 
         return (float) ($query->value('jumlah') ?? 0);
+    }
+
+    /**
+     * Scope mon_prod_qc ke filter aktif. Beda dengan mon_prod_lines,
+     * mon_prod_qc.code_prod cuma berisi KODE OCF apa adanya (mis.
+     * '266C0051'), bukan teks CPO/uraian -- jadi filter CPO/uraian (atau
+     * Buyer/Style yang resolve ke daftar CPO) TIDAK bisa di-LIKE langsung
+     * ke code_prod. Alurnya:
+     *   1. CPO(s) aktif -> cari OCF-nya di mon_orders (uraian -> ocf_no)
+     *   2. mon_prod_qc di-filter ke OCF hasil langkah 1
+     * Filter OCF / Sub Ref / Negara tetap lewat scopeByCodeProd() seperti
+     * sebelumnya (CPO sengaja dikirim null supaya tidak di-LIKE lagi).
+     */
+    private function scopeProdQc($query)
+    {
+        $cpoCodes = $this->filterUraianListForCodeProdScope();
+
+        if ($cpoCodes !== null) {
+            $ocfCodes = $this->ocfCodesForCpoList($cpoCodes);
+
+            if (empty($ocfCodes)) {
+                // CPO tidak punya OCF di mon_orders -> tidak ada data QC.
+                $query->whereRaw('1 = 0');
+            } else {
+                // Chunk supaya aman dari batas 2100 parameter SQL Server.
+                $query->where(function ($q) use ($ocfCodes) {
+                    foreach (array_chunk($ocfCodes, 500) as $chunk) {
+                        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                        $q->orWhereRaw(
+                            "UPPER(LTRIM(RTRIM(mon_prod_qc.code_prod))) IN ($placeholders)",
+                            $chunk
+                        );
+                    }
+                });
+            }
+        }
+
+        return $this->scopeByCodeProd($query, null);
+    }
+
+    /**
+     * Daftar OCF (mon_orders.ocf_no, di-UPPER & di-trim) milik CPO(s) yang
+     * diberikan (mon_orders.uraian). Satu CPO bisa punya lebih dari satu OCF.
+     */
+    private function ocfCodesForCpoList(array $cpoCodes): array
+    {
+        if (empty($cpoCodes)) {
+            return [];
+        }
+
+        $ocfCodes = [];
+
+        foreach (array_chunk($cpoCodes, 1000) as $chunk) {
+            $found = DB::table('mon_orders')
+                ->whereNotNull('ocf_no')
+                ->whereIn('uraian', $chunk)
+                ->distinct()
+                ->pluck('ocf_no')
+                ->all();
+
+            foreach ($found as $ocf) {
+                $ocf = strtoupper(trim((string) $ocf));
+                if ($ocf !== '') {
+                    $ocfCodes[$ocf] = true;
+                }
+            }
+        }
+
+        return array_keys($ocfCodes);
     }
 
     /**
@@ -2183,7 +2252,11 @@ class MonitoringRekonsiliasiService
             }
         }
 
-        $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
+        if ($cfg['source'] === 'qc') {
+            $this->scopeProdQc($query);
+        } else {
+            $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
+        }
 
         return $query;
     }

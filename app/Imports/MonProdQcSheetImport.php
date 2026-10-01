@@ -2,79 +2,64 @@
 
 namespace App\Imports;
 
-use App\Models\Department;
 use App\Models\MonProdQc;
 use App\Services\MonStageDataService;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
-use Maatwebsite\Excel\Concerns\ToCollection;
+use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Concerns\Importable;
+use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
+use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\WithValidation;
 
 /**
- * Import sheet data (index 0) untuk mon_prod_qc.
- * Kolom: code_prod, department_id, jumlah.
+ * Import baris-baris di sheet data ("Template Prod QC", index 0) dari file
+ * template mon_prod_qc. Dipanggil HANYA untuk sheet index 0 lewat
+ * MonProdQcImport::sheets() -- sheet tersembunyi "Lists" tidak lewat class
+ * ini sama sekali.
  *
- * Kolom department_id di Excel berisi NAMA departemen (mis. "QC"), bukan
- * angka, jadi dicari dulu ke tabel departemen untuk mendapatkan ID-nya.
- * Angka ID langsung juga tetap diterima.
- *
- * Baris di-createOrUpdate berdasarkan code_prod + department_id.
+ * Setiap baris valid di-create atau di-update berdasarkan kombinasi
+ * code_prod + department_id.
  */
-class MonProdQcSheetImport implements ToCollection, WithHeadingRow
+class MonProdQcSheetImport implements ToModel, WithHeadingRow, WithValidation, SkipsEmptyRows
 {
-    /** Kolom di tabel departemen yang dicocokkan dengan isi Excel. */
-    private const DEPT_COLUMN = 'name';
+    use Importable;
 
     public function __construct(private MonStageDataService $service) {}
 
-    public function collection(Collection $rows)
+    public function model(array $row)
     {
-        // peta: nama departemen (huruf kecil) => id
-        $departments = Department::query()
-            ->pluck('id', self::DEPT_COLUMN)
-            ->mapWithKeys(fn($id, $name) => [mb_strtolower(trim((string) $name)) => $id]);
+        MonProdQc::updateOrCreate(
+            [
+                'code_prod'     => strtoupper(trim((string) $row['code_prod'])),
+                'department_id' => trim((string) $row['department_id']),
+            ],
+            [
+                'jumlah'        => (int) $row['jumlah'],
+            ]
+        );
 
-        $validIds = $departments->values()->flip();
-        $unknown  = [];
+        // Sudah disimpan lewat updateOrCreate, jadi return null agar
+        // Maatwebsite tidak melakukan insert/save lagi.
+        return null;
+    }
 
-        DB::transaction(function () use ($rows, $departments, $validIds, &$unknown) {
-            foreach ($rows as $index => $row) {
-                $codeProd = trim((string) ($row['code_prod'] ?? ''));
-                $deptRaw  = trim((string) ($row['department_id'] ?? ''));
+    public function rules(): array
+    {
+        return [
+            'code_prod'     => ['required', 'string', 'max:100'],
+            'department_id' => ['required', 'string', Rule::in(MonStageDataService::DEPARTMENTS)],
+            'jumlah'        => ['required', 'numeric', 'min:0'],
+        ];
+    }
 
-                // lewati baris kosong / tidak lengkap
-                if ($codeProd === '' || $deptRaw === '') {
-                    continue;
-                }
-
-                $departmentId = $departments->get(mb_strtolower($deptRaw));
-
-                // fallback: isi Excel sudah berupa ID yang valid
-                if ($departmentId === null && ctype_digit($deptRaw) && $validIds->has((int) $deptRaw)) {
-                    $departmentId = (int) $deptRaw;
-                }
-
-                if ($departmentId === null) {
-                    $unknown[] = 'Baris ' . ($index + 2) . ": departemen \"{$deptRaw}\" tidak ditemukan";
-                    continue;
-                }
-
-                MonProdQc::updateOrCreate(
-                    [
-                        'code_prod'     => $codeProd,
-                        'department_id' => $departmentId,
-                    ],
-                    [
-                        'jumlah' => (int) ($row['jumlah'] ?? 0),
-                    ]
-                );
-            }
-
-            // ada departemen tak dikenal -> batalkan seluruh import
-            if ($unknown) {
-                throw ValidationException::withMessages(['file' => $unknown]);
-            }
-        });
+    public function customValidationMessages(): array
+    {
+        return [
+            'code_prod.required'     => 'code_prod wajib diisi.',
+            'department_id.required' => 'department_id wajib diisi.',
+            'department_id.in'       => 'department_id harus salah satu dari: ' . implode(', ', MonStageDataService::DEPARTMENTS),
+            'jumlah.required'        => 'jumlah wajib diisi.',
+            'jumlah.numeric'         => 'jumlah harus berupa angka.',
+        ];
     }
 }
