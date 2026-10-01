@@ -1897,6 +1897,17 @@ function updateFormulaWithColors() {
 
     const dv   = (v) => (v === null || v === undefined || v === '') ? '-' : escapeHtml(v);
     const dDate = (v) => v ? escapeHtml(formatTanggalIndonesia(v)) : '-';
+    // Jumlah hari dari Tgl Awal s/d Tgl Akhir (inklusif: awal = akhir -> 1 hari).
+    const dDays = (first, last) => {
+        if (!first || !last) return '-';
+        const toUtc = (v) => {
+            const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN;
+        };
+        const a = toUtc(first), b = toUtc(last);
+        if (isNaN(a) || isNaN(b)) return '-';
+        return fmtNum(Math.round((b - a) / 86400000) + 1);
+    };
     const dDec = (v, d) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: d ?? 4 }).format(Number(v || 0));
     const dSum = (rows, key) => (rows || []).reduce((s, r) => s + (parseFloat(r[key]) || 0), 0);
 
@@ -2048,7 +2059,7 @@ function updateFormulaWithColors() {
                 { label: 'Tujuan', val: r => dv(r.destination) },
                 { label: 'Kode Barang', val: r => dv(r.barang_code) },
                 { label: 'Nama Barang', val: r => dv(r.barang_name) },
-                { label: 'Jml Dok', right: true, val: r => fmtNum(r.doc_count) },
+                { label: 'Jumlah Hari', right: true, val: r => dDays(r.first_date, r.last_date) },
                 { label: 'Tgl Awal', val: r => dDate(r.first_date) },
                 { label: 'Tgl Akhir', val: r => dDate(r.last_date) },
                 { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
