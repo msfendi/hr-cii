@@ -1873,7 +1873,7 @@ END AS special_overtime_hours
 
                         /*
                         |----------------------------------------------------
-                        | OPERATOR
+                        | OPERATOR (INLINE / ENDLINE / FQC)
                         |----------------------------------------------------
                         | SPV dipindahkan ke cabang CHIEF/QA (section-based)
                         | karena formula QC SPV = (Total QC Incentive 1 Section
@@ -1885,7 +1885,7 @@ END AS special_overtime_hours
                             if (empty($assignment->role)) {
                                 continue;
                             }
-                            if ($assignment->role == 'operator') {
+                            if (in_array(strtolower((string) $assignment->role), ['inline', 'endline', 'fqc'], true)) {
 
                                 preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
                                 $defaultLine = $matches[0] ?? null;
@@ -1936,8 +1936,8 @@ END AS special_overtime_hours
 
                                 // NOTE: reuses sewing_violations (sama seperti Line Insentif)
                                 // karena belum ada tabel violations khusus QC.
-                                // Cabang ini sekarang hanya menangani role 'operator'
-                                // (SPV sudah dipindahkan ke cabang CHIEF/QA di bawah).
+                                // Cabang ini hanya menangani role operator QC
+                                // (inline, endline, fqc). SPV ada di cabang CHIEF/QA di bawah.
                                 $lineViolations = ($sewingViolationsByDept[$employee->ID_DEPT] ?? collect())->count();
 
                                 foreach ($lineefficiencies as $row) {

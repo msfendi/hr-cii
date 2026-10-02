@@ -553,7 +553,7 @@ class QcInsentifMasterController extends Controller
             // =========================
             $roleLower = strtolower($employee->role ?? '');
 
-            if (in_array($roleLower, ['operator', 'spv'])) {
+            if (in_array($roleLower, ['inline', 'endline', 'fqc', 'spv'], true)) {
                 $lineInfo = (isset($employee->assignment_lines) && $employee->assignment_lines->isNotEmpty())
                     ? 'Line ' . $employee->assignment_lines->implode(', ')
                     : '-';
@@ -737,7 +737,7 @@ class QcInsentifMasterController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | OPERATOR
+        | OPERATOR (INLINE / ENDLINE / FQC)
         |--------------------------------------------------------------------------
         | SPV dipindahkan ke cabang CHIEF/QA (section-based) karena formula QC SPV
         | = (Total QC Incentive 1 Section / Total Line) * 50%, bukan per-line
@@ -745,7 +745,8 @@ class QcInsentifMasterController extends Controller
         |--------------------------------------------------------------------------
         */
         $lineViolations = 0;
-        if ($role == 'operator') {
+        $operatorRoles = ['inline', 'endline', 'fqc']; // semua role operator QC
+        if (in_array(strtolower((string) $role), $operatorRoles, true)) {
 
             /*
             |--------------------------------------------------------------------------
@@ -813,9 +814,9 @@ class QcInsentifMasterController extends Controller
             // NOTE: reuses `sewing_violations` (same as Line Insentif) since no
             // dedicated QC violations table was specified. Swap the table name
             // here if QC should count against a separate violations source.
-            // Cabang ini sekarang hanya menangani role 'operator' (SPV sudah
-            // dipindahkan ke cabang CHIEF/QA di bawah).
-            if (strtolower($role) == 'operator') {
+            // Cabang ini sekarang hanya menangani role operator QC:
+            // inline, endline, fqc (SPV sudah dipindahkan ke cabang CHIEF/QA di bawah).
+            if (in_array(strtolower((string) $role), $operatorRoles, true)) {
 
                 $lineViolations = DB::table('sewing_violations')
                     ->whereBetween('tanggal', [
