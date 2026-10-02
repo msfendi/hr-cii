@@ -2059,103 +2059,28 @@ function updateFormulaWithColors() {
             ]
             : [
                 { label: 'Code Prod (CPO / OCF)', val: r => dv(r.code_prod) },
-                { label: 'Dept', val: r => dv(r.department_id) },
-                { label: 'Tujuan', val: r => dv(r.destination) },
-                { label: 'Kode Barang', val: r => dv(r.barang_code) },
                 { label: 'Nama Barang', val: r => dv(r.barang_name) },
                 { label: 'Jumlah Hari', right: true, val: r => dDays(r.first_date, r.last_date) },
                 { label: 'Tgl Awal', val: r => dDate(r.first_date) },
                 { label: 'Tgl Akhir', val: r => dDate(r.last_date) },
                 { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
             ];
-        const groupFootSpan = isQc ? 2 : 8;
+        const groupFootSpan = isQc ? 2 : 5;
         const groupTable = dGrid(groupCols, d.groups, {
             foot: dFoot(groupFootSpan, [dS(fmtNum(d.total), 'jumlah')]),
             total: null,
         });
 
-        const rowCols = isQc
-            ? [
-                { label: 'Tgl Input', val: r => dDate(r.tgl_produksi) },
-                { label: 'Code Prod (OCF)', val: r => dv(r.code_prod) },
-                { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
-            ]
-            : [
-                { label: 'Tgl Produksi', val: r => dDate(r.tgl_produksi) },
-                { label: 'No. Surat Jalan', val: r => dv(r.no_surat_jalan) },
-                { label: 'Code Prod (CPO / OCF)', val: r => dv(r.code_prod) },
-                { label: 'Dept', val: r => dv(r.department_id) },
-                { label: 'Tujuan', val: r => dv(r.destination) },
-                { label: 'Nama Barang', val: r => dv(r.barang_name) },
-                { label: 'Dibuat Oleh', val: r => dv(r.create_by) },
-                { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
-            ];
-        const rowTable = dGrid(rowCols, d.rows, {
-            foot: dFoot(isQc ? 2 : 7, [dS(fmtNum(d.total), 'jumlah')]),
-            total: d.row_count,
-        });
-
         return head
-            + dSub('Rekap per Code Prod' + (isQc ? '' : ' & Barang'), groupTable)
-            + dSub(isQc ? 'Baris Input QC (mon_prod_qc)' : 'Baris Dokumen (mon_prod_lines)', rowTable);
+            + dSub('Rekap per Code Prod' + (isQc ? '' : ' & Barang'), groupTable);
     }
 
     function dRenderWip(json, bd) {
         const pipeline  = json.productionPipeline || {};
-        const lossSteps = json.pipelineLossSteps || [];
-        const findStep  = (name) => lossSteps.find(s => s.process === name) || null;
         const wip = bd.wip || {};
 
-        // Rekap stage (summary + loss)
-        const wipMap = {
-            'Cutting': 'Contract → Cutting', 'Sewing': 'Cutting → Sewing',
-            'Packing': 'Sewing → Packing', 'Warehouse': 'Packing → Warehouse',
-        };
-        const stageRows = [{ department_id: 'Total Contract', jumlah: pipeline.contract, step: null, remarks: [] }]
-            .concat((pipeline.departments || []).filter(d => !HIDDEN_STAGES.includes(d.department_id)).map(d => ({ ...d, step: findStep(wipMap[d.department_id] || '') })));
-        const recap = dGrid([
-            { label: 'Stage', val: r => dv(r.department_id) },
-            { label: 'Input (Pcs)', right: true, val: r => r.step ? fmtNum(r.step.input) : '-' },
-            { label: 'Output (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
-            { label: 'Loss (Pcs)', right: true, val: r => r.step ? `<span class="${dLossClass(Number(r.step.loss_pcs))}">${Number(r.step.loss_pcs) < 0 ? '-' : ''}${fmtNum(Math.abs(r.step.loss_pcs))}</span>` : '-' },
-            { label: 'Loss %', right: true, val: r => (r.step && r.step.loss_pct !== null) ? `<span class="${dLossClass(Number(r.step.loss_pct))}">${Number(r.step.loss_pct) < 0 ? '-' : ''}${fmtPct(Math.abs(r.step.loss_pct))}</span>` : '-' },
-            { label: 'Remark', val: r => dRemarksText(r.remarks) },
-        ], stageRows, {
-            foot: `<td colspan="3">Total Process Loss</td>${dLossCell(pipeline.total_loss, false)}${dLossCell(pipeline.loss_pct, true)}<td></td>`,
-        });
-
-        // Komponen rumus (dari angka summary di pipeline)
         const p = pipeline;
-        const formulaRows = [
-            ['Total Contract', 'SUM(mon_orders.qty_ord)', p.contract],
-            ['Sabkon (Pabrik Luar)', 'SUM(mon_subkons.qty_result_order)', p.sabkon_pabrik_luar],
-            ['Basis Cutting', 'Total Contract − Sabkon', p.cutting_base],
-            ['Output Cutting', 'mon_prod_lines: dept Cutting, Bahan Setengah Jadi', p.dept_cutting],
-            ['Loss Cutting', 'Output Cutting − Basis Cutting', p.loss_cutting],
-            ['Output Sewing', 'mon_prod_lines: dept Sewing, Barang Jadi', p.dept_sewing],
-            ['Tujuan Sewing', 'mon_prod_lines: tujuan Sewing, Bahan Setengah Jadi', p.dest_sewing],
-            ['Loss Sewing', 'Output Sewing − Tujuan Sewing', p.loss_sewing],
-            ['Output Packing', 'mon_prod_lines: dept Packing, Barang Jadi', p.dept_packing],
-            ['Tujuan Packing', 'mon_prod_lines: tujuan Packing, Barang Jadi', p.dest_packing],
-            ['Loss Packing', 'Output Packing − Tujuan Packing', p.loss_packing],
-            ['Total Process Loss', 'Loss Sewing + Loss Packing', p.total_loss],
-            ['Warehouse (WIP)', 'mon_prod_lines: tujuan Warehouse, Barang Jadi', p.dest_warehouse],
-            ['Warehouse (Sabkon)', 'SUM(mon_subkons.qty_result_aktual)', p.sabkon_warehouse],
-            ['Shipment (Total)', 'SUM(mon_shipments.jumlah_barang), Barang Jadi', p.shipment],
-            ['Balance Garment Stock', '(Warehouse WIP + Warehouse Sabkon) − Shipment', p.balance_garment_stock],
-        ];
-        const formulaTable = dGrid([
-            { label: 'Komponen', val: r => escapeHtml(r[0]) },
-            { label: 'Rumus / Sumber', val: r => escapeHtml(r[1]) },
-            { label: 'Nilai (Pcs)', right: true, val: r => {
-                const n = Number(r[2] || 0);
-                return /Loss|Balance/.test(r[0])
-                    ? `<span class="${dLossClass(n)}">${n < 0 ? '-' : ''}${fmtNum(Math.abs(n))}</span>`
-                    : fmtNum(n);
-            } },
-        ], formulaRows, { filter: false });
 
-        // Tab per tahap
         const stageDefs = [
             ['Cutting', 'Cutting', p.dept_cutting, 'Dept Cutting, kategori Bahan Setengah Jadi.'],
             ['Sewing', 'Sewing', p.dept_sewing, 'Dept Sewing, kategori Barang Jadi.'],
@@ -2170,73 +2095,20 @@ function updateFormulaWithColors() {
             html: dStagePane(key, wip[key], sumVal, note),
         })));
 
-        // Rincian per material (productionResultByMaterial, sudah ada di payload)
-        const prodMat = json.productionResultByMaterial || [];
-        const prodMatTable = dGrid([
-            { label: 'Stage', val: r => dv(r.department_id) },
-            { label: 'Kode Barang', val: r => dv(r.barang_code) },
-            { label: 'Nama Barang', val: r => dv(r.barang_name) },
-            { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
-        ], prodMat);
-
         return dSection('Work In Process (Chutex)',
-            dSub('Rekap Stage', recap)
-            + dSub('Komponen Perhitungan', formulaTable)
-            + dSub('Breakdown per Tahap', tabs)
-            + dSub('Rincian per Material (Cutting / Sewing / Packing)', prodMatTable)
+            dSub('Breakdown per Tahap', tabs)
         );
     }
 
     // ---------- Sabkon Process ----------
     function dRenderSabkon(json, bd) {
-        const p = json.productionPipeline || {};
         const s = bd.sabkon || { row_count: 0, totals: {}, by_supplier: [], rows: [] };
-        const t = s.totals || {};
-
-        const recap = dGrid([
-            { label: 'Stage', val: r => dv(r.department_id) },
-            { label: 'Qty (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
-            { label: 'Sumber', val: r => /Warehouse/.test(r.department_id || '') ? 'SUM(qty_result_aktual)' : 'SUM(qty_result_order)' },
-            { label: 'Remark', val: r => dRemarksText(r.remarks) },
-        ], p.sabkon || [], { filter: false });
-
-        const supplierTable = dGrid([
-            { label: 'Kode', val: r => dv(r.supplier_code) },
-            { label: 'Supplier', val: r => dv(r.supplier_name) },
-            { label: 'Jml Order', right: true, val: r => fmtNum(r.row_count) },
-            { label: 'Material Order', right: true, val: r => fmtNum(r.qty_material_order) },
-            { label: 'Hasil Order (Sabkon)', right: true, val: r => fmtNum(r.qty_result_order) },
-            { label: 'Material Aktual', right: true, val: r => fmtNum(r.qty_material_aktual) },
-            { label: 'Hasil Aktual (Warehouse)', right: true, val: r => fmtNum(r.qty_result_aktual) },
-        ], s.by_supplier, {
-            foot: dFoot(2, [dS(fmtNum(s.row_count), 'row_count'), dS(fmtNum(t.qty_material_order), 'qty_material_order'), dS(fmtNum(t.qty_result_order), 'qty_result_order'), dS(fmtNum(t.qty_material_aktual), 'qty_material_aktual'), dS(fmtNum(t.qty_result_aktual), 'qty_result_aktual')]),
-        });
-
-        const rowsTable = dGrid([
-            { label: 'Tgl Order', val: r => dDate(r.tgl_order) },
-            { label: 'ID Order', val: r => dv(r.id_order) },
-            { label: 'No. Order', val: r => dv(r.no_order) },
-            { label: 'Jenis', val: r => dv(r.jenis) },
-            { label: 'Supplier', val: r => dv(r.supplier_name) },
-            { label: 'Material Order', right: true, val: r => fmtNum(r.qty_material_order) },
-            { label: 'Hasil Order (Sabkon)', right: true, val: r => fmtNum(r.qty_result_order) },
-            { label: 'Material Aktual', right: true, val: r => fmtNum(r.qty_material_aktual) },
-            { label: 'Hasil Aktual (Warehouse)', right: true, val: r => fmtNum(r.qty_result_aktual) },
-        ], s.rows, {
-            foot: dFoot(5, [dS(fmtNum(t.qty_material_order), 'qty_material_order'), dS(fmtNum(t.qty_result_order), 'qty_result_order'), dS(fmtNum(t.qty_material_aktual), 'qty_material_aktual'), dS(fmtNum(t.qty_result_aktual), 'qty_result_aktual')]),
-            total: s.row_count,
-        });
 
         const noFilterNote = (s.row_count === 0)
             ? '<div class="rekon-detail-note">Sabkon hanya di-scope lewat filter OCF (no_order) — kosong bila OCF tidak dipilih atau tidak ada order subkon untuk OCF ini.</div>'
             : '';
 
-        return dSection('Sabkon Process',
-            dSub('Rekap Stage', recap)
-            + noFilterNote
-            + dSub('Per Supplier', supplierTable, dRecon(t.qty_result_order, p.sabkon_pabrik_luar, 'Hasil Order vs Sabkon (Pabrik Luar)'))
-            + dSub('Baris Order Subkon (mon_subkons)', rowsTable, dRecon(t.qty_result_aktual, p.sabkon_warehouse, 'Hasil Aktual vs Warehouse (Sabkon)'))
-        );
+        return dSection('Sabkon Process', noFilterNote);
     }
 
     // ---------- Material (Fabric / Sewing Trim / Packing Trim) ----------
@@ -2257,64 +2129,12 @@ function updateFormulaWithColors() {
         ], rows);
     }
 
-    function dMaterialPoTable(po, labelByCode) {
-        po = po || { row_count: 0, totals: {}, rows: [] };
-        const t = po.totals || {};
-        return dGrid([
-            { label: 'Material', val: r => escapeHtml(labelByCode[r.barang_code] || r.barang_code || '-') },
-            { label: 'Nama Barang', val: r => dv(r.barang_name) },
-            { label: 'No. PO', val: r => dv(r.no_po) },
-            { label: 'Jenis', val: r => dv(r.jenis_po) },
-            { label: 'Tgl PO', val: r => dDate(r.tgl_po) },
-            { label: 'Tgl Kirim', val: r => dDate(r.tgl_pengiriman) },
-            { label: 'Supplier', val: r => dv(r.supplier_name) },
-            { label: 'CPO', val: r => dv(r.uraian) },
-            { label: 'Spesifikasi', val: r => dv(r.spesifikasi) },
-            { label: 'Sat', val: r => dv(r.satuan_order) },
-            { label: 'Order', right: true, val: r => fmtNum(r.jumlah_order) },
-            { label: 'Received', right: true, val: r => fmtNum(r.jumlah_doc) },
-            { label: 'Out Doc', right: true, val: r => fmtNum(r.out_doc) },
-            { label: 'Out Prod', right: true, val: r => fmtNum(r.out_req) },
-            { label: 'Stock', right: true, val: r => fmtNum(r.saldo_gudang) },
-            { label: 'Harga Total', right: true, val: r => fmtNum(r.harga_total) },
-        ], po.rows, {
-            foot: dFoot(10, [dS(fmtNum(t.jumlah_order), 'jumlah_order'), dS(fmtNum(t.jumlah_doc), 'jumlah_doc'), dS(fmtNum(t.out_doc), 'out_doc'), dS(fmtNum(t.out_req), 'out_req'), dS(fmtNum(t.saldo_gudang), 'saldo_gudang'), dS(fmtNum(t.harga_total), 'harga_total')]),
-            total: po.row_count,
-        });
-    }
-
-    function dMaterialNeedTable(need, labelByCode) {
-        need = need || { row_count: 0, totals: {}, rows: [] };
-        const t = need.totals || {};
-        return dGrid([
-            { label: 'Material', val: r => escapeHtml(labelByCode[r.barang_code] || r.barang_code || '-') },
-            { label: 'Nama Barang', val: r => dv(r.barang_name) },
-            { label: 'Code Prod (CPO / OCF)', val: r => dv(r.code_prod) },
-            { label: 'Kode Produk', val: r => dv(r.product_code) },
-            { label: 'Jumlah Prod (Pcs)', right: true, val: r => fmtNum(r.jumlah_prod) },
-            { label: 'Cons', right: true, val: r => dDec(r.cons, 4) },
-            { label: 'Need (Jml Prod × Cons)', right: true, val: r => dDec(r.need, 2) },
-        ], need.rows, {
-            foot: dFoot(4, [dS(fmtNum(t.jumlah_prod), 'jumlah_prod'), '', dS(dDec(t.need, 2), 'need', 2)]),
-            total: need.row_count,
-        });
-    }
-
     function dRenderFabricAchievement(json, bd) {
         const maRows = json.materialAchievement || [];
         const fabricRows = maRows.filter(r => r.material_group === 'fabric')
             .map((r, idx) => ({ ...r, real_barang_name: r.barang_name, label: `Fabric ${String.fromCharCode(65 + idx)}` }));
-        const labelByCode = {};
-        fabricRows.forEach(r => { labelByCode[r.barang_code] = r.label; });
-
-        const g = (bd.materials || {}).fabric || {};
-        const po = g.po || { totals: {} };
-
         return dSection('Fabric Achievement',
             dSub('Rekap per Fabric', dMaterialRecap(fabricRows, r => r.label))
-            + dSub('Detail PO (mon_purchase_orders)', dMaterialPoTable(g.po, labelByCode),
-                dRecon((po.totals || {}).jumlah_doc, dSum(fabricRows, 'received_qty'), 'Received breakdown vs rekap'))
-            + dSub('Detail Need (mon_work_orders)', dMaterialNeedTable(g.need, labelByCode))
         );
     }
 
@@ -2324,32 +2144,17 @@ function updateFormulaWithColors() {
             ...maRows.filter(r => r.material_group === 'aksesoris').map(r => ({ ...r, label: `Sewing Trim — ${r.barang_name}` })),
             ...maRows.filter(r => r.material_group === 'packing').map(r => ({ ...r, label: `Packing Trim — ${r.barang_name}` })),
         ];
-        const labelByCode = {};
-        maRows.forEach(r => {
-            if (r.material_group === 'aksesoris') labelByCode[r.barang_code] = 'Sewing Trim';
-            if (r.material_group === 'packing')   labelByCode[r.barang_code] = 'Packing Trim';
-        });
-
-        const m = bd.materials || {};
-        const sewing  = m.aksesoris || {};
-        const packing = m.packing || {};
         const recapSewing  = trimRows.filter(r => r.material_group === 'aksesoris');
         const recapPacking = trimRows.filter(r => r.material_group === 'packing');
 
         const tabs = dTabs([
             {
                 label: 'Sewing Trim',
-                html: dSub('Rekap per Material', dMaterialRecap(recapSewing, r => 'Sewing Trim'))
-                    + dSub('Detail PO (mon_purchase_orders)', dMaterialPoTable(sewing.po, labelByCode),
-                        dRecon(((sewing.po || {}).totals || {}).jumlah_doc, dSum(recapSewing, 'received_qty'), 'Received breakdown vs rekap'))
-                    + dSub('Detail Need (mon_work_orders)', dMaterialNeedTable(sewing.need, labelByCode)),
+                html: dSub('Rekap per Material', dMaterialRecap(recapSewing, r => 'Sewing Trim')),
             },
             {
                 label: 'Packing Trim',
-                html: dSub('Rekap per Material', dMaterialRecap(recapPacking, r => 'Packing Trim'))
-                    + dSub('Detail PO (mon_purchase_orders)', dMaterialPoTable(packing.po, labelByCode),
-                        dRecon(((packing.po || {}).totals || {}).jumlah_doc, dSum(recapPacking, 'received_qty'), 'Received breakdown vs rekap'))
-                    + dSub('Detail Need (mon_work_orders)', dMaterialNeedTable(packing.need, labelByCode)),
+                html: dSub('Rekap per Material', dMaterialRecap(recapPacking, r => 'Packing Trim')),
             },
         ]);
 
@@ -2359,65 +2164,16 @@ function updateFormulaWithColors() {
     // ---------- Fabric Usage Percentage ----------
     function dRenderFabricUsage(json, bd) {
         const fu = json.fabricUsage || {};
-        const d  = bd.fabric_usage || { out_req: { totals: {}, by_barang: [], rows: [] }, scrap: { groups: [] } };
-        const o  = d.out_req || { totals: {}, by_barang: [], rows: [] };
+        const d  = bd.fabric_usage || { scrap: { groups: [] } };
         const sc = d.scrap || { total: 0, row_count: 0, groups: [] };
-        const ot = o.totals || {};
-        const outputCutting = (json.productionPipeline || {}).dest_sewing;
-
-        const recap = dGrid([
-            { label: 'Keterangan', val: r => escapeHtml(r[0]) },
-            { label: 'Rumus / Sumber', val: r => escapeHtml(r[1]) },
-            { label: 'Nilai', right: true, val: r => r[2] },
-        ], [
-            ['Total Out Req (KGM)', 'SUM(mon_purchase_orders.out_req), satuan KGM', fmtNum(fu.total_out_req)],
-            ['Scrap Qty', "SUM(mon_prod_lines.jumlah), barang 01SCRP00001", fmtNum(fu.scrap_qty)],
-            ['Use For GMT', 'Total Out Req − Scrap Qty', fmtNum(fu.use_for_gmt)],
-            ['Usage (%)', 'Use For GMT / Total Out Req', fmtPct(fu.usage_pct)],
-            ['Scrap (%)', 'Scrap Qty / Total Out Req', fmtPct(fu.scrap_pct)],
-            ['Output Cutting (Tujuan Sewing)', 'mon_prod_lines: tujuan Sewing, Bahan Setengah Jadi', fmtNum(outputCutting)],
-            ['Consumption', 'Total Out Req / Output Cutting', dDec(fu.consumption, 2)],
-        ], { filter: false });
-
-        const byBarang = dGrid([
-            { label: 'Kode Barang', val: r => dv(r.barang_code) },
-            { label: 'Nama Barang', val: r => dv(r.barang_name) },
-            { label: 'Jml Baris PO', right: true, val: r => fmtNum(r.row_count) },
-            { label: 'Order (KGM)', right: true, val: r => fmtNum(r.jumlah_order) },
-            { label: 'Received (KGM)', right: true, val: r => fmtNum(r.jumlah_doc) },
-            { label: 'Out Req (KGM)', right: true, val: r => fmtNum(r.out_req) },
-        ], o.by_barang, {
-            foot: dFoot(2, [dS(fmtNum(o.row_count), 'row_count'), dS(fmtNum(ot.jumlah_order), 'jumlah_order'), dS(fmtNum(ot.jumlah_doc), 'jumlah_doc'), dS(fmtNum(ot.out_req), 'out_req')]),
-        });
-
-        const nz = o.nonzero || { row_count: (o.rows || []).length, totals: ot };
-        const outRows = dGrid([
-            { label: 'No. PO', val: r => dv(r.no_po) },
-            { label: 'Tgl PO', val: r => dDate(r.tgl_po) },
-            { label: 'Supplier', val: r => dv(r.supplier_name) },
-            { label: 'CPO', val: r => dv(r.uraian) },
-            { label: 'Nama Barang', val: r => dv(r.barang_name) },
-            { label: 'Order (KGM)', right: true, val: r => fmtNum(r.jumlah_order) },
-            { label: 'Received (KGM)', right: true, val: r => fmtNum(r.jumlah_doc) },
-            { label: 'Out Req (KGM)', right: true, val: r => fmtNum(r.out_req) },
-        ], o.rows, {
-            foot: dFoot(5, [dS(fmtNum(nz.totals.jumlah_order), 'jumlah_order'), dS(fmtNum(nz.totals.jumlah_doc), 'jumlah_doc'), dS(fmtNum(nz.totals.out_req), 'out_req')]),
-            total: nz.row_count,
-        });
 
         const scrapTable = dGrid([
             { label: 'Code Prod (CPO / OCF)', val: r => dv(r.code_prod) },
-            { label: 'Dept', val: r => dv(r.department_id) },
-            { label: 'Tujuan', val: r => dv(r.destination) },
-            { label: 'Jml Dok', right: true, val: r => fmtNum(r.doc_count) },
             { label: 'Scrap', right: true, val: r => fmtNum(r.jumlah) },
-        ], sc.groups, { foot: dFoot(3, [dS(fmtNum(sc.row_count), 'doc_count'), dS(fmtNum(sc.total), 'jumlah')]) });
+        ], sc.groups, { foot: dFoot(1, [dS(fmtNum(sc.total), 'jumlah')]) });
 
         return dSection('Fabric Usage Percentage',
-            dSub('Rekap & Rumus', recap)
-            + dSub('Total Out Req per Fabric (mon_purchase_orders, KGM)', byBarang, dRecon(ot.out_req, fu.total_out_req, 'Out Req breakdown vs summary'))
-            + dSub('Baris PO dengan Out Req ≠ 0', outRows)
-            + dSub('Scrap per Code Prod / Dept / Tujuan (mon_prod_lines)', scrapTable, dRecon(sc.total, fu.scrap_qty, 'Scrap breakdown vs summary'))
+            dSub('Scrap per Code Prod (mon_prod_lines)', scrapTable, dRecon(sc.total, fu.scrap_qty, 'Scrap breakdown vs summary'))
         );
     }
 
@@ -2428,20 +2184,7 @@ function updateFormulaWithColors() {
         const ta = (s.totals || {}).all || {};
         const tj = (s.totals || {}).barang_jadi || {};
 
-        // Per Kategori Barang: cukup Barang Jadi saja.
-        const isJadi = r => String(r.barang_category ?? '').trim().toLowerCase() === 'barang jadi';
-        const catRows = (Array.isArray(s.by_category) ? s.by_category : (json.shipmentByCategory || []))
-            .filter(isJadi);
-        const catTable = dGrid([
-            { label: 'Kategori Barang', val: r => dv(r.barang_category) },
-            { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
-            { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
-        ], catRows, {
-            foot: dFoot(1, [dS(fmtNum(dSum(catRows, 'jumlah_barang')), 'jumlah_barang'), dS(fmtNum(dSum(catRows, 'nilai_fob')), 'nilai_fob')]),
-            filter: false,
-        });
-
-        // Per Tanggal & No. Bukti: cukup dokumen BC 3.0 saja (service sudah
+        // Per Tanggal: cukup dokumen BC 3.0 saja (service sudah
         // memfilter; filter di sini menjaga tampilan tetap benar bila payload lama).
         const isBc30 = r => String(r.jenis_doc ?? '').trim().toUpperCase() === 'BC 3.0';
         const byDateRows = (s.by_date || []).filter(isBc30);
@@ -2452,50 +2195,17 @@ function updateFormulaWithColors() {
         };
         const byDate = dGrid([
             { label: 'Tgl Bukti', val: r => dDate(r.tgl_bukti) },
-            { label: 'No. Bukti', val: r => dv(r.no_bukti) },
-            { label: 'Jenis Doc', val: r => dv(r.jenis_doc) },
-            { label: 'Jml Baris', right: true, val: r => fmtNum(r.row_count) },
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
             { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
         ], byDateRows, {
-            foot: dFoot(3, [dS(fmtNum(tb.row_count), 'row_count'), dS(fmtNum(tb.jumlah_barang), 'jumlah_barang'), dS(fmtNum(tb.nilai_fob), 'nilai_fob')]),
-        });
-
-        // Baris Dokumen Shipment: cukup dokumen BC 3.0 saja.
-        const docRows = (s.rows || []).filter(isBc30);
-        const tr = (s.totals || {}).bc30_rows || {
-            row_count: docRows.length,
-            jumlah_barang: dSum(docRows, 'jumlah_barang'),
-            nilai_fob: dSum(docRows, 'nilai_fob'),
-        };
-        const rows = dGrid([
-            { label: 'Tgl Bukti', val: r => dDate(r.tgl_bukti) },
-            { label: 'No. Bukti', val: r => dv(r.no_bukti) },
-            { label: 'Jenis Doc', val: r => dv(r.jenis_doc) },
-            { label: 'No. Aju', val: r => dv(r.no_aju) },
-            { label: 'No. Invoice', val: r => dv(r.no_invoice) },
-            { label: 'Jenis PS', val: r => dv(r.jenis_ps) },
-            { label: 'No. PS', val: r => dv(r.no_ps) },
-            { label: 'CPO', val: r => dv(r.uraian) },
-            { label: 'Penerima', val: r => dv(r.supplier_name) },
-            { label: 'Nama Barang', val: r => dv(r.barang_name) },
-            { label: 'Kategori', val: r => dv(r.barang_category) },
-            { label: 'Sat', val: r => dv(r.satuan_doc) },
-            { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
-            { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
-            { label: 'Berat', right: true, val: r => dDec(r.berat, 2) },
-        ], docRows, {
-            foot: dFoot(12, [dS(fmtNum(tr.jumlah_barang), 'jumlah_barang'), dS(fmtNum(tr.nilai_fob), 'nilai_fob'), '']),
-            total: tr.row_count,
+            foot: dFoot(1, [dS(fmtNum(tb.jumlah_barang), 'jumlah_barang'), dS(fmtNum(tb.nilai_fob), 'nilai_fob')]),
         });
 
         const shipByDateTotal = dSum(json.shipmentByDate || [], 'jumlah_barang');
 
         return dSection('Shipment By Date',
-            dSub('Per Kategori Barang — Barang Jadi', catTable, dRecon(tj.jumlah_barang, p.shipment, 'Barang Jadi vs Shipment (Total) di pipeline'))
-            + `<div class="rekon-detail-note mb-2">Grafik memakai semua kategori (${fmtNum(ta.jumlah_barang)} Pcs)${dRecon(ta.jumlah_barang, shipByDateTotal, 'Total breakdown vs total grafik').replace('ml-1', 'ml-1')}; box "Shipment (Total)" di pipeline hanya Barang Jadi (${fmtNum(tj.jumlah_barang)} Pcs).</div>`
-            + dSub('Per Tanggal & No. Bukti — BC 3.0 (mon_shipments)', byDate)
-            + dSub('Baris Dokumen Shipment — BC 3.0 (mon_shipments)', rows)
+            `<div class="rekon-detail-note mb-2">Grafik memakai semua kategori (${fmtNum(ta.jumlah_barang)} Pcs)${dRecon(ta.jumlah_barang, shipByDateTotal, 'Total breakdown vs total grafik').replace('ml-1', 'ml-1')}; box "Shipment (Total)" di pipeline hanya Barang Jadi (${fmtNum(tj.jumlah_barang)} Pcs).</div>`
+            + dSub('Per Tanggal — BC 3.0 (mon_shipments)', byDate)
         );
     }
 

@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class QcInsentifMasterController extends Controller
@@ -894,18 +895,26 @@ class QcInsentifMasterController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
-                | QA / QA LEADER: line ditentukan dari BUYER + THIRD PARTY di
-                | employee_qc_assignments.
+                | QA / QA LEADER: sumber qc_efficiencies ditentukan dari assignment
+                | (employee_qc_assignments yang line_number-nya NULL), DISTINCT per tanggal.
+                | Acuan: sheet "Summary Incentive" (QA INCENTIVE SEPTEMBER 2026).
                 |
-                | - third_party terisi  : lines diambil dari qc_efficiencies dengan
-                |                         date + buyer + third_party yang sama.
-                | - third_party kosong  : lines diambil berdasarkan date + buyer saja.
+                | - third_party terisi : qc_efficiencies = tanggal + buyer + third_party tsb
+                |     (baris third party, line_number NULL). Contoh: TENTAC / PQC.
+                | - third_party kosong : qc_efficiencies = tanggal + buyer saja.
+                |     * NPK yang memegang third_party di buyer yang sama => assignment kosong
+                |       ikut third_party tsb (tidak dobel di tanggal yang sama).
+                |     * Buyer yang punya baris third party (MUJI): hanya baris line_number NULL
+                |       (PQC + TENTAC) => total insentif keduanya x 50% (= rata-rata).
+                |     * Buyer tanpa third party (GAP, SUKO): baris buyer di-distinct per tanggal
+                |       (1 defect rate per buyer per tanggal) => x 50%.
                 |
-                | QA LEADER: total insentif per tanggal dibagi jumlah third_party yang
-                | dipegang di tanggal tsb (mis. PQC + TENTAC => total / 2).
+                | Nominal per entry = TOTAL insentif baris yang di-distinct, lalu formula role QC
+                | (qa x5/10, qa_leader x7/10, dipotong qc_violation).
+                | QA LEADER dibagi jumlah third_party di tanggal tsb.
                 |--------------------------------------------------------------------------
                 */
-                $qaAssignments = DB::table('employee_qc_assignments')
+                $qaRaw = DB::table('employee_qc_assignments')
                     ->where('npk', $employee->NPK)
                     ->where('period_id', $period->id)
                     ->where('role', $role)
@@ -919,54 +928,95 @@ class QcInsentifMasterController extends Controller
                     ->get()
                     ->map(function ($row) {
                         $thirdParty = trim((string) ($row->third_party ?? ''));
+                        $row->date        = substr((string) $row->date, 0, 10);
                         $row->third_party = $thirdParty !== '' ? $thirdParty : null;
+                        $row->buyer       = trim((string) ($row->buyer ?? ''));
 
                         return $row;
                     })
-                    // Hindari row ganda (tanggal + buyer + third_party sama) terhitung 2x.
-                    ->unique(fn($row) => $row->date . '|' . strtoupper((string) $row->buyer) . '|' . strtoupper((string) $row->third_party))
+                    ->filter(fn($row) => $row->buyer !== '')
+                    ->values();
+
+                // third_party yang dipegang NPK ini per buyer.
+                $qaThirdPartyByBuyer = $qaRaw
+                    ->filter(fn($row) => $row->third_party !== null)
+                    ->groupBy(fn($row) => strtoupper($row->buyer))
+                    ->map(fn($rows) => $rows->pluck('third_party')
+                        ->unique(fn($tp) => strtoupper($tp))
+                        ->values());
+
+                // Assignment kosong ikut third_party NPK (jika ada), lalu DISTINCT per tanggal + buyer + third_party.
+                $qaAssignments = $qaRaw
+                    ->flatMap(function ($row) use ($qaThirdPartyByBuyer) {
+                        if ($row->third_party !== null) {
+                            return [$row];
+                        }
+
+                        $tps = $qaThirdPartyByBuyer->get(strtoupper($row->buyer));
+
+                        if ($tps && $tps->isNotEmpty()) {
+                            return $tps->map(fn($tp) => (object) [
+                                'date'        => $row->date,
+                                'buyer'       => $row->buyer,
+                                'third_party' => $tp,
+                            ])->all();
+                        }
+
+                        return [$row];
+                    })
+                    ->unique(fn($row) => $row->date . '|' . strtoupper($row->buyer) . '|' . strtoupper((string) $row->third_party))
                     ->values();
 
                 if ($qaAssignments->isEmpty()) {
                     return $amount;
                 }
 
-                // Jumlah third_party yang dipegang per tanggal (dipakai untuk QA LEADER).
-                // Dihitung dari assignment (bukan dari data efficiency), jadi third_party
-                // yang dipegang tapi belum ada efficiency-nya tetap ikut sebagai pembagi.
-                $jumlahThirdPartyByDate = $qaAssignments
-                    ->groupBy(fn($row) => (string) $row->date)
-                    ->map(
-                        fn($rows) => $rows->pluck('third_party')
-                            ->filter()
-                            ->map(fn($tp) => strtoupper($tp))
-                            ->unique()
-                            ->count()
-                    );
+                // Ambil semua qc_efficiencies yang dibutuhkan sekali query, group per tanggal + buyer.
+                $qaEffByKey = DB::table('qc_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->whereIn('date', $qaAssignments->pluck('date')->unique()->all())
+                    ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
+                    ->get()
+                    ->groupBy(fn($row) => substr((string) $row->date, 0, 10) . '|' . strtoupper(trim((string) $row->buyer)));
 
-                // Untuk tiap assignment, ambil line-line di qc_efficiencies sesuai
-                // buyer (+ third_party jika ada). Sekalian kumpulkan union line_number
-                // (dipakai untuk lineViolations).
+                // Buyer yang punya baris third party di periode ini (mis. MUJI: PQC + TENTAC).
+                $qaBuyerHasThirdParty = DB::table('qc_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
+                    ->whereNotNull('third_party')
+                    ->where('third_party', '!=', '')
+                    ->pluck('buyer')
+                    ->mapWithKeys(fn($buyer) => [strtoupper(trim((string) $buyer)) => true]);
+
                 $qaByDate = collect([]);
-                $allLineNumbers = collect([]);
 
                 foreach ($qaAssignments as $qaAssignment) {
 
-                    if (empty($qaAssignment->buyer)) {
-                        continue;
-                    }
+                    $buyerHasThirdParty = $qaBuyerHasThirdParty->has(strtoupper($qaAssignment->buyer));
 
-                    $linesQuery = DB::table('qc_efficiencies')
-                        ->where('period_id', $period->id)
-                        ->where('date', $qaAssignment->date)
-                        ->where('buyer', $qaAssignment->buyer);
+                    $effRows = $qaEffByKey->get(
+                        $qaAssignment->date . '|' . strtoupper($qaAssignment->buyer),
+                        collect()
+                    );
 
-                    // third_party kosong / null => cukup by buyer saja
-                    if ($qaAssignment->third_party !== null) {
-                        $linesQuery->where('third_party', $qaAssignment->third_party);
-                    }
+                    $linesOfDay = $effRows
+                        ->filter(function ($row) use ($qaAssignment, $buyerHasThirdParty) {
+                            // third_party terisi => baris buyer + third_party tsb
+                            if ($qaAssignment->third_party !== null) {
+                                return strcasecmp(trim((string) ($row->third_party ?? '')), $qaAssignment->third_party) === 0;
+                            }
 
-                    $linesOfDay = $linesQuery->get();
+                            // third_party kosong, buyer punya third party (MUJI) => hanya line_number NULL
+                            if ($buyerHasThirdParty) {
+                                return $row->line_number === null || $row->line_number === '';
+                            }
+
+                            // third_party kosong, buyer tanpa third party (GAP, SUKO) => semua baris buyer
+                            return true;
+                        })
+                        // DISTINCT per tanggal (+ third_party): 1 defect rate = 1 baris.
+                        ->unique(fn($row) => strtoupper(trim((string) ($row->third_party ?? ''))) . '|' . (float) $row->efficiency)
+                        ->values();
 
                     if ($linesOfDay->isEmpty()) {
                         continue;
@@ -974,41 +1024,26 @@ class QcInsentifMasterController extends Controller
 
                     $qaByDate->push((object) [
                         'date'        => $qaAssignment->date,
+                        'buyer'       => $qaAssignment->buyer,
                         'third_party' => $qaAssignment->third_party,
                         'lines'       => $linesOfDay,
                     ]);
-
-                    $allLineNumbers = $allLineNumbers->merge($linesOfDay->pluck('line_number'));
                 }
 
                 if ($qaByDate->isEmpty()) {
                     return $amount;
                 }
 
-                $allLineNumbers = $allLineNumbers->unique()->values()->all();
+                // Jumlah third_party per tanggal (pembagi QA LEADER).
+                $qaThirdPartyCountByDate = [];
 
-                // NOTE: reuses sewing_violations, sama seperti chief/spv,
-                // cuma filter line-nya pakai gabungan seluruh line hasil
-                // pencarian buyer/third_party sepanjang periode (IN), bukan range
-                // section (BETWEEN).
-                $lineViolations = DB::table('sewing_violations')
-                    ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
-                    ->whereBetween('sewing_violations.tanggal', [
-                        $period->start_date,
-                        $period->end_date
-                    ])
-                    ->where('d.DEPARTEMENT', 'like', 'LINE %')
-                    ->whereIn(
-                        DB::raw("CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)"),
-                        $allLineNumbers
-                    )
-                    ->count();
+                foreach ($qaByDate as $row) {
+                    if ($row->third_party !== null) {
+                        $qaThirdPartyCountByDate[(string) $row->date][strtoupper($row->third_party)] = true;
+                    }
+                }
 
-                $collectionDay = collect([]);
-                $collectionTotalLines = collect([]);
-                $collectionLines = collect([]);
-
-                // Proses PER TANGGAL: 1 tanggal bisa punya >1 entry (beda third_party).
+                // Proses PER TANGGAL (1 tanggal bisa >1 entry: beda third_party).
                 foreach ($qaByDate->groupBy(fn($entry) => (string) $entry->date) as $entries) {
 
                     $date = $entries->first()->date;
@@ -1028,47 +1063,25 @@ class QcInsentifMasterController extends Controller
                         $totalLineInsentif = 0;
 
                         foreach ($entry->lines as $line) {
-
-                            // Cutoff di luar tier tertinggi sudah ditangani oleh
-                            // getInsentifByDefectRate() sendiri.
-                            $totalLineInsentif +=
-                                $this->getInsentifByDefectRate($line->efficiency, $formula);
-
-                            if ($totalLineInsentif <= 0) {
-                                continue;
-                            }
-
-                            $collectionLines->push($totalLineInsentif);
+                            // Cutoff di luar tier tertinggi sudah ditangani getInsentifByDefectRate().
+                            $totalLineInsentif += $this->getInsentifByDefectRate($line->efficiency, $formula);
                         }
 
-                        // jumlahLine dihitung per entry (buyer [+ third_party] pada tanggal tsb).
-                        $jumlahLine = $entry->lines->count();
-
-                        $dayAmount += $this->calculateRoleQcInsentif(
+                        $dayAmount += $this->calculateQaInsentif(
                             $role,
-                            'qc',
                             $totalLineInsentif,
-                            $jumlahLine,
-                            $lineViolations,
-                            $employee->violation_percentage,
-                            $this->qcViolationPercentage($period)
+                            $this->qcViolationPercentageByBuyer($period, $entry->buyer)
                         );
-
-                        $collectionTotalLines->push($jumlahLine);
                     }
 
-                    // QA LEADER: total insentif dibagi jumlah third_party yang dipegang
-                    // pada tanggal tsb. Kalau tidak ada third_party => tidak dibagi.
+                    // QA LEADER: dibagi jumlah third_party di tanggal tsb (tanpa third_party => tidak dibagi).
                     if ($role === 'qa_leader') {
-                        $jumlahThirdParty = max($jumlahThirdPartyByDate[(string) $date] ?? 0, 1);
+                        $jumlahThirdParty = max(count($qaThirdPartyCountByDate[(string) $date] ?? []), 1);
                         $dayAmount = $dayAmount / $jumlahThirdParty;
                     }
 
                     $amount += $dayAmount;
-
-                    $collectionDay->push($amount);
                 }
-
             } else {
 
                 $section = DB::table('sections')
@@ -1270,6 +1283,92 @@ class QcInsentifMasterController extends Controller
         return $this->qcViolationCache[$periodId] ??= min(100, max(0, (float) DB::table('qc_violations')
             ->where('period_id', $periodId)
             ->sum('percentage')));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | QC VIOLATION PER BUYER (qc_violations)
+    |--------------------------------------------------------------------------
+    | Jika tabel qc_violations punya kolom `buyer`, baris dengan buyer kosong
+    | berlaku untuk semua buyer dan baris ber-buyer hanya untuk buyer tsb.
+    | Tanpa kolom `buyer` => total percentage periode (perilaku lama).
+    */
+    private array $qcViolationBuyerCache = [];
+
+    private function qcViolationPercentageByBuyer($period, $buyer = null): float
+    {
+        $periodId = is_object($period) ? $period->id : $period;
+        $buyerKey = strtoupper(trim((string) $buyer));
+        $cacheKey = $periodId . '|' . $buyerKey;
+
+        if (isset($this->qcViolationBuyerCache[$cacheKey])) {
+            return $this->qcViolationBuyerCache[$cacheKey];
+        }
+
+        $query = DB::table('qc_violations')->where('period_id', $periodId);
+
+        if (Schema::hasColumn('qc_violations', 'buyer')) {
+            $query->where(function ($q) use ($buyerKey) {
+                $q->whereNull('buyer')
+                    ->orWhere('buyer', '')
+                    ->orWhereRaw('UPPER(buyer) = ?', [$buyerKey]);
+            });
+        }
+
+        return $this->qcViolationBuyerCache[$cacheKey] = min(100, max(0, (float) $query->sum('percentage')));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSENTIF QA / QA LEADER (formula insentif_role_formulas dept 'qc')
+    |--------------------------------------------------------------------------
+    | $avgInsentif (nama lama) = TOTAL insentif baris efficiency yang di-distinct
+    | pada tanggal tsb (totalLineInsentif di formula).
+    | qa        : (total * 5 / 10) * ((100 - qc_violation) / 100)
+    | qa_leader : (total * 7 / 10) * ((100 - qc_violation) / 100)
+    */
+    private function calculateQaInsentif($role, $avgInsentif, $qcViolation = 0)
+    {
+        $qcViolation = (float) ($qcViolation ?? 0);
+
+        $fallback = fn() => $avgInsentif
+            * ($role === 'qa_leader' ? 0.7 : 0.5)
+            * ((100 - $qcViolation) / 100);
+
+        $formula = Cache::remember(
+            "insentif_formula_qc_{$role}",
+            300,
+            function () use ($role) {
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', 'qc')
+                    ->value('formula');
+            }
+        );
+
+        if (!$formula) {
+            return $fallback();
+        }
+
+        $variables = [
+            'totalLineInsentif'    => $avgInsentif,
+            'jumlahLine'           => 1,
+            'violationsCount'      => 0,
+            'violation_percentage' => 0,
+            'qc_violation'         => $qcViolation,
+            'insentif'             => $avgInsentif,
+        ];
+
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, $variables));
+
+        try {
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+            return $fallback();
+        }
     }
 
     private function calculateRoleQcInsentif(
