@@ -19,6 +19,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use App\Services\PayrollRoleFilterService;
@@ -1906,18 +1907,24 @@ END AS special_overtime_hours
 
                                     /*
                                     |--------------------------------------------------------------------------
-                                    | QA / QA LEADER: line ditentukan dari BUYER + THIRD PARTY di
-                                    | employee_qc_assignments.
-                                    |
-                                    | - third_party terisi  : lines diambil dari qc_efficiencies dengan
-                                    |                         date + buyer + third_party yang sama.
-                                    | - third_party kosong  : lines diambil berdasarkan date + buyer saja.
-                                    |
-                                    | QA LEADER: total insentif per tanggal dibagi jumlah third_party yang
-                                    | dipegang di tanggal tsb (mis. PQC + TENTAC => total / 2).
+                                    | QA / QA LEADER (sama dengan QcInsentifMasterController)
+                                    |--------------------------------------------------------------------------
+                                    | Sumber: employee_qc_assignments dengan line_number NULL, DISTINCT per
+                                    | tanggal + buyer + third_party.
+                                    | - third_party terisi : qc_efficiencies tanggal + buyer + third_party tsb.
+                                    | - third_party kosong : qc_efficiencies tanggal + buyer saja.
+                                    |     * NPK yang memegang third_party di buyer yang sama => assignment
+                                    |       kosong ikut third_party tsb (tidak dobel).
+                                    |     * Buyer yang punya baris third party (MUJI): hanya baris line_number
+                                    |       NULL (PQC + TENTAC).
+                                    |     * Buyer tanpa third party (GAP, SUKO): baris buyer di-distinct per
+                                    |       tanggal (1 defect rate per buyer).
+                                    | Nominal per entry = TOTAL insentif baris distinct x faktor role
+                                    | (qa 5/10, qa_leader 7/10) x potongan qc_violation PER BUYER.
+                                    | QA LEADER dibagi jumlah third_party di tanggal tsb.
                                     |--------------------------------------------------------------------------
                                     */
-                                    $qaAssignments = DB::table('employee_qc_assignments')
+                                    $qaRaw = DB::table('employee_qc_assignments')
                                         ->where('npk', $employee->NPK)
                                         ->where('period_id', $period->id)
                                         ->where('role', $assignment->role)
@@ -1931,54 +1938,96 @@ END AS special_overtime_hours
                                         ->get()
                                         ->map(function ($row) {
                                             $thirdParty = trim((string) ($row->third_party ?? ''));
+                                            $row->date        = substr((string) $row->date, 0, 10);
                                             $row->third_party = $thirdParty !== '' ? $thirdParty : null;
+                                            $row->buyer       = trim((string) ($row->buyer ?? ''));
 
                                             return $row;
                                         })
-                                        // Hindari row ganda (tanggal + buyer + third_party sama) terhitung 2x.
-                                        ->unique(fn($row) => $row->date . '|' . strtoupper((string) $row->buyer) . '|' . strtoupper((string) $row->third_party))
+                                        ->filter(fn($row) => $row->buyer !== '')
+                                        ->values();
+
+                                    // third_party yang dipegang NPK ini per buyer.
+                                    $qaThirdPartyByBuyer = $qaRaw
+                                        ->filter(fn($row) => $row->third_party !== null)
+                                        ->groupBy(fn($row) => strtoupper($row->buyer))
+                                        ->map(fn($rows) => $rows->pluck('third_party')
+                                            ->unique(fn($tp) => strtoupper($tp))
+                                            ->values());
+
+                                    // Assignment kosong ikut third_party NPK (jika ada), lalu DISTINCT.
+                                    $qaAssignments = $qaRaw
+                                        ->flatMap(function ($row) use ($qaThirdPartyByBuyer) {
+                                            if ($row->third_party !== null) {
+                                                return [$row];
+                                            }
+
+                                            $tps = $qaThirdPartyByBuyer->get(strtoupper($row->buyer));
+
+                                            if ($tps && $tps->isNotEmpty()) {
+                                                return $tps->map(fn($tp) => (object) [
+                                                    'date'        => $row->date,
+                                                    'buyer'       => $row->buyer,
+                                                    'third_party' => $tp,
+                                                ])->all();
+                                            }
+
+                                            return [$row];
+                                        })
+                                        ->unique(fn($row) => $row->date . '|' . strtoupper($row->buyer) . '|' . strtoupper((string) $row->third_party))
                                         ->values();
 
                                     if ($qaAssignments->isEmpty()) {
                                         continue;
                                     }
 
-                                    // Jumlah third_party yang dipegang per tanggal (dipakai untuk QA LEADER).
-                                    // Dihitung dari assignment (bukan dari data efficiency), jadi third_party
-                                    // yang dipegang tapi belum ada efficiency-nya tetap ikut sebagai pembagi.
-                                    $jumlahThirdPartyByDate = $qaAssignments
-                                        ->groupBy(fn($row) => (string) $row->date)
-                                        ->map(
-                                            fn($rows) => $rows->pluck('third_party')
-                                                ->filter()
-                                                ->map(fn($tp) => strtoupper($tp))
-                                                ->unique()
-                                                ->count()
-                                        );
+                                    // Semua qc_efficiencies yang dibutuhkan, sekali query.
+                                    $qaEffByKey = DB::table('qc_efficiencies')
+                                        ->where('period_id', $period->id)
+                                        ->whereIn('date', $qaAssignments->pluck('date')->unique()->all())
+                                        ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
+                                        ->get()
+                                        ->groupBy(fn($row) => substr((string) $row->date, 0, 10) . '|' . strtoupper(trim((string) $row->buyer)));
 
-                                    // Untuk tiap assignment, ambil line-line di qc_efficiencies sesuai
-                                    // buyer (+ third_party jika ada). Sekalian kumpulkan union line_number
-                                    // (dipakai untuk lineViolations).
+                                    // Buyer yang punya baris third party di periode ini (mis. MUJI).
+                                    $qaBuyerHasThirdParty = DB::table('qc_efficiencies')
+                                        ->where('period_id', $period->id)
+                                        ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
+                                        ->whereNotNull('third_party')
+                                        ->where('third_party', '!=', '')
+                                        ->pluck('buyer')
+                                        ->mapWithKeys(fn($buyer) => [strtoupper(trim((string) $buyer)) => true]);
+
                                     $qaByDate = collect([]);
                                     $allLineNumbers = collect([]);
 
                                     foreach ($qaAssignments as $qaAssignment) {
 
-                                        if (empty($qaAssignment->buyer)) {
-                                            continue;
-                                        }
+                                        $buyerHasThirdParty = $qaBuyerHasThirdParty->has(strtoupper($qaAssignment->buyer));
 
-                                        $linesQuery = DB::table('qc_efficiencies')
-                                            ->where('period_id', $period->id)
-                                            ->where('date', $qaAssignment->date)
-                                            ->where('buyer', $qaAssignment->buyer);
+                                        $effRows = $qaEffByKey->get(
+                                            $qaAssignment->date . '|' . strtoupper($qaAssignment->buyer),
+                                            collect()
+                                        );
 
-                                        // third_party kosong / null => cukup by buyer saja
-                                        if ($qaAssignment->third_party !== null) {
-                                            $linesQuery->where('third_party', $qaAssignment->third_party);
-                                        }
+                                        $linesOfDay = $effRows
+                                            ->filter(function ($row) use ($qaAssignment, $buyerHasThirdParty) {
+                                                // third_party terisi => baris buyer + third_party tsb
+                                                if ($qaAssignment->third_party !== null) {
+                                                    return strcasecmp(trim((string) ($row->third_party ?? '')), $qaAssignment->third_party) === 0;
+                                                }
 
-                                        $linesOfDay = $linesQuery->get();
+                                                // third_party kosong, buyer punya third party (MUJI) => hanya line_number NULL
+                                                if ($buyerHasThirdParty) {
+                                                    return $row->line_number === null || $row->line_number === '';
+                                                }
+
+                                                // third_party kosong, buyer tanpa third party (GAP, SUKO) => semua baris buyer
+                                                return true;
+                                            })
+                                            // DISTINCT per tanggal (+ third_party): 1 defect rate = 1 baris.
+                                            ->unique(fn($row) => strtoupper(trim((string) ($row->third_party ?? ''))) . '|' . (float) $row->efficiency)
+                                            ->values();
 
                                         if ($linesOfDay->isEmpty()) {
                                             continue;
@@ -1986,11 +2035,12 @@ END AS special_overtime_hours
 
                                         $qaByDate->push((object) [
                                             'date'        => $qaAssignment->date,
+                                            'buyer'       => $qaAssignment->buyer,
                                             'third_party' => $qaAssignment->third_party,
                                             'lines'       => $linesOfDay,
                                         ]);
 
-                                        $allLineNumbers = $allLineNumbers->merge($linesOfDay->pluck('line_number'));
+                                        $allLineNumbers = $allLineNumbers->merge($linesOfDay->pluck('line_number')->filter(fn($n) => $n !== null));
                                     }
 
                                     if ($qaByDate->isEmpty()) {
@@ -1999,26 +2049,16 @@ END AS special_overtime_hours
 
                                     $allLineNumbers = $allLineNumbers->unique()->values()->all();
 
-                                    // NOTE: reuses sewing_violations, sama seperti chief/spv,
-                                    // cuma filter line-nya pakai gabungan seluruh line hasil
-                                    // pencarian buyer/third_party sepanjang periode (IN), bukan range
-                                    // section (BETWEEN).
-                                    $lineViolations = DB::table('sewing_violations')
-                                        ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
-                                        ->whereBetween('sewing_violations.tanggal', [
-                                            $period->start_date,
-                                            $period->end_date
-                                        ])
-                                        ->where('d.DEPARTEMENT', 'like', 'LINE %')
-                                        ->whereIn(
-                                            DB::raw("CAST(REPLACE(d.DEPARTEMENT,'LINE ','') AS INT)"),
-                                            $allLineNumbers
-                                        )
-                                        ->count();
+                                    // Jumlah third_party per tanggal (pembagi QA LEADER).
+                                    $qaThirdPartyCountByDate = [];
+
+                                    foreach ($qaByDate as $row) {
+                                        if ($row->third_party !== null) {
+                                            $qaThirdPartyCountByDate[(string) $row->date][strtoupper($row->third_party)] = true;
+                                        }
+                                    }
 
                                     $collectionDay = collect([]);
-                                    $collectionTotalLines = collect([]);
-                                    $collectionLines = collect([]);
 
                                     // Proses PER TANGGAL: 1 tanggal bisa punya >1 entry (beda third_party).
                                     foreach ($qaByDate->groupBy(fn($entry) => (string) $entry->date) as $entries) {
@@ -2040,39 +2080,21 @@ END AS special_overtime_hours
                                             $totalLineInsentif = 0;
 
                                             foreach ($entry->lines as $line) {
-
-                                                // Cutoff di luar tier tertinggi sudah ditangani oleh
-                                                // getInsentifByDefectRate() sendiri.
+                                                // Cutoff di luar tier tertinggi sudah ditangani getInsentifByDefectRate().
                                                 $totalLineInsentif +=
                                                     $this->getInsentifByDefectRate($line->efficiency, $qcInsentifFormula);
-
-                                                if ($totalLineInsentif <= 0) {
-                                                    continue;
-                                                }
-
-                                                $collectionLines->push($totalLineInsentif);
                                             }
 
-                                            // jumlahLine dihitung per entry (buyer [+ third_party] pada tanggal tsb).
-                                            $jumlahLine = $entry->lines->count();
-
-                                            $dayAmount += $this->calculateRoleSewingInsentif(
+                                            $dayAmount += $this->calculateQaQcInsentif(
                                                 $assignment->role,
-                                                'qc',
                                                 $totalLineInsentif,
-                                                $jumlahLine,
-                                                $lineViolations,
-                                                $employee->violation_percentage,
-                                                $qcViolationPercentage
+                                                $this->qcViolationPercentageByBuyer($period, $entry->buyer)
                                             );
-
-                                            $collectionTotalLines->push($jumlahLine);
                                         }
 
-                                        // QA LEADER: total insentif dibagi jumlah third_party yang dipegang
-                                        // pada tanggal tsb. Kalau tidak ada third_party => tidak dibagi.
+                                        // QA LEADER: dibagi jumlah third_party di tanggal tsb (tanpa third_party => tidak dibagi).
                                         if ($assignment->role === 'qa_leader') {
-                                            $jumlahThirdParty = max($jumlahThirdPartyByDate[(string) $date] ?? 0, 1);
+                                            $jumlahThirdParty = max(count($qaThirdPartyCountByDate[(string) $date] ?? []), 1);
                                             $dayAmount = $dayAmount / $jumlahThirdParty;
                                         }
 
@@ -2138,7 +2160,9 @@ END AS special_overtime_hours
                                     //     ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
                                     //     ->get();
 
-                                    $jumlahLine = $lineEnd - $lineStart + 1;
+                                    // Pembagi = jumlah line yang benar-benar ada di section (tabel DEPT 'LINE n'),
+                                    // sama seperti QcInsentifMasterController (mis. section 1-12 tanpa LINE 1 => 11).
+                                    $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd);
 
                                     foreach ($grouped as $day) {
 
@@ -2173,13 +2197,12 @@ END AS special_overtime_hours
                                             $collectionLines->push($totalLineInsentif);
                                         }
 
-                                        $amount += $this->calculateRoleSewingInsentif(
+                                        // CHIEF / SPV: (total insentif semua line section / jumlah line) x faktor role
+                                        // (chief 7/10, spv 5/10), lalu dipotong qc_violation. Sama dengan controller.
+                                        $amount += $this->calculateChiefSpvQcInsentif(
                                             $assignment->role,
-                                            'qc',
                                             $totalLineInsentif,
                                             $jumlahLine,
-                                            $lineViolations,
-                                            $employee->violation_percentage,
                                             $qcViolationPercentage
                                         );
 
@@ -2654,6 +2677,135 @@ END AS special_overtime_hours
         }
 
         return 0;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | QC VIOLATION PER BUYER (qc_violations) - sama dengan QcInsentifMasterController
+    |--------------------------------------------------------------------------
+    | Jika tabel qc_violations punya kolom `buyer`, baris dengan buyer kosong
+    | berlaku untuk semua buyer dan baris ber-buyer hanya untuk buyer tsb.
+    | Tanpa kolom `buyer` => total percentage periode.
+    */
+    private array $qcViolationBuyerCache = [];
+
+    private function qcViolationPercentageByBuyer($period, $buyer = null): float
+    {
+        $periodId = is_object($period) ? $period->id : $period;
+        $buyerKey = strtoupper(trim((string) $buyer));
+        $cacheKey = $periodId . '|' . $buyerKey;
+
+        if (isset($this->qcViolationBuyerCache[$cacheKey])) {
+            return $this->qcViolationBuyerCache[$cacheKey];
+        }
+
+        $query = DB::table('qc_violations')->where('period_id', $periodId);
+
+        if (Schema::hasColumn('qc_violations', 'buyer')) {
+            $query->where(function ($q) use ($buyerKey) {
+                $q->whereNull('buyer')
+                    ->orWhere('buyer', '')
+                    ->orWhereRaw('UPPER(buyer) = ?', [$buyerKey]);
+            });
+        }
+
+        return $this->qcViolationBuyerCache[$cacheKey] = min(100, max(0, (float) $query->sum('percentage')));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | JUMLAH LINE SECTION (pembagi CHIEF / SPV QC)
+    |--------------------------------------------------------------------------
+    | Hitung line yang ada di tabel DEPT ('LINE n') dalam range section.
+    | Fallback ke selisih range jika DEPT tidak punya line di range tsb.
+    */
+    private array $qcSectionLineCountCache = [];
+
+    private function qcSectionLineCount($lineStart, $lineEnd): int
+    {
+        $lineStart = (int) $lineStart;
+        $lineEnd   = (int) $lineEnd;
+        $cacheKey  = $lineStart . '-' . $lineEnd;
+
+        if (isset($this->qcSectionLineCountCache[$cacheKey])) {
+            return $this->qcSectionLineCountCache[$cacheKey];
+        }
+
+        $count = (int) DB::table('DEPT')
+            ->where('DEPARTEMENT', 'like', 'LINE %')
+            ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
+            ->distinct()
+            ->count('DEPARTEMENT');
+
+        if ($count <= 0) {
+            $count = max($lineEnd - $lineStart + 1, 1);
+        }
+
+        return $this->qcSectionLineCountCache[$cacheKey] = $count;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSENTIF QA / QA LEADER QC
+    |--------------------------------------------------------------------------
+    | qa        : (total * 5 / 10) * ((100 - qc_violation) / 100)
+    | qa_leader : (total * 7 / 10) * ((100 - qc_violation) / 100)
+    */
+    private function calculateQaQcInsentif($role, $totalLineInsentif, $qcViolation = 0)
+    {
+        return $this->evaluateQcRoleFormula($role, $totalLineInsentif, 1, $qcViolation, fn() => $totalLineInsentif
+            * ($role === 'qa_leader' ? 0.7 : 0.5)
+            * ((100 - (float) ($qcViolation ?? 0)) / 100));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSENTIF CHIEF / SPV QC
+    |--------------------------------------------------------------------------
+    | chief : ((total / jumlahLine) * 7 / 10) * ((100 - qc_violation) / 100)
+    | spv   : ((total / jumlahLine) * 5 / 10) * ((100 - qc_violation) / 100)
+    */
+    private function calculateChiefSpvQcInsentif($role, $totalLineInsentif, $jumlahLine, $qcViolation = 0)
+    {
+        $jumlahLine = max((int) $jumlahLine, 1);
+
+        return $this->evaluateQcRoleFormula($role, $totalLineInsentif, $jumlahLine, $qcViolation, fn() => ($totalLineInsentif / $jumlahLine)
+            * ($role === 'chief' ? 0.7 : 0.5)
+            * ((100 - (float) ($qcViolation ?? 0)) / 100));
+    }
+
+    private function evaluateQcRoleFormula($role, $totalLineInsentif, $jumlahLine, $qcViolation, callable $fallback)
+    {
+        $formula = Cache::remember(
+            "insentif_formula_qc_{$role}",
+            300,
+            function () use ($role) {
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', 'qc')
+                    ->value('formula');
+            }
+        );
+
+        if (!$formula) {
+            return $fallback();
+        }
+
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, [
+            'totalLineInsentif' => $totalLineInsentif,
+            'jumlahLine'        => $jumlahLine,
+            'qc_violation'      => (float) ($qcViolation ?? 0),
+            'insentif'          => $totalLineInsentif,
+        ]));
+
+        try {
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+            return $fallback();
+        }
     }
 
     private function calculateRoleSewingInsentif(
