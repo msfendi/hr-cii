@@ -1162,7 +1162,9 @@ class QcInsentifMasterController extends Controller
                 //     ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
                 //     ->get();
 
-                $jumlahLine = $lineEnd - $lineStart + 1;
+                // Pembagi = jumlah line yang benar-benar ada di section (tabel DEPT 'LINE n'),
+                // bukan selisih range, mis. section 1-12 tanpa LINE 1 => 11 (acuan: FTY 2).
+                $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd);
 
                 foreach ($grouped as $day) {
                     /*
@@ -1206,14 +1208,12 @@ class QcInsentifMasterController extends Controller
 
                     // dd($grouped, $collectionLines);
 
-                    $amount += $this->calculateRoleQcInsentif(
+                    // CHIEF / SPV: (total insentif semua line di section / jumlah line) x faktor role
+                    // (chief 7/10, spv 5/10), lalu dipotong qc_violation. Acuan: Summary Incentive FTY 1 & 2.
+                    $amount += $this->calculateChiefSpvQcInsentif(
                         $role,
-                        'qc',
                         $totalLineInsentif,
-                        // $jumlahLine->first()->jumlah_line,
                         $jumlahLine,
-                        $lineViolations,
-                        $employee->violation_percentage,
                         $this->qcViolationPercentage($period)
                     );
 
@@ -1359,6 +1359,87 @@ class QcInsentifMasterController extends Controller
         ];
 
         $formula = strtr($formula, array_map(fn($v) => (string) $v, $variables));
+
+        try {
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+            return $fallback();
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | JUMLAH LINE SECTION (pembagi CHIEF / SPV QC)
+    |--------------------------------------------------------------------------
+    | Hitung line yang ada di tabel DEPT ('LINE n') dalam range section.
+    | Fallback ke selisih range jika DEPT tidak punya line di range tsb.
+    */
+    private array $qcSectionLineCountCache = [];
+
+    private function qcSectionLineCount($lineStart, $lineEnd): int
+    {
+        $lineStart = (int) $lineStart;
+        $lineEnd   = (int) $lineEnd;
+        $cacheKey  = $lineStart . '-' . $lineEnd;
+
+        if (isset($this->qcSectionLineCountCache[$cacheKey])) {
+            return $this->qcSectionLineCountCache[$cacheKey];
+        }
+
+        $count = (int) DB::table('DEPT')
+            ->where('DEPARTEMENT', 'like', 'LINE %')
+            ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
+            ->distinct()
+            ->count('DEPARTEMENT');
+
+        if ($count <= 0) {
+            $count = max($lineEnd - $lineStart + 1, 1);
+        }
+
+        return $this->qcSectionLineCountCache[$cacheKey] = $count;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSENTIF CHIEF / SPV QC (formula insentif_role_formulas dept 'qc')
+    |--------------------------------------------------------------------------
+    | chief : ((total / jumlahLine) * 7 / 10) * ((100 - qc_violation) / 100)
+    | spv   : ((total / jumlahLine) * 5 / 10) * ((100 - qc_violation) / 100)
+    | total = jumlah insentif semua line section pada tanggal tsb.
+    */
+    private function calculateChiefSpvQcInsentif($role, $totalLineInsentif, $jumlahLine, $qcViolation = 0)
+    {
+        $jumlahLine  = max((int) $jumlahLine, 1);
+        $qcViolation = (float) ($qcViolation ?? 0);
+
+        $fallback = fn() => ($totalLineInsentif / $jumlahLine)
+            * ($role === 'chief' ? 0.7 : 0.5)
+            * ((100 - $qcViolation) / 100);
+
+        $formula = Cache::remember(
+            "insentif_formula_qc_{$role}",
+            300,
+            function () use ($role) {
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', 'qc')
+                    ->value('formula');
+            }
+        );
+
+        if (!$formula) {
+            return $fallback();
+        }
+
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, [
+            'totalLineInsentif' => $totalLineInsentif,
+            'jumlahLine'        => $jumlahLine,
+            'qc_violation'      => $qcViolation,
+            'insentif'          => $totalLineInsentif,
+        ]));
 
         try {
             if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
