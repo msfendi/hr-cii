@@ -23,11 +23,17 @@ class QcEfficiencyImport implements ToModel, WithHeadingRow
             ? trim((string) $row['third_party'])
             : null;
 
+        // dept: 'qa' / 'qc'. Kosong / kolom tidak ada => 'qc' (default).
+        $dept = isset($row['dept']) && trim((string) $row['dept']) !== ''
+            ? strtolower(trim((string) $row['dept']))
+            : 'qc';
+
         return QcEfficiency::updateOrCreate(
             [
                 'line_number' => $row['line_number'],
                 'buyer' => $row['buyer'],
                 'third_party' => $thirdParty,
+                'dept'        => $dept,
                 'date' =>
                 !empty($row['date'])
                     ? Date::excelToDateTimeObject($row['date'])

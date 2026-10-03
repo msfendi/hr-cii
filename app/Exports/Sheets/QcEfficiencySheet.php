@@ -25,6 +25,7 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
             'days',
             'buyer',
             'third_party',
+            'dept',
         ];
     }
 
@@ -33,10 +34,10 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet = $event->sheet->getDelegate();
 
         // bold header
-        $sheet->getStyle('A1:F1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:G1')->getFont()->setBold(true);
 
         // auto width
-        foreach (range('A', 'F') as $column) {
+        foreach (range('A', 'G') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
@@ -44,7 +45,7 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
             ->getNumberFormat()
             ->setFormatCode(NumberFormat::FORMAT_DATE_DDMMYYYY);
 
-        // contoh data (third_party opsional: kosongkan jika tidak ada)
+        // contoh data (third_party opsional: kosongkan jika tidak ada; dept: qc / qa)
         $sheet->setCellValue('A2', '1');
         $sheet->setCellValue('B2', '1.82');
         $date = Date::stringToExcel('2026-01-12');
@@ -52,6 +53,7 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D2', '1');
         $sheet->setCellValue('E2', 'MUJI');
         $sheet->setCellValue('F2', 'PQC');
+        $sheet->setCellValue('G2', 'qc');
 
         $sheet->setCellValue('A3', '2');
         $sheet->setCellValue('B3', '2.56');
@@ -60,6 +62,7 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D3', '1');
         $sheet->setCellValue('E3', 'UNIQLO');
         $sheet->setCellValue('F3', '');
+        $sheet->setCellValue('G3', 'qc');
 
         $sheet->setCellValue('A4', '3');
         $sheet->setCellValue('B4', '4.21');
@@ -68,6 +71,7 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D4', '1');
         $sheet->setCellValue('E4', 'MUJI');
         $sheet->setCellValue('F4', 'TENTAC');
+        $sheet->setCellValue('G4', 'qc');
 
         $sheet->setCellValue('A5', '1');
         $sheet->setCellValue('B5', '0.88');
@@ -76,6 +80,7 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D5', '2');
         $sheet->setCellValue('E5', 'MUJI');
         $sheet->setCellValue('F5', '');
+        $sheet->setCellValue('G5', 'qc');
 
         $sheet->setCellValue('A6', '1');
         $sheet->setCellValue('B6', '1.51');
@@ -84,6 +89,16 @@ class QcEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D6', '3');
         $sheet->setCellValue('E6', 'MUJI');
         $sheet->setCellValue('F6', '');
+        $sheet->setCellValue('G6', 'qc');
+
+        // contoh baris QA (dept = qa)
+        $sheet->setCellValue('A7', '');
+        $sheet->setCellValue('B7', '1.20');
+        $sheet->setCellValue('C7', Date::stringToExcel('2026-01-12'));
+        $sheet->setCellValue('D7', '1');
+        $sheet->setCellValue('E7', 'MUJI');
+        $sheet->setCellValue('F7', 'PQC');
+        $sheet->setCellValue('G7', 'qa');
     }
 
     public function registerEvents(): array

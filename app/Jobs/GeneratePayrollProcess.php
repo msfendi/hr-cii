@@ -1813,7 +1813,8 @@ END AS special_overtime_hours
                                     ->leftJoin('qc_efficiencies as le', function ($join) {
                                         $join->on('le.period_id', '=', 'ela.period_id')
                                             ->on('le.line_number', '=', 'ela.line_number')
-                                            ->on('le.date', '=', 'ela.start_date');
+                                            ->on('le.date', '=', 'ela.start_date')
+                                            ->where('le.dept', '=', 'qc');
                                     })
 
                                     ->leftJoinSub(
@@ -1984,6 +1985,7 @@ END AS special_overtime_hours
                                     // Semua qc_efficiencies yang dibutuhkan, sekali query.
                                     $qaEffByKey = DB::table('qc_efficiencies')
                                         ->where('period_id', $period->id)
+                                        ->where('dept', 'qa')
                                         ->whereIn('date', $qaAssignments->pluck('date')->unique()->all())
                                         ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
                                         ->get()
@@ -1992,6 +1994,7 @@ END AS special_overtime_hours
                                     // Buyer yang punya baris third party di periode ini (mis. MUJI).
                                     $qaBuyerHasThirdParty = DB::table('qc_efficiencies')
                                         ->where('period_id', $period->id)
+                                        ->where('dept', 'qa')
                                         ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
                                         ->whereNotNull('third_party')
                                         ->where('third_party', '!=', '')
@@ -2119,7 +2122,8 @@ END AS special_overtime_hours
                                     $grouped = DB::table('employee_qc_assignments as ela')
                                         ->join('qc_efficiencies as le', function ($join) {
                                             $join->on('le.period_id', '=', 'ela.period_id')
-                                                ->on('le.date', '=', 'ela.start_date');
+                                                ->on('le.date', '=', 'ela.start_date')
+                                                ->where('le.dept', '=', 'qc');
                                         })
 
                                         ->where('ela.npk', $employee->NPK)
@@ -2176,6 +2180,7 @@ END AS special_overtime_hours
 
                                         $lines = DB::table('qc_efficiencies')
                                             ->where('period_id', $period->id)
+                                            ->where('dept', 'qc')
                                             ->where('date', $day->date)
                                             ->whereBetween('line_number', [$lineStart, $lineEnd])
                                             ->get();

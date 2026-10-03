@@ -17,6 +17,7 @@ class QcEfficiency extends Model
         'days',
         'buyer',
         'third_party',
+        'dept',
     ];
 
     protected $casts = [

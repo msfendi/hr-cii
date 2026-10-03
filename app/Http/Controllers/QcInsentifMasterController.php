@@ -765,7 +765,8 @@ class QcInsentifMasterController extends Controller
                 ->leftJoin('qc_efficiencies as le', function ($join) {
                     $join->on('le.period_id', '=', 'ela.period_id')
                         ->on('le.line_number', '=', 'ela.line_number')
-                        ->on('le.date', '=', 'ela.start_date');
+                        ->on('le.date', '=', 'ela.start_date')
+                        ->where('le.dept', '=', 'qc');
                 })
 
                 ->leftJoinSub(
@@ -975,6 +976,7 @@ class QcInsentifMasterController extends Controller
                 // Ambil semua qc_efficiencies yang dibutuhkan sekali query, group per tanggal + buyer.
                 $qaEffByKey = DB::table('qc_efficiencies')
                     ->where('period_id', $period->id)
+                    ->where('dept', 'qa')
                     ->whereIn('date', $qaAssignments->pluck('date')->unique()->all())
                     ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
                     ->get()
@@ -983,6 +985,7 @@ class QcInsentifMasterController extends Controller
                 // Buyer yang punya baris third party di periode ini (mis. MUJI: PQC + TENTAC).
                 $qaBuyerHasThirdParty = DB::table('qc_efficiencies')
                     ->where('period_id', $period->id)
+                    ->where('dept', 'qa')
                     ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
                     ->whereNotNull('third_party')
                     ->where('third_party', '!=', '')
@@ -1102,7 +1105,8 @@ class QcInsentifMasterController extends Controller
                 $grouped = DB::table('employee_qc_assignments as ela')
                     ->join('qc_efficiencies as le', function ($join) {
                         $join->on('le.period_id', '=', 'ela.period_id')
-                            ->on('le.date', '=', 'ela.start_date');
+                            ->on('le.date', '=', 'ela.start_date')
+                            ->where('le.dept', '=', 'qc');
                     })
 
                     ->where('ela.npk', $employee->NPK)
@@ -1187,6 +1191,7 @@ class QcInsentifMasterController extends Controller
 
                     $lines = DB::table('qc_efficiencies')
                         ->where('period_id', $period->id)
+                        ->where('dept', 'qc')
                         ->where('date', $day->date)
                         ->whereBetween('line_number', [$lineStart, $lineEnd])
                         ->get();

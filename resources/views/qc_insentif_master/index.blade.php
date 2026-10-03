@@ -62,6 +62,8 @@
 Detail Insentif Karyawan
 </h6>
 
+<div class="d-flex align-items-center">
+
 <select id="checkPeriod"
         class="form-control select-period">
     <option value="">Pilih Payroll Period</option>
@@ -73,6 +75,14 @@ Detail Insentif Karyawan
     @endforeach
 
 </select>
+
+<button type="button"
+        id="btnExportInsentif"
+        class="btn btn-success btn-sm ml-2">
+    <i class="fas fa-file-excel"></i> Export Excel
+</button>
+
+</div>
 
 </div>
 
@@ -337,7 +347,8 @@ Import Excel Insentif
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>      <script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>      <script>
 let masterTable;
         $(document).ready(function(){
 
@@ -369,7 +380,11 @@ $('#insentifSelect').on('change', function(){
 
 </script>
 <script>
-function formatRupiah(number){
+/*
+| Normalisasi angka (dipakai tampilan DataTables & export Excel
+| supaya nilainya selalu sama)
+*/
+function normalizeRupiah(number){
 
     if(number === null || number === undefined || number === ''){
         number = 0;
@@ -384,6 +399,13 @@ function formatRupiah(number){
     if(isNaN(number)){
         number = 0;
     }
+
+    return number;
+}
+
+function formatRupiah(number){
+
+    number = normalizeRupiah(number);
 
     return new Intl.NumberFormat('id-ID',{
         style:'currency',
@@ -698,4 +720,77 @@ $('#checkPeriod').on('change',function(){
 });
 </script>
 
+<script>
+/*
+|--------------------------------------------------------------------------
+| EXPORT EXCEL - DETAIL INSENTIF KARYAWAN
+|--------------------------------------------------------------------------
+| Mengikuti persis isi DataTables: hasil search/filter, urutan sort,
+| semua halaman (bukan hanya halaman aktif), + baris TOTAL
+*/
+$('#btnExportInsentif').on('click',function(){
+
+    let rows = insentifTable
+        .rows({search:'applied', order:'applied'})
+        .data()
+        .toArray();
+
+    if(!rows.length){
+        Swal.fire({
+            icon:'warning',
+            title:'Tidak ada data untuk diexport'
+        });
+        return;
+    }
+
+    let aoa  = [['NPK','Name','Role','Insentif']];
+    let total = 0;
+
+    rows.forEach(function(r){
+
+        let val = normalizeRupiah(r.qc_insentif);
+        total += val;
+
+        aoa.push([
+            r.npk  ?? '',
+            r.name ?? '',
+            r.role ?? '',
+            val
+        ]);
+    });
+
+    // BARIS TOTAL (sama dengan footer tabel)
+    aoa.push(['','','TOTAL',total]);
+
+    let ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // FORMAT KOLOM INSENTIF
+    for(let i = 2; i <= aoa.length; i++){
+        let cell = ws['D'+i];
+        if(cell){
+            cell.t = 'n';
+            cell.z = '"Rp" #,##0.00';
+        }
+    }
+
+    ws['!cols'] = [
+        {wch:14},
+        {wch:32},
+        {wch:22},
+        {wch:20}
+    ];
+
+    let wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Detail Insentif QC');
+
+    let periodName = $('#checkPeriod option:selected').text().trim()
+                        .replace(/[^\w\-]+/g,'_');
+
+    XLSX.writeFile(
+        wb,
+        'Detail_Insentif_QC_' + periodName + '.xlsx'
+    );
+
+});
+</script>
 </html>
