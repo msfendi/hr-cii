@@ -1337,9 +1337,9 @@ class QcInsentifMasterController extends Controller
     {
         $qcViolation = (float) ($qcViolation ?? 0);
 
-        // $fallback = fn() => $avgInsentif
-        //     * ($role === 'qa_leader' ? 0.7 : 0.5)
-        //     * ((100 - $qcViolation) / 100);
+        $fallback = fn() => $avgInsentif
+            * ($role === 'qa_leader' ? 0.7 : 0.5)
+            * ((100 - $qcViolation) / 100);
 
         $formula = Cache::remember(
             "insentif_formula_qc_{$role}",
@@ -1351,9 +1351,9 @@ class QcInsentifMasterController extends Controller
             }
         );
 
-        // if (!$formula) {
-        //     return $fallback();
-        // }
+        if (!$formula) {
+            return $fallback();
+        }
 
         $variables = [
             'totalLineInsentif'    => $avgInsentif,
@@ -1373,7 +1373,7 @@ class QcInsentifMasterController extends Controller
 
             return eval("return {$formula};");
         } catch (\Throwable $e) {
-            // return $fallback();
+            return $fallback();
         }
     }
 
@@ -1473,7 +1473,7 @@ class QcInsentifMasterController extends Controller
         // QC: nominal dasar langsung dipotong qc_violations (persen), rumus role
         // di insentif_role_formulas (dept 'qc') tidak dievaluasi.
         if ($dept === 'qc') {
-            return $totalLineInsentif * ((100 - ($qcViolation ?? 0)) / 100);
+            return $totalLineInsentif;
         }
         // dd($violationsCount);
 
