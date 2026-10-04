@@ -1373,7 +1373,7 @@ class QcInsentifMasterController extends Controller
 
             return eval("return {$formula};");
         } catch (\Throwable $e) {
-            return $fallback();
+            // return $fallback();
         }
     }
 
