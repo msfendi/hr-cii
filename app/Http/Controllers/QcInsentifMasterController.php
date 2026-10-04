@@ -977,6 +977,20 @@ class QcInsentifMasterController extends Controller
                         ->groupBy(fn($r) => substr((string) $r->start_date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
                         ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
 
+                    $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->where('dept', 'qa')
+                    ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                    ->whereNotNull('third_party')
+                    ->where('third_party', '!=', '')
+                    ->select('date', 'buyer', 'third_party')
+                    ->get()
+                    ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                    ->map(fn($rows) => $rows->pluck('third_party')
+                        ->map(fn($t) => strtoupper(trim((string) $t)))
+                        ->unique()
+                        ->count());
+
                     $qaExpanded = collect();
 
                     foreach ($qaBlank as $blankRow) {
@@ -990,7 +1004,12 @@ class QcInsentifMasterController extends Controller
                                 'expanded'    => true,
                             ]);
 
-                            $qaShareByDateBuyer[$shareKey] = $qaOtherStaff->get($shareKey, 0) + 1;
+                            // QA LEADER memegang SELURUH buyer; buyer yang pecah >= 2 third_party pada tanggal tsb (MUJI: PQC + TENTAC)
+                            // sudah dibagi per third_party oleh staf QA masing-masing, jadi leader TIDAK dibagi jumlah staf.
+                            // Pembagi staf hanya untuk buyer tanpa pecahan third_party (SUKO, GAP, dst).
+                            $qaShareByDateBuyer[$shareKey] = ($role === 'qa_leader' && $qaThirdPartyCountByDateBuyer->get($shareKey, 0) >= 2)
+                                ? 1
+                                : $qaOtherStaff->get($shareKey, 0) + 1;
                         }
                     }
 
