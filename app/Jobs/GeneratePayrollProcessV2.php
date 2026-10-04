@@ -2008,7 +2008,7 @@ END AS special_overtime_hours
                                     | QA LEADER dibagi jumlah third_party di tanggal tsb.
                                     |--------------------------------------------------------------------------
                                     */
-                                    $qaRaw = DB::table('employee_qc_assignments')
+                                    $qaRawAll = DB::table('employee_qc_assignments')
                                         ->where('npk', $employee->NPK)
                                         ->where('period_id', $period->id)
                                         ->where('role', $assignment->role)
@@ -2028,8 +2028,67 @@ END AS special_overtime_hours
 
                                             return $row;
                                         })
-                                        ->filter(fn($row) => $row->buyer !== '')
                                         ->values();
+
+                                    // FIX BUYER KOSONG: assignment tanpa buyer = berlaku untuk SEMUA buyer yang punya
+                                    // data qc_efficiencies (dept qa) pada tanggal tsb (termasuk SUKO, GAP, dst).
+                                    // Insentif tiap buyer dihitung terpisah lalu diakumulasi. Untuk buyer yang BUKAN
+                                    // assignment eksplisit NPK ini, nominal dibagi jumlah staf QA/QA leader yang
+                                    // memegang buyer itu pada tanggal tsb (staf lain + NPK ini).
+                                    $qaBlank = $qaRawAll->filter(fn($row) => $row->buyer === '')->values();
+                                    $qaRaw   = $qaRawAll->filter(fn($row) => $row->buyer !== '')->values();
+                                    $qaShareByDateBuyer = [];
+
+                                    if ($qaBlank->isNotEmpty()) {
+                                        $qaBuyersByDate = DB::table('qc_efficiencies')
+                                            ->where('period_id', $period->id)
+                                            ->where('dept', 'qa')
+                                            ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                                            ->whereNotNull('buyer')
+                                            ->where('buyer', '!=', '')
+                                            ->select('date', 'buyer')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->date, 0, 10))
+                                            ->map(fn($rows) => $rows->pluck('buyer')
+                                                ->map(fn($b) => trim((string) $b))
+                                                ->unique(fn($b) => strtoupper($b))
+                                                ->values());
+
+                                        $qaOtherStaff = DB::table('employee_qc_assignments')
+                                            ->where('period_id', $period->id)
+                                            ->whereIn('role', ['qa', 'qa_leader'])
+                                            ->where('npk', '!=', $employee->NPK)
+                                            ->whereNull('line_number')
+                                            ->whereNotNull('buyer')
+                                            ->where('buyer', '!=', '')
+                                            ->whereBetween('start_date', [$period->start_date, $period->end_date])
+                                            ->select('npk', 'buyer', 'start_date')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->start_date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                                            ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
+
+                                        $qaExpanded = collect();
+
+                                        foreach ($qaBlank as $blankRow) {
+                                            foreach ($qaBuyersByDate->get($blankRow->date, collect()) as $blankBuyer) {
+                                                $shareKey = $blankRow->date . '|' . strtoupper($blankBuyer);
+
+                                                $qaExpanded->push((object) [
+                                                    'date'        => $blankRow->date,
+                                                    'buyer'       => $blankBuyer,
+                                                    'third_party' => null,
+                                                    'expanded'    => true,
+                                                ]);
+
+                                                $qaShareByDateBuyer[$shareKey] = $qaOtherStaff->get($shareKey, 0) + 1;
+                                            }
+                                        }
+
+                                        // Assignment eksplisit ditaruh DULU supaya unique() mempertahankan baris eksplisit
+                                        // (tidak dibagi) kalau buyer+tanggal yang sama juga muncul dari expand buyer kosong.
+                                        $qaRaw = $qaRaw->concat($qaExpanded)->values();
+                                    }
+
 
                                     // third_party yang dipegang NPK ini per buyer.
                                     $qaThirdPartyByBuyer = $qaRaw
@@ -2053,6 +2112,7 @@ END AS special_overtime_hours
                                                     'date'        => $row->date,
                                                     'buyer'       => $row->buyer,
                                                     'third_party' => $tp,
+                                                    'expanded'    => $row->expanded ?? false,
                                                 ])->all();
                                             }
 
@@ -2124,6 +2184,9 @@ END AS special_overtime_hours
                                             'buyer'       => $qaAssignment->buyer,
                                             'third_party' => $qaAssignment->third_party,
                                             'lines'       => $linesOfDay,
+                                            'share'       => ($qaAssignment->expanded ?? false)
+                                                ? ($qaShareByDateBuyer[$qaAssignment->date . '|' . strtoupper($qaAssignment->buyer)] ?? 1)
+                                                : 1,
                                         ]);
 
                                         $allLineNumbers = $allLineNumbers->merge($linesOfDay->pluck('line_number')->filter(fn($n) => $n !== null));
@@ -2183,6 +2246,9 @@ END AS special_overtime_hours
                                                 $jumlahThirdParty = max(count($qaThirdPartyCountByDate[(string) $date . '|' . strtoupper($entry->buyer)] ?? []), 1);
                                                 $entryAmount = $entryAmount / $jumlahThirdParty;
                                             }
+
+                                            // FIX BUYER KOSONG: buyer hasil expand dibagi jumlah staf QA di buyer tsb
+                                            $entryAmount = $entryAmount / max((int) ($entry->share ?? 1), 1);
 
                                             $dayAmount += $entryAmount;
                                         }
