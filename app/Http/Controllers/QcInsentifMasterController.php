@@ -792,6 +792,8 @@ class QcInsentifMasterController extends Controller
 
                 ->where('ela.period_id', $period->id)
                 ->where('ela.npk', $employee->NPK)
+                // FIX ROLE GANDA: hanya assignment milik role ini (tanggal role lain tidak ikut)
+                ->where('ela.role', $role)
                 ->whereBetween('le.date', [$period->start_date, $period->end_date])
 
                 ->select(
@@ -1111,6 +1113,8 @@ class QcInsentifMasterController extends Controller
 
                     ->where('ela.npk', $employee->NPK)
                     ->where('ela.period_id', $period->id)
+                    // FIX ROLE GANDA: hanya tanggal assignment role ini (chief/spv)
+                    ->where('ela.role', $role)
 
                     ->whereBetween('ela.start_date', [
                         $period->start_date,

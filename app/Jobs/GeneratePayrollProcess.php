@@ -1840,6 +1840,8 @@ END AS special_overtime_hours
 
                                     ->where('ela.period_id', $period->id)
                                     ->where('ela.npk', $employee->NPK)
+                                    // FIX ROLE GANDA: hanya assignment milik role ini
+                                    ->where('ela.role', $assignment->role)
                                     ->whereBetween('le.date', [$period->start_date, $period->end_date])
 
                                     ->select(
@@ -2128,6 +2130,8 @@ END AS special_overtime_hours
 
                                         ->where('ela.npk', $employee->NPK)
                                         ->where('ela.period_id', $period->id)
+                                        // FIX ROLE GANDA: hanya tanggal assignment role ini (chief/spv)
+                                        ->where('ela.role', $assignment->role)
 
                                         ->whereBetween('ela.start_date', [
                                             $period->start_date,
