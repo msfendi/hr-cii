@@ -1351,9 +1351,9 @@ class QcInsentifMasterController extends Controller
             }
         );
 
-        if (!$formula) {
-            return $fallback();
-        }
+        // if (!$formula) {
+        //     return $fallback();
+        // }
 
         $variables = [
             'totalLineInsentif'    => $avgInsentif,
