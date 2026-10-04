@@ -1045,7 +1045,7 @@ class QcInsentifMasterController extends Controller
 
                 foreach ($qaByDate as $row) {
                     if ($row->third_party !== null) {
-                        $qaThirdPartyCountByDate[(string) $row->date][strtoupper($row->third_party)] = true;
+                        $qaThirdPartyCountByDate[(string) $row->date . '|' . strtoupper($row->buyer)][strtoupper($row->third_party)] = true;
                     }
                 }
 
@@ -1073,18 +1073,22 @@ class QcInsentifMasterController extends Controller
                             $totalLineInsentif += $this->getInsentifByDefectRate($line->efficiency, $formula);
                         }
 
-                        $dayAmount += $this->calculateQaInsentif(
+                        $entryAmount = $this->calculateQaInsentif(
                             $role,
                             $totalLineInsentif,
                             $this->qcViolationPercentageByBuyer($period, $entry->buyer)
                         );
+
+                        // FIX MULTI BUYER: QA LEADER dibagi jumlah third_party pada tanggal + buyer ENTRY ini
+                        // (bukan seluruh third_party di tanggal tsb), lalu hasil tiap buyer diakumulasi.
+                        if ($role === 'qa_leader') {
+                            $jumlahThirdParty = max(count($qaThirdPartyCountByDate[(string) $date . '|' . strtoupper($entry->buyer)] ?? []), 1);
+                            $entryAmount = $entryAmount / $jumlahThirdParty;
+                        }
+
+                        $dayAmount += $entryAmount;
                     }
 
-                    // QA LEADER: dibagi jumlah third_party di tanggal tsb (tanpa third_party => tidak dibagi).
-                    if ($role === 'qa_leader') {
-                        $jumlahThirdParty = max(count($qaThirdPartyCountByDate[(string) $date] ?? []), 1);
-                        $dayAmount = $dayAmount / $jumlahThirdParty;
-                    }
 
                     $amount += $dayAmount;
                 }
