@@ -1472,9 +1472,9 @@ class QcInsentifMasterController extends Controller
 
         // QC: nominal dasar langsung dipotong qc_violations (persen), rumus role
         // di insentif_role_formulas (dept 'qc') tidak dievaluasi.
-        if ($dept === 'qc') {
-            return $totalLineInsentif;
-        }
+        // if ($dept === 'qc') {
+        //     return $totalLineInsentif;
+        // }
         // dd($violationsCount);
 
         /*
