@@ -1337,9 +1337,9 @@ class QcInsentifMasterController extends Controller
     {
         $qcViolation = (float) ($qcViolation ?? 0);
 
-        $fallback = fn() => $avgInsentif
-            * ($role === 'qa_leader' ? 0.7 : 0.5)
-            * ((100 - $qcViolation) / 100);
+        // $fallback = fn() => $avgInsentif
+        //     * ($role === 'qa_leader' ? 0.7 : 0.5)
+        //     * ((100 - $qcViolation) / 100);
 
         $formula = Cache::remember(
             "insentif_formula_qc_{$role}",
