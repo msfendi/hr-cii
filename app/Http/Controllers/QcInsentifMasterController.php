@@ -704,10 +704,7 @@ class QcInsentifMasterController extends Controller
                 $period->end_date
             ])
             ->get()
-            // Normalisasi ke Y-m-d: OVERTIME_DATE bisa berupa datetime
-            // ('2026-09-28 00:00:00.000'), sedangkan $date dari qc_efficiencies
-            // berformat 'Y-m-d'. Tanpa ini absen (P1, SD, MA, dst) tidak terdeteksi.
-            ->keyBy(fn($o) => substr((string) $o->OVERTIME_DATE, 0, 10));
+            ->keyBy(fn($o) => $o->OVERTIME_DATE);
 
 
         /*
@@ -717,14 +714,11 @@ class QcInsentifMasterController extends Controller
     */
         $isValidOvertime = function ($date) use ($overtimes) {
 
-            $date = substr((string) $date, 0, 10);
-
             if (!isset($overtimes[$date])) {
                 return true; // tidak ada overtime → tetap dihitung
             }
 
             $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
-            $lembur = is_string($lembur) ? trim($lembur) : $lembur;
 
             // NULL → tetap dihitung
             if ($lembur === null || $lembur === '') {
@@ -1187,7 +1181,7 @@ class QcInsentifMasterController extends Controller
 
                 $section = DB::table('sections')
                     ->whereRaw('id = ?', [(int) $employee->SECTION])
-                    ->select('line_start', 'line_end')
+                    ->select('line_start', 'line_end', 'blank_line')
                     ->first();
 
                 // dd($employee->SECTION, $section);
@@ -1266,9 +1260,9 @@ class QcInsentifMasterController extends Controller
                 //     ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
                 //     ->get();
 
-                // Pembagi = jumlah line yang benar-benar ada di section (tabel DEPT 'LINE n'),
-                // bukan selisih range, mis. section 1-12 tanpa LINE 1 => 11 (acuan: FTY 2).
-                $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd);
+                // Pembagi = jumlah line di range section dikurangi line di kolom
+                // sections.blank_line, mis. 67-78 => 12; blank 72 => 11; blank 72,74 => 10.
+                $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd, $section->blank_line ?? null);
 
                 foreach ($grouped as $day) {
                     /*
@@ -1480,30 +1474,37 @@ class QcInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     | JUMLAH LINE SECTION (pembagi CHIEF / SPV QC)
     |--------------------------------------------------------------------------
-    | Hitung line yang ada di tabel DEPT ('LINE n') dalam range section.
-    | Fallback ke selisih range jika DEPT tidak punya line di range tsb.
+    | Jumlah line = (line_end - line_start + 1) dikurangi line yang tercantum di
+    | sections.blank_line (satu atau beberapa nilai, dipisah koma / spasi / titik koma).
+    | Hanya blank line yang berada di dalam range section yang dihitung (distinct).
+    | Contoh: 67-78 => 12; blank 72 => 11; blank 72,74 => 10.
     */
     private array $qcSectionLineCountCache = [];
 
-    private function qcSectionLineCount($lineStart, $lineEnd): int
+    private function qcSectionLineCount($lineStart, $lineEnd, $blankLine = null): int
     {
         $lineStart = (int) $lineStart;
         $lineEnd   = (int) $lineEnd;
-        $cacheKey  = $lineStart . '-' . $lineEnd;
+        $blankKey  = trim((string) $blankLine);
+        $cacheKey  = $lineStart . '-' . $lineEnd . '|' . $blankKey;
 
         if (isset($this->qcSectionLineCountCache[$cacheKey])) {
             return $this->qcSectionLineCountCache[$cacheKey];
         }
 
-        $count = (int) DB::table('DEPT')
-            ->where('DEPARTEMENT', 'like', 'LINE %')
-            ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
-            ->distinct()
-            ->count('DEPARTEMENT');
-
-        if ($count <= 0) {
-            $count = max($lineEnd - $lineStart + 1, 1);
+        $blanks = [];
+        if ($blankKey !== '') {
+            foreach (preg_split('/[\s,;]+/', $blankKey, -1, PREG_SPLIT_NO_EMPTY) as $b) {
+                if (is_numeric($b)) {
+                    $n = (int) $b;
+                    if ($n >= $lineStart && $n <= $lineEnd) {
+                        $blanks[$n] = true;
+                    }
+                }
+            }
         }
+
+        $count = max(($lineEnd - $lineStart + 1) - count($blanks), 1);
 
         return $this->qcSectionLineCountCache[$cacheKey] = $count;
     }
