@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Satu service untuk dashboard Rekonsiliasi (gabungan), menarik data dari:
- *  - mon_orders          : Contract Qty (qty_ord) & info brand/style untuk header CPO
+ *  - mon_orders          : info brand/style untuk header CPO (Contract Qty kini dari mon_work_orders.jumlah_prod unik per prod_id)
  *  - mon_rekonsiliasis   : material achievement, top excess, detail per material
  *  - mon_prod_lines      : tahapan produksi per department (Production Result),
  *                          + tahap Warehouse (dari kolom `destination`),
@@ -296,6 +296,45 @@ class MonitoringRekonsiliasiService
         }
 
         return $query;
+    }
+
+    /**
+     * Subquery mon_work_orders dengan 1 baris per (prod_id, code_prod).
+     *
+     * mon_work_orders menyimpan 1 baris per KOMPONEN BOM, jadi `jumlah_prod`
+     * (qty produksi) diulang di setiap baris komponen milik prod_id yang
+     * sama. SUM(jumlah_prod) langsung = qty x jumlah komponen. Karena itu
+     * di-collapse dulu per prod_id dengan MAX(jumlah_prod), baru di-SUM.
+     *
+     * Scope filter SAMA dengan scopeByCodeProd() (Buyer/Style/CPO -> LIKE
+     * ke code_prod, OCF/Sub Ref/Negara -> LIKE langsung ke code_prod).
+     */
+    private function workOrderProdSubquery()
+    {
+        $sub = DB::table('mon_work_orders')
+            ->select('prod_id', 'code_prod')
+            ->selectRaw('MAX(jumlah_prod) as jumlah_prod')
+            ->selectRaw('MAX(product_name) as product_name')
+            ->selectRaw('MAX(tgl_prod) as tgl_prod')
+            ->selectRaw('MAX(tgl_doc) as tgl_doc')
+            ->groupBy('prod_id', 'code_prod');
+
+        if ($this->hasAnyFilterInput()) {
+            $this->scopeByCodeProd($sub, $this->filterUraianListForCodeProdScope());
+        }
+
+        return $sub;
+    }
+
+    /**
+     * Qty referensi / "Contract" = SUM(mon_work_orders.jumlah_prod) unik per
+     * prod_id (BUKAN mon_orders.qty_ord lagi).
+     */
+    private function workOrderQty(): float
+    {
+        return (float) (DB::query()
+            ->fromSub($this->workOrderProdSubquery(), 'wo')
+            ->sum('jumlah_prod') ?? 0);
     }
 
     private function orderQuery()
@@ -948,7 +987,7 @@ class MonitoringRekonsiliasiService
      */
     public function summary(): array
     {
-        $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
+        $contract = $this->workOrderQty();
         $shipment = (float) ($this->shipmentSumByCategory(MsBarang::CATEGORY_JADI) ?? 0);
         $balance  = $contract - $shipment;
 
@@ -1128,7 +1167,7 @@ class MonitoringRekonsiliasiService
      */
     public function productionPipeline(): array
     {
-        $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
+        $contract = $this->workOrderQty();
 
         $deptCutting = $this->prodLineSumByDepartment('Cutting', MsBarang::CATEGORY_WIP);
         $deptSewing  = $this->prodLineSumByDepartment('Sewing', MsBarang::CATEGORY_JADI);
@@ -1743,7 +1782,7 @@ class MonitoringRekonsiliasiService
     private function shipmentPlanVsActualByDate(): array
     {
         $actualRows = $this->shipmentByDate();
-        $totalPlan  = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
+        $totalPlan  = $this->workOrderQty();
 
         $labels = $actualRows->pluck('tgl_bukti')->values()->all();
         $actual = $actualRows->pluck('jumlah_barang')->map(fn($v) => (float) $v)->values()->all();
@@ -2033,19 +2072,22 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * Total Contract: baris mon_orders yang membentuk SUM(qty_ord)
-     * (orderQuery() -- sama dengan productionPipeline()['contract']).
+     * Total Contract: baris mon_work_orders (unik per prod_id) yang membentuk
+     * SUM(jumlah_prod) (workOrderProdSubquery() -- sama dengan
+     * productionPipeline()['contract']).
      */
     private function contractDetail(): array
     {
-        $totals = $this->orderQuery()
-            ->selectRaw('COUNT(*) as row_count, SUM(qty_ord) as total')
+        $totals = DB::query()
+            ->fromSub($this->workOrderProdSubquery(), 'wo')
+            ->selectRaw('COUNT(*) as row_count, SUM(jumlah_prod) as total')
             ->first();
 
-        $rows = $this->orderQuery()
-            ->select('uraian', 'ocf_no', 'sub_ref', 'buyer', 'brand', 'style', 'item', 'destination', 'qty_ord', 'production_delivery', 'buyer_delivery')
-            ->orderBy('uraian')
-            ->orderBy('sub_ref')
+        $rows = DB::query()
+            ->fromSub($this->workOrderProdSubquery(), 'wo')
+            ->select('prod_id', 'code_prod', 'product_name', 'jumlah_prod', 'tgl_prod', 'tgl_doc')
+            ->orderBy('code_prod')
+            ->orderBy('prod_id')
             ->limit(self::DETAIL_ROW_LIMIT)
             ->get();
 
