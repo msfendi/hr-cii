@@ -704,7 +704,10 @@ class QcInsentifMasterController extends Controller
                 $period->end_date
             ])
             ->get()
-            ->keyBy(fn($o) => $o->OVERTIME_DATE);
+            // Normalisasi ke Y-m-d: OVERTIME_DATE bisa berupa datetime
+            // ('2026-09-28 00:00:00.000'), sedangkan $date dari qc_efficiencies
+            // berformat 'Y-m-d'. Tanpa ini absen (P1, SD, MA, dst) tidak terdeteksi.
+            ->keyBy(fn($o) => substr((string) $o->OVERTIME_DATE, 0, 10));
 
 
         /*
@@ -714,11 +717,14 @@ class QcInsentifMasterController extends Controller
     */
         $isValidOvertime = function ($date) use ($overtimes) {
 
+            $date = substr((string) $date, 0, 10);
+
             if (!isset($overtimes[$date])) {
                 return true; // tidak ada overtime → tetap dihitung
             }
 
             $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
+            $lembur = is_string($lembur) ? trim($lembur) : $lembur;
 
             // NULL → tetap dihitung
             if ($lembur === null || $lembur === '') {
@@ -978,18 +984,18 @@ class QcInsentifMasterController extends Controller
                         ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
 
                     $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
-                    ->where('period_id', $period->id)
-                    ->where('dept', 'qa')
-                    ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
-                    ->whereNotNull('third_party')
-                    ->where('third_party', '!=', '')
-                    ->select('date', 'buyer', 'third_party')
-                    ->get()
-                    ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
-                    ->map(fn($rows) => $rows->pluck('third_party')
-                        ->map(fn($t) => strtoupper(trim((string) $t)))
-                        ->unique()
-                        ->count());
+                        ->where('period_id', $period->id)
+                        ->where('dept', 'qa')
+                        ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                        ->whereNotNull('third_party')
+                        ->where('third_party', '!=', '')
+                        ->select('date', 'buyer', 'third_party')
+                        ->get()
+                        ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                        ->map(fn($rows) => $rows->pluck('third_party')
+                            ->map(fn($t) => strtoupper(trim((string) $t)))
+                            ->unique()
+                            ->count());
 
                     $qaExpanded = collect();
 
@@ -1262,7 +1268,7 @@ class QcInsentifMasterController extends Controller
 
                 // Pembagi = jumlah line yang benar-benar ada di section (tabel DEPT 'LINE n'),
                 // bukan selisih range, mis. section 1-12 tanpa LINE 1 => 11 (acuan: FTY 2).
-                $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd);
+                $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd, $period->id);
 
                 foreach ($grouped as $day) {
                     /*
@@ -1474,27 +1480,46 @@ class QcInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     | JUMLAH LINE SECTION (pembagi CHIEF / SPV QC)
     |--------------------------------------------------------------------------
-    | Hitung line yang ada di tabel DEPT ('LINE n') dalam range section.
-    | Fallback ke selisih range jika DEPT tidak punya line di range tsb.
+    | Hitung line QC yang punya data (qc_efficiencies dept 'qc') di range section.
+    | Fallback: tabel DEPT ('LINE n'), lalu selisih range.
     */
     private array $qcSectionLineCountCache = [];
 
-    private function qcSectionLineCount($lineStart, $lineEnd): int
+    private function qcSectionLineCount($lineStart, $lineEnd, $periodId = null): int
     {
         $lineStart = (int) $lineStart;
         $lineEnd   = (int) $lineEnd;
-        $cacheKey  = $lineStart . '-' . $lineEnd;
+        $cacheKey  = ($periodId ?? 'all') . '|' . $lineStart . '-' . $lineEnd;
 
         if (isset($this->qcSectionLineCountCache[$cacheKey])) {
             return $this->qcSectionLineCountCache[$cacheKey];
         }
 
-        $count = (int) DB::table('DEPT')
-            ->where('DEPARTEMENT', 'like', 'LINE %')
-            ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
-            ->distinct()
-            ->count('DEPARTEMENT');
+        $count = 0;
 
+        // 1) Line QC yang benar-benar ada (dept 'qc') di periode ini dalam range section.
+        //    Line kosong di tengah range (mis. 37, 39, 72) tidak ikut jadi pembagi,
+        //    walau nomor line itu ada di DEPT (karena DEPT berisi semua line sewing).
+        if ($periodId !== null) {
+            $count = (int) DB::table('qc_efficiencies')
+                ->where('period_id', $periodId)
+                ->where('dept', 'qc')
+                ->whereNotNull('line_number')
+                ->whereBetween('line_number', [$lineStart, $lineEnd])
+                ->distinct()
+                ->count('line_number');
+        }
+
+        // 2) Fallback: line yang ada di tabel DEPT ('LINE n') dalam range.
+        if ($count <= 0) {
+            $count = (int) DB::table('DEPT')
+                ->where('DEPARTEMENT', 'like', 'LINE %')
+                ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
+                ->distinct()
+                ->count('DEPARTEMENT');
+        }
+
+        // 3) Fallback terakhir: panjang range.
         if ($count <= 0) {
             $count = max($lineEnd - $lineStart + 1, 1);
         }
