@@ -1701,12 +1701,34 @@ END AS special_overtime_hours
                                 $collectionDay = collect([]);
                                 $collectionLines = collect([]);
 
-                                $jumlahLine = DB::table('line_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereBetween('line_number', [$lineStart, $lineEnd])
-                                    ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
-                                    ->get();
+                                // jumlahLine = jumlah line DISTINCT (dalam range section) yang muncul pada
+                                // tanggal penugasan karyawan di employee_line_assignments (hanya tanggal
+                                // yang benar-benar dihitung: lolos TKK & validasi overtime), BUKAN seluruh
+                                // line di section selama satu periode. Dengan begitu chief/mekanik/
+                                // mekanik_leader/section_head yang hanya bertugas sebagian tanggal dihitung
+                                // proporsional sesuai tanggal assignment-nya.
+                                $assignedValidDates = [];
+                                foreach ($grouped as $assignedDay) {
+                                    if ($tkkDate && $assignedDay->date >= $tkkDate) {
+                                        continue;
+                                    }
+                                    if (!$isValidOvertime($assignedDay->date)) {
+                                        continue;
+                                    }
+                                    $assignedValidDates[] = $assignedDay->date;
+                                }
+
+                                $jumlahLineCount = empty($assignedValidDates)
+                                    ? 0
+                                    : (int) DB::table('line_efficiencies')
+                                        ->where('period_id', $period->id)
+                                        ->whereIn('date', $assignedValidDates)
+                                        ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                        ->distinct()
+                                        ->count('line_number');
+
+                                // dibungkus agar pemakaian $jumlahLine->first()->jumlah_line di bawah tetap valid
+                                $jumlahLine = collect([(object) ['jumlah_line' => $jumlahLineCount]]);
 
                                 foreach ($grouped as $day) {
 
@@ -1987,18 +2009,18 @@ END AS special_overtime_hours
                                             ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
 
                                         $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
-                                        ->where('period_id', $period->id)
-                                        ->where('dept', 'qa')
-                                        ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
-                                        ->whereNotNull('third_party')
-                                        ->where('third_party', '!=', '')
-                                        ->select('date', 'buyer', 'third_party')
-                                        ->get()
-                                        ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
-                                        ->map(fn($rows) => $rows->pluck('third_party')
-                                            ->map(fn($t) => strtoupper(trim((string) $t)))
-                                            ->unique()
-                                            ->count());
+                                            ->where('period_id', $period->id)
+                                            ->where('dept', 'qa')
+                                            ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                                            ->whereNotNull('third_party')
+                                            ->where('third_party', '!=', '')
+                                            ->select('date', 'buyer', 'third_party')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                                            ->map(fn($rows) => $rows->pluck('third_party')
+                                                ->map(fn($t) => strtoupper(trim((string) $t)))
+                                                ->unique()
+                                                ->count());
 
                                         $qaExpanded = collect();
 
