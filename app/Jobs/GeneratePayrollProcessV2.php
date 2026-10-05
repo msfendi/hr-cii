@@ -2090,18 +2090,18 @@ END AS special_overtime_hours
                                             ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
 
                                         $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
-                                        ->where('period_id', $period->id)
-                                        ->where('dept', 'qa')
-                                        ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
-                                        ->whereNotNull('third_party')
-                                        ->where('third_party', '!=', '')
-                                        ->select('date', 'buyer', 'third_party')
-                                        ->get()
-                                        ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
-                                        ->map(fn($rows) => $rows->pluck('third_party')
-                                            ->map(fn($t) => strtoupper(trim((string) $t)))
-                                            ->unique()
-                                            ->count());
+                                            ->where('period_id', $period->id)
+                                            ->where('dept', 'qa')
+                                            ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                                            ->whereNotNull('third_party')
+                                            ->where('third_party', '!=', '')
+                                            ->select('date', 'buyer', 'third_party')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                                            ->map(fn($rows) => $rows->pluck('third_party')
+                                                ->map(fn($t) => strtoupper(trim((string) $t)))
+                                                ->unique()
+                                                ->count());
 
                                         $qaExpanded = collect();
 
@@ -2303,7 +2303,7 @@ END AS special_overtime_hours
 
                                     $section = DB::table('sections')
                                         ->whereRaw('id = ?', [(int) $employee->SECTION])
-                                        ->select('line_start', 'line_end')
+                                        ->select('line_start', 'line_end', 'blank_line')
                                         ->first();
 
                                     if (!$section) {
@@ -2359,9 +2359,9 @@ END AS special_overtime_hours
                                     // BUKAN COUNT(DISTINCT line_number) dari
                                     // qc_efficiencies (yang bisa lebih kecil dari
                                     // panjang range kalau ada line tanpa data).
-                                    // Pembagi = jumlah line yang benar-benar ada di section (tabel DEPT 'LINE n'),
-                                    // sama seperti QcInsentifMasterController (mis. section 1-12 tanpa LINE 1 => 11).
-                                    $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd);
+                                    // Pembagi = jumlah line di range section dikurangi sections.blank_line
+                                    // (mis. 67-78 => 12; blank 72 => 11; blank 72,74 => 10), sama seperti QcInsentifMasterController.
+                                    $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd, $section->blank_line ?? null);
 
                                     foreach ($grouped as $day) {
 
@@ -2985,30 +2985,38 @@ END AS special_overtime_hours
     |--------------------------------------------------------------------------
     | JUMLAH LINE SECTION (pembagi CHIEF / SPV QC)
     |--------------------------------------------------------------------------
-    | Hitung line yang ada di tabel DEPT ('LINE n') dalam range section.
-    | Fallback ke selisih range jika DEPT tidak punya line di range tsb.
+    | Jumlah line = (line_end - line_start + 1) dikurangi line yang tercantum di
+    | sections.blank_line (satu atau beberapa nilai, dipisah koma / spasi / titik koma).
+    | Hanya blank line yang berada di dalam range section yang dihitung (distinct).
+    | Contoh: 67-78 => 12; blank 72 => 11; blank 72,74 => 10.
+    | Sama seperti QcInsentifMasterController.
     */
     private array $qcSectionLineCountCache = [];
 
-    private function qcSectionLineCount($lineStart, $lineEnd): int
+    private function qcSectionLineCount($lineStart, $lineEnd, $blankLine = null): int
     {
         $lineStart = (int) $lineStart;
         $lineEnd   = (int) $lineEnd;
-        $cacheKey  = $lineStart . '-' . $lineEnd;
+        $blankKey  = trim((string) $blankLine);
+        $cacheKey  = $lineStart . '-' . $lineEnd . '|' . $blankKey;
 
         if (isset($this->qcSectionLineCountCache[$cacheKey])) {
             return $this->qcSectionLineCountCache[$cacheKey];
         }
 
-        $count = (int) DB::table('DEPT')
-            ->where('DEPARTEMENT', 'like', 'LINE %')
-            ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
-            ->distinct()
-            ->count('DEPARTEMENT');
-
-        if ($count <= 0) {
-            $count = max($lineEnd - $lineStart + 1, 1);
+        $blanks = [];
+        if ($blankKey !== '') {
+            foreach (preg_split('/[\s,;]+/', $blankKey, -1, PREG_SPLIT_NO_EMPTY) as $b) {
+                if (is_numeric($b)) {
+                    $n = (int) $b;
+                    if ($n >= $lineStart && $n <= $lineEnd) {
+                        $blanks[$n] = true;
+                    }
+                }
+            }
         }
+
+        $count = max(($lineEnd - $lineStart + 1) - count($blanks), 1);
 
         return $this->qcSectionLineCountCache[$cacheKey] = $count;
     }
