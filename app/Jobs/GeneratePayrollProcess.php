@@ -2475,7 +2475,11 @@ END AS special_overtime_hours
                                 })
                                 ->pluck('role')
                                 ->filter()
-                                ->unique();
+                                // Case/trailing-space insensitive, sama seperti DISTINCT +
+                                // collation SQL Server di controller. Tanpa ini 'fushing' &
+                                // 'FUSHING' dianggap 2 role berbeda oleh PHP sehingga
+                                // dihitung 2x (double count).
+                                ->unique(fn($r) => mb_strtolower(trim($r)));
 
                             foreach ($rolesForNpk as $roleForNpk) {
                                 $roleAmount = round((float) $this->calculateCuttingFromController(

@@ -2090,18 +2090,18 @@ END AS special_overtime_hours
                                             ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
 
                                         $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
-                                        ->where('period_id', $period->id)
-                                        ->where('dept', 'qa')
-                                        ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
-                                        ->whereNotNull('third_party')
-                                        ->where('third_party', '!=', '')
-                                        ->select('date', 'buyer', 'third_party')
-                                        ->get()
-                                        ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
-                                        ->map(fn($rows) => $rows->pluck('third_party')
-                                            ->map(fn($t) => strtoupper(trim((string) $t)))
-                                            ->unique()
-                                            ->count());
+                                            ->where('period_id', $period->id)
+                                            ->where('dept', 'qa')
+                                            ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                                            ->whereNotNull('third_party')
+                                            ->where('third_party', '!=', '')
+                                            ->select('date', 'buyer', 'third_party')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                                            ->map(fn($rows) => $rows->pluck('third_party')
+                                                ->map(fn($t) => strtoupper(trim((string) $t)))
+                                                ->unique()
+                                                ->count());
 
                                         $qaExpanded = collect();
 
@@ -2557,7 +2557,11 @@ END AS special_overtime_hours
                                 })
                                 ->pluck('role')
                                 ->filter()
-                                ->unique();
+                                // Case/trailing-space insensitive, sama seperti DISTINCT +
+                                // collation SQL Server di controller. Tanpa ini 'fushing' &
+                                // 'FUSHING' dianggap 2 role berbeda oleh PHP sehingga
+                                // dihitung 2x (double count).
+                                ->unique(fn($r) => mb_strtolower(trim($r)));
 
                             foreach ($rolesForNpk as $roleForNpk) {
                                 $roleAmount = round((float) $this->calculateCuttingFromController(
