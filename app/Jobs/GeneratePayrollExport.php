@@ -144,6 +144,27 @@ class GeneratePayrollExport implements ShouldQueue
 
         // dd($overtimeAgg);
 
+        // Jumlah hari periode (sama seperti GeneratePayrollProcess)
+        $countDays = \Carbon\Carbon::parse($period->start_date)
+            ->diffInDays(\Carbon\Carbon::parse($period->end_date)) + 1;
+
+        // Kontrak terbaru yang berlaku di periode -> salary & daily_salary
+        $latestContract = DB::table('employees_contract as ec1')
+            ->select('ec1.npk', 'ec1.salary', 'ec1.daily_salary', 'ec1.type')
+            ->whereDate('ec1.start_date', '<=', $period->end_date)
+            ->whereDate('ec1.end_date', '>=', $period->start_date)
+            ->whereRaw("
+                ec1.id = (
+                    SELECT TOP 1 ec2.id
+                    FROM employees_contract ec2
+                    WHERE ec2.npk = ec1.npk
+                      AND ec2.start_date <= ?
+                      AND ec2.end_date >= ?
+                    ORDER BY ec2.contract_ke DESC,
+                             ec2.start_date DESC
+                )
+            ", [$period->end_date, $period->start_date]);
+
         $data = DB::table('payroll_run_details as prd')
             ->leftJoinSub(
                 $employeeUnion,
@@ -155,6 +176,11 @@ class GeneratePayrollExport implements ShouldQueue
                 $pkwtLatest,
                 'p',
                 fn($j) => $j->on('p.NPK', '=', 'prd.employee_npk')
+            )
+            ->leftJoinSub(
+                $latestContract,
+                'ec',
+                fn($j) => $j->on('ec.npk', '=', 'prd.employee_npk')
             )
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
@@ -192,7 +218,10 @@ class GeneratePayrollExport implements ShouldQueue
                 'ot.SD',
                 'ot.BR',
                 'ot.OUT',
-                'ij.total_ijin_minutes'
+                'ij.total_ijin_minutes',
+                'ec.salary as contract_salary',
+                'ec.daily_salary as contract_daily_salary',
+                'ec.type as contract_type'
             )
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk')
@@ -323,6 +352,23 @@ class GeneratePayrollExport implements ShouldQueue
                 // dukung struktur baru {"amount":..,"type":..} maupun struktur lama (angka langsung)
                 $item->$k = is_array($v) ? ($v['amount'] ?? 0) : $v;
             }
+
+            // Selisih khusus STAFF + EXPAT bertipe Daily: (daily_salary * count_days) - salary.
+            // total_salary dari GeneratePayrollProcess SUDAH memuat selisih ini, tetapi komponen
+            // basic_salary disimpan = salary (kontrak). Rekap/Pengeluaran PDF menjumlah dari komponen,
+            // jadi selisih ditambahkan ke basic_salary supaya total & net sama dengan total_salary.
+            // (total_salary sendiri TIDAK diubah, agar tidak dihitung dua kali.)
+            $item->selisih_expat = 0;
+            if (
+                $item->IS_STAFF == '1' && $item->IS_EXPAT == '1'
+                && strtolower(trim($item->contract_type ?? '')) === 'daily'
+                && (float) $item->contract_daily_salary > 0
+            ) {
+                $item->selisih_expat = ((float) $item->contract_daily_salary * (float) $countDays)
+                    - (float) $item->contract_salary;
+
+                $item->basic_salary = (float) ($item->basic_salary ?? 0) + $item->selisih_expat;
+            }
         }
 
         /*
@@ -423,7 +469,9 @@ class GeneratePayrollExport implements ShouldQueue
                 foreach ($totals as $code => &$total) {
                     $total += $row->$code ?? 0;
                 }
+                unset($total);
             }
+
             return $totals;
         };
 
