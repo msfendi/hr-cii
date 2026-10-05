@@ -1982,7 +1982,7 @@ END AS special_overtime_hours
                                     $lineInsentif =
                                         $this->getInsentifByDefectRate($row->efficiency, $qcInsentifFormula) * $row->work_hours / $row->max_work_hours;
 
-                                    $amount += $this->calculateRoleSewingInsentif(
+                                    $amount += $this->calculateRoleQcInsentif(
                                         $assignment->role,
                                         'qc',
                                         $lineInsentif,
@@ -2090,18 +2090,18 @@ END AS special_overtime_hours
                                             ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
 
                                         $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
-                                            ->where('period_id', $period->id)
-                                            ->where('dept', 'qa')
-                                            ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
-                                            ->whereNotNull('third_party')
-                                            ->where('third_party', '!=', '')
-                                            ->select('date', 'buyer', 'third_party')
-                                            ->get()
-                                            ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
-                                            ->map(fn($rows) => $rows->pluck('third_party')
-                                                ->map(fn($t) => strtoupper(trim((string) $t)))
-                                                ->unique()
-                                                ->count());
+                                        ->where('period_id', $period->id)
+                                        ->where('dept', 'qa')
+                                        ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                                        ->whereNotNull('third_party')
+                                        ->where('third_party', '!=', '')
+                                        ->select('date', 'buyer', 'third_party')
+                                        ->get()
+                                        ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                                        ->map(fn($rows) => $rows->pluck('third_party')
+                                            ->map(fn($t) => strtoupper(trim((string) $t)))
+                                            ->unique()
+                                            ->count());
 
                                         $qaExpanded = collect();
 
@@ -3082,6 +3082,65 @@ END AS special_overtime_hours
             return eval("return {$formula};");
         } catch (\Throwable $e) {
             return $fallback();
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ROLE QC OPERATOR (inline / endline / fqc)
+    |--------------------------------------------------------------------------
+    | Disalin 1:1 dari QcInsentifMasterController::calculateRoleQcInsentif().
+    | Rumus role dept 'qc' di insentif_role_formulas dievaluasi; jika tidak ada
+    | rumus, nominal dikembalikan apa adanya (tanpa potongan qc_violation).
+    */
+    private function calculateRoleQcInsentif(
+        $role,
+        $dept,
+        $totalLineInsentif,
+        $jumlahLine,
+        $violationsCount,
+        $employeeViolations,
+        $qcViolation = 0,
+    ) {
+
+        $jumlahLine = max($jumlahLine, 1);
+
+        $formula = Cache::remember(
+            "insentif_formula_{$dept}_{$role}",
+            300,
+            function () use ($role, $dept) {
+
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', $dept)
+                    ->value('formula');
+            }
+        );
+
+        if (!$formula) {
+            return $totalLineInsentif;
+        }
+
+        $variables = [
+            'totalLineInsentif' => $totalLineInsentif,
+            'jumlahLine'        => $jumlahLine,
+            'violationsCount'   => $violationsCount ?? 0,
+            'violation_percentage' => $employeeViolations ?? 0,
+            'qc_violation'      => $qcViolation ?? 0,
+            'insentif'          => $totalLineInsentif,
+        ];
+
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, $variables));
+
+        try {
+
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+
+            return $totalLineInsentif;
         }
     }
 
