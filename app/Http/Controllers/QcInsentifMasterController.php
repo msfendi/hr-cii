@@ -1268,7 +1268,7 @@ class QcInsentifMasterController extends Controller
 
                 // Pembagi = jumlah line yang benar-benar ada di section (tabel DEPT 'LINE n'),
                 // bukan selisih range, mis. section 1-12 tanpa LINE 1 => 11 (acuan: FTY 2).
-                $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd, $period->id);
+                $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd);
 
                 foreach ($grouped as $day) {
                     /*
@@ -1480,46 +1480,27 @@ class QcInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     | JUMLAH LINE SECTION (pembagi CHIEF / SPV QC)
     |--------------------------------------------------------------------------
-    | Hitung line QC yang punya data (qc_efficiencies dept 'qc') di range section.
-    | Fallback: tabel DEPT ('LINE n'), lalu selisih range.
+    | Hitung line yang ada di tabel DEPT ('LINE n') dalam range section.
+    | Fallback ke selisih range jika DEPT tidak punya line di range tsb.
     */
     private array $qcSectionLineCountCache = [];
 
-    private function qcSectionLineCount($lineStart, $lineEnd, $periodId = null): int
+    private function qcSectionLineCount($lineStart, $lineEnd): int
     {
         $lineStart = (int) $lineStart;
         $lineEnd   = (int) $lineEnd;
-        $cacheKey  = ($periodId ?? 'all') . '|' . $lineStart . '-' . $lineEnd;
+        $cacheKey  = $lineStart . '-' . $lineEnd;
 
         if (isset($this->qcSectionLineCountCache[$cacheKey])) {
             return $this->qcSectionLineCountCache[$cacheKey];
         }
 
-        $count = 0;
+        $count = (int) DB::table('DEPT')
+            ->where('DEPARTEMENT', 'like', 'LINE %')
+            ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
+            ->distinct()
+            ->count('DEPARTEMENT');
 
-        // 1) Line QC yang benar-benar ada (dept 'qc') di periode ini dalam range section.
-        //    Line kosong di tengah range (mis. 37, 39, 72) tidak ikut jadi pembagi,
-        //    walau nomor line itu ada di DEPT (karena DEPT berisi semua line sewing).
-        if ($periodId !== null) {
-            $count = (int) DB::table('qc_efficiencies')
-                ->where('period_id', $periodId)
-                ->where('dept', 'qc')
-                ->whereNotNull('line_number')
-                ->whereBetween('line_number', [$lineStart, $lineEnd])
-                ->distinct()
-                ->count('line_number');
-        }
-
-        // 2) Fallback: line yang ada di tabel DEPT ('LINE n') dalam range.
-        if ($count <= 0) {
-            $count = (int) DB::table('DEPT')
-                ->where('DEPARTEMENT', 'like', 'LINE %')
-                ->whereRaw("TRY_CAST(REPLACE(DEPARTEMENT, 'LINE ', '') AS INT) BETWEEN ? AND ?", [$lineStart, $lineEnd])
-                ->distinct()
-                ->count('DEPARTEMENT');
-        }
-
-        // 3) Fallback terakhir: panjang range.
         if ($count <= 0) {
             $count = max($lineEnd - $lineStart + 1, 1);
         }
