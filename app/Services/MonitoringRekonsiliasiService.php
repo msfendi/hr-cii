@@ -2370,9 +2370,24 @@ class MonitoringRekonsiliasiService
 
             $needTotals = $needBase()
                 ->selectRaw('COUNT(*) as row_count')
-                ->selectRaw('SUM(jumlah_prod) as jumlah_prod')
                 ->selectRaw('SUM(jumlah_prod * cons) as need')
                 ->first();
+
+            // jumlah_prod di mon_work_orders di-repeat per baris BOM/komponen
+            // (1 prod_id = N baris komponen, jumlah_prod sama). SUM(jumlah_prod)
+            // langsung = qty x jumlah komponen. Total produksi yang benar =
+            // jumlah_prod per prod_id (unik), tanpa filter kelompok barang,
+            // karena filter kelompok hanya relevan untuk NEED (komponen).
+            $prodTotal = DB::table(
+                DB::table('mon_work_orders')
+                    ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%'])
+                    ->select('prod_id')
+                    ->selectRaw('MAX(jumlah_prod) as jumlah_prod')
+                    ->groupBy('prod_id'),
+                'wo_prod'
+            )->selectRaw('SUM(jumlah_prod) as jumlah_prod')->value('jumlah_prod');
+
+            $needTotals->jumlah_prod = (float) ($prodTotal ?? 0);
 
             $needRows = $needBase()
                 ->select('barang_code', 'barang_name', 'code_prod', 'product_code', 'cons')
