@@ -2180,6 +2180,9 @@ class MonitoringRekonsiliasiService
                 ->selectRaw('SUM(mon_prod_lines.jumlah) as jumlah')
                 ->selectRaw('MIN(mon_prod_lines.tgl_produksi) as first_date')
                 ->selectRaw('MAX(mon_prod_lines.tgl_produksi) as last_date')
+                // Jumlah hari AKTIF = banyaknya tanggal produksi yang berbeda
+                // (bukan last_date - first_date, yang ikut menghitung hari kosong).
+                ->selectRaw('COUNT(DISTINCT mon_prod_lines.tgl_produksi) as active_days')
                 ->groupBy(
                     'mon_prod_lines.code_prod',
                     'mon_prod_lines.department_id',
@@ -2254,6 +2257,7 @@ class MonitoringRekonsiliasiService
                 'jumlah'        => (float) $g->jumlah,
                 'first_date'    => null,
                 'last_date'     => null,
+                'active_days'   => null,
             ]);
 
         $rows = $qcRows->map(fn($r) => (object) [

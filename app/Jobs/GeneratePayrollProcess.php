@@ -2451,22 +2451,44 @@ END AS special_overtime_hours
                         // role yang benar-benar dimiliki NPK ini, dijumlah — bukan tiap
                         // baris efisiensi dikali tiap role (bug lama: multiplikasi kalau
                         // NPK punya >1 role).
-                        $rolesForNpk = DB::table('employee_cutting_assignments')
-                            ->where('period_id', $period->id)
-                            ->where('npk', $employee->NPK)
-                            ->pluck('role')
-                            ->filter()
-                            ->unique();
-
+                        // Disamakan dengan CuttingInsentifMasterController::check():
+                        // 1) Hanya karyawan dengan TKK kosong atau TKK di dalam periode
+                        //    (controller: whereNull(TKK) OR TKK BETWEEN start & end).
+                        // 2) Hanya role yang terdaftar di insentif_role_formulas
+                        //    (controller: joinSub insentif_role_formulas).
+                        // 3) Dibulatkan per role sebelum dijumlah
+                        //    (controller: round per baris, lalu mergeInsentifByNpk).
                         $amount = 0;
 
-                        foreach ($rolesForNpk as $roleForNpk) {
-                            $amount += $this->calculateCuttingFromController(
-                                $employee,
-                                $period,
-                                $cuttingInsentifFormula,
-                                $roleForNpk
+                        $cuttingTkkOk = empty($employee->TKK)
+                            || (
+                                Carbon::parse($employee->TKK)->format('Y-m-d') >= Carbon::parse($period->start_date)->format('Y-m-d')
+                                && Carbon::parse($employee->TKK)->format('Y-m-d') <= Carbon::parse($period->end_date)->format('Y-m-d')
                             );
+
+                        if ($cuttingTkkOk) {
+                            $rolesForNpk = DB::table('employee_cutting_assignments')
+                                ->where('period_id', $period->id)
+                                ->where('npk', $employee->NPK)
+                                ->whereIn('role', function ($q) {
+                                    $q->select('role')->from('insentif_role_formulas');
+                                })
+                                ->pluck('role')
+                                ->filter()
+                                ->unique();
+
+                            foreach ($rolesForNpk as $roleForNpk) {
+                                $roleAmount = round((float) $this->calculateCuttingFromController(
+                                    $employee,
+                                    $period,
+                                    $cuttingInsentifFormula,
+                                    $roleForNpk
+                                ), 0);
+
+                                if ($roleAmount <= 0) continue;
+
+                                $amount += $roleAmount;
+                            }
                         }
                     } else if ($component->code === 'heat_insentif') {
 
