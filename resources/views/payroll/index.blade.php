@@ -212,7 +212,6 @@
                                                         'STAFF'      => 'Staff',
                                                         'SEWING'     => 'Sewing',
                                                         'NON_SEWING' => 'Non Sewing',
-                                                        'NON_STAFF'  => 'Non Staff',
                                                     ];
                                                     $bankStatuses = [
                                                         'AKTIF'   => ['label' => 'Active',  'class' => 'btn-primary',   'source' => $period->file_bank_active],
