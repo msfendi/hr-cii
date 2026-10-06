@@ -30,7 +30,11 @@ class HeatEfficiencyImport implements ToModel, WithHeadingRow
             ],
             [
                 'efficiency' => $row['efficiency'],
-                'piece' => $row['piece']
+                'piece' => $row['piece'],
+                // tim: integer (1 / 2), kosong = null (tanpa pemisahan tim)
+                'tim' => isset($row['tim']) && $row['tim'] !== ''
+                    ? (int) $row['tim']
+                    : null,
             ]
         );
     }

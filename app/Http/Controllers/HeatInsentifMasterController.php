@@ -44,7 +44,8 @@ class HeatInsentifMasterController extends Controller
                 'pp.name as period',
                 'h.efficiency',
                 'h.piece',
-                'h.date'
+                'h.date',
+                'h.tim'
             )
             ->where('pp.is_closed', 0)
             ->orderBy('h.date')
@@ -71,17 +72,18 @@ class HeatInsentifMasterController extends Controller
             ->join('payroll_periods as pp', 'h.period_id', '=', 'pp.id')
 
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
-                $join->on('ela.NPK', '=', 'bio.NPK');
+                $join->on('h.npk', '=', 'bio.NPK');
             })
             ->select(
                 'h.id',
                 'h.npk',
-                'b.NAMA_KARYAWAN as name',
+                'bio.NAMA_KARYAWAN as name',
                 'h.role',
                 'pp.name as period',
                 'h.efficiency',
                 'h.piece',
-                'h.date'
+                'h.date',
+                'h.tim'
             )
             ->where('h.period_id', $period)
             ->orderBy('h.date')
@@ -469,7 +471,7 @@ class HeatInsentifMasterController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | PAD PRINT INSENTIF (COPY PAYROLL)
+    | HEAT SEAL INSENTIF (COPY PAYROLL)
     |--------------------------------------------------------------------------
     */
 
@@ -544,17 +546,18 @@ class HeatInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
+    | Difilter berdasarkan $role yang sedang dihitung (sama seperti Pad).
+    | Karyawan bisa punya lebih dari satu role dalam 1 periode, dan
+    | calculateHeat() dipanggil terpisah per (npk, role) dari check(), jadi
+    | assignment yang diambil di sini dibatasi ke role tsb saja.
+    |--------------------------------------------------------------------------
     */
-        $query = DB::table('heat_efficiencies')
+        $assignments = DB::table('heat_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
-            ->whereBetween('date', [$period->start_date, $period->end_date]);
-
-        $isOperator = (clone $query)->value('role') === 'operator';
-
-        $assignments = $isOperator
-            ? $query->get()
-            : $query->limit(1)->get();
+            ->where('role', $role)
+            ->whereBetween('date', [$period->start_date, $period->end_date])
+            ->get();
 
         // dd($assignments);
 
@@ -595,59 +598,86 @@ class HeatInsentifMasterController extends Controller
         |--------------------------------------------------------------------------
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
+        | Operator pembanding diambil PER TANGGAL, mengikuti kolom "tim" milik
+        | employee (non operator) itu sendiri pada tanggal tsb:
+        |   - tim = 1  -> hanya operator dengan tim = 1
+        |   - tim = 2  -> hanya operator dengan tim = 2
+        |   - tim null -> semua operator (tanpa filter tim)
+        |--------------------------------------------------------------------------
         */ else {
-            $employeeDates = DB::table('heat_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('npk', $employee->NPK)
-                ->where('role', $role) // <-- tambahkan ini: hanya tanggal saat dia berperan sebagai $role (non-operator)
-                ->pluck('date')
-                ->unique()
-                ->toArray();
+            // Assignment milik employee (non operator) ini sendiri, dikelompokkan per tanggal
+            $employeeAssignmentsByDate = $assignments->groupBy('date');
+            // dd($employeeAssignmentsByDate);
 
-            /*
-    |----------------------------------
-    | TOTAL DEPT INSENTIF
-    | ONLY VALID OPERATOR
-    |----------------------------------
-    */
             $totalDeptInsentif = 0;
+            $operatorNpks = [];
 
-            $operators = DB::table('heat_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('role', '=', 'operator')
-                ->whereBetween('date', [$period->start_date, $period->end_date])
-                ->whereIn('date', $employeeDates) // sekarang hanya tanggal saat NPK ini jadi $role, bukan semua tanggal NPK
-                ->get();
+            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
 
-            foreach ($operators as $operator) {
-                if ($tkkDate && $operator->date >= $tkkDate) {
-                    continue;
-                }
-                // FILTER HANYA NUMERATOR
-                if (!$isValidOvertime($operator->npk, $operator->date)) {
+                /*
+                |--------------------------------------------------------------------------
+                | CHECK RESIGN (NEW)
+                |--------------------------------------------------------------------------
+                */
+                if ($tkkDate && $date >= $tkkDate) {
                     continue;
                 }
 
-                $rate = $this->getInsentifByEfficiency(
-                    $operator->efficiency,
-                    $formula
-                );
+                /*
+                |--------------------------------------------------------------------------
+                | AMBIL TIM EMPLOYEE UNTUK TANGGAL INI
+                |--------------------------------------------------------------------------
+                */
+                $tim = $rowsForDate
+                    ->pluck('tim')
+                    ->filter(fn($t) => $t !== null && $t !== '')
+                    ->first();
 
-                $totalDeptInsentif += $rate * $operator->piece;
+                /*
+                |----------------------------------
+                | TOTAL DEPT INSENTIF (NUMERATOR)
+                | ONLY VALID OPERATOR, TIM SAMA (JIKA ADA)
+                |----------------------------------
+                */
+                $operatorQuery = DB::table('heat_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->where('role', '=', 'operator')
+                    ->where('date', $date);
+
+                if (!is_null($tim)) {
+                    $operatorQuery->where('tim', $tim);
+                }
+
+                $operatorsForDate = $operatorQuery->get();
+
+                // dd($tim, $operatorsForDate);
+
+                foreach ($operatorsForDate as $operator) {
+                    // FILTER HANYA NUMERATOR
+                    if (!$isValidOvertime($operator->npk, $operator->date)) {
+                        continue;
+                    }
+
+                    $rate = $this->getInsentifByEfficiency(
+                        $operator->efficiency,
+                        $formula
+                    );
+
+                    $totalDeptInsentif += $rate * $operator->piece;
+                    $operatorNpks[] = $operator->npk;
+
+                    // dd($totalDeptInsentif);
+                }
             }
 
             /*
-    |----------------------------------
-    | DENOMINATOR (ALL OPERATOR)
-    |----------------------------------
-    */
-            $jumlahOperator = DB::table('heat_efficiencies as he')
-                ->where('he.period_id', $period->id)
-                ->whereIn('he.date', $employeeDates) // ikut pakai $employeeDates yang sudah difilter role
-                ->where('he.role', '=', 'operator')
-                ->pluck('he.npk')
-                ->unique()
-                ->count();
+            |----------------------------------
+            | DENOMINATOR (OPERATOR UNIK, TIM SAMA PER TANGGAL)
+            |----------------------------------
+            */
+            $jumlahOperator = collect($operatorNpks)->unique()->count();
+
+            // dd($totalDeptInsentif, $jumlahOperator);
 
             $amount += $this->calculateRoleHeatInsentif(
                 $role,

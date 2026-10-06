@@ -3169,25 +3169,17 @@ END AS special_overtime_hours
             return false;
         };
 
-        // 🔹 PERBAIKAN: sebelumnya $assignments ditentukan lewat $isOperator
-        // yang diambil dari ->value('role') TANPA orderBy — baris mana yang
-        // "duluan" dikembalikan MySQL untuk NPK ini tidak terjamin urutannya,
-        // jadi untuk NPK yang punya >1 role (mis. operator + repair) dalam
-        // periode yang sama, bisa saja baris pertama yang terambil justru
-        // role 'repair', membuat $isOperator = false dan $assignments
-        // dipotong jadi cuma 1 baris (->limit(1)) — akibatnya hari-hari
-        // operator lain ikut hilang dari perhitungan. Sekarang untuk role
-        // 'operator', assignment SELALU diambil dengan filter role='operator'
-        // secara eksplisit, jadi hasilnya deterministik dan tidak bergantung
-        // urutan baris dari database.
-        if ($role === 'operator') {
-            $assignments = DB::table('heat_efficiencies')
-                ->where('npk', $employee->NPK)
-                ->where('period_id', $period->id)
-                ->where('role', 'operator')
-                ->whereBetween('date', [$period->start_date, $period->end_date])
-                ->get();
+        // 🔹 PERBAIKAN (tim): assignment SELALU difilter per $role (sama seperti
+        // PadInsentifMasterController::calculatePad), jadi hasilnya
+        // deterministik dan tanggal role lain tidak ikut tercampur.
+        $assignments = DB::table('heat_efficiencies')
+            ->where('npk', $employee->NPK)
+            ->where('period_id', $period->id)
+            ->where('role', $role)
+            ->whereBetween('date', [$period->start_date, $period->end_date])
+            ->get();
 
+        if ($role === 'operator') {
             foreach ($assignments as $assignment) {
                 if ($tkkDate && $assignment->date >= $tkkDate) {
                     continue;
@@ -3199,41 +3191,48 @@ END AS special_overtime_hours
                 $amount += $rate * $assignment->piece;
             }
         } else {
-            $employeeDates = DB::table('heat_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('npk', $employee->NPK)
-                ->where('role', $role)
-                ->pluck('date')
-                ->unique()
-                ->toArray();
+            // Operator pembanding diambil PER TANGGAL, mengikuti kolom "tim" milik
+            // employee non operator itu sendiri pada tanggal tsb:
+            //   - tim = 1  -> hanya operator dengan tim = 1
+            //   - tim = 2  -> hanya operator dengan tim = 2
+            //   - tim null -> semua operator (tanpa filter tim)
+            $employeeAssignmentsByDate = $assignments->groupBy('date');
 
             $totalDeptInsentif = 0;
+            $operatorNpks = [];
 
-            $operators = DB::table('heat_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('role', '=', 'operator')
-                ->whereBetween('date', [$period->start_date, $period->end_date])
-                ->whereIn('date', $employeeDates)
-                ->get();
-
-            foreach ($operators as $operator) {
-                if ($tkkDate && $operator->date >= $tkkDate) {
+            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
+                if ($tkkDate && $date >= $tkkDate) {
                     continue;
                 }
-                if (!$isValidOvertime($operator->npk, $operator->date)) {
-                    continue;
+
+                $tim = $rowsForDate
+                    ->pluck('tim')
+                    ->filter(fn($t) => $t !== null && $t !== '')
+                    ->first();
+
+                $operatorQuery = DB::table('heat_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->where('role', '=', 'operator')
+                    ->where('date', $date);
+
+                if (!is_null($tim)) {
+                    $operatorQuery->where('tim', $tim);
                 }
-                $rate = $this->getInsentifByEfficiency($operator->efficiency, $formula);
-                $totalDeptInsentif += $rate * $operator->piece;
+
+                $operatorsForDate = $operatorQuery->get();
+
+                foreach ($operatorsForDate as $operator) {
+                    if (!$isValidOvertime($operator->npk, $operator->date)) {
+                        continue;
+                    }
+                    $rate = $this->getInsentifByEfficiency($operator->efficiency, $formula);
+                    $totalDeptInsentif += $rate * $operator->piece;
+                    $operatorNpks[] = $operator->npk;
+                }
             }
 
-            $jumlahOperator = DB::table('heat_efficiencies as he')
-                ->where('he.period_id', $period->id)
-                ->whereIn('he.date', $employeeDates)
-                ->where('he.role', '=', 'operator')
-                ->pluck('he.npk')
-                ->unique()
-                ->count();
+            $jumlahOperator = collect($operatorNpks)->unique()->count();
 
             $amount += $this->calculateRoleHeatInsentif($role, 'heat', $totalDeptInsentif, $jumlahOperator);
         }
