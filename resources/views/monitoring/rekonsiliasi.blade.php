@@ -1604,7 +1604,7 @@ function updateFormulaWithColors() {
         // Basis sekarang Total Contract (bukan lagi output Cutting):
         //  - Shipment loss   = shipment − total contract
         //  - Shipment loss % = shipment / total contract
-        const shipmentBox = renderBox('Shipment (Total)', pipeline.shipment, 'navy', findStep('Cutting → Shipment'), null, []);
+        const shipmentBox = renderBox('Shipment (Total)', pipeline.shipment, 'navy', findStep('Cutting → Shipment'), null, pipeline.shipment_remarks);
 
         // ===== Balance Garment Stock (kotak baru di samping Shipment) =====
         // = (Warehouse [Work In Process] + Warehouse [Sabkon]) − Shipment (Total)

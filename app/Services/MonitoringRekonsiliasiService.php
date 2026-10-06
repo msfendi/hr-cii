@@ -1238,6 +1238,10 @@ class MonitoringRekonsiliasiService
         // [Sabkon]) - Shipment (Total).
         $balanceGarmentStock = ($destWarehouse + $sabkonWarehouse) - $shipment;
 
+        // Remark untuk kotak Shipment (Total) (department_id 'Shipment' di
+        // mon_stage_remarks).
+        $shipmentRemarks = $this->stageRemarksByDepartment('Shipment');
+
         // Remark untuk kotak Balance Garment Stock (department_id khusus
         // di mon_stage_remarks, tidak terhubung ke stage produksi manapun).
         $balanceGarmentStockRemarks = $this->stageRemarksByDepartment('Balance Garment Stock');
@@ -1250,6 +1254,7 @@ class MonitoringRekonsiliasiService
             'contract'    => $contract,
             'departments' => $departments,
             'shipment'    => $shipment,
+            'shipment_remarks' => $shipmentRemarks,
             'total_loss'  => $totalLoss,
             'loss_pct'    => $lossPct,
             'total_loss_remarks' => $totalLossRemarks,
