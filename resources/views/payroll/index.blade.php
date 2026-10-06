@@ -201,7 +201,7 @@
 
                                         <td class="text-center">
                                             {{-- DOWNLOAD BANK (HANYA JIKA APPROVAL FINISH) --}}
-                                            @if($period->approve_status == 'finish' && $period->export_status == 'approved' && (auth()->user()->hasRole('Accounting') || auth()->user()->hasRole('Admin')) && \App\Services\PayrollRoleFilterService::getRole(auth()->user()) === 'STAFF')
+                                            @if($period->approve_status == 'finish' && $period->export_status == 'approved' && (auth()->user()->hasRole('Accounting') || auth()->user()->hasRole('Admin')))
                                                 @php
                                                     // 🔥 HARDCODE DULU: hanya Accounting/Admin yang lihat section ini,
                                                     // jadi cukup tampilkan role STAFF, SEWING, NON_SEWING & NON_STAFF saja.
