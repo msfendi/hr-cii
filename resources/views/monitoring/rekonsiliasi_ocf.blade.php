@@ -1040,6 +1040,9 @@
     // breakdown). Hanya tampilan: data & perhitungan tidak berubah. Kosongkan
     // array ini untuk menampilkannya lagi.
     const HIDDEN_STAGES = ['QC'];
+    // Balance Garment Stock: default disembunyikan, bisa di-toggle lewat tombol kecil.
+    // State disimpan di variabel (bukan di DOM) supaya tetap kepakai saat pipeline di-render ulang.
+    let showBalanceStock = false;
     const deleteStageRemarkUrl = app.dataset.deleteStageRemarkUrl;
     const canDeleteStageRemark = app.dataset.canDeleteStageRemark === '1';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -1619,13 +1622,17 @@ function updateFormulaWithColors() {
 
         const balanceRemarksRow = renderRemarkList(balanceRemarks);
 
+        // Dibungkus wrapper `display:contents` (tidak mengubah layout flex saat tampil)
+        // atau `display:none` (saat disembunyikan).
         const balanceBox = `
-            <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
-                <div class="rekon-pipe-header">Balance Garment Stock</div>
-                <div class="rekon-pipe-body">
-                    <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtNum(Math.abs(balanceGarmentStock))}</div>
-                    <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
-                    ${balanceRemarksRow}
+            <div id="rekon-balance-stock" style="display:${showBalanceStock ? 'contents' : 'none'}">
+                <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
+                    <div class="rekon-pipe-header">Balance Garment Stock</div>
+                    <div class="rekon-pipe-body">
+                        <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtNum(Math.abs(balanceGarmentStock))}</div>
+                        <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
+                        ${balanceRemarksRow}
+                    </div>
                 </div>
             </div>
         `;
@@ -1671,6 +1678,9 @@ function updateFormulaWithColors() {
                 <span><i class="rekon-pipe-dot dot-loss"></i>Loss Qty (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-sabkon"></i>Sabkon Input/Output (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-pct"></i>Persentase terhadap Kontrak</span>
+                <button type="button" id="btn-toggle-balance-stock" class="btn btn-sm btn-outline-secondary py-0 px-2 ml-2" style="font-size:.7rem;" title="Show/Hide Balance Garment Stock">
+                    <i class="fas ${showBalanceStock ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>Balance Garment Stock
+                </button>
             </div>
         `;
 
@@ -1693,6 +1703,17 @@ function updateFormulaWithColors() {
 
         document.getElementById('rekon-pipeline').innerHTML = html;
     }
+
+    // Toggle Balance Garment Stock (delegasi event, karena #rekon-pipeline di-render ulang via innerHTML).
+    document.getElementById('rekon-pipeline').addEventListener('click', function (e) {
+        const btn = e.target.closest('#btn-toggle-balance-stock');
+        if (!btn) return;
+        showBalanceStock = !showBalanceStock;
+        const box = document.getElementById('rekon-balance-stock');
+        if (box) box.style.display = showBalanceStock ? 'contents' : 'none';
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = 'fas ' + (showBalanceStock ? 'fa-eye-slash' : 'fa-eye') + ' mr-1';
+    });
 
     // ========== renderLossSteps dengan tanda/warna dari backend ==========
     function renderLossSteps(rows) {
