@@ -748,7 +748,8 @@ class MonitoringRekonsiliasiService
      * material kain (satuan_code = 'KGM'), di-scope ke CPO terpilih.
      *  - ORDER    : SUM(mon_rekonsiliasis.jumlah_order) WHERE satuan_code = 'KGM'.
      *  - RECEIVED : SUM(mon_rekonsiliasis.jumlah_doc) WHERE satuan_code = 'KGM'.
-     *  - OUT WIP  : SUM(mon_rekonsiliasis.out_req) WHERE satuan_code = 'KGM'.
+     *  - OUT WIP REQ : SUM(mon_rekonsiliasis.total_req) WHERE satuan_order = 'KGM'.
+     *  - OUT WIP DOC : SUM(mon_rekonsiliasis.total_doc) WHERE satuan_order = 'KGM'.
      *  - STOCK    : SUM(mon_rekonsiliasis.saldo_gudang) WHERE satuan_code = 'KGM'.
      *  - NEED     : SUM(mon_work_orders.jumlah_prod * mon_work_orders.cons)
      *               WHERE satuan_code = 'KGM', di-scope melalui join ke
@@ -761,7 +762,8 @@ class MonitoringRekonsiliasiService
     {
         $order    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('jumlah_order') ?? 0);
         $received = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_in') ?? 0);
-        $outWip   = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_req') ?? 0) + ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_doc') ?? 0);
+        $outWipReq = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_req') ?? 0);
+        $outWipDoc = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_doc') ?? 0);
         $stock    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_gudang') ?? 0);
 
         // NEED dari mon_work_orders: SUM(jumlah_prod * cons) per row (bukan
@@ -783,15 +785,17 @@ class MonitoringRekonsiliasiService
         // Perhitungan baru (persentase, konsisten dengan materialAchievement()):
         //  - order    : ORDER / NEED
         //  - received : RECEIVED / NEED
-        //  - out_wip  : OUT WIP / RECEIVED
-        //  - stock    : STOCK / RECEIVED
+        //  - out_wip_req : OUT WIP REQ / NEED
+        //  - out_wip_doc : OUT WIP DOC / NEED
+        //  - stock    : STOCK / NEED
         $pct = fn($num, $denom) => $denom > 0 ? round(max(0, (float) $num) / $denom * 100, 1) : 0;
 
         return [
             'need'     => $need,
             'order'    => $pct($order, $need),
             'received' => $pct($received, $need),
-            'out_wip'  => $pct($outWip, $need),
+            'out_wip_req' => $pct($outWipReq, $need),
+            'out_wip_doc' => $pct($outWipDoc, $need),
             'stock'    => $pct($stock, $need),
         ];
     }
@@ -1102,6 +1106,11 @@ class MonitoringRekonsiliasiService
                 'received_pct'    => $pct($doc, $need),
                 // OUT PROD% = out_req / (jumlah_doc - out_doc).
                 'out_prod_pct'    => $pct($r->out_req, $netReceived),
+                // Versi terpisah (dipakai tabel Rekap per Fabric):
+                // OUT REQ% = out_req / (jumlah_doc - out_doc),
+                // OUT DOC% = out_doc / (jumlah_doc - out_doc).
+                'out_req_pct'     => $pct($r->out_req, $netReceived),
+                'out_doc_pct'     => $pct($outDoc, $netReceived),
                 // STOCK% = saldo_gudang / (jumlah_doc - out_doc).
                 'stock_pct'       => $pct($r->saldo_gudang, $netReceived),
                 // Qty mentah (bukan persentase) untuk masing-masing bar --
@@ -1111,6 +1120,8 @@ class MonitoringRekonsiliasiService
                 'order_qty'       => $order,
                 'received_qty'    => $doc,
                 'out_prod_qty'    => (float) $r->out_req,
+                'out_req_qty'     => (float) $r->out_req,
+                'out_doc_qty'     => $outDoc,
                 'stock_qty'       => (float) $r->saldo_gudang,
             ];
         });

@@ -1232,7 +1232,8 @@
         // document.getElementById('fabric-need').textContent = fmtNum(fabricQty.need);
         // document.getElementById('fabric-order').textContent = fmtNum(fabricQty.order);
         // document.getElementById('fabric-received').textContent = fmtNum(fabricQty.received);
-        // document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
+        // document.getElementById('fabric-out-wip-req').textContent = fmtNum(fabricQty.out_wip_req);
+        // document.getElementById('fabric-out-wip-doc').textContent = fmtNum(fabricQty.out_wip_doc);
         // document.getElementById('fabric-stock').textContent = fmtNum(fabricQty.stock);
     }
 
@@ -2124,12 +2125,33 @@ function updateFormulaWithColors() {
         ], rows);
     }
 
+    // Rekap per Fabric: urutan kolom Need, Order, Order %, Received, Received %,
+    // Out WIP Req (+%), Out WIP Doc (+%), Stock (+%), Harga Total.
+    function dFabricRecap(rows, labelFn) {
+        return dGrid([
+            { label: 'Material', val: r => escapeHtml(labelFn(r)) },
+            { label: 'Nama Barang', val: r => dv(r.real_barang_name || r.barang_name) },
+            { label: 'Need', right: true, val: r => fmtNum(r.need_qty) },
+            { label: 'Order', right: true, val: r => fmtNum(r.order_qty) },
+            { label: 'Order %', right: true, val: r => fmtPct(r.order_pct) },
+            { label: 'Received', right: true, val: r => fmtNum(r.received_qty) },
+            { label: 'Received %', right: true, val: r => fmtPct(r.received_pct) },
+            { label: 'Out WIP Req', right: true, val: r => fmtNum(r.out_req_qty) },
+            { label: 'Out WIP Req %', right: true, val: r => fmtPct(r.out_req_pct) },
+            { label: 'Out WIP Doc', right: true, val: r => fmtNum(r.out_doc_qty) },
+            { label: 'Out WIP Doc %', right: true, val: r => fmtPct(r.out_doc_pct) },
+            { label: 'Stock', right: true, val: r => fmtNum(r.stock_qty) },
+            { label: 'Stock %', right: true, val: r => fmtPct(r.stock_pct) },
+            { label: 'Harga Total', right: true, val: r => fmtNum(r.harga_total) },
+        ], rows);
+    }
+
     function dRenderFabricAchievement(json, bd) {
         const maRows = json.materialAchievement || [];
         const fabricRows = maRows.filter(r => r.material_group === 'fabric')
             .map((r, idx) => ({ ...r, real_barang_name: r.barang_name, label: `Fabric ${String.fromCharCode(65 + idx)}` }));
         return dSection('Fabric Achievement',
-            dSub('Rekap per Fabric', dMaterialRecap(fabricRows, r => r.label))
+            dSub('Rekap per Fabric', dFabricRecap(fabricRows, r => r.label))
         );
     }
 
