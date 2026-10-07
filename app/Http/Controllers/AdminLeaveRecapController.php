@@ -63,6 +63,7 @@ class AdminLeaveRecapController extends Controller
                 'total_days'     => $activeRow->total_days,
                 'reason'         => $activeRow->reason,
                 'overall_status' => $overallStatus,
+                'has_attach'     => !empty($activeRow->attach_files),
                 'created_at'     => $activeRow->created_at->format('Y-m-d H:i:s'),
             ];
         }
@@ -132,16 +133,36 @@ class AdminLeaveRecapController extends Controller
             ];
         });
 
+        $formattedFiles = [];
+        if (!empty($firstReq->attach_files)) {
+            $files = is_array($firstReq->attach_files) ? $firstReq->attach_files : json_decode($firstReq->attach_files, true);
+            if (is_array($files)) {
+                foreach ($files as $filePath) {
+                    $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+                    $formattedFiles[] = [
+                        'path'     => $filePath,
+                        'url'      => asset('storage/' . $filePath),
+                        'name'     => basename($filePath),
+                        'ext'      => $ext,
+                        'is_image' => in_array($ext, ['jpg', 'jpeg', 'png', 'webp']),
+                        'is_pdf'   => $ext === 'pdf',
+                        'is_word'  => in_array($ext, ['doc', 'docx']),
+                    ];
+                }
+            }
+        }
+
         $data = [
-            'npk' => $firstReq->NPK,
-            'nama' => $employee ? $employee->NAMA_KARYAWAN : $firstReq->NPK,
-            'dept' => $employee ? $employee->DEPARTEMENT : '-',
-            'leave_type' => $firstReq->leaveType->name ?? '-',
-            'start_date' => Carbon::parse($firstReq->start_date)->format('d M Y'),
-            'end_date' => Carbon::parse($firstReq->end_date)->format('d M Y'),
-            'total_days' => $firstReq->total_days,
-            'reason' => $firstReq->reason,
-            'approvals' => $detailPaths,
+            'npk'          => $firstReq->NPK,
+            'nama'         => $employee ? $employee->NAMA_KARYAWAN : $firstReq->NPK,
+            'dept'         => $employee ? $employee->DEPARTEMENT : '-',
+            'leave_type'   => $firstReq->leaveType->name ?? '-',
+            'start_date'   => Carbon::parse($firstReq->start_date)->format('d M Y'),
+            'end_date'     => Carbon::parse($firstReq->end_date)->format('d M Y'),
+            'total_days'   => $firstReq->total_days,
+            'reason'       => $firstReq->reason,
+            'approvals'    => $detailPaths,
+            'attach_files' => $formattedFiles,
         ];
 
         return response()->json(['success' => true, 'data' => $data]);

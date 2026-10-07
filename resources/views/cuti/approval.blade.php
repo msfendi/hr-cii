@@ -53,7 +53,9 @@
                                     <label for="filterStatus">Status</label>
                                     <select class="form-control form-control-sm" id="filterStatus">
                                         <option value="">Semua Status</option>
-                                        <option value="pending">Diproses</option>
+                                        <option value="pending">Semua Diproses / Menunggu</option>
+                                        <option value="pending_active">Menunggu Giliran Anda</option>
+                                        <option value="waiting_previous">Waiting Approval Sebelumnya</option>
                                         <option value="approved">Disetujui</option>
                                         <option value="rejected">Ditolak</option>
                                     </select>
@@ -148,6 +150,10 @@
                             <div class="text-muted small">Alasan Pengajuan</div>
                             <div id="detailAlasan">-</div>
                         </div>
+                        <div class="col-md-12 mb-3" id="detailAttachWrap">
+                            <div class="text-muted small mb-1">Lampiran Dokumen</div>
+                            <div id="detailAttachContent"></div>
+                        </div>
                         <div class="col-md-12" id="detailKomentarWrap" style="display:none;">
                             <div class="text-muted small">Komentar Penolakan</div>
                             <div class="text-danger" id="detailKomentar">-</div>
@@ -156,6 +162,23 @@
                 </div>
                 <div class="modal-footer" id="detailModalFooter">
                     <!-- diisi dinamis lewat JS: Setujui/Tolak, Ubah Keputusan, atau cuma Tutup -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Zoom Foto Lampiran -->
+    <div class="modal fade" id="imageZoomModal" tabindex="-1" role="dialog" aria-hidden="true" style="z-index: 1070;">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header py-2 px-3 bg-light d-flex align-items-center justify-content-between">
+                    <h6 class="modal-title font-weight-bold text-gray-800 text-truncate mr-2" id="imageZoomTitle">
+                        <i class="far fa-file-image text-primary mr-1"></i> Preview Foto
+                    </h6>
+                    <button type="button" class="close ml-auto" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body p-2 text-center bg-dark" style="min-height: 250px; display:flex; align-items:center; justify-content:center;">
+                    <img id="imageZoomSrc" src="" style="max-width: 100%; max-height: 75vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);" alt="Zoom">
                 </div>
             </div>
         </div>
@@ -202,7 +225,18 @@
                     { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false },
                     { data: 'karyawan', name: 'nama' },
                     { data: 'created_at', name: 'created_at' },
-                    { data: 'leave_type', name: 'leave_type' },
+                    { 
+                        data: 'leave_type', 
+                        name: 'leave_type',
+                        render: function (data, type, row) {
+                            var badge = '';
+                            if (row.attach_files && row.attach_files.length > 0) {
+                                var count = row.attach_files.length;
+                                badge = ' <span class="badge badge-light border text-primary" title="' + count + ' file dilampirkan"><i class="fas fa-paperclip"></i> ' + count + '</span>';
+                            }
+                            return (data || '-') + badge;
+                        }
+                    },
                     { data: 'periode', name: 'periode', orderable: false, searchable: false },
                     { data: 'hari', name: 'hari', orderable: false, searchable: false, className: 'text-center' },
                     { data: 'alasan', name: 'alasan', orderable: false, searchable: false },
@@ -249,9 +283,10 @@
             }
 
             // Warna header modal & footer aksi menyesuaikan status permohonan
-            function statusMeta(status) {
+            function statusMeta(status, isWaitingPrev) {
                 if (status === 'approved') return { header: 'bg-success text-white', icon: 'fa-check-circle', close: 'text-white' };
                 if (status === 'rejected') return { header: 'bg-danger text-white', icon: 'fa-times-circle', close: 'text-white' };
+                if (isWaitingPrev) return { header: 'bg-secondary text-white', icon: 'fa-clock', close: 'text-white' };
                 return { header: 'bg-warning text-dark', icon: 'fa-hourglass-half', close: '' };
             }
 
@@ -259,9 +294,9 @@
             $(document).on('click', '.btn-detail', function () {
                 var tr = $(this).closest('tr');
                 var row = dtable.row(tr).data();
-                var meta = statusMeta(row.status);
+                var meta = statusMeta(row.status, row.is_waiting_previous);
 
-                $('#detailModalHeader').removeClass('bg-success bg-danger bg-warning text-white text-dark').addClass(meta.header);
+                $('#detailModalHeader').removeClass('bg-success bg-danger bg-warning bg-secondary text-white text-dark').addClass(meta.header);
                 $('#detailModalIcon').attr('class', 'fas mr-1 ' + meta.icon);
                 $('#detailModalHeader .close').removeClass('text-white').addClass(meta.close);
 
@@ -274,6 +309,54 @@
                 $('#detailDiajukan').text(row.created_at);
                 $('#detailAlasan').text(row.alasan || '-');
 
+                // Render lampiran dokumen
+                if (row.attach_files && row.attach_files.length > 0) {
+                    var attachHtml = '<div class="d-flex flex-wrap" style="gap: 8px;">';
+                    $.each(row.attach_files, function(i, file) {
+                        if (file.is_image) {
+                            attachHtml += `
+                            <div class="border rounded p-2 bg-white shadow-sm d-flex align-items-center" style="max-width: 260px; min-width: 200px;">
+                                <img src="${file.url}" class="rounded mr-2 img-preview-thumb" data-url="${file.url}" data-name="${file.name}" style="width: 48px; height: 48px; object-fit: cover; cursor: zoom-in;" title="Klik untuk perbesar">
+                                <div class="overflow-hidden mr-2" style="flex:1;">
+                                    <div class="font-weight-bold small text-truncate" title="${file.name}">${file.name}</div>
+                                    <span class="badge badge-success" style="font-size:0.65rem;">GAMBAR</span>
+                                </div>
+                                <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-primary p-1" title="Buka di Tab Baru"><i class="fas fa-external-link-alt fa-xs"></i></a>
+                            </div>`;
+                        } else if (file.is_pdf) {
+                            attachHtml += `
+                            <div class="border rounded p-2 bg-white shadow-sm d-flex align-items-center" style="max-width: 260px; min-width: 200px;">
+                                <div class="rounded mr-2 d-flex align-items-center justify-content-center bg-light" style="width: 48px; height: 48px; flex-shrink: 0;">
+                                    <i class="far fa-file-pdf text-danger fa-2x"></i>
+                                </div>
+                                <div class="overflow-hidden mr-2" style="flex:1;">
+                                    <div class="font-weight-bold small text-truncate" title="${file.name}">${file.name}</div>
+                                    <span class="badge badge-danger" style="font-size:0.65rem;">PDF</span>
+                                </div>
+                                <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-danger p-1" title="Buka File"><i class="fas fa-external-link-alt fa-xs"></i></a>
+                            </div>`;
+                        } else {
+                            var badgeColor = file.is_word ? 'badge-primary' : 'badge-secondary';
+                            var iconColor = file.is_word ? 'fa-file-word text-primary' : 'fa-file-alt text-secondary';
+                            attachHtml += `
+                            <div class="border rounded p-2 bg-white shadow-sm d-flex align-items-center" style="max-width: 260px; min-width: 200px;">
+                                <div class="rounded mr-2 d-flex align-items-center justify-content-center bg-light" style="width: 48px; height: 48px; flex-shrink: 0;">
+                                    <i class="far ${iconColor} fa-2x"></i>
+                                </div>
+                                <div class="overflow-hidden mr-2" style="flex:1;">
+                                    <div class="font-weight-bold small text-truncate" title="${file.name}">${file.name}</div>
+                                    <span class="badge ${badgeColor}" style="font-size:0.65rem;">${(file.ext || 'FILE').toUpperCase()}</span>
+                                </div>
+                                <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-primary p-1" title="Download / Buka"><i class="fas fa-download fa-xs"></i></a>
+                            </div>`;
+                        }
+                    });
+                    attachHtml += '</div>';
+                    $('#detailAttachContent').html(attachHtml);
+                } else {
+                    $('#detailAttachContent').html('<span class="text-muted font-italic">Tidak ada dokumen dilampirkan</span>');
+                }
+
                 if (row.status === 'rejected' && row.comment) {
                     $('#detailKomentar').text(row.comment);
                     $('#detailKomentarWrap').show();
@@ -282,7 +365,9 @@
                 }
 
                 var footer = '';
-                if (row.status === 'pending') {
+                if (row.is_waiting_previous) {
+                    footer += '<span class="text-muted small mr-auto"><i class="fas fa-info-circle text-info mr-1"></i>Permohonan ini masih menunggu persetujuan pada Level sebelumnya.</span> ';
+                } else if (row.status === 'pending') {
                     footer += '<button type="button" class="btn btn-success btn-approve" data-id="' + row.id + '" data-nama="' + row.nama + '"><i class="fas fa-check"></i> Setujui</button> ';
                     footer += '<button type="button" class="btn btn-danger btn-reject" data-id="' + row.id + '" data-nama="' + row.nama + '"><i class="fas fa-times"></i> Tolak</button> ';
                 } else if (row.can_update) {
@@ -292,6 +377,15 @@
                 $('#detailModalFooter').html(footer);
 
                 $('#detailModal').modal('show');
+            });
+
+            // Zoom foto preview
+            $(document).on('click', '.img-preview-thumb', function () {
+                var url = $(this).data('url');
+                var name = $(this).data('name') || 'Preview Foto';
+                $('#imageZoomSrc').attr('src', url);
+                $('#imageZoomTitle').html('<i class="far fa-file-image text-primary mr-1"></i> ' + name);
+                $('#imageZoomModal').modal('show');
             });
 
             // Approve button (dari kolom Aksi ATAU dari footer modal Detail)

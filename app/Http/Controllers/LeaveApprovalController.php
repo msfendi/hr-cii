@@ -86,15 +86,11 @@ class LeaveApprovalController extends Controller
 
         $approverNpk = $employee->NPK;
 
-        // Tampilkan permohonan yang levelnya sedang aktif (butuh aksi approver ini)
-        // ATAU yang statusnya sudah pernah diputuskan (approved/rejected) --
-        // supaya permohonan yang sudah diproses TIDAK hilang dari daftar approver ini
-        // walaupun approval_progress sudah maju ke level berikutnya.
-        $query = LeaveRequest::where('approval_id', $approverNpk)
-            ->where(function ($q) {
-                $q->whereColumn('approval_level', 'approval_progress')
-                  ->orWhere('status', '!=', 'pending');
-            });
+        // Ambil semua permohonan di mana user ini adalah approver
+        // Termasuk yang sedang menunggu giliran (approval_progress == approval_level),
+        // yang sudah diputuskan (approved/rejected), MAUPUN yang masih menunggu approval
+        // level sebelumnya (approval_progress < approval_level).
+        $query = LeaveRequest::where('approval_id', $approverNpk);
 
         // Filter tanggal: tampilkan permohonan yang periode cutinya beririsan
         // dengan rentang tanggal yang dipilih (start_date/end_date dari request).
@@ -105,13 +101,30 @@ class LeaveApprovalController extends Controller
             $query->whereDate('start_date', '<=', $endDate);
         }
         if ($status = request('status')) {
-            $query->where('status', $status);
+            if ($status === 'waiting_previous') {
+                $query->where('status', 'pending')
+                      ->whereColumn('approval_progress', '<', 'approval_level');
+            } elseif ($status === 'pending_active') {
+                $query->where('status', 'pending')
+                      ->whereColumn('approval_progress', '=', 'approval_level');
+            } else {
+                $query->where('status', $status);
+            }
         }
 
+        // Urutkan dan pastikan 1 row per pengajuan (token):
+        // 1. Yang butuh tindakan aktif approver ini (pending & approval_progress == approval_level)
+        // 2. Yang masih menunggu approval sebelumnya (pending & approval_progress < approval_level)
+        // 3. Yang sudah diputuskan (approved / rejected)
         $leaveRequestsQuery = $query
-            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
-            ->orderBy('created_at', 'asc')
-            ->get();
+            ->orderByRaw("CASE 
+                WHEN status = 'pending' AND approval_progress = approval_level THEN 0 
+                WHEN status = 'pending' THEN 1 
+                ELSE 2 
+            END")
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->unique('token');
 
         $rows = [];
         foreach ($leaveRequestsQuery as $req) {
@@ -123,6 +136,9 @@ class LeaveApprovalController extends Controller
 
             $leaveType = LeaveTypes::find($req->leave_type_id);
 
+            // Cek apakah masih menunggu approval level sebelumnya
+            $isWaitingPrevious = ($req->status === 'pending' && (int)$req->approval_progress < (int)$req->approval_level);
+
             // Approver cuma boleh mengubah keputusan selama belum ada level
             // berikutnya yang sudah bertindak (biar workflow tetap konsisten).
             $laterLevelActed = LeaveRequest::where('token', $req->token)
@@ -131,22 +147,45 @@ class LeaveApprovalController extends Controller
                 ->where('void', '!=', 'true')
                 ->exists();
 
+            // Format lampiran file
+            $formattedFiles = [];
+            if (!empty($req->attach_files)) {
+                $files = is_array($req->attach_files) ? $req->attach_files : json_decode($req->attach_files, true);
+                if (is_array($files)) {
+                    foreach ($files as $filePath) {
+                        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+                        $formattedFiles[] = [
+                            'path'     => $filePath,
+                            'url'      => asset('storage/' . $filePath),
+                            'name'     => basename($filePath),
+                            'ext'      => $ext,
+                            'is_image' => in_array($ext, ['jpg', 'jpeg', 'png', 'webp']),
+                            'is_pdf'   => $ext === 'pdf',
+                            'is_word'  => in_array($ext, ['doc', 'docx']),
+                        ];
+                    }
+                }
+            }
+
             $rows[] = [
-                'id'             => $req->id,
-                'token'          => $req->token,
-                'npk'            => $req->NPK,
-                'nama'           => $bioEmployee ? $bioEmployee->NAMA_KARYAWAN : $req->NPK,
-                'dept'           => $bioEmployee ? $bioEmployee->DEPARTEMENT : '-',
-                'leave_type'     => $leaveType ? $leaveType->name : '-',
-                'start_date'     => $req->start_date,
-                'end_date'       => $req->end_date,
-                'total_days'     => $req->total_days,
-                'reason'         => $req->reason,
-                'status'         => $req->status,
-                'comment'        => $req->comment,
-                'created_at'     => Carbon::parse($req->created_at)->format('d M Y H:i'),
-                'approval_level' => $req->approval_level,
-                'can_update'     => $req->status !== 'pending' && !$laterLevelActed,
+                'id'                  => $req->id,
+                'token'               => $req->token,
+                'npk'                 => $req->NPK,
+                'nama'                => $bioEmployee ? $bioEmployee->NAMA_KARYAWAN : $req->NPK,
+                'dept'                => $bioEmployee ? $bioEmployee->DEPARTEMENT : '-',
+                'leave_type'          => $leaveType ? $leaveType->name : '-',
+                'start_date'          => $req->start_date,
+                'end_date'            => $req->end_date,
+                'total_days'          => $req->total_days,
+                'reason'              => $req->reason,
+                'status'              => $req->status,
+                'comment'             => $req->comment,
+                'created_at'          => Carbon::parse($req->created_at)->format('d M Y H:i'),
+                'approval_level'      => $req->approval_level,
+                'approval_progress'   => $req->approval_progress,
+                'is_waiting_previous' => $isWaitingPrevious,
+                'can_update'          => $req->status !== 'pending' && !$laterLevelActed,
+                'attach_files'        => $formattedFiles,
             ];
         }
 
@@ -168,14 +207,23 @@ class LeaveApprovalController extends Controller
                     return $row['reason'] ?: '-';
                 })
                 ->addColumn('status_badge', function($row) {
-                    if($row['status'] === 'approved') return '<span class="badge badge-success">Disetujui</span>';
-                    elseif($row['status'] === 'rejected') return '<span class="badge badge-danger">Ditolak</span>';
+                    if ($row['status'] === 'approved') {
+                        return '<span class="badge badge-success">Disetujui</span>';
+                    } elseif ($row['status'] === 'rejected') {
+                        return '<span class="badge badge-danger">Ditolak</span>';
+                    } elseif (!empty($row['is_waiting_previous'])) {
+                        return '<span class="badge badge-secondary" title="Menunggu approval level sebelumnya"><i class="fas fa-clock mr-1"></i>Waiting Approval Sebelumnya</span>';
+                    }
                     return '<span class="badge badge-warning text-white">Menunggu</span>';
                 })
                 ->addColumn('aksi', function($row) {
                     $detailBtn = '<button type="button" class="btn btn-sm btn-info btn-detail" data-id="'.$row['id'].'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
 
                     if ($row['status'] === 'pending') {
+                        if (!empty($row['is_waiting_previous'])) {
+                            return $detailBtn;
+                        }
+
                         return $detailBtn . ' ' .
                                '<button type="button" class="btn btn-sm btn-success btn-approve" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'"><i class="fas fa-check fa-sm"></i> Approve</button> ' .
                                '<button type="button" class="btn btn-sm btn-danger btn-reject" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'"><i class="fas fa-times fa-sm"></i> Reject</button>';
@@ -261,6 +309,11 @@ class LeaveApprovalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Status sudah diproses sebelumnya']);
             }
 
+            if ((int)$leave->approval_progress < (int)$leave->approval_level) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Permohonan ini masih menunggu persetujuan pada level sebelumnya.']);
+            }
+
             $leave->status = 'approved';
             $leave->approval_date = now();
             $leave->save();
@@ -287,6 +340,11 @@ class LeaveApprovalController extends Controller
             if ($leave->status !== 'pending') {
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Status sudah diproses sebelumnya']);
+            }
+
+            if ((int)$leave->approval_progress < (int)$leave->approval_level) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Permohonan ini masih menunggu persetujuan pada level sebelumnya.']);
             }
 
             $leave->status = 'rejected';

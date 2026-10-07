@@ -204,6 +204,13 @@ class PengajuanCutiController extends Controller
 
             // ── Tahap 1: Validasi SEMUA baris cuti dulu, sebelum menyimpan apapun ──
             $preparedLeaves = [];
+
+            // Jenis cuti yang WAJIB upload lampiran file
+            $attachRequiredCodes = [
+                'menikah', 'menikahkan_anak', 'suami_istri_meninggal',
+                'keluarga_meninggal', 'anak_meninggal', 'menantu_meninggal',
+                'orang_tua_meninggal',
+            ];
             foreach ($leaves as $i => $leave) {
                 $rowLabel = 'Cuti #' . ((int) $i + 1);
 
@@ -273,14 +280,57 @@ class PengajuanCutiController extends Controller
                     return back();
                 }
 
+                // ── Validasi lampiran file untuk jenis cuti tertentu ──
+                $leaveType = LeaveTypes::find($leave['jenis_cuti']);
+                $requiresAttach = $leaveType && in_array($leaveType->code, $attachRequiredCodes);
+
+                if ($requiresAttach && !$request->hasFile("leaves.{$i}.attach_files")) {
+                    Alert::error('Error', "$rowLabel: Lampiran file wajib diupload untuk jenis cuti {$leaveType->name}.");
+                    return back();
+                }
+
+                // Validasi format & ukuran file (jika ada)
+                if ($request->hasFile("leaves.{$i}.attach_files")) {
+                    foreach ($request->file("leaves.{$i}.attach_files") as $file) {
+                        if (!$file->isValid()) {
+                            Alert::error('Error', "$rowLabel: File upload gagal.");
+                            return back();
+                        }
+                        if ($file->getSize() > 5 * 1024 * 1024) {
+                            Alert::error('Error', "$rowLabel: Ukuran file {$file->getClientOriginalName()} melebihi 5MB.");
+                            return back();
+                        }
+                        $allowedExt = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+                        if (!in_array(strtolower($file->getClientOriginalExtension()), $allowedExt)) {
+                            Alert::error('Error', "$rowLabel: Format file {$file->getClientOriginalName()} tidak diizinkan. Gunakan PDF, JPG, PNG, atau DOC/DOCX.");
+                            return back();
+                        }
+                    }
+                }
+
                 $preparedLeaves[] = [
                     'leave_type_id' => $leave['jenis_cuti'],
                     'start_date'    => $leave['tanggal_mulai'],
                     'end_date'      => $leave['tanggal_selesai'],
                     'total_days'    => $total_days,
                     'reason'        => $leave['keterangan'] ?? '',
+                    'file_index'    => $i,
                 ];
             }
+
+            // ── Upload file lampiran ──
+            foreach ($preparedLeaves as &$leaveData) {
+                $attachPaths = [];
+                $idx = $leaveData['file_index'];
+                if ($request->hasFile("leaves.{$idx}.attach_files")) {
+                    foreach ($request->file("leaves.{$idx}.attach_files") as $file) {
+                        $attachPaths[] = $file->store("leave-attachments/{$request->npk}", 'public');
+                    }
+                }
+                $leaveData['attach_files'] = !empty($attachPaths) ? $attachPaths : null;
+                unset($leaveData['file_index']);
+            }
+            unset($leaveData);
 
             // ── Tahap 2: Simpan — setiap baris cuti menjadi pengajuan approval TERPISAH (token beda) ──
             DB::beginTransaction();
@@ -303,6 +353,7 @@ class PengajuanCutiController extends Controller
                         'status'            => 'pending',
                         'token'             => $token,
                         'void'              => 'false',
+                        'attach_files'      => $leaveData['attach_files'],
                     ]);
                 }
             }
@@ -435,6 +486,26 @@ class PengajuanCutiController extends Controller
                 $overallStatus = $activeRow->approval_level > 1 ? 'partial' : 'pending';
             }
 
+            // Format lampiran file
+            $formattedFiles = [];
+            if (!empty($activeRow->attach_files)) {
+                $files = is_array($activeRow->attach_files) ? $activeRow->attach_files : json_decode($activeRow->attach_files, true);
+                if (is_array($files)) {
+                    foreach ($files as $filePath) {
+                        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+                        $formattedFiles[] = [
+                            'path'     => $filePath,
+                            'url'      => asset('storage/' . $filePath),
+                            'name'     => basename($filePath),
+                            'ext'      => $ext,
+                            'is_image' => in_array($ext, ['jpg', 'jpeg', 'png', 'webp']),
+                            'is_pdf'   => $ext === 'pdf',
+                            'is_word'  => in_array($ext, ['doc', 'docx']),
+                        ];
+                    }
+                }
+            }
+
             $rows[] = [
                 'token'          => $activeRow->token,
                 'npk'            => $activeRow->NPK,
@@ -452,6 +523,7 @@ class PengajuanCutiController extends Controller
                 'void'           => $activeRow->void,
                 'created_at'     => $activeRow->created_at,
                 'comment'        => $activeRow->comment,
+                'attach_files'   => $formattedFiles,
             ];
         }
 

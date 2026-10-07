@@ -24,6 +24,12 @@ class LeaveRequest extends Model
         'approval_date',
         'status',
         'token',
+        'void',
+        'attach_files',
+    ];
+
+    protected $casts = [
+        'attach_files' => 'array',
     ];
 
     public function leaveType()
