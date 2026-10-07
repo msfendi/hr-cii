@@ -343,9 +343,9 @@
             </div> -->
 
             <!-- Tambahkan menu berikutnya di sini -->
-            <!-- <div class="col-lg-3 col-md-4 col-6">
+            <div class="col-lg-3 col-md-4 col-6">
 
-                <a href="#" class="text-decoration-none">
+                <a href="/pengajuan-cuti/login" class="text-decoration-none">
 
                     <div class="card menu-card shadow">
 
@@ -363,7 +363,7 @@
 
                 </a>
 
-            </div> -->
+            </div>
 
         </div>
 
