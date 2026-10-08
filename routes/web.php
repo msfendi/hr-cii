@@ -251,6 +251,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/role/update', [RoleController::class, 'update'])->name('role.update')->middleware(['auth', 'permission']);
 
     //User
+    Route::post('/user/toggle/{id}', [UserController::class, 'toggleStatus'])->name('user.toggle')->middleware(['auth', 'permission']);
     Route::get('/user/index', [UserController::class, 'index'])->name('user.index')->middleware(['auth', 'permission']);
     Route::get('/user/profile', [UserController::class, 'profile'])->name('user.profile');
     Route::post('/user/update', [UserController::class, 'update'])->name('user.update')->middleware(['auth', 'permission']);
