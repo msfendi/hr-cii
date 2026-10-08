@@ -68,6 +68,7 @@
                                         <th>Name</th>
                                         <th>Email</th>
                                         <th>Role</th>
+                                        <th>Status</th>
                                         <th>Created At</th>
                                         <th>Updated At</th>
                                         <th>Action</th>
@@ -81,6 +82,13 @@
                                         <td>{{ $user->name }}</td>
                                         <td>{{ $user->email }}</td>
                                         <td>{{ $user->role }}</td>
+                                        <td class="text-center">
+                                            @if ($user->disabled)
+                                                <span class="badge badge-danger">Disabled</span>
+                                            @else
+                                                <span class="badge badge-success">Enabled</span>
+                                            @endif
+                                        </td>
                                         <td>{{ $user->created_at }}</td>
                                         <td>{{ $user->updated_at }}</td>
                                         <td class="text-center">
@@ -93,6 +101,22 @@
                                             <a href="{{ route('user.detail', ['id' => $user->id]) }}" class="btn btn-primary btn-circle btn-sm">
                                                 <i class="fas fa-edit"></i>
                                             </a>
+                                            @endcanRoute
+                                            @canRoute('user.toggle')
+                                            @if (auth()->id() !== $user->id)
+                                            <form action="{{ route('user.toggle', ['id' => $user->id]) }}" method="POST" class="d-inline form-toggle-user" data-user-name="{{ $user->name }}" data-disabled="{{ $user->disabled ? 1 : 0 }}">
+                                                @csrf
+                                                @if ($user->disabled)
+                                                <button type="submit" class="btn btn-success btn-circle btn-sm" title="Enable user">
+                                                    <i class="fas fa-user-check"></i>
+                                                </button>
+                                                @else
+                                                <button type="submit" class="btn btn-warning btn-circle btn-sm" title="Disable user">
+                                                    <i class="fas fa-user-slash"></i>
+                                                </button>
+                                                @endif
+                                            </form>
+                                            @endif
                                             @endcanRoute
                                             @canRoute('user.delete')
                                             <a class="btn btn-danger btn-circle btn-sm btn-delete-user" data-delete-link="{{ route('user.delete', ['id' => $user->id]) }}" data-user-name="{{ $user->name }}" data-toggle="modal" data-target="#deleteModal">
@@ -146,6 +170,15 @@
     $('.btn-delete-user').on('click', function () {
         $('#btn-confirm').attr('href', $(this).data('delete-link'));
         $("#modal-text-user").text('Apakah anda yakin ingin menghapus user ' + $(this).data('user-name') + '?');
+    });
+
+    // konfirmasi enable / disable user
+    $(document).on('submit', '.form-toggle-user', function (e) {
+        var isDisabled = parseInt($(this).data('disabled')) === 1;
+        var action = isDisabled ? 'mengaktifkan' : 'menonaktifkan';
+        if (!confirm('Apakah anda yakin ingin ' + action + ' user ' + $(this).data('user-name') + '?')) {
+            e.preventDefault();
+        }
     });
 </script>
 </html>

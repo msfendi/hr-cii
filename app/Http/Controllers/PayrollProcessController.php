@@ -879,7 +879,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT','CU')
                     THEN 1
 
                 ELSE 0
@@ -892,7 +892,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD','CU')
                     THEN JUMLAH_JAM_LEMBUR
             END AS absence_status
         ")

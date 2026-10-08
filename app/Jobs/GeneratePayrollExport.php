@@ -121,6 +121,7 @@ class GeneratePayrollExport implements ShouldQueue
         NPK,
         SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'MA' THEN 1 ELSE 0 END) as MA,
         SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'P1' THEN 1 ELSE 0 END) as P1,
+        SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'CU' THEN 1 ELSE 0 END) as CU,
         SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'CT' THEN 1 ELSE 0 END) as CT,
         SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'SD' THEN 1 ELSE 0 END) as SD,
         SUM(CASE WHEN JUMLAH_JAM_LEMBUR = 'BR' THEN 1 ELSE 0 END) as BR,
@@ -214,6 +215,7 @@ class GeneratePayrollExport implements ShouldQueue
                 // overtime hasil agregasi
                 'ot.MA',
                 'ot.P1',
+                'ot.CU',
                 'ot.CT',
                 'ot.SD',
                 'ot.BR',

@@ -27,6 +27,12 @@
   ];
   };
 
+
+  // Lebar kolom tetap: NPK 6 + Name 12 + 8 kolom detail x 3.5 (=28) + Total 8 = 54%
+  // Sisa 46% dibagi rata ke semua komponen agar tabel selalu muat di 1 halaman lebar
+  $compCount = max(count($allComponents), 1);
+  $compWidth = round(46 / $compCount, 2);
+
   @endphp
 
   <head>
@@ -50,8 +56,8 @@
         width: 100%;
         border-collapse: collapse;
         margin-bottom: 12px;
-        table-layout: auto;   /* otomatis menyesuaikan lebar kolom */
-        font-size: 8px;
+        table-layout: fixed;  /* lebar kolom dikunci supaya tidak melebihi halaman */
+        font-size: 7px;
       }
 
       table,
@@ -62,7 +68,7 @@
 
       th,
       td {
-        padding: 2px 3px;     /* padding lebih kecil */
+        padding: 2px 1px;     /* padding lebih kecil */
         word-wrap: break-word;
         overflow-wrap: break-word;
         vertical-align: middle;
@@ -94,7 +100,6 @@
       }
 
       .dept-block {
-        page-break-inside: avoid;
         margin-bottom: 8px;
       }
 
@@ -104,17 +109,20 @@
 
       /* ===== LEBAR KOLOM (relatif) ===== */
       .col-npk {
-        width: 7%;
+        width: 6%;
       }
       .col-name {
-        width: 14%;
+        width: 12%;
       }
       .col-details {
-        width: 5%;
+        width: 3.5%;
       }
-      .col-component {
-        width: auto;
-        min-width: 50px;
+      .col-total {
+        width: 8%;
+      }
+      /* lebar .col-component diset inline (dinamis sesuai jumlah komponen) */
+      .num {
+        white-space: nowrap;
       }
 
       /* ===== TABEL RINGKASAN ===== */
@@ -122,6 +130,7 @@
         width: 100%;
         margin-top: 15px;
         table-layout: auto;
+        font-size: 8px;
       }
 
       .summary-table th,
@@ -180,16 +189,17 @@
             <th class="col-details">MA</th>
             <th class="col-details">P1</th>
             <th class="col-details">CT</th>
+            <th class="col-details">CU</th>
             <th class="col-details">SD</th>
             <th class="col-details">BR</th>
             <th class="col-details">OUT</th>
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
-            <th class="col-component">{{ $component->name }}</th>
+            <th class="col-component" style="width:{{ $compWidth }}%">{{ $component->name }}</th>
             @endforeach
 
-            <th class="col-component">Total Salary</th>
+            <th class="col-total">Total Salary</th>
           </tr>
         </thead>
 
@@ -204,18 +214,19 @@
             <td align="center">{{ number_format($item->MA ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->P1 ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->CT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->CU ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->SD ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->BR ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->OUT ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->total_ijin_minutes ?? 0,0,',','.') }}</td>
 
             @foreach($allComponents as $code => $component)
-            <td align="right">
+            <td align="right" class="num">
               {{ number_format($item->$code ?? 0,0,',','.') }}
             </td>
             @endforeach
 
-            <td align="right">
+            <td align="right" class="num">
               {{ number_format($item->total_salary,0,',','.') }}
             </td>
           </tr>
@@ -227,6 +238,7 @@
           $totMA  = $employees->sum(fn($x) => $x->MA  ?? 0);
           $totP1  = $employees->sum(fn($x) => $x->P1  ?? 0);
           $totCT  = $employees->sum(fn($x) => $x->CT  ?? 0);
+          $totCU  = $employees->sum(fn($x) => $x->CU  ?? 0);
           $totSD  = $employees->sum(fn($x) => $x->SD  ?? 0);
           $totBR  = $employees->sum(fn($x) => $x->BR  ?? 0);
           $totOUT = $employees->sum(fn($x) => $x->OUT ?? 0);
@@ -239,18 +251,19 @@
             <td align="center">{{ number_format($totMA,0,',','.') }}</td>
             <td align="center">{{ number_format($totP1,0,',','.') }}</td>
             <td align="center">{{ number_format($totCT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totCU,0,',','.') }}</td>
             <td align="center">{{ number_format($totSD,0,',','.') }}</td>
             <td align="center">{{ number_format($totBR,0,',','.') }}</td>
             <td align="center">{{ number_format($totOUT,0,',','.') }}</td>
             <td align="center">{{ number_format($totIjin,0,',','.') }}</td>
 
             @foreach($allComponents as $code=>$component)
-            <td align="right">
+            <td align="right" class="num">
                 {{ number_format($totDept['components'][$code] ?? 0,0,',','.') }}
             </td>
             @endforeach
 
-            <td align="right">
+            <td align="right" class="num">
                 {{ number_format($totDept['salary'],0,',','.') }}
             </td>
         </tr>
@@ -282,16 +295,17 @@
             <th class="col-details">MA</th>
             <th class="col-details">P1</th>
             <th class="col-details">CT</th>
+            <th class="col-details">CU</th>
             <th class="col-details">SD</th>
             <th class="col-details">BR</th>
             <th class="col-details">OUT</th>
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
-            <th class="col-component">{{ $component->name }}</th>
+            <th class="col-component" style="width:{{ $compWidth }}%">{{ $component->name }}</th>
             @endforeach
 
-            <th class="col-component">Total Salary</th>
+            <th class="col-total">Total Salary</th>
           </tr>
         </thead>
 
@@ -305,18 +319,19 @@
             <td align="center">{{ number_format($item->MA ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->P1 ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->CT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->CU ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->SD ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->BR ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->OUT ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->total_ijin_minutes ?? 0,0,',','.') }}</td>
 
             @foreach($allComponents as $code => $component)
-            <td align="right">
+            <td align="right" class="num">
               {{ number_format($item->$code ?? 0,0,',','.') }}
             </td>
             @endforeach
 
-            <td align="right">
+            <td align="right" class="num">
               {{ number_format($item->total_salary,0,',','.') }}
             </td>
           </tr>
@@ -328,6 +343,7 @@
           $totMA  = $employees->sum(fn($x) => $x->MA  ?? 0);
           $totP1  = $employees->sum(fn($x) => $x->P1  ?? 0);
           $totCT  = $employees->sum(fn($x) => $x->CT  ?? 0);
+          $totCU  = $employees->sum(fn($x) => $x->CU  ?? 0);
           $totSD  = $employees->sum(fn($x) => $x->SD  ?? 0);
           $totBR  = $employees->sum(fn($x) => $x->BR  ?? 0);
           $totOUT = $employees->sum(fn($x) => $x->OUT ?? 0);
@@ -340,18 +356,19 @@
             <td align="center">{{ number_format($totMA,0,',','.') }}</td>
             <td align="center">{{ number_format($totP1,0,',','.') }}</td>
             <td align="center">{{ number_format($totCT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totCU,0,',','.') }}</td>
             <td align="center">{{ number_format($totSD,0,',','.') }}</td>
             <td align="center">{{ number_format($totBR,0,',','.') }}</td>
             <td align="center">{{ number_format($totOUT,0,',','.') }}</td>
             <td align="center">{{ number_format($totIjin,0,',','.') }}</td>
 
             @foreach($allComponents as $code=>$component)
-            <td align="right">
+            <td align="right" class="num">
                 {{ number_format($totDept['components'][$code] ?? 0,0,',','.') }}
             </td>
             @endforeach
 
-            <td align="right">
+            <td align="right" class="num">
                 {{ number_format($totDept['salary'],0,',','.') }}
             </td>
         </tr>
@@ -383,16 +400,17 @@
             <th class="col-details">MA</th>
             <th class="col-details">P1</th>
             <th class="col-details">CT</th>
+            <th class="col-details">CU</th>
             <th class="col-details">SD</th>
             <th class="col-details">BR</th>
             <th class="col-details">OUT</th>
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
-            <th class="col-component">{{ $component->name }}</th>
+            <th class="col-component" style="width:{{ $compWidth }}%">{{ $component->name }}</th>
             @endforeach
 
-            <th class="col-component">Total Salary</th>
+            <th class="col-total">Total Salary</th>
           </tr>
         </thead>
 
@@ -406,18 +424,19 @@
             <td align="center">{{ number_format($item->MA ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->P1 ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->CT ?? 0,0,',','.') }}</td>
+            <td align="center">{{ number_format($item->CU ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->SD ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->BR ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->OUT ?? 0,0,',','.') }}</td>
             <td align="center">{{ number_format($item->total_ijin_minutes ?? 0,0,',','.') }}</td>
 
             @foreach($allComponents as $code=>$component)
-            <td align="right">
+            <td align="right" class="num">
               {{ number_format($item->$code ?? 0,0,',','.') }}
             </td>
             @endforeach
 
-            <td align="right">
+            <td align="right" class="num">
               {{ number_format($item->total_salary,0,',','.') }}
             </td>
           </tr>
@@ -429,6 +448,7 @@
           $totMA  = $employees->sum(fn($x) => $x->MA  ?? 0);
           $totP1  = $employees->sum(fn($x) => $x->P1  ?? 0);
           $totCT  = $employees->sum(fn($x) => $x->CT  ?? 0);
+          $totCU  = $employees->sum(fn($x) => $x->CU  ?? 0);
           $totSD  = $employees->sum(fn($x) => $x->SD  ?? 0);
           $totBR  = $employees->sum(fn($x) => $x->BR  ?? 0);
           $totOUT = $employees->sum(fn($x) => $x->OUT ?? 0);
@@ -441,18 +461,19 @@
             <td align="center">{{ number_format($totMA,0,',','.') }}</td>
             <td align="center">{{ number_format($totP1,0,',','.') }}</td>
             <td align="center">{{ number_format($totCT,0,',','.') }}</td>
+            <td align="center">{{ number_format($totCU,0,',','.') }}</td>
             <td align="center">{{ number_format($totSD,0,',','.') }}</td>
             <td align="center">{{ number_format($totBR,0,',','.') }}</td>
             <td align="center">{{ number_format($totOUT,0,',','.') }}</td>
             <td align="center">{{ number_format($totIjin,0,',','.') }}</td>
 
             @foreach($allComponents as $code=>$component)
-            <td align="right">
+            <td align="right" class="num">
                 {{ number_format($totDept['components'][$code] ?? 0,0,',','.') }}
             </td>
             @endforeach
 
-            <td align="right">
+            <td align="right" class="num">
                 {{ number_format($totDept['salary'],0,',','.') }}
             </td>
         </tr>
@@ -565,7 +586,6 @@ $totalOrangMangkir = $groupedMangkir->sum(fn($g) => $g->count());
         {{ number_format($totalOrangMangkir,0,',','.') }} Orang
     </td>
 </tr>
-    </table>
     </table>
     {{-- ================= APPROVAL ================= --}}
     @if(!empty($approvals))

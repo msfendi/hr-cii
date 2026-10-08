@@ -7,6 +7,7 @@ use App\Models\QrScanLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class LoginController extends Controller
@@ -89,9 +90,23 @@ class LoginController extends Controller
         // captcha benar → hapus supaya tidak bisa dipakai ulang (replay)
         session()->forget('captcha_answer');
 
+        // Jika kredensial benar tetapi akun dinonaktifkan → beri pesan khusus
+        $existing = User::where('email', $credentials['email'])->first();
+        if (
+            $existing
+            && (int) $existing->disabled === 1
+            && Hash::check($credentials['password'], $existing->password)
+        ) {
+            return back()->withErrors([
+                'email' => 'Akun Anda dinonaktifkan. Silakan hubungi admin HRIS.',
+            ])->onlyInput('email');
+        }
+
+        // 'disabled' => 0 ikut menjadi kondisi WHERE, jadi hanya user aktif yang bisa login
         if (Auth::attempt([
             'email'    => $credentials['email'],
             'password' => $credentials['password'],
+            'disabled' => 0,
         ])) {
             $request->session()->regenerate();
 
@@ -151,6 +166,16 @@ class LoginController extends Controller
         }
 
         $log['user_id'] = $user->id;
+
+        // 2b. Cek user aktif (users.disabled = 0)
+        if ((int) $user->disabled === 1) {
+            QrScanLog::create($log + ['status' => 'failed_user_disabled']);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun Anda dinonaktifkan. Silakan hubungi admin HRIS.'
+            ], 403);
+        }
 
         // 3. Cek device sudah diassign admin untuk user ini
         $device = QrAuthorizedDevice::where('user_id', $user->id)

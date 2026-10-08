@@ -708,7 +708,7 @@
                     $badgeClass = 'badge-lembur';
                 } elseif($row->status === 'Libur'){
                     $badgeClass = 'badge-libur';
-                } elseif(in_array($row->status, ['MA', 'BR', 'P1', 'SD', 'CT', 'H', 'OUT', 'PE', 'Tidak Finger'])){
+                } elseif(in_array($row->status, ['MA', 'BR', 'P1', 'SD', 'CT','CU', 'H', 'OUT', 'PE', 'Tidak Finger'])){
                     $badgeClass = 'badge-absen';
                 }
                 @endphp
