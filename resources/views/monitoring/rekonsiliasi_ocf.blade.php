@@ -1985,7 +1985,7 @@ function updateFormulaWithColors() {
         const body = rows.length
             ? rows.map(r => `<tr>${cols.map((c, ci) => {
                 const g = getters[ci];
-                return `<td class="${c.right ? 'right' : ''} ${c.cls ? c.cls(r) : ''}"${g ? ` data-v="${g.g(r)}"` : ''}>${c.val(r)}</td>`;
+                return `<td class="${c.right ? 'right' : ''} ${c.cls ? c.cls(r) : ''}"${g ? ` data-v="${g.g(r)}"` : ''}${g && g.w ? ` data-w="${g.w(r)}"` : ''}>${c.val(r)}</td>`;
             }).join('')}</tr>`).join('')
             : `<tr class="rekon-detail-empty"><td colspan="${cols.length}" class="text-center text-muted">Tidak ada data</td></tr>`;
 
@@ -1994,7 +1994,7 @@ function updateFormulaWithColors() {
             const cells = footObj.cells.map((c, i) => {
                 const t = (c && typeof c === 'object') ? c.t : c;
                 const attrs = (c && typeof c === 'object' && c.g)
-                    ? ` data-col="${footObj.span + i}" data-dec="${c.d === undefined ? '' : c.d}" data-orig="${escapeHtml(t)}"`
+                    ? ` data-col="${footObj.span + i}" data-dec="${c.d === undefined ? '' : c.d}"${c.w ? ' data-ratio="1"' : ''} data-orig="${escapeHtml(t)}"`
                     : '';
                 return `<td class="right"${attrs}>${t}</td>`;
             }).join('');
@@ -2015,7 +2015,9 @@ function updateFormulaWithColors() {
     // Footer: sel dengan pengambil nilai (dS) ikut dihitung ulang saat pencarian;
     // sel string biasa / '' tetap statis.
     const dFoot = (span, cells) => ({ span, cells });
-    const dS = (t, key, dec) => ({ t, g: r => parseFloat(r[key]) || 0, d: dec });
+    // wkey (opsional): kolom rasio -- sel menyimpan pembilang (key) dan penyebut (wkey),
+    // footer dihitung ulang sebagai SUM(key) / SUM(wkey), bukan penjumlahan nilai per baris.
+    const dS = (t, key, dec, wkey) => ({ t, g: r => parseFloat(r[key]) || 0, d: dec, w: wkey ? (r => parseFloat(r[wkey]) || 0) : null });
 
     // Hitung ulang footer dari baris yang masih tampil setelah pencarian.
     // Query kosong -> kembalikan total asli dari server (seluruh baris).
@@ -2036,8 +2038,12 @@ function updateFormulaWithColors() {
             .filter(tr => !tr.classList.contains('rekon-detail-empty') && tr.style.display !== 'none');
         cells.forEach(td => {
             const col = Number(td.dataset.col);
-            let sum = 0;
-            shown.forEach(tr => { const c = tr.children[col]; if (c) sum += parseFloat(c.dataset.v) || 0; });
+            let sum = 0, wsum = 0;
+            shown.forEach(tr => {
+                const c = tr.children[col];
+                if (c) { sum += parseFloat(c.dataset.v) || 0; wsum += parseFloat(c.dataset.w) || 0; }
+            });
+            if (td.dataset.ratio === '1') sum = wsum ? sum / wsum : 0;
             td.textContent = td.dataset.dec !== '' ? dDec(sum, Number(td.dataset.dec)) : fmtNum(sum);
         });
         if (label) {
@@ -2229,14 +2235,22 @@ function updateFormulaWithColors() {
         const tb = (s.totals || {}).bc30 || {
             row_count: dSum(byDateRows, 'row_count'),
             jumlah_barang: dSum(byDateRows, 'jumlah_barang'),
-            nilai_fob: dSum(byDateRows, 'nilai_fob'),
+            nilai_barang: dSum(byDateRows, 'nilai_barang'),
+            jumlah_doc: dSum(byDateRows, 'jumlah_doc'),
         };
+        // CM Cost/Pce = nilai_barang / jumlah_doc (0 bila jumlah_doc = 0).
+        const cmPerPce = (nilai, doc) => (parseFloat(doc) || 0) ? (parseFloat(nilai) || 0) / parseFloat(doc) : 0;
         const byDate = dGrid([
             { label: 'Tgl Bukti', val: r => dDate(r.tgl_bukti) },
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
-            { label: 'Nilai FOB', right: true, val: r => fmtNum(r.nilai_fob) },
+            { label: 'Total CM Price', right: true, val: r => fmtNum(r.nilai_barang) },
+            { label: 'CM Cost/Pce', right: true, val: r => dDec(cmPerPce(r.nilai_barang, r.jumlah_doc), 4) },
         ], byDateRows, {
-            foot: dFoot(1, [dS(fmtNum(tb.jumlah_barang), 'jumlah_barang'), dS(fmtNum(tb.nilai_fob), 'nilai_fob')]),
+            foot: dFoot(1, [
+                dS(fmtNum(tb.jumlah_barang), 'jumlah_barang'),
+                dS(fmtNum(tb.nilai_barang), 'nilai_barang'),
+                dS(dDec(cmPerPce(tb.nilai_barang, tb.jumlah_doc), 4), 'nilai_barang', 4, 'jumlah_doc'),
+            ]),
         });
 
         const shipByDateTotal = dSum(json.shipmentByDate || [], 'jumlah_barang');

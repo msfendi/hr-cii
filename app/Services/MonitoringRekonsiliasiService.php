@@ -2624,6 +2624,8 @@ class MonitoringRekonsiliasiService
             ->selectRaw('COUNT(*) as row_count')
             ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
             ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->selectRaw('SUM(nilai_barang) as nilai_barang')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
             ->first();
 
         $byDate = $bc30Base()
@@ -2632,6 +2634,8 @@ class MonitoringRekonsiliasiService
             ->selectRaw('COUNT(*) as row_count')
             ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
             ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->selectRaw('SUM(nilai_barang) as nilai_barang')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
             ->groupBy('tgl_bukti', 'no_bukti', 'jenis_doc')
             ->orderByDesc('tgl_bukti')
             ->orderBy('no_bukti')
@@ -2690,6 +2694,8 @@ class MonitoringRekonsiliasiService
                     'row_count'     => (int) ($bc30->row_count ?? 0),
                     'jumlah_barang' => (float) ($bc30->jumlah_barang ?? 0),
                     'nilai_fob'     => (float) ($bc30->nilai_fob ?? 0),
+                    'nilai_barang'  => (float) ($bc30->nilai_barang ?? 0),
+                    'jumlah_doc'    => (float) ($bc30->jumlah_doc ?? 0),
                 ],
             ],
             'by_category' => $byCategory,
