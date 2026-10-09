@@ -485,7 +485,7 @@
                     </table>
                 </td>
                 <td class="text-cell">
-                    <div class="company-name">PT CHUTEX INTERNATIONAL</div>
+                    <div class="company-name">PT CHUTEX INTERNATIONAL INDONESIA</div>
                     <div class="doc-title">Slip Gaji Karyawan</div>
                 </td>
                 <td style="width:120px; text-align:right;">
@@ -623,7 +623,7 @@
                     </table>
                 </td>
                 <td class="text-cell">
-                    <div class="company-name">PT CHUTEX INTERNATIONAL</div>
+                    <div class="company-name">PT CHUTEX INTERNATIONAL INDONESIA</div>
                     <div class="doc-title">Rekap Absensi Karyawan</div>
                 </td>
                 <td style="width:120px; text-align:right;">
@@ -779,7 +779,7 @@
                     </table>
                 </td>
                 <td class="text-cell">
-                    <div class="company-name">PT CHUTEX INTERNATIONAL</div>
+                    <div class="company-name">PT CHUTEX INTERNATIONAL INDONESIA</div>
                     <div class="doc-title">Detail Ijin Meninggalkan Pekerjaan</div>
                 </td>
                 <td style="width:120px; text-align:right;">
