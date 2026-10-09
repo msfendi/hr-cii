@@ -52,12 +52,10 @@
                                 <div class="col-md-3">
                                     <label for="filterStatus">Status</label>
                                     <select class="form-control form-control-sm" id="filterStatus">
-                                        <option value="">Semua Status</option>
-                                        <option value="pending">Semua Diproses / Menunggu</option>
-                                        <option value="pending_active">Menunggu Giliran Anda</option>
-                                        <option value="waiting_previous">Waiting Approval Sebelumnya</option>
+                                        <option value="pending" selected>Menunggu Approval</option>
                                         <option value="approved">Disetujui</option>
                                         <option value="rejected">Ditolak</option>
+                                        <option value="all">Semua Status</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
@@ -71,19 +69,22 @@
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-bordered table-sm table-hover" id="dataTable" width="100%"
+                                <table class="table table-bordered table-hover" id="dataTable" width="100%"
                                     cellspacing="0">
                                     <thead>
                                         <tr>
-                                            <th style="width:40px;">#</th>
-                                            <th>Karyawan</th>
-                                            <th>Tgl Pengajuan</th>
-                                            <th>Jenis Cuti</th>
-                                            <th>Periode</th>
-                                            <th class="text-center" style="width:90px;">Total Hari</th>
-                                            <th>Alasan</th>
-                                            <th class="text-center" style="width:120px;">Status</th>
-                                            <th class="text-center">Aksi</th>
+                                            <th class="text-center" style="width:35px;">#</th>
+                                            <th style="width:150px;">Karyawan</th>
+                                            <th style="width:100px;">Tgl Pengajuan</th>
+                                            <th style="width:110px;">Jenis Cuti</th>
+                                            <th class="text-center" style="width:110px;">Periode</th>
+                                            <th class="text-center" style="width:90px;">Sisa Cuti</th>
+                                            <th class="text-center" style="width:80px;">Total Hari</th>
+                                            <th style="width:120px;">Alasan</th>
+                                            <th class="text-center" style="width:250px; min-width:230px;">Approval
+                                                Progress</th>
+                                            <th class="text-center" style="width:110px;">Decision</th>
+                                            <th class="text-center" style="width:90px;">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -150,6 +151,10 @@
                             <div class="text-muted small">Alasan Pengajuan</div>
                             <div id="detailAlasan">-</div>
                         </div>
+                        <div class="col-md-12 mb-3" id="detailApproversWrap">
+                            <div class="text-muted small mb-1">Status Tiap Approver</div>
+                            <div id="detailApproversContent" class="p-2 border rounded bg-light"></div>
+                        </div>
                         <div class="col-md-12 mb-3" id="detailAttachWrap">
                             <div class="text-muted small mb-1">Lampiran Dokumen</div>
                             <div id="detailAttachContent"></div>
@@ -177,14 +182,37 @@
                     </h6>
                     <button type="button" class="close ml-auto" data-dismiss="modal">&times;</button>
                 </div>
-                <div class="modal-body p-2 text-center bg-dark" style="min-height: 250px; display:flex; align-items:center; justify-content:center;">
-                    <img id="imageZoomSrc" src="" style="max-width: 100%; max-height: 75vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);" alt="Zoom">
+                <div class="modal-body p-2 text-center bg-dark"
+                    style="min-height: 250px; display:flex; align-items:center; justify-content:center;">
+                    <img id="imageZoomSrc" src=""
+                        style="max-width: 100%; max-height: 75vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"
+                        alt="Zoom">
                 </div>
             </div>
         </div>
     </div>
 
     <style>
+        #dataTable {
+            font-size: 0.94rem;
+            color: #2e384d;
+        }
+
+        #dataTable thead th {
+            font-size: 0.92rem;
+            font-weight: 700;
+            background-color: #f8f9fc;
+            color: #4e73df;
+            vertical-align: middle;
+            padding: 10px 8px;
+        }
+
+        #dataTable tbody td {
+            font-size: 0.93rem;
+            vertical-align: middle;
+            padding: 10px 8px;
+        }
+
         .avatar-circle {
             width: 36px;
             height: 36px;
@@ -194,7 +222,7 @@
             align-items: center;
             justify-content: center;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
         }
     </style>
 
@@ -213,6 +241,7 @@
             var dtable = $('#dataTable').DataTable({
                 processing: true,
                 serverSide: true,
+                autoWidth: false,
                 ajax: {
                     url: ajaxUrl,
                     data: function (d) {
@@ -222,26 +251,36 @@
                     }
                 },
                 columns: [
-                    { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false },
-                    { data: 'karyawan', name: 'nama' },
-                    { data: 'created_at', name: 'created_at' },
-                    { 
-                        data: 'leave_type', 
+                    { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false, width: '35px', className: 'text-center' },
+                    { data: 'karyawan', name: 'nama', width: '150px' },
+                    {
+                        data: 'created_at',
+                        name: 'created_at',
+                        width: '100px',
+                        render: function (data) {
+                            return '<span style="font-size:0.9rem; font-weight:500;">' + (data || '-') + '</span>';
+                        }
+                    },
+                    {
+                        data: 'leave_type',
                         name: 'leave_type',
+                        width: '110px',
                         render: function (data, type, row) {
                             var badge = '';
                             if (row.attach_files && row.attach_files.length > 0) {
                                 var count = row.attach_files.length;
-                                badge = ' <span class="badge badge-light border text-primary" title="' + count + ' file dilampirkan"><i class="fas fa-paperclip"></i> ' + count + '</span>';
+                                badge = '<br><span class="badge badge-light border text-primary mt-1" style="font-size:0.8rem;" title="' + count + ' file dilampirkan"><i class="fas fa-paperclip"></i> ' + count + ' berkas</span>';
                             }
-                            return (data || '-') + badge;
+                            return '<span class="font-weight-bold" style="font-size:0.94rem;">' + (data || '-') + '</span>' + badge;
                         }
                     },
-                    { data: 'periode', name: 'periode', orderable: false, searchable: false },
-                    { data: 'hari', name: 'hari', orderable: false, searchable: false, className: 'text-center' },
-                    { data: 'alasan', name: 'alasan', orderable: false, searchable: false },
-                    { data: 'status_badge', name: 'status_badge', orderable: false, searchable: false, className: 'text-center' },
-                    { data: 'aksi', name: 'aksi', orderable: false, searchable: false, className: 'text-center' }
+                    { data: 'periode', name: 'periode', orderable: false, searchable: false, width: '110px', className: 'text-center' },
+                    { data: 'sisa_cuti', name: 'sisa_cuti', orderable: false, searchable: false, width: '90px', className: 'text-center' },
+                    { data: 'hari', name: 'hari', orderable: false, searchable: false, width: '80px', className: 'text-center' },
+                    { data: 'alasan', name: 'alasan', orderable: false, searchable: false, width: '120px' },
+                    { data: 'status_approver', name: 'status_approver', orderable: false, searchable: false, width: '250px' },
+                    { data: 'status_utama', name: 'status_utama', orderable: false, searchable: false, width: '110px', className: 'text-center' },
+                    { data: 'aksi', name: 'aksi', orderable: false, searchable: false, width: '90px', className: 'text-center' }
                 ],
                 language: {
                     search: 'Cari:',
@@ -254,7 +293,8 @@
                 dtable.ajax.reload();
             });
             $('#btnResetFilter').on('click', function () {
-                $('#filterStart, #filterEnd, #filterStatus').val('');
+                $('#filterStart, #filterEnd').val('');
+                $('#filterStatus').val('pending');
                 dtable.ajax.reload();
             });
 
@@ -302,17 +342,20 @@
 
                 $('#detailNama').text(row.nama);
                 $('#detailNpkDept').text(row.npk + ' · ' + row.dept);
-                $('#detailStatusBadge').html(row.status_badge);
+                $('#detailStatusBadge').html(row.status_utama);
                 $('#detailJenis').text(row.leave_type);
-                $('#detailHari').text(row.hari);
-                $('#detailPeriode').text(row.periode);
-                $('#detailDiajukan').text(row.created_at);
-                $('#detailAlasan').text(row.alasan || '-');
+                $('#detailHari').text(row.total_days ? (row.total_days + ' hari') : '-');
+                var startText = row.start_date_formatted || row.start_date || '-';
+                var endText = row.end_date_formatted || row.end_date || '-';
+                $('#detailPeriode').text(startText + ' s/d ' + endText);
+                $('#detailDiajukan').text(row.created_at || '-');
+                $('#detailAlasan').text(row.reason || '-');
+                $('#detailApproversContent').html(row.status_approver || '<span class="text-muted">-</span>');
 
                 // Render lampiran dokumen
                 if (row.attach_files && row.attach_files.length > 0) {
                     var attachHtml = '<div class="d-flex flex-wrap" style="gap: 8px;">';
-                    $.each(row.attach_files, function(i, file) {
+                    $.each(row.attach_files, function (i, file) {
                         if (file.is_image) {
                             attachHtml += `
                             <div class="border rounded p-2 bg-white shadow-sm d-flex align-items-center" style="max-width: 260px; min-width: 200px;">

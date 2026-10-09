@@ -100,7 +100,14 @@ class LeaveApprovalController extends Controller
         if ($endDate = request('end_date')) {
             $query->whereDate('start_date', '<=', $endDate);
         }
-        if ($status = request('status')) {
+
+        // Filter status: default tampilkan yang statusnya pending / waiting
+        $status = request('status', 'pending');
+        if (empty($status)) {
+            $status = 'pending';
+        }
+
+        if ($status !== 'all') {
             if ($status === 'waiting_previous') {
                 $query->where('status', 'pending')
                       ->whereColumn('approval_progress', '<', 'approval_level');
@@ -135,6 +142,35 @@ class LeaveApprovalController extends Controller
                 ->first();
 
             $leaveType = LeaveTypes::find($req->leave_type_id);
+
+            // Ambil sisa balance cuti karyawan untuk jenis cuti yang dipilih
+            $leaveBalance = DB::table('leave_balances')
+                ->where('NPK', $req->NPK)
+                ->where('leave_type_id', $req->leave_type_id)
+                ->where('year', date('Y'))
+                ->first();
+
+            // Ambil daftar semua approver untuk token ini (semua level)
+            $allApprovers = LeaveRequest::where('token', $req->token)
+                ->where('void', '!=', 'true')
+                ->orderBy('approval_level', 'asc')
+                ->get();
+
+            $approversList = [];
+            foreach ($allApprovers as $approverReq) {
+                $approverBio = DB::connection('cii')->table('BIODATA')
+                    ->where('NPK', $approverReq->approval_id)
+                    ->select('NAMA_KARYAWAN')
+                    ->first();
+
+                $approversList[] = [
+                    'npk'    => $approverReq->approval_id,
+                    'nama'   => $approverBio ? $approverBio->NAMA_KARYAWAN : $approverReq->approval_id,
+                    'level'  => $approverReq->approval_level,
+                    'status' => $approverReq->status,
+                    'void'   => $approverReq->void,
+                ];
+            }
 
             // Cek apakah masih menunggu approval level sebelumnya
             $isWaitingPrevious = ($req->status === 'pending' && (int)$req->approval_progress < (int)$req->approval_level);
@@ -174,8 +210,12 @@ class LeaveApprovalController extends Controller
                 'nama'                => $bioEmployee ? $bioEmployee->NAMA_KARYAWAN : $req->NPK,
                 'dept'                => $bioEmployee ? $bioEmployee->DEPARTEMENT : '-',
                 'leave_type'          => $leaveType ? $leaveType->name : '-',
+                'leave_balance'       => $leaveBalance ? $leaveBalance->remained_days : '-',
+                'leave_used'          => $leaveBalance ? $leaveBalance->used_days : '-',
                 'start_date'          => $req->start_date,
                 'end_date'            => $req->end_date,
+                'start_date_formatted'=> Carbon::parse($req->start_date)->format('d M Y'),
+                'end_date_formatted'  => Carbon::parse($req->end_date)->format('d M Y'),
                 'total_days'          => $req->total_days,
                 'reason'              => $req->reason,
                 'status'              => $req->status,
@@ -186,6 +226,7 @@ class LeaveApprovalController extends Controller
                 'is_waiting_previous' => $isWaitingPrevious,
                 'can_update'          => $req->status !== 'pending' && !$laterLevelActed,
                 'attach_files'        => $formattedFiles,
+                'approvers'           => $approversList,
             ];
         }
 
@@ -193,45 +234,96 @@ class LeaveApprovalController extends Controller
             return \Yajra\DataTables\Facades\DataTables::of(collect($rows))
                 ->addIndexColumn()
                 ->addColumn('karyawan', function($row) {
-                    return '<strong>'.$row['nama'].'</strong><br><small class="text-muted">'.$row['npk'].' &middot; '.$row['dept'].'</small>';
+                    return '<div style="line-height:1.3;">' .
+                           '  <strong style="font-size:0.95rem; color:#2e59d9;">'.e($row['nama']).'</strong>' .
+                           '  <div class="text-muted" style="font-size:0.85rem; margin-top:2px;">' .
+                           '    <span class="font-weight-bold">'.e($row['npk']).'</span> &middot; '.e($row['dept']) .
+                           '  </div>' .
+                           '</div>';
                 })
                 ->addColumn('periode', function($row) {
-                    $start = Carbon::parse($row['start_date'])->format('d M Y');
-                    $end   = Carbon::parse($row['end_date'])->format('d M Y');
-                    return $start . ' – ' . $end;
+                    $start = $row['start_date_formatted'];
+                    $end   = $row['end_date_formatted'];
+                    return '<div style="font-size:0.9rem; font-weight:600; white-space:nowrap;">' . $start . '</div>' .
+                           '<div class="text-muted" style="font-size:0.8rem; text-align:center;">s/d</div>' .
+                           '<div style="font-size:0.9rem; font-weight:600; white-space:nowrap;">' . $end . '</div>';
                 })
                 ->addColumn('hari', function($row) {
-                    return $row['total_days'] . ' hari';
+                    return '<span class="badge badge-light border text-dark font-weight-bold" style="font-size:0.92rem; padding:5px 8px;">'.$row['total_days'].' hari</span>';
                 })
                 ->addColumn('alasan', function($row) {
-                    return $row['reason'] ?: '-';
+                    return '<div style="font-size:0.88rem; line-height:1.4;">' . (e($row['reason']) ?: '-') . '</div>';
                 })
-                ->addColumn('status_badge', function($row) {
-                    if ($row['status'] === 'approved') {
-                        return '<span class="badge badge-success">Disetujui</span>';
-                    } elseif ($row['status'] === 'rejected') {
-                        return '<span class="badge badge-danger">Ditolak</span>';
-                    } elseif (!empty($row['is_waiting_previous'])) {
-                        return '<span class="badge badge-secondary" title="Menunggu approval level sebelumnya"><i class="fas fa-clock mr-1"></i>Waiting Approval Sebelumnya</span>';
+                ->addColumn('sisa_cuti', function($row) {
+                    if ($row['leave_balance'] === '-') {
+                        return '<span class="text-muted" style="font-size:0.9rem;">-</span>';
                     }
-                    return '<span class="badge badge-warning text-white">Menunggu</span>';
+                    $sisa = (int)$row['leave_balance'];
+                    $used = (int)$row['leave_used'];
+                    $color = $sisa <= 2 ? 'danger' : ($sisa <= 5 ? 'warning' : 'success');
+                    return '<div class="font-weight-bold text-'.$color.'" style="font-size:1.05rem;">'.$sisa.' hari</div>' .
+                           '<div class="text-muted font-weight-bold" style="font-size:0.8rem; margin-top:2px;">Terpakai: '.$used.' hr</div>';
+                })
+                ->addColumn('status_approver', function($row) {
+                    // Daftar approver beserta status approval masing-masing
+                    if (empty($row['approvers'])) {
+                        return '<span class="text-muted">-</span>';
+                    }
+
+                    $html = '<div style="font-size:0.86rem; text-align:left;">';
+                    foreach ($row['approvers'] as $index => $approver) {
+                        $statusBadge = '';
+                        if ($approver['status'] === 'approved') {
+                            $statusBadge = '<span class="badge badge-success" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-check fa-xs mr-1"></i>Approved</span>';
+                        } elseif ($approver['status'] === 'rejected') {
+                            $statusBadge = '<span class="badge badge-danger" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-times fa-xs mr-1"></i>Rejected</span>';
+                        } else {
+                            $statusBadge = '<span class="badge badge-warning text-white" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-clock fa-xs mr-1"></i>Pending</span>';
+                        }
+
+                        $borderBottom = ($index < count($row['approvers']) - 1) ? 'border-bottom:1px dashed #e3e6f0;' : '';
+
+                        $html .= '<div class="d-flex align-items-center justify-content-between py-1" style="' . $borderBottom . ' gap:6px;">';
+                        $html .= '  <div class="d-flex align-items-center text-truncate" style="flex:1; min-width:0;" title="['.$approver['npk'].'] '.e($approver['nama']).'">';
+                        $html .= '    <span class="badge badge-light border text-muted mr-1" style="font-size:0.72rem;">'.$approver['npk'].'</span>';
+                        $html .= '    <span class="font-weight-bold text-dark text-truncate" style="font-size:0.85rem;">'.e($approver['nama']).'</span>';
+                        $html .= '  </div>';
+                        $html .= '  <div style="flex-shrink:0;">'.$statusBadge.'</div>';
+                        $html .= '</div>';
+                    }
+                    $html .= '</div>';
+
+                    return $html;
+                })
+                ->addColumn('status_utama', function($row) {
+                    // Status utama pengajuan cuti (sebelum kolom aksi)
+                    if ($row['status'] === 'approved') {
+                        return '<span class="badge badge-success px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-check mr-1"></i>Disetujui</span>';
+                    } elseif ($row['status'] === 'rejected') {
+                        return '<span class="badge badge-danger px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-times mr-1"></i>Ditolak</span>';
+                    } elseif (!empty($row['is_waiting_previous'])) {
+                        return '<span class="badge badge-secondary px-2 py-1" style="font-size:0.82rem;" title="Menunggu approval level sebelumnya"><i class="fas fa-clock mr-1"></i>Menunggu Level Sebelumnya</span>';
+                    }
+                    return '<span class="badge badge-warning text-white px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-hourglass-half mr-1"></i>Menunggu</span>';
                 })
                 ->addColumn('aksi', function($row) {
-                    $detailBtn = '<button type="button" class="btn btn-sm btn-info btn-detail" data-id="'.$row['id'].'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
+                    $detailBtn = '<button type="button" class="btn btn-sm btn-info btn-detail btn-block text-nowrap" style="font-size:0.82rem; padding:4px 6px;" data-id="'.$row['id'].'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
 
                     if ($row['status'] === 'pending') {
                         if (!empty($row['is_waiting_previous'])) {
                             return $detailBtn;
                         }
 
-                        return $detailBtn . ' ' .
-                               '<button type="button" class="btn btn-sm btn-success btn-approve" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'"><i class="fas fa-check fa-sm"></i> Approve</button> ' .
-                               '<button type="button" class="btn btn-sm btn-danger btn-reject" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'"><i class="fas fa-times fa-sm"></i> Reject</button>';
+                        return '<div class="d-flex flex-column" style="gap:4px;">' .
+                               $detailBtn .
+                               '<button type="button" class="btn btn-sm btn-success btn-approve btn-block text-nowrap" style="font-size:0.82rem; padding:4px 6px;" data-id="'.$row['id'].'" data-nama="'.e($row['nama']).'"><i class="fas fa-check fa-sm"></i> Approve</button>' .
+                               '<button type="button" class="btn btn-sm btn-danger btn-reject btn-block text-nowrap" style="font-size:0.82rem; padding:4px 6px;" data-id="'.$row['id'].'" data-nama="'.e($row['nama']).'"><i class="fas fa-times fa-sm"></i> Reject</button>' .
+                               '</div>';
                     }
 
                     return $detailBtn;
                 })
-                ->rawColumns(['karyawan', 'status_badge', 'aksi'])
+                ->rawColumns(['karyawan', 'periode', 'hari', 'alasan', 'sisa_cuti', 'status_approver', 'status_utama', 'aksi'])
                 ->make(true);
         }
 
@@ -471,7 +563,7 @@ class LeaveApprovalController extends Controller
 
     /**
      * Efek final ketika cuti disetujui di level terakhir: potong leave_balances
-     * dan isi record Overtime "CT" (cuti) untuk tiap hari kerja di periode cuti.
+     * dan isi record Overtime "CT" atau "CU" (khusus tipe 'pribadi'/id 14) untuk tiap hari kerja di periode cuti.
      */
     private function finalizeApproval(LeaveRequest $leave)
     {
@@ -499,6 +591,10 @@ class LeaveApprovalController extends Controller
         $startDate = Carbon::parse($leave->start_date);
         $endDate = Carbon::parse($leave->end_date);
 
+        // Khusus tipe cuti 'pribadi' (atau ID 14), kode JUMLAH_JAM_LEMBUR adalah 'CU', selain itu 'CT'
+        $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
+        $overtimeCode = ($leaveType && $leaveType->code === 'pribadi') ? 'CU' : 'CT';
+
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dayOfWeek = $date->dayOfWeek; // 0 = Minggu, 6 = Sabtu
             $dateString = $date->format('Y-m-d');
@@ -517,7 +613,7 @@ class LeaveApprovalController extends Controller
                     'NAMA_KARYAWAN' => $karyawan ? $karyawan->NAMA_KARYAWAN : $leave->NPK,
                     'BAGIAN' => $karyawan ? $karyawan->DEPARTEMENT : '-',
                     'DAY' => $date->translatedFormat('l'),
-                    'JUMLAH_JAM_LEMBUR' => 'CT',
+                    'JUMLAH_JAM_LEMBUR' => $overtimeCode,
                     'DEPT_GROUP' => '',
                     'is_request' => 'true',
                 ]
@@ -528,7 +624,7 @@ class LeaveApprovalController extends Controller
     /**
      * Kebalikan dari finalizeApproval() -- dipakai saat keputusan "approved" di
      * level terakhir diubah jadi status lain: kembalikan leave_balances dan
-     * hapus record Overtime "CT" yang sempat dibuat untuk periode cuti ini.
+     * hapus record Overtime "CT"/"CU" yang sempat dibuat untuk periode cuti ini.
      */
     private function reverseFinalize(LeaveRequest $leave)
     {
@@ -543,7 +639,7 @@ class LeaveApprovalController extends Controller
 
         Overtime::where('NPK', $leave->NPK)
             ->whereBetween('OVERTIME_DATE', [$leave->start_date, $leave->end_date])
-            ->where('JUMLAH_JAM_LEMBUR', 'CT')
+            ->whereIn('JUMLAH_JAM_LEMBUR', ['CT', 'CU'])
             ->update([
                 'JUMLAH_JAM_LEMBUR' => null,
                 'is_request' => 'false',

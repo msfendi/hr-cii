@@ -52,7 +52,7 @@ class PengajuanCutiController extends Controller
             return back();
         }
 
-        $password = date('dmy', strtotime($birth));
+        $password = date('ymd', strtotime($birth));
 
         if ($request->password != $password) {
             Alert::error('Error', 'Password salah.');
@@ -116,7 +116,24 @@ class PengajuanCutiController extends Controller
             return Carbon::parse($date)->format('Y-m-d');
         })->toArray();
 
-        return view('cuti.form', compact('employee', 'masterLeaveType', 'holidays'));
+        // Ambil daftar balance cuti karyawan untuk tahun berjalan
+        $leaveBalances = DB::table('leave_balances')
+            ->join('leave_types', 'leave_balances.leave_type_id', '=', 'leave_types.id')
+            ->where('leave_balances.NPK', $npk)
+            ->where('leave_balances.year', date('Y'))
+            ->select(
+                'leave_types.name as leave_type_name',
+                'leave_balances.remained_days',
+                'leave_balances.used_days'
+            )
+            ->get();
+
+        $leaveReasons = DB::table('leave_reasons')
+            ->select('id', 'leave_type_id', 'reason')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        return view('cuti.form', compact('employee', 'masterLeaveType', 'holidays', 'leaveBalances', 'leaveReasons'));
     }
 
     /**
@@ -440,12 +457,15 @@ class PengajuanCutiController extends Controller
     }
 
     /**
-     * Admin: riwayat pengajuan cuti semua karyawan.
-     * Setiap token hanya ditampilkan 1 row (row terbaru/per-approval aktif).
+     * Riwayat pengajuan cuti karyawan (portal cuti).
+     * Setiap token hanya ditampilkan 1 row (row pengajuan unik).
      */
     public function riwayat()
     {
         $npk = session('cuti_employee_npk');
+        if (!$npk && auth()->check()) {
+            $npk = auth()->user()->npk;
+        }
         if (!$npk) {
             return redirect()->route('pengajuan-cuti.login');
         }
@@ -461,35 +481,101 @@ class PengajuanCutiController extends Controller
             return redirect()->route('pengajuan-cuti.login');
         }
 
-        // Ambil data pengajuan aktif (dimana level approval sesuai progress) beserta relasinya
-        $activeRequests = LeaveRequest::with('leaveType')
-            ->where('NPK', $npk)
-            ->whereColumn('approval_level', 'approval_progress')
+        $query = LeaveRequest::where('NPK', $npk);
+
+        // Filter tanggal: tampilkan permohonan yang periode cutinya beririsan
+        if ($startDate = request('start_date')) {
+            $query->whereDate('end_date', '>=', $startDate);
+        }
+        if ($endDate = request('end_date')) {
+            $query->whereDate('start_date', '<=', $endDate);
+        }
+
+        // Ambil semua permohonan cuti (1 row per token)
+        $leaveRequests = $query
             ->orderBy('created_at', 'desc')
             ->get()
             ->unique('token');
 
-        // Batch fetch nama approver
-        $approvers = DB::connection('cii')->table('BIODATA')
-            ->whereIn('NPK', $activeRequests->pluck('approval_id'))
-            ->pluck('NAMA_KARYAWAN', 'NPK');
+        // Filter status: default tampilkan yang statusnya pending / waiting
+        $filterStatus = request('status', 'pending');
+        if (empty($filterStatus)) {
+            $filterStatus = 'pending';
+        }
 
         $rows = [];
-        foreach ($activeRequests as $activeRow) {
-            
-            // Penentuan overall status dari state row aktif
-            if ($activeRow->status === 'rejected') {
+        foreach ($leaveRequests as $req) {
+            $leaveType = LeaveTypes::find($req->leave_type_id);
+
+            // Ambil balance cuti karyawan untuk jenis cuti yang dipilih
+            $leaveBalance = DB::table('leave_balances')
+                ->where('NPK', $req->NPK)
+                ->where('leave_type_id', $req->leave_type_id)
+                ->where('year', date('Y'))
+                ->first();
+
+            // Ambil daftar semua approver untuk token ini
+            $allApprovers = LeaveRequest::where('token', $req->token)
+                ->where(function($q) {
+                    $q->whereNull('void')->orWhere('void', '!=', 'true');
+                })
+                ->orderBy('approval_level', 'asc')
+                ->get();
+
+            if ($allApprovers->isEmpty()) {
+                $allApprovers = LeaveRequest::where('token', $req->token)
+                    ->orderBy('approval_level', 'asc')
+                    ->get();
+            }
+
+            $approversList = [];
+            $hasRejected = false;
+            $allApproved = ($allApprovers->count() > 0);
+            $rejectComment = null;
+
+            foreach ($allApprovers as $approverReq) {
+                $approverBio = DB::connection('cii')->table('BIODATA')
+                    ->where('NPK', $approverReq->approval_id)
+                    ->select('NAMA_KARYAWAN')
+                    ->first();
+
+                if ($approverReq->status === 'rejected') {
+                    $hasRejected = true;
+                    if ($approverReq->comment) {
+                        $rejectComment = $approverReq->comment;
+                    }
+                }
+                if ($approverReq->status !== 'approved') {
+                    $allApproved = false;
+                }
+
+                $approversList[] = [
+                    'npk'    => $approverReq->approval_id,
+                    'nama'   => $approverBio ? $approverBio->NAMA_KARYAWAN : $approverReq->approval_id,
+                    'level'  => $approverReq->approval_level,
+                    'status' => $approverReq->status,
+                    'comment'=> $approverReq->comment,
+                ];
+            }
+
+            // Tentukan status utama pengajuan (overall status)
+            if ($hasRejected || $req->status === 'rejected') {
                 $overallStatus = 'rejected';
-            } elseif ($activeRow->status === 'approved') {
+            } elseif ($allApproved) {
                 $overallStatus = 'approved';
-            } else { // pending atau waiting
-                $overallStatus = $activeRow->approval_level > 1 ? 'partial' : 'pending';
+            } else {
+                $overallStatus = 'pending';
+            }
+
+            // Terapkan filter status jika bukan 'all'
+            if ($filterStatus !== 'all' && $overallStatus !== $filterStatus) {
+                continue;
             }
 
             // Format lampiran file
             $formattedFiles = [];
-            if (!empty($activeRow->attach_files)) {
-                $files = is_array($activeRow->attach_files) ? $activeRow->attach_files : json_decode($activeRow->attach_files, true);
+            if (!empty($req->attach_files)) {
+                $files = is_array($req->attach_files) ? $req->attach_files : json_decode($req->attach_files, true);
                 if (is_array($files)) {
                     foreach ($files as $filePath) {
                         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
@@ -507,23 +593,25 @@ class PengajuanCutiController extends Controller
             }
 
             $rows[] = [
-                'token'          => $activeRow->token,
-                'npk'            => $activeRow->NPK,
-                'nama'           => $employee->NAMA_KARYAWAN,
-                'dept'           => $employee->DEPARTEMENT,
-                'leave_type'     => $activeRow->leaveType->name ?? '-',
-                'start_date'     => $activeRow->start_date,
-                'end_date'       => $activeRow->end_date,
-                'total_days'     => $activeRow->total_days,
-                'reason'         => $activeRow->reason,
-                'approver_name'  => $approvers[$activeRow->approval_id] ?? $activeRow->approval_id,
-                'approver_level' => $activeRow->approval_level,
-                'approver_status'=> $activeRow->status,
-                'overall_status' => $overallStatus,
-                'void'           => $activeRow->void,
-                'created_at'     => $activeRow->created_at,
-                'comment'        => $activeRow->comment,
-                'attach_files'   => $formattedFiles,
+                'id'                  => $req->id,
+                'token'               => $req->token,
+                'npk'                 => $req->NPK,
+                'nama'                => $employee->NAMA_KARYAWAN,
+                'dept'                => $employee->DEPARTEMENT,
+                'leave_type'          => $leaveType ? $leaveType->name : '-',
+                'leave_balance'       => $leaveBalance ? $leaveBalance->remained_days : '-',
+                'leave_used'          => $leaveBalance ? $leaveBalance->used_days : '-',
+                'start_date'          => $req->start_date,
+                'end_date'            => $req->end_date,
+                'start_date_formatted'=> Carbon::parse($req->start_date)->format('d M Y'),
+                'end_date_formatted'  => Carbon::parse($req->end_date)->format('d M Y'),
+                'total_days'          => $req->total_days,
+                'reason'              => $req->reason,
+                'status'              => $overallStatus,
+                'comment'             => $rejectComment ?: $req->comment,
+                'created_at'          => Carbon::parse($req->created_at)->format('d M Y H:i'),
+                'attach_files'        => $formattedFiles,
+                'approvers'           => $approversList,
             ];
         }
 
@@ -531,30 +619,79 @@ class PengajuanCutiController extends Controller
             return DataTables::of(collect($rows))
                 ->addIndexColumn()
                 ->addColumn('karyawan', function($row) {
-                    return '<strong>'.$row['nama'].'</strong><br><small class="text-muted">'.$row['npk'].' &middot; '.$row['dept'].'</small>';
+                    return '<div style="line-height:1.3;">' .
+                           '  <strong style="font-size:0.95rem; color:#2e59d9;">'.e($row['nama']).'</strong>' .
+                           '  <div class="text-muted" style="font-size:0.85rem; margin-top:2px;">' .
+                           '    <span class="font-weight-bold">'.e($row['npk']).'</span> &middot; '.e($row['dept']) .
+                           '  </div>' .
+                           '</div>';
                 })
                 ->addColumn('periode', function($row) {
-                    $start = Carbon::parse($row['start_date'])->format('d M Y');
-                    $end   = Carbon::parse($row['end_date'])->format('d M Y');
-                    return $start . ' – ' . $end;
+                    $start = $row['start_date_formatted'];
+                    $end   = $row['end_date_formatted'];
+                    return '<div style="font-size:0.9rem; font-weight:600; white-space:nowrap;">' . $start . '</div>' .
+                           '<div class="text-muted" style="font-size:0.8rem; text-align:center;">s/d</div>' .
+                           '<div style="font-size:0.9rem; font-weight:600; white-space:nowrap;">' . $end . '</div>';
+                })
+                ->addColumn('sisa_cuti', function($row) {
+                    if ($row['leave_balance'] === '-') {
+                        return '<span class="text-muted" style="font-size:0.9rem;">-</span>';
+                    }
+                    $sisa = (int)$row['leave_balance'];
+                    $used = (int)$row['leave_used'];
+                    $color = $sisa <= 2 ? 'danger' : ($sisa <= 5 ? 'warning' : 'success');
+                    return '<div class="font-weight-bold text-'.$color.'" style="font-size:1.05rem;">'.$sisa.' hari</div>' .
+                           '<div class="text-muted font-weight-bold" style="font-size:0.8rem; margin-top:2px;">Terpakai: '.$used.' hr</div>';
                 })
                 ->addColumn('hari', function($row) {
-                    return $row['total_days'] . ' hari';
+                    return '<span class="badge badge-light border text-dark font-weight-bold" style="font-size:0.92rem; padding:5px 8px;">'.$row['total_days'].' hari</span>';
                 })
-                ->addColumn('status_badge', function($row) {
-                    if($row['overall_status'] === 'approved') return '<span class="badge badge-success">Disetujui</span>';
-                    elseif($row['overall_status'] === 'rejected') return '<span class="badge badge-danger">Ditolak</span>';
-                    elseif($row['overall_status'] === 'partial') return '<span class="badge badge-warning text-white">Parsial</span>';
-                    return '<span class="badge badge-secondary">Menunggu</span>';
+                ->addColumn('alasan', function($row) {
+                    return '<div style="font-size:0.88rem; line-height:1.4;">' . (e($row['reason']) ?: '-') . '</div>';
+                })
+                ->addColumn('status_approver', function($row) {
+                    // Daftar approver beserta status approval masing-masing
+                    if (empty($row['approvers'])) {
+                        return '<span class="text-muted">-</span>';
+                    }
+
+                    $html = '<div style="font-size:0.86rem; text-align:left;">';
+                    foreach ($row['approvers'] as $index => $approver) {
+                        $statusBadge = '';
+                        if ($approver['status'] === 'approved') {
+                            $statusBadge = '<span class="badge badge-success" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-check fa-xs mr-1"></i>Approved</span>';
+                        } elseif ($approver['status'] === 'rejected') {
+                            $statusBadge = '<span class="badge badge-danger" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-times fa-xs mr-1"></i>Rejected</span>';
+                        } else {
+                            $statusBadge = '<span class="badge badge-warning text-white" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-clock fa-xs mr-1"></i>Pending</span>';
+                        }
+
+                        $borderBottom = ($index < count($row['approvers']) - 1) ? 'border-bottom:1px dashed #e3e6f0;' : '';
+
+                        $html .= '<div class="d-flex align-items-center justify-content-between py-1" style="' . $borderBottom . ' gap:6px;">';
+                        $html .= '  <div class="d-flex align-items-center text-truncate" style="flex:1; min-width:0;" title="['.$approver['npk'].'] '.e($approver['nama']).'">';
+                        $html .= '    <span class="badge badge-light border text-muted mr-1" style="font-size:0.72rem;">'.$approver['npk'].'</span>';
+                        $html .= '    <span class="font-weight-bold text-dark text-truncate" style="font-size:0.85rem;">'.e($approver['nama']).'</span>';
+                        $html .= '  </div>';
+                        $html .= '  <div style="flex-shrink:0;">'.$statusBadge.'</div>';
+                        $html .= '</div>';
+                    }
+                    $html .= '</div>';
+
+                    return $html;
+                })
+                ->addColumn('status_utama', function($row) {
+                    if ($row['status'] === 'approved') {
+                        return '<span class="badge badge-success px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-check mr-1"></i>Disetujui</span>';
+                    } elseif ($row['status'] === 'rejected') {
+                        return '<span class="badge badge-danger px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-times mr-1"></i>Ditolak</span>';
+                    }
+                    return '<span class="badge badge-warning text-white px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-hourglass-half mr-1"></i>Menunggu</span>';
                 })
                 ->addColumn('aksi', function($row) {
-                    $row['start_date'] = Carbon::parse($row['start_date'])->format('d M Y');
-                    $row['end_date'] = Carbon::parse($row['end_date'])->format('d M Y');
-                    $row['created_at'] = Carbon::parse($row['created_at'])->format('d M Y');
-                    $info = htmlspecialchars(json_encode($row), ENT_QUOTES, 'UTF-8');
-                    return '<button type="button" class="btn btn-sm btn-info btn-detail" data-info="'.$info.'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
+                    return '<button type="button" class="btn btn-sm btn-info btn-detail btn-block text-nowrap" style="font-size:0.82rem; padding:4px 6px;" data-id="'.$row['id'].'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
                 })
-                ->rawColumns(['karyawan', 'status_badge', 'aksi'])
+                ->rawColumns(['karyawan', 'periode', 'sisa_cuti', 'hari', 'alasan', 'status_approver', 'status_utama', 'aksi'])
                 ->make(true);
         }
 

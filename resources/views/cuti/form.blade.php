@@ -264,6 +264,11 @@
         line-height: 1;
     }
 
+    /* Collapsible Saldo */
+    [data-toggle="collapse"][aria-expanded="true"] .transition-icon {
+        transform: rotate(180deg);
+    }
+
     /* Footer */
     .sticky-footer {
         background: rgba(255, 255, 255, .08) !important;
@@ -450,10 +455,21 @@
         font-size: 2.5rem;
     }
 
-    .doc-icon-pdf { color: #ef4444; }
-    .doc-icon-word { color: #2563eb; }
-    .doc-icon-image { color: #10b981; }
-    .doc-icon-file { color: #64748b; }
+    .doc-icon-pdf {
+        color: #ef4444;
+    }
+
+    .doc-icon-word {
+        color: #2563eb;
+    }
+
+    .doc-icon-image {
+        color: #10b981;
+    }
+
+    .doc-icon-file {
+        color: #64748b;
+    }
 
     .file-type-pill {
         position: absolute;
@@ -465,13 +481,29 @@
         border-radius: 4px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
         z-index: 1;
     }
-    .pill-pdf { background: #fee2e2; color: #b91c1c; }
-    .pill-doc { background: #dbeafe; color: #1d4ed8; }
-    .pill-img { background: #d1fae5; color: #047857; }
-    .pill-file { background: #f1f5f9; color: #475569; }
+
+    .pill-pdf {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .pill-doc {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .pill-img {
+        background: #d1fae5;
+        color: #047857;
+    }
+
+    .pill-file {
+        background: #f1f5f9;
+        color: #475569;
+    }
 
     .file-preview-body {
         padding: 8px 10px;
@@ -516,7 +548,7 @@
         padding: 0;
         z-index: 2;
         transition: all 0.2s;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     }
 
     .file-remove-btn:hover {
@@ -538,13 +570,50 @@
         margin-bottom: 6px;
         font-size: 0.78rem;
         color: #334155;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
         transition: all 0.2s;
     }
 
     .review-file-badge:hover {
         border-color: #cbd5e1;
         background: #f8fafc;
+    }
+
+    /* Reason Radio Options Styling */
+    .leave-reason-radio-card {
+        border: 1.5px solid #e3e6f0;
+        border-radius: 8px;
+        padding: 9px 14px;
+        margin-bottom: 8px;
+        background: #ffffff;
+        cursor: pointer;
+        transition: all 0.15s ease-in-out;
+        display: flex;
+        align-items: center;
+    }
+
+    .leave-reason-radio-card:hover {
+        border-color: #4e73df;
+        background: #f8faff;
+    }
+
+    .leave-reason-radio-card.is-selected {
+        border-color: #4e73df;
+        background: #edf2ff;
+        box-shadow: 0 2px 5px rgba(78, 115, 223, 0.12);
+    }
+
+    .leave-reason-radio-card .custom-control-label {
+        cursor: pointer;
+        font-size: 0.88rem;
+        user-select: none;
+        width: 100%;
+        margin-bottom: 0;
+    }
+
+    .leave-reason-radio-card .custom-control-input:checked ~ .custom-control-label {
+        color: #224abe;
+        font-weight: 700;
     }
 </style>
 
@@ -638,7 +707,8 @@
                             </div>
 
                             {{-- Final Form Content --}}
-                            <form id="cuti-form" action="{{ route('pengajuan-cuti.submit-form') }}" method="POST" enctype="multipart/form-data">
+                            <form id="cuti-form" action="{{ route('pengajuan-cuti.submit-form') }}" method="POST"
+                                enctype="multipart/form-data">
                                 @csrf
                                 <input type="hidden" name="npk" value="{{ $employee->NPK }}">
                                 <input type="hidden" name="nama" value="{{ $employee->NAMA_KARYAWAN }}">
@@ -659,6 +729,82 @@
                                                     &middot; {{ $employee->DEPARTEMENT }}</div>
                                             </div>
                                         </div>
+
+                                        {{-- Saldo Cuti Karyawan (Collapsible Panel) --}}
+                                        @if(isset($leaveBalances) && $leaveBalances->count() > 0)
+                                            <div class="card border mb-4"
+                                                style="border-radius: 0.65rem; border-color: #e3e6f0; background: #fff; overflow: hidden;">
+                                                <a href="#collapseSaldoCuti"
+                                                    class="d-block card-header py-2 px-3 text-decoration-none"
+                                                    data-toggle="collapse" role="button" aria-expanded="false"
+                                                    aria-controls="collapseSaldoCuti"
+                                                    style="background: #f8f9fc; border: 0;">
+                                                    <div class="d-flex align-items-center justify-content-between">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fas fa-wallet text-primary mr-2"
+                                                                style="font-size: 0.92rem;"></i>
+                                                            <span class="font-weight-bold text-gray-800"
+                                                                style="font-size: 0.85rem;">Sisa Saldo Cuti
+                                                                ({{ date('Y') }})</span>
+                                                        </div>
+                                                        <div class="d-flex align-items-center text-primary font-weight-bold"
+                                                            style="font-size: 0.78rem;">
+                                                            <span class="mr-1">Lihat Rincian</span>
+                                                            <i class="fas fa-chevron-down transition-icon"
+                                                                style="font-size: 0.7rem; transition: transform 0.25s ease;"></i>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                                <div class="collapse" id="collapseSaldoCuti">
+                                                    <div class="card-body p-3 pt-2 border-top"
+                                                        style="border-color: #edf2f7 !important;">
+                                                        <div class="row pt-1">
+                                                            @foreach($leaveBalances as $bal)
+                                                                @php
+                                                                    $sisa = (int) $bal->remained_days;
+                                                                    $used = (int) $bal->used_days;
+                                                                    $badgeBg = $sisa <= 2 ? '#fef2f2' : ($sisa <= 5 ? '#fefce8' : '#f0fdf4');
+                                                                    $badgeBorder = $sisa <= 2 ? '#fecaca' : ($sisa <= 5 ? '#fef08a' : '#bbf7d0');
+                                                                    $badgeText = $sisa <= 2 ? '#b91c1c' : ($sisa <= 5 ? '#a16207' : '#15803d');
+                                                                @endphp
+                                                                <div
+                                                                    class="col-sm-6 {{ $leaveBalances->count() >= 3 ? 'col-lg-4' : '' }} mb-2">
+                                                                    <div class="card h-100 border shadow-none"
+                                                                        style="border-radius: 0.55rem; border-color: #e3e6f0 !important; background: #fafbfc;">
+                                                                        <div
+                                                                            class="card-body p-2 px-3 d-flex flex-column justify-content-between">
+                                                                            <div
+                                                                                class="d-flex justify-content-between align-items-center mb-1">
+                                                                                <span
+                                                                                    class="font-weight-bold text-gray-800 text-truncate mr-2"
+                                                                                    style="font-size: 0.83rem;"
+                                                                                    title="{{ $bal->leave_type_name }}">
+                                                                                    {{ $bal->leave_type_name }}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div class="d-flex align-items-center justify-content-between text-muted"
+                                                                                style="font-size: 0.74rem;">
+                                                                                <span class="badge px-2 py-1 font-weight-bold"
+                                                                                    style="background: {{ $badgeBg }}; color: {{ $badgeText }}; border: 1px solid {{ $badgeBorder }}; border-radius: 20px; font-size: 0.7rem; white-space: nowrap;">
+                                                                                    {{ $sisa }} hari sisa
+                                                                                </span>
+                                                                                <span></span>
+                                                                                <span><i
+                                                                                        class="fas fa-history mr-1 font-weight-bold text-gray-800"></i>
+                                                                                    Terpakai:</span>
+                                                                                <span
+                                                                                    class="font-weight-bold text-gray-600">{{ $used }}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endif
 
                                         {{-- Kontainer blok cuti — diisi lewat JS agar bisa ditambah/dihapus dinamis
                                         --}}
@@ -730,15 +876,20 @@
         <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header py-2 px-3 bg-light d-flex align-items-center justify-content-between">
-                    <h6 class="modal-title font-weight-bold text-gray-800 text-truncate mr-2" id="filePreviewTitle" style="font-size: 0.9rem;">
+                    <h6 class="modal-title font-weight-bold text-gray-800 text-truncate mr-2" id="filePreviewTitle"
+                        style="font-size: 0.9rem;">
                         <i class="far fa-file-image text-primary mr-1"></i> Preview Lampiran
                     </h6>
-                    <button type="button" class="close ml-auto" data-dismiss="modal" aria-label="Close" style="font-size: 1.4rem;">
+                    <button type="button" class="close ml-auto" data-dismiss="modal" aria-label="Close"
+                        style="font-size: 1.4rem;">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <div class="modal-body p-2 text-center bg-dark" style="min-height: 250px; display: flex; align-items: center; justify-content: center; border-bottom-left-radius: .3rem; border-bottom-right-radius: .3rem;">
-                    <img id="filePreviewImage" src="" style="max-width: 100%; max-height: 75vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);" alt="Preview Lampiran">
+                <div class="modal-body p-2 text-center bg-dark"
+                    style="min-height: 250px; display: flex; align-items: center; justify-content: center; border-bottom-left-radius: .3rem; border-bottom-right-radius: .3rem;">
+                    <img id="filePreviewImage" src=""
+                        style="max-width: 100%; max-height: 75vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"
+                        alt="Preview Lampiran">
                 </div>
             </div>
         </div>
@@ -759,6 +910,7 @@
             return ['id' => $t->id, 'name' => $t->name, 'code' => $t->code];
         }));
         const holidays = @json($holidays ?? []);
+        const leaveReasons = @json($leaveReasons ?? []);
         const employeeNpk = @json($employee->NPK);
 
         // Jenis cuti yang WAJIB upload lampiran file
@@ -956,10 +1108,34 @@
                     <small class="form-text mt-1 font-weight-bold text-danger leave-overlap-info" style="display:none;"></small>
                 </div>
 
-                <div class="form-group mb-0">
-                    <label class="font-weight-bold text-gray-700 small">Keterangan / Alasan <span class="text-danger">*</span></label>
-                    <textarea class="form-control leave-keterangan" name="leaves[${idx}][keterangan]" rows="3"
-                        required placeholder="Alasan cuti..."></textarea>
+                <div class="form-group mb-0 leave-reason-wrapper">
+                    <label class="font-weight-bold text-gray-700 small">
+                        Keterangan / Alasan <span class="text-danger">*</span>
+                    </label>
+
+                    {{-- Placeholder saat jenis cuti belum dipilih --}}
+                    <div class="leave-reason-empty-alert alert alert-light border text-muted py-2 px-3 small mb-0 d-flex align-items-center"
+                        style="background: #f8f9fc; border-color: #e3e6f0; border-radius: 0.5rem;">
+                        <i class="fas fa-info-circle text-primary mr-2" style="font-size: 0.95rem;"></i>
+                        <span>Pilih <strong>Jenis Cuti</strong> di atas untuk melihat pilihan alasan cuti.</span>
+                    </div>
+
+                    {{-- Container template reasons (radio buttons) --}}
+                    <div class="leave-reason-container mt-2" style="display:none;">
+                        <div class="leave-reason-list"></div>
+                    </div>
+
+                    {{-- Textbox untuk input manual / sendiri --}}
+                    <div class="leave-reason-custom-box mt-2" style="display:none;">
+                        <label class="font-weight-bold text-gray-600 small mb-1 leave-reason-custom-label">
+                            <i class="fas fa-pen mr-1 text-primary"></i> Tuliskan Alasan Sendiri: <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control leave-custom-textarea" rows="2"
+                            placeholder="Ketik alasan cuti Anda di sini..."></textarea>
+                    </div>
+
+                    {{-- Hidden / Actual field yang dikirim ke backend --}}
+                    <textarea class="leave-keterangan d-none" name="leaves[${idx}][keterangan]"></textarea>
                 </div>
 
                 <div class="form-group mb-0 mt-4 leave-attach-wrapper" style="display:none;">
@@ -1291,7 +1467,7 @@
             files.forEach((file, index) => {
                 const parts = file.name.split('.');
                 const ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
-                const sizeFormatted = file.size > 1024 * 1024 
+                const sizeFormatted = file.size > 1024 * 1024
                     ? (file.size / (1024 * 1024)).toFixed(2) + ' MB'
                     : (file.size / 1024).toFixed(1) + ' KB';
 
@@ -1334,7 +1510,7 @@
 
                 if (isImage) {
                     const reader = new FileReader();
-                    reader.onload = function(e) {
+                    reader.onload = function (e) {
                         const thumbDiv = card.querySelector('.file-preview-thumb');
                         if (thumbDiv) {
                             thumbDiv.innerHTML = `
@@ -1360,10 +1536,88 @@
             }
         }
 
+        /* ── Update template reason berdasarkan jenis cuti yang dipilih ── */
+        function updateLeaveReasons(block) {
+            const jenisSelect = block.querySelector('.leave-jenis');
+            const selectedTypeId = jenisSelect.value;
+            const idx = block.getAttribute('data-index');
+
+            const emptyAlert = block.querySelector('.leave-reason-empty-alert');
+            const reasonContainer = block.querySelector('.leave-reason-container');
+            const reasonList = block.querySelector('.leave-reason-list');
+            const customBox = block.querySelector('.leave-reason-custom-box');
+            const customTextarea = block.querySelector('.leave-custom-textarea');
+            const customLabel = block.querySelector('.leave-reason-custom-label');
+            const finalKeterangan = block.querySelector('.leave-keterangan');
+
+            // Reset nilai awal
+            finalKeterangan.value = '';
+            customTextarea.value = '';
+
+            if (!selectedTypeId) {
+                if (emptyAlert) emptyAlert.style.display = 'flex';
+                if (reasonContainer) reasonContainer.style.display = 'none';
+                if (reasonList) reasonList.innerHTML = '';
+                if (customBox) customBox.style.display = 'none';
+                return;
+            }
+
+            if (emptyAlert) emptyAlert.style.display = 'none';
+
+            // Filter data template reason dari tabel leave_reasons berdasarkan leave_type_id
+            const matchedReasons = leaveReasons.filter(r => String(r.leave_type_id) === String(selectedTypeId));
+
+            if (matchedReasons.length > 0) {
+                // Tampilkan container radio button template reasons
+                reasonContainer.style.display = 'block';
+                customBox.style.display = 'none';
+
+                let html = '';
+                matchedReasons.forEach((r, rIdx) => {
+                    const radioId = `reason_${idx}_${r.id || rIdx}`;
+                    const rawReason = r.reason || '';
+                    const escapedReason = rawReason.replace(/"/g, '&quot;');
+                    html += `
+                    <div class="custom-control custom-radio leave-reason-radio-card" data-reason="${escapedReason}">
+                        <input type="radio" id="${radioId}" name="leaves_reason_choice_${idx}" 
+                            class="custom-control-input leave-radio-item" value="${escapedReason}">
+                        <label class="custom-control-label text-gray-800" for="${radioId}">
+                            ${rawReason}
+                        </label>
+                    </div>`;
+                });
+
+                // Tambahkan opsi Radio untuk "Input Alasan Sendiri"
+                const customRadioId = `reason_${idx}_custom`;
+                html += `
+                <div class="custom-control custom-radio leave-reason-radio-card leave-reason-radio-custom" data-reason="__custom__">
+                    <input type="radio" id="${customRadioId}" name="leaves_reason_choice_${idx}" 
+                        class="custom-control-input leave-radio-item leave-radio-custom-trigger" value="__custom__">
+                    <label class="custom-control-label text-primary font-weight-bold" for="${customRadioId}">
+                        <i class="fas fa-edit mr-1"></i> Lainnya (Input alasan sendiri)
+                    </label>
+                </div>`;
+
+                reasonList.innerHTML = html;
+                if (customLabel) {
+                    customLabel.innerHTML = '<i class="fas fa-pen mr-1 text-primary"></i> Tuliskan Alasan Sendiri: <span class="text-danger">*</span>';
+                }
+            } else {
+                // Jika tidak ada template reason di database untuk jenis cuti ini, langsung buka textbox
+                reasonContainer.style.display = 'none';
+                reasonList.innerHTML = '';
+                customBox.style.display = 'block';
+                if (customLabel) {
+                    customLabel.innerHTML = '<i class="fas fa-pen mr-1 text-primary"></i> Keterangan / Alasan Cuti: <span class="text-danger">*</span>';
+                }
+            }
+        }
+
         document.getElementById('leaves-container').addEventListener('change', function (e) {
             if (e.target.matches('.leave-jenis')) {
                 updateJenisAvailability();
                 handleBlockDateChange(e.target.closest('.leave-block'));
+                updateLeaveReasons(e.target.closest('.leave-block'));
 
                 // Toggle tampilan upload file berdasarkan jenis cuti
                 const block = e.target.closest('.leave-block');
@@ -1381,9 +1635,57 @@
                     }
                 }
             }
+
+            // Saat radio template reason dipilih
+            if (e.target.matches('.leave-radio-item')) {
+                const block = e.target.closest('.leave-block');
+                const customBox = block.querySelector('.leave-reason-custom-box');
+                const customTextarea = block.querySelector('.leave-custom-textarea');
+                const finalKeterangan = block.querySelector('.leave-keterangan');
+
+                // Update styling active pada radio cards
+                block.querySelectorAll('.leave-reason-radio-card').forEach(card => {
+                    const input = card.querySelector('.leave-radio-item');
+                    if (input && input.checked) {
+                        card.classList.add('is-selected');
+                    } else {
+                        card.classList.remove('is-selected');
+                    }
+                });
+
+                if (e.target.value === '__custom__') {
+                    customBox.style.display = 'block';
+                    customTextarea.focus();
+                    finalKeterangan.value = customTextarea.value;
+                } else {
+                    customBox.style.display = 'none';
+                    finalKeterangan.value = e.target.value;
+                }
+            }
+        });
+
+        // Event listener saat user mengetik di textbox alasan sendiri
+        document.getElementById('leaves-container').addEventListener('input', function (e) {
+            if (e.target.matches('.leave-custom-textarea')) {
+                const block = e.target.closest('.leave-block');
+                const finalKeterangan = block.querySelector('.leave-keterangan');
+                if (finalKeterangan) {
+                    finalKeterangan.value = e.target.value;
+                }
+            }
         });
 
         document.getElementById('leaves-container').addEventListener('click', function (e) {
+            // Klik card radio button reason untuk kemudahan pengguna
+            const card = e.target.closest('.leave-reason-radio-card');
+            if (card && !e.target.matches('input[type="radio"]') && !e.target.matches('label')) {
+                const radio = card.querySelector('.leave-radio-item');
+                if (radio && !radio.checked) {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+
             const removeBtn = e.target.closest('.btn-remove-leave');
             if (removeBtn) {
                 const block = removeBtn.closest('.leave-block');
@@ -1424,7 +1726,17 @@
                 if (!jenis.value) { jenis.reportValidity(); return; }
                 if (!mulai.value) { mulai.reportValidity(); return; }
                 if (!selesai.value) { selesai.reportValidity(); return; }
-                if (!ket.value.trim()) { ket.reportValidity(); return; }
+                if (!ket.value.trim()) {
+                    const customBox = block.querySelector('.leave-reason-custom-box');
+                    const customTextarea = block.querySelector('.leave-custom-textarea');
+                    if (customBox && customBox.style.display !== 'none') {
+                        customTextarea.focus();
+                        alert(`${nomor}: Silakan tulis alasan cuti pada kotak keterangan yang tersedia.`);
+                    } else {
+                        alert(`${nomor}: Silakan pilih salah satu alasan cuti atau pilih opsi input alasan sendiri.`);
+                    }
+                    return;
+                }
 
                 // Validasi lampiran file jika wajib
                 const attachWrapper = block.querySelector('.leave-attach-wrapper');
@@ -1492,26 +1804,26 @@
                         <div class="review-value text-left" style="max-width: 65%;">
                             <div class="d-flex flex-wrap" style="gap: 6px;">
                                 ${filesList.map(f => {
-                                    const parts = f.name.split('.');
-                                    const ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
-                                    const isPdf = ext === 'pdf';
-                                    const isWord = ['doc', 'docx'].includes(ext);
-                                    const isImg = ['jpg', 'jpeg', 'png'].includes(ext);
-                                    let iconClass = 'fa-file-alt text-secondary';
-                                    if (isPdf) iconClass = 'fa-file-pdf text-danger';
-                                    else if (isWord) iconClass = 'fa-file-word text-primary';
-                                    else if (isImg) iconClass = 'fa-file-image text-success';
-                                    const sizeStr = f.size > 1024 * 1024 
-                                        ? (f.size / (1024 * 1024)).toFixed(1) + ' MB'
-                                        : (f.size / 1024).toFixed(0) + ' KB';
-                                    return `<div class="review-file-badge">
+                    const parts = f.name.split('.');
+                    const ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
+                    const isPdf = ext === 'pdf';
+                    const isWord = ['doc', 'docx'].includes(ext);
+                    const isImg = ['jpg', 'jpeg', 'png'].includes(ext);
+                    let iconClass = 'fa-file-alt text-secondary';
+                    if (isPdf) iconClass = 'fa-file-pdf text-danger';
+                    else if (isWord) iconClass = 'fa-file-word text-primary';
+                    else if (isImg) iconClass = 'fa-file-image text-success';
+                    const sizeStr = f.size > 1024 * 1024
+                        ? (f.size / (1024 * 1024)).toFixed(1) + ' MB'
+                        : (f.size / 1024).toFixed(0) + ' KB';
+                    return `<div class="review-file-badge">
                                         <i class="far ${iconClass} mr-2" style="font-size: 1rem;"></i>
                                         <div style="line-height: 1.2;">
                                             <div class="font-weight-bold text-truncate" style="font-size: 0.78rem; max-width: 170px;" title="${f.name.replace(/"/g, '&quot;')}">${f.name}</div>
                                             <div class="text-muted" style="font-size: 0.68rem;">${sizeStr}</div>
                                         </div>
                                     </div>`;
-                                }).join('')}
+                }).join('')}
                             </div>
                         </div>
                     </div>` : ''}
