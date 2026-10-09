@@ -245,9 +245,12 @@ $(document).ready(function () {
                 width: '110px',
                 render: function (data, type, row) {
                     var badge = '';
+                    if (row.is_negative_leave) {
+                        badge += '<br><span class="badge badge-warning text-dark font-weight-bold mt-1" style="font-size:0.75rem;"><i class="fas fa-exclamation-triangle fa-xs mr-1"></i>Hutang Cuti</span>';
+                    }
                     if (row.attach_files && row.attach_files.length > 0) {
                         var count = row.attach_files.length;
-                        badge = '<br><span class="badge badge-light border text-primary mt-1" style="font-size:0.8rem;" title="' + count + ' file dilampirkan"><i class="fas fa-paperclip"></i> ' + count + ' berkas</span>';
+                        badge += '<br><span class="badge badge-light border text-primary mt-1" style="font-size:0.8rem;" title="' + count + ' file dilampirkan"><i class="fas fa-paperclip"></i> ' + count + ' berkas</span>';
                     }
                     return '<span class="font-weight-bold" style="font-size:0.94rem;">' + (data || '-') + '</span>' + badge;
                 }

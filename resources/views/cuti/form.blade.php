@@ -763,6 +763,7 @@
                                                                 @php
                                                                     $sisa = (int) $bal->remained_days;
                                                                     $used = (int) $bal->used_days;
+                                                                    $hutang = (int) ($bal->negative_leave ?? 0);
                                                                     $badgeBg = $sisa <= 2 ? '#fef2f2' : ($sisa <= 5 ? '#fefce8' : '#f0fdf4');
                                                                     $badgeBorder = $sisa <= 2 ? '#fecaca' : ($sisa <= 5 ? '#fef08a' : '#bbf7d0');
                                                                     $badgeText = $sisa <= 2 ? '#b91c1c' : ($sisa <= 5 ? '#a16207' : '#15803d');
@@ -781,6 +782,11 @@
                                                                                     title="{{ $bal->leave_type_name }}">
                                                                                     {{ $bal->leave_type_name }}
                                                                                 </span>
+                                                                                @if($hutang > 0)
+                                                                                    <span class="badge badge-warning text-dark font-weight-bold" style="font-size: 0.68rem;" title="Total Hutang Cuti">
+                                                                                        Hutang: {{ $hutang }} hr
+                                                                                    </span>
+                                                                                @endif
                                                                             </div>
                                                                             <div class="d-flex align-items-center justify-content-between text-muted"
                                                                                 style="font-size: 0.74rem;">
@@ -801,6 +807,28 @@
                                                                 </div>
                                                             @endforeach
                                                         </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @else
+                                            <div class="card border mb-4"
+                                                style="border-radius: 0.65rem; border-color: #e3e6f0; background: #fff; overflow: hidden;">
+                                                <div class="card-header py-2 px-3 d-flex align-items-center justify-content-between"
+                                                    style="background: #f8f9fc; border: 0;">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-wallet text-muted mr-2"
+                                                            style="font-size: 0.92rem;"></i>
+                                                        <span class="font-weight-bold text-gray-800"
+                                                            style="font-size: 0.85rem;">Sisa Saldo Cuti ({{ date('Y') }})</span>
+                                                    </div>
+                                                    <span class="badge badge-light border text-muted" style="font-size: 0.72rem;">Belum Ada Saldo</span>
+                                                </div>
+                                                <div class="card-body p-3 text-center border-top"
+                                                    style="border-color: #edf2f7 !important; background: #fafbfc;">
+                                                    <div class="py-2">
+                                                        <i class="fas fa-calendar-times text-muted mb-2" style="font-size: 1.6rem; opacity: 0.55;"></i>
+                                                        <div class="font-weight-bold text-gray-800" style="font-size: 0.88rem;">Belum Memiliki Saldo Cuti</div>
+                                                        <div class="text-muted small mt-1">Anda belum memiliki saldo cuti di tahun berjalan ({{ date('Y') }}). Silakan hubungi bagian HRD untuk informasi lebih lanjut.</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1288,16 +1316,26 @@
                     const recalculatedDiff = computeWorkingDays(mulai.value, selesai.value);
                     const effectiveDiff = selesai.value ? recalculatedDiff : days;
 
-                    if (res.sisa <= 0) {
-                        sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
-                        sisaInfo.innerHTML = `<i class="fas fa-times-circle mr-1"></i> ${res.keterangan}. Anda tidak memiliki sisa cuti.`;
-                    } else if (effectiveDiff > res.sisa) {
-                        sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
-                        sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Sisa cuti tidak mencukupi.`;
+                    if (res.is_negative_leave) {
+                        selesai.dataset.isNegative = 'true';
+                        delete selesai.dataset.maxEnd;
+                        if (selesai._flatpickr) selesai._flatpickr.set('maxDate', null);
+
+                        sisaInfo.className = 'form-text text-warning mt-2 small font-weight-bold leave-sisa-info';
+                        sisaInfo.innerHTML = `<span class="badge badge-warning text-dark mr-1" style="font-size:0.75rem;"><i class="fas fa-exclamation-triangle fa-xs"></i> HUTANG CUTI</span> ${res.keterangan}`;
                     } else {
-                        const maxInfo = res.max_end_date ? ` Maks. tanggal selesai: <strong>${formatDate(res.max_end_date)}</strong>.` : '';
-                        sisaInfo.className = 'form-text text-success mt-2 small font-weight-bold leave-sisa-info';
-                        sisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}. Sisa cuti mencukupi.${maxInfo}`;
+                        delete selesai.dataset.isNegative;
+                        if (res.sisa <= 0) {
+                            sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-times-circle mr-1"></i> ${res.keterangan}. Anda tidak memiliki sisa cuti.`;
+                        } else if (effectiveDiff > res.sisa) {
+                            sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Sisa cuti tidak mencukupi.`;
+                        } else {
+                            const maxInfo = res.max_end_date ? ` Maks. tanggal selesai: <strong>${formatDate(res.max_end_date)}</strong>.` : '';
+                            sisaInfo.className = 'form-text text-success mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}. Sisa cuti mencukupi.${maxInfo}`;
+                        }
                     }
 
                     refreshAllDatepickersDisabledDates();
@@ -1766,8 +1804,9 @@
                     return;
                 }
 
+                const isNegative = selesai.dataset.isNegative === 'true';
                 const maxAttr = selesai.dataset.maxEnd;
-                if (maxAttr && selesai.value > maxAttr) {
+                if (!isNegative && maxAttr && selesai.value > maxAttr) {
                     alert(`${nomor}: Tanggal selesai melebihi sisa saldo cuti yang tersedia.`);
                     return;
                 }
@@ -1775,12 +1814,19 @@
                 const leaveName = jenis.options[jenis.selectedIndex].getAttribute('data-name');
                 const filesList = (attachInput && attachInput._storedFiles) ? attachInput._storedFiles : (attachInput && attachInput.files ? Array.from(attachInput.files) : []);
 
+                const hutangBadge = isNegative ? ' <span class="badge badge-warning text-dark font-weight-bold ml-1"><i class="fas fa-exclamation-triangle fa-xs"></i> Hutang Cuti</span>' : '';
+                const hutangNotice = isNegative ? `
+                    <div class="alert alert-warning py-2 px-3 small mt-3 mb-0 d-flex align-items-center" style="border-radius: 6px;">
+                        <i class="fas fa-info-circle mr-2 text-warning"></i>
+                        <span>Pengajuan ini menggunakan fitur <strong>Hutang Cuti</strong> karena saldo cuti tahunan telah habis.</span>
+                    </div>` : '';
+
                 reviewHtml += `
                 <div class="bg-light p-3 p-md-4 rounded mb-3 border">
                     <div class="font-weight-bold text-primary small mb-2"><i class="fas fa-calendar-alt mr-1"></i> ${nomor}</div>
                     <div class="review-row">
                         <span class="review-label">Jenis Cuti</span>
-                        <span class="review-value"><span class="badge badge-primary px-2 py-1">${leaveName}</span></span>
+                        <span class="review-value"><span class="badge badge-primary px-2 py-1">${leaveName}</span>${hutangBadge}</span>
                     </div>
                     <div class="review-row">
                         <span class="review-label">Tanggal Mulai</span>
@@ -1827,6 +1873,7 @@
                             </div>
                         </div>
                     </div>` : ''}
+                    ${hutangNotice}
                 </div>`;
             }
 

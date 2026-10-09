@@ -225,6 +225,7 @@ class LeaveApprovalController extends Controller
                 'approval_progress'   => $req->approval_progress,
                 'is_waiting_previous' => $isWaitingPrevious,
                 'can_update'          => $req->status !== 'pending' && !$laterLevelActed,
+                'is_negative_leave'   => str_contains($req->reason, '[Hutang Cuti]'),
                 'attach_files'        => $formattedFiles,
                 'approvers'           => $approversList,
             ];
@@ -252,7 +253,8 @@ class LeaveApprovalController extends Controller
                     return '<span class="badge badge-light border text-dark font-weight-bold" style="font-size:0.92rem; padding:5px 8px;">'.$row['total_days'].' hari</span>';
                 })
                 ->addColumn('alasan', function($row) {
-                    return '<div style="font-size:0.88rem; line-height:1.4;">' . (e($row['reason']) ?: '-') . '</div>';
+                    $badge = !empty($row['is_negative_leave']) ? '<span class="badge badge-warning text-dark font-weight-bold mr-1"><i class="fas fa-exclamation-triangle fa-xs"></i> Hutang Cuti</span> ' : '';
+                    return '<div style="font-size:0.88rem; line-height:1.4;">' . $badge . (e($row['reason']) ?: '-') . '</div>';
                 })
                 ->addColumn('sisa_cuti', function($row) {
                     if ($row['leave_balance'] === '-') {
@@ -563,18 +565,31 @@ class LeaveApprovalController extends Controller
 
     /**
      * Efek final ketika cuti disetujui di level terakhir: potong leave_balances
-     * dan isi record Overtime "CT" atau "CU" (khusus tipe 'pribadi'/id 14) untuk tiap hari kerja di periode cuti.
+     * (atau tambah negative_leave jika pengajuan adalah hutang cuti),
+     * dan isi record Overtime "CT" atau "CU" untuk tiap hari kerja di periode cuti.
      */
     private function finalizeApproval(LeaveRequest $leave)
     {
-        DB::table('leave_balances')
-            ->where('NPK', $leave->NPK)
-            ->where('leave_type_id', $leave->leave_type_id)
-            ->where('year', date('Y'))
-            ->update([
-                'used_days' => DB::raw('used_days + ' . $leave->total_days),
-                'remained_days' => DB::raw('remained_days - ' . $leave->total_days)
-            ]);
+        $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+
+        if ($isNegativeLeave) {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'negative_leave' => DB::raw('COALESCE(negative_leave, 0) + ' . $leave->total_days)
+                ]);
+        } else {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'used_days' => DB::raw('used_days + ' . $leave->total_days),
+                    'remained_days' => DB::raw('remained_days - ' . $leave->total_days)
+                ]);
+        }
 
         $karyawan = DB::connection('cii')->table('BIODATA')
             ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
@@ -591,7 +606,7 @@ class LeaveApprovalController extends Controller
         $startDate = Carbon::parse($leave->start_date);
         $endDate = Carbon::parse($leave->end_date);
 
-        // Khusus tipe cuti 'pribadi' (atau ID 14), kode JUMLAH_JAM_LEMBUR adalah 'CU', selain itu 'CT'
+        // Khusus tipe cuti 'pribadi' (atau ID 14), kode JUMLAH_JAM_LEMBUR adalah 'CU', selain itu 'CT' (hutang cuti tetap 'CT')
         $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
         $overtimeCode = ($leaveType && $leaveType->code === 'pribadi') ? 'CU' : 'CT';
 
@@ -623,19 +638,31 @@ class LeaveApprovalController extends Controller
 
     /**
      * Kebalikan dari finalizeApproval() -- dipakai saat keputusan "approved" di
-     * level terakhir diubah jadi status lain: kembalikan leave_balances dan
-     * hapus record Overtime "CT"/"CU" yang sempat dibuat untuk periode cuti ini.
+     * level terakhir diubah jadi status lain: kembalikan leave_balances / kurangi negative_leave
+     * dan hapus record Overtime "CT"/"CU" yang sempat dibuat untuk periode cuti ini.
      */
     private function reverseFinalize(LeaveRequest $leave)
     {
-        DB::table('leave_balances')
-            ->where('NPK', $leave->NPK)
-            ->where('leave_type_id', $leave->leave_type_id)
-            ->where('year', date('Y'))
-            ->update([
-                'used_days' => DB::raw('used_days - ' . $leave->total_days),
-                'remained_days' => DB::raw('remained_days + ' . $leave->total_days)
-            ]);
+        $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+
+        if ($isNegativeLeave) {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'negative_leave' => DB::raw('GREATEST(0, COALESCE(negative_leave, 0) - ' . $leave->total_days . ')')
+                ]);
+        } else {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'used_days' => DB::raw('used_days - ' . $leave->total_days),
+                    'remained_days' => DB::raw('remained_days + ' . $leave->total_days)
+                ]);
+        }
 
         Overtime::where('NPK', $leave->NPK)
             ->whereBetween('OVERTIME_DATE', [$leave->start_date, $leave->end_date])

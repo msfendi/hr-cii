@@ -122,9 +122,12 @@ class PengajuanCutiController extends Controller
             ->where('leave_balances.NPK', $npk)
             ->where('leave_balances.year', date('Y'))
             ->select(
+                'leave_types.id as leave_type_id',
                 'leave_types.name as leave_type_name',
+                'leave_types.code as leave_type_code',
                 'leave_balances.remained_days',
-                'leave_balances.used_days'
+                'leave_balances.used_days',
+                'leave_balances.negative_leave'
             )
             ->get();
 
@@ -291,14 +294,19 @@ class PengajuanCutiController extends Controller
                     return back();
                 }
 
-                // Sisa hari cuti membatasi rentang tanggal selesai yang boleh diajukan.
-                if ($balance->remained_days < $total_days) {
+                // Cek apakah jenis cuti ini adalah Cuti Tahunan dan saldo cutinya sudah habis
+                $leaveType = LeaveTypes::find($leave['jenis_cuti']);
+                $isTahunan = $leaveType && $leaveType->code === 'tahunan';
+                $isNegativeLeave = $isTahunan && ($balance->remained_days <= 0);
+
+                // Sisa hari cuti membatasi rentang tanggal selesai yang boleh diajukan,
+                // kecuali untuk cuti tahunan dengan saldo habis (menggunakan Hutang Cuti).
+                if (!$isNegativeLeave && $balance->remained_days < $total_days) {
                     Alert::error('Error', "$rowLabel: Jumlah Hari Cuti ({$total_days} hari) Melebihi Sisa Jatah Cuti ({$balance->remained_days} hari).");
                     return back();
                 }
 
                 // ── Validasi lampiran file untuk jenis cuti tertentu ──
-                $leaveType = LeaveTypes::find($leave['jenis_cuti']);
                 $requiresAttach = $leaveType && in_array($leaveType->code, $attachRequiredCodes);
 
                 if ($requiresAttach && !$request->hasFile("leaves.{$i}.attach_files")) {
@@ -325,13 +333,19 @@ class PengajuanCutiController extends Controller
                     }
                 }
 
+                $reason = $leave['keterangan'] ?? '';
+                if ($isNegativeLeave) {
+                    $reason = '[Hutang Cuti] ' . $reason;
+                }
+
                 $preparedLeaves[] = [
-                    'leave_type_id' => $leave['jenis_cuti'],
-                    'start_date'    => $leave['tanggal_mulai'],
-                    'end_date'      => $leave['tanggal_selesai'],
-                    'total_days'    => $total_days,
-                    'reason'        => $leave['keterangan'] ?? '',
-                    'file_index'    => $i,
+                    'leave_type_id'     => $leave['jenis_cuti'],
+                    'start_date'        => $leave['tanggal_mulai'],
+                    'end_date'          => $leave['tanggal_selesai'],
+                    'total_days'        => $total_days,
+                    'reason'            => $reason,
+                    'is_negative_leave' => $isNegativeLeave,
+                    'file_index'        => $i,
                 ];
             }
 
@@ -440,19 +454,28 @@ class PengajuanCutiController extends Controller
             }
         }
 
-        if ($balance) {
+        $leaveType = LeaveTypes::find($leaveTypeId);
+        $isTahunan = $leaveType && $leaveType->code === 'tahunan';
+        $isNegativeLeave = $isTahunan && $remained <= 0;
+
+        if ($isNegativeLeave) {
+            $currentNegative = $balance ? (int)($balance->negative_leave ?? 0) : 0;
+            $keterangan = "Saldo cuti tahunan Anda telah habis (0 hari). Pengajuan ini akan dicatat sebagai Hutang Cuti (Total hutang cuti saat ini: {$currentNegative} hari).";
+        } elseif ($balance) {
             $keterangan = "Sisa cuti Anda: {$remained} hari, Terpakai: {$used}";
         } else {
             $keterangan = 'Belum ada data jatah cuti untuk jenis ini di tahun berjalan.';
         }
 
         return response()->json([
-            'success'       => true,
-            'sisa'          => $remained,
-            'keterangan'    => $keterangan,
-            'remained_days' => $remained,
-            'used_days'     => $used,
-            'max_end_date'  => $maxEndDate,
+            'success'           => true,
+            'sisa'              => $remained,
+            'keterangan'        => $keterangan,
+            'remained_days'     => $remained,
+            'used_days'         => $used,
+            'is_negative_leave' => $isNegativeLeave,
+            'negative_leave'    => $balance ? (int)($balance->negative_leave ?? 0) : 0,
+            'max_end_date'      => $isNegativeLeave ? null : $maxEndDate,
         ]);
     }
 
@@ -610,6 +633,7 @@ class PengajuanCutiController extends Controller
                 'status'              => $overallStatus,
                 'comment'             => $rejectComment ?: $req->comment,
                 'created_at'          => Carbon::parse($req->created_at)->format('d M Y H:i'),
+                'is_negative_leave'   => str_contains($req->reason, '[Hutang Cuti]'),
                 'attach_files'        => $formattedFiles,
                 'approvers'           => $approversList,
             ];

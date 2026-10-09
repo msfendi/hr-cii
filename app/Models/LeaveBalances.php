@@ -17,5 +17,6 @@ class LeaveBalances extends Model
         'year',
         'remained_days',
         'used_days',
+        'negative_leave',
     ];
 }

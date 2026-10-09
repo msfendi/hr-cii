@@ -64,6 +64,7 @@ class AdminLeaveRecapController extends Controller
                 'reason'         => $activeRow->reason,
                 'overall_status' => $overallStatus,
                 'has_attach'     => !empty($activeRow->attach_files),
+                'is_negative_leave' => str_contains($activeRow->reason, '[Hutang Cuti]'),
                 'created_at'     => $activeRow->created_at->format('Y-m-d H:i:s'),
             ];
         }

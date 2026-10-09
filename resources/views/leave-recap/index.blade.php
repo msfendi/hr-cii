@@ -160,8 +160,9 @@
                         data: 'leave_type', 
                         name: 'leave_type_id',
                         render: function (data, type, row) {
-                            var badge = row.has_attach ? ' <span class="badge badge-light border text-primary" title="Ada Lampiran Dokumen"><i class="fas fa-paperclip"></i></span>' : '';
-                            return (data || '-') + badge;
+                            var attachBadge = row.has_attach ? ' <span class="badge badge-light border text-primary" title="Ada Lampiran Dokumen"><i class="fas fa-paperclip"></i></span>' : '';
+                            var hutangBadge = (row.is_negative_leave || (row.reason && row.reason.indexOf('[Hutang Cuti]') !== -1)) ? '<br><span class="badge badge-warning text-dark font-weight-bold" style="font-size:0.75rem;"><i class="fas fa-exclamation-triangle fa-xs mr-1"></i>Hutang Cuti</span>' : '';
+                            return (data || '-') + attachBadge + hutangBadge;
                         }
                     },
                     { data: 'created_at', name: 'created_at' },
@@ -191,7 +192,8 @@
                             var html = '<table class="table table-sm table-bordered">';
                             html += '<tr><th width="30%">Nama</th><td>' + data.nama + ' (' + data.npk + ')</td></tr>';
                             html += '<tr><th>Departemen</th><td>' + data.dept + '</td></tr>';
-                            html += '<tr><th>Jenis Cuti</th><td>' + data.leave_type + '</td></tr>';
+                            var hutangBadge = (data.reason && data.reason.indexOf('[Hutang Cuti]') !== -1) ? ' <span class="badge badge-warning text-dark font-weight-bold ml-1"><i class="fas fa-exclamation-triangle fa-xs mr-1"></i>Hutang Cuti</span>' : '';
+                            html += '<tr><th>Jenis Cuti</th><td>' + data.leave_type + hutangBadge + '</td></tr>';
                             html += '<tr><th>Periode</th><td>' + data.start_date + ' s/d ' + data.end_date + ' (' + data.total_days + ' hari)</td></tr>';
                             html += '<tr><th>Alasan</th><td>' + data.reason + '</td></tr>';
 
