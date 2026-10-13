@@ -1506,7 +1506,7 @@ function updateFormulaWithColors() {
         // menyediakan basis input/output sendiri (mis. Contract, atau
         // cabang Sabkon yang basisnya dihitung terhadap Kontrak, bukan
         // stage sebelumnya).
-        function renderBox(label, value, theme, step, pct, remarks) {
+        function renderBox(label, value, theme, step, pct, remarks, unit) {
             let lossValue = step ? Number(step.loss_pcs || 0) : null;
             let lossPct   = step ? Number(step.loss_pct || 0) : null;
 
@@ -1557,6 +1557,7 @@ function updateFormulaWithColors() {
                     <div class="rekon-pipe-body">
                         <div class="rekon-pipe-output">${fmtNum(value)}</div>
                         <div class="rekon-pipe-output-pct">${outputPctDisplay}</div>
+                        ${unit ? `<div class="text-uppercase" style="font-size:.65rem;">${unit}</div>` : ''}
                         ${lossRow}
                         ${remarksRow}
                     </div>
@@ -1581,7 +1582,9 @@ function updateFormulaWithColors() {
         const internalBoxes = (pipeline.departments || []).filter(d => !HIDDEN_STAGES.includes(d.department_id)).map(d => {
             const label = d.department_id ?? '-';
             const step = findStep(internalProcess[label] || '');
-            return renderBox(label, d.jumlah, 'green', step, null, d.remarks);
+            // Tampilan saja: stage "Warehouse" setelah Packing diberi nama CT-PAT.
+            const displayLabel = label === 'Warehouse' ? 'CT-PAT' : label;
+            return renderBox(displayLabel, d.jumlah, 'green', step, null, d.remarks, 'PCS');
         }).join(arrow);
 
         // ===== Grup Sabkon Process: Sabkon → Warehouse (Chutex) =====
@@ -2109,7 +2112,7 @@ function updateFormulaWithColors() {
             ['Sewing', 'Sewing', p.dept_sewing, 'Dept Sewing, kategori Barang Jadi.'],
             ['QC', 'QC', p.dept_qc, 'Sumber tabel mon_prod_qc (import Excel), scope lewat Code Prod = kode OCF.'],
             ['Packing', 'Packing', p.dept_packing, 'Dept Packing, kategori Barang Jadi.'],
-            ['Warehouse', 'Warehouse', p.dest_warehouse, 'Tujuan Warehouse (semua dept asal), kategori Barang Jadi.'],
+            ['Warehouse', 'CT-PAT', p.dest_warehouse, 'Tujuan Warehouse (semua dept asal), kategori Barang Jadi.'],
             ['basis_dest_sewing', 'Basis: Tujuan Sewing', p.dest_sewing, 'Pembanding untuk Loss Sewing (Output Sewing − Tujuan Sewing).'],
             ['basis_dest_packing', 'Basis: Tujuan Packing', p.dest_packing, 'Pembanding untuk Loss Packing (Output Packing − Tujuan Packing).'],
         ];
@@ -2152,22 +2155,21 @@ function updateFormulaWithColors() {
         ], rows);
     }
 
-    // Rekap per Fabric: urutan kolom Need, Order, Order %, Received, Received %,
+    // Rekap per Fabric: urutan kolom Order, Order %, Received, Received %,
     // Out WIP Req (+%), Out WIP Doc (+%), Stock (+%), Harga Total.
     function dFabricRecap(rows, labelFn) {
         return dGrid([
             { label: 'Material', val: r => escapeHtml(labelFn(r)) },
             { label: 'Nama Barang', val: r => dv(r.real_barang_name || r.barang_name) },
-            { label: 'Need', right: true, val: r => fmtNum(r.need_qty) },
-            { label: 'Order', right: true, val: r => fmtNum(r.order_qty) },
+            { label: 'Order (KGM)', right: true, val: r => fmtNum(r.order_qty) },
             { label: 'Order %', right: true, val: r => fmtPct(r.order_pct) },
-            { label: 'Received', right: true, val: r => fmtNum(r.received_qty) },
+            { label: 'Received (KGM)', right: true, val: r => fmtNum(r.received_qty) },
             { label: 'Received %', right: true, val: r => fmtPct(r.received_pct) },
-            { label: 'Out WIP Req', right: true, val: r => fmtNum(r.out_req_qty) },
+            { label: 'Out WIP Req (KGM)', right: true, val: r => fmtNum(r.out_req_qty) },
             { label: 'Out WIP Req %', right: true, val: r => fmtPct(r.out_req_pct) },
-            { label: 'Out WIP Doc', right: true, val: r => fmtNum(r.out_doc_qty) },
+            { label: 'Out WIP Doc (KGM)', right: true, val: r => fmtNum(r.out_doc_qty) },
             { label: 'Out WIP Doc %', right: true, val: r => fmtPct(r.out_doc_pct) },
-            { label: 'Stock', right: true, val: r => fmtNum(r.stock_qty) },
+            { label: 'Stock (KGM)', right: true, val: r => fmtNum(r.stock_qty) },
             { label: 'Stock %', right: true, val: r => fmtPct(r.stock_pct) },
             { label: 'Harga Total', right: true, val: r => fmtNum(r.harga_total) },
         ], rows);
