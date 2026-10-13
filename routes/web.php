@@ -114,6 +114,7 @@ use App\Http\Controllers\PdfExtractionController;
 use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
+use App\Http\Controllers\MonitoringRekonLockController;
 
 /*
 |--------------------------------------------------------------------------
@@ -673,6 +674,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::delete('/destroy/{id}', [AdminLeaveBalanceController::class, 'destroyBalance'])->name('leave-balances.destroy');
 
         Route::post('/generate-yearly', [AdminLeaveBalanceController::class, 'generateYearlyBalance'])->name('leave-balances.generate-yearly');
+        Route::post('/generate-non-annual', [AdminLeaveBalanceController::class, 'generateNonAnnualBalance'])->name('leave-balances.generate-non-annual');
     });
 
     // ========================================
@@ -976,6 +978,30 @@ Route::group(['middleware' => 'auth'], function () {
         Route::delete('/{id}', [OutsourceController::class, 'destroy'])->name('destroy');
         Route::get('/template/download', [OutsourceController::class, 'template'])->name('template');
         Route::post('/import/upload', [OutsourceController::class, 'import'])->name('import');
+    });
+
+    Route::prefix('monitoring/rekonsiliasi')->group(function () {
+        // Lock Data OCF (POST JSON dari tombol di Dashboard Reconciliation)
+        Route::post('/lock', [MonitoringRekonLockController::class, 'store'])
+            ->name('monitoring.rekonsiliasi.lock.store');
+
+        // Summary Rekonsiliasi
+        Route::get('/summary', [MonitoringRekonLockController::class, 'summaryPage'])
+            ->name('monitoring.rekonsiliasi.summary');
+        Route::get('/summary/data', [MonitoringRekonLockController::class, 'summaryData'])
+            ->name('monitoring.rekonsiliasi.summary.data');
+        Route::get('/summary/grade-template', [MonitoringRekonLockController::class, 'gradeTemplate'])
+            ->name('monitoring.rekonsiliasi.summary.grade-template');
+        Route::post('/summary/grade-import', [MonitoringRekonLockController::class, 'gradeImport'])
+            ->name('monitoring.rekonsiliasi.summary.grade-import');
+
+        Route::get('/summary/notes-template', [MonitoringRekonLockController::class, 'notesTemplate'])
+            ->name('monitoring.rekonsiliasi.summary.notes-template');
+        Route::post('/summary/notes-import', [MonitoringRekonLockController::class, 'notesImport'])
+            ->name('monitoring.rekonsiliasi.summary.notes-import');
+
+        Route::post('/summary/status', [MonitoringRekonLockController::class, 'updateStatus'])
+            ->name('monitoring.rekonsiliasi.summary.update-status');
     });
 
     Route::middleware(['auth', 'permission'])

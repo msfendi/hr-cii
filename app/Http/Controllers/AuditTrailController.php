@@ -14,7 +14,7 @@ class AuditTrailController extends Controller
 {
     public function index()
     {
-        $events = ['created', 'updated', 'deleted'];
+        $events = ['created', 'updated', 'deleted', 'generate'];
         $models = AuditTrail::query()
             ->select('auditable_type')
             ->distinct()
@@ -59,6 +59,7 @@ class AuditTrailController extends Controller
                     'created' => 'success',
                     'updated' => 'warning',
                     'deleted' => 'danger',
+                    'generate' => 'info',
                     default => 'secondary',
                 };
 

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Imports\PelamarImport;
 use App\Exports\PelamarTemplateExport;
+use App\Models\PKWT;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Facades\Storage;
@@ -232,7 +233,7 @@ class PelamarController extends Controller
         // [pkwt_column => filename] ready to merge into the PKWT insert.
         $pkwtFiles = $this->moveApplicantFilesToPkwt($pelamarDetail, $npk);
 
-        DB::connection('cii')->table('PKWT')->insert(array_merge([
+        PKWT::create(array_merge([
             'NPK' => $npk,
             'NAMA' => strtoupper($request->nama),
             'JK' => strtoupper($request->jk),

@@ -16,6 +16,7 @@
             <div class="container-fluid" id="rekon-app"
                  data-filters='@json($filters)'
                  data-endpoint="{{ route('monitoring.rekonsiliasi.data') }}"
+                 data-lock-url="{{ route('monitoring.rekonsiliasi.lock.store') }}"
                  data-calendar-url="{{ route('monitoring.rekonsiliasi.calendar') }}"
                  data-calendar-detail-url="{{ route('monitoring.rekonsiliasi.calendar.detail') }}"
                  data-sync-rekon-url="{{ route('monitoring.rekonsiliasi.sync') }}"
@@ -97,6 +98,19 @@
                                 <div class="font-weight-bold" id="rekon-last-updated">--</div>
                             </div>
                             <div class="d-flex" style="gap:6px">
+                                {{-- Lock Data OCF: snapshot semua stage + Rekap per Fabric + buyer/style/OCF
+                                     ke tabel mon_rekon_locks (partial / shortship dipilih lewat SweetAlert). --}}
+                                @canRoute('monitoring.rekonsiliasi.lock.store')
+                                    <button id="btn-lock-ocf" type="button" class="btn btn-outline-light btn-sm">
+                                        <i class="fas fa-lock fa-sm"></i> Lock Data OCF
+                                    </button>
+                                @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.summary')
+                                    <a href="{{ route('monitoring.rekonsiliasi.summary') }}" class="btn btn-outline-light btn-sm">
+                                        <i class="fas fa-chart-pie fa-sm"></i> Summary Rekonsiliasi
+                                    </a>
+                                @endcanRoute
+
                                 @php $canSyncAny = false; @endphp
                                 @canRoute('monitoring.rekonsiliasi.sync')
                                     @php $canSyncAny = true; @endphp
@@ -2757,6 +2771,64 @@ function updateFormulaWithColors() {
     });
 
     if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
+
+    /**
+     * Lock Data OCF: user harus memilih 1 OCF, lalu SweetAlert menanyakan jenis
+     * lock (Partial / Shortship). Snapshot dihitung di server
+     * (RekonLockService) memakai filter dashboard yang sedang aktif.
+     */
+    const lockUrl = app.dataset.lockUrl;
+    const btnLockOcf = document.getElementById('btn-lock-ocf');
+
+    function submitLock(lockType) {
+        const f = currentFilters();
+        Swal.fire({
+            title: 'Mengunci data OCF...',
+            html: 'Mohon tunggu, sedang mengambil snapshot data.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        fetch(lockUrl, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...f, lock_type: lockType }),
+        })
+            .then(async (response) => {
+                const json = await response.json().catch(() => ({}));
+                if (!response.ok || !json.success) {
+                    const detail = json.errors ? Object.values(json.errors).flat().join('<br>') : '';
+                    throw new Error(json.message || detail || 'Lock gagal.');
+                }
+                return json;
+            })
+            .then((json) => Swal.fire({ icon: 'success', title: 'Berhasil di-lock', html: escapeHtml(json.message) }))
+            .catch((err) => Swal.fire({ icon: 'error', title: 'Gagal', html: escapeHtml(err.message || 'Lock gagal diproses.') }));
+    }
+
+    btnLockOcf?.addEventListener('click', () => {
+        const f = currentFilters();
+        if (!f.ocf) {
+            Swal.fire({ icon: 'warning', title: 'OCF belum dipilih', text: 'Pilih satu OCF terlebih dahulu sebelum melakukan Lock Data OCF.' });
+            return;
+        }
+        Swal.fire({
+            icon: 'question',
+            title: 'Lock Data OCF',
+            html: `Pilih jenis lock untuk OCF <strong>${escapeHtml(f.ocf)}</strong>.<br><small class="text-muted">Data seluruh stage & Rekap per Fabric dikunci pada periode tanggal hari ini.</small>`,
+            input: 'radio',
+            inputOptions: { shortship: 'Short Ship', partial: 'Partial', complete: 'Complete' },
+            inputValidator: (value) => (!value ? 'Pilih salah satu jenis lock.' : undefined),
+            showCancelButton: true,
+            confirmButtonText: 'Lock',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#2e75b6',
+        }).then((res) => {
+            if (res.isConfirmed && res.value) submitLock(res.value);
+        });
+    });
 
     /**
      * Import Stage Remark (mon_stage_remarks) & Prod QC (mon_prod_qc):

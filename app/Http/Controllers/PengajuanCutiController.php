@@ -9,6 +9,7 @@ use App\Models\Holiday;
 use App\Models\LeaveBalances;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
+use App\Services\LeaveBalanceGenerationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -116,6 +117,9 @@ class PengajuanCutiController extends Controller
             return Carbon::parse($date)->format('Y-m-d');
         })->toArray();
 
+        // Pastikan leave balance non-tahunan sudah tergenerate jika belum ada
+        app(LeaveBalanceGenerationService::class)->generateForEmployee($npk, $employee->JK, (int) date('Y'));
+
         // Ambil daftar balance cuti karyawan untuk tahun berjalan
         $leaveBalances = DB::table('leave_balances')
             ->join('leave_types', 'leave_balances.leave_type_id', '=', 'leave_types.id')
@@ -174,13 +178,12 @@ class PengajuanCutiController extends Controller
                 'leaves'                     => 'required|array|min:1',
                 // distinct: satu jenis cuti hanya boleh dipilih di satu form dalam sekali kirim
                 'leaves.*.jenis_cuti'        => 'required|exists:leave_types,id|distinct',
-                'leaves.*.tanggal_mulai'     => 'required|date|after_or_equal:today',
+                'leaves.*.tanggal_mulai'     => 'required|date',
                 // tanggal_selesai = hari terakhir cuti (inclusive), boleh sama dengan tanggal_mulai untuk cuti 1 hari
                 'leaves.*.tanggal_selesai'   => 'required|date|after_or_equal:leaves.*.tanggal_mulai',
                 'leaves.*.keterangan'        => 'required|string',
             ], [
                 'leaves.*.jenis_cuti.distinct' => 'Jenis cuti yang sama tidak boleh dipilih lebih dari sekali dalam satu pengajuan.',
-                'leaves.*.tanggal_mulai.after_or_equal' => 'Tanggal mulai tidak boleh sebelum hari ini.',
                 'leaves.*.tanggal_selesai.after_or_equal' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
             ]);
 
@@ -237,11 +240,6 @@ class PengajuanCutiController extends Controller
                 $startDate = Carbon::parse($leave['tanggal_mulai']);
                 $endDate   = Carbon::parse($leave['tanggal_selesai']);
 
-                if ($startDate->lt(Carbon::today())) {
-                    Alert::error('Error', "$rowLabel: Tanggal mulai tidak boleh sebelum hari ini.");
-                    return back();
-                }
-
                 // tanggal_selesai = hari terakhir cuti (inclusive), tidak boleh sebelum tanggal_mulai
                 if ($endDate->lt($startDate)) {
                     Alert::error('Error', "$rowLabel: Tanggal selesai tidak boleh sebelum tanggal mulai.");
@@ -288,6 +286,17 @@ class PengajuanCutiController extends Controller
                     ->where('leave_type_id', $leave['jenis_cuti'])
                     ->where('year', $startDate->year)
                     ->first();
+
+                if (!$balance) {
+                    $leaveType = LeaveTypes::find($leave['jenis_cuti']);
+                    if ($leaveType && strtolower(trim($leaveType->code)) !== 'tahunan') {
+                        app(LeaveBalanceGenerationService::class)->generateForEmployee($request->npk, null, (int) $startDate->year);
+                        $balance = LeaveBalances::where('NPK', $request->npk)
+                            ->where('leave_type_id', $leave['jenis_cuti'])
+                            ->where('year', $startDate->year)
+                            ->first();
+                    }
+                }
 
                 if (!$balance) {
                     Alert::error('Error', "$rowLabel: Jatah cuti tidak ditemukan. Hubungi HR untuk informasi lebih lanjut.");
@@ -420,6 +429,17 @@ class PengajuanCutiController extends Controller
             ->where('leave_type_id', $leaveTypeId)
             ->where('year', $year)
             ->first();
+
+        if (!$balance) {
+            $leaveType = LeaveTypes::find($leaveTypeId);
+            if ($leaveType && strtolower(trim($leaveType->code)) !== 'tahunan') {
+                app(LeaveBalanceGenerationService::class)->generateForEmployee($npk, null, (int) $year);
+                $balance = LeaveBalances::where('NPK', $npk)
+                    ->where('leave_type_id', $leaveTypeId)
+                    ->where('year', $year)
+                    ->first();
+            }
+        }
 
         $remained = $balance ? $balance->remained_days : 0;
         $used = $balance ? $balance->used_days : 0;

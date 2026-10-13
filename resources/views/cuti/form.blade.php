@@ -1044,7 +1044,6 @@
 
             flatpickr(mulaiInput, {
                 dateFormat: 'Y-m-d',
-                minDate: 'today',
                 disableMobile: true,
                 onChange: () => {
                     handleBlockDateChange(block);
@@ -1054,7 +1053,6 @@
 
             flatpickr(selesaiInput, {
                 dateFormat: 'Y-m-d',
-                minDate: 'today',
                 disableMobile: true,
                 onChange: () => {
                     handleBlockDateChange(block);
@@ -1793,10 +1791,10 @@
                 }
                 chosenTypes.push(jenis.value);
 
-                if (mulai.value < todayStr) {
-                    alert(`${nomor}: Tanggal mulai tidak boleh sebelum hari ini.`);
-                    return;
-                }
+                // if (mulai.value < todayStr) {
+                //     alert(`${nomor}: Tanggal mulai tidak boleh sebelum hari ini.`);
+                //     return;
+                // }
 
                 const diff = computeWorkingDays(mulai.value, selesai.value);
                 if (!diff || diff <= 0) {
