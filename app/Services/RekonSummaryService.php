@@ -82,7 +82,7 @@ class RekonSummaryService
             ],
             'kpi'         => $this->kpi($current, $totals, $prevTotals),
             'top3'        => [
-                'short_ship'  => $this->topList($current, 'short_ship', 3, $totals['short_ship']),
+                'short_ship'  => $this->topList($current, 'short_ship', 3, $totals['short_ship'], 'ship_pct'),
                 'loss'        => $this->topList($current, 'loss', 3, $totals['loss'], 'loss_pct'),
                 'sisa_fabric' => $this->topList($current, 'sisa_fabric', 3, $totals['sisa_fabric'], 'sisa_fabric_pct'),
             ],
@@ -177,7 +177,7 @@ class RekonSummaryService
                 'note_target'    => $l->note_target,
                 'note_estimasi'  => $l->note_estimasi !== null ? (float) $l->note_estimasi : null,
                 'has_note'       => $l->note_status || $l->note_masalah || $l->note_tindakan
-                                    || $l->note_pic || $l->note_target || $l->note_estimasi !== null,
+                    || $l->note_pic || $l->note_target || $l->note_estimasi !== null,
             ];
         })->values();
     }
@@ -238,11 +238,11 @@ class RekonSummaryService
     /** Top N OCF untuk 1 metrik + kontribusi terhadap total metrik itu. */
     private function topList(Collection $rows, string $key, int $limit, float $total, ?string $pctKey = null): array
     {
-        // Kalau $pctKey diisi, urutan Top N mengikuti persentase (nilai absolut),
+        // Kalau $pctKey diisi, urutan Top N mengikuti persentase terbesar (loss/stock: nilai absolut),
         // bukan qty. Data tanpa persentase (basis 0) tidak ikut.
         $rank = $pctKey
             ? $rows->filter(fn($r) => $r[$key] > 0 && $r[$pctKey] !== null)
-                ->sortByDesc(fn($r) => abs($r[$pctKey]))
+            ->sortByDesc(fn($r) => $pctKey === 'ship_pct' ? $r[$pctKey] : abs($r[$pctKey]))
             : $rows->filter(fn($r) => $r[$key] > 0)->sortByDesc($key);
 
         return $rank
