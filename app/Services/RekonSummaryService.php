@@ -139,6 +139,11 @@ class RekonSummaryService
                 'lock_date'    => $l->lock_date->toDateString(),
                 'loss'         => $loss,
                 'short_ship'   => $shortShip,
+                // % Shipment terhadap output Cutting = qty_shipment / qty_cutting x 100
+                // (dipakai kartu Top 3 Short Shipment).
+                'ship_pct'     => (float) $l->qty_cutting > 0
+                    ? round((float) $l->qty_shipment / (float) $l->qty_cutting * 100, 1)
+                    : null,
                 'grade_a'      => $gradeA,
                 'grade_b'      => $gradeB,
                 'grade_c'      => $gradeC,
@@ -153,7 +158,7 @@ class RekonSummaryService
                 'note_target'    => $l->note_target,
                 'note_estimasi'  => $l->note_estimasi !== null ? (float) $l->note_estimasi : null,
                 'has_note'       => $l->note_status || $l->note_masalah || $l->note_tindakan
-                    || $l->note_pic || $l->note_target || $l->note_estimasi !== null,
+                                    || $l->note_pic || $l->note_target || $l->note_estimasi !== null,
             ];
         })->values();
     }
@@ -223,6 +228,7 @@ class RekonSummaryService
                 'buyer'     => $r['buyer'],
                 'value'     => $r[$key],
                 'share_pct' => $total > 0 ? round($r[$key] / $total * 100, 1) : 0,
+                'ship_pct'  => $r['ship_pct'] ?? null,
             ])->all();
     }
 

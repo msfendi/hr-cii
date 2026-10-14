@@ -82,7 +82,7 @@
                     <div class="row">
                         <div class="col-xl-4 col-md-6 mb-4">
                             <div class="card shadow h-100 sum-card">
-                                <div class="sum-card-head bg-danger"><i class="fas fa-exclamation-triangle mr-1"></i> TOP 3 &ndash; SHORT SHIPMENT (PCS)</div>
+                                <div class="sum-card-head bg-danger"><i class="fas fa-exclamation-triangle mr-1"></i> TOP 3 &ndash; SHORT SHIPMENT (% SHIPMENT / CUTTING)</div>
                                 <div class="card-body p-2" id="sum-top3-short_ship"></div>
                             </div>
                         </div>
@@ -222,8 +222,16 @@
         history.replaceState(null, '', u);
     }
 
-    function rankList(items, color) {
+    // usePct: tampilkan % (ship_pct = shipment / output cutting) dari service, bukan qty.
+    function rankList(items, color, usePct = false) {
         if (!items.length) return '<div class="text-muted small text-center py-3">No data</div>';
+        if (usePct) {
+            const fmtP = (v) => v === null || v === undefined ? '-' : new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(v) + '%';
+            return items.map((i, idx) => `<div class="sum-rank">
+                <span class="no">${idx + 1}</span><span class="ocf">${esc(i.ocf)}</span><span class="buyer" title="${esc(i.buyer)}">${esc(i.buyer || '-')}</span>
+                <div class="sum-bar-wrap"><div class="sum-bar" style="width:${Math.min(100, Math.max(0, i.ship_pct || 0)).toFixed(1)}%;background:${color}"></div></div>
+                <span class="num" title="Short ship: ${fmt(i.value)} pcs">${fmtP(i.ship_pct)}</span></div>`).join('');
+        }
         const max = Math.max(...items.map(i => i.value), 1);
         return items.map((i, idx) => `<div class="sum-rank">
             <span class="no">${idx + 1}</span><span class="ocf">${esc(i.ocf)}</span><span class="buyer" title="${esc(i.buyer)}">${esc(i.buyer || '-')}</span>
@@ -232,7 +240,7 @@
     }
 
     function renderTop3(d) {
-        document.getElementById('sum-top3-short_ship').innerHTML = rankList(d.top3.short_ship, '#ef4444');
+        document.getElementById('sum-top3-short_ship').innerHTML = rankList(d.top3.short_ship, '#ef4444', true);
         document.getElementById('sum-top3-loss').innerHTML = rankList(d.top3.loss, '#f97316');
         document.getElementById('sum-top3-sisa_fabric').innerHTML = rankList(d.top3.sisa_fabric, '#3b82f6');
     }
