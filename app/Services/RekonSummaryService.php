@@ -139,10 +139,11 @@ class RekonSummaryService
                 'lock_date'    => $l->lock_date->toDateString(),
                 'loss'         => $loss,
                 'short_ship'   => $shortShip,
-                // % Shipment terhadap output Cutting = qty_shipment / qty_cutting x 100
+                // % Short Shipment terhadap output Cutting =
+                // (qty_cutting - qty_shipment) / qty_cutting x 100
                 // (dipakai kartu Top 3 Short Shipment).
                 'ship_pct'     => (float) $l->qty_cutting > 0
-                    ? round((float) $l->qty_shipment / (float) $l->qty_cutting * 100, 1)
+                    ? round(((float) $l->qty_cutting - (float) $l->qty_shipment) / (float) $l->qty_cutting * 100, 1)
                     : null,
                 'grade_a'      => $gradeA,
                 'grade_b'      => $gradeB,

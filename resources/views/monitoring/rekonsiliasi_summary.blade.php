@@ -82,7 +82,7 @@
                     <div class="row">
                         <div class="col-xl-4 col-md-6 mb-4">
                             <div class="card shadow h-100 sum-card">
-                                <div class="sum-card-head bg-danger"><i class="fas fa-exclamation-triangle mr-1"></i> TOP 3 &ndash; SHORT SHIPMENT (% SHIPMENT / CUTTING)</div>
+                                <div class="sum-card-head bg-danger"><i class="fas fa-exclamation-triangle mr-1"></i> TOP 3 &ndash; SHORT SHIPMENT (% (CUTTING &minus; SHIPMENT) / CUTTING)</div>
                                 <div class="card-body p-2" id="sum-top3-short_ship"></div>
                             </div>
                         </div>
@@ -222,7 +222,7 @@
         history.replaceState(null, '', u);
     }
 
-    // usePct: tampilkan % (ship_pct = shipment / output cutting) dari service, bukan qty.
+    // usePct: tampilkan % (ship_pct = (output cutting - shipment) / output cutting) dari service, bukan qty.
     function rankList(items, color, usePct = false) {
         if (!items.length) return '<div class="text-muted small text-center py-3">No data</div>';
         if (usePct) {
