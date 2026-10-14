@@ -22,7 +22,7 @@ class RekapService
         $countPkwt = PKWT::where('TKK', null)->count();
 
         // Hitung total Magang yang masih aktif
-        $countMagang = Magang::where('TKK', null)->count();
+        // $countMagang = Magang::where('TKK', null)->count();
 
         Rekap::updateOrCreate(
             [
@@ -31,7 +31,7 @@ class RekapService
             ],
             [
                 'PKWT' => $countPkwt,
-                'MAGANG' => $countMagang,
+                'MAGANG' => 0,
             ]
         );
     }
@@ -42,7 +42,7 @@ class RekapService
     public static function updateRekap($bulan, $tahun)
     {
         $countPkwt = PKWT::where('TKK', null)->count();
-        $countMagang = Magang::where('TKK', null)->count();
+        // $countMagang = Magang::where('TKK', null)->count();
 
         Rekap::updateOrCreate(
             [
@@ -51,7 +51,7 @@ class RekapService
             ],
             [
                 'PKWT' => $countPkwt,
-                'MAGANG' => $countMagang,
+                'MAGANG' => 0,
             ]
         );
     }

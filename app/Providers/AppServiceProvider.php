@@ -7,7 +7,7 @@ use App\Models\Magang;
 use App\Models\PKWT;
 use App\Models\User;
 use App\Observers\GlobalObserver;
-use App\Observers\MagangObserver;
+// use App\Observers\MagangObserver;
 use App\Observers\PkwtObserver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\File;
@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         PKWT::observe(PkwtObserver::class);
-        Magang::observe(MagangObserver::class);
+        // Magang::observe(MagangObserver::class);
 
         // $models = File::allFiles(app_path('Models'));
 

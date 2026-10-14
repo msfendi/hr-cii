@@ -99,15 +99,13 @@ class RekonLockService
 
         // Mode CPO: NEED dari materialAchievement() tidak ter-scope ke CPO (code_prod LIKE '%%'
         // => semua work order), jadi need_qty / order_pct / received_pct dihitung ulang
-        // hanya dari work order milik OCF di dalam CPO ini.
+        // hanya dari work order milik OCF di dalam CPO ini. (Persentase tidak berbasis NEED
+        // lagi -- lihat aturan di MonitoringRekonsiliasiService::materialAchievement().)
         if ($isCpo && !empty($ocfNumbers)) {
             $needByCode = $this->needByBarangForOcfs($ocfNumbers);
             $fabrics = $fabrics->map(function ($f) use ($needByCode) {
                 $need = (float) ($needByCode[$f->barang_code] ?? 0);
-                $pct  = fn($n) => $need > 0 ? round(max(0, (float) $n) / $need * 100) : 0;
-                $f->need_qty     = $need;
-                $f->order_pct    = $pct($f->order_qty);
-                $f->received_pct = $pct($f->received_qty);
+                $f->need_qty = $need;
                 return $f;
             });
         }

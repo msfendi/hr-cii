@@ -1018,17 +1018,16 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * "MATERIAL ACHIEVEMENT": persentase tiap tahap dihitung berantai,
-     * dengan NEED sebagai baseline (selalu 100% kalau NEED > 0):
-     *  - NEED%     : NEED / NEED (patokan, selalu 100%), dengan NEED = SUM(mon_work_orders.jumlah_prod * mon_work_orders.cons).
-     *  - ORDER%    : mon_rekonsiliasis.jumlah_order / NEED.
-     *  - RECEIVED% : (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc) / NEED.
-     *  - OUT PROD% : mon_rekonsiliasis.out_req / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
-     *  - STOCK%    : mon_rekonsiliasis.saldo_gudang / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
+     * "MATERIAL ACHIEVEMENT": persentase tiap tahap dengan ORDER sebagai baseline:
+     *  - ORDER%    : 100% (baseline, kalau jumlah_order > 0).
+     *  - RECEIVED% : jumlah_doc (received) / jumlah_order.
+     *  - OUT PROD% : out_req / jumlah_doc (received).
+     *  - OUT DOC%  : out_doc / jumlah_doc (received).
+     *  - STOCK%    : saldo_gudang (total_gudang) / jumlah_doc (received).
      *
-     * `out_doc` (mon_rekonsiliasis.out_doc) dikurangkan dari jumlah_doc untuk
-     * mendapatkan "jumlah diterima bersih" yang jadi pembagi OUT PROD% &
-     * STOCK%, sekaligus pembilang RECEIVED%.
+     * NEED (SUM(mon_work_orders.jumlah_prod * cons)) tetap dibawakan sebagai qty
+     * informasi (`need_qty`), tidak lagi jadi pembagi persentase.
+     * Blade hanya menampilkan field *_pct dari sini, tidak menghitung ulang.
      *
      * Setiap baris juga dibawakan `barang_category` (dari mon_ms_barangs, via
      * barang_code) supaya frontend bisa memecah chart menjadi 3 card:
@@ -1080,9 +1079,6 @@ class MonitoringRekonsiliasiService
             $order  = (float) $r->jumlah_order;
             $doc    = (float) $r->jumlah_doc;
             $outDoc = (float) $r->out_doc;
-            // Jumlah diterima bersih = jumlah_doc - out_doc, dipakai sebagai
-            // pembagi OUT PROD% & STOCK%, dan pembilang RECEIVED%.
-            $netReceived = $doc - $outDoc;
             $need   = (float) ($needByCode[$r->barang_code]->request ?? 0);
 
             $pct = fn($num, $denom) => $denom > 0 ? round(max(0, (float) $num) / $denom * 100) : 0;
@@ -1096,23 +1092,20 @@ class MonitoringRekonsiliasiService
                 // barang_code) -- dipakai frontend untuk ditampilkan di
                 // tooltip chart Material/Fabric Achievement saat di-hover.
                 'harga_total'     => (float) ($r->harga_total ?? 0),
-                // NEED% jadi baseline/patokan (selalu 100% kalau NEED > 0),
-                // ORDER% & RECEIVED% sekarang dihitung terhadap NEED (bukan
-                // lagi terhadap ORDER itu sendiri) -- lihat instruksi
-                // perubahan formula fabricQty().
+                // Aturan persentase Material/Fabric Achievement (SATU-SATUNYA sumber
+                // hitung; blade hanya menampilkan field ini, tidak menghitung ulang):
+                //   ORDER%    = 100% (baseline, kalau ada order)
+                //   RECEIVED% = received (jumlah_doc) / order
+                //   OUT PROD% = out_req / received
+                //   OUT DOC%  = out_doc / received
+                //   STOCK%    = saldo_gudang / received
                 'need_pct'        => $pct($need, $need),
-                'order_pct'       => $pct($order, $need),
-                // RECEIVED% = (jumlah_doc - out_doc) / need.
-                'received_pct'    => $pct($doc, $need),
-                // OUT PROD% = out_req / (jumlah_doc - out_doc).
-                'out_prod_pct'    => $pct($r->out_req, $netReceived),
-                // Versi terpisah (dipakai tabel Rekap per Fabric):
-                // OUT REQ% = out_req / (jumlah_doc - out_doc),
-                // OUT DOC% = out_doc / (jumlah_doc - out_doc).
-                'out_req_pct'     => $pct($r->out_req, $netReceived),
-                'out_doc_pct'     => $pct($outDoc, $netReceived),
-                // STOCK% = saldo_gudang / (jumlah_doc - out_doc).
-                'stock_pct'       => $pct($r->saldo_gudang, $netReceived),
+                'order_pct'       => $order > 0 ? 100 : 0,
+                'received_pct'    => $pct($doc, $order),
+                'out_prod_pct'    => $pct($r->out_req, $doc),
+                'out_req_pct'     => $pct($r->out_req, $doc),
+                'out_doc_pct'     => $pct($outDoc, $doc),
+                'stock_pct'       => $pct($r->saldo_gudang, $doc),
                 // Qty mentah (bukan persentase) untuk masing-masing bar --
                 // dipakai frontend supaya tooltip chart Material Achievement
                 // bisa menampilkan qty asli di samping persentase saat di-hover.
