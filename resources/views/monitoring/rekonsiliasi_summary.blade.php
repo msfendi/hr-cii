@@ -88,13 +88,13 @@
                         </div>
                         <div class="col-xl-4 col-md-6 mb-4">
                             <div class="card shadow h-100 sum-card">
-                                <div class="sum-card-head" style="background:#f97316"><i class="fas fa-exclamation-triangle mr-1"></i> TOP 3 &ndash; PRODUCTION LOSS (PCS)</div>
+                                <div class="sum-card-head" style="background:#f97316"><i class="fas fa-exclamation-triangle mr-1"></i> TOP 3 &ndash; PRODUCTION LOSS (% LOSS / CONTRACT)</div>
                                 <div class="card-body p-2" id="sum-top3-loss"></div>
                             </div>
                         </div>
                         <div class="col-xl-4 col-md-6 mb-4">
                             <div class="card shadow h-100 sum-card">
-                                <div class="sum-card-head bg-primary"><i class="fas fa-layer-group mr-1"></i> TOP 3 &ndash; FABRIC STOCK (KGM)</div>
+                                <div class="sum-card-head bg-primary"><i class="fas fa-layer-group mr-1"></i> TOP 3 &ndash; FABRIC STOCK (% STOCK / RECEIVED)</div>
                                 <div class="card-body p-2" id="sum-top3-sisa_fabric"></div>
                             </div>
                         </div>
@@ -223,14 +223,16 @@
     }
 
     // usePct: tampilkan % (ship_pct = (output cutting - shipment) / output cutting) dari service, bukan qty.
-    function rankList(items, color, usePct = false) {
+    // usePct: 'ship' => i.ship_pct (short ship), 'pct' => i.pct (loss / fabric stock).
+    function rankList(items, color, usePct = false, unit = 'pcs', lbl = 'Short ship') {
         if (!items.length) return '<div class="text-muted small text-center py-3">No data</div>';
         if (usePct) {
+            const pv = (i) => usePct === 'pct' ? i.pct : i.ship_pct;
             const fmtP = (v) => v === null || v === undefined ? '-' : new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(v) + '%';
             return items.map((i, idx) => `<div class="sum-rank">
                 <span class="no">${idx + 1}</span><span class="ocf">${esc(i.ocf)}</span><span class="buyer" title="${esc(i.buyer)}">${esc(i.buyer || '-')}</span>
-                <div class="sum-bar-wrap"><div class="sum-bar" style="width:${Math.min(100, Math.max(0, i.ship_pct || 0)).toFixed(1)}%;background:${color}"></div></div>
-                <span class="num" title="Short ship: ${fmt(i.value)} pcs">${fmtP(i.ship_pct)}</span></div>`).join('');
+                <div class="sum-bar-wrap"><div class="sum-bar" style="width:${Math.min(100, Math.abs(pv(i) || 0)).toFixed(1)}%;background:${color}"></div></div>
+                <span class="num" title="${lbl}: ${fmt(i.value, 2)} ${unit}">${fmtP(pv(i))}</span></div>`).join('');
         }
         const max = Math.max(...items.map(i => i.value), 1);
         return items.map((i, idx) => `<div class="sum-rank">
@@ -240,9 +242,9 @@
     }
 
     function renderTop3(d) {
-        document.getElementById('sum-top3-short_ship').innerHTML = rankList(d.top3.short_ship, '#ef4444', true);
-        document.getElementById('sum-top3-loss').innerHTML = rankList(d.top3.loss, '#f97316');
-        document.getElementById('sum-top3-sisa_fabric').innerHTML = rankList(d.top3.sisa_fabric, '#3b82f6');
+        document.getElementById('sum-top3-short_ship').innerHTML = rankList(d.top3.short_ship, '#ef4444', 'ship', 'pcs', 'Short ship');
+        document.getElementById('sum-top3-loss').innerHTML = rankList(d.top3.loss, '#f97316', 'pct', 'pcs', 'Loss');
+        document.getElementById('sum-top3-sisa_fabric').innerHTML = rankList(d.top3.sisa_fabric, '#3b82f6', 'pct', 'kg', 'Fabric stock');
     }
 
     const label = (v) => String(v || '').charAt(0).toUpperCase() + String(v || '').slice(1);

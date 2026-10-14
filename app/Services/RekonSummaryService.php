@@ -24,6 +24,10 @@ use Illuminate\Support\Collection;
  *  - Grade A/B/C    : hasil import Excel (kosong dianggap 0).
  *  - Pembanding "vs periode sebelumnya" = periode dengan jumlah hari yang sama
  *    tepat sebelum periode terpilih.
+ *  - Top 3 Production Loss  : % = total loss / Total Contract (sama seperti stage Balance
+ *                     di Work In Process Monitoring Rekonsiliasi), urut dari % terbesar.
+ *  - Top 3 Fabric Stock     : % = stock / received (sama seperti Stock % di Fabric
+ *                     Achievement), urut dari % terbesar.
  *  - Urutan Top 5 OCF memakai estimasi dampak internal = CM per pcs x
  *    (loss + short ship + grade B + grade C) + estimasi nilai sisa fabric.
  *  - Status & REKOMENDASI & NOTES diisi manual (import Excel, kolom note_*).
@@ -79,8 +83,8 @@ class RekonSummaryService
             'kpi'         => $this->kpi($current, $totals, $prevTotals),
             'top3'        => [
                 'short_ship'  => $this->topList($current, 'short_ship', 3, $totals['short_ship']),
-                'loss'        => $this->topList($current, 'loss', 3, $totals['loss']),
-                'sisa_fabric' => $this->topList($current, 'sisa_fabric', 3, $totals['sisa_fabric']),
+                'loss'        => $this->topList($current, 'loss', 3, $totals['loss'], 'loss_pct'),
+                'sisa_fabric' => $this->topList($current, 'sisa_fabric', 3, $totals['sisa_fabric'], 'sisa_fabric_pct'),
             ],
             'top_impact'      => $this->topImpact($current),
             'notes'           => $this->notes($current),
@@ -116,7 +120,9 @@ class RekonSummaryService
             // Sisa fabric dibaca dari tabel mon_rekon_lock_fabrics (stock_qty); nilai Rp =
             // harga_total x stock/received per fabric. Kalau tidak ada baris fabric,
             // pakai angka yang tersimpan di baris lock.
+            $receivedKg = 0.0;
             if ($l->fabrics->isNotEmpty()) {
+                $receivedKg = (float) $l->fabrics->sum('received_qty');
                 $sisaKg    = (float) $l->fabrics->sum('stock_qty');
                 $sisaValue = (float) $l->fabrics->sum(fn($f) => (float) $f->received_qty > 0
                     ? (float) $f->harga_total * ((float) $f->stock_qty / (float) $f->received_qty)
@@ -125,6 +131,16 @@ class RekonSummaryService
                 $sisaKg    = (float) $l->sisa_fabric_kg;
                 $sisaValue = (float) $l->sisa_fabric_value;
             }
+
+            // % Production Loss = sama seperti stage Balance di Work In Process (Chutex)
+            // pada Monitoring Rekonsiliasi: total loss (sewing + packing) / Total Contract x 100.
+            // Disimpan bertanda NEGATIF (loss = minus) agar tampil sama dengan stage Balance.
+            $contract = (float) ($l->qty_contract ?? $l->total_contract ?? 0);
+            $lossPct  = $contract > 0 ? round(-$loss / $contract * 100, 1) : null;
+
+            // % Fabric Stock = sama seperti kolom Stock % di Fabric Achievement:
+            // stock / received (semua fabric OCF/CPO digabung).
+            $sisaPct = $receivedKg > 0 ? round($sisaKg / $receivedKg * 100, 1) : null;
 
             $impact = (float) $l->cm_per_pcs * ($loss + $shortShip + $gradeB + $gradeC)
                 + $sisaValue;
@@ -138,6 +154,7 @@ class RekonSummaryService
                 'lock_type'    => $l->lock_type,
                 'lock_date'    => $l->lock_date->toDateString(),
                 'loss'         => $loss,
+                'loss_pct'     => $lossPct,
                 'short_ship'   => $shortShip,
                 // % Short Shipment terhadap output Cutting =
                 // (qty_cutting - qty_shipment) / qty_cutting x 100
@@ -149,6 +166,7 @@ class RekonSummaryService
                 'grade_b'      => $gradeB,
                 'grade_c'      => $gradeC,
                 'sisa_fabric'  => $sisaKg,
+                'sisa_fabric_pct' => $sisaPct,
                 'impact_value' => round($impact, 2),
                 'grade_filled' => $l->grade_a !== null || $l->grade_b !== null || $l->grade_c !== null,
                 'note_prioritas' => $l->note_prioritas !== null ? (int) $l->note_prioritas : null,
@@ -218,10 +236,16 @@ class RekonSummaryService
     }
 
     /** Top N OCF untuk 1 metrik + kontribusi terhadap total metrik itu. */
-    private function topList(Collection $rows, string $key, int $limit, float $total): array
+    private function topList(Collection $rows, string $key, int $limit, float $total, ?string $pctKey = null): array
     {
-        return $rows->filter(fn($r) => $r[$key] > 0)
-            ->sortByDesc($key)
+        // Kalau $pctKey diisi, urutan Top N mengikuti persentase (nilai absolut),
+        // bukan qty. Data tanpa persentase (basis 0) tidak ikut.
+        $rank = $pctKey
+            ? $rows->filter(fn($r) => $r[$key] > 0 && $r[$pctKey] !== null)
+                ->sortByDesc(fn($r) => abs($r[$pctKey]))
+            : $rows->filter(fn($r) => $r[$key] > 0)->sortByDesc($key);
+
+        return $rank
             ->take($limit)
             ->values()
             ->map(fn($r) => [
@@ -230,6 +254,7 @@ class RekonSummaryService
                 'value'     => $r[$key],
                 'share_pct' => $total > 0 ? round($r[$key] / $total * 100, 1) : 0,
                 'ship_pct'  => $r['ship_pct'] ?? null,
+                'pct'       => $pctKey ? $r[$pctKey] : null,
             ])->all();
     }
 
