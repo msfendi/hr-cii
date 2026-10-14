@@ -792,11 +792,11 @@ class MonitoringRekonsiliasiService
 
         return [
             'need'     => $need,
-            'order'    => $pct($order, $need),
-            'received' => $pct($received, $need),
-            'out_wip_req' => $pct($outWipReq, $need),
-            'out_wip_doc' => $pct($outWipDoc, $need),
-            'stock'    => $pct($stock, $need),
+            'order'    => $pct($order, 1),
+            'received' => $pct($received, $order),
+            'out_wip_req' => $pct($outWipReq, $received),
+            'out_wip_doc' => $pct($outWipDoc, $received),
+            'stock'    => $pct($stock, $received),
         ];
     }
 
