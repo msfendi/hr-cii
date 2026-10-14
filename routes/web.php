@@ -980,7 +980,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/import/upload', [OutsourceController::class, 'import'])->name('import');
     });
 
-    Route::prefix('monitoring/rekonsiliasi')->group(function () {
+    Route::middleware(['auth', 'permission'])
+        ->prefix('monitoring/rekonsiliasi')->group(function () {
         // Lock Data OCF (POST JSON dari tombol di Dashboard Reconciliation)
         Route::post('/lock', [MonitoringRekonLockController::class, 'store'])
             ->name('monitoring.rekonsiliasi.lock.store');
