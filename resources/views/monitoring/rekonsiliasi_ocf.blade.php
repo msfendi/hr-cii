@@ -98,11 +98,11 @@
                                 <div class="font-weight-bold" id="rekon-last-updated">--</div>
                             </div>
                             <div class="d-flex" style="gap:6px">
-                                {{-- Lock Data OCF: snapshot semua stage + Rekap per Fabric + buyer/style/OCF
-                                     ke tabel mon_rekon_locks (partial / shortship dipilih lewat SweetAlert). --}}
+                                {{-- Lock Data (2 mode: per OCF / per CPO): snapshot semua stage + Rekap per Fabric
+                                     + buyer/style ke tabel mon_rekon_locks (mode & jenis lock dipilih lewat SweetAlert). --}}
                                 @canRoute('monitoring.rekonsiliasi.lock.store')
                                     <button id="btn-lock-ocf" type="button" class="btn btn-outline-light btn-sm">
-                                        <i class="fas fa-lock fa-sm"></i> Lock Data OCF
+                                        <i class="fas fa-lock fa-sm"></i> Lock Data
                                     </button>
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.summary')
@@ -2773,17 +2773,21 @@ function updateFormulaWithColors() {
     if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
 
     /**
-     * Lock Data OCF: user harus memilih 1 OCF, lalu SweetAlert menanyakan jenis
-     * lock (Partial / Shortship). Snapshot dihitung di server
-     * (RekonLockService) memakai filter dashboard yang sedang aktif.
+     * Lock Data (2 mode):
+     *  - OCF : butuh 1 OCF terpilih.
+     *  - CPO : butuh 1 CPO (uraian) terpilih; snapshot mencakup seluruh OCF di CPO itu.
+     * SweetAlert menanyakan mode + jenis lock (Short Ship / Partial / Complete).
+     * Snapshot dihitung di server (RekonLockService) memakai filter dashboard.
+     * Catatan: di halaman versi OCF-only (dropdown CPO disembunyikan) mode CPO dinonaktifkan.
      */
     const lockUrl = app.dataset.lockUrl;
     const btnLockOcf = document.getElementById('btn-lock-ocf');
 
-    function submitLock(lockType) {
+    function submitLock(mode, lockType) {
         const f = currentFilters();
+        const label = mode === 'cpo' ? 'CPO' : 'OCF';
         Swal.fire({
-            title: 'Mengunci data OCF...',
+            title: `Mengunci data ${label}...`,
             html: 'Mohon tunggu, sedang mengambil snapshot data.',
             allowOutsideClick: false,
             allowEscapeKey: false,
@@ -2794,7 +2798,7 @@ function updateFormulaWithColors() {
         fetch(lockUrl, {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...f, lock_type: lockType }),
+            body: JSON.stringify({ ...f, mode: mode, lock_type: lockType }),
         })
             .then(async (response) => {
                 const json = await response.json().catch(() => ({}));
@@ -2810,23 +2814,53 @@ function updateFormulaWithColors() {
 
     btnLockOcf?.addEventListener('click', () => {
         const f = currentFilters();
-        if (!f.ocf) {
-            Swal.fire({ icon: 'warning', title: 'OCF belum dipilih', text: 'Pilih satu OCF terlebih dahulu sebelum melakukan Lock Data OCF.' });
-            return;
-        }
+        const cpoAvailable = Object.prototype.hasOwnProperty.call(f, 'uraian'); // false di versi OCF-only
+        const defaultMode = (!f.ocf && cpoAvailable && f.uraian) ? 'cpo' : 'ocf';
+        const radios = (name, opts, checked, disabledKeys = []) => Object.entries(opts).map(([v, t]) =>
+            `<label class="mr-3 mb-1" style="cursor:pointer"><input type="radio" name="${name}" value="${v}" ${v === checked ? 'checked' : ''} ${disabledKeys.includes(v) ? 'disabled' : ''}> ${t}</label>`
+        ).join('');
+
         Swal.fire({
             icon: 'question',
-            title: 'Lock Data OCF',
-            html: `Pilih jenis lock untuk OCF <strong>${escapeHtml(f.ocf)}</strong>.<br><small class="text-muted">Data seluruh stage & Rekap per Fabric dikunci pada periode tanggal hari ini.</small>`,
-            input: 'radio',
-            inputOptions: { shortship: 'Short Ship', partial: 'Partial', complete: 'Complete' },
-            inputValidator: (value) => (!value ? 'Pilih salah satu jenis lock.' : undefined),
+            title: 'Lock Data',
+            html: `
+                <div class="text-left">
+                    <div class="font-weight-bold mb-1">Mode</div>
+                    <div class="mb-1">${radios('lock-mode', { ocf: 'Lock by OCF', cpo: 'Lock by CPO' }, defaultMode, cpoAvailable ? [] : ['cpo'])}</div>
+                    <div id="lock-target" class="small mb-3"></div>
+                    <div class="font-weight-bold mb-1">Jenis lock</div>
+                    <div>${radios('lock-type', { shortship: 'Short Ship', partial: 'Partial', complete: 'Complete' }, '')}</div>
+                    <small class="text-muted d-block mt-3">Data seluruh stage &amp; Rekap per Fabric dikunci pada periode tanggal hari ini.</small>
+                </div>`,
             showCancelButton: true,
             confirmButtonText: 'Lock',
             cancelButtonText: 'Batal',
             confirmButtonColor: '#2e75b6',
+            didOpen: () => {
+                const popup = Swal.getPopup();
+                const target = popup.querySelector('#lock-target');
+                const paint = () => {
+                    const mode = popup.querySelector('input[name="lock-mode"]:checked')?.value || 'ocf';
+                    const val = mode === 'cpo' ? f.uraian : f.ocf;
+                    const lbl = mode === 'cpo' ? 'CPO' : 'OCF';
+                    target.innerHTML = val
+                        ? `${lbl} terpilih: <strong>${escapeHtml(val)}</strong>${mode === 'cpo' ? ' <span class="text-muted">(seluruh OCF di dalam CPO ini)</span>' : ''}`
+                        : `<span class="text-danger">${lbl} belum dipilih di filter dashboard.</span>`;
+                };
+                popup.querySelectorAll('input[name="lock-mode"]').forEach((el) => el.addEventListener('change', paint));
+                paint();
+            },
+            preConfirm: () => {
+                const popup = Swal.getPopup();
+                const mode = popup.querySelector('input[name="lock-mode"]:checked')?.value || 'ocf';
+                const type = popup.querySelector('input[name="lock-type"]:checked')?.value;
+                const val = mode === 'cpo' ? f.uraian : f.ocf;
+                if (!val) return Swal.showValidationMessage(`Pilih satu ${mode === 'cpo' ? 'CPO' : 'OCF'} terlebih dahulu di filter dashboard.`);
+                if (!type) return Swal.showValidationMessage('Pilih salah satu jenis lock.');
+                return { mode, type };
+            },
         }).then((res) => {
-            if (res.isConfirmed && res.value) submitLock(res.value);
+            if (res.isConfirmed && res.value) submitLock(res.value.mode, res.value.type);
         });
     });
 

@@ -20,7 +20,8 @@
                  data-notes-template-url="{{ route('monitoring.rekonsiliasi.summary.notes-template') }}"
                  data-notes-import-url="{{ route('monitoring.rekonsiliasi.summary.notes-import') }}"
                  data-status-url="{{ route('monitoring.rekonsiliasi.summary.update-status') }}"
-                 data-lock-types='@json(\App\Models\MonRekonLock::types())'>
+                 data-lock-types='@json(\App\Models\MonRekonLock::types())'
+                 data-mode="{{ $mode ?? 'ocf' }}">
 
                 {{-- ================= HEADER ================= --}}
                 <div class="sum-hero shadow mb-4">
@@ -30,6 +31,10 @@
                             <div class="sum-hero-sub">Production Audit &nbsp;|&nbsp; Efficiency &nbsp;|&nbsp; Profitability</div>
                         </div>
                         <div class="d-flex flex-wrap align-items-center" style="gap:8px">
+                            <div class="btn-group btn-group-sm" role="group" id="sum-mode" aria-label="Summary mode">
+                                <button type="button" class="btn btn-outline-light" data-mode="ocf">By OCF</button>
+                                <button type="button" class="btn btn-outline-light" data-mode="cpo">By CPO</button>
+                            </div>
                             <div class="d-flex align-items-center" style="gap:6px">
                                 <label class="text-white small mb-0">Lock Period</label>
                                 <input type="date" id="sum-from" class="form-control form-control-sm" value="{{ $dateFrom }}">
@@ -66,8 +71,8 @@
                 <div id="sum-empty" class="card shadow mb-4" style="display:none">
                     <div class="card-body text-center text-muted py-5">
                         <i class="fas fa-lock fa-2x mb-3 d-block"></i>
-                        <div class="font-weight-bold mb-1">No OCF has been locked in this period</div>
-                        <div class="small">Use the <strong>Lock Data OCF</strong> button on the Reconciliation Dashboard, then select the lock period above.</div>
+                        <div class="font-weight-bold mb-1">No <span class="sum-mode-lbl">OCF</span> has been locked in this period</div>
+                        <div class="small">Use the <strong>Lock Data</strong> button (mode <strong class="sum-mode-lbl">OCF</strong>) on the Reconciliation Dashboard, then select the lock period above.</div>
                     </div>
                 </div>
 
@@ -99,13 +104,13 @@
                     <div class="row">
                         <div class="col-xl-8 mb-4">
                             <div class="card shadow sum-card mb-4">
-                                <div class="sum-card-head" style="background:#1f3864"><i class="fas fa-list mr-1"></i> TOP 5 OCF WITH THE BIGGEST ISSUES &ndash; DETAIL</div>
+                                <div class="sum-card-head" style="background:#1f3864"><i class="fas fa-list mr-1"></i> TOP 5 <span class="sum-mode-lbl">OCF</span> WITH THE BIGGEST ISSUES &ndash; DETAIL</div>
                                 <div class="card-body p-0">
                                     <div class="table-responsive">
                                         <table class="table table-sm table-bordered mb-0 sum-table" id="sum-top-impact">
                                             <thead>
                                                 <tr>
-                                                    <th>No</th><th>OCF</th><th>Buyer</th>
+                                                    <th>No</th><th class="sum-mode-lbl">OCF</th><th>Buyer</th>
                                                     <th class="text-right">Total Loss (Packing - Sewing)</th>
                                                     <th class="text-right">Grade A (pcs)</th>
                                                     <th class="text-right">Grade B (pcs)</th>
@@ -193,6 +198,8 @@
     const notesImportUrl = app.dataset.notesImportUrl;
     const statusUrl = app.dataset.statusUrl;
     const lockTypes = JSON.parse(app.dataset.lockTypes || '[]');
+    let mode = (new URLSearchParams(location.search).get('mode') || app.dataset.mode || 'ocf') === 'cpo' ? 'cpo' : 'ocf';
+    const modeLbl = () => (mode === 'cpo' ? 'CPO' : 'OCF');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
     const fromEl = document.getElementById('sum-from');
@@ -201,7 +208,19 @@
     const fmt = (v, d = 0) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: d }).format(Number(v || 0));
     const rp = (v) => 'Rp ' + fmt(v);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const qs = () => new URLSearchParams({ date_from: fromEl.value, date_to: toEl.value }).toString();
+    const qs = () => new URLSearchParams({ date_from: fromEl.value, date_to: toEl.value, mode }).toString();
+
+    function applyMode() {
+        document.querySelectorAll('.sum-mode-lbl').forEach(el => { el.textContent = modeLbl(); });
+        document.querySelectorAll('#sum-mode [data-mode]').forEach(b => {
+            const on = b.dataset.mode === mode;
+            b.classList.toggle('btn-light', on);
+            b.classList.toggle('btn-outline-light', !on);
+        });
+        const u = new URL(location.href);
+        u.searchParams.set('mode', mode);
+        history.replaceState(null, '', u);
+    }
 
     function rankList(items, color) {
         if (!items.length) return '<div class="text-muted small text-center py-3">No data</div>';
@@ -222,7 +241,7 @@
 
     function renderTable(rows) {
         document.querySelector('#sum-top-impact tbody').innerHTML = rows.length ? rows.map(r => `<tr>
-            <td>${r.no}</td><td><strong>${esc(r.ocf)}</strong></td><td>${esc(r.buyer || '-')}</td>
+            <td>${r.no}</td><td><strong>${esc(r.ocf)}</strong>${mode === 'cpo' && r.ocf_numbers ? `<div class="small text-muted" style="max-width:220px;white-space:normal">OCF: ${esc(r.ocf_numbers)}</div>` : ''}</td><td>${esc(r.buyer || '-')}</td>
             <td class="text-right text-danger">${fmt(r.loss)}</td><td class="text-right">${fmt(r.grade_a)}</td><td class="text-right">${fmt(r.grade_b)}</td>
             <td class="text-right">${fmt(r.grade_c)}</td><td class="text-right">${fmt(r.sisa_fabric)}</td>
             <td class="text-nowrap">${r.status ? `<span class="sum-badge ${esc(r.status)}">${esc(label(r.status))}</span>` : '<span class="text-muted">-</span>'}
@@ -242,7 +261,7 @@
             if (n.estimasi !== null && n.estimasi !== undefined) li.push(`<li>Estimated potential savings: <strong>${rp(n.estimasi)}</strong></li>`);
             return `<div class="sum-reco-item sum-reco">
                 <div class="sum-reco-no" style="background:${c}">${esc(n.no)}</div>
-                <div class="flex-fill"><div class="d-flex justify-content-between"><strong style="color:${c};font-size:.85rem">OCF ${esc(n.ocf)}${n.buyer ? ' &middot; ' + esc(n.buyer) : ''}</strong>
+                <div class="flex-fill"><div class="d-flex justify-content-between"><strong style="color:${c};font-size:.85rem">${modeLbl()} ${esc(n.ocf)}${n.buyer ? ' &middot; ' + esc(n.buyer) : ''}</strong>
                 ${n.status ? `<span class="sum-badge" style="background:${c}22;color:${c}">${esc(n.status)}</span>` : ''}</div>
                 <ul>${li.join('')}</ul></div></div>`;
         }).join('') : '<div class="text-muted small text-center py-3">No Recommendations &amp; Notes yet. Fill them in via Template &rarr; Import &rarr; Recommendations &amp; Notes.</div>';
@@ -255,7 +274,7 @@
             .then(d => {
                 Swal.close();
                 document.getElementById('sum-period-label').textContent =
-                    `Data periode : ${d.period.label} (comparing date ${d.period.prev_from} - ${d.period.prev_to})`;
+                    `Mode : By ${modeLbl()} | Data periode : ${d.period.label} (comparing date ${d.period.prev_from} - ${d.period.prev_to})`;
                 const empty = d.kpi.total_ocf.value === 0;
                 document.getElementById('sum-empty').style.display = empty ? '' : 'none';
                 document.getElementById('sum-body').style.display = empty ? 'none' : '';
@@ -264,7 +283,7 @@
                 renderTable(d.top_impact); renderNotes(d.notes);
                 if (d.grade_filled < d.kpi.total_ocf.value) {
                     document.getElementById('sum-period-label').insertAdjacentHTML('beforeend',
-                        ` &nbsp;|&nbsp; <span class="badge badge-warning">Grade filled ${d.grade_filled}/${d.kpi.total_ocf.value} OCF</span>`);
+                        ` &nbsp;|&nbsp; <span class="badge badge-warning">Grade filled ${d.grade_filled}/${d.kpi.total_ocf.value} ${modeLbl()}</span>`);
                 }
             })
             .catch(err => { Swal.close(); Swal.fire('Failed', 'Unable to load summary: ' + err.message, 'error'); });
@@ -283,7 +302,7 @@
         const options = Object.fromEntries(lockTypes.map(t => [t, label(t)]));
 
         Swal.fire({
-            title: `Change status of OCF ${ocf}`,
+            title: `Change status of ${modeLbl()} ${ocf}`,
             input: 'select',
             inputOptions: options,
             inputValue: status,
@@ -314,6 +333,12 @@
     });
 
     document.getElementById('sum-apply').addEventListener('click', load);
+    document.querySelectorAll('#sum-mode [data-mode]').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.mode === mode) return;
+        mode = b.dataset.mode;
+        applyMode();
+        load();
+    }));
     document.getElementById('sum-template').addEventListener('click', (e) => {
         e.preventDefault();
         window.location.href = `${templateUrl}?${qs()}`;
@@ -330,6 +355,7 @@
         fd.append('file', file);
         fd.append('date_from', fromEl.value);
         fd.append('date_to', toEl.value);
+        fd.append('mode', mode);
         Swal.fire({ title, html: 'Please wait, processing the Excel file.', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
         fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: fd })
             .then(async (res) => {
@@ -352,6 +378,7 @@
     fileEl.addEventListener('change', () => uploadExcel(importUrl, fileEl, 'Importing grades...'));
     notesFileEl.addEventListener('change', () => uploadExcel(notesImportUrl, notesFileEl, 'Importing recommendations & notes...'));
 
+    applyMode();
     load();
 })();
 </script>

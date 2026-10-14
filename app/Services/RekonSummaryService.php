@@ -14,7 +14,10 @@ use Illuminate\Support\Collection;
  *  - Satu OCF bisa di-lock berkali-kali (mis. partial lalu shortship). Snapshot
  *    berisi total-to-date, jadi menjumlah semua snapshot akan double count.
  *    Karena itu yang dipakai hanya lock TERBARU per OCF di dalam periode.
- *  - Total Loss     : max(0, total_loss) -- loss sewing + packing (pcs).
+ *  - Total Loss     : max(0, -total_loss) -- loss sewing + packing (pcs). Di pipeline
+ *                     total_loss = (sewing - dest_sewing) + (packing - dest_packing),
+ *                     jadi NEGATIF = pcs hilang (loss, merah di dashboard) dan
+ *                     POSITIF = gain; yang dijumlah di summary adalah besar loss-nya.
  *  - Short Ship     : short_ship_pcs, HANYA dari lock berjenis `shortship`
  *                     (lock `partial` berarti sisa kontrak masih akan dikirim).
  *  - Sisa Fabric    : sisa_fabric_kg (kg).
@@ -24,15 +27,22 @@ use Illuminate\Support\Collection;
  *  - Urutan Top 5 OCF memakai estimasi dampak internal = CM per pcs x
  *    (loss + short ship + grade B + grade C) + estimasi nilai sisa fabric.
  *  - Status & REKOMENDASI & NOTES diisi manual (import Excel, kolom note_*).
+ *
+ * Mode summary (2 mode):
+ *  - 'ocf' : hanya lock ber-`lock_mode` = 'ocf' (kunci = nomor OCF).
+ *  - 'cpo' : hanya lock ber-`lock_mode` = 'cpo' (kunci = kode CPO).
+ *  Kedua mode tidak dicampur supaya OCF yang sudah ikut di-lock lewat CPO
+ *  tidak terhitung dobel. Key output tetap `ocf` (isinya OCF atau CPO sesuai mode).
  */
 class RekonSummaryService
 {
     public function __construct(
         private readonly Carbon $from,
         private readonly Carbon $to,
+        private readonly string $mode = MonRekonLock::MODE_OCF,
     ) {}
 
-    public static function make(string|Carbon|null $from, string|Carbon|null $to): self
+    public static function make(string|Carbon|null $from, string|Carbon|null $to, ?string $mode = null): self
     {
         $to   = $to ? Carbon::parse($to)->startOfDay() : Carbon::today();
         $from = $from ? Carbon::parse($from)->startOfDay() : $to->copy()->startOfMonth();
@@ -41,7 +51,7 @@ class RekonSummaryService
             [$from, $to] = [$to, $from];
         }
 
-        return new self($from, $to);
+        return new self($from, $to, MonRekonLock::normalizeMode($mode));
     }
 
     public function build(): array
@@ -57,6 +67,8 @@ class RekonSummaryService
         $prevTotals = $this->totals($previous);
 
         return [
+            'mode'       => $this->mode,
+            'mode_label' => MonRekonLock::modeLabel($this->mode),
             'period' => [
                 'from'      => $this->from->toDateString(),
                 'to'        => $this->to->toDateString(),
@@ -82,29 +94,45 @@ class RekonSummaryService
     private function metricsPerOcf(Carbon $from, Carbon $to): Collection
     {
         $locks = MonRekonLock::query()
+            ->mode($this->mode)
+            ->with('fabrics') // data Rekap per Fabric (mon_rekon_lock_fabrics)
             ->whereDate('lock_date', '>=', $from->toDateString())
             ->whereDate('lock_date', '<=', $to->toDateString())
             ->orderBy('lock_date')
             ->orderBy('id')
             ->get();
 
-        return $locks->groupBy('ocf_no')->map(function (Collection $rows) {
+        // Kunci grup: nomor OCF (mode ocf) atau kode CPO (mode cpo).
+        return $locks->groupBy(fn(MonRekonLock $r) => $r->lock_key)->map(function (Collection $rows) {
             /** @var MonRekonLock $l */
             $l = $rows->last(); // lock terbaru
 
-            $loss      = max(0.0, (float) $l->total_loss);
+            $loss      = max(0.0, -(float) $l->total_loss); // negatif di pipeline = loss
             $shortShip = $l->lock_type === MonRekonLock::TYPE_SHORTSHIP ? (float) $l->short_ship_pcs : 0.0;
             $gradeA    = (float) ($l->grade_a ?? 0);
             $gradeB    = (float) ($l->grade_b ?? 0);
             $gradeC    = (float) ($l->grade_c ?? 0);
-            $sisaKg    = (float) $l->sisa_fabric_kg;
+
+            // Sisa fabric dibaca dari tabel mon_rekon_lock_fabrics (stock_qty); nilai Rp =
+            // harga_total x stock/received per fabric. Kalau tidak ada baris fabric,
+            // pakai angka yang tersimpan di baris lock.
+            if ($l->fabrics->isNotEmpty()) {
+                $sisaKg    = (float) $l->fabrics->sum('stock_qty');
+                $sisaValue = (float) $l->fabrics->sum(fn($f) => (float) $f->received_qty > 0
+                    ? (float) $f->harga_total * ((float) $f->stock_qty / (float) $f->received_qty)
+                    : 0);
+            } else {
+                $sisaKg    = (float) $l->sisa_fabric_kg;
+                $sisaValue = (float) $l->sisa_fabric_value;
+            }
 
             $impact = (float) $l->cm_per_pcs * ($loss + $shortShip + $gradeB + $gradeC)
-                + (float) $l->sisa_fabric_value;
+                + $sisaValue;
 
             return [
                 'lock_id'      => $l->id,
-                'ocf'          => $l->ocf_no,
+                'ocf'          => $l->lock_key,
+                'ocf_numbers'  => $l->lock_mode === MonRekonLock::MODE_CPO ? $l->ocf_no : null,
                 'buyer'        => $l->buyer,
                 'style'        => $l->style,
                 'lock_type'    => $l->lock_type,
@@ -125,7 +153,7 @@ class RekonSummaryService
                 'note_target'    => $l->note_target,
                 'note_estimasi'  => $l->note_estimasi !== null ? (float) $l->note_estimasi : null,
                 'has_note'       => $l->note_status || $l->note_masalah || $l->note_tindakan
-                                    || $l->note_pic || $l->note_target || $l->note_estimasi !== null,
+                    || $l->note_pic || $l->note_target || $l->note_estimasi !== null,
             ];
         })->values();
     }
@@ -205,6 +233,7 @@ class RekonSummaryService
             'no'          => $i + 1,
             'lock_id'     => $r['lock_id'],
             'ocf'         => $r['ocf'],
+            'ocf_numbers' => $r['ocf_numbers'],
             'buyer'       => $r['buyer'],
             'loss'        => $r['loss'],
             'grade_a'     => $r['grade_a'],
