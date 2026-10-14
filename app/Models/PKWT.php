@@ -9,6 +9,7 @@ class PKWT extends Model
 {
     use HasFactory;
     protected $connection = 'cii';
+    public $timestamps = false;
     protected $table = 'PKWT';
     protected $fillable = [
         'NPK',
