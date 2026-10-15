@@ -112,6 +112,9 @@ class RekonSummaryService
             $l = $rows->last(); // lock terbaru
 
             $loss      = max(0.0, -(float) $l->total_loss); // negatif di pipeline = loss
+            // Panel Reject = loss stage Sewing di Work In Process (Chutex) (Cutting -> Sewing:
+            // output Sewing - tujuan Sewing). Negatif = loss, jadi diambil besar lossnya saja.
+            $panelReject = max(0.0, -(float) $l->loss_sewing);
             $shortShip = $l->lock_type === MonRekonLock::TYPE_SHORTSHIP ? (float) $l->short_ship_pcs : 0.0;
             $gradeA    = (float) ($l->grade_a ?? 0);
             $gradeB    = (float) ($l->grade_b ?? 0);
@@ -155,6 +158,7 @@ class RekonSummaryService
                 'lock_date'    => $l->lock_date->toDateString(),
                 'loss'         => $loss,
                 'loss_pct'     => $lossPct,
+                'panel_reject' => $panelReject,
                 'short_ship'   => $shortShip,
                 // % Short Shipment terhadap output Cutting =
                 // (qty_cutting - qty_shipment) / qty_cutting x 100
@@ -267,7 +271,7 @@ class RekonSummaryService
             'ocf'         => $r['ocf'],
             'ocf_numbers' => $r['ocf_numbers'],
             'buyer'       => $r['buyer'],
-            'loss'        => $r['loss'],
+            'panel_reject' => $r['panel_reject'],
             'grade_a'     => $r['grade_a'],
             'grade_b'     => $r['grade_b'],
             'grade_c'     => $r['grade_c'],

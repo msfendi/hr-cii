@@ -111,7 +111,7 @@
                                             <thead>
                                                 <tr>
                                                     <th>No</th><th class="sum-mode-lbl">OCF</th><th>Buyer</th>
-                                                    <th class="text-right">Total Loss (Packing - Sewing)</th>
+                                                    <th class="text-right">Panel Reject (pcs)</th>
                                                     <th class="text-right">Grade A (pcs)</th>
                                                     <th class="text-right">Grade B (pcs)</th>
                                                     <th class="text-right">Grade C (pcs)</th>
@@ -252,7 +252,7 @@
     function renderTable(rows) {
         document.querySelector('#sum-top-impact tbody').innerHTML = rows.length ? rows.map(r => `<tr>
             <td>${r.no}</td><td><strong>${esc(r.ocf)}</strong>${mode === 'cpo' && r.ocf_numbers ? `<div class="small text-muted" style="max-width:220px;white-space:normal">OCF: ${esc(r.ocf_numbers)}</div>` : ''}</td><td>${esc(r.buyer || '-')}</td>
-            <td class="text-right text-danger">${fmt(r.loss)}</td><td class="text-right">${fmt(r.grade_a)}</td><td class="text-right">${fmt(r.grade_b)}</td>
+            <td class="text-right text-danger">${fmt(r.panel_reject)}</td><td class="text-right">${fmt(r.grade_a)}</td><td class="text-right">${fmt(r.grade_b)}</td>
             <td class="text-right">${fmt(r.grade_c)}</td><td class="text-right">${fmt(r.sisa_fabric)}</td>
             <td class="text-nowrap">${r.status ? `<span class="sum-badge ${esc(r.status)}">${esc(label(r.status))}</span>` : '<span class="text-muted">-</span>'}
                 <a href="#" class="sum-status-edit" title="Change status" data-lock-id="${esc(r.lock_id)}" data-ocf="${esc(r.ocf)}" data-status="${esc(r.status)}"><i class="fas fa-edit"></i></a></td></tr>`).join('')
