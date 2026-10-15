@@ -244,10 +244,21 @@ class RekonSummaryService
     {
         // Kalau $pctKey diisi, urutan Top N mengikuti persentase terbesar (loss/stock: nilai absolut),
         // bukan qty. Data tanpa persentase (basis 0) tidak ikut.
-        $rank = $pctKey
-            ? $rows->filter(fn($r) => $r[$key] > 0 && $r[$pctKey] !== null)
-            ->sortByDesc(fn($r) => $pctKey === 'ship_pct' ? $r[$pctKey] : abs($r[$pctKey]))
-            : $rows->filter(fn($r) => $r[$key] > 0)->sortByDesc($key);
+        // Khusus ship_pct = (cutting - shipment) / cutting: dasarnya output Cutting, BUKAN
+        // short_ship (kontrak - shipment). CPO yang kontraknya sudah terkirim penuh tapi
+        // output Cutting-nya lebih besar (short_ship = 0) tetap harus masuk, jadi filternya
+        // pakai ship_pct > 0 dan hanya lock berjenis shortship (konsisten dengan KPI Short Ship).
+        if ($pctKey === 'ship_pct') {
+            $rank = $rows
+                ->filter(fn($r) => $r['lock_type'] === MonRekonLock::TYPE_SHORTSHIP
+                    && $r['ship_pct'] !== null && $r['ship_pct'] > 0)
+                ->sortByDesc('ship_pct');
+        } else {
+            $rank = $pctKey
+                ? $rows->filter(fn($r) => $r[$key] > 0 && $r[$pctKey] !== null)
+                ->sortByDesc(fn($r) => abs($r[$pctKey]))
+                : $rows->filter(fn($r) => $r[$key] > 0)->sortByDesc($key);
+        }
 
         return $rank
             ->take($limit)
