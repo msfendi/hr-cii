@@ -511,9 +511,10 @@
             </td>
             <td width="190" valign="middle">
                 <div class="meta-box">
-                    <div><span class="meta-label">No</span>: BIO/{{ $npk }}</div>
-                    <div><span class="meta-label">Tanggal</span>: {{ now()->translatedFormat('d F Y') }}</div>
-                    <div><span class="meta-label">NPK</span>: {{ $npk }}</div>
+                    <div><span class="meta-label">No</span>: CII.FM.HR.01.04</div>
+                    <div><span class="meta-label">Active Date</span>: 13 Mei 2025</div>
+                    <div><span class="meta-label">Rev</span>: 00</div>
+                    <div><span class="meta-label">Rev Date</span>: 9 Juli 2025</div>
                 </div>
             </td>
         </tr>
