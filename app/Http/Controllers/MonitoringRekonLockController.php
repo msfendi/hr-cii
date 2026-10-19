@@ -10,6 +10,7 @@ use App\Services\RekonSummaryService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -114,6 +115,45 @@ class MonitoringRekonLockController extends Controller
         return response()->json([
             'success' => true,
             'message' => "Status of {$lbl} {$lock->lock_key} changed from {$old} to {$new}.",
+        ]);
+    }
+
+    // ------------------------------------------------------------------
+    // 1c) Delete lock record (+ fabric snapshot rows)
+    // ------------------------------------------------------------------
+    public function destroy(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'lock_id' => ['required', 'integer'],
+        ]);
+
+        $lock = MonRekonLock::find($data['lock_id']);
+        if (!$lock) {
+            return response()->json(['success' => false, 'message' => 'Lock record not found.'], 404);
+        }
+
+        $lbl  = MonRekonLock::modeLabel($lock->lock_mode ?? MonRekonLock::MODE_OCF);
+        $key  = $lock->lock_key;
+        $type = $lock->lock_type;
+        $date = $lock->lock_date->format('d-m-Y');
+
+        try {
+            DB::transaction(function () use ($lock) {
+                // Hapus dulu snapshot fabric (child), baru header lock.
+                DB::table('mon_rekon_lock_fabrics')->where('lock_id', $lock->id)->delete();
+
+                // Hard delete supaya unique index (ocf_no/cpo_no, lock_date, lock_type)
+                // terlepas dan OCF/CPO yang sama bisa di-lock ulang.
+                method_exists($lock, 'forceDelete') ? $lock->forceDelete() : $lock->delete();
+            });
+        } catch (Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'message' => 'Failed to delete lock: ' . $e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$lbl} {$key} ({$type}) lock for period {$date} has been deleted.",
         ]);
     }
 

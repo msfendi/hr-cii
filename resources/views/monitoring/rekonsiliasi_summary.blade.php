@@ -20,6 +20,7 @@
                  data-notes-template-url="{{ route('monitoring.rekonsiliasi.summary.notes-template') }}"
                  data-notes-import-url="{{ route('monitoring.rekonsiliasi.summary.notes-import') }}"
                  data-status-url="{{ route('monitoring.rekonsiliasi.summary.update-status') }}"
+                 data-delete-url="{{ route('monitoring.rekonsiliasi.summary.delete-lock') }}"
                  data-lock-types='@json(\App\Models\MonRekonLock::types())'
                  data-mode="{{ $mode ?? 'ocf' }}">
 
@@ -178,6 +179,8 @@
     .sum-badge.complete { background:#dcfce7; color:#15803d; }
     .sum-status-edit { color:#6b7280; margin-left:6px; cursor:pointer; }
     .sum-status-edit:hover { color:#0b3a6e; }
+    .sum-lock-delete { color:#9ca3af; margin-left:8px; cursor:pointer; }
+    .sum-lock-delete:hover { color:#dc2626; }
     .sum-badge.Investigasi { background:#fee2e2; color:#b91c1c; }
     .sum-badge.Monitor { background:#fef3c7; color:#b45309; }
     .sum-badge.Follow-up { background:#dcfce7; color:#15803d; }
@@ -197,6 +200,7 @@
     const notesTemplateUrl = app.dataset.notesTemplateUrl;
     const notesImportUrl = app.dataset.notesImportUrl;
     const statusUrl = app.dataset.statusUrl;
+    const deleteUrl = app.dataset.deleteUrl;
     const lockTypes = JSON.parse(app.dataset.lockTypes || '[]');
     let mode = (new URLSearchParams(location.search).get('mode') || app.dataset.mode || 'ocf') === 'cpo' ? 'cpo' : 'ocf';
     const modeLbl = () => (mode === 'cpo' ? 'CPO' : 'OCF');
@@ -255,7 +259,8 @@
             <td class="text-right text-danger">${fmt(r.panel_reject)}</td><td class="text-right">${fmt(r.grade_a)}</td><td class="text-right">${fmt(r.grade_b)}</td>
             <td class="text-right">${fmt(r.grade_c)}</td><td class="text-right">${fmt(r.sisa_fabric)}</td>
             <td class="text-nowrap">${r.status ? `<span class="sum-badge ${esc(r.status)}">${esc(label(r.status))}</span>` : '<span class="text-muted">-</span>'}
-                <a href="#" class="sum-status-edit" title="Change status" data-lock-id="${esc(r.lock_id)}" data-ocf="${esc(r.ocf)}" data-status="${esc(r.status)}"><i class="fas fa-edit"></i></a></td></tr>`).join('')
+                <a href="#" class="sum-status-edit" title="Change status" data-lock-id="${esc(r.lock_id)}" data-ocf="${esc(r.ocf)}" data-status="${esc(r.status)}"><i class="fas fa-edit"></i></a>
+                <a href="#" class="sum-lock-delete" title="Delete lock" data-lock-id="${esc(r.lock_id)}" data-ocf="${esc(r.ocf)}" data-status="${esc(r.status)}"><i class="fas fa-trash-alt"></i></a></td></tr>`).join('')
             : '<tr><td colspan="9" class="text-center text-muted">No data</td></tr>';
     }
 
@@ -338,6 +343,46 @@
         }).then((r) => {
             if (r.isConfirmed && r.value) {
                 Swal.fire({ icon: 'success', title: 'Success', text: r.value.message, timer: 1500, showConfirmButton: false }).then(load);
+            }
+        });
+    });
+
+    // Delete lock record via SweetAlert confirmation
+    document.querySelector('#sum-top-impact tbody').addEventListener('click', (e) => {
+        const btn = e.target.closest('.sum-lock-delete');
+        if (!btn) return;
+        e.preventDefault();
+        const { lockId, ocf, status } = btn.dataset;
+        if (!lockId) {
+            Swal.fire('Failed', 'Lock ID not found in the summary data. Make sure RekonSummaryService.php is updated.', 'error');
+            return;
+        }
+
+        Swal.fire({
+            icon: 'warning',
+            title: `Delete lock of ${modeLbl()} ${ocf}?`,
+            html: `The <strong>${esc(label(status))}</strong> lock record and its fabric snapshot will be permanently deleted,
+                   including any Grade A/B/C and Recommendation &amp; Notes already imported for it.<br>This cannot be undone.`,
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            confirmButtonText: 'Yes, delete',
+            cancelButtonText: 'Cancel',
+            showLoaderOnConfirm: true,
+            allowOutsideClick: () => !Swal.isLoading(),
+            preConfirm: () => fetch(deleteUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lock_id: Number(lockId) }),
+            })
+                .then(async (res) => {
+                    const json = await res.json().catch(() => ({}));
+                    if (!res.ok || !json.success) throw new Error(json.message || 'Failed to delete lock.');
+                    return json;
+                })
+                .catch((err) => Swal.showValidationMessage(err.message)),
+        }).then((r) => {
+            if (r.isConfirmed && r.value) {
+                Swal.fire({ icon: 'success', title: 'Deleted', text: r.value.message, timer: 1500, showConfirmButton: false }).then(load);
             }
         });
     });

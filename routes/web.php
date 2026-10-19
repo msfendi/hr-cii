@@ -1003,6 +1003,7 @@ Route::group(['middleware' => 'auth'], function () {
 
             Route::post('/summary/status', [MonitoringRekonLockController::class, 'updateStatus'])
                 ->name('monitoring.rekonsiliasi.summary.update-status');
+            Route::post('/summary/delete-lock', [MonitoringRekonLockController::class, 'destroy'])->name('monitoring.rekonsiliasi.summary.delete-lock');
         });
 
     Route::middleware(['auth', 'permission'])
