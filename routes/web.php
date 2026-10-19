@@ -982,28 +982,28 @@ Route::group(['middleware' => 'auth'], function () {
 
     Route::middleware(['auth', 'permission'])
         ->prefix('monitoring/rekonsiliasi')->group(function () {
-        // Lock Data OCF (POST JSON dari tombol di Dashboard Reconciliation)
-        Route::post('/lock', [MonitoringRekonLockController::class, 'store'])
-            ->name('monitoring.rekonsiliasi.lock.store');
+            // Lock Data OCF (POST JSON dari tombol di Dashboard Reconciliation)
+            Route::post('/lock', [MonitoringRekonLockController::class, 'store'])
+                ->name('monitoring.rekonsiliasi.lock.store');
 
-        // Summary Rekonsiliasi
-        Route::get('/summary', [MonitoringRekonLockController::class, 'summaryPage'])
-            ->name('monitoring.rekonsiliasi.summary');
-        Route::get('/summary/data', [MonitoringRekonLockController::class, 'summaryData'])
-            ->name('monitoring.rekonsiliasi.summary.data');
-        Route::get('/summary/grade-template', [MonitoringRekonLockController::class, 'gradeTemplate'])
-            ->name('monitoring.rekonsiliasi.summary.grade-template');
-        Route::post('/summary/grade-import', [MonitoringRekonLockController::class, 'gradeImport'])
-            ->name('monitoring.rekonsiliasi.summary.grade-import');
+            // Summary Rekonsiliasi
+            Route::get('/summary', [MonitoringRekonLockController::class, 'summaryPage'])
+                ->name('monitoring.rekonsiliasi.summary');
+            Route::get('/summary/data', [MonitoringRekonLockController::class, 'summaryData'])
+                ->name('monitoring.rekonsiliasi.summary.data');
+            Route::get('/summary/grade-template', [MonitoringRekonLockController::class, 'gradeTemplate'])
+                ->name('monitoring.rekonsiliasi.summary.grade-template');
+            Route::post('/summary/grade-import', [MonitoringRekonLockController::class, 'gradeImport'])
+                ->name('monitoring.rekonsiliasi.summary.grade-import');
 
-        Route::get('/summary/notes-template', [MonitoringRekonLockController::class, 'notesTemplate'])
-            ->name('monitoring.rekonsiliasi.summary.notes-template');
-        Route::post('/summary/notes-import', [MonitoringRekonLockController::class, 'notesImport'])
-            ->name('monitoring.rekonsiliasi.summary.notes-import');
+            Route::get('/summary/notes-template', [MonitoringRekonLockController::class, 'notesTemplate'])
+                ->name('monitoring.rekonsiliasi.summary.notes-template');
+            Route::post('/summary/notes-import', [MonitoringRekonLockController::class, 'notesImport'])
+                ->name('monitoring.rekonsiliasi.summary.notes-import');
 
-        Route::post('/summary/status', [MonitoringRekonLockController::class, 'updateStatus'])
-            ->name('monitoring.rekonsiliasi.summary.update-status');
-    });
+            Route::post('/summary/status', [MonitoringRekonLockController::class, 'updateStatus'])
+                ->name('monitoring.rekonsiliasi.summary.update-status');
+        });
 
     Route::middleware(['auth', 'permission'])
         ->prefix('monitoring/rekonsiliasi')
@@ -1206,6 +1206,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/', [ExchangeRateController::class, 'index'])->name('index');
         Route::get('/today', [ExchangeRateController::class, 'today'])->name('today');
         Route::post('/sync', [ExchangeRateController::class, 'sync'])->name('sync');
+        Route::post('/sync-frankfurter', [ExchangeRateController::class, 'syncFrankfurter'])->name('sync-frankfurter');
+        Route::put('/{exchangeRate}', [ExchangeRateController::class, 'update'])->name('update');
     });
 
     Route::middleware(['auth', 'permission'])->group(function () {

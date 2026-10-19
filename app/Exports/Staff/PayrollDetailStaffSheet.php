@@ -175,6 +175,7 @@ class PayrollDetailStaffSheet
             'monthly_premi',
             'long_service_allowance',
             'allowance',
+            'meal_allowance',
             'sewing_insentif',
             'pad_insentif',
             'cutting_insentif',
@@ -207,6 +208,11 @@ class PayrollDetailStaffSheet
                 $type  = $this->componentTypes[$field] ?? 'earning';
             }
 
+            // meal_allowance hanya berlaku untuk karyawan expat (IS_EXPAT = 1)
+            if ($field === 'meal_allowance' && (string) ($row->employee_expat ?? '0') !== '1') {
+                $value = 0;
+            }
+
             if ($type === 'deduction') {
                 $value = -abs($value);
             }
@@ -235,6 +241,7 @@ class PayrollDetailStaffSheet
             'Monthly Premi',
             'Long Service Allowance',
             'Allowance',
+            'Meal Allowance',
             'Sewing Insentif',
             'Pad Print Insentif',
             'Cutting Insentif',

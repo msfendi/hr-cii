@@ -28,10 +28,10 @@
   };
 
 
-  // Lebar kolom tetap: NPK 6 + Name 12 + 8 kolom detail x 3.5 (=28) + Total 8 = 54%
-  // Sisa 46% dibagi rata ke semua komponen agar tabel selalu muat di 1 halaman lebar
+  // Lebar kolom tetap (A3 landscape): NPK 4.2 + Name 8.5 + 7 kolom absen x 2.1 (=14.7) + Ijin 3.2 + Total 6.5 = 37.1%
+  // Sisa 62.9% dibagi rata ke semua komponen agar tabel selalu muat di 1 halaman lebar
   $compCount = max(count($allComponents), 1);
-  $compWidth = round(46 / $compCount, 2);
+  $compWidth = round(62.9 / $compCount, 2);
 
   @endphp
 
@@ -40,13 +40,13 @@
     <style>
       /* ===== GLOBAL & PAGE SETUP ===== */
       @page {
-        size: A4 landscape;  /* landscape memberi lebih banyak ruang */
+        size: A3 landscape;  /* kertas lebih lebar agar kolom lebih lega */
         margin: 10mm 8mm;
       }
 
       body {
         font-family: sans-serif;
-        font-size: 8px;       /* ukuran lebih kecil agar muat */
+        font-size: 10px;
         margin: 0;
         padding: 0;
       }
@@ -57,7 +57,7 @@
         border-collapse: collapse;
         margin-bottom: 12px;
         table-layout: fixed;  /* lebar kolom dikunci supaya tidak melebihi halaman */
-        font-size: 7px;
+        font-size: 8px;
       }
 
       table,
@@ -68,7 +68,7 @@
 
       th,
       td {
-        padding: 2px 1px;     /* padding lebih kecil */
+        padding: 5px 2px;
         word-wrap: break-word;
         overflow-wrap: break-word;
         vertical-align: middle;
@@ -77,6 +77,10 @@
       th {
         background: #eee;
         text-align: center;
+        font-size: 7px;
+        line-height: 1.2;
+        word-wrap: normal;
+        overflow-wrap: normal;
       }
 
       thead {
@@ -109,20 +113,24 @@
 
       /* ===== LEBAR KOLOM (relatif) ===== */
       .col-npk {
-        width: 6%;
+        width: 4.2%;
       }
       .col-name {
-        width: 12%;
+        width: 8.5%;
+      }
+      .col-abs {
+        width: 2.1%;
       }
       .col-details {
-        width: 3.5%;
+        width: 3.2%;
       }
       .col-total {
-        width: 8%;
+        width: 6.5%;
       }
       /* lebar .col-component diset inline (dinamis sesuai jumlah komponen) */
       .num {
         white-space: nowrap;
+        padding-right: 3px;
       }
 
       /* ===== TABEL RINGKASAN ===== */
@@ -186,13 +194,13 @@
             <th class="col-name">Name</th>
 
             {{-- 🔥 OVERTIME (DITAMBAH DI SINI) --}}
-            <th class="col-details">MA</th>
-            <th class="col-details">P1</th>
-            <th class="col-details">CT</th>
-            <th class="col-details">CU</th>
-            <th class="col-details">SD</th>
-            <th class="col-details">BR</th>
-            <th class="col-details">OUT</th>
+            <th class="col-abs">MA</th>
+            <th class="col-abs">P1</th>
+            <th class="col-abs">CT</th>
+            <th class="col-abs">CU</th>
+            <th class="col-abs">SD</th>
+            <th class="col-abs">BR</th>
+            <th class="col-abs">OUT</th>
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
@@ -292,13 +300,13 @@
             <th class="col-npk">NPK</th>
             <th class="col-name">Name</th>
 
-            <th class="col-details">MA</th>
-            <th class="col-details">P1</th>
-            <th class="col-details">CT</th>
-            <th class="col-details">CU</th>
-            <th class="col-details">SD</th>
-            <th class="col-details">BR</th>
-            <th class="col-details">OUT</th>
+            <th class="col-abs">MA</th>
+            <th class="col-abs">P1</th>
+            <th class="col-abs">CT</th>
+            <th class="col-abs">CU</th>
+            <th class="col-abs">SD</th>
+            <th class="col-abs">BR</th>
+            <th class="col-abs">OUT</th>
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
@@ -397,13 +405,13 @@
             <th class="col-npk">NPK</th>
             <th class="col-name">Name</th>
 
-            <th class="col-details">MA</th>
-            <th class="col-details">P1</th>
-            <th class="col-details">CT</th>
-            <th class="col-details">CU</th>
-            <th class="col-details">SD</th>
-            <th class="col-details">BR</th>
-            <th class="col-details">OUT</th>
+            <th class="col-abs">MA</th>
+            <th class="col-abs">P1</th>
+            <th class="col-abs">CT</th>
+            <th class="col-abs">CU</th>
+            <th class="col-abs">SD</th>
+            <th class="col-abs">BR</th>
+            <th class="col-abs">OUT</th>
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)

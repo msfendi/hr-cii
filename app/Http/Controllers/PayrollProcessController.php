@@ -1740,6 +1740,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                     ($components['monthly_premi'] ?? 0) +
                     ($components['long_service_allowance'] ?? 0) +
                     ($components['allowance'] ?? 0) +
+                    ($components['meal_allowance'] ?? 0) +
                     ($components['sewing_insentif'] ?? 0) +
                     ($components['pad_insentif'] ?? 0) +
                     ($components['cutting_insentif'] ?? 0) +

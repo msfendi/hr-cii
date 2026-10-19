@@ -4,15 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\ExchangeRate;
 use App\Services\BiExchangeRateService;
+use App\Services\FrankfurterExchangeRateService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ExchangeRateController extends Controller
 {
-    public function __construct(protected BiExchangeRateService $biExchangeRateService)
-    {
-    }
+    public function __construct(
+        protected BiExchangeRateService $biExchangeRateService,
+        protected FrankfurterExchangeRateService $frankfurterService
+    ) {}
 
     /**
      * Halaman blade: tabel riwayat kurs USD -> IDR + tombol sync.
@@ -73,7 +75,7 @@ class ExchangeRateController extends Controller
     }
 
     /**
-     * Endpoint untuk tombol "Sync Kurs".
+     * Tombol "Sync Kurs Terbaru" -> selalu dari Bank Indonesia.
      *
      * Catatan: sumber data (halaman "Kurs Transaksi BI") cuma menampilkan rilis
      * TERBARU yang sedang tayang di BI (bukan API historis per tanggal), jadi
@@ -85,14 +87,89 @@ class ExchangeRateController extends Controller
         $result = $this->biExchangeRateService->syncLatest();
 
         if (! $result) {
+            $detail = $this->biExchangeRateService->lastError();
+
             return response()->json([
-                'message' => 'Gagal mengambil kurs dari Bank Indonesia. Coba lagi beberapa saat, atau cek log aplikasi (kemungkinan struktur halaman BI berubah).',
+                'message' => 'Gagal mengambil kurs dari Bank Indonesia.'
+                    . ($detail ? " Detail: {$detail}" : '')
+                    . ' Cek juga log aplikasi.',
             ], 422);
         }
 
         return response()->json([
             'message' => "Berhasil sync kurs USD -> IDR untuk tanggal {$result->rate_date->format('d/m/Y')}.",
             'data'    => $result,
+        ]);
+    }
+
+    /**
+     * Tombol "Sync dari Frankfurter" -> histori dari tanggal yang dipilih sampai hari ini.
+     * Data yang sudah ada tidak ditimpa; akhir pekan/libur diisi kurs tanggal berikutnya.
+     */
+    public function syncFrankfurter(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'start_date' => ['required', 'date', 'after_or_equal:1999-01-04', 'before_or_equal:today'],
+        ], [
+            'start_date.required'        => 'Tanggal mulai wajib diisi.',
+            'start_date.date'            => 'Format tanggal mulai tidak valid.',
+            'start_date.after_or_equal'  => 'Frankfurter hanya punya data mulai 4 Januari 1999.',
+            'start_date.before_or_equal' => 'Tanggal mulai tidak boleh melewati hari ini.',
+        ]);
+
+        @set_time_limit(300);
+
+        $result = $this->frankfurterService->syncRange(Carbon::parse($validated['start_date']));
+
+        if (! $result) {
+            return response()->json([
+                'message' => 'Gagal sync dari Frankfurter.'
+                    . ($this->frankfurterService->lastError() ? ' Detail: ' . $this->frankfurterService->lastError() : '')
+                    . ' Cek juga log aplikasi.',
+            ], 422);
+        }
+
+        $from = Carbon::parse($result['from'])->locale('id')->translatedFormat('j F Y');
+        $to   = Carbon::parse($result['to'])->locale('id')->translatedFormat('j F Y');
+
+        $message = "Sync Frankfurter {$from} s/d {$to} selesai. "
+            . "{$result['created']} data baru dibuat, "
+            . "{$result['skipped_existing']} dilewati (sudah ada)";
+
+        if ($result['skipped_no_data'] > 0) {
+            $message .= ", {$result['skipped_no_data']} tanggal di akhir rentang dilewati (kurs berikutnya belum terbit)";
+        }
+
+        return response()->json([
+            'message' => $message . '.',
+            'data'    => $result,
+        ]);
+    }
+
+    /**
+     * Edit manual kurs beli / jual / tengah.
+     */
+    public function update(Request $request, ExchangeRate $exchangeRate): JsonResponse
+    {
+        $validated = $request->validate([
+            'kurs_jual'   => ['required', 'numeric', 'min:0'],
+            'kurs_beli'   => ['required', 'numeric', 'min:0'],
+            'kurs_tengah' => ['required', 'numeric', 'min:0'],
+        ], [
+            'required' => ':attribute wajib diisi.',
+            'numeric'  => ':attribute harus berupa angka.',
+            'min'      => ':attribute tidak boleh negatif.',
+        ], [
+            'kurs_jual'   => 'Kurs Jual',
+            'kurs_beli'   => 'Kurs Beli',
+            'kurs_tengah' => 'Kurs Tengah',
+        ]);
+
+        $exchangeRate->update($validated);
+
+        return response()->json([
+            'message' => 'Kurs tanggal ' . $exchangeRate->rate_date->locale('id')->translatedFormat('j F Y') . ' berhasil diperbarui.',
+            'data'    => $exchangeRate->fresh(),
         ]);
     }
 }

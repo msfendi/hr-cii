@@ -1184,6 +1184,61 @@ END AS special_overtime_hours
             return false;
         };
 
+        /*
+        |--------------------------------------------------------------------------
+        | MEAL ALLOWANCE (meal_allowance = meal_days * first_kurs)
+        |--------------------------------------------------------------------------
+        | meal_days : jumlah hari Sabtu + Minggu + hari libur nasional (tabel
+        |             `holidays`) di periode payroll, dikurangi tanggal-tanggal
+        |             yang karyawan tsb absence di tabel `overtimes`
+        |             (JUMLAH_JAM_LEMBUR berisi karakter, bukan angka).
+        | first_kurs: kurs_tengah (exchange_rates) pada rate_date PERTAMA di
+        |             bulan periode payroll.
+        | Hanya dipakai oleh komponen meal_allowance; tidak mengubah logic lain.
+        |--------------------------------------------------------------------------
+        */
+        $mealDateSet = [];
+        $mealCursor  = $periodStart->copy();
+        while ($mealCursor->lte($periodEnd)) {
+            if ($mealCursor->isSaturday() || $mealCursor->isSunday()) {
+                $mealDateSet[$mealCursor->toDateString()] = true;
+            }
+            $mealCursor->addDay();
+        }
+
+        $mealHolidayDates = DB::table('holidays')
+            ->whereBetween('holiday_date', [$period->start_date, $period->end_date])
+            ->pluck('holiday_date');
+        foreach ($mealHolidayDates as $mealHolidayDate) {
+            $mealDateSet[substr((string) $mealHolidayDate, 0, 10)] = true;
+        }
+
+        $mealTotalDays = count($mealDateSet);
+
+        $mealAbsenceByNpk = [];
+        foreach ($allOvertimesForInsentif as $mealNpk => $mealRows) {
+            foreach ($mealRows as $mealRow) {
+                $mealDate = substr((string) $mealRow->OVERTIME_DATE, 0, 10);
+                if (!isset($mealDateSet[$mealDate])) {
+                    continue;
+                }
+                $mealLembur = trim((string) $mealRow->JUMLAH_JAM_LEMBUR);
+                if ($mealLembur !== '' && !is_numeric($mealLembur)) {
+                    $mealAbsenceByNpk[$mealNpk][$mealDate] = true;
+                }
+            }
+        }
+
+        $firstKurs = (float) (DB::table('exchange_rates')
+            ->whereBetween('rate_date', [
+                $periodStart->copy()->startOfMonth()->toDateString(),
+                $periodStart->copy()->endOfMonth()->toDateString(),
+            ])
+            ->whereRaw("UPPER(LTRIM(RTRIM(currency_from))) = 'USD'")
+            ->whereRaw("UPPER(LTRIM(RTRIM(currency_to))) = 'IDR'")
+            ->orderBy('rate_date')
+            ->value('kurs_tengah') ?? 0);
+
         // Sewing violations untuk operator (per id_dept) dan untuk supervisor
         // (per range line). Kita ambil sekali, sudah join ke DEPT supaya bisa
         // dipakai untuk perhitungan range "LINE n" pada cabang supervisor.
@@ -1316,6 +1371,11 @@ END AS special_overtime_hours
             // tambahan: khusus untuk cek TKK apakah jatuh di periode berjalan
             $isTkkInPeriod = ($tkk && $tkk->between($periodStart, $periodEnd)) ? 1 : 0;
 
+            // meal_days: hanya karyawan expat (komponen "Meal Allowance Expat")
+            $mealDays = $employee->IS_EXPAT == '1'
+                ? (float) max(0, $mealTotalDays - count($mealAbsenceByNpk[$employee->NPK] ?? []))
+                : 0.0;
+
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
@@ -1327,6 +1387,8 @@ END AS special_overtime_hours
                 'pph_21'         => (float) $employee->pph21,
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
+                'meal_days'      => (float) $mealDays,
+                'first_kurs'     => (float) $firstKurs,
                 'tanggungan'     => (float) $employee->TANGGUNGAN,
                 'percentage'     => (float) $employee->percentage,
 
@@ -1391,6 +1453,8 @@ END AS special_overtime_hours
             foreach ($components as $component) {
                 if ($component->code === 'thr') continue;
                 if ($component->code === 'compensation') continue;
+                // meal_allowance hanya berlaku untuk karyawan expat (IS_EXPAT = 1)
+                if ($component->code === 'meal_allowance' && $employee->IS_EXPAT != '1') continue;
 
                 if ($component->calculation_method === 'fixed') {
                     $amount = $component->value;
@@ -2621,6 +2685,8 @@ END AS special_overtime_hours
                     'out_days_auto'  => (float) $autoOutDays,
                     'sick_days'   => (float) $employee->sick_days,
                     'count_days'    => $count_days,
+                    'meal_days'     => (float) $mealDays,
+                    'first_kurs'    => (float) $firstKurs,
                     'type' => Str::ucfirst(Str::lower($employee->type)),
                     'dept' => $employee->DEPARTEMENT,
                     'id_dept' => $employee->ID_DEPT,

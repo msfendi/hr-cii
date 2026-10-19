@@ -388,6 +388,7 @@
                                         <th>Monthly Premi</th>
                                         <th>Long Service</th>
                                         <th>Allowance</th>
+                                        <th>Meal Allowance</th>
                                         <th>Sewing Insentif</th>
                                         <th>QC Insentif</th>
                                         <th>Pad Print Insentif</th>
@@ -412,6 +413,7 @@
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -1077,6 +1079,12 @@ $(document).on('click','.btn-export',function(e){
                 }
             },
 
+            { data:'components.meal_allowance.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.meal_allowance?.type);
+                }
+            },
+
             { data:'components.sewing_insentif.amount', defaultContent:0, render:function(data,type,row){
                     if(type !== 'display'){ return data ?? 0; }
                     return formatRupiahColored(data ?? 0, row.components?.sewing_insentif?.type);
@@ -1252,7 +1260,7 @@ $(document).on('click','.btn-export',function(e){
                 13,
                 14,15,16,
                 17,18,19,20,21,
-                22,23,24,25
+                22,23,24,25,26
             ];
 
             cols.forEach(function(colIndex){
