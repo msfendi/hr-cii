@@ -168,6 +168,14 @@ class RecruitmentController extends Controller
         return DataTables::of($query)
             ->orderColumn('PELAMAR.id', 'PELAMAR.id $1')
 
+            // ── Filter: Departemen / Posisi ────────────────────────────────
+            ->filterColumn('pd.department', function ($query, $keyword) {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('pd.department', 'like', "%{$keyword}%")
+                      ->orWhere('pd.jabatan', 'like', "%{$keyword}%");
+                });
+            })
+
             // ── Nomor urut ─────────────────────────────────────────────────
             ->addIndexColumn()
 

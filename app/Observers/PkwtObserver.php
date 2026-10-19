@@ -13,6 +13,12 @@ class PkwtObserver
     public function created(PKWT $pkwt): void
     {
         RekapService::updateRekapBulanBerjalan();
+
+        try {
+            app(\App\Services\LeaveBalanceGenerationService::class)->generateForEmployee($pkwt);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Gagal auto-generate leave balance untuk employee {$pkwt->NPK}: " . $e->getMessage());
+        }
     }
 
     /**

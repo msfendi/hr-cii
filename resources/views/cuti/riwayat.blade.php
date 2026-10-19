@@ -29,18 +29,51 @@
                         <h6 class="m-0 font-weight-bold text-primary">Daftar Pengajuan</h6>
                     </div>
                     <div class="card-body">
+
+                        <!-- Filters -->
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label for="filterStart">Dari Tanggal</label>
+                                <input type="date" class="form-control form-control-sm" id="filterStart">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filterEnd">Sampai Tanggal</label>
+                                <input type="date" class="form-control form-control-sm" id="filterEnd">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filterStatus">Status</label>
+                                <select class="form-control form-control-sm" id="filterStatus">
+                                    <option value="pending" selected>Menunggu Approval</option>
+                                    <option value="approved">Disetujui</option>
+                                    <option value="rejected">Ditolak</option>
+                                    <option value="all">Semua Status</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="button" id="btnFilter" class="btn btn-primary btn-sm mr-2 w-100">
+                                    <i class="fas fa-filter fa-sm"></i> Filter
+                                </button>
+                                <button type="button" id="btnResetFilter" class="btn btn-secondary btn-sm w-100">
+                                    <i class="fas fa-undo fa-sm"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
-                            <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
+                            <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
                                 <thead>
                                     <tr>
-                                        <th>#</th>
-                                        <th>Karyawan</th>
-                                        <th>Jenis Cuti</th>
-                                        <th>Periode</th>
-                                        <th>Total Hari</th>
-                                        <th>Status</th>
-                                        <th>Komentar</th>
-                                        <th>Aksi</th>
+                                        <th class="text-center" style="width:35px;">#</th>
+                                        <th style="width:150px;">Karyawan</th>
+                                        <th style="width:100px;">Tgl Pengajuan</th>
+                                        <th style="width:110px;">Jenis Cuti</th>
+                                        <th class="text-center" style="width:110px;">Periode</th>
+                                        <th class="text-center" style="width:90px;">Sisa Cuti</th>
+                                        <th class="text-center" style="width:80px;">Total Hari</th>
+                                        <th style="width:120px;">Alasan</th>
+                                        <th class="text-center" style="width:250px; min-width:230px;">Approval Progress</th>
+                                        <th class="text-center" style="width:110px;">Decision</th>
+                                        <th class="text-center" style="width:90px;">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -64,29 +97,61 @@
 </div>
 <!-- End of Page Wrapper -->
 
-<!-- Modal Detail -->
-<div class="modal fade" id="modalDetail" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
+<!-- Modal Detail Pengajuan Cuti -->
+<div class="modal fade" id="detailModal" tabindex="-1" role="dialog" aria-labelledby="detailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="mdTitle">Detail Pengajuan</h5>
-                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            <div class="modal-header" id="detailModalHeader">
+                <h5 class="modal-title" id="detailModalLabel">
+                    <i class="fas mr-1" id="detailModalIcon"></i> Detail Pengajuan Cuti
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
             <div class="modal-body">
-                <table class="table table-sm table-borderless mb-0">
-                    <tr><td class="text-muted" width="40%">Nama</td><td id="mdNama">-</td></tr>
-                    <tr><td class="text-muted">NPK</td><td id="mdNpk">-</td></tr>
-                    <tr><td class="text-muted">Departemen</td><td id="mdDept">-</td></tr>
-                    <tr><td class="text-muted">Jenis Cuti</td><td id="mdLeave">-</td></tr>
-                    <tr><td class="text-muted">Tanggal Mulai</td><td id="mdStart">-</td></tr>
-                    <tr><td class="text-muted">Tanggal Selesai</td><td id="mdEnd">-</td></tr>
-                    <tr><td class="text-muted">Jumlah Hari</td><td id="mdDays">-</td></tr>
-                    <tr><td class="text-muted">Alasan</td><td id="mdReason">-</td></tr>
-                    <tr><td class="text-muted">Komentar</td><td id="mdComment">-</td></tr>
-                    <tr><td class="text-muted">Approver</td><td id="mdApprover">-</td></tr>
-                    <tr><td class="text-muted">Status</td><td id="mdStatus">-</td></tr>
-                    <tr><td class="text-muted">Tanggal Diajukan</td><td id="mdCreated">-</td></tr>
-                </table>
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <h5 class="mb-0" id="detailNama">-</h5>
+                        <div class="text-muted small" id="detailNpkDept">-</div>
+                    </div>
+                    <div id="detailStatusBadge"></div>
+                </div>
+                <hr class="mt-0">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="text-muted small">Jenis Cuti</div>
+                        <div class="font-weight-bold" id="detailJenis">-</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="text-muted small">Total Hari</div>
+                        <div class="font-weight-bold" id="detailHari">-</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="text-muted small">Periode Cuti</div>
+                        <div class="font-weight-bold" id="detailPeriode">-</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="text-muted small">Diajukan Pada</div>
+                        <div class="font-weight-bold" id="detailDiajukan">-</div>
+                    </div>
+                    <div class="col-md-12 mb-3">
+                        <div class="text-muted small">Alasan Pengajuan</div>
+                        <div id="detailAlasan">-</div>
+                    </div>
+                    <div class="col-md-12 mb-3" id="detailApproversWrap">
+                        <div class="text-muted small mb-1">Status Tiap Approver</div>
+                        <div id="detailApproversContent" class="p-2 border rounded bg-light"></div>
+                    </div>
+                    <div class="col-md-12 mb-3" id="detailAttachWrap">
+                        <div class="text-muted small mb-1">Lampiran Dokumen</div>
+                        <div id="detailAttachContent"></div>
+                    </div>
+                    <div class="col-md-12" id="detailKomentarWrap" style="display:none;">
+                        <div class="text-muted small">Komentar Penolakan</div>
+                        <div class="text-danger" id="detailKomentar">-</div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Tutup</button>
@@ -95,11 +160,58 @@
     </div>
 </div>
 
+<!-- Modal Zoom Foto Lampiran -->
+<div class="modal fade" id="imageZoomModal" tabindex="-1" role="dialog" aria-hidden="true" style="z-index: 1070;">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header py-2 px-3 bg-light d-flex align-items-center justify-content-between">
+                <h6 class="modal-title font-weight-bold text-gray-800 text-truncate mr-2" id="imageZoomTitle">
+                    <i class="far fa-file-image text-primary mr-1"></i> Preview Foto
+                </h6>
+                <button type="button" class="close ml-auto" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body p-2 text-center bg-dark" style="min-height: 250px; display:flex; align-items:center; justify-content:center;">
+                <img id="imageZoomSrc" src="" style="max-width: 100%; max-height: 75vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);" alt="Zoom">
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    #dataTable {
+        font-size: 0.94rem;
+        color: #2e384d;
+    }
+    #dataTable thead th {
+        font-size: 0.92rem;
+        font-weight: 700;
+        background-color: #f8f9fc;
+        color: #4e73df;
+        vertical-align: middle;
+        padding: 10px 8px;
+    }
+    #dataTable tbody td {
+        font-size: 0.93rem;
+        vertical-align: middle;
+        padding: 10px 8px;
+    }
+    .avatar-circle {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+</style>
+
 <!-- Page level plugins -->
 <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
 <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
 
-<!-- Data rows handling code replaced by server side fetching -->
 <script>
 $(document).ready(function () {
 
@@ -107,24 +219,49 @@ $(document).ready(function () {
     var dtable = $('#dataTable').DataTable({
         processing: true,
         serverSide: true,
-        ajax: "{{ route('pengajuan-cuti.riwayat') }}",
+        autoWidth: false,
+        ajax: {
+            url: "{{ route('pengajuan-cuti.riwayat') }}",
+            data: function (d) {
+                d.start_date = $('#filterStart').val();
+                d.end_date   = $('#filterEnd').val();
+                d.status     = $('#filterStatus').val();
+            }
+        },
         columns: [
-            {data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false},
-            {data: 'karyawan', name: 'nama'}, // search will fallback to row nama
-            {data: 'leave_type', name: 'leave_type'},
-            {data: 'periode', name: 'periode', orderable: false, searchable: false},
-            {data: 'hari', name: 'hari', orderable: false, searchable: false},
-            {data: 'status_badge', name: 'status_badge', orderable: false, searchable: false},
-            {
-                data: 'comment', 
-                name: 'comment', 
-                orderable: false, 
-                searchable: false,
-                render: function(data, type, row) {
-                    return data ? '<span class="text-muted small">' + data + '</span>' : '-';
+            { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false, width: '35px', className: 'text-center' },
+            { data: 'karyawan', name: 'nama', width: '150px' },
+            { 
+                data: 'created_at', 
+                name: 'created_at', 
+                width: '100px',
+                render: function (data) {
+                    return '<span style="font-size:0.9rem; font-weight:500;">' + (data || '-') + '</span>';
                 }
             },
-            {data: 'aksi', name: 'aksi', orderable: false, searchable: false}
+            { 
+                data: 'leave_type', 
+                name: 'leave_type',
+                width: '110px',
+                render: function (data, type, row) {
+                    var badge = '';
+                    if (row.is_negative_leave) {
+                        badge += '<br><span class="badge badge-warning text-dark font-weight-bold mt-1" style="font-size:0.75rem;"><i class="fas fa-exclamation-triangle fa-xs mr-1"></i>Hutang Cuti</span>';
+                    }
+                    if (row.attach_files && row.attach_files.length > 0) {
+                        var count = row.attach_files.length;
+                        badge += '<br><span class="badge badge-light border text-primary mt-1" style="font-size:0.8rem;" title="' + count + ' file dilampirkan"><i class="fas fa-paperclip"></i> ' + count + ' berkas</span>';
+                    }
+                    return '<span class="font-weight-bold" style="font-size:0.94rem;">' + (data || '-') + '</span>' + badge;
+                }
+            },
+            { data: 'periode', name: 'periode', orderable: false, searchable: false, width: '110px', className: 'text-center' },
+            { data: 'sisa_cuti', name: 'sisa_cuti', orderable: false, searchable: false, width: '90px', className: 'text-center' },
+            { data: 'hari', name: 'hari', orderable: false, searchable: false, width: '80px', className: 'text-center' },
+            { data: 'alasan', name: 'alasan', orderable: false, searchable: false, width: '120px' },
+            { data: 'status_approver', name: 'status_approver', orderable: false, searchable: false, width: '250px' },
+            { data: 'status_utama', name: 'status_utama', orderable: false, searchable: false, width: '110px', className: 'text-center' },
+            { data: 'aksi', name: 'aksi', orderable: false, searchable: false, width: '90px', className: 'text-center' }
         ],
         language: {
             search:       'Cari:',
@@ -132,39 +269,112 @@ $(document).ready(function () {
         }
     });
 
+    // Filter tanggal & status
+    $('#btnFilter').on('click', function () {
+        dtable.ajax.reload();
+    });
+    $('#btnResetFilter').on('click', function () {
+        $('#filterStart, #filterEnd').val('');
+        $('#filterStatus').val('pending');
+        dtable.ajax.reload();
+    });
+
+    // Warna header modal
+    function statusMeta(status) {
+        if (status === 'approved') return { header: 'bg-success text-white', icon: 'fa-check-circle', close: 'text-white' };
+        if (status === 'rejected') return { header: 'bg-danger text-white', icon: 'fa-times-circle', close: 'text-white' };
+        return { header: 'bg-warning text-dark', icon: 'fa-hourglass-half', close: '' };
+    }
+
     // Open modal on Detail click
-    // Note: since it's AJAX, we access the row data embedded manually during column rendering
     $(document).on('click', '.btn-detail', function () {
-        var info = $(this).data('info');
-        if (!info) return;
-        
-        // Handle if the data is stringified JSON
-        if (typeof info === 'string') {
-            try { info = JSON.parse(info); } catch(e) {}
+        var tr = $(this).closest('tr');
+        var row = dtable.row(tr).data();
+        if (!row) return;
+
+        var meta = statusMeta(row.status);
+        $('#detailModalHeader').removeClass('bg-success bg-danger bg-warning text-white text-dark').addClass(meta.header);
+        $('#detailModalIcon').attr('class', 'fas mr-1 ' + meta.icon);
+        $('#detailModalHeader .close').removeClass('text-white').addClass(meta.close);
+
+        $('#detailNama').text(row.nama || '-');
+        $('#detailNpkDept').text((row.npk || '-') + ' · ' + (row.dept || '-'));
+        $('#detailStatusBadge').html(row.status_utama);
+        $('#detailJenis').text(row.leave_type || '-');
+        $('#detailHari').text(row.total_days ? (row.total_days + ' hari') : '-');
+        var startText = row.start_date_formatted || row.start_date || '-';
+        var endText = row.end_date_formatted || row.end_date || '-';
+        $('#detailPeriode').text(startText + ' s/d ' + endText);
+        $('#detailDiajukan').text(row.created_at || '-');
+        $('#detailAlasan').text(row.reason || '-');
+        $('#detailApproversContent').html(row.status_approver || '<span class="text-muted">-</span>');
+
+        // Komentar penolakan
+        if (row.status === 'rejected' && row.comment) {
+            $('#detailKomentar').text(row.comment);
+            $('#detailKomentarWrap').show();
+        } else {
+            $('#detailKomentarWrap').hide();
         }
 
-        $('#mdNama').text(info.nama || '-');
-        $('#mdNpk').text(info.npk || '-');
-        $('#mdDept').text(info.dept || '-');
-        $('#mdLeave').text(info.leave_type || '-');
-        $('#mdStart').text(info.start_date || '-');
-        $('#mdEnd').text(info.end_date || '-');
-        $('#mdDays').text((info.total_days || 0) + ' hari');
-        $('#mdReason').text(info.reason || '-');
-        $('#mdComment').text(info.comment || '-');
-        $('#mdApprover').text((info.approver_name || '-') + ' (Level ' + (info.approval_level||0) + ')');
-        $('#mdCreated').text(info.created_at || '-');
+        // Render lampiran dokumen
+        if (row.attach_files && row.attach_files.length > 0) {
+            var attachHtml = '<div class="d-flex flex-wrap" style="gap: 8px;">';
+            $.each(row.attach_files, function(i, file) {
+                if (file.is_image) {
+                    attachHtml += `
+                    <div class="border rounded p-2 bg-white shadow-sm d-flex align-items-center" style="max-width: 260px; min-width: 200px;">
+                        <img src="${file.url}" class="rounded mr-2 img-preview-thumb" data-url="${file.url}" data-name="${file.name}" style="width: 48px; height: 48px; object-fit: cover; cursor: zoom-in;" title="Klik untuk perbesar">
+                        <div class="overflow-hidden mr-2" style="flex:1;">
+                            <div class="font-weight-bold small text-truncate" title="${file.name}">${file.name}</div>
+                            <span class="badge badge-success" style="font-size:0.65rem;">GAMBAR</span>
+                        </div>
+                        <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-primary p-1" title="Buka di Tab Baru"><i class="fas fa-external-link-alt fa-xs"></i></a>
+                    </div>`;
+                } else if (file.is_pdf) {
+                    attachHtml += `
+                    <div class="border rounded p-2 bg-white shadow-sm d-flex align-items-center" style="max-width: 260px; min-width: 200px;">
+                        <div class="rounded mr-2 d-flex align-items-center justify-content-center bg-light" style="width: 48px; height: 48px; flex-shrink: 0;">
+                            <i class="far fa-file-pdf text-danger fa-2x"></i>
+                        </div>
+                        <div class="overflow-hidden mr-2" style="flex:1;">
+                            <div class="font-weight-bold small text-truncate" title="${file.name}">${file.name}</div>
+                            <span class="badge badge-danger" style="font-size:0.65rem;">PDF</span>
+                        </div>
+                        <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-danger p-1" title="Buka File"><i class="fas fa-external-link-alt fa-xs"></i></a>
+                    </div>`;
+                } else {
+                    var badgeColor = file.is_word ? 'badge-primary' : 'badge-secondary';
+                    var iconColor = file.is_word ? 'fa-file-word text-primary' : 'fa-file-alt text-secondary';
+                    attachHtml += `
+                    <div class="border rounded p-2 bg-white shadow-sm d-flex align-items-center" style="max-width: 260px; min-width: 200px;">
+                        <div class="rounded mr-2 d-flex align-items-center justify-content-center bg-light" style="width: 48px; height: 48px; flex-shrink: 0;">
+                            <i class="far ${iconColor} fa-2x"></i>
+                        </div>
+                        <div class="overflow-hidden mr-2" style="flex:1;">
+                            <div class="font-weight-bold small text-truncate" title="${file.name}">${file.name}</div>
+                            <span class="badge ${badgeColor}" style="font-size:0.65rem;">${(file.ext || 'FILE').toUpperCase()}</span>
+                        </div>
+                        <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-primary p-1" title="Download / Buka"><i class="fas fa-download fa-xs"></i></a>
+                    </div>`;
+                }
+            });
+            attachHtml += '</div>';
+            $('#detailAttachContent').html(attachHtml);
+        } else {
+            $('#detailAttachContent').html('<span class="text-muted font-italic">Tidak ada dokumen dilampirkan</span>');
+        }
 
-        // Status badge
-        var statusMap = {
-            approved: '<span class="badge badge-success">Disetujui</span>',
-            rejected: '<span class="badge badge-danger">Ditolak</span>',
-            partial:  '<span class="badge badge-warning text-white">Parsial</span>',
-            pending:  '<span class="badge badge-secondary">Menunggu</span>',
-        };
-        $('#mdStatus').html(statusMap[info.overall_status] || statusMap['pending']);
+        $('#detailModal').modal('show');
+    });
 
-        $('#modalDetail').modal('show');
+    // Zoom foto preview
+    $(document).on('click', '.img-preview-thumb', function () {
+        var url = $(this).data('url');
+        var name = $(this).data('name') || 'Preview Foto';
+        $('#imageZoomSrc').attr('src', url);
+        $('#imageZoomTitle').html('<i class="far fa-file-image text-primary mr-1"></i> ' + name);
+        $('#imageZoomModal').modal('show');
     });
 
 });

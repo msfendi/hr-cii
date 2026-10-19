@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pelamar;
+use App\Models\PKWT;
 use App\Models\SalaryApprove;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -232,7 +233,7 @@ class PelamarController extends Controller
         // [pkwt_column => filename] ready to merge into the PKWT insert.
         $pkwtFiles = $this->moveApplicantFilesToPkwt($pelamarDetail, $npk);
 
-        DB::connection('cii')->table('PKWT')->insert(array_merge([
+        PKWT::create(array_merge([
             'NPK' => $npk,
             'NAMA' => strtoupper($request->nama),
             'JK' => strtoupper($request->jk),

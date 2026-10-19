@@ -14,7 +14,7 @@ class AuditTrailController extends Controller
 {
     public function index()
     {
-        $events = ['created', 'updated', 'deleted'];
+        $events = ['created', 'updated', 'deleted', 'generate'];
         $models = AuditTrail::query()
             ->select('auditable_type')
             ->distinct()
@@ -56,10 +56,11 @@ class AuditTrailController extends Controller
             ->addColumn('model_name', fn(AuditTrail $row) => class_basename($row->auditable_type))
             ->addColumn('event_badge', function (AuditTrail $row) {
                 $color = match ($row->event) {
-                    'created' => 'success',
-                    'updated' => 'warning',
-                    'deleted' => 'danger',
-                    default => 'secondary',
+                    'created'  => 'success',
+                    'updated'  => 'warning',
+                    'deleted'  => 'danger',
+                    'generate' => 'info',
+                    default    => 'secondary',
                 };
 
                 return '<span class="badge badge-' . $color . '">' . strtoupper($row->event) . '</span>';

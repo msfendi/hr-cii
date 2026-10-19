@@ -19,5 +19,6 @@ class Overtime extends Model
         'JUMLAH_JAM_LEMBUR',
         'DAY',
         'DEPT_GROUP',
+        'is_request',
     ];
 }

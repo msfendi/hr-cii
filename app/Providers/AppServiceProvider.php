@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         PKWT::observe(PkwtObserver::class);
-        Magang::observe(MagangObserver::class);
+        // Magang::observe(MagangObserver::class);
 
         // $models = File::allFiles(app_path('Models'));
 

@@ -539,11 +539,11 @@ class RecruitmentFormController extends Controller
         }
 
         // ── Notifikasi: pelamar baru berhasil submit ──────────────────────────
-        event(new NotificationEvent(
-            'New Applicant Submitted!',
-            'Applicant: ' . ($step1['nama_lengkap'] ?? '-') . ' has applied for ' . ($step1['jabatan'] ?? '-') . ' position!',
-            'success'
-        ));
+        // event(new NotificationEvent(
+        //     'New Applicant Submitted!',
+        //     'Applicant: ' . ($step1['nama_lengkap'] ?? '-') . ' has applied for ' . ($step1['jabatan'] ?? '-') . ' position!',
+        //     'success'
+        // ));
 
         // ── Bersihkan semua session step ─────────────────────────────────────
         for ($i = 1; $i <= 8; $i++) {

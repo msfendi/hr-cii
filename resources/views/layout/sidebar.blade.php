@@ -11,265 +11,252 @@
     console.log(currentRole);
 </script> -->
 <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-   {{-- BRAND --}}
-   <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{ route('welcome') }}">
-      <div class="sidebar-brand-icon">
-         <img src="{{ asset('img/chutex.svg') }}" style="width:40px;">
-      </div>
-      <div class="sidebar-brand-text mx-3">Chutex <sup>Sys</sup></div>
-   </a>
-   <hr class="sidebar-divider my-0">
+    {{-- BRAND --}}
+    <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{ route('welcome') }}">
+        <div class="sidebar-brand-icon">
+            <img src="{{ asset('img/chutex.svg') }}" style="width:40px;">
+        </div>
+        <div class="sidebar-brand-text mx-3">Chutex <sup>Sys</sup></div>
+    </a>
+    <hr class="sidebar-divider my-0">
 
-   {{-- SEARCH MENU --}}
-   <li class="nav-item px-3 mb-2" id="sidebarSearchWrapper">
+    {{-- SEARCH MENU --}}
+    <li class="nav-item px-3 mb-2" id="sidebarSearchWrapper">
         <div style="position:relative;">
-            <input
-                type="text"
-                id="sidebarMenuSearch"
-                class="form-control form-control-sm"
-                placeholder="Cari menu..."
-                autocomplete="off"
-                style="border-radius:20px;padding-left:14px;padding-right:32px;font-size:13px;"
-            >
-            <i class="fas fa-search" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;"></i>
+            <input type="text" id="sidebarMenuSearch" class="form-control form-control-sm" placeholder="Cari menu..."
+                autocomplete="off" style="border-radius:20px;padding-left:14px;padding-right:32px;font-size:13px;">
+            <i class="fas fa-search"
+                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;"></i>
         </div>
         <div id="sidebarSearchEmpty" class="text-center small text-white-50 mt-2 d-none">
             Menu tidak ditemukan
         </div>
-   </li>
+    </li>
 
-   {{-- AI ASSISTANT MENU --}}
-   <li class="nav-item {{ request()->routeIs('rag-chat.*') ? 'active' : '' }}" data-menu-item data-menu-name="ai assistant rag bot">
-      <a class="nav-link" href="{{ route('rag-chat.index') }}">
-         <i class="fas fa-robot text-warning"></i>
-         <span class="font-weight-bold">AI Assistant & RAG</span>
-      </a>
-   </li>
-   <hr class="sidebar-divider my-1">
+    {{-- AI ASSISTANT MENU --}}
+    {{-- <li class="nav-item {{ request()->routeIs('rag-chat.*') ? 'active' : '' }}" data-menu-item
+        data-menu-name="ai assistant rag bot">
+        <a class="nav-link" href="{{ route('rag-chat.index') }}">
+            <i class="fas fa-robot text-warning"></i>
+            <span class="font-weight-bold">AI Assistant & RAG</span>
+        </a>
+    </li>
+    <hr class="sidebar-divider my-1"> --}}
 
-   {{-- MENU DINAMIS DARI DATABASE --}}
-@foreach ($sidebarMenus as $menu)
+    {{-- MENU DINAMIS DARI DATABASE --}}
+    @foreach ($sidebarMenus as $menu)
 
-    {{-- Hide jika parent kosong (tidak punya route dan tidak punya child) --}}
-    @if (!$menu->route_name && $menu->children->isEmpty())
-        @continue
-    @endif
+        {{-- Hide jika parent kosong (tidak punya route dan tidak punya child) --}}
+        @if (!$menu->route_name && $menu->children->isEmpty())
+            @continue
+        @endif
 
-    @if ($menu->children->isEmpty())
-        {{-- Parent tanpa child tetapi punya route --}}
-        <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
-            <a class="nav-link" href="{{ route($menu->route_name) }}">
-                <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
-                <span>{{ $menu->name }}</span>
-            </a>
-        </li>
-    @else
-        {{-- Parent dengan child --}}
-        <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
-            <a class="nav-link collapsed"
-               href="#"
-               data-toggle="collapse"
-               data-target="#menu-{{ $menu->id }}"
-               aria-expanded="false"
-               aria-controls="menu-{{ $menu->id }}">
-                <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
-                <span>{{ $menu->name }}</span>
-            </a>
+        @if ($menu->children->isEmpty())
+            {{-- Parent tanpa child tetapi punya route --}}
+            <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
+                <a class="nav-link" href="{{ route($menu->route_name) }}">
+                    <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
+                    <span>{{ $menu->name }}</span>
+                </a>
+            </li>
+        @else
+            {{-- Parent dengan child --}}
+            <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
+                <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#menu-{{ $menu->id }}"
+                    aria-expanded="false" aria-controls="menu-{{ $menu->id }}">
+                    <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
+                    <span>{{ $menu->name }}</span>
+                </a>
 
-            <div id="menu-{{ $menu->id }}"
-                 class="collapse"
-                 data-parent="#accordionSidebar">
+                <div id="menu-{{ $menu->id }}" class="collapse" data-parent="#accordionSidebar">
 
-                <div class="collapse-inner bg-white rounded">
-                    @foreach ($menu->children as $child)
-                        <a class="collapse-item"
-                           data-menu-child
-                           data-menu-name="{{ strtolower($child->name) }}"
-                           href="{{ $child->route_name ? route($child->route_name) : '#' }}">
-                            {{ $child->name }}
-                        </a>
-                    @endforeach
+                    <div class="collapse-inner bg-white rounded">
+                        @foreach ($menu->children as $child)
+                            <a class="collapse-item" data-menu-child data-menu-name="{{ strtolower($child->name) }}"
+                                href="{{ $child->route_name ? route($child->route_name) : '#' }}">
+                                {{ $child->name }}
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
-            </div>
-        </li>
-    @endif
+            </li>
+        @endif
 
-@endforeach
+    @endforeach
 
-   <hr class="sidebar-divider d-none d-md-block">
+    <hr class="sidebar-divider d-none d-md-block">
 </ul>
 
 <script>
-(function () {
-    const searchInput = document.getElementById('sidebarMenuSearch');
-    const emptyState  = document.getElementById('sidebarSearchEmpty');
-    if (!searchInput) return;
+    (function () {
+        const searchInput = document.getElementById('sidebarMenuSearch');
+        const emptyState = document.getElementById('sidebarSearchEmpty');
+        if (!searchInput) return;
 
-    // Simpan state collapse asli (yang sedang 'show') supaya bisa dikembalikan saat search dikosongkan
-    const originallyOpen = new Set();
-    document.querySelectorAll('#accordionSidebar .collapse.show').forEach(el => originallyOpen.add(el.id));
+        // Simpan state collapse asli (yang sedang 'show') supaya bisa dikembalikan saat search dikosongkan
+        const originallyOpen = new Set();
+        document.querySelectorAll('#accordionSidebar .collapse.show').forEach(el => originallyOpen.add(el.id));
 
-    function normalize(str) {
-        return (str || '').toLowerCase().trim();
-    }
-
-    function resetSidebar() {
-        document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
-            li.classList.remove('d-none');
-        });
-        document.querySelectorAll('#accordionSidebar [data-menu-child]').forEach(child => {
-            child.classList.remove('d-none');
-        });
-        document.querySelectorAll('#accordionSidebar .collapse').forEach(el => {
-            if (originallyOpen.has(el.id)) {
-                el.classList.add('show');
-            } else {
-                el.classList.remove('show');
-            }
-        });
-        emptyState.classList.add('d-none');
-    }
-
-    function filterSidebar(query) {
-        const q = normalize(query);
-
-        if (!q) {
-            resetSidebar();
-            return;
+        function normalize(str) {
+            return (str || '').toLowerCase().trim();
         }
 
-        let anyVisible = false;
+        function resetSidebar() {
+            document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
+                li.classList.remove('d-none');
+            });
+            document.querySelectorAll('#accordionSidebar [data-menu-child]').forEach(child => {
+                child.classList.remove('d-none');
+            });
+            document.querySelectorAll('#accordionSidebar .collapse').forEach(el => {
+                if (originallyOpen.has(el.id)) {
+                    el.classList.add('show');
+                } else {
+                    el.classList.remove('show');
+                }
+            });
+            emptyState.classList.add('d-none');
+        }
 
-        document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
-            const parentName = normalize(li.getAttribute('data-menu-name'));
-            const parentMatch = parentName.includes(q);
+        function filterSidebar(query) {
+            const q = normalize(query);
 
-            const childLinks = li.querySelectorAll('[data-menu-child]');
-            const collapseEl = li.querySelector('.collapse');
-
-            if (childLinks.length === 0) {
-                // Item tanpa child
-                const show = parentMatch;
-                li.classList.toggle('d-none', !show);
-                if (show) anyVisible = true;
+            if (!q) {
+                resetSidebar();
                 return;
             }
 
-            // Item dengan child
-            let anyChildMatch = false;
-            childLinks.forEach(child => {
-                const childName = normalize(child.getAttribute('data-menu-name'));
-                const childMatch = parentMatch || childName.includes(q);
-                child.classList.toggle('d-none', !childMatch);
-                if (childMatch) anyChildMatch = true;
+            let anyVisible = false;
+
+            document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
+                const parentName = normalize(li.getAttribute('data-menu-name'));
+                const parentMatch = parentName.includes(q);
+
+                const childLinks = li.querySelectorAll('[data-menu-child]');
+                const collapseEl = li.querySelector('.collapse');
+
+                if (childLinks.length === 0) {
+                    // Item tanpa child
+                    const show = parentMatch;
+                    li.classList.toggle('d-none', !show);
+                    if (show) anyVisible = true;
+                    return;
+                }
+
+                // Item dengan child
+                let anyChildMatch = false;
+                childLinks.forEach(child => {
+                    const childName = normalize(child.getAttribute('data-menu-name'));
+                    const childMatch = parentMatch || childName.includes(q);
+                    child.classList.toggle('d-none', !childMatch);
+                    if (childMatch) anyChildMatch = true;
+                });
+
+                const showParent = parentMatch || anyChildMatch;
+                li.classList.toggle('d-none', !showParent);
+
+                if (collapseEl) {
+                    collapseEl.classList.toggle('show', showParent);
+                }
+
+                if (showParent) anyVisible = true;
             });
 
-            const showParent = parentMatch || anyChildMatch;
-            li.classList.toggle('d-none', !showParent);
+            emptyState.classList.toggle('d-none', anyVisible);
+        }
 
-            if (collapseEl) {
-                collapseEl.classList.toggle('show', showParent);
-            }
-
-            if (showParent) anyVisible = true;
+        let debounceTimer;
+        searchInput.addEventListener('input', function (e) {
+            clearTimeout(debounceTimer);
+            const value = e.target.value;
+            debounceTimer = setTimeout(() => filterSidebar(value), 150);
         });
-
-        emptyState.classList.toggle('d-none', anyVisible);
-    }
-
-    let debounceTimer;
-    searchInput.addEventListener('input', function (e) {
-        clearTimeout(debounceTimer);
-        const value = e.target.value;
-        debounceTimer = setTimeout(() => filterSidebar(value), 150);
-    });
-})();
+    })();
 </script>
 
 {{-- Bagian notifikasi realtime (Pusher/Reverb) di bawah ini TIDAK berubah,
-     biarkan persis seperti file sidebar lama Anda --}}
+biarkan persis seperti file sidebar lama Anda --}}
 
 
 
 
-    <div id="notif-container"
-        style="position:fixed;top:20px;right:20px;z-index:9999;">
-    </div>
+<div id="notif-container" style="position:fixed;top:20px;right:20px;z-index:9999;">
+</div>
 
-    <!-- Pusher -->
-    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+<!-- Pusher -->
+<script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
 
-    <!-- Laravel Echo -->
-    <script src="https://cdn.jsdelivr.net/npm/laravel-echo/dist/echo.iife.js"></script>
+<!-- Laravel Echo -->
+<script src="https://cdn.jsdelivr.net/npm/laravel-echo/dist/echo.iife.js"></script>
 
-    <script>
-        window.Pusher = Pusher;
+<script>
+    window.Pusher = Pusher;
 
-        const EchoClass = window.Echo.default ?? window.Echo;
-        const wsHost = window.location.hostname;
+    const EchoClass = window.Echo.default ?? window.Echo;
+    const wsHost = window.location.hostname;
 
-        window.Echo = new EchoClass({
-            broadcaster: 'pusher',
+    window.Echo = new EchoClass({
+        broadcaster: 'pusher',
 
-            key: window.reverbKey,
+        key: window.reverbKey,
 
-            wsHost: wsHost,
-            wsPort: 8800,
-            wssPort: 443,
+        wsHost: wsHost,
+        wsPort: 8800,
+        wssPort: 443,
 
-            cluster: 'mt1',
+        cluster: 'mt1',
 
-            forceTLS: window.location.protocol === 'https:',
-            disableStats: true,
-            enabledTransports: ['ws','wss'],
-        });
-    </script>
-    <script>
-window.Echo.channel('notification-channel')
-.listen('NotificationEvent', (e) => {
+        forceTLS: window.location.protocol === 'https:',
+        disableStats: true,
+        enabledTransports: ['ws', 'wss'],
+    });
+</script>
+<script>
+    window.Echo.channel('notification-channel')
+        .listen('NotificationEvent', (e) => {
 
-    /*
-    =====================================
-    TYPE CONFIG
-    =====================================
-    */
+            /*
+            =====================================
+            TYPE CONFIG
+            =====================================
+            */
 
-    const types = {
+            const types = {
 
-        success:{
-            border:'#28a745',
-            bg:'#e9f9ee',
-            color:'#28a745',
-            icon:'✔'
-        },
+                success: {
+                    border: '#28a745',
+                    bg: '#e9f9ee',
+                    color: '#28a745',
+                    icon: '✔'
+                },
 
-        danger:{
-            border:'#dc3545',
-            bg:'#fdeaea',
-            color:'#dc3545',
-            icon:'✖'
-        },
+                danger: {
+                    border: '#dc3545',
+                    bg: '#fdeaea',
+                    color: '#dc3545',
+                    icon: '✖'
+                },
 
-        warning:{
-            border:'#ffc107',
-            bg:'#fff8e1',
-            color:'#ffc107',
-            icon:'⚠'
-        }
+                warning: {
+                    border: '#ffc107',
+                    bg: '#fff8e1',
+                    color: '#ffc107',
+                    icon: '⚠'
+                }
 
-    };
+            };
 
-    const type = types[e.type] ?? types.success;
+            const type = types[e.type] ?? types.success;
 
-    /*
-    =====================================
-    BUILD NOTIFICATION
-    =====================================
-    */
+            /*
+            =====================================
+            BUILD NOTIFICATION
+            =====================================
+            */
 
-    const notif = document.createElement('div');
+            const notif = document.createElement('div');
 
-    notif.innerHTML = `
+            notif.innerHTML = `
     <div style="
         display:flex;
         align-items:center;
@@ -327,20 +314,20 @@ window.Echo.channel('notification-channel')
     </div>
     `;
 
-    document.getElementById('notif-container')
-        .prepend(notif);
+            document.getElementById('notif-container')
+                .prepend(notif);
 
-    /*
-    =====================================
-    AUTO REMOVE
-    =====================================
-    */
+            /*
+            =====================================
+            AUTO REMOVE
+            =====================================
+            */
 
-    setTimeout(() => {
-        notif.style.opacity = 0;
-        notif.style.transform = 'translateY(-10px)';
-        setTimeout(()=>notif.remove(),300);
-    },4000);
+            setTimeout(() => {
+                notif.style.opacity = 0;
+                notif.style.transform = 'translateY(-10px)';
+                setTimeout(() => notif.remove(), 300);
+            }, 4000);
 
-});
+        });
 </script>

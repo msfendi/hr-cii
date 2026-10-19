@@ -15,7 +15,12 @@ class LeaveApprovalController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
+        $this->middleware('auth')->except([
+            'portalIndex',
+            'portalApprove',
+            'portalReject',
+            'portalUpdateDecision',
+        ]);
     }
 
     /**
@@ -25,14 +30,44 @@ class LeaveApprovalController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $npk = $user->npk;
+        $npk = $user ? $user->npk : null;
 
         if (!$npk) {
             Alert::error('Error', 'Akun Anda tidak memiliki NPK yang terdaftar.');
             return redirect()->back();
         }
 
-        // Cari data karyawan yang login sebagai approver (berdasarkan NPK user)
+        return $this->renderApprovalList($npk, false);
+    }
+
+    /**
+     * Tampilkan data leave yang butuh di-approve untuk portal karyawan
+     * (tanpa auth middleware, berbasis session cuti_employee_npk)
+     */
+    public function portalIndex()
+    {
+        $npk = session('cuti_employee_npk');
+
+        if (!$npk) {
+            Alert::error('Error', 'Silahkan login terlebih dahulu.');
+            return redirect()->route('pengajuan-cuti.login');
+        }
+
+        $isApprover = \App\Models\ApprovalRule::where('approval_id', $npk)->exists();
+        if (!$isApprover) {
+            Alert::error('Akses Ditolak', 'Anda tidak terdaftar sebagai approver cuti.');
+            return redirect()->route('pengajuan-cuti.form');
+        }
+
+        return $this->renderApprovalList($npk, true);
+    }
+
+    /**
+     * Shared render method for both admin and portal approval views
+     */
+    private function renderApprovalList($npk, $isPortal = false)
+    {
+        // Cari data karyawan yang login sebagai approver (berdasarkan NPK)
         $employee = DB::connection('cii')
             ->table('BIODATA')
             ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
@@ -42,8 +77,8 @@ class LeaveApprovalController extends Controller
 
         if (!$employee) {
             $employee = (object) [
-                'NPK' => $user->npk,
-                'NAMA_KARYAWAN' => $user->name,
+                'NPK' => $npk,
+                'NAMA_KARYAWAN' => $npk,
                 'DEPARTEMENT' => '-',
                 'IS_SEWING' => 0
             ];
@@ -51,33 +86,52 @@ class LeaveApprovalController extends Controller
 
         $approverNpk = $employee->NPK;
 
-        // Tampilkan permohonan yang levelnya sedang aktif (butuh aksi approver ini)
-        // ATAU yang statusnya sudah pernah diputuskan (approved/rejected) --
-        // supaya permohonan yang sudah diproses TIDAK hilang dari daftar approver ini
-        // walaupun approval_progress sudah maju ke level berikutnya.
-        $query = LeaveRequest::where('approval_id', $approverNpk)
-            ->where(function ($q) {
-                $q->whereColumn('approval_level', 'approval_progress')
-                  ->orWhere('status', '!=', 'pending');
-            });
+        // Ambil semua permohonan di mana user ini adalah approver
+        // Termasuk yang sedang menunggu giliran (approval_progress == approval_level),
+        // yang sudah diputuskan (approved/rejected), MAUPUN yang masih menunggu approval
+        // level sebelumnya (approval_progress < approval_level).
+        $query = LeaveRequest::where('approval_id', $approverNpk);
 
         // Filter tanggal: tampilkan permohonan yang periode cutinya beririsan
         // dengan rentang tanggal yang dipilih (start_date/end_date dari request).
-        // Sesuaikan ke created_at kalau yang dimaksud "per tanggal" adalah tanggal pengajuan.
         if ($startDate = request('start_date')) {
             $query->whereDate('end_date', '>=', $startDate);
         }
         if ($endDate = request('end_date')) {
             $query->whereDate('start_date', '<=', $endDate);
         }
-        if ($status = request('status')) {
-            $query->where('status', $status);
+
+        // Filter status: default tampilkan yang statusnya pending / waiting
+        $status = request('status', 'pending');
+        if (empty($status)) {
+            $status = 'pending';
         }
 
+        if ($status !== 'all') {
+            if ($status === 'waiting_previous') {
+                $query->where('status', 'pending')
+                      ->whereColumn('approval_progress', '<', 'approval_level');
+            } elseif ($status === 'pending_active') {
+                $query->where('status', 'pending')
+                      ->whereColumn('approval_progress', '=', 'approval_level');
+            } else {
+                $query->where('status', $status);
+            }
+        }
+
+        // Urutkan dan pastikan 1 row per pengajuan (token):
+        // 1. Yang butuh tindakan aktif approver ini (pending & approval_progress == approval_level)
+        // 2. Yang masih menunggu approval sebelumnya (pending & approval_progress < approval_level)
+        // 3. Yang sudah diputuskan (approved / rejected)
         $leaveRequestsQuery = $query
-            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
-            ->orderBy('created_at', 'asc')
-            ->get();
+            ->orderByRaw("CASE 
+                WHEN status = 'pending' AND approval_progress = approval_level THEN 0 
+                WHEN status = 'pending' THEN 1 
+                ELSE 2 
+            END")
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->unique('token');
 
         $rows = [];
         foreach ($leaveRequestsQuery as $req) {
@@ -89,31 +143,91 @@ class LeaveApprovalController extends Controller
 
             $leaveType = LeaveTypes::find($req->leave_type_id);
 
+            // Ambil sisa balance cuti karyawan untuk jenis cuti yang dipilih
+            $leaveBalance = DB::table('leave_balances')
+                ->where('NPK', $req->NPK)
+                ->where('leave_type_id', $req->leave_type_id)
+                ->where('year', date('Y'))
+                ->first();
+
+            // Ambil daftar semua approver untuk token ini (semua level)
+            $allApprovers = LeaveRequest::where('token', $req->token)
+                ->where('void', '!=', 'true')
+                ->orderBy('approval_level', 'asc')
+                ->get();
+
+            $approversList = [];
+            foreach ($allApprovers as $approverReq) {
+                $approverBio = DB::connection('cii')->table('BIODATA')
+                    ->where('NPK', $approverReq->approval_id)
+                    ->select('NAMA_KARYAWAN')
+                    ->first();
+
+                $approversList[] = [
+                    'npk'    => $approverReq->approval_id,
+                    'nama'   => $approverBio ? $approverBio->NAMA_KARYAWAN : $approverReq->approval_id,
+                    'level'  => $approverReq->approval_level,
+                    'status' => $approverReq->status,
+                    'void'   => $approverReq->void,
+                ];
+            }
+
+            // Cek apakah masih menunggu approval level sebelumnya
+            $isWaitingPrevious = ($req->status === 'pending' && (int)$req->approval_progress < (int)$req->approval_level);
+
             // Approver cuma boleh mengubah keputusan selama belum ada level
             // berikutnya yang sudah bertindak (biar workflow tetap konsisten).
-            // Harus abaikan row yang statusnya di-void secara otomatis karena reject di level ini.
             $laterLevelActed = LeaveRequest::where('token', $req->token)
                 ->where('approval_level', '>', $req->approval_level)
                 ->where('status', '!=', 'pending')
                 ->where('void', '!=', 'true')
                 ->exists();
 
+            // Format lampiran file
+            $formattedFiles = [];
+            if (!empty($req->attach_files)) {
+                $files = is_array($req->attach_files) ? $req->attach_files : json_decode($req->attach_files, true);
+                if (is_array($files)) {
+                    foreach ($files as $filePath) {
+                        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+                        $formattedFiles[] = [
+                            'path'     => $filePath,
+                            'url'      => asset('storage/' . $filePath),
+                            'name'     => basename($filePath),
+                            'ext'      => $ext,
+                            'is_image' => in_array($ext, ['jpg', 'jpeg', 'png', 'webp']),
+                            'is_pdf'   => $ext === 'pdf',
+                            'is_word'  => in_array($ext, ['doc', 'docx']),
+                        ];
+                    }
+                }
+            }
+
             $rows[] = [
-                'id'             => $req->id,
-                'token'          => $req->token,
-                'npk'            => $req->NPK,
-                'nama'           => $bioEmployee ? $bioEmployee->NAMA_KARYAWAN : $req->NPK,
-                'dept'           => $bioEmployee ? $bioEmployee->DEPARTEMENT : '-',
-                'leave_type'     => $leaveType ? $leaveType->name : '-',
-                'start_date'     => $req->start_date,
-                'end_date'       => $req->end_date,
-                'total_days'     => $req->total_days,
-                'reason'         => $req->reason,
-                'status'         => $req->status,
-                'comment'        => $req->comment,
-                'created_at'     => Carbon::parse($req->created_at)->format('d M Y H:i'),
-                'approval_level' => $req->approval_level,
-                'can_update'     => $req->status !== 'pending' && !$laterLevelActed,
+                'id'                  => $req->id,
+                'token'               => $req->token,
+                'npk'                 => $req->NPK,
+                'nama'                => $bioEmployee ? $bioEmployee->NAMA_KARYAWAN : $req->NPK,
+                'dept'                => $bioEmployee ? $bioEmployee->DEPARTEMENT : '-',
+                'leave_type'          => $leaveType ? $leaveType->name : '-',
+                'leave_balance'       => $leaveBalance ? $leaveBalance->remained_days : '-',
+                'leave_used'          => $leaveBalance ? $leaveBalance->used_days : '-',
+                'start_date'          => $req->start_date,
+                'end_date'            => $req->end_date,
+                'start_date_formatted'=> Carbon::parse($req->start_date)->format('d M Y'),
+                'end_date_formatted'  => Carbon::parse($req->end_date)->format('d M Y'),
+                'total_days'          => $req->total_days,
+                'reason'              => $req->reason,
+                'status'              => $req->status,
+                'comment'             => $req->comment,
+                'created_at'          => Carbon::parse($req->created_at)->format('d M Y H:i'),
+                'approval_level'      => $req->approval_level,
+                'approval_progress'   => $req->approval_progress,
+                'is_waiting_previous' => $isWaitingPrevious,
+                'can_update'          => $req->status !== 'pending' && !$laterLevelActed,
+                'is_negative_leave'   => str_contains($req->reason, '[Hutang Cuti]'),
+                'attach_files'        => $formattedFiles,
+                'approvers'           => $approversList,
             ];
         }
 
@@ -121,52 +235,158 @@ class LeaveApprovalController extends Controller
             return \Yajra\DataTables\Facades\DataTables::of(collect($rows))
                 ->addIndexColumn()
                 ->addColumn('karyawan', function($row) {
-                    return '<strong>'.$row['nama'].'</strong><br><small class="text-muted">'.$row['npk'].' &middot; '.$row['dept'].'</small>';
+                    return '<div style="line-height:1.3;">' .
+                           '  <strong style="font-size:0.95rem; color:#2e59d9;">'.e($row['nama']).'</strong>' .
+                           '  <div class="text-muted" style="font-size:0.85rem; margin-top:2px;">' .
+                           '    <span class="font-weight-bold">'.e($row['npk']).'</span> &middot; '.e($row['dept']) .
+                           '  </div>' .
+                           '</div>';
                 })
                 ->addColumn('periode', function($row) {
-                    $start = Carbon::parse($row['start_date'])->format('d M Y');
-                    $end   = Carbon::parse($row['end_date'])->format('d M Y');
-                    return $start . ' – ' . $end;
+                    $start = $row['start_date_formatted'];
+                    $end   = $row['end_date_formatted'];
+                    return '<div style="font-size:0.9rem; font-weight:600; white-space:nowrap;">' . $start . '</div>' .
+                           '<div class="text-muted" style="font-size:0.8rem; text-align:center;">s/d</div>' .
+                           '<div style="font-size:0.9rem; font-weight:600; white-space:nowrap;">' . $end . '</div>';
                 })
                 ->addColumn('hari', function($row) {
-                    return $row['total_days'] . ' hari';
+                    return '<span class="badge badge-light border text-dark font-weight-bold" style="font-size:0.92rem; padding:5px 8px;">'.$row['total_days'].' hari</span>';
                 })
                 ->addColumn('alasan', function($row) {
-                    return $row['reason'] ?: '-';
+                    $badge = !empty($row['is_negative_leave']) ? '<span class="badge badge-warning text-dark font-weight-bold mr-1"><i class="fas fa-exclamation-triangle fa-xs"></i> Hutang Cuti</span> ' : '';
+                    return '<div style="font-size:0.88rem; line-height:1.4;">' . $badge . (e($row['reason']) ?: '-') . '</div>';
                 })
-                ->addColumn('status_badge', function($row) {
-                    if($row['status'] === 'approved') return '<span class="badge badge-success">Disetujui</span>';
-                    elseif($row['status'] === 'rejected') return '<span class="badge badge-danger">Ditolak</span>';
-                    return '<span class="badge badge-warning text-white">Menunggu</span>';
+                ->addColumn('sisa_cuti', function($row) {
+                    if ($row['leave_balance'] === '-') {
+                        return '<span class="text-muted" style="font-size:0.9rem;">-</span>';
+                    }
+                    $sisa = (int)$row['leave_balance'];
+                    $used = (int)$row['leave_used'];
+                    $color = $sisa <= 2 ? 'danger' : ($sisa <= 5 ? 'warning' : 'success');
+                    return '<div class="font-weight-bold text-'.$color.'" style="font-size:1.05rem;">'.$sisa.' hari</div>' .
+                           '<div class="text-muted font-weight-bold" style="font-size:0.8rem; margin-top:2px;">Terpakai: '.$used.' hr</div>';
                 })
-                ->addColumn('aksi', function($row) {
-                    $detailBtn = '<button type="button" class="btn btn-sm btn-info btn-detail" data-id="'.$row['id'].'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
-
-                    if ($row['status'] === 'pending') {
-                        return $detailBtn . ' ' .
-                               '<button type="button" class="btn btn-sm btn-success btn-approve" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'"><i class="fas fa-check fa-sm"></i> Approve</button> ' .
-                               '<button type="button" class="btn btn-sm btn-danger btn-reject" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'"><i class="fas fa-times fa-sm"></i> Reject</button>';
+                ->addColumn('status_approver', function($row) {
+                    // Daftar approver beserta status approval masing-masing
+                    if (empty($row['approvers'])) {
+                        return '<span class="text-muted">-</span>';
                     }
 
-                    $html = $detailBtn;
+                    $html = '<div style="font-size:0.86rem; text-align:left;">';
+                    foreach ($row['approvers'] as $index => $approver) {
+                        $statusBadge = '';
+                        if ($approver['status'] === 'approved') {
+                            $statusBadge = '<span class="badge badge-success" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-check fa-xs mr-1"></i>Approved</span>';
+                        } elseif ($approver['status'] === 'rejected') {
+                            $statusBadge = '<span class="badge badge-danger" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-times fa-xs mr-1"></i>Rejected</span>';
+                        } else {
+                            $statusBadge = '<span class="badge badge-warning text-white" style="font-size:0.75rem; padding:3px 7px;"><i class="fas fa-clock fa-xs mr-1"></i>Pending</span>';
+                        }
 
-                    // if ($row['can_update']) {
-                    //     $start = \Carbon\Carbon::parse($row['start_date'])->format('d M Y');
-                    //     $end = \Carbon\Carbon::parse($row['end_date'])->format('d M Y');
-                    //     $komentar = htmlspecialchars($row['comment'] ?? '', ENT_QUOTES, 'UTF-8');
-                    //     $html .= ' <button type="button" class="btn btn-sm btn-outline-secondary btn-ubah" data-id="'.$row['id'].'" data-nama="'.$row['nama'].'" data-status="'.$row['status'].'" data-jenis="'.$row['leave_type'].'" data-mulai="'.$start.'" data-selesai="'.$end.'" data-hari="'.$row['total_days'].'" data-komentar="'.$komentar.'"><i class="fas fa-edit fa-sm"></i> Ubah</button>';
-                    // } 
-                    // else {
-                    //     $html .= '<div class="mt-1"><span class="text-muted small">Sudah diproses</span></div>';
-                    // }
+                        $borderBottom = ($index < count($row['approvers']) - 1) ? 'border-bottom:1px dashed #e3e6f0;' : '';
+
+                        $html .= '<div class="d-flex align-items-center justify-content-between py-1" style="' . $borderBottom . ' gap:6px;">';
+                        $html .= '  <div class="d-flex align-items-center text-truncate" style="flex:1; min-width:0;" title="['.$approver['npk'].'] '.e($approver['nama']).'">';
+                        $html .= '    <span class="badge badge-light border text-muted mr-1" style="font-size:0.72rem;">'.$approver['npk'].'</span>';
+                        $html .= '    <span class="font-weight-bold text-dark text-truncate" style="font-size:0.85rem;">'.e($approver['nama']).'</span>';
+                        $html .= '  </div>';
+                        $html .= '  <div style="flex-shrink:0;">'.$statusBadge.'</div>';
+                        $html .= '</div>';
+                    }
+                    $html .= '</div>';
 
                     return $html;
                 })
-                ->rawColumns(['karyawan', 'status_badge', 'aksi'])
+                ->addColumn('status_utama', function($row) {
+                    // Status utama pengajuan cuti (sebelum kolom aksi)
+                    if ($row['status'] === 'approved') {
+                        return '<span class="badge badge-success px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-check mr-1"></i>Disetujui</span>';
+                    } elseif ($row['status'] === 'rejected') {
+                        return '<span class="badge badge-danger px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-times mr-1"></i>Ditolak</span>';
+                    } elseif (!empty($row['is_waiting_previous'])) {
+                        return '<span class="badge badge-secondary px-2 py-1" style="font-size:0.82rem;" title="Menunggu approval level sebelumnya"><i class="fas fa-clock mr-1"></i>Menunggu Level Sebelumnya</span>';
+                    }
+                    return '<span class="badge badge-warning text-white px-2 py-1" style="font-size:0.85rem;"><i class="fas fa-hourglass-half mr-1"></i>Menunggu</span>';
+                })
+                ->addColumn('aksi', function($row) {
+                    $detailBtn = '<button type="button" class="btn btn-sm btn-info btn-detail btn-block text-nowrap" style="font-size:0.82rem; padding:4px 6px;" data-id="'.$row['id'].'"><i class="fas fa-eye fa-sm"></i> Detail</button>';
+
+                    if ($row['status'] === 'pending') {
+                        if (!empty($row['is_waiting_previous'])) {
+                            return $detailBtn;
+                        }
+
+                        return '<div class="d-flex flex-column" style="gap:4px;">' .
+                               $detailBtn .
+                               '<button type="button" class="btn btn-sm btn-success btn-approve btn-block text-nowrap" style="font-size:0.82rem; padding:4px 6px;" data-id="'.$row['id'].'" data-nama="'.e($row['nama']).'"><i class="fas fa-check fa-sm"></i> Approve</button>' .
+                               '<button type="button" class="btn btn-sm btn-danger btn-reject btn-block text-nowrap" style="font-size:0.82rem; padding:4px 6px;" data-id="'.$row['id'].'" data-nama="'.e($row['nama']).'"><i class="fas fa-times fa-sm"></i> Reject</button>' .
+                               '</div>';
+                    }
+
+                    return $detailBtn;
+                })
+                ->rawColumns(['karyawan', 'periode', 'hari', 'alasan', 'sisa_cuti', 'status_approver', 'status_utama', 'aksi'])
                 ->make(true);
         }
 
-        return view('cuti.approval', compact('employee'));
+        $ajaxUrl = $isPortal ? route('pengajuan-cuti.portal-approval') : route('pengajuan-cuti.approval');
+        $actionBaseUrl = $isPortal ? url('pengajuan-cuti/portal-approval') : url('pengajuan-cuti/approval');
+
+        return view('cuti.approval', compact('employee', 'isPortal', 'ajaxUrl', 'actionBaseUrl'));
+    }
+
+    /**
+     * Portal: Approve cuti dari portal karyawan
+     */
+    public function portalApprove($id)
+    {
+        $npk = session('cuti_employee_npk');
+        if (!$npk) {
+            return response()->json(['success' => false, 'message' => 'Sesi login telah berakhir. Silahkan login kembali.'], 401);
+        }
+
+        $leave = LeaveRequest::findOrFail($id);
+        if ($leave->approval_id !== $npk) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk memproses permohonan ini.'], 403);
+        }
+
+        return $this->approve($id);
+    }
+
+    /**
+     * Portal: Reject cuti dari portal karyawan
+     */
+    public function portalReject(Request $request, $id)
+    {
+        $npk = session('cuti_employee_npk');
+        if (!$npk) {
+            return response()->json(['success' => false, 'message' => 'Sesi login telah berakhir. Silahkan login kembali.'], 401);
+        }
+
+        $leave = LeaveRequest::findOrFail($id);
+        if ($leave->approval_id !== $npk) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk memproses permohonan ini.'], 403);
+        }
+
+        return $this->reject($request, $id);
+    }
+
+    /**
+     * Portal: Ubah keputusan dari portal karyawan
+     */
+    public function portalUpdateDecision(Request $request, $id)
+    {
+        $npk = session('cuti_employee_npk');
+        if (!$npk) {
+            return response()->json(['success' => false, 'message' => 'Sesi login telah berakhir. Silahkan login kembali.'], 401);
+        }
+
+        $leave = LeaveRequest::findOrFail($id);
+        if ($leave->approval_id !== $npk) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk memproses permohonan ini.'], 403);
+        }
+
+        return $this->updateDecision($request, $id);
     }
 
     /**
@@ -181,6 +401,11 @@ class LeaveApprovalController extends Controller
             if ($leave->status !== 'pending') {
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Status sudah diproses sebelumnya']);
+            }
+
+            if ((int)$leave->approval_progress < (int)$leave->approval_level) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Permohonan ini masih menunggu persetujuan pada level sebelumnya.']);
             }
 
             $leave->status = 'approved';
@@ -209,6 +434,11 @@ class LeaveApprovalController extends Controller
             if ($leave->status !== 'pending') {
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Status sudah diproses sebelumnya']);
+            }
+
+            if ((int)$leave->approval_progress < (int)$leave->approval_level) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Permohonan ini masih menunggu persetujuan pada level sebelumnya.']);
             }
 
             $leave->status = 'rejected';
@@ -335,18 +565,31 @@ class LeaveApprovalController extends Controller
 
     /**
      * Efek final ketika cuti disetujui di level terakhir: potong leave_balances
-     * dan isi record Overtime "CT" (cuti) untuk tiap hari kerja di periode cuti.
+     * (atau tambah negative_leave jika pengajuan adalah hutang cuti),
+     * dan isi record Overtime "CT" atau "CU" untuk tiap hari kerja di periode cuti.
      */
     private function finalizeApproval(LeaveRequest $leave)
     {
-        DB::table('leave_balances')
-            ->where('NPK', $leave->NPK)
-            ->where('leave_type_id', $leave->leave_type_id)
-            ->where('year', date('Y'))
-            ->update([
-                'used_days' => DB::raw('used_days + ' . $leave->total_days),
-                'remained_days' => DB::raw('remained_days - ' . $leave->total_days)
-            ]);
+        $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+
+        if ($isNegativeLeave) {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'negative_leave' => DB::raw('COALESCE(negative_leave, 0) + ' . $leave->total_days)
+                ]);
+        } else {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'used_days' => DB::raw('used_days + ' . $leave->total_days),
+                    'remained_days' => DB::raw('remained_days - ' . $leave->total_days)
+                ]);
+        }
 
         $karyawan = DB::connection('cii')->table('BIODATA')
             ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
@@ -362,6 +605,10 @@ class LeaveApprovalController extends Controller
 
         $startDate = Carbon::parse($leave->start_date);
         $endDate = Carbon::parse($leave->end_date);
+
+        // Khusus tipe cuti 'pribadi' (atau ID 14), kode JUMLAH_JAM_LEMBUR adalah 'CU', selain itu 'CT' (hutang cuti tetap 'CT')
+        $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
+        $overtimeCode = ($leaveType && $leaveType->code === 'pribadi') ? 'CU' : 'CT';
 
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dayOfWeek = $date->dayOfWeek; // 0 = Minggu, 6 = Sabtu
@@ -381,8 +628,9 @@ class LeaveApprovalController extends Controller
                     'NAMA_KARYAWAN' => $karyawan ? $karyawan->NAMA_KARYAWAN : $leave->NPK,
                     'BAGIAN' => $karyawan ? $karyawan->DEPARTEMENT : '-',
                     'DAY' => $date->translatedFormat('l'),
-                    'JUMLAH_JAM_LEMBUR' => 'CT',
+                    'JUMLAH_JAM_LEMBUR' => $overtimeCode,
                     'DEPT_GROUP' => '',
+                    'is_request' => 'true',
                 ]
             );
         }
@@ -390,24 +638,39 @@ class LeaveApprovalController extends Controller
 
     /**
      * Kebalikan dari finalizeApproval() -- dipakai saat keputusan "approved" di
-     * level terakhir diubah jadi status lain: kembalikan leave_balances dan
-     * hapus record Overtime "CT" yang sempat dibuat untuk periode cuti ini.
+     * level terakhir diubah jadi status lain: kembalikan leave_balances / kurangi negative_leave
+     * dan hapus record Overtime "CT"/"CU" yang sempat dibuat untuk periode cuti ini.
      */
     private function reverseFinalize(LeaveRequest $leave)
     {
-        DB::table('leave_balances')
-            ->where('NPK', $leave->NPK)
-            ->where('leave_type_id', $leave->leave_type_id)
-            ->where('year', date('Y'))
-            ->update([
-                'used_days' => DB::raw('used_days - ' . $leave->total_days),
-                'remained_days' => DB::raw('remained_days + ' . $leave->total_days)
-            ]);
+        $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+
+        if ($isNegativeLeave) {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'negative_leave' => DB::raw('GREATEST(0, COALESCE(negative_leave, 0) - ' . $leave->total_days . ')')
+                ]);
+        } else {
+            DB::table('leave_balances')
+                ->where('NPK', $leave->NPK)
+                ->where('leave_type_id', $leave->leave_type_id)
+                ->where('year', date('Y'))
+                ->update([
+                    'used_days' => DB::raw('used_days - ' . $leave->total_days),
+                    'remained_days' => DB::raw('remained_days + ' . $leave->total_days)
+                ]);
+        }
 
         Overtime::where('NPK', $leave->NPK)
             ->whereBetween('OVERTIME_DATE', [$leave->start_date, $leave->end_date])
-            ->where('JUMLAH_JAM_LEMBUR', 'CT')
-            ->delete();
+            ->whereIn('JUMLAH_JAM_LEMBUR', ['CT', 'CU'])
+            ->update([
+                'JUMLAH_JAM_LEMBUR' => null,
+                'is_request' => 'false',
+            ]);
     }
 
     /**

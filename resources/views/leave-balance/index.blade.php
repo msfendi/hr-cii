@@ -18,9 +18,14 @@
                 <!-- Page Heading -->
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Manajemen Saldo Cuti</h1>
-                    <button class="btn btn-success btn-sm shadow-sm" id="btn-generate">
-                        <i class="fas fa-sync-alt fa-sm"></i> Generate Balance Tahunan
-                    </button>
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm shadow-sm mr-2" id="btn-generate-non-annual">
+                            <i class="fas fa-users-cog fa-sm"></i> Generate Saldo Karyawan (Non-Tahunan)
+                        </button>
+                        <button class="btn btn-success btn-sm shadow-sm" id="btn-generate">
+                            <i class="fas fa-sync-alt fa-sm"></i> Generate Balance Tahunan
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="card shadow mb-2">
@@ -235,6 +240,58 @@
                             console.log();
                             Swal.fire('Error', msg, 'error');
                             $btn.prop('disabled', false).html('<i class="fas fa-play mr-1"></i> Jalankan Generate');
+                        }
+                    });
+                }
+            });
+        // ── GENERATE SALDO NON-TAHUNAN UNTUK SELURUH KARYAWAN AKTIF ──
+        $('#btn-generate-non-annual').on('click', function () {
+            var year = $('#year_filter').val() || new Date().getFullYear();
+
+            Swal.fire({
+                title: 'Generate Saldo Non-Tahunan?',
+                html: 'Buat saldo cuti (selain cuti tahunan) untuk <b>seluruh karyawan aktif</b> pada tahun <b>' + year + '</b>?<br><small class="text-muted">Saldo yang sudah ada tidak akan ditimpa.</small>',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#4e73df',
+                cancelButtonText: 'Batal',
+                confirmButtonText: 'Ya, Jalankan!'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    var $btn = $('#btn-generate-non-annual');
+                    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Sedang Proses...');
+
+                    $.ajax({
+                        url: '{{ route("leave-balances.generate-non-annual") }}',
+                        type: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            year: year
+                        },
+                        success: function (res) {
+                            $btn.prop('disabled', false).html('<i class="fas fa-users-cog fa-sm"></i> Generate Saldo Karyawan (Non-Tahunan)');
+                            if (res.status === 'success') {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Berhasil!',
+                                    html: '<b>Generate Selesai!</b><br>' +
+                                          'Total Karyawan Aktif: <b>' + res.employees_count + '</b><br>' +
+                                          'Saldo Dibuat: <b>' + res.created + '</b><br>' +
+                                          'Dilewati (Sudah Ada): <b>' + res.skipped + '</b><br>' +
+                                          'Dilewati (Gender): <b>' + res.skipped_gender + '</b>'
+                                });
+                                table.ajax.reload();
+                            } else {
+                                Swal.fire('Gagal', res.message || 'Terjadi kesalahan.', 'error');
+                            }
+                        },
+                        error: function (xhr) {
+                            $btn.prop('disabled', false).html('<i class="fas fa-users-cog fa-sm"></i> Generate Saldo Karyawan (Non-Tahunan)');
+                            var msg = 'Gagal menjalankan generate.';
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                msg = xhr.responseJSON.message;
+                            }
+                            Swal.fire('Error', msg, 'error');
                         }
                     });
                 }

@@ -1695,8 +1695,8 @@
 
             /* ── DataTable ── */
             const _dtAjaxUrl = '{{ route('recruitment.getData') }}';
-            const _dtStatus  = '{{ $status ?? '' }}';
-            const _dtTgl     = '{{ request()->query('tgl_pendaftaran', '') }}';
+            const _dtStatus = '{{ $status ?? '' }}';
+            const _dtTgl = '{{ request()->query('tgl_pendaftaran', '') }}';
 
             $('#dataTable').DataTable({
                 pageLength: 10,
@@ -1707,23 +1707,24 @@
                     url: _dtAjaxUrl,
                     data: function (d) {
                         if (_dtStatus) d.status = _dtStatus;
-                        if (_dtTgl)    d.tgl_pendaftaran = _dtTgl;
+                        if (_dtTgl) d.tgl_pendaftaran = _dtTgl;
                     }
                 },
                 columns: [
-                    { data: 'DT_RowIndex',   name: 'DT_RowIndex',   orderable: false, searchable: false, width: '40px', className: 'text-center text-muted' },
-                    { data: 'col_nama',       name: 'PELAMAR.NAMA',  orderable: true },
-                    { data: 'col_nik',        name: 'PELAMAR.NIK',   orderable: true },
-                    { data: 'col_pendidikan', name: 'PELAMAR.PENDIDIKAN', orderable: false },
-                    { data: 'col_fisik',      name: 'PELAMAR.TINGGI_BADAN', orderable: false, className: 'text-center' },
-                    { data: 'col_kontak',     name: 'PELAMAR.HP',    orderable: false },
-                    { data: 'col_agama',      name: 'PELAMAR.AGAMA', orderable: false },
-                    { data: 'col_dept',       name: 'pd.department', orderable: false },
-                    { data: 'col_tgl_apply',  name: 'pd.created_at', orderable: true },
-                    { data: 'col_status',     name: 'pd.status_apply', orderable: false },
-                    { data: 'col_hasil',      name: 'col_hasil',     orderable: false },
-                    { data: 'col_dokumen',    name: 'col_dokumen',   orderable: false, className: 'text-center' },
-                    { data: 'col_aksi',       name: 'col_aksi',      orderable: false, className: 'text-center' },
+                    { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false, width: '40px', className: 'text-center text-muted' },
+                    { data: 'col_nama', name: 'PELAMAR.NAMA', orderable: true, searchable: true },
+                    { data: 'col_nik', name: 'PELAMAR.NIK', orderable: true, searchable: true },
+                    { data: 'col_pendidikan', name: 'PELAMAR.PENDIDIKAN', orderable: false, searchable: false },
+                    { data: 'col_fisik', name: 'PELAMAR.TINGGI_BADAN', orderable: false, searchable: false, className: 'text-center' },
+                    { data: 'col_kontak', name: 'PELAMAR.HP', orderable: false, searchable: false },
+                    { data: 'col_agama', name: 'PELAMAR.AGAMA', orderable: false, searchable: false },
+                    { data: 'col_dept', name: 'pd.department', orderable: false, searchable: true },
+                    { data: 'col_tgl_apply', name: 'pd.created_at', orderable: true, searchable: false },
+                    { data: 'col_status', name: 'pd.status_apply', orderable: true, searchable: false },
+                    { data: 'col_hasil', name: 'col_hasil', orderable: false, searchable: false },
+                    { data: 'col_dokumen', name: 'col_dokumen', orderable: false, searchable: false, className: 'text-center' },
+                    { data: 'col_aksi', name: 'col_aksi', orderable: false, searchable: false, className: 'text-center' },
+
                 ],
                 language: {
                     search: 'Cari:',
@@ -1929,16 +1930,16 @@
                 }
 
 
-            //     // TODO:: BUTTON TEST KESEHATAN BELUM RUNNING DENGAN BENAR
-            //     if(isset($healthTestMap[$recruitment->NIK])) {
-            //         <a class="dropdown-item d-flex align-items-center"
-            //             style="font-size:12.5px; gap:8px;"
-            //             href="{{ route('health-test.pdf','1') }}"
-            //             target="_blank">
-            //             <i class="fas fa-heartbeat text-danger"></i>
-            //             Test Kesehatan
-            //         </a>
-            // }
+                //     // TODO:: BUTTON TEST KESEHATAN BELUM RUNNING DENGAN BENAR
+                //     if(isset($healthTestMap[$recruitment->NIK])) {
+                //         <a class="dropdown-item d-flex align-items-center"
+                //             style="font-size:12.5px; gap:8px;"
+                //             href="{{ route('health-test.pdf', '1') }}"
+                //             target="_blank">
+                //             <i class="fas fa-heartbeat text-danger"></i>
+                //             Test Kesehatan
+                //         </a>
+                // }
 
             });
 

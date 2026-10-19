@@ -195,4 +195,28 @@ class AdminLeaveBalanceController extends Controller
             'skipped_gender'  => $result['skipped_gender'],
         ]);
     }
+
+    /**
+     * Generate saldo cuti non-tahunan (semua jenis cuti selain tahunan) untuk seluruh karyawan aktif.
+     */
+    public function generateNonAnnualBalance(Request $request, LeaveBalanceGenerationService $leaveBalanceGenerationService)
+    {
+        $request->validate([
+            'year' => 'required|numeric',
+        ]);
+
+        $year = (int) $request->input('year');
+
+        $result = $leaveBalanceGenerationService->generateNonAnnualForActiveEmployees($year);
+
+        return response()->json([
+            'status'          => 'success',
+            'message'         => "Generate Saldo Cuti Non-Tahunan selesai untuk tahun $year",
+            'year'            => $year,
+            'employees_count' => $result['employees_count'],
+            'created'         => $result['created'],
+            'skipped'         => $result['skipped'],
+            'skipped_gender'  => $result['skipped_gender'],
+        ]);
+    }
 }

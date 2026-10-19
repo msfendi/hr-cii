@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ApprovalDept;
 use App\Models\ApprovalRule;
+use App\Models\Section;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -21,7 +22,9 @@ class ApprovalController extends Controller
             ->orderBy('DEPARTEMENT')
             ->get();
 
-        return view('approval.index', compact('depts'));
+        $sections = Section::orderBy('name')->get();
+
+        return view('approval.index', compact('depts', 'sections'));
     }
 
     /**
@@ -29,7 +32,7 @@ class ApprovalController extends Controller
      */
     public function getData()
     {
-        $data = ApprovalDept::with('rules')->get()->map(function ($item) {
+        $data = ApprovalDept::with(['rules', 'sectionDetail'])->get()->map(function ($item) {
             // Resolve department names from CII DB
             $deptNames = DB::connection('cii')
                 ->table('DEPT')
@@ -54,12 +57,14 @@ class ApprovalController extends Controller
             });
 
             return [
-                'id'         => $item->id,
-                'name'       => $item->name,
-                'dept'       => $item->dept,
-                'dept_names' => $deptNames,
-                'rules'      => $rulesData,
-                'rules_count' => $rulesData->count(),
+                'id'           => $item->id,
+                'name'         => $item->name,
+                'dept'         => $item->dept,
+                'dept_names'   => $deptNames,
+                'section'      => $item->section,
+                'section_name' => $item->sectionDetail ? $item->sectionDetail->name : null,
+                'rules'        => $rulesData,
+                'rules_count'  => $rulesData->count(),
             ];
         });
 
@@ -72,25 +77,27 @@ class ApprovalController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'dept' => 'required|array|min:1',
-            'dept.*' => 'string',
+            'name'    => 'required|string|max:255',
+            'dept'    => 'required|array|min:1',
+            'dept.*'  => 'string',
+            'section' => 'nullable|exists:sections,id',
         ]);
 
         try {
             $approvalDept = ApprovalDept::create([
-                'name' => $request->name,
-                'dept' => array_map('strval', $request->dept),
+                'name'    => $request->name,
+                'dept'    => array_map('strval', $request->dept),
+                'section' => $request->filled('section') ? $request->section : null,
             ]);
 
             return response()->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'Approval Group berhasil ditambahkan',
-                'data' => $approvalDept,
+                'data'    => $approvalDept,
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'Gagal menambahkan: ' . $e->getMessage(),
             ], 500);
         }
@@ -102,25 +109,27 @@ class ApprovalController extends Controller
     public function update(Request $request, $id)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'dept' => 'required|array|min:1',
-            'dept.*' => 'string',
+            'name'    => 'required|string|max:255',
+            'dept'    => 'required|array|min:1',
+            'dept.*'  => 'string',
+            'section' => 'nullable|exists:sections,id',
         ]);
 
         try {
             $approvalDept = ApprovalDept::findOrFail($id);
             $approvalDept->update([
-                'name' => $request->name,
-                'dept' => array_map('strval', $request->dept),
+                'name'    => $request->name,
+                'dept'    => array_map('strval', $request->dept),
+                'section' => $request->filled('section') ? $request->section : null,
             ]);
 
             return response()->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'Approval Group berhasil diperbarui',
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'Gagal memperbarui: ' . $e->getMessage(),
             ], 500);
         }

@@ -264,6 +264,11 @@
         line-height: 1;
     }
 
+    /* Collapsible Saldo */
+    [data-toggle="collapse"][aria-expanded="true"] .transition-icon {
+        transform: rotate(180deg);
+    }
+
     /* Footer */
     .sticky-footer {
         background: rgba(255, 255, 255, .08) !important;
@@ -307,6 +312,309 @@
         color: #d3d6e0;
         text-decoration: line-through;
     }
+
+    /* ── Component Upload File & Preview ── */
+    .file-upload-zone {
+        border: 2px dashed #b7c9f8;
+        background: #f8faff;
+        border-radius: 12px;
+        padding: 1.5rem 1.25rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        position: relative;
+    }
+
+    .file-upload-zone:hover {
+        border-color: #4e73df;
+        background: #f0f4ff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(78, 115, 223, 0.08);
+    }
+
+    .file-upload-zone.dragover {
+        border-color: #224abe;
+        background: #e8efff;
+        box-shadow: 0 0 0 4px rgba(78, 115, 223, 0.18);
+        transform: scale(1.01);
+    }
+
+    .file-upload-icon-circle {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 0.75rem auto;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        color: #4338ca;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        transition: all 0.25s ease;
+    }
+
+    .file-upload-zone:hover .file-upload-icon-circle {
+        transform: scale(1.1);
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        color: #fff;
+    }
+
+    .file-upload-zone .upload-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #334155;
+        margin-bottom: 0.25rem;
+    }
+
+    .file-upload-zone .upload-subtitle {
+        font-size: 0.76rem;
+        color: #64748b;
+        margin-bottom: 0.6rem;
+    }
+
+    .file-upload-zone .upload-badges {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .file-upload-zone .upload-badge {
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 20px;
+        background: #e2e8f0;
+        color: #475569;
+        letter-spacing: 0.4px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /* File Previews Grid */
+    .file-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 12px;
+    }
+
+    @media (max-width: 576px) {
+        .file-preview-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .file-preview-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .file-preview-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+        transform: translateY(-2px);
+    }
+
+    .file-preview-thumb {
+        height: 105px;
+        background: #f8fafc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .file-preview-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+
+    .file-preview-card:hover .file-preview-thumb img {
+        transform: scale(1.05);
+    }
+
+    .file-preview-thumb .doc-icon-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .file-preview-thumb .doc-icon-wrapper i {
+        font-size: 2.5rem;
+    }
+
+    .doc-icon-pdf {
+        color: #ef4444;
+    }
+
+    .doc-icon-word {
+        color: #2563eb;
+    }
+
+    .doc-icon-image {
+        color: #10b981;
+    }
+
+    .doc-icon-file {
+        color: #64748b;
+    }
+
+    .file-type-pill {
+        position: absolute;
+        bottom: 6px;
+        right: 6px;
+        font-size: 0.62rem;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        z-index: 1;
+    }
+
+    .pill-pdf {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .pill-doc {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .pill-img {
+        background: #d1fae5;
+        color: #047857;
+    }
+
+    .pill-file {
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+    .file-preview-body {
+        padding: 8px 10px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: #fff;
+    }
+
+    .file-preview-name {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #1e293b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.3;
+    }
+
+    .file-preview-size {
+        font-size: 0.7rem;
+        color: #64748b;
+        margin-top: 3px;
+    }
+
+    .file-remove-btn {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        color: #ef4444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        cursor: pointer;
+        padding: 0;
+        z-index: 2;
+        transition: all 0.2s;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    }
+
+    .file-remove-btn:hover {
+        background: #ef4444;
+        color: #fff;
+        border-color: #ef4444;
+        transform: scale(1.1);
+    }
+
+    /* Review Chip Badges */
+    .review-file-badge {
+        display: inline-flex;
+        align-items: center;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 6px 10px;
+        margin-right: 6px;
+        margin-bottom: 6px;
+        font-size: 0.78rem;
+        color: #334155;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        transition: all 0.2s;
+    }
+
+    .review-file-badge:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+    }
+
+    /* Reason Radio Options Styling */
+    .leave-reason-radio-card {
+        border: 1.5px solid #e3e6f0;
+        border-radius: 8px;
+        padding: 9px 14px;
+        margin-bottom: 8px;
+        background: #ffffff;
+        cursor: pointer;
+        transition: all 0.15s ease-in-out;
+        display: flex;
+        align-items: center;
+    }
+
+    .leave-reason-radio-card:hover {
+        border-color: #4e73df;
+        background: #f8faff;
+    }
+
+    .leave-reason-radio-card.is-selected {
+        border-color: #4e73df;
+        background: #edf2ff;
+        box-shadow: 0 2px 5px rgba(78, 115, 223, 0.12);
+    }
+
+    .leave-reason-radio-card .custom-control-label {
+        cursor: pointer;
+        font-size: 0.88rem;
+        user-select: none;
+        width: 100%;
+        margin-bottom: 0;
+    }
+
+    .leave-reason-radio-card .custom-control-input:checked ~ .custom-control-label {
+        color: #224abe;
+        font-weight: 700;
+    }
 </style>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -343,6 +651,15 @@
                                     <i class="fas fa-tasks fa-sm mr-1"></i> Riwayat Pengajuan
                                 </a>
                             </li>
+                            @if (session('cuti_employee_npk') && \App\Models\ApprovalRule::where('approval_id', session('cuti_employee_npk'))->exists())
+                                <li
+                                    class="nav-item {{ request()->routeIs('pengajuan-cuti.portal-approval*') ? 'active' : '' }}">
+                                    <a class="nav-link" href="{{ route('pengajuan-cuti.portal-approval') }}">
+                                        <i class="fas fa-fw fa-check-circle"></i>
+                                        <span>Approval Cuti</span>
+                                    </a>
+                                </li>
+                            @endif
                         </ul>
                         <div class="d-flex align-items-center ml-auto">
                             <span class="mr-3 text-white small d-none d-md-inline" style="opacity:0.9;">
@@ -390,7 +707,8 @@
                             </div>
 
                             {{-- Final Form Content --}}
-                            <form id="cuti-form" action="{{ route('pengajuan-cuti.submit-form') }}" method="POST">
+                            <form id="cuti-form" action="{{ route('pengajuan-cuti.submit-form') }}" method="POST"
+                                enctype="multipart/form-data">
                                 @csrf
                                 <input type="hidden" name="npk" value="{{ $employee->NPK }}">
                                 <input type="hidden" name="nama" value="{{ $employee->NAMA_KARYAWAN }}">
@@ -412,11 +730,117 @@
                                             </div>
                                         </div>
 
-                                        {{-- Kontainer blok cuti — diisi lewat JS agar bisa ditambah/dihapus dinamis --}}
+                                        {{-- Saldo Cuti Karyawan (Collapsible Panel) --}}
+                                        @if(isset($leaveBalances) && $leaveBalances->count() > 0)
+                                            <div class="card border mb-4"
+                                                style="border-radius: 0.65rem; border-color: #e3e6f0; background: #fff; overflow: hidden;">
+                                                <a href="#collapseSaldoCuti"
+                                                    class="d-block card-header py-2 px-3 text-decoration-none"
+                                                    data-toggle="collapse" role="button" aria-expanded="false"
+                                                    aria-controls="collapseSaldoCuti"
+                                                    style="background: #f8f9fc; border: 0;">
+                                                    <div class="d-flex align-items-center justify-content-between">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fas fa-wallet text-primary mr-2"
+                                                                style="font-size: 0.92rem;"></i>
+                                                            <span class="font-weight-bold text-gray-800"
+                                                                style="font-size: 0.85rem;">Sisa Saldo Cuti
+                                                                ({{ date('Y') }})</span>
+                                                        </div>
+                                                        <div class="d-flex align-items-center text-primary font-weight-bold"
+                                                            style="font-size: 0.78rem;">
+                                                            <span class="mr-1">Lihat Rincian</span>
+                                                            <i class="fas fa-chevron-down transition-icon"
+                                                                style="font-size: 0.7rem; transition: transform 0.25s ease;"></i>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                                <div class="collapse" id="collapseSaldoCuti">
+                                                    <div class="card-body p-3 pt-2 border-top"
+                                                        style="border-color: #edf2f7 !important;">
+                                                        <div class="row pt-1">
+                                                            @foreach($leaveBalances as $bal)
+                                                                @php
+                                                                    $sisa = (int) $bal->remained_days;
+                                                                    $used = (int) $bal->used_days;
+                                                                    $hutang = (int) ($bal->negative_leave ?? 0);
+                                                                    $badgeBg = $sisa <= 2 ? '#fef2f2' : ($sisa <= 5 ? '#fefce8' : '#f0fdf4');
+                                                                    $badgeBorder = $sisa <= 2 ? '#fecaca' : ($sisa <= 5 ? '#fef08a' : '#bbf7d0');
+                                                                    $badgeText = $sisa <= 2 ? '#b91c1c' : ($sisa <= 5 ? '#a16207' : '#15803d');
+                                                                @endphp
+                                                                <div
+                                                                    class="col-sm-6 {{ $leaveBalances->count() >= 3 ? 'col-lg-4' : '' }} mb-2">
+                                                                    <div class="card h-100 border shadow-none"
+                                                                        style="border-radius: 0.55rem; border-color: #e3e6f0 !important; background: #fafbfc;">
+                                                                        <div
+                                                                            class="card-body p-2 px-3 d-flex flex-column justify-content-between">
+                                                                            <div
+                                                                                class="d-flex justify-content-between align-items-center mb-1">
+                                                                                <span
+                                                                                    class="font-weight-bold text-gray-800 text-truncate mr-2"
+                                                                                    style="font-size: 0.83rem;"
+                                                                                    title="{{ $bal->leave_type_name }}">
+                                                                                    {{ $bal->leave_type_name }}
+                                                                                </span>
+                                                                                @if($hutang > 0)
+                                                                                    <span class="badge badge-warning text-dark font-weight-bold" style="font-size: 0.68rem;" title="Total Hutang Cuti">
+                                                                                        Hutang: {{ $hutang }} hr
+                                                                                    </span>
+                                                                                @endif
+                                                                            </div>
+                                                                            <div class="d-flex align-items-center justify-content-between text-muted"
+                                                                                style="font-size: 0.74rem;">
+                                                                                <span class="badge px-2 py-1 font-weight-bold"
+                                                                                    style="background: {{ $badgeBg }}; color: {{ $badgeText }}; border: 1px solid {{ $badgeBorder }}; border-radius: 20px; font-size: 0.7rem; white-space: nowrap;">
+                                                                                    {{ $sisa }} hari sisa
+                                                                                </span>
+                                                                                <span></span>
+                                                                                <span><i
+                                                                                        class="fas fa-history mr-1 font-weight-bold text-gray-800"></i>
+                                                                                    Terpakai:</span>
+                                                                                <span
+                                                                                    class="font-weight-bold text-gray-600">{{ $used }}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @else
+                                            <div class="card border mb-4"
+                                                style="border-radius: 0.65rem; border-color: #e3e6f0; background: #fff; overflow: hidden;">
+                                                <div class="card-header py-2 px-3 d-flex align-items-center justify-content-between"
+                                                    style="background: #f8f9fc; border: 0;">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-wallet text-muted mr-2"
+                                                            style="font-size: 0.92rem;"></i>
+                                                        <span class="font-weight-bold text-gray-800"
+                                                            style="font-size: 0.85rem;">Sisa Saldo Cuti ({{ date('Y') }})</span>
+                                                    </div>
+                                                    <span class="badge badge-light border text-muted" style="font-size: 0.72rem;">Belum Ada Saldo</span>
+                                                </div>
+                                                <div class="card-body p-3 text-center border-top"
+                                                    style="border-color: #edf2f7 !important; background: #fafbfc;">
+                                                    <div class="py-2">
+                                                        <i class="fas fa-calendar-times text-muted mb-2" style="font-size: 1.6rem; opacity: 0.55;"></i>
+                                                        <div class="font-weight-bold text-gray-800" style="font-size: 0.88rem;">Belum Memiliki Saldo Cuti</div>
+                                                        <div class="text-muted small mt-1">Anda belum memiliki saldo cuti di tahun berjalan ({{ date('Y') }}). Silakan hubungi bagian HRD untuk informasi lebih lanjut.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endif
+
+                                        {{-- Kontainer blok cuti — diisi lewat JS agar bisa ditambah/dihapus dinamis
+                                        --}}
                                         <div id="leaves-container"></div>
 
                                         <div class="text-center mb-4">
-                                            <button type="button" class="btn btn-outline-primary btn-sm px-3" id="btnTambahCuti">
+                                            <button type="button" class="btn btn-outline-primary btn-sm px-3"
+                                                id="btnTambahCuti">
                                                 <i class="fas fa-plus mr-1"></i> Tambah Pengajuan Cuti Lain
                                             </button>
                                         </div>
@@ -475,6 +899,30 @@
     </div>
     <!-- End of Page Wrapper -->
 
+    <!-- Modal Preview Gambar Lampiran -->
+    <div class="modal fade" id="filePreviewModal" tabindex="-1" role="dialog" aria-hidden="true" style="z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header py-2 px-3 bg-light d-flex align-items-center justify-content-between">
+                    <h6 class="modal-title font-weight-bold text-gray-800 text-truncate mr-2" id="filePreviewTitle"
+                        style="font-size: 0.9rem;">
+                        <i class="far fa-file-image text-primary mr-1"></i> Preview Lampiran
+                    </h6>
+                    <button type="button" class="close ml-auto" data-dismiss="modal" aria-label="Close"
+                        style="font-size: 1.4rem;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-2 text-center bg-dark"
+                    style="min-height: 250px; display: flex; align-items: center; justify-content: center; border-bottom-left-radius: .3rem; border-bottom-right-radius: .3rem;">
+                    <img id="filePreviewImage" src=""
+                        style="max-width: 100%; max-height: 75vh; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"
+                        alt="Preview Lampiran">
+                </div>
+            </div>
+        </div>
+    </div>
+
     @include('layout.footerscript')
 
     <!-- Flatpickr: dipakai agar tanggal yang sudah dipilih di satu blok cuti bisa didisable di blok lainnya -->
@@ -487,10 +935,15 @@
         /* ══ Data dari server ══ */
         // masterLeaveType sudah difilter di controller sesuai gender karyawan (gender_type 'A' = semua)
         const leaveTypeOptions = @json($masterLeaveType->map(function ($t) {
-            return ['id' => $t->id, 'name' => $t->name];
+            return ['id' => $t->id, 'name' => $t->name, 'code' => $t->code];
         }));
         const holidays = @json($holidays ?? []);
+        const leaveReasons = @json($leaveReasons ?? []);
         const employeeNpk = @json($employee->NPK);
+
+        // Jenis cuti yang WAJIB upload lampiran file
+        const attachRequiredCodes = ['menikah', 'menikahkan_anak', 'suami_istri_meninggal',
+            'keluarga_meninggal', 'anak_meninggal', 'menantu_meninggal', 'orang_tua_meninggal'];
         const getBalanceUrl = @json(route('pengajuan-cuti.get-leave-balance'));
 
         const now = new Date();
@@ -591,7 +1044,6 @@
 
             flatpickr(mulaiInput, {
                 dateFormat: 'Y-m-d',
-                minDate: 'today',
                 disableMobile: true,
                 onChange: () => {
                     handleBlockDateChange(block);
@@ -601,7 +1053,6 @@
 
             flatpickr(selesaiInput, {
                 dateFormat: 'Y-m-d',
-                minDate: 'today',
                 disableMobile: true,
                 onChange: () => {
                     handleBlockDateChange(block);
@@ -635,7 +1086,7 @@
         /* ── Membangun 1 blok cuti ── */
         function createLeaveBlockHTML(idx) {
             const optionsHtml = leaveTypeOptions.map(o =>
-                `<option value="${o.id}" data-name="${o.name.replace(/"/g, '&quot;')}">${o.name}</option>`
+                `<option value="${o.id}" data-name="${o.name.replace(/"/g, '&quot;')}" data-code="${o.code}">${o.name}</option>`
             ).join('');
 
             return `
@@ -683,10 +1134,77 @@
                     <small class="form-text mt-1 font-weight-bold text-danger leave-overlap-info" style="display:none;"></small>
                 </div>
 
-                <div class="form-group mb-0">
-                    <label class="font-weight-bold text-gray-700 small">Keterangan / Alasan <span class="text-danger">*</span></label>
-                    <textarea class="form-control leave-keterangan" name="leaves[${idx}][keterangan]" rows="3"
-                        required placeholder="Alasan cuti..."></textarea>
+                <div class="form-group mb-0 leave-reason-wrapper">
+                    <label class="font-weight-bold text-gray-700 small">
+                        Keterangan / Alasan <span class="text-danger">*</span>
+                    </label>
+
+                    {{-- Placeholder saat jenis cuti belum dipilih --}}
+                    <div class="leave-reason-empty-alert alert alert-light border text-muted py-2 px-3 small mb-0 d-flex align-items-center"
+                        style="background: #f8f9fc; border-color: #e3e6f0; border-radius: 0.5rem;">
+                        <i class="fas fa-info-circle text-primary mr-2" style="font-size: 0.95rem;"></i>
+                        <span>Pilih <strong>Jenis Cuti</strong> di atas untuk melihat pilihan alasan cuti.</span>
+                    </div>
+
+                    {{-- Container template reasons (radio buttons) --}}
+                    <div class="leave-reason-container mt-2" style="display:none;">
+                        <div class="leave-reason-list"></div>
+                    </div>
+
+                    {{-- Textbox untuk input manual / sendiri --}}
+                    <div class="leave-reason-custom-box mt-2" style="display:none;">
+                        <label class="font-weight-bold text-gray-600 small mb-1 leave-reason-custom-label">
+                            <i class="fas fa-pen mr-1 text-primary"></i> Tuliskan Alasan Sendiri: <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control leave-custom-textarea" rows="2"
+                            placeholder="Ketik alasan cuti Anda di sini..."></textarea>
+                    </div>
+
+                    {{-- Hidden / Actual field yang dikirim ke backend --}}
+                    <textarea class="leave-keterangan d-none" name="leaves[${idx}][keterangan]"></textarea>
+                </div>
+
+                <div class="form-group mb-0 mt-4 leave-attach-wrapper" style="display:none;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="font-weight-bold text-gray-700 small mb-0">
+                            <i class="fas fa-paperclip text-primary mr-1"></i> Lampiran Dokumen Pendukung <span class="text-danger">*</span>
+                        </label>
+                        <span class="badge badge-light border text-muted px-2 py-1 font-weight-normal" style="font-size: 0.7rem;">Wajib dilampirkan</span>
+                    </div>
+
+                    <!-- Dropzone upload area -->
+                    <div class="file-upload-zone mt-2" data-index="${idx}">
+                        <input type="file" class="leave-attach-files d-none"
+                            name="leaves[${idx}][attach_files][]"
+                            multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                        <div class="file-upload-icon-circle">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <div class="upload-title">
+                            Tarik & lepas dokumen di sini, atau <span class="text-primary font-weight-bold" style="text-decoration: underline;">Pilih File</span>
+                        </div>
+                        <div class="upload-subtitle">
+                            Maksimal 5MB per file &bull; Dokumen harus jelas terbaca
+                        </div>
+                        <div class="upload-badges">
+                            <span class="upload-badge"><i class="far fa-file-pdf text-danger mr-1"></i>PDF</span>
+                            <span class="upload-badge"><i class="far fa-file-image text-success mr-1"></i>JPG / PNG</span>
+                            <span class="upload-badge"><i class="far fa-file-word text-primary mr-1"></i>DOC / DOCX</span>
+                        </div>
+                    </div>
+
+                    <!-- Preview area -->
+                    <div class="leave-attach-preview mt-3" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center px-1 mb-2">
+                            <span class="small font-weight-bold text-gray-700 preview-count-label">
+                                <i class="fas fa-check-circle text-success mr-1"></i> 0 file dipilih
+                            </span>
+                            <button type="button" class="btn btn-link btn-sm text-danger p-0 btn-clear-files" style="font-size: 0.74rem; text-decoration: none;">
+                                <i class="fas fa-trash-alt mr-1"></i> Hapus Semua
+                            </button>
+                        </div>
+                        <div class="file-preview-grid"></div>
+                    </div>
                 </div>
             </div>`;
         }
@@ -699,6 +1217,7 @@
             const block = wrapper.firstElementChild;
             container.appendChild(block);
             initBlockDatepickers(block);
+            initBlockFileUpload(block);
             updateRemoveButtonsVisibility();
             updateJenisAvailability();
             refreshAllDatepickersDisabledDates();
@@ -795,16 +1314,26 @@
                     const recalculatedDiff = computeWorkingDays(mulai.value, selesai.value);
                     const effectiveDiff = selesai.value ? recalculatedDiff : days;
 
-                    if (res.sisa <= 0) {
-                        sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
-                        sisaInfo.innerHTML = `<i class="fas fa-times-circle mr-1"></i> ${res.keterangan}. Anda tidak memiliki sisa cuti.`;
-                    } else if (effectiveDiff > res.sisa) {
-                        sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
-                        sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Sisa cuti tidak mencukupi.`;
+                    if (res.is_negative_leave) {
+                        selesai.dataset.isNegative = 'true';
+                        delete selesai.dataset.maxEnd;
+                        if (selesai._flatpickr) selesai._flatpickr.set('maxDate', null);
+
+                        sisaInfo.className = 'form-text text-warning mt-2 small font-weight-bold leave-sisa-info';
+                        sisaInfo.innerHTML = `<span class="badge badge-warning text-dark mr-1" style="font-size:0.75rem;"><i class="fas fa-exclamation-triangle fa-xs"></i> HUTANG CUTI</span> ${res.keterangan}`;
                     } else {
-                        const maxInfo = res.max_end_date ? ` Maks. tanggal selesai: <strong>${formatDate(res.max_end_date)}</strong>.` : '';
-                        sisaInfo.className = 'form-text text-success mt-2 small font-weight-bold leave-sisa-info';
-                        sisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}. Sisa cuti mencukupi.${maxInfo}`;
+                        delete selesai.dataset.isNegative;
+                        if (res.sisa <= 0) {
+                            sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-times-circle mr-1"></i> ${res.keterangan}. Anda tidak memiliki sisa cuti.`;
+                        } else if (effectiveDiff > res.sisa) {
+                            sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Sisa cuti tidak mencukupi.`;
+                        } else {
+                            const maxInfo = res.max_end_date ? ` Maks. tanggal selesai: <strong>${formatDate(res.max_end_date)}</strong>.` : '';
+                            sisaInfo.className = 'form-text text-success mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}. Sisa cuti mencukupi.${maxInfo}`;
+                        }
                     }
 
                     refreshAllDatepickersDisabledDates();
@@ -814,17 +1343,385 @@
                 });
         }
 
-        /* ── Event delegation: berlaku juga untuk blok yang ditambahkan belakangan ──
-           Catatan: perubahan tanggal (.leave-mulai/.leave-selesai) ditangani lewat callback
-           onChange flatpickr masing-masing instance (lihat initBlockDatepickers), bukan di sini. */
+        /* ── Event delegation & File Upload Handler ── */
+        function initBlockFileUpload(block) {
+            const zone = block.querySelector('.file-upload-zone');
+            const input = block.querySelector('.leave-attach-files');
+            const grid = block.querySelector('.file-preview-grid');
+            const clearBtn = block.querySelector('.btn-clear-files');
+
+            if (!zone || !input) return;
+
+            // Inisialisasi list internal file
+            input._storedFiles = [];
+
+            // Klik zone untuk buka file picker
+            zone.addEventListener('click', (e) => {
+                if (e.target !== input) {
+                    input.click();
+                }
+            });
+
+            // Drag and drop events
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.add('dragover');
+            });
+
+            zone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.remove('dragover');
+            });
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.remove('dragover');
+                if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+                    handleNewFiles(input, e.dataTransfer.files);
+                }
+            });
+
+            // Input change saat user pilih file via dialog
+            input.addEventListener('change', (e) => {
+                if (input.files && input.files.length > 0) {
+                    handleNewFiles(input, input.files);
+                }
+            });
+
+            // Hapus semua file
+            if (clearBtn) {
+                clearBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    clearAllFiles(input);
+                });
+            }
+
+            // Hapus file satuan atau perbesar gambar
+            if (grid) {
+                grid.addEventListener('click', (e) => {
+                    const removeBtn = e.target.closest('.file-remove-btn');
+                    if (removeBtn) {
+                        e.stopPropagation();
+                        const fileIdx = parseInt(removeBtn.getAttribute('data-index'), 10);
+                        removeSingleFile(input, fileIdx);
+                        return;
+                    }
+
+                    const zoomable = e.target.closest('.img-zoomable');
+                    if (zoomable) {
+                        e.stopPropagation();
+                        showImageModal(zoomable.src, zoomable.getAttribute('alt') || 'Preview Foto');
+                    }
+                });
+            }
+        }
+
+        function handleNewFiles(input, filesList) {
+            if (!input._storedFiles) {
+                input._storedFiles = [];
+            }
+
+            const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+            const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+            const oversizeFiles = [];
+            const invalidExtFiles = [];
+
+            Array.from(filesList).forEach(file => {
+                const parts = file.name.split('.');
+                const ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
+
+                if (!ALLOWED_EXT.includes(ext)) {
+                    invalidExtFiles.push(file.name);
+                    return;
+                }
+
+                if (file.size > MAX_SIZE) {
+                    oversizeFiles.push(file.name);
+                    return;
+                }
+
+                // Hindari duplikasi file persis (nama & ukuran sama)
+                const exists = input._storedFiles.some(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified);
+                if (!exists) {
+                    input._storedFiles.push(file);
+                }
+            });
+
+            if (invalidExtFiles.length > 0) {
+                alert('Format file berikut tidak diizinkan:\n- ' + invalidExtFiles.join('\n- ') + '\n\nGunakan format: PDF, JPG, PNG, atau DOC/DOCX.');
+            }
+            if (oversizeFiles.length > 0) {
+                alert('Ukuran file berikut melebihi batas 5MB:\n- ' + oversizeFiles.join('\n- '));
+            }
+
+            syncStoredFilesToInput(input);
+            renderFilePreviews(input);
+        }
+
+        function syncStoredFilesToInput(input) {
+            const dt = new DataTransfer();
+            (input._storedFiles || []).forEach(file => {
+                dt.items.add(file);
+            });
+            input.files = dt.files;
+        }
+
+        function removeSingleFile(input, index) {
+            if (input._storedFiles && input._storedFiles[index]) {
+                input._storedFiles.splice(index, 1);
+                syncStoredFilesToInput(input);
+                renderFilePreviews(input);
+            }
+        }
+
+        function clearAllFiles(input) {
+            input._storedFiles = [];
+            syncStoredFilesToInput(input);
+            renderFilePreviews(input);
+        }
+
+        function renderFilePreviews(input) {
+            const block = input.closest('.leave-block');
+            const previewWrapper = block.querySelector('.leave-attach-preview');
+            const countLabel = block.querySelector('.preview-count-label');
+            const grid = block.querySelector('.file-preview-grid');
+            const files = input._storedFiles || [];
+
+            if (files.length === 0) {
+                previewWrapper.style.display = 'none';
+                grid.innerHTML = '';
+                return;
+            }
+
+            previewWrapper.style.display = 'block';
+            countLabel.innerHTML = `<i class="fas fa-check-circle text-success mr-1"></i> <strong>${files.length}</strong> file berhasil dipilih`;
+            grid.innerHTML = '';
+
+            files.forEach((file, index) => {
+                const parts = file.name.split('.');
+                const ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
+                const sizeFormatted = file.size > 1024 * 1024
+                    ? (file.size / (1024 * 1024)).toFixed(2) + ' MB'
+                    : (file.size / 1024).toFixed(1) + ' KB';
+
+                const isImage = ['jpg', 'jpeg', 'png'].includes(ext);
+                const isPdf = ext === 'pdf';
+                const isWord = ['doc', 'docx'].includes(ext);
+
+                let iconHtml = '';
+                let pillClass = 'pill-file';
+                let pillText = ext.toUpperCase() || 'FILE';
+
+                if (isPdf) {
+                    pillClass = 'pill-pdf';
+                    iconHtml = `<div class="doc-icon-wrapper"><i class="fas fa-file-pdf doc-icon-pdf"></i></div>`;
+                } else if (isWord) {
+                    pillClass = 'pill-doc';
+                    iconHtml = `<div class="doc-icon-wrapper"><i class="fas fa-file-word doc-icon-word"></i></div>`;
+                } else if (isImage) {
+                    pillClass = 'pill-img';
+                    iconHtml = `<div class="doc-icon-wrapper"><i class="fas fa-file-image doc-icon-image"></i></div>`;
+                } else {
+                    iconHtml = `<div class="doc-icon-wrapper"><i class="fas fa-file-alt doc-icon-file"></i></div>`;
+                }
+
+                const card = document.createElement('div');
+                card.className = 'file-preview-card';
+                card.innerHTML = `
+                    <button type="button" class="file-remove-btn" data-index="${index}" title="Hapus file ini">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="file-preview-thumb" data-index="${index}">
+                        ${iconHtml}
+                        <span class="file-type-pill ${pillClass}">${pillText}</span>
+                    </div>
+                    <div class="file-preview-body">
+                        <div class="file-preview-name" title="${file.name.replace(/"/g, '&quot;')}">${file.name}</div>
+                        <div class="file-preview-size"><i class="fas fa-hdd mr-1 text-secondary"></i>${sizeFormatted}</div>
+                    </div>
+                `;
+
+                if (isImage) {
+                    const reader = new FileReader();
+                    reader.onload = function (e) {
+                        const thumbDiv = card.querySelector('.file-preview-thumb');
+                        if (thumbDiv) {
+                            thumbDiv.innerHTML = `
+                                <img src="${e.target.result}" alt="${file.name.replace(/"/g, '&quot;')}" class="img-zoomable" style="cursor: zoom-in;" title="Klik untuk melihat foto">
+                                <span class="file-type-pill ${pillClass}">${pillText}</span>
+                            `;
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+
+                grid.appendChild(card);
+            });
+        }
+
+        function showImageModal(src, title) {
+            const modalImg = document.getElementById('filePreviewImage');
+            const modalTitle = document.getElementById('filePreviewTitle');
+            if (modalImg && modalTitle) {
+                modalImg.src = src;
+                modalTitle.innerHTML = `<i class="far fa-file-image text-primary mr-2"></i> ${title}`;
+                $('#filePreviewModal').modal('show');
+            }
+        }
+
+        /* ── Update template reason berdasarkan jenis cuti yang dipilih ── */
+        function updateLeaveReasons(block) {
+            const jenisSelect = block.querySelector('.leave-jenis');
+            const selectedTypeId = jenisSelect.value;
+            const idx = block.getAttribute('data-index');
+
+            const emptyAlert = block.querySelector('.leave-reason-empty-alert');
+            const reasonContainer = block.querySelector('.leave-reason-container');
+            const reasonList = block.querySelector('.leave-reason-list');
+            const customBox = block.querySelector('.leave-reason-custom-box');
+            const customTextarea = block.querySelector('.leave-custom-textarea');
+            const customLabel = block.querySelector('.leave-reason-custom-label');
+            const finalKeterangan = block.querySelector('.leave-keterangan');
+
+            // Reset nilai awal
+            finalKeterangan.value = '';
+            customTextarea.value = '';
+
+            if (!selectedTypeId) {
+                if (emptyAlert) emptyAlert.style.display = 'flex';
+                if (reasonContainer) reasonContainer.style.display = 'none';
+                if (reasonList) reasonList.innerHTML = '';
+                if (customBox) customBox.style.display = 'none';
+                return;
+            }
+
+            if (emptyAlert) emptyAlert.style.display = 'none';
+
+            // Filter data template reason dari tabel leave_reasons berdasarkan leave_type_id
+            const matchedReasons = leaveReasons.filter(r => String(r.leave_type_id) === String(selectedTypeId));
+
+            if (matchedReasons.length > 0) {
+                // Tampilkan container radio button template reasons
+                reasonContainer.style.display = 'block';
+                customBox.style.display = 'none';
+
+                let html = '';
+                matchedReasons.forEach((r, rIdx) => {
+                    const radioId = `reason_${idx}_${r.id || rIdx}`;
+                    const rawReason = r.reason || '';
+                    const escapedReason = rawReason.replace(/"/g, '&quot;');
+                    html += `
+                    <div class="custom-control custom-radio leave-reason-radio-card" data-reason="${escapedReason}">
+                        <input type="radio" id="${radioId}" name="leaves_reason_choice_${idx}" 
+                            class="custom-control-input leave-radio-item" value="${escapedReason}">
+                        <label class="custom-control-label text-gray-800" for="${radioId}">
+                            ${rawReason}
+                        </label>
+                    </div>`;
+                });
+
+                // Tambahkan opsi Radio untuk "Input Alasan Sendiri"
+                const customRadioId = `reason_${idx}_custom`;
+                html += `
+                <div class="custom-control custom-radio leave-reason-radio-card leave-reason-radio-custom" data-reason="__custom__">
+                    <input type="radio" id="${customRadioId}" name="leaves_reason_choice_${idx}" 
+                        class="custom-control-input leave-radio-item leave-radio-custom-trigger" value="__custom__">
+                    <label class="custom-control-label text-primary font-weight-bold" for="${customRadioId}">
+                        <i class="fas fa-edit mr-1"></i> Lainnya (Input alasan sendiri)
+                    </label>
+                </div>`;
+
+                reasonList.innerHTML = html;
+                if (customLabel) {
+                    customLabel.innerHTML = '<i class="fas fa-pen mr-1 text-primary"></i> Tuliskan Alasan Sendiri: <span class="text-danger">*</span>';
+                }
+            } else {
+                // Jika tidak ada template reason di database untuk jenis cuti ini, langsung buka textbox
+                reasonContainer.style.display = 'none';
+                reasonList.innerHTML = '';
+                customBox.style.display = 'block';
+                if (customLabel) {
+                    customLabel.innerHTML = '<i class="fas fa-pen mr-1 text-primary"></i> Keterangan / Alasan Cuti: <span class="text-danger">*</span>';
+                }
+            }
+        }
+
         document.getElementById('leaves-container').addEventListener('change', function (e) {
             if (e.target.matches('.leave-jenis')) {
                 updateJenisAvailability();
                 handleBlockDateChange(e.target.closest('.leave-block'));
+                updateLeaveReasons(e.target.closest('.leave-block'));
+
+                // Toggle tampilan upload file berdasarkan jenis cuti
+                const block = e.target.closest('.leave-block');
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                const code = selectedOption ? selectedOption.getAttribute('data-code') : '';
+                const attachWrapper = block.querySelector('.leave-attach-wrapper');
+                const attachInput = block.querySelector('.leave-attach-files');
+
+                if (attachRequiredCodes.includes(code)) {
+                    attachWrapper.style.display = 'block';
+                } else {
+                    attachWrapper.style.display = 'none';
+                    if (attachInput) {
+                        clearAllFiles(attachInput);
+                    }
+                }
+            }
+
+            // Saat radio template reason dipilih
+            if (e.target.matches('.leave-radio-item')) {
+                const block = e.target.closest('.leave-block');
+                const customBox = block.querySelector('.leave-reason-custom-box');
+                const customTextarea = block.querySelector('.leave-custom-textarea');
+                const finalKeterangan = block.querySelector('.leave-keterangan');
+
+                // Update styling active pada radio cards
+                block.querySelectorAll('.leave-reason-radio-card').forEach(card => {
+                    const input = card.querySelector('.leave-radio-item');
+                    if (input && input.checked) {
+                        card.classList.add('is-selected');
+                    } else {
+                        card.classList.remove('is-selected');
+                    }
+                });
+
+                if (e.target.value === '__custom__') {
+                    customBox.style.display = 'block';
+                    customTextarea.focus();
+                    finalKeterangan.value = customTextarea.value;
+                } else {
+                    customBox.style.display = 'none';
+                    finalKeterangan.value = e.target.value;
+                }
+            }
+        });
+
+        // Event listener saat user mengetik di textbox alasan sendiri
+        document.getElementById('leaves-container').addEventListener('input', function (e) {
+            if (e.target.matches('.leave-custom-textarea')) {
+                const block = e.target.closest('.leave-block');
+                const finalKeterangan = block.querySelector('.leave-keterangan');
+                if (finalKeterangan) {
+                    finalKeterangan.value = e.target.value;
+                }
             }
         });
 
         document.getElementById('leaves-container').addEventListener('click', function (e) {
+            // Klik card radio button reason untuk kemudahan pengguna
+            const card = e.target.closest('.leave-reason-radio-card');
+            if (card && !e.target.matches('input[type="radio"]') && !e.target.matches('label')) {
+                const radio = card.querySelector('.leave-radio-item');
+                if (radio && !radio.checked) {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+
             const removeBtn = e.target.closest('.btn-remove-leave');
             if (removeBtn) {
                 const block = removeBtn.closest('.leave-block');
@@ -865,7 +1762,28 @@
                 if (!jenis.value) { jenis.reportValidity(); return; }
                 if (!mulai.value) { mulai.reportValidity(); return; }
                 if (!selesai.value) { selesai.reportValidity(); return; }
-                if (!ket.value.trim()) { ket.reportValidity(); return; }
+                if (!ket.value.trim()) {
+                    const customBox = block.querySelector('.leave-reason-custom-box');
+                    const customTextarea = block.querySelector('.leave-custom-textarea');
+                    if (customBox && customBox.style.display !== 'none') {
+                        customTextarea.focus();
+                        alert(`${nomor}: Silakan tulis alasan cuti pada kotak keterangan yang tersedia.`);
+                    } else {
+                        alert(`${nomor}: Silakan pilih salah satu alasan cuti atau pilih opsi input alasan sendiri.`);
+                    }
+                    return;
+                }
+
+                // Validasi lampiran file jika wajib
+                const attachWrapper = block.querySelector('.leave-attach-wrapper');
+                const attachInput = block.querySelector('.leave-attach-files');
+                const isAttachRequired = attachWrapper && attachWrapper.style.display !== 'none';
+                const fileCount = (attachInput && attachInput._storedFiles) ? attachInput._storedFiles.length : (attachInput && attachInput.files ? attachInput.files.length : 0);
+
+                if (isAttachRequired && fileCount === 0) {
+                    alert(`${nomor}: Lampiran dokumen wajib diunggah untuk jenis cuti ini.`);
+                    return;
+                }
 
                 if (chosenTypes.includes(jenis.value)) {
                     alert(`${nomor}: Jenis cuti ini sudah dipilih di pengajuan lain. Setiap jenis cuti hanya boleh dipilih sekali.`);
@@ -873,10 +1791,10 @@
                 }
                 chosenTypes.push(jenis.value);
 
-                if (mulai.value < todayStr) {
-                    alert(`${nomor}: Tanggal mulai tidak boleh sebelum hari ini.`);
-                    return;
-                }
+                // if (mulai.value < todayStr) {
+                //     alert(`${nomor}: Tanggal mulai tidak boleh sebelum hari ini.`);
+                //     return;
+                // }
 
                 const diff = computeWorkingDays(mulai.value, selesai.value);
                 if (!diff || diff <= 0) {
@@ -884,20 +1802,29 @@
                     return;
                 }
 
+                const isNegative = selesai.dataset.isNegative === 'true';
                 const maxAttr = selesai.dataset.maxEnd;
-                if (maxAttr && selesai.value > maxAttr) {
+                if (!isNegative && maxAttr && selesai.value > maxAttr) {
                     alert(`${nomor}: Tanggal selesai melebihi sisa saldo cuti yang tersedia.`);
                     return;
                 }
 
                 const leaveName = jenis.options[jenis.selectedIndex].getAttribute('data-name');
+                const filesList = (attachInput && attachInput._storedFiles) ? attachInput._storedFiles : (attachInput && attachInput.files ? Array.from(attachInput.files) : []);
+
+                const hutangBadge = isNegative ? ' <span class="badge badge-warning text-dark font-weight-bold ml-1"><i class="fas fa-exclamation-triangle fa-xs"></i> Hutang Cuti</span>' : '';
+                const hutangNotice = isNegative ? `
+                    <div class="alert alert-warning py-2 px-3 small mt-3 mb-0 d-flex align-items-center" style="border-radius: 6px;">
+                        <i class="fas fa-info-circle mr-2 text-warning"></i>
+                        <span>Pengajuan ini menggunakan fitur <strong>Hutang Cuti</strong> karena saldo cuti tahunan telah habis.</span>
+                    </div>` : '';
 
                 reviewHtml += `
                 <div class="bg-light p-3 p-md-4 rounded mb-3 border">
                     <div class="font-weight-bold text-primary small mb-2"><i class="fas fa-calendar-alt mr-1"></i> ${nomor}</div>
                     <div class="review-row">
                         <span class="review-label">Jenis Cuti</span>
-                        <span class="review-value"><span class="badge badge-primary px-2 py-1">${leaveName}</span></span>
+                        <span class="review-value"><span class="badge badge-primary px-2 py-1">${leaveName}</span>${hutangBadge}</span>
                     </div>
                     <div class="review-row">
                         <span class="review-label">Tanggal Mulai</span>
@@ -915,6 +1842,36 @@
                         <span class="review-label">Alasan</span>
                         <span class="review-value">${ket.value}</span>
                     </div>
+                    ${filesList.length > 0 ? `
+                    <div class="review-row align-items-start">
+                        <span class="review-label pt-1"><i class="fas fa-paperclip mr-1"></i>Lampiran (${filesList.length})</span>
+                        <div class="review-value text-left" style="max-width: 65%;">
+                            <div class="d-flex flex-wrap" style="gap: 6px;">
+                                ${filesList.map(f => {
+                    const parts = f.name.split('.');
+                    const ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
+                    const isPdf = ext === 'pdf';
+                    const isWord = ['doc', 'docx'].includes(ext);
+                    const isImg = ['jpg', 'jpeg', 'png'].includes(ext);
+                    let iconClass = 'fa-file-alt text-secondary';
+                    if (isPdf) iconClass = 'fa-file-pdf text-danger';
+                    else if (isWord) iconClass = 'fa-file-word text-primary';
+                    else if (isImg) iconClass = 'fa-file-image text-success';
+                    const sizeStr = f.size > 1024 * 1024
+                        ? (f.size / (1024 * 1024)).toFixed(1) + ' MB'
+                        : (f.size / 1024).toFixed(0) + ' KB';
+                    return `<div class="review-file-badge">
+                                        <i class="far ${iconClass} mr-2" style="font-size: 1rem;"></i>
+                                        <div style="line-height: 1.2;">
+                                            <div class="font-weight-bold text-truncate" style="font-size: 0.78rem; max-width: 170px;" title="${f.name.replace(/"/g, '&quot;')}">${f.name}</div>
+                                            <div class="text-muted" style="font-size: 0.68rem;">${sizeStr}</div>
+                                        </div>
+                                    </div>`;
+                }).join('')}
+                            </div>
+                        </div>
+                    </div>` : ''}
+                    ${hutangNotice}
                 </div>`;
             }
 

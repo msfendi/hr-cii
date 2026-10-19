@@ -33,7 +33,7 @@ class AuditTrailService
 
             AuditTrail::create([
                 'user_id'        => Auth::id(),
-                'user_name'      => Auth::check() ? (Auth::user()->name ?? null) : null,
+                'user_name'      => Auth::check() ? (Auth::user()->name ?? null) : (app()->runningInConsole() ? 'SYSTEM (CLI)' : 'SYSTEM (Auto)'),
                 'event'          => $event,
                 'auditable_type' => get_class($model),
                 'auditable_id'   => $model->getKey(),

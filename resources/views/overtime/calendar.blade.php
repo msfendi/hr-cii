@@ -1,69 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
+
 <body id="page-top">
-<!-- Page Wrapper -->
-@include('sweetalert::alert')
-<div id="wrapper">
-@include('layout.sidebar')
-    <!-- Content Wrapper -->
-    <div id="content-wrapper" class="d-flex flex-column">
+    <!-- Page Wrapper -->
+    @include('sweetalert::alert')
+    <div id="wrapper">
+        @include('layout.sidebar')
+        <!-- Content Wrapper -->
+        <div id="content-wrapper" class="d-flex flex-column">
 
-        <!-- Main Content -->
-        <div id="content">
-            @include('layout.navbar')
-            <!-- Begin Page Content -->
-            <div class="container-fluid">
+            <!-- Main Content -->
+            <div id="content">
+                @include('layout.navbar')
+                <!-- Begin Page Content -->
+                <div class="container-fluid">
 
-                <!-- Page Heading -->
-                <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                    <h1 class="h3 mb-0 text-gray-800">Overtime Management</h1>
-                </div>
-                
-                <!-- Add Button in Card Header -->
-                <div class="card shadow mb-2">
-                    <div class="card-header py-3">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">Overtime Data</h6>
-                            <div class="d-flex align-items-center flex-wrap">
-                                <span class="mr-2 font-weight-bold text-dark" style="font-size:0.85rem;">Durasi Jam:</span>
-                                <select id="duration_filter" class="form-control form-control-sm mr-2" style="width: 120px;">
-                                    <option value="">Semua Jam</option>
-                                    @for($i = 1; $i <= 12; $i++)
-                                    <option value="{{ $i }}">{{ $i }} Jam</option>
-                                    @endfor
-                                </select>
-                                <span class="mr-2 font-weight-bold text-dark" style="font-size:0.85rem;">Dept Group:</span>
-                                <select id="dept_group_filter" class="form-control form-control-sm mr-2" style="width: 140px;">
-                                    <option value="all">Semua</option>
-                                    <option value="sewing">Sewing</option>
-                                    <option value="non_sewing">Non-Sewing</option>
-                                    <option value="staff">Staff</option>
-                                </select>
-                                <div class="form-inline ml-3">
-                                    <label for="date" class="mr-2">Date:</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="month" class="form-control" name="date" id="date" value="{{ date('Y-m') }}" required>
+                    <!-- Page Heading -->
+                    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                        <h1 class="h3 mb-0 text-gray-800">Overtime Management</h1>
+                    </div>
+
+                    <!-- Add Button in Card Header -->
+                    <div class="card shadow mb-2">
+                        <div class="card-header py-3">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <h6 class="m-0 font-weight-bold text-primary">Overtime Data</h6>
+                                <div class="d-flex align-items-center flex-wrap">
+                                    <span class="mr-2 font-weight-bold text-dark" style="font-size:0.85rem;">Filter
+                                        Overtime:</span>
+                                    <select id="duration_filter" class="form-control form-control-sm mr-2"
+                                        style="width: 155px;">
+                                        <option value="">Semua Overtime</option>
+                                        <optgroup label="Jam Lembur">
+                                            @for($i = 1; $i <= 12; $i++)
+                                                <option value="{{ $i }}">{{ $i }} Jam</option>
+                                            @endfor
+                                        </optgroup>
+                                        <optgroup label="Label / Kode">
+                                            <option value="MA">MA (Mangkir)</option>
+                                            <option value="CT">CT (Cuti)</option>
+                                            <option value="P1">P1 (Izin Pribadi)</option>
+                                            <option value="H">H (Setengah Hari)</option>
+                                            <option value="SD">SD (Sakit Dokter)</option>
+                                            <option value="BR">BR (Belum Masuk)</option>
+                                            <option value="OUT">OUT (Keluar)</option>
+                                        </optgroup>
+                                    </select>
+                                    <span class="mr-2 font-weight-bold text-dark" style="font-size:0.85rem;">Dept
+                                        Group:</span>
+                                    <select id="dept_group_filter" class="form-control form-control-sm mr-2"
+                                        style="width: 140px;">
+                                        <option value="all">Semua</option>
+                                        <option value="sewing">Sewing</option>
+                                        <option value="non_sewing">Non-Sewing</option>
+                                        <option value="staff">Staff</option>
+                                    </select>
+                                    <div class="form-inline ml-3">
+                                        <label for="date" class="mr-2">Date:</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="month" class="form-control" name="date" id="date"
+                                                value="{{ date('Y-m') }}" required>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
-                            </table>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm" id="dataTable" width="100%"
+                                    cellspacing="0">
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <!-- Content Row -->
-                
-            </div>
-            <!-- /.container-fluid -->
+                    <!-- Content Row -->
 
-        </div>
-        <!-- End of Main Content -->
-@include('layout.footer')
+                </div>
+                <!-- /.container-fluid -->
+
+            </div>
+            <!-- End of Main Content -->
+            @include('layout.footer')
 </body>
 <!-- Page level plugins -->
 <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
@@ -71,7 +89,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.3.0/js/bootstrap-datepicker.js"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.8.0/css/bootstrap-datepicker.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.8.0/css/bootstrap-datepicker.css"
+    rel="stylesheet" />
 
 <style>
     #dataTable thead tr:first-child th.week-header {
@@ -81,6 +100,7 @@
         font-weight: bold;
         border: 1px solid #3a5bbf;
     }
+
     #dataTable thead tr:first-child th.summary-header {
         background-color: #1cc88a;
         color: #fff;
@@ -88,33 +108,37 @@
         font-weight: bold;
         border: 1px solid #17a673;
     }
+
     #dataTable thead tr:first-child th.info-header {
         background-color: #858796;
         color: #fff;
         text-align: center;
         font-weight: bold;
     }
+
     .week-over {
         background-color: #dc3545 !important;
         color: #000000af !important;
     }
+
     /* Weekend & Holiday column highlight (merah) */
     th.col-red {
         background-color: #e74a3b !important;
         color: #fff !important;
     }
+
     td.col-red {
         background-color: #fce4e4 !important;
     }
 </style>
 <script>
-    $(document).ready(function() {
+    $(document).ready(function () {
         function loadTable() {
             var dateVal = $('#date').val();
             if (!dateVal) return;
             var monthVal = dateVal.substring(0, 7);
 
-                var duration = $('#duration_filter').val();
+            var duration = $('#duration_filter').val();
             var deptGroup = $('#dept_group_filter').val();
 
             if ($.fn.DataTable.isDataTable('#dataTable')) {
@@ -127,7 +151,7 @@
                 url: '{{ route("overtime.calendar-data") }}',
                 data: { month: monthVal, duration: duration, dept_group: deptGroup },
                 dataType: 'json',
-                success: function(response) {
+                success: function (response) {
                     var weeks = response.weeks;
                     var tableData = response.data;
                     var holidays = response.holidays || {};
@@ -250,9 +274,9 @@
                         order: [], // Disable default sorting to use server-side order
                         orderCellsTop: true,
                         orderMulti: true,
-                        createdRow: function(row, data, dataIndex) {
+                        createdRow: function (row, data, dataIndex) {
                             var $tds = $(row).find('td');
-                            weekColRanges.forEach(function(wr) {
+                            weekColRanges.forEach(function (wr) {
                                 var val = parseFloat(data[wr.key]) || 0;
                                 if (val > 16) {
                                     for (var ci = wr.startCol; ci <= wr.endCol; ci++) {
@@ -260,17 +284,36 @@
                                     }
                                 }
                             });
+
+                            // Highlight cell yang cocok dengan filter yang dipilih
+                            if (duration) {
+                                var durUpper = duration.toString().toUpperCase();
+                                $tds.each(function (idx) {
+                                    // Highlight kolom hari lembur (setelah NPK, Nama, Bagian)
+                                    if (idx >= 3) {
+                                        var txt = $(this).text().trim().toUpperCase();
+                                        if (txt === durUpper) {
+                                            $(this).css({
+                                                'background-color': '#ffeeba',
+                                                'font-weight': 'bold',
+                                                'color': '#856404'
+                                            });
+                                        }
+                                    }
+                                });
+                            }
                         }
                     });
                 }
             });
         }
 
-        $('#date, #duration_filter, #dept_group_filter').on('change', function() {
+        $('#date, #duration_filter, #dept_group_filter').on('change', function () {
             loadTable();
         });
 
         loadTable();
     });
 </script>
+
 </html>

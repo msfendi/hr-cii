@@ -8,14 +8,12 @@ use App\Http\Controllers\AttendanceFingerController;
 use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginController;
-use App\Http\Controllers\RagChatController;
 use App\Http\Controllers\PelamarController;
 use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\ParentDeptController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\DeptController;
 use App\Http\Controllers\AdminKunjunganController;
@@ -83,6 +81,7 @@ use App\Http\Controllers\WhatsappTemplateController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotificationsContractController;
+use App\Http\Controllers\ParentDeptController;
 use App\Http\Controllers\PortalRecruitmentStatusController;
 use App\Http\Controllers\RecruitmentFormController;
 use App\Http\Controllers\SewingViolationController;
@@ -96,6 +95,7 @@ use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\CanteenController;
 use App\Http\Controllers\CanteenReportController;
+use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\DoorprizeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventInvitationController;
@@ -113,6 +113,7 @@ use App\Http\Controllers\PdfDocumentController;
 use App\Http\Controllers\PdfExtractionController;
 use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
+use App\Http\Controllers\QcInsentifMasterController;
 
 /*
 |--------------------------------------------------------------------------
@@ -173,6 +174,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'permission']);
     Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'permission']);
     Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
+    Route::get('/biodata/generate-pdf/{npk}', [BiodataController::class, 'generatePdf'])->name('biodata.generate-pdf')->middleware(['auth', 'permission']);
+    Route::get('/biodata/export-all-docs/{npk}', [BiodataController::class, 'exportAllDocs'])->name('biodata.export-all-docs')->middleware(['auth', 'permission']);
 
 
     // PKWT
@@ -190,10 +193,6 @@ Route::group(['middleware' => 'auth'], function () {
 
 
     // ========================================
-    // BIODATA KELUAR
-    Route::get('/biodata-keluar/index', [BiodataKeluarController::class, 'index'])->name('biodata_keluar.index')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-    Route::get('/biodata-keluar/get-data', [BiodataKeluarController::class, 'getData'])->name('biodata_keluar.get-data')->middleware(['auth', 'role:Admin|Payroll_STAFF|Payroll_SEWING|Payroll_NONSEWING|HRD']);
-
     // EMPLOYEES CONTRACT
     // ========================================
     Route::prefix('employees-contract')->group(function () {
@@ -212,6 +211,9 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/template',         [EmployeesContractController::class, 'template'])->name('employees-contract.template')->middleware(['auth', 'permission']);
         Route::post('/import',          [EmployeesContractController::class, 'import'])->name('employees-contract.import')->middleware(['auth', 'permission']);
         Route::get('/export',           [EmployeesContractController::class, 'export'])->name('employees-contract.export')->middleware(['auth', 'permission']);
+        Route::post('/upload/{id}',      [EmployeesContractController::class, 'uploadDocument'])->name('employees-contract.upload')->middleware(['auth', 'permission']);
+        Route::post('/delete-file/{id}', [EmployeesContractController::class, 'deleteDocument'])->name('employees-contract.delete-file')->middleware(['auth', 'permission']);
+        Route::get('/file/{id}',         [EmployeesContractController::class, 'viewDocument'])->name('employees-contract.file')->middleware(['auth', 'permission']);
         Route::get('/export-all',       [EmployeesContractController::class, 'exportAll'])->name('employees-contract.export-all');
     });
 
@@ -414,6 +416,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::put('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'update'])->name('ijin-meninggalkan-pekerjaan.update')->middleware(['auth', 'permission']);
     Route::get('/ijin-meninggalkan-pekerjaan/{id}', [IjinMeninggalkanPekerjaanController::class, 'destroy'])->name('ijin-meninggalkan-pekerjaan.delete')->middleware(['auth', 'permission']);
     Route::get('/ijin-meninggalkan-pekerjaan/export/excel', [IjinMeninggalkanPekerjaanController::class, 'export'])->name('ijin-meninggalkan-pekerjaan.export')->middleware(['auth', 'permission']);
+
 
     //  Evaluation Employee
     Route::get('/evaluation-employee', [EvaluationEmployeeController::class, 'index'])->name('evaluation-employee.index')->middleware(['auth', 'permission']);
@@ -667,6 +670,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::delete('/destroy/{id}', [AdminLeaveBalanceController::class, 'destroyBalance'])->name('leave-balances.destroy');
 
         Route::post('/generate-yearly', [AdminLeaveBalanceController::class, 'generateYearlyBalance'])->name('leave-balances.generate-yearly');
+        Route::post('/generate-non-annual', [AdminLeaveBalanceController::class, 'generateNonAnnualBalance'])->name('leave-balances.generate-non-annual');
     });
 
     // ========================================
@@ -842,7 +846,14 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/document-data', [ExpatController::class, 'documentData'])->name('document-data');
         Route::get('/search-employee', [ExpatController::class, 'searchEmployee'])->name('search-employee');
         Route::get('/transaction-detail', [ExpatController::class, 'transactionDetail'])->name('transaction-detail');
+        Route::get('/contract-data', [ExpatController::class, 'contractData'])->name('contract-data');
+        Route::get('/contract-detail/{npk}', [ExpatController::class, 'contractDetail'])->name('contract-detail');
+        Route::get('/document-list', [ExpatController::class, 'expatDocumentList'])->name('document-list');
+        Route::post('/document', [ExpatController::class, 'storeExpatDocument'])->name('document-store');
+        Route::delete('/document/{id}', [ExpatController::class, 'destroyExpatDocument'])->name('document-destroy');
     });
+
+
 
     // Foreign Guest dashboard data
     Route::get('/guest-master/dashboard-data', [ForeignGuestController::class, 'dashboardData'])->name('guest-master.dashboard-data')->middleware(['auth', 'permission']);
@@ -1006,27 +1017,6 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/edit/{id}', [SewingViolationController::class, 'edit'])->name('sewing-violations.edit');
         Route::post('/update', [SewingViolationController::class, 'update'])->name('sewing-violations.update');
         Route::get('/delete/{id}', [SewingViolationController::class, 'delete'])->name('sewing-violations.delete');
-    });
-
-    // ========================================
-    // PENGAJUAN CUTI ONLINE
-    // ========================================
-    Route::prefix('pengajuan-cuti')->group(function () {
-        Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
-        Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
-        Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
-        Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
-        Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
-        Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
-        Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
-        Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
-        Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
-
-        // Cuti Approval (Leave Management by logged in user)
-        Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval')->middleware('auth');
-        Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve')->middleware('auth');
-        Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject')->middleware('auth');
-        Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update')->middleware('auth');
     });
 
     // Insentif 6S
@@ -1277,6 +1267,28 @@ Route::prefix('event-invitation')->name('event-invitation.')->group(function () 
     Route::post('/{event?}/respond', [EventInvitationController::class, 'storeResponse'])->name('respond');
 });
 
+Route::prefix('chatbot')->name('chatbot.')->middleware(['auth'])->group(function () {
+    Route::get('/', [ChatbotController::class, 'index'])->name('index');
+    Route::post('/sessions', [ChatbotController::class, 'storeSession'])->name('sessions.store');
+    Route::get('/sessions/{chatbotSession}/messages', [ChatbotController::class, 'messages'])->name('sessions.messages');
+    Route::post('/sessions/{chatbotSession}/send', [ChatbotController::class, 'send'])->name('sessions.send');
+    Route::delete('/sessions/{chatbotSession}', [ChatbotController::class, 'destroySession'])->name('sessions.destroy');
+});
+
+
+Route::get('qc-insentif-master/index', [QcInsentifMasterController::class, 'index'])->name('qc-insentif-master.index')->middleware(['auth', 'permission']);
+Route::get('qc-insentif-master/create', [QcInsentifMasterController::class, 'create'])->name('qc-insentif-master.create')->middleware(['auth', 'permission']);
+Route::post('qc-insentif-master/store', [QcInsentifMasterController::class, 'store'])->name('qc-insentif-master.store')->middleware(['auth', 'permission']);
+Route::get('qc-insentif-master/delete/{id}', [QcInsentifMasterController::class, 'destroy'])->name('qc-insentif-master.delete')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/edit/{id}', [QcInsentifMasterController::class, 'edit'])->name('qc-insentif-master.edit')->middleware(['auth', 'permission']);
+Route::post('qc-insentif-master/import', [QcInsentifMasterController::class, 'import'])->name('qc-insentif-master.import')->middleware(['auth', 'permission']);
+Route::get('qc-insentif-master/export', [QcInsentifMasterController::class, 'export'])->name('qc-insentif-master.export')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/template', [QcInsentifMasterController::class, 'template'])->name('qc-insentif-master.template')->middleware(['auth', 'permission']);
+Route::post('/qc-insentif-master/import', [QcInsentifMasterController::class, 'import'])->name('qc-insentif-master.import')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/{period}/check', [QcInsentifMasterController::class, 'check'])->name('qc-insentif-master.check')->middleware(['auth', 'permission']);
+Route::get('/qc-insentif-master/{period}/data', [QcInsentifMasterController::class, 'getData'])->name('qc-insentif-master.data')->middleware(['auth', 'permission']);
+
+
 
 Route::get('/test-reverb', function () {
     event(new NotificationEvent(
@@ -1353,17 +1365,29 @@ Route::middleware(['auth', 'permission'])->group(function () {
 
 Route::get('/pdf-extractor', [PdfExtractionController::class, 'index'])->name('pdf.index')->middleware(['auth']);
 
-/*
-|--------------------------------------------------------------------------
-| AI Assistant, RAG Knowledge Base & Document Generator
-|--------------------------------------------------------------------------
-*/
-Route::middleware(['auth'])->prefix('ai-assistant')->name('rag-chat.')->group(function () {
-    Route::get('/', [RagChatController::class, 'index'])->name('index');
-    Route::post('/send', [RagChatController::class, 'sendMessage'])->name('send');
-    Route::post('/upload', [RagChatController::class, 'uploadKnowledge'])->name('upload');
-    Route::get('/download/{filename}', [RagChatController::class, 'downloadDocument'])->name('download');
-    Route::post('/clear', [RagChatController::class, 'clearSession'])->name('clear');
-    Route::delete('/knowledge/{id}', [RagChatController::class, 'deleteKnowledge'])->name('delete-knowledge');
-});
+// ========================================
+// PENGAJUAN CUTI ONLINE
+// ========================================
+Route::prefix('pengajuan-cuti')->group(function () {
+    Route::get('/login', [PengajuanCutiController::class, 'login'])->name('pengajuan-cuti.login');
+    Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
+    Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
+    Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
+    Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
+    Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
+    Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
+    Route::get('/progress', [PengajuanCutiController::class, 'progress'])->name('pengajuan-cuti.progress');
+    Route::get('/riwayat', [PengajuanCutiController::class, 'riwayat'])->name('pengajuan-cuti.riwayat');
 
+    // Cuti Approval (Leave Management by logged in user)
+    Route::get('/approval', [LeaveApprovalController::class, 'index'])->name('pengajuan-cuti.approval')->middleware('auth');
+    Route::post('/approval/approve/{id}', [LeaveApprovalController::class, 'approve'])->name('pengajuan-cuti.approval.approve')->middleware('auth');
+    Route::post('/approval/reject/{id}', [LeaveApprovalController::class, 'reject'])->name('pengajuan-cuti.approval.reject')->middleware('auth');
+    Route::post('/approval/update/{id}', [LeaveApprovalController::class, 'updateDecision'])->name('pengajuan-cuti.approval.update')->middleware('auth');
+
+    // Cuti Approval (Portal Karyawan / Atasan - tanpa middleware auth, berbasis session cuti)
+    Route::get('/portal-approval', [LeaveApprovalController::class, 'portalIndex'])->name('pengajuan-cuti.portal-approval');
+    Route::post('/portal-approval/approve/{id}', [LeaveApprovalController::class, 'portalApprove'])->name('pengajuan-cuti.portal-approval.approve');
+    Route::post('/portal-approval/reject/{id}', [LeaveApprovalController::class, 'portalReject'])->name('pengajuan-cuti.portal-approval.reject');
+    Route::post('/portal-approval/update/{id}', [LeaveApprovalController::class, 'portalUpdateDecision'])->name('pengajuan-cuti.portal-approval.update');
+});

@@ -10,8 +10,10 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Str;
+use App\Models\User;
 
 class EmployeesContractController extends Controller
 {
@@ -69,6 +71,7 @@ class EmployeesContractController extends Controller
                 'c.allowance',
                 'c.pph21',
                 'c.daily_salary',
+                'c.file_contract',
                 DB::raw("DATEDIFF(DAY, CAST(GETDATE() AS DATE), c.end_date) AS sisa_hari"),
                 DB::raw("DAY(c.end_date) AS end_day"),
             ]);
@@ -174,11 +177,13 @@ class EmployeesContractController extends Controller
                     $canSeeSalary = true;
                 }
 
-                $row->salary       = $canSeeSalary ? (float) $row->salary : '***';
-                $row->allowance    = $canSeeSalary ? (float) $row->allowance : '***';
-                $row->pph21        = $canSeeSalary ? (float) $row->pph21 : '***';
-                $row->daily_salary = $canSeeSalary ? (float) $row->daily_salary : '***';
-                $row->can_edit     = $canSeeSalary;
+                $row->salary            = $canSeeSalary ? (float) $row->salary : '***';
+                $row->allowance         = $canSeeSalary ? (float) $row->allowance : '***';
+                $row->pph21             = $canSeeSalary ? (float) $row->pph21 : '***';
+                $row->daily_salary      = $canSeeSalary ? (float) $row->daily_salary : '***';
+                $row->can_edit          = $canSeeSalary;
+                $row->file_contract_url = !empty($row->file_contract) ? asset('storage/' . $row->file_contract) : null;
+                $row->file_name         = !empty($row->file_contract) ? basename($row->file_contract) : null;
 
                 return $row;
             });
@@ -227,11 +232,13 @@ class EmployeesContractController extends Controller
                     $canSeeSalary = true;
                 }
 
-                $row->salary       = $canSeeSalary ? (float) $row->salary : '***********';
-                $row->allowance    = $canSeeSalary ? (float) $row->allowance : '***********';
-                $row->pph21        = $canSeeSalary ? (float) $row->pph21 : '***********';
-                $row->daily_salary = $canSeeSalary ? (float) $row->daily_salary : '***********';
-                $row->can_edit     = $canSeeSalary;
+                $row->salary            = $canSeeSalary ? (float) $row->salary : '***********';
+                $row->allowance         = $canSeeSalary ? (float) $row->allowance : '***********';
+                $row->pph21             = $canSeeSalary ? (float) $row->pph21 : '***********';
+                $row->daily_salary      = $canSeeSalary ? (float) $row->daily_salary : '***********';
+                $row->can_edit          = $canSeeSalary;
+                $row->file_contract_url = !empty($row->file_contract) ? asset('storage/' . $row->file_contract) : null;
+                $row->file_name         = !empty($row->file_contract) ? basename($row->file_contract) : null;
 
                 return $row;
             });
@@ -255,6 +262,13 @@ class EmployeesContractController extends Controller
             'allowance'       => 'nullable|numeric|min:0',
         ]);
 
+        if (!$this->canModifyContract((object) ['npk' => $data['npk']])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk menambahkan kontrak karyawan ini.',
+            ], 403);
+        }
+
         EmployeesContract::create($data);
 
         return response()->json(['success' => true, 'message' => 'Kontrak berhasil disimpan.']);
@@ -266,6 +280,14 @@ class EmployeesContractController extends Controller
     public function stop(string $id)
     {
         $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         $contract->update(['status_contract' => 'DIAKHIRI']);
 
         return response()->json(['success' => true, 'message' => 'Kontrak telah diakhiri.']);
@@ -277,6 +299,14 @@ class EmployeesContractController extends Controller
     public function finish(string $id)
     {
         $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         $contract->update(['status_contract' => 'HABIS']);
 
         return response()->json(['success' => true, 'message' => 'Kontrak telah selesai.']);
@@ -288,6 +318,14 @@ class EmployeesContractController extends Controller
     public function undo(string $id)
     {
         $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         $contract->update(['status_contract' => 'AKTIF']);
 
         return response()->json(['success' => true, 'message' => 'Status kontrak berhasil dikembalikan ke AKTIF.']);
@@ -314,6 +352,13 @@ class EmployeesContractController extends Controller
                 'success' => false,
                 'message' => 'Data kontrak tidak ditemukan.',
             ], 404);
+        }
+
+        if (!$this->canModifyContract($old)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
         }
 
         if ($old->status_contract !== 'AKTIF') {
@@ -420,6 +465,13 @@ class EmployeesContractController extends Controller
 
         $old = EmployeesContract::findOrFail($id);
 
+        if (!$this->canModifyContract($old)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         if ($old->status_contract !== 'AKTIF') {
             return response()->json([
                 'success' => false,
@@ -512,6 +564,13 @@ class EmployeesContractController extends Controller
 
         $contract = EmployeesContract::findOrFail($id);
 
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         // if ($contract->status_contract !== 'AKTIF') {
         //     return response()->json([
         //         'success' => false,
@@ -542,9 +601,206 @@ class EmployeesContractController extends Controller
      */
     public function destroy(string $id)
     {
-        EmployeesContract::findOrFail($id)->delete();
+        $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk menghapus kontrak ini.',
+            ], 403);
+        }
+
+        if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
+            Storage::disk('public')->delete($contract->file_contract);
+        }
+
+        $contract->delete();
 
         return response()->json(['success' => true, 'message' => 'Kontrak berhasil dihapus.']);
+    }
+
+    /**
+     * POST — Unggah atau perbarui dokumen berkas kontrak karyawan.
+     */
+    public function uploadDocument(Request $request, string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk mengunggah dokumen kontrak ini.',
+            ], 403);
+        }
+
+        $request->validate([
+            'file_contract' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+        ], [
+            'file_contract.required' => 'Berkas kontrak wajib dipilih.',
+            'file_contract.file'     => 'Berkas yang dipilih tidak valid.',
+            'file_contract.mimes'    => 'Format berkas harus PDF, JPG, PNG, DOC, atau DOCX.',
+            'file_contract.max'      => 'Ukuran berkas maksimal 10 MB.',
+        ]);
+
+        try {
+            $file = $request->file('file_contract');
+            $ext = $file->getClientOriginalExtension();
+            $cleanNpk = preg_replace('/[^a-zA-Z0-9_-]/', '_', $contract->npk);
+            $filename = 'contract_' . $cleanNpk . '_ke' . $contract->contract_ke . '_' . time() . '.' . $ext;
+
+            $path = $file->storeAs('contracts', $filename, 'public');
+
+            // Hapus berkas lama jika sebelumnya sudah ada
+            if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
+                Storage::disk('public')->delete($contract->file_contract);
+            }
+
+            $contract->update(['file_contract' => $path]);
+
+            return response()->json([
+                'success'           => true,
+                'message'           => 'Dokumen kontrak berhasil diunggah.',
+                'file_contract'     => $path,
+                'file_contract_url' => asset('storage/' . $path),
+                'file_name'         => basename($path),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengunggah dokumen: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * POST — Hapus berkas dokumen kontrak karyawan.
+     */
+    public function deleteDocument(string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk menghapus dokumen kontrak ini.',
+            ], 403);
+        }
+
+        try {
+            if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
+                Storage::disk('public')->delete($contract->file_contract);
+            }
+
+            $contract->update(['file_contract' => null]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dokumen kontrak berhasil dihapus.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus dokumen: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * GET — Tampilkan berkas dokumen kontrak karyawan secara aman.
+     */
+    public function viewDocument(string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+
+        $user = Auth::user();
+        $roleAdmin = $user ? $user->hasRole('Admin') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
+        $roleStaff = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
+        $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
+        $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+
+        if (!$roleAdmin && !$rolePayrollAll) {
+            $biodata = DB::table('BIODATA as b')
+                ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
+                ->select('b.IS_STAFF', 'd.IS_SEWING')
+                ->where('b.NPK', $contract->npk)
+                ->first();
+
+            $hasAccess = false;
+            if ($biodata) {
+                $isStaff  = (int) ($biodata->IS_STAFF ?? 0);
+                $isSewing = (int) ($biodata->IS_SEWING ?? 0);
+                if ($roleStaff && $isStaff === 1) $hasAccess = true;
+                if ($roleNonStaff && $isStaff === 0) $hasAccess = true;
+                if ($roleSewing && $isSewing === 0 && $isStaff === 0) $hasAccess = true;
+                if ($roleNonSewing && $isSewing === 1 && $isStaff === 0) $hasAccess = true;
+            }
+
+            if (!$hasAccess) {
+                abort(403, 'Anda tidak memiliki hak akses untuk melihat dokumen kontrak ini.');
+            }
+        }
+
+        if (empty($contract->file_contract) || !Storage::disk('public')->exists($contract->file_contract)) {
+            abort(404, 'Berkas dokumen kontrak tidak ditemukan.');
+        }
+
+        return Storage::disk('public')->response($contract->file_contract);
+    }
+
+    /**
+     * Memeriksa apakah user memiliki hak akses modifikasi untuk data kontrak ini.
+     * Role yang berhak:
+     * - Admin & Management Payroll: Seluruh data karyawan
+     * - Payroll_STAFF: Karyawan Staff (b.IS_STAFF == 1)
+     * - Payroll_NONSTAFF: Karyawan Non-Staff (b.IS_STAFF == 0)
+     * - Payroll_SEWING: Karyawan Non-Staff Sewing (d.IS_SEWING == 0 && b.IS_STAFF == 0)
+     * - Payroll_NONSEWING: Karyawan Non-Staff Non-Sewing (d.IS_SEWING == 1 && b.IS_STAFF == 0)
+     */
+    private function canModifyContract($contract, ?User $user = null): bool
+    {
+        $user = $user ?: Auth::user();
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole('Admin') || $user->hasRole('Management Payroll')) {
+            return true;
+        }
+
+        $npk = is_object($contract) ? ($contract->npk ?? null) : null;
+        if (!$npk) {
+            return false;
+        }
+
+        $biodata = DB::table('BIODATA as b')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
+            ->select('b.IS_STAFF', 'd.IS_SEWING')
+            ->where('b.NPK', $npk)
+            ->first();
+
+        if (!$biodata) {
+            return false;
+        }
+
+        $isStaff  = (int) ($biodata->IS_STAFF ?? 0);
+        $isSewing = (int) ($biodata->IS_SEWING ?? 0);
+
+        if ($user->hasRole('Payroll_STAFF') && $isStaff === 1) {
+            return true;
+        }
+        if ($user->hasRole('Payroll_NONSTAFF') && $isStaff === 0) {
+            return true;
+        }
+        if ($user->hasRole('Payroll_SEWING') && $isSewing === 0 && $isStaff === 0) {
+            return true;
+        }
+        if ($user->hasRole('Payroll_NONSEWING') && $isSewing === 1 && $isStaff === 0) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

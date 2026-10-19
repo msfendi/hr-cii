@@ -18,4 +18,9 @@ class LeaveTypes extends Model
         'is_active',
         'gender_type',
     ];
+
+    public function reasons()
+    {
+        return $this->hasMany(LeaveReason::class, 'leave_type_id');
+    }
 }

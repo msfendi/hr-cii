@@ -12,6 +12,7 @@ class ApprovalDept extends Model
     protected $fillable = [
         'name',
         'dept',
+        'section',
     ];
 
     protected $casts = [
@@ -21,5 +22,10 @@ class ApprovalDept extends Model
     public function rules()
     {
         return $this->hasMany(ApprovalRule::class, 'rules_id');
+    }
+
+    public function sectionDetail()
+    {
+        return $this->belongsTo(Section::class, 'section');
     }
 }

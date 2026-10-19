@@ -11,7 +11,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::connection('cii')->create('parent_dept', function (Blueprint $table) {
+        Schema::connection($this->connection)->create('parent_dept', function (Blueprint $table) {
             $table->id();
             $table->string('parent_dept_name', 100);
             $table->timestamps();
@@ -21,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection('cii')->dropIfExists('parent_dept');
+        Schema::connection($this->connection)->dropIfExists('parent_dept');
     }
 };
