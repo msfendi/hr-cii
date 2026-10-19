@@ -408,8 +408,6 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
         //     $yesterday,   // emp_bounds: prev_shift_end_dt CASE normal
         // ]);
 
-        // return collect($data);
-
 
         // $date      = $this->date;
         // $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
@@ -561,7 +559,6 @@ class AttendanceFingerExport implements FromCollection, WithHeadings, WithMappin
         // ]);
 
 
-        
         $date      = $this->date;
         $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
         $tomorrow  = \Carbon\Carbon::parse($date)->addDay()->format('Y-m-d');

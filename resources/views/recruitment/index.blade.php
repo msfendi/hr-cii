@@ -1724,7 +1724,6 @@
                     { data: 'col_hasil', name: 'col_hasil', orderable: false, searchable: false },
                     { data: 'col_dokumen', name: 'col_dokumen', orderable: false, searchable: false, className: 'text-center' },
                     { data: 'col_aksi', name: 'col_aksi', orderable: false, searchable: false, className: 'text-center' },
-
                 ],
                 language: {
                     search: 'Cari:',

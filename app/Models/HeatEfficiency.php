@@ -15,11 +15,13 @@ class HeatEfficiency extends Model
         'role',
         'efficiency',
         'piece',
-        'date'
+        'date',
+        'tim'
     ];
 
     protected $casts = [
         'date' => 'date',
-        'efficiency' => 'float'
+        'efficiency' => 'float',
+        'tim' => 'integer'
     ];
 }

@@ -160,7 +160,7 @@ class PayrollMADetailStaffSheet
             ->leftJoin('payroll_runs as pr', 'pr.id', '=', 'prd.run_id')
             ->leftJoin('payroll_periods as pp', 'pp.id', '=', 'pr.period_id')
             ->where('prd.run_id', $this->run_id)
-            ->where('bio.IS_STAFF', 1)
+            ->where('prd.employee_staff', 1)
             ->where(function ($query) use ($period) {
                 $query->whereNotNull('bio.TKK')
                     ->whereBetween('bio.TKK', [$period->start_date, $period->end_date])
@@ -187,11 +187,13 @@ class PayrollMADetailStaffSheet
             'monthly_premi',
             'long_service_allowance',
             'allowance',
+            'meal_allowance',
             'sewing_insentif',
             'pad_insentif',
             'cutting_insentif',
             'heat_insentif',
             'sixs_insentif',
+            'qc_insentif',
             'night_shift_compensation',
             'adjusment',
             'bpjs_kesehatan',
@@ -216,6 +218,11 @@ class PayrollMADetailStaffSheet
                 // Fallback untuk format lama: nilai langsung berupa angka
                 $value = (float)($component ?? 0);
                 $type  = $this->componentTypes[$field] ?? 'earning';
+            }
+
+            // meal_allowance hanya berlaku untuk karyawan expat (IS_EXPAT = 1)
+            if ($field === 'meal_allowance' && (string) ($row->employee_expat ?? '0') !== '1') {
+                $value = 0;
             }
 
             if ($type === 'deduction') {
@@ -247,11 +254,13 @@ class PayrollMADetailStaffSheet
             'Monthly Premi',
             'Long Service Allowance',
             'Allowance',
+            'Meal Allowance',
             'Sewing Insentif',
             'Pad Print Insentif',
             'Cutting Insentif',
             'Heat Seal Insentif',
             'Six S Insentif',
+            'QC Insentif',
             'Night Shift Compensation',
             'Adjusment',
 

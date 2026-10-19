@@ -16,6 +16,7 @@
             <div class="container-fluid" id="rekon-app"
                  data-filters='@json($filters)'
                  data-endpoint="{{ route('monitoring.rekonsiliasi.data') }}"
+                 data-lock-url="{{ route('monitoring.rekonsiliasi.lock.store') }}"
                  data-calendar-url="{{ route('monitoring.rekonsiliasi.calendar') }}"
                  data-calendar-detail-url="{{ route('monitoring.rekonsiliasi.calendar.detail') }}"
                  data-sync-rekon-url="{{ route('monitoring.rekonsiliasi.sync') }}"
@@ -97,6 +98,19 @@
                                 <div class="font-weight-bold" id="rekon-last-updated">--</div>
                             </div>
                             <div class="d-flex" style="gap:6px">
+                                {{-- Lock Data (2 mode: per OCF / per CPO): snapshot semua stage + Rekap per Fabric
+                                     + buyer/style ke tabel mon_rekon_locks (mode & jenis lock dipilih lewat SweetAlert). --}}
+                                @canRoute('monitoring.rekonsiliasi.lock.store')
+                                    <button id="btn-lock-ocf" type="button" class="btn btn-outline-light btn-sm">
+                                        <i class="fas fa-lock fa-sm"></i> Lock Data
+                                    </button>
+                                @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.summary')
+                                    <a href="{{ route('monitoring.rekonsiliasi.summary') }}" class="btn btn-outline-light btn-sm">
+                                        <i class="fas fa-chart-pie fa-sm"></i> Summary Rekonsiliasi
+                                    </a>
+                                @endcanRoute
+
                                 @php $canSyncAny = false; @endphp
                                 @canRoute('monitoring.rekonsiliasi.sync')
                                     @php $canSyncAny = true; @endphp
@@ -340,6 +354,22 @@
                     </div>
                 </div> -->
 
+                {{-- ================= ACCORDION: FABRIC ACHIEVEMENT + FABRIC USAGE PERCENTAGE + SHIPMENT BY DATE =================
+                     Ketiga card dibungkus SATU accordion (show/hide), gaya sama dengan DETAIL DATA.
+                     Default tertutup (auto hide); chart di-resize otomatis saat accordion dibuka. --}}
+                <div class="row">
+                    <div class="col-lg-12 mb-4">
+                        <div class="card shadow rekon-detail-accordion">
+                            <div class="card-header py-3 rekon-detail-toggle rekon-acc-toggle"
+                                 role="button" tabindex="0" aria-expanded="false"
+                                 aria-controls="rekon-acc-fabric" data-acc-target="rekon-acc-fabric">
+                                <h6 class="m-0 font-weight-bold text-primary d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-shopping-basket mr-1"></i> FABRIC ACHIEVEMENT &middot; FABRIC USAGE PERCENTAGE &middot; SHIPMENT BY DATE</span>
+                                    <i class="fas fa-chevron-down rekon-detail-caret"></i>
+                                </h6>
+                            </div>
+                            <div id="rekon-acc-fabric" style="display:none">
+                                <div class="card-body">
                 {{-- ================= FABRIC QTY / USAGE ================= --}}
                 <div class="row">
                     <div class="col-lg-4 mb-4">
@@ -443,30 +473,66 @@
                         </div> -->
                     </div>
                 </div>
+                                </div>{{-- /card-body --}}
+                            </div>{{-- /#rekon-acc-fabric --}}
+                        </div>
+                    </div>
+                </div>
 
-                {{-- ================= MATERIAL ACHIEVEMENT & SHIPMENT BY DATE ================= --}}
+                {{-- ================= ACCORDION: MATERIAL ACHIEVEMENT ================= --}}
                 <div class="row">
                     <div class="col-lg-12 mb-4">
-                        <div class="card shadow h-100">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">MATERIAL ACHIEVEMENT</h6>
+                        <div class="card shadow rekon-detail-accordion">
+                            <div class="card-header py-3 rekon-detail-toggle rekon-acc-toggle"
+                                 role="button" tabindex="0" aria-expanded="false"
+                                 aria-controls="rekon-acc-material" data-acc-target="rekon-acc-material">
+                                <h6 class="m-0 font-weight-bold text-primary d-flex justify-content-between align-items-center">
+                                    <span>MATERIAL ACHIEVEMENT</span>
+                                    <i class="fas fa-chevron-down rekon-detail-caret"></i>
+                                </h6>
                             </div>
-                            <div class="card-body">
-                                <div class="rekon-ma-formula mb-3">
+                            <div id="rekon-acc-material" style="display:none">
+                                <div class="card-body">
+                                    <div class="rekon-ma-formula mb-3">
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-lg-6 mb-4 mb-lg-0">
+                                            <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Sewing Trim</h6>
+                                            <div class="chart-area" style="height:320px">
+                                                <canvas id="chart-material-achievement-aksesoris"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Packing Trim</h6>
+                                            <div class="chart-area" style="height:320px">
+                                                <canvas id="chart-material-achievement-packing"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="row">
-                                    <div class="col-lg-6 mb-4 mb-lg-0">
-                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Sewing Trim</h6>
-                                        <div class="chart-area" style="height:320px">
-                                            <canvas id="chart-material-achievement-aksesoris"></canvas>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-6">
-                                        <h6 class="text-center text-muted text-uppercase small font-weight-bold mb-2">Packing Trim</h6>
-                                        <div class="chart-area" style="height:320px">
-                                            <canvas id="chart-material-achievement-packing"></canvas>
-                                        </div>
-                                    </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ================= DETAIL DATA (ACCORDION) =================
+                     Satu accordion untuk seluruh detail card di atas: Work In Process (Chutex),
+                     Sabkon Process, Fabric Achievement, Fabric Usage Percentage,
+                     Shipment By Date, dan Material Achievement. Isi dirender JS
+                     (renderDetailAccordion) dari payload yang sama dengan card summary. --}}
+                <div class="row">
+                    <div class="col-lg-12 mb-4">
+                        <div class="card shadow rekon-detail-accordion">
+                            <div class="card-header py-3 rekon-detail-toggle" id="rekon-detail-toggle"
+                                 role="button" tabindex="0" aria-expanded="false" aria-controls="rekon-detail-collapse">
+                                <h6 class="m-0 font-weight-bold text-primary d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-list-alt mr-1"></i> DETAIL DATA</span>
+                                    <i class="fas fa-chevron-down rekon-detail-caret"></i>
+                                </h6>
+                            </div>
+                            <div id="rekon-detail-collapse" style="display:none">
+                                <div class="card-body" id="rekon-detail-body">
+                                    <!-- diisi JS -->
                                 </div>
                             </div>
                         </div>
@@ -938,6 +1004,33 @@
         padding: .5rem .75rem;
     }
     .rekon-ma-formula strong { color: #1f3864; }
+    /* ===== Accordion DETAIL DATA ===== */
+    .rekon-detail-toggle { cursor: pointer; user-select: none; }
+    .rekon-detail-caret { transition: transform .2s ease; }
+    .rekon-detail-toggle[aria-expanded="true"] .rekon-detail-caret { transform: rotate(180deg); }
+    .rekon-detail-section + .rekon-detail-section { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px dashed #d1d3e2; }
+    .rekon-detail-section-title { font-size: .8rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: #1f3864; margin-bottom: .6rem; }
+    .rekon-detail-subtitle { font-size: .72rem; font-weight: 700; text-transform: uppercase; color: #858796; margin: .9rem 0 .4rem; }
+    .rekon-detail-box { max-height: 360px; overflow: auto; }
+    .rekon-detail-table { font-size: .8rem; margin-bottom: 0; }
+    .rekon-detail-table thead th { position: sticky; top: 0; z-index: 1; background: #f8f9fc; white-space: nowrap; }
+    .rekon-detail-table td.right, .rekon-detail-table th.right { text-align: right; }
+    .rekon-detail-table tfoot td { font-weight: 700; background: #f8f9fc; }
+    .rekon-detail-table .d-loss-negative { color: #c0392b; font-weight: bold; }
+    .rekon-detail-table .d-loss-positive { color: #1cc88a; font-weight: bold; }
+    .rekon-detail-table .d-loss-zero { color: #5a5c69; font-weight: bold; }
+    .rekon-detail-note { font-size: .72rem; color: #858796; margin-top: .35rem; }
+    .rekon-detail-note-warn { color: #b7791f; }
+    .rekon-detail-filter { max-width: 260px; margin-bottom: .4rem; }
+    .rekon-detail-tabs { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .75rem; }
+    .rekon-detail-tab {
+        border: 1px solid #d1d3e2; background: #fff; color: #5a5c69;
+        border-radius: 999px; padding: .2rem .8rem; font-size: .75rem; font-weight: 600; cursor: pointer;
+    }
+    .rekon-detail-tab:hover { background: #f8f9fc; }
+    .rekon-detail-tab.active { background: #1f3864; border-color: #1f3864; color: #fff; }
+    .rekon-detail-table td { vertical-align: top; }
+    .rekon-detail-subtitle .badge { text-transform: none; font-weight: 600; }
 </style>
 
 <script>
@@ -956,6 +1049,14 @@
     const syncSubkonUrl = app.dataset.syncSubkonUrl;
     const importStageRemarkUrl = app.dataset.importStageRemarkUrl;
     const importProdQcUrl = app.dataset.importProdQcUrl;
+
+    // Stage yang disembunyikan dari tampilan (box pipeline, rekap stage & tab
+    // breakdown). Hanya tampilan: data & perhitungan tidak berubah. Kosongkan
+    // array ini untuk menampilkannya lagi.
+    const HIDDEN_STAGES = ['QC'];
+    // Balance Garment Stock: default disembunyikan, bisa di-toggle lewat tombol kecil.
+    // State disimpan di variabel (bukan di DOM) supaya tetap kepakai saat pipeline di-render ulang.
+    let showBalanceStock = false;
     const deleteStageRemarkUrl = app.dataset.deleteStageRemarkUrl;
     const canDeleteStageRemark = app.dataset.canDeleteStageRemark === '1';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -1148,7 +1249,8 @@
         // document.getElementById('fabric-need').textContent = fmtNum(fabricQty.need);
         // document.getElementById('fabric-order').textContent = fmtNum(fabricQty.order);
         // document.getElementById('fabric-received').textContent = fmtNum(fabricQty.received);
-        // document.getElementById('fabric-out-wip').textContent = fmtNum(fabricQty.out_wip);
+        // document.getElementById('fabric-out-wip-req').textContent = fmtNum(fabricQty.out_wip_req);
+        // document.getElementById('fabric-out-wip-doc').textContent = fmtNum(fabricQty.out_wip_doc);
         // document.getElementById('fabric-stock').textContent = fmtNum(fabricQty.stock);
     }
 
@@ -1235,7 +1337,10 @@
 
     const labels = rows.map(r => wrapLabel(r.barang_name));
     // Warna baru sesuai palet FABRIC USAGE PERCENTAGE
-    const mk = (key, color, label) => ({ label, data: rows.map(r => r[key]), backgroundColor: color });
+    // qtyKey menunjuk ke field qty mentah (bukan persentase) yang dikirim
+    // service (need_qty/order_qty/dst) supaya tooltip bisa menampilkan qty
+    // asli di samping persentase saat bar di-hover.
+    const mk = (key, color, label, qtyKey) => ({ label, data: rows.map(r => r[key]), backgroundColor: color, qtyKey });
 
     if (meta.chart) meta.chart.destroy();
     meta.chart = new Chart(ctx, {
@@ -1243,11 +1348,11 @@
         data: {
             labels,
             datasets: [
-                mk('need_pct', '#6c757d', 'NEED%'),
-                mk('order_pct', '#1f6f8b', 'ORDER%'),
-                mk('received_pct', '#e07b39', 'RECEIVED%'),
-                mk('out_prod_pct', '#44af69', 'OUT PROD%'),
-                mk('stock_pct', '#f5a623', 'STOCK%'),
+                mk('need_pct', '#6c757d', 'NEED%', 'need_qty'),
+                mk('order_pct', '#1f6f8b', 'ORDER%', 'order_qty'),
+                mk('received_pct', '#e07b39', 'RECEIVED%', 'received_qty'),
+                mk('out_prod_pct', '#44af69', 'OUT PROD%', 'out_prod_qty'),
+                mk('stock_pct', '#f5a623', 'STOCK%', 'stock_qty'),
             ],
         },
         options: {
@@ -1280,7 +1385,16 @@
                             if (!r || r.harga_total === undefined || r.harga_total === null) return '';
                             return 'Harga: Rp ' + fmtNum(r.harga_total);
                         },
-                        label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%`
+                        // Baris qty ditambahkan setelah persentase, mengambil
+                        // nilai qty mentah dari field yang ditunjuk qtyKey
+                        // (mis. 'need_qty' untuk dataset NEED%).
+                        label: (c) => {
+                            const r = rows[c.dataIndex];
+                            const qtyKey = c.dataset.qtyKey;
+                            const qty = (r && qtyKey) ? r[qtyKey] : undefined;
+                            const qtyStr = (qty === undefined || qty === null) ? '' : `  |  Qty: ${fmtNum(qty)}`;
+                            return `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%${qtyStr}`;
+                        }
                     }
                 },
             },
@@ -1330,8 +1444,8 @@ function updateFormulaWithColors() {
         { label: 'NEED%', desc: 'Kebutuhan (Work Order Request) -- patokan 100%', color: '#6c757d' },
         { label: 'ORDER%', desc: 'Jumlah Order ÷ Need', color: '#1f6f8b' },
         { label: 'RECEIVED%', desc: '(Jumlah Diterima - Out Doc) ÷ Need', color: '#e07b39' },
-        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ (Jumlah Diterima - Out Doc)', color: '#44af69' },
-        { label: 'STOCK%', desc: 'Saldo Gudang ÷ (Jumlah Diterima - Out Doc)', color: '#f5a623' }
+        { label: 'OUT PROD%', desc: 'Out Req (WIP) ÷ Need', color: '#44af69' },
+        { label: 'STOCK%', desc: 'Saldo Gudang ÷ Need', color: '#f5a623' }
     ];
     formulaDiv.innerHTML = items.map(item =>
         `<span><span style="display:inline-block;width:12px;height:12px;background:${item.color};border-radius:2px;margin-right:4px;"></span><strong>${item.label}</strong> = ${item.desc}</span>`
@@ -1406,7 +1520,7 @@ function updateFormulaWithColors() {
         // menyediakan basis input/output sendiri (mis. Contract, atau
         // cabang Sabkon yang basisnya dihitung terhadap Kontrak, bukan
         // stage sebelumnya).
-        function renderBox(label, value, theme, step, pct, remarks) {
+        function renderBox(label, value, theme, step, pct, remarks, unit) {
             let lossValue = step ? Number(step.loss_pcs || 0) : null;
             let lossPct   = step ? Number(step.loss_pct || 0) : null;
 
@@ -1457,6 +1571,7 @@ function updateFormulaWithColors() {
                     <div class="rekon-pipe-body">
                         <div class="rekon-pipe-output">${fmtNum(value)}</div>
                         <div class="rekon-pipe-output-pct">${outputPctDisplay}</div>
+                        ${unit ? `<div class="text-uppercase" style="font-size:.65rem;">${unit}</div>` : ''}
                         ${lossRow}
                         ${remarksRow}
                     </div>
@@ -1475,14 +1590,15 @@ function updateFormulaWithColors() {
         const internalProcess = {
             'Cutting':   'Contract → Cutting',
             'Sewing':    'Cutting → Sewing',
-            'QC':        'Sewing → QC',
-            'Packing':   'QC → Packing',
+            'Packing':   'Sewing → Packing',
             'Warehouse': 'Packing → Warehouse',
         };
-        const internalBoxes = (pipeline.departments || []).map(d => {
+        const internalBoxes = (pipeline.departments || []).filter(d => !HIDDEN_STAGES.includes(d.department_id)).map(d => {
             const label = d.department_id ?? '-';
             const step = findStep(internalProcess[label] || '');
-            return renderBox(label, d.jumlah, 'green', step, null, d.remarks);
+            // Tampilan saja: stage "Warehouse" setelah Packing diberi nama CT-PAT.
+            const displayLabel = label === 'Warehouse' ? 'CT-PAT' : label;
+            return renderBox(displayLabel, d.jumlah, 'green', step, null, d.remarks, 'PCS');
         }).join(arrow);
 
         // ===== Grup Sabkon Process: Sabkon → Warehouse (Chutex) =====
@@ -1505,7 +1621,7 @@ function updateFormulaWithColors() {
         // Basis sekarang Total Contract (bukan lagi output Cutting):
         //  - Shipment loss   = shipment − total contract
         //  - Shipment loss % = shipment / total contract
-        const shipmentBox = renderBox('Shipment (Total)', pipeline.shipment, 'navy', findStep('Cutting → Shipment'), null, []);
+        const shipmentBox = renderBox('Shipment (Total)', pipeline.shipment, 'navy', findStep('Cutting → Shipment'), null, pipeline.shipment_remarks);
 
         // ===== Balance Garment Stock (kotak baru di samping Shipment) =====
         // = (Warehouse [Work In Process] + Warehouse [Sabkon]) − Shipment (Total)
@@ -1523,13 +1639,17 @@ function updateFormulaWithColors() {
 
         const balanceRemarksRow = renderRemarkList(balanceRemarks);
 
+        // Dibungkus wrapper `display:contents` (tidak mengubah layout flex saat tampil)
+        // atau `display:none` (saat disembunyikan).
         const balanceBox = `
-            <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
-                <div class="rekon-pipe-header">Balance Garment Stock</div>
-                <div class="rekon-pipe-body">
-                    <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtNum(Math.abs(balanceGarmentStock))}</div>
-                    <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
-                    ${balanceRemarksRow}
+            <div id="rekon-balance-stock" style="display:${showBalanceStock ? 'contents' : 'none'}">
+                <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
+                    <div class="rekon-pipe-header">Balance Garment Stock</div>
+                    <div class="rekon-pipe-body">
+                        <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtNum(Math.abs(balanceGarmentStock))}</div>
+                        <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
+                        ${balanceRemarksRow}
+                    </div>
                 </div>
             </div>
         `;
@@ -1551,13 +1671,16 @@ function updateFormulaWithColors() {
             totalLossColorClass = 'loss-positive';
         }
 
+        const totalLossRemarksRow = renderRemarkList(pipeline.total_loss_remarks);
+
         const lossBox = `
             <div class="rekon-pipe-box theme-loss rekon-pipe-total">
-                <div class="rekon-pipe-header">Total Process Loss</div>
+                <div class="rekon-pipe-header">Balance</div>
                 <div class="rekon-pipe-body">
                     <div class="rekon-pipe-output ${totalLossColorClass}">${totalLossSign}${fmtNum(Math.abs(totalLoss))}</div>
                     <div class="rekon-pipe-output-pct ${totalLossColorClass}">${totalLossSign}${fmtPct(Math.abs(totalLossPct))}</div>
                     <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
+                    ${totalLossRemarksRow}
                 </div>
             </div>
         `;
@@ -1572,6 +1695,9 @@ function updateFormulaWithColors() {
                 <span><i class="rekon-pipe-dot dot-loss"></i>Loss Qty (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-sabkon"></i>Sabkon Input/Output (PCS)</span>
                 <span><i class="rekon-pipe-dot dot-pct"></i>Persentase terhadap Kontrak</span>
+                <button type="button" id="btn-toggle-balance-stock" class="btn btn-sm btn-outline-secondary py-0 px-2 ml-2" style="font-size:.7rem;" title="Show/Hide Balance Garment Stock">
+                    <i class="fas ${showBalanceStock ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>Balance Garment Stock
+                </button>
             </div>
         `;
 
@@ -1594,6 +1720,17 @@ function updateFormulaWithColors() {
 
         document.getElementById('rekon-pipeline').innerHTML = html;
     }
+
+    // Toggle Balance Garment Stock (delegasi event, karena #rekon-pipeline di-render ulang via innerHTML).
+    document.getElementById('rekon-pipeline').addEventListener('click', function (e) {
+        const btn = e.target.closest('#btn-toggle-balance-stock');
+        if (!btn) return;
+        showBalanceStock = !showBalanceStock;
+        const box = document.getElementById('rekon-balance-stock');
+        if (box) box.style.display = showBalanceStock ? 'contents' : 'none';
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = 'fas ' + (showBalanceStock ? 'fa-eye-slash' : 'fa-eye') + ' mr-1';
+    });
 
     // ========== renderLossSteps dengan tanda/warna dari backend ==========
     function renderLossSteps(rows) {
@@ -1788,6 +1925,464 @@ function updateFormulaWithColors() {
     }
 
 
+    // ========== DETAIL DATA (accordion): breakdown dari query sumber ==========
+    // Sumber data:
+    //  - json.detailBreakdown (MonitoringRekonsiliasiService::detailBreakdown()):
+    //    baris sumber dari mon_orders, mon_prod_lines, mon_prod_qc, mon_subkons,
+    //    mon_purchase_orders, mon_work_orders, mon_shipments -- di-scope IDENTIK
+    //    dengan query summary tiap card.
+    //  - json.productionPipeline / fabricUsage / materialAchievement /
+    //    shipmentByCategory: angka summary, dipakai untuk rekap & penanda
+    //    "Sesuai summary" (cek total breakdown = angka di card).
+    // Render ditunda sampai accordion dibuka (dan di-refresh kalau data berubah).
+    const detailState = { json: null, dirty: false, open: false };
+    let dSeq = 0;
+
+    const dv   = (v) => (v === null || v === undefined || v === '') ? '-' : escapeHtml(v);
+    const dDate = (v) => v ? escapeHtml(formatTanggalIndonesia(v)) : '-';
+    // Jumlah hari AKTIF = banyaknya tanggal produksi yang berbeda (active_days dari
+    // service), BUKAN selisih Tgl Akhir - Tgl Awal -- hari tanpa data tidak dihitung.
+    const dDays = (activeDays) => {
+        if (activeDays === null || activeDays === undefined || activeDays === '') return '-';
+        return fmtNum(activeDays);
+    };
+    const dDec = (v, d) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: d ?? 4 }).format(Number(v || 0));
+    const dSum = (rows, key) => (rows || []).reduce((s, r) => s + (parseFloat(r[key]) || 0), 0);
+
+    function dLossClass(n) { return n < 0 ? 'd-loss-negative' : (n > 0 ? 'd-loss-positive' : 'd-loss-zero'); }
+
+    function dLossCell(value, isPct) {
+        if (value === null || value === undefined || value === '') return '<td class="right">-</td>';
+        const n = Number(value);
+        if (isNaN(n)) return '<td class="right">-</td>';
+        const sign = n < 0 ? '-' : '';
+        const txt = isPct ? fmtPct(Math.abs(n)) : fmtNum(Math.abs(n));
+        return `<td class="right ${dLossClass(n)}">${sign}${txt}</td>`;
+    }
+
+    function dRemarksText(remarks) {
+        if (!Array.isArray(remarks) || !remarks.length) return '-';
+        return remarks.map(r => escapeHtml((r && typeof r === 'object') ? (r.remark ?? r.text ?? '') : r))
+            .filter(Boolean).join('<br>') || '-';
+    }
+
+    // Penanda apakah total breakdown = angka summary di card.
+    function dRecon(detailTotal, summaryTotal, label) {
+        const a = Number(detailTotal || 0), b = Number(summaryTotal || 0);
+        const ok = Math.abs(a - b) < 0.5;
+        return ok
+            ? `<span class="badge badge-success ml-1" title="${escapeHtml(label || '')}">Sesuai summary</span>`
+            : `<span class="badge badge-warning ml-1" title="${escapeHtml(label || '')}">Selisih ${fmtNum(Math.abs(a - b))} vs summary ${fmtNum(b)}</span>`;
+    }
+
+    // Tabel generik. cols: [{label, right, val:(row)=>html, cls:(row)=>string}]
+    // opts: {
+    //   foot  : dFoot(span, [cell,...]) | string HTML custom,
+    //   total : jumlahBarisSebenarnya (untuk penanda "dipotong"),
+    //   filter: false untuk menyembunyikan kotak cari
+    // }
+    // Cell footer dari dS() membawa fungsi pengambil nilai mentah (g) -- dGrid
+    // menulis nilainya ke `data-v` di tiap sel kolom itu, sehingga footer bisa
+    // dihitung ulang dari baris yang lolos pencarian (lihat dUpdateFoot()).
+    function dGrid(cols, rows, opts) {
+        opts = opts || {};
+        rows = rows || [];
+        const id = 'dg' + (++dSeq);
+        const limit = (detailState.json && detailState.json.detailBreakdown && detailState.json.detailBreakdown.row_limit) || 500;
+        const truncated = opts.total !== undefined && opts.total !== null
+            && Number(opts.total) > rows.length && rows.length >= limit;
+
+        const footObj = (opts.foot && typeof opts.foot === 'object') ? opts.foot : null;
+        const getters = {};
+        if (footObj) {
+            footObj.cells.forEach((c, i) => { if (c && typeof c === 'object' && c.g) getters[footObj.span + i] = c; });
+        }
+
+        const thead = cols.map(c => `<th class="${c.right ? 'right' : ''}">${c.label}</th>`).join('');
+        const body = rows.length
+            ? rows.map(r => `<tr>${cols.map((c, ci) => {
+                const g = getters[ci];
+                return `<td class="${c.right ? 'right' : ''} ${c.cls ? c.cls(r) : ''}"${g ? ` data-v="${g.g(r)}"` : ''}${g && g.w ? ` data-w="${g.w(r)}"` : ''}>${c.val(r)}</td>`;
+            }).join('')}</tr>`).join('')
+            : `<tr class="rekon-detail-empty"><td colspan="${cols.length}" class="text-center text-muted">Tidak ada data</td></tr>`;
+
+        let foot = '';
+        if (footObj) {
+            const cells = footObj.cells.map((c, i) => {
+                const t = (c && typeof c === 'object') ? c.t : c;
+                const attrs = (c && typeof c === 'object' && c.g)
+                    ? ` data-col="${footObj.span + i}" data-dec="${c.d === undefined ? '' : c.d}"${c.w ? ' data-ratio="1"' : ''} data-orig="${escapeHtml(t)}"`
+                    : '';
+                return `<td class="right"${attrs}>${t}</td>`;
+            }).join('');
+            foot = `<tfoot><tr><td colspan="${footObj.span}" class="rekon-foot-label" data-orig="Total">Total</td>${cells}</tr></tfoot>`;
+        } else if (opts.foot) {
+            foot = `<tfoot><tr>${opts.foot}</tr></tfoot>`;
+        }
+
+        const filter = (opts.filter !== false && rows.length > 8)
+            ? `<input type="search" class="form-control form-control-sm rekon-detail-filter" placeholder="Cari di tabel ini..." data-target="${id}">`
+            : '';
+        const note = truncated
+            ? `<div class="rekon-detail-note rekon-detail-note-warn"><i class="fas fa-exclamation-triangle mr-1"></i>Menampilkan ${fmtNum(rows.length)} dari ${fmtNum(opts.total)} baris (dibatasi ${fmtNum(limit)}). Total di footer = seluruh baris; saat memakai pencarian, total dihitung dari baris yang dimuat saja. Persempit filter untuk melihat sisanya.</div>`
+            : '';
+        return `${filter}<div class="rekon-detail-box"><table id="${id}" class="table table-bordered table-sm rekon-detail-table" data-trunc="${truncated ? 1 : 0}"><thead><tr>${thead}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${note}`;
+    }
+
+    // Footer: sel dengan pengambil nilai (dS) ikut dihitung ulang saat pencarian;
+    // sel string biasa / '' tetap statis.
+    const dFoot = (span, cells) => ({ span, cells });
+    // wkey (opsional): kolom rasio -- sel menyimpan pembilang (key) dan penyebut (wkey),
+    // footer dihitung ulang sebagai SUM(key) / SUM(wkey), bukan penjumlahan nilai per baris.
+    const dS = (t, key, dec, wkey) => ({ t, g: r => parseFloat(r[key]) || 0, d: dec, w: wkey ? (r => parseFloat(r[wkey]) || 0) : null });
+
+    // Hitung ulang footer dari baris yang masih tampil setelah pencarian.
+    // Query kosong -> kembalikan total asli dari server (seluruh baris).
+    function dUpdateFoot(table, q) {
+        const foot = table.querySelector('tfoot');
+        if (!foot) return;
+        const cells = foot.querySelectorAll('td[data-col]');
+        if (!cells.length) return;
+        const label = foot.querySelector('.rekon-foot-label');
+
+        if (!q) {
+            cells.forEach(td => { td.textContent = td.dataset.orig; });
+            if (label) label.textContent = label.dataset.orig;
+            return;
+        }
+
+        const shown = Array.from(table.querySelectorAll('tbody tr'))
+            .filter(tr => !tr.classList.contains('rekon-detail-empty') && tr.style.display !== 'none');
+        cells.forEach(td => {
+            const col = Number(td.dataset.col);
+            let sum = 0, wsum = 0;
+            shown.forEach(tr => {
+                const c = tr.children[col];
+                if (c) { sum += parseFloat(c.dataset.v) || 0; wsum += parseFloat(c.dataset.w) || 0; }
+            });
+            if (td.dataset.ratio === '1') sum = wsum ? sum / wsum : 0;
+            td.textContent = td.dataset.dec !== '' ? dDec(sum, Number(td.dataset.dec)) : fmtNum(sum);
+        });
+        if (label) {
+            label.textContent = `Total (hasil cari: ${fmtNum(shown.length)} baris)`
+                + (table.dataset.trunc === '1' ? ' — dari baris yang dimuat' : '');
+        }
+    }
+
+    const dSub = (title, html, badge) =>
+        `<div class="rekon-detail-subtitle">${title}${badge || ''}</div>${html}`;
+
+    function dSection(title, inner) {
+        return `<div class="rekon-detail-section"><div class="rekon-detail-section-title">${title}</div>${inner}</div>`;
+    }
+
+    function dTabs(items) {
+        const gid = 'dtab' + (++dSeq);
+        const nav = items.map((it, i) =>
+            `<button type="button" class="rekon-detail-tab ${i === 0 ? 'active' : ''}" data-group="${gid}" data-index="${i}">${it.label}</button>`).join('');
+        const panes = items.map((it, i) =>
+            `<div class="rekon-detail-pane" data-group="${gid}" data-index="${i}" style="${i === 0 ? '' : 'display:none'}">${it.html}</div>`).join('');
+        return `<div class="rekon-detail-tabs">${nav}</div>${panes}`;
+    }
+
+    // ---------- Work In Process (Chutex) ----------
+    function dStagePane(stageKey, d, summaryValue, note) {
+        d = d || { row_count: 0, total: 0, groups: [], rows: [] };
+        const head = `<div class="mb-2"><strong>Total ${fmtNum(d.total)}</strong> dari ${fmtNum(d.row_count)} baris ${dRecon(d.total, summaryValue, 'Bandingkan dengan angka di card pipeline')}${note ? `<div class="rekon-detail-note">${note}</div>` : ''}</div>`;
+
+        const isQc = stageKey === 'QC';
+        const groupCols = isQc
+            ? [
+                { label: 'Code Prod (OCF)', val: r => dv(r.code_prod) },
+                { label: 'Jumlah Input', right: true, val: r => fmtNum(r.doc_count) },
+                { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
+            ]
+            : [
+                { label: 'Code Prod (CPO / OCF)', val: r => dv(r.code_prod) },
+                { label: 'Nama Barang', val: r => dv(r.barang_name) },
+                { label: 'Jumlah Hari', right: true, val: r => dDays(r.active_days) },
+                { label: 'Tgl Awal', val: r => dDate(r.first_date) },
+                { label: 'Tgl Akhir', val: r => dDate(r.last_date) },
+                { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
+            ];
+        const groupFootSpan = isQc ? 2 : 5;
+        const groupTable = dGrid(groupCols, d.groups, {
+            foot: dFoot(groupFootSpan, [dS(fmtNum(d.total), 'jumlah')]),
+            total: null,
+        });
+
+        return head
+            + dSub('Rekap per Code Prod' + (isQc ? '' : ' & Barang'), groupTable);
+    }
+
+    function dRenderWip(json, bd) {
+        const pipeline  = json.productionPipeline || {};
+        const wip = bd.wip || {};
+
+        const p = pipeline;
+
+        const stageDefs = [
+            ['Cutting', 'Cutting', p.dept_cutting, 'Dept Cutting, kategori Bahan Setengah Jadi.'],
+            ['Sewing', 'Sewing', p.dept_sewing, 'Dept Sewing, kategori Barang Jadi.'],
+            ['QC', 'QC', p.dept_qc, 'Sumber tabel mon_prod_qc (import Excel), scope lewat Code Prod = kode OCF.'],
+            ['Packing', 'Packing', p.dept_packing, 'Dept Packing, kategori Barang Jadi.'],
+            ['Warehouse', 'CT-PAT', p.dest_warehouse, 'Tujuan Warehouse (semua dept asal), kategori Barang Jadi.'],
+            ['basis_dest_sewing', 'Basis: Tujuan Sewing', p.dest_sewing, 'Pembanding untuk Loss Sewing (Output Sewing − Tujuan Sewing).'],
+            ['basis_dest_packing', 'Basis: Tujuan Packing', p.dest_packing, 'Pembanding untuk Loss Packing (Output Packing − Tujuan Packing).'],
+        ];
+        const tabs = dTabs(stageDefs.filter(([key]) => !HIDDEN_STAGES.includes(key)).map(([key, label, sumVal, note]) => ({
+            label,
+            html: dStagePane(key, wip[key], sumVal, note),
+        })));
+
+        return dSection('Work In Process (Chutex)',
+            dSub('Breakdown per Tahap', tabs)
+        );
+    }
+
+    // ---------- Sabkon Process ----------
+    function dRenderSabkon(json, bd) {
+        const s = bd.sabkon || { row_count: 0, totals: {}, by_supplier: [], rows: [] };
+
+        const noFilterNote = (s.row_count === 0)
+            ? '<div class="rekon-detail-note">Sabkon hanya di-scope lewat filter OCF (no_order) — kosong bila OCF tidak dipilih atau tidak ada order subkon untuk OCF ini.</div>'
+            : '';
+
+        return dSection('Sabkon Process', noFilterNote);
+    }
+
+    // ---------- Material (Fabric / Sewing Trim / Packing Trim) ----------
+    function dMaterialRecap(rows, labelFn) {
+        return dGrid([
+            { label: 'Material', val: r => escapeHtml(labelFn(r)) },
+            { label: 'Nama Barang', val: r => dv(r.real_barang_name || r.barang_name) },
+            { label: 'Need', right: true, val: r => fmtNum(r.need_qty) },
+            { label: 'Order', right: true, val: r => fmtNum(r.order_qty) },
+            { label: 'Received', right: true, val: r => fmtNum(r.received_qty) },
+            { label: 'Out Prod', right: true, val: r => fmtNum(r.out_prod_qty) },
+            { label: 'Stock', right: true, val: r => fmtNum(r.stock_qty) },
+            { label: 'Order %', right: true, val: r => fmtPct(r.order_pct) },
+            { label: 'Received %', right: true, val: r => fmtPct(r.received_pct) },
+            { label: 'Out Prod %', right: true, val: r => fmtPct(r.out_prod_pct) },
+            { label: 'Stock %', right: true, val: r => fmtPct(r.stock_pct) },
+            { label: 'Harga Total', right: true, val: r => fmtNum(r.harga_total) },
+        ], rows);
+    }
+
+    // Rekap per Fabric: urutan kolom Order, Order %, Received, Received %,
+    // Out WIP Req (+%), Out WIP Doc (+%), Stock (+%), Harga Total.
+    function dFabricRecap(rows, labelFn) {
+        return dGrid([
+            { label: 'Material', val: r => escapeHtml(labelFn(r)) },
+            { label: 'Nama Barang', val: r => dv(r.real_barang_name || r.barang_name) },
+            { label: 'Order (KGM)', right: true, val: r => fmtNum(r.order_qty) },
+            { label: 'Order %', right: true, val: r => fmtPct(r.order_pct) },
+            { label: 'Received (KGM)', right: true, val: r => fmtNum(r.received_qty) },
+            { label: 'Received %', right: true, val: r => fmtPct(r.received_pct) },
+            { label: 'Out WIP Req (KGM)', right: true, val: r => fmtNum(r.out_req_qty) },
+            { label: 'Out WIP Req %', right: true, val: r => fmtPct(r.out_req_pct) },
+            { label: 'Out WIP Doc (KGM)', right: true, val: r => fmtNum(r.out_doc_qty) },
+            { label: 'Out WIP Doc %', right: true, val: r => fmtPct(r.out_doc_pct) },
+            { label: 'Stock (KGM)', right: true, val: r => fmtNum(r.stock_qty) },
+            { label: 'Stock %', right: true, val: r => fmtPct(r.stock_pct) },
+            { label: 'Harga Total', right: true, val: r => fmtNum(r.harga_total) },
+        ], rows);
+    }
+
+    function dRenderFabricAchievement(json, bd) {
+        const maRows = json.materialAchievement || [];
+        const fabricRows = maRows.filter(r => r.material_group === 'fabric')
+            .map((r, idx) => ({ ...r, real_barang_name: r.barang_name, label: `Fabric ${String.fromCharCode(65 + idx)}` }));
+        return dSection('Fabric Achievement',
+            dSub('Rekap per Fabric', dFabricRecap(fabricRows, r => r.label))
+        );
+    }
+
+    function dRenderMaterialAchievement(json, bd) {
+        const maRows = json.materialAchievement || [];
+        const trimRows = [
+            ...maRows.filter(r => r.material_group === 'aksesoris').map(r => ({ ...r, label: `Sewing Trim — ${r.barang_name}` })),
+            ...maRows.filter(r => r.material_group === 'packing').map(r => ({ ...r, label: `Packing Trim — ${r.barang_name}` })),
+        ];
+        const recapSewing  = trimRows.filter(r => r.material_group === 'aksesoris');
+        const recapPacking = trimRows.filter(r => r.material_group === 'packing');
+
+        const tabs = dTabs([
+            {
+                label: 'Sewing Trim',
+                html: dSub('Rekap per Material', dMaterialRecap(recapSewing, r => 'Sewing Trim')),
+            },
+            {
+                label: 'Packing Trim',
+                html: dSub('Rekap per Material', dMaterialRecap(recapPacking, r => 'Packing Trim')),
+            },
+        ]);
+
+        return dSection('Material Achievement', tabs);
+    }
+
+    // ---------- Fabric Usage Percentage ----------
+    function dRenderFabricUsage(json, bd) {
+        const fu = json.fabricUsage || {};
+        const d  = bd.fabric_usage || { scrap: { groups: [] } };
+        const sc = d.scrap || { total: 0, row_count: 0, groups: [] };
+
+        const scrapTable = dGrid([
+            { label: 'Code Prod (CPO / OCF)', val: r => dv(r.code_prod) },
+            { label: 'Scrap', right: true, val: r => fmtNum(r.jumlah) },
+        ], sc.groups, { foot: dFoot(1, [dS(fmtNum(sc.total), 'jumlah')]) });
+
+        return dSection('Fabric Usage Percentage',
+            dSub('Scrap per Code Prod (mon_prod_lines)', scrapTable, dRecon(sc.total, fu.scrap_qty, 'Scrap breakdown vs summary'))
+        );
+    }
+
+    // ---------- Shipment By Date ----------
+    function dRenderShipment(json, bd) {
+        const p  = json.productionPipeline || {};
+        const s  = bd.shipment || { totals: { all: {}, barang_jadi: {} }, by_date: [], rows: [] };
+        const ta = (s.totals || {}).all || {};
+        const tj = (s.totals || {}).barang_jadi || {};
+
+        // Per Tanggal: cukup dokumen BC 3.0 saja (service sudah
+        // memfilter; filter di sini menjaga tampilan tetap benar bila payload lama).
+        const isBc30 = r => String(r.jenis_doc ?? '').trim().toUpperCase() === 'BC 3.0';
+        const byDateRows = (s.by_date || []).filter(isBc30);
+        const tb = (s.totals || {}).bc30 || {
+            row_count: dSum(byDateRows, 'row_count'),
+            jumlah_barang: dSum(byDateRows, 'jumlah_barang'),
+            nilai_barang: dSum(byDateRows, 'nilai_barang'),
+            jumlah_doc: dSum(byDateRows, 'jumlah_doc'),
+        };
+        // CM Cost/Pce = nilai_barang / jumlah_doc (0 bila jumlah_doc = 0).
+        const cmPerPce = (nilai, doc) => (parseFloat(doc) || 0) ? (parseFloat(nilai) || 0) / parseFloat(doc) : 0;
+        const byDate = dGrid([
+            { label: 'Tgl Bukti', val: r => dDate(r.tgl_bukti) },
+            { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
+            { label: 'Total CM Price', right: true, val: r => fmtNum(r.nilai_barang) },
+            { label: 'CM Cost/Pce', right: true, val: r => dDec(cmPerPce(r.nilai_barang, r.jumlah_doc), 4) },
+        ], byDateRows, {
+            foot: dFoot(1, [
+                dS(fmtNum(tb.jumlah_barang), 'jumlah_barang'),
+                dS(fmtNum(tb.nilai_barang), 'nilai_barang'),
+                dS(dDec(cmPerPce(tb.nilai_barang, tb.jumlah_doc), 4), 'nilai_barang', 4, 'jumlah_doc'),
+            ]),
+        });
+
+        const shipByDateTotal = dSum(json.shipmentByDate || [], 'jumlah_barang');
+
+        return dSection('Shipment By Date',
+            `<div class="rekon-detail-note mb-2">Grafik memakai semua kategori (${fmtNum(ta.jumlah_barang)} Pcs)${dRecon(ta.jumlah_barang, shipByDateTotal, 'Total breakdown vs total grafik').replace('ml-1', 'ml-1')}; box "Shipment (Total)" di pipeline hanya Barang Jadi (${fmtNum(tj.jumlah_barang)} Pcs).</div>`
+            + dSub('Per Tanggal — BC 3.0 (mon_shipments)', byDate)
+        );
+    }
+
+    function renderDetailAccordion(json) {
+        detailState.json = json;
+        detailState.dirty = true;
+        if (detailState.open) drawDetailAccordion();
+    }
+
+    function drawDetailAccordion() {
+        const body = document.getElementById('rekon-detail-body');
+        const json = detailState.json;
+        if (!body || !json) return;
+
+        const bd = json.detailBreakdown || {};
+        if (!Object.keys(bd).length) {
+            body.innerHTML = '<div class="text-center text-muted small py-3">Belum ada data detail — pilih filter terlebih dahulu.</div>';
+            detailState.dirty = false;
+            return;
+        }
+
+        body.innerHTML = [
+            dRenderShipment(json, bd),
+            dRenderWip(json, bd),
+            dRenderSabkon(json, bd),
+            dRenderFabricAchievement(json, bd),
+            dRenderFabricUsage(json, bd),
+            dRenderMaterialAchievement(json, bd),
+        ].join('');
+        detailState.dirty = false;
+    }
+
+    // Toggle accordion (show/hide) -- tidak bergantung versi Bootstrap.
+    // Tab & filter tabel memakai event delegation supaya tetap jalan
+    // setelah isi accordion di-render ulang.
+    (function initDetailAccordion() {
+        const toggle = document.getElementById('rekon-detail-toggle');
+        const panel  = document.getElementById('rekon-detail-collapse');
+        const body   = document.getElementById('rekon-detail-body');
+        if (!toggle || !panel || !body) return;
+
+        const flip = () => {
+            const open = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+            detailState.open = !open;
+            if (!open && detailState.dirty) drawDetailAccordion();
+            $(panel).stop(true, true)[open ? 'slideUp' : 'slideDown'](180);
+        };
+        toggle.addEventListener('click', flip);
+        toggle.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); }
+        });
+
+        body.addEventListener('click', (e) => {
+            const tab = e.target.closest('.rekon-detail-tab');
+            if (!tab) return;
+            const gid = tab.dataset.group, idx = tab.dataset.index;
+            body.querySelectorAll(`.rekon-detail-tab[data-group="${gid}"]`).forEach(b => b.classList.toggle('active', b.dataset.index === idx));
+            body.querySelectorAll(`.rekon-detail-pane[data-group="${gid}"]`).forEach(p => { p.style.display = (p.dataset.index === idx) ? '' : 'none'; });
+        });
+
+        body.addEventListener('input', (e) => {
+            const input = e.target.closest('.rekon-detail-filter');
+            if (!input) return;
+            const table = document.getElementById(input.dataset.target);
+            if (!table) return;
+            const q = input.value.trim().toLowerCase();
+            table.querySelectorAll('tbody tr').forEach(tr => {
+                tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+            });
+            dUpdateFoot(table, q);
+        });
+    })();
+
+    // ========== ACCORDION SECTION (Fabric/Usage/Shipment & Material Achievement) ==========
+    // Toggle show/hide generik untuk semua header `.rekon-acc-toggle[data-acc-target]`.
+    // (DETAIL DATA punya init sendiri di atas karena render isinya ditunda.)
+    // Canvas Chart.js yang ada di dalam panel di-resize setelah panel terbuka,
+    // karena chart yang dibuat saat panel tertutup (display:none) berukuran 0.
+    function resizeChartsIn(panel) {
+        if (typeof Chart === 'undefined' || !Chart.getChart) return;
+        panel.querySelectorAll('canvas').forEach(cv => {
+            const ch = Chart.getChart(cv);
+            if (ch) ch.resize();
+        });
+    }
+
+    (function initSectionAccordions() {
+        document.querySelectorAll('.rekon-acc-toggle[data-acc-target]').forEach(toggle => {
+            const panel = document.getElementById(toggle.dataset.accTarget);
+            if (!panel) return;
+
+            const flip = () => {
+                const open = toggle.getAttribute('aria-expanded') === 'true';
+                toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+                if (open) {
+                    $(panel).stop(true, true).slideUp(180);
+                } else {
+                    $(panel).stop(true, true).slideDown(180, () => resizeChartsIn(panel));
+                }
+            };
+
+            toggle.addEventListener('click', flip);
+            toggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); }
+            });
+        });
+    })();
+
     function renderAll(json) {
         renderHeader(json.header);
         renderKpi(json.summary);
@@ -1802,6 +2397,9 @@ function updateFormulaWithColors() {
         renderShipmentByDate(json.shipmentByDate);
 
         renderShipCalDetailTable(json.shipmentDetail);
+
+        // Detail data (accordion) di bawah card Material Achievement
+        renderDetailAccordion(json);
 
         applyCascadedFilterOptions(json);
     }
@@ -2173,6 +2771,98 @@ function updateFormulaWithColors() {
     });
 
     if (btnSyncAll) btnSyncAll.addEventListener('click', runSyncAll);
+
+    /**
+     * Lock Data (2 mode):
+     *  - OCF : butuh 1 OCF terpilih.
+     *  - CPO : butuh 1 CPO (uraian) terpilih; snapshot mencakup seluruh OCF di CPO itu.
+     * SweetAlert menanyakan mode + jenis lock (Short Ship / Partial / Complete).
+     * Snapshot dihitung di server (RekonLockService) memakai filter dashboard.
+     * Catatan: di halaman versi OCF-only (dropdown CPO disembunyikan) mode CPO dinonaktifkan.
+     */
+    const lockUrl = app.dataset.lockUrl;
+    const btnLockOcf = document.getElementById('btn-lock-ocf');
+
+    function submitLock(mode, lockType) {
+        const f = currentFilters();
+        const label = mode === 'cpo' ? 'CPO' : 'OCF';
+        Swal.fire({
+            title: `Mengunci data ${label}...`,
+            html: 'Mohon tunggu, sedang mengambil snapshot data.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        fetch(lockUrl, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...f, mode: mode, lock_type: lockType }),
+        })
+            .then(async (response) => {
+                const json = await response.json().catch(() => ({}));
+                if (!response.ok || !json.success) {
+                    const detail = json.errors ? Object.values(json.errors).flat().join('<br>') : '';
+                    throw new Error(json.message || detail || 'Lock gagal.');
+                }
+                return json;
+            })
+            .then((json) => Swal.fire({ icon: 'success', title: 'Berhasil di-lock', html: escapeHtml(json.message) }))
+            .catch((err) => Swal.fire({ icon: 'error', title: 'Gagal', html: escapeHtml(err.message || 'Lock gagal diproses.') }));
+    }
+
+    btnLockOcf?.addEventListener('click', () => {
+        const f = currentFilters();
+        const cpoAvailable = Object.prototype.hasOwnProperty.call(f, 'uraian'); // false di versi OCF-only
+        const defaultMode = (!f.ocf && cpoAvailable && f.uraian) ? 'cpo' : 'ocf';
+        const radios = (name, opts, checked, disabledKeys = []) => Object.entries(opts).map(([v, t]) =>
+            `<label class="mr-3 mb-1" style="cursor:pointer"><input type="radio" name="${name}" value="${v}" ${v === checked ? 'checked' : ''} ${disabledKeys.includes(v) ? 'disabled' : ''}> ${t}</label>`
+        ).join('');
+
+        Swal.fire({
+            icon: 'question',
+            title: 'Lock Data',
+            html: `
+                <div class="text-left">
+                    <div class="font-weight-bold mb-1">Mode</div>
+                    <div class="mb-1">${radios('lock-mode', { ocf: 'Lock by OCF', cpo: 'Lock by CPO' }, defaultMode, cpoAvailable ? [] : ['cpo'])}</div>
+                    <div id="lock-target" class="small mb-3"></div>
+                    <div class="font-weight-bold mb-1">Jenis lock</div>
+                    <div>${radios('lock-type', { shortship: 'Short Ship', partial: 'Partial', complete: 'Complete' }, '')}</div>
+                    <small class="text-muted d-block mt-3">Data seluruh stage &amp; Rekap per Fabric dikunci pada periode tanggal hari ini.</small>
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Lock',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#2e75b6',
+            didOpen: () => {
+                const popup = Swal.getPopup();
+                const target = popup.querySelector('#lock-target');
+                const paint = () => {
+                    const mode = popup.querySelector('input[name="lock-mode"]:checked')?.value || 'ocf';
+                    const val = mode === 'cpo' ? f.uraian : f.ocf;
+                    const lbl = mode === 'cpo' ? 'CPO' : 'OCF';
+                    target.innerHTML = val
+                        ? `${lbl} terpilih: <strong>${escapeHtml(val)}</strong>${mode === 'cpo' ? ' <span class="text-muted">(seluruh OCF di dalam CPO ini)</span>' : ''}`
+                        : `<span class="text-danger">${lbl} belum dipilih di filter dashboard.</span>`;
+                };
+                popup.querySelectorAll('input[name="lock-mode"]').forEach((el) => el.addEventListener('change', paint));
+                paint();
+            },
+            preConfirm: () => {
+                const popup = Swal.getPopup();
+                const mode = popup.querySelector('input[name="lock-mode"]:checked')?.value || 'ocf';
+                const type = popup.querySelector('input[name="lock-type"]:checked')?.value;
+                const val = mode === 'cpo' ? f.uraian : f.ocf;
+                if (!val) return Swal.showValidationMessage(`Pilih satu ${mode === 'cpo' ? 'CPO' : 'OCF'} terlebih dahulu di filter dashboard.`);
+                if (!type) return Swal.showValidationMessage('Pilih salah satu jenis lock.');
+                return { mode, type };
+            },
+        }).then((res) => {
+            if (res.isConfirmed && res.value) submitLock(res.value.mode, res.value.type);
+        });
+    });
 
     /**
      * Import Stage Remark (mon_stage_remarks) & Prod QC (mon_prod_qc):

@@ -105,15 +105,16 @@ use App\Http\Controllers\FoodMenuController;
 use App\Http\Controllers\FoodOrderController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\MonitoringDashboardController;
+use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\MonitoringRekonsiliasiController;
 use App\Http\Controllers\MonStageDataController;
 use App\Http\Controllers\OrderImportController;
 use App\Http\Controllers\OutsourceController;
 use App\Http\Controllers\PdfDocumentController;
 use App\Http\Controllers\PdfExtractionController;
+use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
-use App\Http\Controllers\QcInsentifMasterController;
 
 /*
 |--------------------------------------------------------------------------
@@ -174,8 +175,6 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'permission']);
     Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'permission']);
     Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
-    Route::get('/biodata/generate-pdf/{npk}', [BiodataController::class, 'generatePdf'])->name('biodata.generate-pdf')->middleware(['auth', 'permission']);
-    Route::get('/biodata/export-all-docs/{npk}', [BiodataController::class, 'exportAllDocs'])->name('biodata.export-all-docs')->middleware(['auth', 'permission']);
 
 
     // PKWT
@@ -250,6 +249,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/role/update', [RoleController::class, 'update'])->name('role.update')->middleware(['auth', 'permission']);
 
     //User
+    Route::post('/user/toggle/{id}', [UserController::class, 'toggleStatus'])->name('user.toggle')->middleware(['auth', 'permission']);
     Route::get('/user/index', [UserController::class, 'index'])->name('user.index')->middleware(['auth', 'permission']);
     Route::get('/user/profile', [UserController::class, 'profile'])->name('user.profile');
     Route::post('/user/update', [UserController::class, 'update'])->name('user.update')->middleware(['auth', 'permission']);
@@ -314,6 +314,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/payroll-master/store', [PayrollMasterController::class, 'store'])->name('payroll-master.store')->middleware(['auth', 'permission']);
     Route::post('/payroll-master/import', [PayrollMasterController::class, 'import'])->name('payroll-master.import')->middleware(['auth', 'permission']);
     Route::get('/payroll-master/template', [PayrollMasterController::class, 'template'])->name('payroll-master.template')->middleware(['auth', 'permission']);
+    Route::get('/payroll-master/export', [PayrollMasterController::class, 'export'])->name('payroll-master.export')->middleware(['auth', 'permission']);
 
 
     // Thr Period
@@ -977,6 +978,31 @@ Route::group(['middleware' => 'auth'], function () {
     });
 
     Route::middleware(['auth', 'permission'])
+        ->prefix('monitoring/rekonsiliasi')->group(function () {
+            // Lock Data OCF (POST JSON dari tombol di Dashboard Reconciliation)
+            Route::post('/lock', [MonitoringRekonLockController::class, 'store'])
+                ->name('monitoring.rekonsiliasi.lock.store');
+
+            // Summary Rekonsiliasi
+            Route::get('/summary', [MonitoringRekonLockController::class, 'summaryPage'])
+                ->name('monitoring.rekonsiliasi.summary');
+            Route::get('/summary/data', [MonitoringRekonLockController::class, 'summaryData'])
+                ->name('monitoring.rekonsiliasi.summary.data');
+            Route::get('/summary/grade-template', [MonitoringRekonLockController::class, 'gradeTemplate'])
+                ->name('monitoring.rekonsiliasi.summary.grade-template');
+            Route::post('/summary/grade-import', [MonitoringRekonLockController::class, 'gradeImport'])
+                ->name('monitoring.rekonsiliasi.summary.grade-import');
+
+            Route::get('/summary/notes-template', [MonitoringRekonLockController::class, 'notesTemplate'])
+                ->name('monitoring.rekonsiliasi.summary.notes-template');
+            Route::post('/summary/notes-import', [MonitoringRekonLockController::class, 'notesImport'])
+                ->name('monitoring.rekonsiliasi.summary.notes-import');
+
+            Route::post('/summary/status', [MonitoringRekonLockController::class, 'updateStatus'])
+                ->name('monitoring.rekonsiliasi.summary.update-status');
+        });
+
+    Route::middleware(['auth', 'permission'])
         ->prefix('monitoring/rekonsiliasi')
         ->name('monitoring.rekonsiliasi.')
         ->group(function () {
@@ -1177,6 +1203,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/', [ExchangeRateController::class, 'index'])->name('index');
         Route::get('/today', [ExchangeRateController::class, 'today'])->name('today');
         Route::post('/sync', [ExchangeRateController::class, 'sync'])->name('sync');
+        Route::post('/sync-frankfurter', [ExchangeRateController::class, 'syncFrankfurter'])->name('sync-frankfurter');
+        Route::put('/{exchangeRate}', [ExchangeRateController::class, 'update'])->name('update');
     });
 
     Route::middleware(['auth', 'permission'])->group(function () {

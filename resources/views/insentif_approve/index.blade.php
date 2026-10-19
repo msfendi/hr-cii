@@ -346,6 +346,7 @@
                  row.cutting_insentif ??
                  row.heat_insentif ??
                  row.sixs_insentif ??
+                 row.qc_insentif ??
                  0;
          }
 
@@ -583,6 +584,7 @@
                 row.cutting_insentif ??
                 row.heat_insentif ??
                 row.sixs_insentif ??
+                row.qc_insentif ??
                 0;
 
                 return formatRupiah(value);
@@ -624,6 +626,7 @@
          row.cutting_insentif ??
          row.heat_insentif ??
          row.sixs_insentif ??
+         row.qc_insentif ??
          0;
          
          return sum + Number(val);
@@ -647,7 +650,8 @@
              'pad_insentif':     { label: 'Pad Print',  color: '#1cc88a' },
              'cutting_insentif': { label: 'Cutting',    color: '#f6c23e' },
              'heat_insentif':    { label: 'Heat Seal',  color: '#e74a3b' },
-             'sixs_insentif':    { label: '6S',         color: '#36b9cc' }
+             'sixs_insentif':    { label: '6S',         color: '#36b9cc' },
+             'qc_insentif':      { label: 'QC',         color: '#fd7e14' }
          };
 
          $(document).on('click','.btn-detail',function(){
@@ -701,6 +705,9 @@
          }
          else if(component==='sixs_insentif'){
          url='/employee-6s-assignment/'+period+'/check';
+         }
+         else if(component==='qc_insentif'){
+         url='/qc-insentif-master/'+period+'/check';
          }
          
          $('#insentifTable_processing').show();

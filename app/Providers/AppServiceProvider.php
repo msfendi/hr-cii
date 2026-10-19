@@ -7,7 +7,7 @@ use App\Models\Magang;
 use App\Models\PKWT;
 use App\Models\User;
 use App\Observers\GlobalObserver;
-use App\Observers\MagangObserver;
+// use App\Observers\MagangObserver;
 use App\Observers\PkwtObserver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\File;

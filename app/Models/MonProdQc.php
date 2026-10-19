@@ -10,6 +10,7 @@ class MonProdQc extends Model
 
     protected $fillable = [
         'code_prod',
+        'cpo',
         'department_id',
         'jumlah',
     ];

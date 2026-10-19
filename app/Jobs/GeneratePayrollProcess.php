@@ -19,6 +19,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use App\Services\PayrollRoleFilterService;
@@ -285,7 +286,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
                     WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                         AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1')
+                        AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','HD','CU')
                         AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
                         AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                         THEN 1
@@ -405,7 +406,7 @@ END AS special_overtime_hours
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','HD','CU')
                     AND CAST(overtimes.OVERTIME_DATE AS DATE) >= CAST(pk.TMK AS DATE)
                     AND (pk.TKK IS NULL OR CAST(overtimes.OVERTIME_DATE AS DATE) <= CAST(pk.TKK AS DATE))
                     THEN 1
@@ -424,7 +425,7 @@ END AS special_overtime_hours
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','HD','CU','H','BR','OUT','SD')
                     THEN JUMLAH_JAM_LEMBUR
             END AS absence_status
         ")
@@ -1097,6 +1098,17 @@ END AS special_overtime_hours
         $sewingInsentifComponent = PayrollComponent::where('code', 'sewing_insentif')->first();
         $sewingInsentifFormula = json_decode($sewingInsentifComponent->formula, true);
 
+        $qcInsentifComponent = PayrollComponent::where('code', 'qc_insentif')->first();
+        $qcInsentifFormula = json_decode($qcInsentifComponent->formula, true);
+
+        // Total potongan QC violation untuk periode berjalan (tabel qc_violations,
+        // kolom percentage). Dikirim ke formula role QC sebagai variable
+        // `qc_violation`, mis. 50 => ((100-qc_violation)/100) = 0.5.
+        // Beberapa baris pada periode yang sama dijumlahkan, dibatasi 0-100.
+        $qcViolationPercentage = min(100, max(0, (float) DB::table('qc_violations')
+            ->where('period_id', $period->id)
+            ->sum('percentage')));
+
         $cuttingInsentifComponent = PayrollComponent::where('code', 'cutting_insentif')->first();
         $cuttingInsentifFormula = json_decode($cuttingInsentifComponent->formula, true);
 
@@ -1171,6 +1183,61 @@ END AS special_overtime_hours
             // karakter (MA, CT, BR, S1, dll)
             return false;
         };
+
+        /*
+        |--------------------------------------------------------------------------
+        | MEAL ALLOWANCE (meal_allowance = meal_days * first_kurs)
+        |--------------------------------------------------------------------------
+        | meal_days : jumlah hari Sabtu + Minggu + hari libur nasional (tabel
+        |             `holidays`) di periode payroll, dikurangi tanggal-tanggal
+        |             yang karyawan tsb absence di tabel `overtimes`
+        |             (JUMLAH_JAM_LEMBUR berisi karakter, bukan angka).
+        | first_kurs: kurs_tengah (exchange_rates) pada rate_date PERTAMA di
+        |             bulan periode payroll.
+        | Hanya dipakai oleh komponen meal_allowance; tidak mengubah logic lain.
+        |--------------------------------------------------------------------------
+        */
+        $mealDateSet = [];
+        $mealCursor  = $periodStart->copy();
+        while ($mealCursor->lte($periodEnd)) {
+            if ($mealCursor->isSaturday() || $mealCursor->isSunday()) {
+                $mealDateSet[$mealCursor->toDateString()] = true;
+            }
+            $mealCursor->addDay();
+        }
+
+        $mealHolidayDates = DB::table('holidays')
+            ->whereBetween('holiday_date', [$period->start_date, $period->end_date])
+            ->pluck('holiday_date');
+        foreach ($mealHolidayDates as $mealHolidayDate) {
+            $mealDateSet[substr((string) $mealHolidayDate, 0, 10)] = true;
+        }
+
+        $mealTotalDays = count($mealDateSet);
+
+        $mealAbsenceByNpk = [];
+        foreach ($allOvertimesForInsentif as $mealNpk => $mealRows) {
+            foreach ($mealRows as $mealRow) {
+                $mealDate = substr((string) $mealRow->OVERTIME_DATE, 0, 10);
+                if (!isset($mealDateSet[$mealDate])) {
+                    continue;
+                }
+                $mealLembur = trim((string) $mealRow->JUMLAH_JAM_LEMBUR);
+                if ($mealLembur !== '' && !is_numeric($mealLembur)) {
+                    $mealAbsenceByNpk[$mealNpk][$mealDate] = true;
+                }
+            }
+        }
+
+        $firstKurs = (float) (DB::table('exchange_rates')
+            ->whereBetween('rate_date', [
+                $periodStart->copy()->startOfMonth()->toDateString(),
+                $periodStart->copy()->endOfMonth()->toDateString(),
+            ])
+            ->whereRaw("UPPER(LTRIM(RTRIM(currency_from))) = 'USD'")
+            ->whereRaw("UPPER(LTRIM(RTRIM(currency_to))) = 'IDR'")
+            ->orderBy('rate_date')
+            ->value('kurs_tengah') ?? 0);
 
         // Sewing violations untuk operator (per id_dept) dan untuk supervisor
         // (per range line). Kita ambil sekali, sudah join ke DEPT supaya bisa
@@ -1304,6 +1371,11 @@ END AS special_overtime_hours
             // tambahan: khusus untuk cek TKK apakah jatuh di periode berjalan
             $isTkkInPeriod = ($tkk && $tkk->between($periodStart, $periodEnd)) ? 1 : 0;
 
+            // meal_days: hanya karyawan expat (komponen "Meal Allowance Expat")
+            $mealDays = $employee->IS_EXPAT == '1'
+                ? (float) max(0, $mealTotalDays - count($mealAbsenceByNpk[$employee->NPK] ?? []))
+                : 0.0;
+
             $inputVariables = [
                 'basic_salary'   => (float) $employee->salary,
                 'allowance'      => (float) $employee->allowance,
@@ -1315,6 +1387,8 @@ END AS special_overtime_hours
                 'pph_21'         => (float) $employee->pph21,
                 'daily_salary'   => (float) $employee->daily_salary,
                 'count_days'     => (float) $count_days,
+                'meal_days'      => (float) $mealDays,
+                'first_kurs'     => (float) $firstKurs,
                 'tanggungan'     => (float) $employee->TANGGUNGAN,
                 'percentage'     => (float) $employee->percentage,
 
@@ -1379,6 +1453,8 @@ END AS special_overtime_hours
             foreach ($components as $component) {
                 if ($component->code === 'thr') continue;
                 if ($component->code === 'compensation') continue;
+                // meal_allowance hanya berlaku untuk karyawan expat (IS_EXPAT = 1)
+                if ($component->code === 'meal_allowance' && $employee->IS_EXPAT != '1') continue;
 
                 if ($component->calculation_method === 'fixed') {
                     $amount = $component->value;
@@ -1633,7 +1709,7 @@ END AS special_overtime_hours
                                 | CHIEF / MEKANIK / MEKANIK LEADER
                                 |--------------------------------------------
                                 */
-                                $validRoles = ['chief', 'mekanik', 'mekanik_leader'];
+                                $validRoles = ['chief', 'mekanik', 'mekanik_leader', 'section_head'];
 
                                 if (!in_array($assignment->role, $validRoles)) {
                                     continue;
@@ -1689,12 +1765,34 @@ END AS special_overtime_hours
                                 $collectionDay = collect([]);
                                 $collectionLines = collect([]);
 
-                                $jumlahLine = DB::table('line_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereBetween('line_number', [$lineStart, $lineEnd])
-                                    ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
-                                    ->get();
+                                // jumlahLine = jumlah line DISTINCT (dalam range section) yang muncul pada
+                                // tanggal penugasan karyawan di employee_line_assignments (hanya tanggal
+                                // yang benar-benar dihitung: lolos TKK & validasi overtime), BUKAN seluruh
+                                // line di section selama satu periode. Dengan begitu chief/mekanik/
+                                // mekanik_leader/section_head yang hanya bertugas sebagian tanggal dihitung
+                                // proporsional sesuai tanggal assignment-nya.
+                                $assignedValidDates = [];
+                                foreach ($grouped as $assignedDay) {
+                                    if ($tkkDate && $assignedDay->date >= $tkkDate) {
+                                        continue;
+                                    }
+                                    if (!$isValidOvertime($assignedDay->date)) {
+                                        continue;
+                                    }
+                                    $assignedValidDates[] = $assignedDay->date;
+                                }
+
+                                $jumlahLineCount = empty($assignedValidDates)
+                                    ? 0
+                                    : (int) DB::table('line_efficiencies')
+                                        ->where('period_id', $period->id)
+                                        ->whereIn('date', $assignedValidDates)
+                                        ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                        ->distinct()
+                                        ->count('line_number');
+
+                                // dibungkus agar pemakaian $jumlahLine->first()->jumlah_line di bawah tetap valid
+                                $jumlahLine = collect([(object) ['jumlah_line' => $jumlahLineCount]]);
 
                                 foreach ($grouped as $day) {
 
@@ -1739,64 +1837,656 @@ END AS special_overtime_hours
                                 }
                             }
                         }
-                    } else if ($component->code === 'pad_insentif') {
+                    } else if ($component->code === 'qc_insentif') {
+                        $assignmentNpk = DB::table('employee_qc_assignments as ela')
+                            ->select('ela.npk', 'ela.role')
+                            ->where('ela.period_id', $period->id)
+                            ->where('ela.npk', $employee->NPK)
+                            ->distinct()
+                            ->get();
 
-                        $query = DB::table('pad_efficiencies')
+                        $tkkDate = !empty($employee->TKK)
+                            ? Carbon::parse($employee->TKK)->format('Y-m-d')
+                            : null;
+
+                        $amount = 0;
+
+                        /*
+                        |----------------------------------------------------
+                        | LOAD THRESHOLD
+                        |----------------------------------------------------
+                        */
+                        $thresholds = DB::table('insentif_thresholds')
+                            ->where('insentif_type', 'QC')
+                            ->where('type', 'Percentage')
+                            ->pluck('minimum', 'days');
+
+                        $getMinEfficiency = function ($dayIndex) use ($thresholds) {
+
+                            if (isset($thresholds[$dayIndex])) {
+                                return $thresholds[$dayIndex];
+                            }
+
+                            return $thresholds->max();
+                        };
+
+                        // Validasi overtime pakai data yang sudah di-prefetch
+                        // sebelum loop (lihat $isValidOvertimeFor).
+                        $isValidOvertime = function ($date) use ($employee, $isValidOvertimeFor) {
+                            return $isValidOvertimeFor($employee->NPK, $date);
+                        };
+
+                        /*
+                        |----------------------------------------------------
+                        | OPERATOR (INLINE / ENDLINE / FQC)
+                        |----------------------------------------------------
+                        | SPV dipindahkan ke cabang CHIEF/QA (section-based)
+                        | karena formula QC SPV = (Total QC Incentive 1 Section
+                        | / Total Line) * 50%, bukan per-line seperti Operator.
+                        |----------------------------------------------------
+                        */
+                        $lineViolations = 0;
+                        foreach ($assignmentNpk as $assignment) {
+                            if (empty($assignment->role)) {
+                                continue;
+                            }
+                            if (in_array(strtolower((string) $assignment->role), ['inline', 'endline', 'fqc'], true)) {
+
+                                preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
+                                $defaultLine = $matches[0] ?? null;
+
+                                $lineefficiencies = DB::table('employee_qc_assignments as ela')
+                                    ->leftJoin('qc_efficiencies as le', function ($join) {
+                                        $join->on('le.period_id', '=', 'ela.period_id')
+                                            ->on('le.line_number', '=', 'ela.line_number')
+                                            ->on('le.date', '=', 'ela.start_date')
+                                            ->where('le.dept', '=', 'qc');
+                                    })
+
+                                    ->leftJoinSub(
+                                        DB::table('employee_qc_assignments')
+                                            ->select(
+                                                'period_id',
+                                                'line_number',
+                                                'start_date',
+                                                DB::raw('MAX(work_hours) as max_work_hours')
+                                            )
+                                            ->groupBy(
+                                                'period_id',
+                                                'line_number',
+                                                'start_date'
+                                            ),
+                                        'max_wh',
+                                        function ($join) {
+                                            $join->on('max_wh.period_id', '=', 'ela.period_id')
+                                                ->on('max_wh.line_number', '=', 'ela.line_number')
+                                                ->on('max_wh.start_date', '=', 'ela.start_date');
+                                        }
+                                    )
+
+                                    ->where('ela.period_id', $period->id)
+                                    ->where('ela.npk', $employee->NPK)
+                                    // FIX ROLE GANDA: hanya assignment milik role ini
+                                    ->where('ela.role', $assignment->role)
+                                    ->whereBetween('le.date', [$period->start_date, $period->end_date])
+
+                                    ->select(
+                                        'ela.npk',
+                                        'le.line_number',
+                                        'le.efficiency',
+                                        'le.date',
+                                        'ela.work_hours',
+                                        'max_wh.max_work_hours'
+                                    )
+
+                                    ->orderBy('le.date')
+                                    ->get();
+
+                                // NOTE: reuses sewing_violations (sama seperti Line Insentif)
+                                // karena belum ada tabel violations khusus QC.
+                                // Cabang ini hanya menangani role operator QC
+                                // (inline, endline, fqc). SPV ada di cabang CHIEF/QA di bawah.
+                                $lineViolations = ($sewingViolationsByDept[$employee->ID_DEPT] ?? collect())->count();
+
+                                foreach ($lineefficiencies as $row) {
+
+                                    if ($tkkDate && $row->date >= $tkkDate) {
+                                        continue;
+                                    }
+
+                                    if (!$isValidOvertime($row->date)) {
+                                        continue;
+                                    }
+
+                                    // Cutoff di luar tier tertinggi sudah ditangani oleh
+                                    // getInsentifByDefectRate() sendiri (return 0 jika
+                                    // efficiency melebihi threshold terbesar), sama
+                                    // seperti QcInsentifMasterController::calculateQc().
+                                    $lineInsentif =
+                                        $this->getInsentifByDefectRate($row->efficiency, $qcInsentifFormula) * $row->work_hours / $row->max_work_hours;
+
+                                    $amount += $this->calculateRoleQcInsentif(
+                                        $assignment->role,
+                                        'qc',
+                                        $lineInsentif,
+                                        1,
+                                        $lineViolations,
+                                        $employee->violation_percentage,
+                                        $qcViolationPercentage
+                                    );
+                                }
+                            } else {
+
+                                /*
+                                |--------------------------------------------
+                                | CHIEF / QA / SPV (SECTION-BASED)
+                                |--------------------------------------------
+                                | SPV masuk ke sini karena formula QC SPV
+                                | berbasis Total QC Incentive dalam 1 Section
+                                | dibagi Total Line (sama seperti Chief & QA).
+                                |--------------------------------------------
+                                */
+                                $validRoles = ['chief', 'qa', 'qa_leader', 'spv'];
+
+                                if (!in_array($assignment->role, $validRoles)) {
+                                    continue;
+                                }
+
+                                if (in_array($assignment->role, ['qa', 'qa_leader'], true)) {
+
+                                    /*
+                                    |--------------------------------------------------------------------------
+                                    | QA / QA LEADER (sama dengan QcInsentifMasterController)
+                                    |--------------------------------------------------------------------------
+                                    | Sumber: employee_qc_assignments dengan line_number NULL, DISTINCT per
+                                    | tanggal + buyer + third_party.
+                                    | - third_party terisi : qc_efficiencies tanggal + buyer + third_party tsb.
+                                    | - third_party kosong : qc_efficiencies tanggal + buyer saja.
+                                    |     * NPK yang memegang third_party di buyer yang sama => assignment
+                                    |       kosong ikut third_party tsb (tidak dobel).
+                                    |     * Buyer yang punya baris third party (MUJI): hanya baris line_number
+                                    |       NULL (PQC + TENTAC).
+                                    |     * Buyer tanpa third party (GAP, SUKO): baris buyer di-distinct per
+                                    |       tanggal (1 defect rate per buyer).
+                                    | Nominal per entry = TOTAL insentif baris distinct x faktor role
+                                    | (qa 5/10, qa_leader 7/10) x potongan qc_violation PER BUYER.
+                                    | QA LEADER dibagi jumlah third_party di tanggal tsb.
+                                    |--------------------------------------------------------------------------
+                                    */
+                                    $qaRawAll = DB::table('employee_qc_assignments')
+                                        ->where('npk', $employee->NPK)
+                                        ->where('period_id', $period->id)
+                                        ->where('role', $assignment->role)
+                                        ->whereNull('line_number') // QA / QA leader: hanya assignment tanpa line_number
+                                        ->whereBetween('start_date', [
+                                            $period->start_date,
+                                            $period->end_date
+                                        ])
+                                        ->select('start_date as date', 'buyer', 'third_party')
+                                        ->orderBy('start_date')
+                                        ->get()
+                                        ->map(function ($row) {
+                                            $thirdParty = trim((string) ($row->third_party ?? ''));
+                                            $row->date        = substr((string) $row->date, 0, 10);
+                                            $row->third_party = $thirdParty !== '' ? $thirdParty : null;
+                                            $row->buyer       = trim((string) ($row->buyer ?? ''));
+
+                                            return $row;
+                                        })
+                                        ->values();
+
+                                    // FIX BUYER KOSONG: assignment tanpa buyer = berlaku untuk SEMUA buyer yang punya
+                                    // data qc_efficiencies (dept qa) pada tanggal tsb (termasuk SUKO, GAP, dst).
+                                    // Insentif tiap buyer dihitung terpisah lalu diakumulasi. Untuk buyer yang BUKAN
+                                    // assignment eksplisit NPK ini, nominal dibagi jumlah staf QA/QA leader yang
+                                    // memegang buyer itu pada tanggal tsb (staf lain + NPK ini).
+                                    $qaBlank = $qaRawAll->filter(fn($row) => $row->buyer === '')->values();
+                                    $qaRaw   = $qaRawAll->filter(fn($row) => $row->buyer !== '')->values();
+                                    $qaShareByDateBuyer = [];
+
+                                    if ($qaBlank->isNotEmpty()) {
+                                        $qaBuyersByDate = DB::table('qc_efficiencies')
+                                            ->where('period_id', $period->id)
+                                            ->where('dept', 'qa')
+                                            ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                                            ->whereNotNull('buyer')
+                                            ->where('buyer', '!=', '')
+                                            ->select('date', 'buyer')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->date, 0, 10))
+                                            ->map(fn($rows) => $rows->pluck('buyer')
+                                                ->map(fn($b) => trim((string) $b))
+                                                ->unique(fn($b) => strtoupper($b))
+                                                ->values());
+
+                                        $qaOtherStaff = DB::table('employee_qc_assignments')
+                                            ->where('period_id', $period->id)
+                                            ->whereIn('role', ['qa', 'qa_leader'])
+                                            ->where('npk', '!=', $employee->NPK)
+                                            ->whereNull('line_number')
+                                            ->whereNotNull('buyer')
+                                            ->where('buyer', '!=', '')
+                                            ->whereBetween('start_date', [$period->start_date, $period->end_date])
+                                            ->select('npk', 'buyer', 'start_date')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->start_date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                                            ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
+
+                                        $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
+                                            ->where('period_id', $period->id)
+                                            ->where('dept', 'qa')
+                                            ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
+                                            ->whereNotNull('third_party')
+                                            ->where('third_party', '!=', '')
+                                            ->select('date', 'buyer', 'third_party')
+                                            ->get()
+                                            ->groupBy(fn($r) => substr((string) $r->date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
+                                            ->map(fn($rows) => $rows->pluck('third_party')
+                                                ->map(fn($t) => strtoupper(trim((string) $t)))
+                                                ->unique()
+                                                ->count());
+
+                                        $qaExpanded = collect();
+
+                                        foreach ($qaBlank as $blankRow) {
+                                            foreach ($qaBuyersByDate->get($blankRow->date, collect()) as $blankBuyer) {
+                                                $shareKey = $blankRow->date . '|' . strtoupper($blankBuyer);
+
+                                                $qaExpanded->push((object) [
+                                                    'date'        => $blankRow->date,
+                                                    'buyer'       => $blankBuyer,
+                                                    'third_party' => null,
+                                                    'expanded'    => true,
+                                                ]);
+
+                                                // QA LEADER memegang SELURUH buyer; buyer yang pecah >= 2 third_party pada tanggal tsb (MUJI: PQC + TENTAC)
+                                                // sudah dibagi per third_party oleh staf QA masing-masing, jadi leader TIDAK dibagi jumlah staf.
+                                                // Pembagi staf hanya untuk buyer tanpa pecahan third_party (SUKO, GAP, dst).
+                                                $qaShareByDateBuyer[$shareKey] = ($assignment->role === 'qa_leader' && $qaThirdPartyCountByDateBuyer->get($shareKey, 0) >= 2)
+                                                    ? 1
+                                                    : $qaOtherStaff->get($shareKey, 0) + 1;
+                                            }
+                                        }
+
+                                        // Assignment eksplisit ditaruh DULU supaya unique() mempertahankan baris eksplisit
+                                        // (tidak dibagi) kalau buyer+tanggal yang sama juga muncul dari expand buyer kosong.
+                                        $qaRaw = $qaRaw->concat($qaExpanded)->values();
+                                    }
+
+
+                                    // third_party yang dipegang NPK ini per buyer.
+                                    $qaThirdPartyByBuyer = $qaRaw
+                                        ->filter(fn($row) => $row->third_party !== null)
+                                        ->groupBy(fn($row) => strtoupper($row->buyer))
+                                        ->map(fn($rows) => $rows->pluck('third_party')
+                                            ->unique(fn($tp) => strtoupper($tp))
+                                            ->values());
+
+                                    // Assignment kosong ikut third_party NPK (jika ada), lalu DISTINCT.
+                                    $qaAssignments = $qaRaw
+                                        ->flatMap(function ($row) use ($qaThirdPartyByBuyer) {
+                                            if ($row->third_party !== null) {
+                                                return [$row];
+                                            }
+
+                                            $tps = $qaThirdPartyByBuyer->get(strtoupper($row->buyer));
+
+                                            if ($tps && $tps->isNotEmpty()) {
+                                                return $tps->map(fn($tp) => (object) [
+                                                    'date'        => $row->date,
+                                                    'buyer'       => $row->buyer,
+                                                    'third_party' => $tp,
+                                                    'expanded'    => $row->expanded ?? false,
+                                                ])->all();
+                                            }
+
+                                            return [$row];
+                                        })
+                                        ->unique(fn($row) => $row->date . '|' . strtoupper($row->buyer) . '|' . strtoupper((string) $row->third_party))
+                                        ->values();
+
+                                    if ($qaAssignments->isEmpty()) {
+                                        continue;
+                                    }
+
+                                    // Semua qc_efficiencies yang dibutuhkan, sekali query.
+                                    $qaEffByKey = DB::table('qc_efficiencies')
+                                        ->where('period_id', $period->id)
+                                        ->where('dept', 'qa')
+                                        ->whereIn('date', $qaAssignments->pluck('date')->unique()->all())
+                                        ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
+                                        ->get()
+                                        ->groupBy(fn($row) => substr((string) $row->date, 0, 10) . '|' . strtoupper(trim((string) $row->buyer)));
+
+                                    // Buyer yang punya baris third party di periode ini (mis. MUJI).
+                                    $qaBuyerHasThirdParty = DB::table('qc_efficiencies')
+                                        ->where('period_id', $period->id)
+                                        ->where('dept', 'qa')
+                                        ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
+                                        ->whereNotNull('third_party')
+                                        ->where('third_party', '!=', '')
+                                        ->pluck('buyer')
+                                        ->mapWithKeys(fn($buyer) => [strtoupper(trim((string) $buyer)) => true]);
+
+                                    $qaByDate = collect([]);
+                                    $allLineNumbers = collect([]);
+
+                                    foreach ($qaAssignments as $qaAssignment) {
+
+                                        $buyerHasThirdParty = $qaBuyerHasThirdParty->has(strtoupper($qaAssignment->buyer));
+
+                                        $effRows = $qaEffByKey->get(
+                                            $qaAssignment->date . '|' . strtoupper($qaAssignment->buyer),
+                                            collect()
+                                        );
+
+                                        $linesOfDay = $effRows
+                                            ->filter(function ($row) use ($qaAssignment, $buyerHasThirdParty) {
+                                                // third_party terisi => baris buyer + third_party tsb
+                                                if ($qaAssignment->third_party !== null) {
+                                                    return strcasecmp(trim((string) ($row->third_party ?? '')), $qaAssignment->third_party) === 0;
+                                                }
+
+                                                // third_party kosong, buyer punya third party (MUJI) => hanya line_number NULL
+                                                if ($buyerHasThirdParty) {
+                                                    return $row->line_number === null || $row->line_number === '';
+                                                }
+
+                                                // third_party kosong, buyer tanpa third party (GAP, SUKO) => semua baris buyer
+                                                return true;
+                                            })
+                                            // DISTINCT per tanggal (+ third_party): 1 defect rate = 1 baris.
+                                            ->unique(fn($row) => strtoupper(trim((string) ($row->third_party ?? ''))) . '|' . (float) $row->efficiency)
+                                            ->values();
+
+                                        if ($linesOfDay->isEmpty()) {
+                                            continue;
+                                        }
+
+                                        $qaByDate->push((object) [
+                                            'date'        => $qaAssignment->date,
+                                            'buyer'       => $qaAssignment->buyer,
+                                            'third_party' => $qaAssignment->third_party,
+                                            'lines'       => $linesOfDay,
+                                            'share'       => ($qaAssignment->expanded ?? false)
+                                                ? ($qaShareByDateBuyer[$qaAssignment->date . '|' . strtoupper($qaAssignment->buyer)] ?? 1)
+                                                : 1,
+                                        ]);
+
+                                        $allLineNumbers = $allLineNumbers->merge($linesOfDay->pluck('line_number')->filter(fn($n) => $n !== null));
+                                    }
+
+                                    if ($qaByDate->isEmpty()) {
+                                        continue;
+                                    }
+
+                                    $allLineNumbers = $allLineNumbers->unique()->values()->all();
+
+                                    // Jumlah third_party per tanggal (pembagi QA LEADER).
+                                    $qaThirdPartyCountByDate = [];
+
+                                    foreach ($qaByDate as $row) {
+                                        if ($row->third_party !== null) {
+                                            $qaThirdPartyCountByDate[(string) $row->date . '|' . strtoupper($row->buyer)][strtoupper($row->third_party)] = true;
+                                        }
+                                    }
+
+                                    $collectionDay = collect([]);
+
+                                    // Proses PER TANGGAL: 1 tanggal bisa punya >1 entry (beda third_party).
+                                    foreach ($qaByDate->groupBy(fn($entry) => (string) $entry->date) as $entries) {
+
+                                        $date = $entries->first()->date;
+
+                                        if ($tkkDate && $date >= $tkkDate) {
+                                            continue;
+                                        }
+
+                                        if (!$isValidOvertime($date)) {
+                                            continue;
+                                        }
+
+                                        $dayAmount = 0;
+
+                                        foreach ($entries as $entry) {
+
+                                            $totalLineInsentif = 0;
+
+                                            foreach ($entry->lines as $line) {
+                                                // Cutoff di luar tier tertinggi sudah ditangani getInsentifByDefectRate().
+                                                $totalLineInsentif +=
+                                                    $this->getInsentifByDefectRate($line->efficiency, $qcInsentifFormula);
+                                            }
+
+                                            $entryAmount = $this->calculateQaQcInsentif(
+                                                $assignment->role,
+                                                $totalLineInsentif,
+                                                $this->qcViolationPercentageByBuyer($period, $entry->buyer)
+                                            );
+
+                                            // FIX MULTI BUYER: QA LEADER dibagi jumlah third_party pada tanggal + buyer ENTRY ini
+                                            // (bukan seluruh third_party di tanggal tsb), lalu hasil tiap buyer diakumulasi.
+                                            if ($assignment->role === 'qa_leader') {
+                                                $jumlahThirdParty = max(count($qaThirdPartyCountByDate[(string) $date . '|' . strtoupper($entry->buyer)] ?? []), 1);
+                                                $entryAmount = $entryAmount / $jumlahThirdParty;
+                                            }
+
+                                            // FIX BUYER KOSONG: buyer hasil expand dibagi jumlah staf QA di buyer tsb
+                                            $entryAmount = $entryAmount / max((int) ($entry->share ?? 1), 1);
+
+                                            $dayAmount += $entryAmount;
+                                        }
+
+
+                                        $amount += $dayAmount;
+
+                                        $collectionDay->push($amount);
+                                    }
+                                } else {
+
+                                    $section = DB::table('sections')
+                                        ->whereRaw('id = ?', [(int) $employee->SECTION])
+                                        ->select('line_start', 'line_end', 'blank_line')
+                                        ->first();
+
+                                    if (!$section) {
+                                        continue;
+                                    }
+
+                                    $lineStart = $section->line_start;
+                                    $lineEnd   = $section->line_end;
+
+                                    $grouped = DB::table('employee_qc_assignments as ela')
+                                        ->join('qc_efficiencies as le', function ($join) {
+                                            $join->on('le.period_id', '=', 'ela.period_id')
+                                                ->on('le.date', '=', 'ela.start_date')
+                                                ->where('le.dept', '=', 'qc');
+                                        })
+
+                                        ->where('ela.npk', $employee->NPK)
+                                        ->where('ela.period_id', $period->id)
+                                        // FIX ROLE GANDA: hanya tanggal assignment role ini (chief/spv)
+                                        ->where('ela.role', $assignment->role)
+
+                                        ->whereBetween('ela.start_date', [
+                                            $period->start_date,
+                                            $period->end_date
+                                        ])
+
+                                        ->whereBetween('le.line_number', [
+                                            $lineStart,
+                                            $lineEnd
+                                        ])
+
+                                        ->select(
+                                            'le.date'
+                                        )
+
+                                        ->groupBy(
+                                            'le.date'
+                                        )
+
+                                        ->orderBy('le.date')
+                                        ->get();
+
+                                    // NOTE: reuses sewing_violations (sama seperti Line Insentif)
+                                    // karena belum ada tabel violations khusus QC.
+                                    $lineViolations = $countSewingViolationsForLineRange($lineStart, $lineEnd);
+
+                                    $collectionDay = collect([]);
+                                    $collectionLines = collect([]);
+
+                                    // $jumlahLine = DB::table('qc_efficiencies')
+                                    //     ->where('period_id', $period->id)
+                                    //     ->whereBetween('date', [$period->start_date, $period->end_date])
+                                    //     ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                    //     ->selectRaw('COUNT(DISTINCT line_number) as jumlah_line')
+                                    //     ->get();
+
+                                    // Pembagi = jumlah line di range section dikurangi sections.blank_line
+                                    // (mis. 67-78 => 12; blank 72 => 11; blank 72,74 => 10), sama seperti QcInsentifMasterController.
+                                    $jumlahLine = $this->qcSectionLineCount($lineStart, $lineEnd, $section->blank_line ?? null);
+
+                                    foreach ($grouped as $day) {
+
+                                        if ($tkkDate && $day->date >= $tkkDate) {
+                                            continue;
+                                        }
+
+                                        if (!$isValidOvertime($day->date)) {
+                                            continue;
+                                        }
+
+                                        $lines = DB::table('qc_efficiencies')
+                                            ->where('period_id', $period->id)
+                                            ->where('dept', 'qc')
+                                            ->where('date', $day->date)
+                                            ->whereBetween('line_number', [$lineStart, $lineEnd])
+                                            ->get();
+
+                                        $totalLineInsentif = 0;
+
+                                        foreach ($lines as $line) {
+
+                                            // Cutoff di luar tier tertinggi sudah
+                                            // ditangani oleh getInsentifByDefectRate()
+                                            // sendiri, sama seperti controller.
+                                            $totalLineInsentif +=
+                                                $this->getInsentifByDefectRate($line->efficiency, $qcInsentifFormula);
+
+                                            if ($totalLineInsentif <= 0) {
+                                                continue;
+                                            }
+
+                                            $collectionLines->push($totalLineInsentif);
+                                        }
+
+                                        // CHIEF / SPV: (total insentif semua line section / jumlah line) x faktor role
+                                        // (chief 7/10, spv 5/10), lalu dipotong qc_violation. Sama dengan controller.
+                                        $amount += $this->calculateChiefSpvQcInsentif(
+                                            $assignment->role,
+                                            $totalLineInsentif,
+                                            $jumlahLine,
+                                            $qcViolationPercentage
+                                        );
+
+                                        $collectionDay->push($amount);
+                                    }
+                                }
+                            }
+                        }
+                    } else if ($component->code === 'pad_insentif') {
+                        $assignments = DB::table('pad_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date]);
-
-                        $isOperator = (clone $query)->value('role') === 'operator';
-
-                        $assignments = $isOperator
-                            ? $query->get()
-                            : $query->limit(1)->get();
+                            ->whereBetween('date', [$period->start_date, $period->end_date])
+                            ->get();
 
                         $amount = 0;
 
                         // NOTE: $mutations (employee_mutations) dihapus — dead code,
                         // tidak pernah dipakai di blok ini.
 
+                        $tkkDate = !empty($employee->TKK)
+                            ? Carbon::parse($employee->TKK)->format('Y-m-d')
+                            : null;
+
                         $isValidOvertime = function ($npk, $date) use ($isValidOvertimeFor) {
                             return $isValidOvertimeFor($npk, $date);
                         };
 
-                        foreach ($assignments as $assignment) {
+                        /*
+                        |----------------------------------------------------------------
+                        | OPERATOR DAYS
+                        |----------------------------------------------------------------
+                        */
+                        foreach ($assignments->where('role', 'operator') as $assignment) {
 
-                            if (empty($assignment->role)) {
+                            if ($tkkDate && $assignment->date >= $tkkDate) {
                                 continue;
                             }
-                            if ($assignment->role === 'operator') {
 
-                                if (!$isValidOvertime($assignment->npk, $assignment->date)) {
+                            if (!$isValidOvertime($assignment->npk, $assignment->date)) {
+                                continue;
+                            }
+
+                            $rate = $this->getInsentifByEfficiency(
+                                $assignment->efficiency,
+                                $padInsentifFormula
+                            );
+
+                            $amount += $rate * $assignment->piece;
+                        }
+
+                        /*
+                        |----------------------------------------------------------------
+                        | NON OPERATOR DAYS (SPV / LEADER / HELPER)
+                        |----------------------------------------------------------------
+                        | Dikelompokkan per role dulu (kalau role berubah di tengah
+                        | periode), lalu per tanggal — supaya tanggal saat karyawan
+                        | masih jadi operator TIDAK ikut masuk ke perhitungan non
+                        | operator. Operator pembanding diambil PER TANGGAL, mengikuti
+                        | kolom "tim" milik employee non operator itu sendiri pada
+                        | tanggal tsb:
+                        |   - tim = 1  -> hanya operator dengan tim = 1
+                        |   - tim = 2  -> hanya operator dengan tim = 2
+                        |   - tim null -> semua operator (tanpa filter tim)
+                        |----------------------------------------------------------------
+                        */
+                        $nonOperatorAssignments = $assignments->filter(
+                            fn($a) => !empty($a->role) && $a->role !== 'operator'
+                        );
+
+                        foreach ($nonOperatorAssignments->groupBy('role') as $role => $roleAssignments) {
+
+                            $employeeAssignmentsByDate = $roleAssignments->groupBy('date');
+
+                            $totalDeptInsentif = 0;
+                            $operatorNpks = [];
+
+                            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
+
+                                if ($tkkDate && $date >= $tkkDate) {
                                     continue;
                                 }
 
-                                $rate = $this->getInsentifByEfficiency(
-                                    $assignment->efficiency,
-                                    $padInsentifFormula
-                                );
+                                $tim = $rowsForDate
+                                    ->pluck('tim')
+                                    ->filter(fn($t) => $t !== null && $t !== '')
+                                    ->first();
 
-                                $amount += $rate * $assignment->piece;
-                            } else {
-
-                                $employeeDates = DB::table('pad_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('npk', $employee->NPK)
-                                    ->pluck('date')
-                                    ->unique()
-                                    ->toArray();
-
-                                $totalDeptInsentif = 0;
-
-                                $operators = DB::table('pad_efficiencies')
+                                $operatorQuery = DB::table('pad_efficiencies')
                                     ->where('period_id', $period->id)
                                     ->where('role', '=', 'operator')
-                                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereIn('date', $employeeDates)
-                                    ->get();
+                                    ->where('date', $date);
 
-                                foreach ($operators as $operator) {
+                                if (!is_null($tim)) {
+                                    $operatorQuery->where('tim', $tim);
+                                }
+
+                                $operatorsForDate = $operatorQuery->get();
+
+                                foreach ($operatorsForDate as $operator) {
                                     if (!$isValidOvertime($operator->npk, $operator->date)) {
                                         continue;
                                     }
@@ -1807,170 +2497,89 @@ END AS special_overtime_hours
                                     );
 
                                     $totalDeptInsentif += $rate * $operator->piece;
+                                    $operatorNpks[] = $operator->npk;
                                 }
-
-                                $jumlahOperator = DB::table('pad_efficiencies as pe')
-                                    ->where('pe.period_id', $period->id)
-                                    ->whereIn('pe.date', $employeeDates)
-                                    ->where('pe.role', '=', 'operator')
-                                    ->pluck('pe.npk')
-                                    ->unique()
-                                    ->count();
-
-                                $amount += $this->calculateRolePadInsentif(
-                                    $assignment->role,
-                                    'pad',
-                                    $totalDeptInsentif,
-                                    $jumlahOperator
-                                );
                             }
+
+                            $jumlahOperator = collect($operatorNpks)->unique()->count();
+
+                            $amount += $this->calculateRolePadInsentif(
+                                $role,
+                                'pad',
+                                $totalDeptInsentif,
+                                $jumlahOperator
+                            );
                         }
                     } else if ($component->code === 'cutting_insentif') {
-                        $assignmentNpk = DB::table('employee_cutting_assignments as eca')
-                            ->select('eca.npk', 'eca.role')
-                            ->where('eca.period_id', $period->id)
-                            ->where('eca.npk', $employee->NPK)
-                            ->distinct()
-                            ->get();
-                        $tkkDate = !empty($employee->TKK)
-                            ? Carbon::parse($employee->TKK)->format('Y-m-d')
-                            : null;
-
+                        // Disamakan dengan CuttingInsentifMasterController: sekali per
+                        // role yang benar-benar dimiliki NPK ini, dijumlah — bukan tiap
+                        // baris efisiensi dikali tiap role (bug lama: multiplikasi kalau
+                        // NPK punya >1 role).
+                        // Disamakan dengan CuttingInsentifMasterController::check():
+                        // 1) Hanya karyawan dengan TKK kosong atau TKK di dalam periode
+                        //    (controller: whereNull(TKK) OR TKK BETWEEN start & end).
+                        // 2) Hanya role yang terdaftar di insentif_role_formulas
+                        //    (controller: joinSub insentif_role_formulas).
+                        // 3) Dibulatkan per role sebelum dijumlah
+                        //    (controller: round per baris, lalu mergeInsentifByNpk).
                         $amount = 0;
 
-                        // NOTE: $mutations dihapus — dead code, tidak dipakai.
+                        $cuttingTkkOk = empty($employee->TKK)
+                            || (
+                                Carbon::parse($employee->TKK)->format('Y-m-d') >= Carbon::parse($period->start_date)->format('Y-m-d')
+                                && Carbon::parse($employee->TKK)->format('Y-m-d') <= Carbon::parse($period->end_date)->format('Y-m-d')
+                            );
 
-                        $isValidOvertime = function ($date) use ($employee, $isValidOvertimeFor) {
-                            return $isValidOvertimeFor($employee->NPK, $date);
-                        };
+                        if ($cuttingTkkOk) {
+                            $rolesForNpk = DB::table('employee_cutting_assignments')
+                                ->where('period_id', $period->id)
+                                ->where('npk', $employee->NPK)
+                                ->whereIn('role', function ($q) {
+                                    $q->select('role')->from('insentif_role_formulas');
+                                })
+                                ->pluck('role')
+                                ->filter()
+                                // Case/trailing-space insensitive, sama seperti DISTINCT +
+                                // collation SQL Server di controller. Tanpa ini 'fushing' &
+                                // 'FUSHING' dianggap 2 role berbeda oleh PHP sehingga
+                                // dihitung 2x (double count).
+                                ->unique(fn($r) => mb_strtolower(trim($r)));
 
-                        $employeeDates = DB::table('employee_cutting_assignments')
-                            ->where('period_id', $period->id)
-                            ->where('npk', $employee->NPK)
-                            ->pluck('start_date')
-                            ->unique()
-                            ->toArray();
+                            foreach ($rolesForNpk as $roleForNpk) {
+                                $roleAmount = round((float) $this->calculateCuttingFromController(
+                                    $employee,
+                                    $period,
+                                    $cuttingInsentifFormula,
+                                    $roleForNpk
+                                ), 0);
 
-                        $cuttingEfficiencies = DB::table('cutting_efficiencies')
-                            ->where('period_id', $period->id)
-                            ->whereBetween('date', [
-                                $period->start_date,
-                                $period->end_date
-                            ])
-                            ->whereIn('date', $employeeDates)
-                            ->get();
+                                if ($roleAmount <= 0) continue;
 
-                        foreach ($assignmentNpk as $assignment) {
-                            if (empty($assignment->role)) {
-                                continue;
-                            }
-                            foreach ($cuttingEfficiencies as $row) {
-                                if ($tkkDate && $row->date >= $tkkDate) {
-                                    continue;
-                                }
-
-                                if (!$isValidOvertime($row->date)) {
-                                    continue;
-                                }
-
-                                $insentif = $this->getInsentifByEfficiency(
-                                    $row->efficiency,
-                                    $cuttingInsentifFormula
-                                );
-
-                                $amount += $this->calculateRoleCuttingInsentif(
-                                    $assignment->role,
-                                    'cutting',
-                                    $insentif
-                                );
+                                $amount += $roleAmount;
                             }
                         }
                     } else if ($component->code === 'heat_insentif') {
 
-                        $query = DB::table('heat_efficiencies')
+                        // Disamakan dengan HeatInsentifMasterController: sekali per role
+                        // yang benar-benar dimiliki NPK ini di heat_efficiencies periode
+                        // ini, lalu dijumlah (setara mergeInsentifByNpk di controller).
+                        $rolesForNpk = DB::table('heat_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
-                            ->whereBetween('date', [$period->start_date, $period->end_date]);
-
-                        $isOperator = (clone $query)->value('role') === 'operator';
-
-                        $assignments = $isOperator
-                            ? $query->get()
-                            : $query->limit(1)->get();
+                            ->whereBetween('date', [$period->start_date, $period->end_date])
+                            ->pluck('role')
+                            ->filter()
+                            ->unique();
 
                         $amount = 0;
 
-                        // NOTE: $mutations dihapus — dead code, tidak dipakai.
-
-                        $isValidOvertime = function ($npk, $date) use ($isValidOvertimeFor) {
-                            return $isValidOvertimeFor($npk, $date);
-                        };
-
-                        foreach ($assignments as $assignment) {
-
-                            if (empty($assignment->role)) {
-                                continue;
-                            }
-                            if ($assignment->role === 'operator') {
-
-                                if (!$isValidOvertime($assignment->npk, $assignment->date)) {
-                                    continue;
-                                }
-
-                                $rate = $this->getInsentifByEfficiency(
-                                    $assignment->efficiency,
-                                    $heatInsentifFormula
-                                );
-
-                                $amount += $rate * $assignment->piece;
-                            } else {
-                                $employeeDates = DB::table('heat_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('npk', $employee->NPK)
-                                    ->where('role', $assignment->role)
-                                    ->pluck('date')
-                                    ->unique()
-                                    ->toArray();
-                                $totalDeptInsentif = 0;
-
-                                $operators = DB::table('heat_efficiencies')
-                                    ->where('period_id', $period->id)
-                                    ->where('role', '=', 'operator')
-                                    ->whereBetween('date', [$period->start_date, $period->end_date])
-                                    ->whereIn('date', $employeeDates) // sekarang hanya tanggal saat NPK ini jadi $role, bukan semua tanggal NPK
-                                    ->get();
-
-                                foreach ($operators as $operator) {
-                                    if ($tkkDate && $operator->date >= $tkkDate) {
-                                        continue;
-                                    }
-                                    // FILTER HANYA NUMERATOR
-                                    if (!$isValidOvertime($operator->npk, $operator->date)) {
-                                        continue;
-                                    }
-
-                                    $rate = $this->getInsentifByEfficiency(
-                                        $operator->efficiency,
-                                        $heatInsentifFormula
-                                    );
-
-                                    $totalDeptInsentif += $rate * $operator->piece;
-                                }
-                                $jumlahOperator = DB::table('heat_efficiencies as he')
-                                    ->where('he.period_id', $period->id)
-                                    ->whereIn('he.date', $employeeDates) // ikut pakai $employeeDates yang sudah difilter role
-                                    ->where('he.role', '=', 'operator')
-                                    ->pluck('he.npk')
-                                    ->unique()
-                                    ->count();
-
-                                $amount += $this->calculateRoleHeatInsentif(
-                                    $assignment->role,
-                                    'heat',
-                                    $totalDeptInsentif,
-                                    $jumlahOperator
-                                );
-                            }
+                        foreach ($rolesForNpk as $roleForNpk) {
+                            $amount += $this->calculateHeatFromController(
+                                $employee,
+                                $period,
+                                $heatInsentifFormula,
+                                $roleForNpk
+                            );
                         }
                     } else {
                         $amount = $this->evaluateFormula($component->formula, $results, $inputVariables);
@@ -2039,12 +2648,14 @@ END AS special_overtime_hours
             }
 
             if (!$isCheck) {
-                $batchSize = 250;
+                $batchSize = 100;
                 $payrollRunDetailRows[] = [
                     'run_id'        => $run->id,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'employee_dept' => $employee->payroll_dept,
+                    'employee_staff' => $employee->IS_STAFF,
+                    'employee_expat' => $employee->IS_EXPAT,
                     'components' => json_encode($componentsWithType),
                     'total_salary'  => $grandTotal,
                     'created_at'    => $now,
@@ -2074,6 +2685,8 @@ END AS special_overtime_hours
                     'out_days_auto'  => (float) $autoOutDays,
                     'sick_days'   => (float) $employee->sick_days,
                     'count_days'    => $count_days,
+                    'meal_days'     => (float) $mealDays,
+                    'first_kurs'    => (float) $firstKurs,
                     'type' => Str::ucfirst(Str::lower($employee->type)),
                     'dept' => $employee->DEPARTEMENT,
                     'id_dept' => $employee->ID_DEPT,
@@ -2258,13 +2871,179 @@ END AS special_overtime_hours
         return 0;
     }
 
-    private function calculateRoleSewingInsentif(
+    /*
+    |--------------------------------------------------------------------------
+    | QC: arah tier terbalik dari sewing — makin KECIL defect rate makin
+    | BESAR insentif. Formula qc_insentif dibaca sebagai upper-bound tiap
+    | tier, jadi harus ascending + "<=".
+    |--------------------------------------------------------------------------
+    */
+    private function getInsentifByDefectRate($efficiency, $rules)
+    {
+        ksort($rules);
+
+        foreach ($rules as $threshold => $value) {
+            if ($efficiency <= $threshold) {
+                return $value;
+            }
+        }
+
+        return 0;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | QC VIOLATION PER BUYER (qc_violations) - sama dengan QcInsentifMasterController
+    |--------------------------------------------------------------------------
+    | Jika tabel qc_violations punya kolom `buyer`, baris dengan buyer kosong
+    | berlaku untuk semua buyer dan baris ber-buyer hanya untuk buyer tsb.
+    | Tanpa kolom `buyer` => total percentage periode.
+    */
+    private array $qcViolationBuyerCache = [];
+
+    private function qcViolationPercentageByBuyer($period, $buyer = null): float
+    {
+        $periodId = is_object($period) ? $period->id : $period;
+        $buyerKey = strtoupper(trim((string) $buyer));
+        $cacheKey = $periodId . '|' . $buyerKey;
+
+        if (isset($this->qcViolationBuyerCache[$cacheKey])) {
+            return $this->qcViolationBuyerCache[$cacheKey];
+        }
+
+        $query = DB::table('qc_violations')->where('period_id', $periodId);
+
+        if (Schema::hasColumn('qc_violations', 'buyer')) {
+            $query->where(function ($q) use ($buyerKey) {
+                $q->whereNull('buyer')
+                    ->orWhere('buyer', '')
+                    ->orWhereRaw('UPPER(buyer) = ?', [$buyerKey]);
+            });
+        }
+
+        return $this->qcViolationBuyerCache[$cacheKey] = min(100, max(0, (float) $query->sum('percentage')));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | JUMLAH LINE SECTION (pembagi CHIEF / SPV QC)
+    |--------------------------------------------------------------------------
+    | Jumlah line = (line_end - line_start + 1) dikurangi line yang tercantum di
+    | sections.blank_line (satu atau beberapa nilai, dipisah koma / spasi / titik koma).
+    | Hanya blank line yang berada di dalam range section yang dihitung (distinct).
+    | Contoh: 67-78 => 12; blank 72 => 11; blank 72,74 => 10.
+    | Sama seperti QcInsentifMasterController.
+    */
+    private array $qcSectionLineCountCache = [];
+
+    private function qcSectionLineCount($lineStart, $lineEnd, $blankLine = null): int
+    {
+        $lineStart = (int) $lineStart;
+        $lineEnd   = (int) $lineEnd;
+        $blankKey  = trim((string) $blankLine);
+        $cacheKey  = $lineStart . '-' . $lineEnd . '|' . $blankKey;
+
+        if (isset($this->qcSectionLineCountCache[$cacheKey])) {
+            return $this->qcSectionLineCountCache[$cacheKey];
+        }
+
+        $blanks = [];
+        if ($blankKey !== '') {
+            foreach (preg_split('/[\s,;]+/', $blankKey, -1, PREG_SPLIT_NO_EMPTY) as $b) {
+                if (is_numeric($b)) {
+                    $n = (int) $b;
+                    if ($n >= $lineStart && $n <= $lineEnd) {
+                        $blanks[$n] = true;
+                    }
+                }
+            }
+        }
+
+        $count = max(($lineEnd - $lineStart + 1) - count($blanks), 1);
+
+        return $this->qcSectionLineCountCache[$cacheKey] = $count;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSENTIF QA / QA LEADER QC
+    |--------------------------------------------------------------------------
+    | qa        : (total * 5 / 10) * ((100 - qc_violation) / 100)
+    | qa_leader : (total * 7 / 10) * ((100 - qc_violation) / 100)
+    */
+    private function calculateQaQcInsentif($role, $totalLineInsentif, $qcViolation = 0)
+    {
+        return $this->evaluateQcRoleFormula($role, $totalLineInsentif, 1, $qcViolation, fn() => $totalLineInsentif
+            * ($role === 'qa_leader' ? 0.7 : 0.5)
+            * ((100 - (float) ($qcViolation ?? 0)) / 100));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSENTIF CHIEF / SPV QC
+    |--------------------------------------------------------------------------
+    | chief : ((total / jumlahLine) * 7 / 10) * ((100 - qc_violation) / 100)
+    | spv   : ((total / jumlahLine) * 5 / 10) * ((100 - qc_violation) / 100)
+    */
+    private function calculateChiefSpvQcInsentif($role, $totalLineInsentif, $jumlahLine, $qcViolation = 0)
+    {
+        $jumlahLine = max((int) $jumlahLine, 1);
+
+        return $this->evaluateQcRoleFormula($role, $totalLineInsentif, $jumlahLine, $qcViolation, fn() => ($totalLineInsentif / $jumlahLine)
+            * ($role === 'chief' ? 0.7 : 0.5)
+            * ((100 - (float) ($qcViolation ?? 0)) / 100));
+    }
+
+    private function evaluateQcRoleFormula($role, $totalLineInsentif, $jumlahLine, $qcViolation, callable $fallback)
+    {
+        $formula = Cache::remember(
+            "insentif_formula_qc_{$role}",
+            300,
+            function () use ($role) {
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', 'qc')
+                    ->value('formula');
+            }
+        );
+
+        if (!$formula) {
+            return $fallback();
+        }
+
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, [
+            'totalLineInsentif' => $totalLineInsentif,
+            'jumlahLine'        => $jumlahLine,
+            'qc_violation'      => (float) ($qcViolation ?? 0),
+            'insentif'          => $totalLineInsentif,
+        ]));
+
+        try {
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+            return $fallback();
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ROLE QC OPERATOR (inline / endline / fqc)
+    |--------------------------------------------------------------------------
+    | Disalin 1:1 dari QcInsentifMasterController::calculateRoleQcInsentif().
+    | Rumus role dept 'qc' di insentif_role_formulas dievaluasi; jika tidak ada
+    | rumus, nominal dikembalikan apa adanya (tanpa potongan qc_violation).
+    */
+    private function calculateRoleQcInsentif(
         $role,
         $dept,
         $totalLineInsentif,
         $jumlahLine,
         $violationsCount,
-        $employeeViolations
+        $employeeViolations,
+        $qcViolation = 0,
     ) {
 
         $jumlahLine = max($jumlahLine, 1);
@@ -2288,12 +3067,74 @@ END AS special_overtime_hours
             'totalLineInsentif' => $totalLineInsentif,
             'jumlahLine'        => $jumlahLine,
             'violationsCount'   => $violationsCount ?? 0,
-            'violation_percentage' => $employeeViolations ?? 0
+            'violation_percentage' => $employeeViolations ?? 0,
+            'qc_violation'      => $qcViolation ?? 0,
+            'insentif'          => $totalLineInsentif,
         ];
 
-        foreach ($variables as $key => $value) {
-            $formula = str_replace($key, $value, $formula);
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, $variables));
+
+        try {
+
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+
+            return $totalLineInsentif;
         }
+    }
+
+    private function calculateRoleSewingInsentif(
+        $role,
+        $dept,
+        $totalLineInsentif,
+        $jumlahLine,
+        $violationsCount,
+        $employeeViolations,
+        $qcViolation = 0
+    ) {
+
+        $jumlahLine = max($jumlahLine, 1);
+
+        // QC: nominal dasar langsung dipotong qc_violations (persen), rumus role
+        // di insentif_role_formulas (dept 'qc') tidak dievaluasi.
+        if ($dept === 'qc') {
+            return $totalLineInsentif * ((100 - ($qcViolation ?? 0)) / 100);
+        }
+
+        $formula = Cache::remember(
+            "insentif_formula_{$dept}_{$role}",
+            300,
+            function () use ($role, $dept) {
+
+                return InsentifRoleFormula::where('role', $role)
+                    ->where('dept', $dept)
+                    ->value('formula');
+            }
+        );
+
+        if (!$formula) {
+            return $totalLineInsentif;
+        }
+
+        $variables = [
+            'totalLineInsentif' => $totalLineInsentif,
+            'jumlahLine'        => $jumlahLine,
+            'violationsCount'   => $violationsCount ?? 0,
+            'violation_percentage' => $employeeViolations ?? 0,
+            // Variable khusus formula role QC (dept 'qc'):
+            // - qc_violation : persentase potongan dari tabel qc_violations
+            // - insentif     : alias totalLineInsentif (dipakai role operator QC)
+            'qc_violation'      => $qcViolation ?? 0,
+            'insentif'          => $totalLineInsentif,
+        ];
+
+        // strtr() mengganti dari key terpanjang dan tidak me-scan ulang hasil
+        // penggantian, jadi 'totalLineInsentif' tidak bentrok dengan 'insentif'.
+        $formula = strtr($formula, array_map(fn($v) => (string) $v, $variables));
 
         try {
 
@@ -2352,6 +3193,181 @@ END AS special_overtime_hours
 
             return $totalDeptInsentif;
         }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HEAT SEAL INSENTIF (DIPORT VERBATIM DARI HeatInsentifMasterController::
+    | calculateHeat). Dipanggil SEKALI PER (npk, role) — lihat catatan lengkap
+    | di GeneratePayrollProcessV2.php.
+    |--------------------------------------------------------------------------
+    */
+    private function calculateHeatFromController($employee, $period, $formula, $role)
+    {
+        $amount = 0;
+
+        $tkkDate = !empty($employee->TKK)
+            ? Carbon::parse($employee->TKK)->format('Y-m-d')
+            : null;
+
+        $overtimes = DB::table('overtimes')
+            ->where('NPK', $employee->NPK)
+            ->whereBetween('OVERTIME_DATE', [
+                $period->start_date,
+                $period->end_date
+            ])
+            ->get()
+            ->keyBy(fn($o) => $o->OVERTIME_DATE);
+
+        // NOTE: closure ini sengaja dibuat sama persis dengan controller
+        // (termasuk bug parameter-nya — lihat catatan di pesan).
+        $isValidOvertime = function ($date) use ($overtimes) {
+            if (!isset($overtimes[$date])) {
+                return true;
+            }
+            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
+            if ($lembur === null || $lembur === '') {
+                return true;
+            }
+            if (is_numeric($lembur)) {
+                return true;
+            }
+            return false;
+        };
+
+        // 🔹 PERBAIKAN (tim): assignment SELALU difilter per $role (sama seperti
+        // PadInsentifMasterController::calculatePad), jadi hasilnya
+        // deterministik dan tanggal role lain tidak ikut tercampur.
+        $assignments = DB::table('heat_efficiencies')
+            ->where('npk', $employee->NPK)
+            ->where('period_id', $period->id)
+            ->where('role', $role)
+            ->whereBetween('date', [$period->start_date, $period->end_date])
+            ->get();
+
+        if ($role === 'operator') {
+            foreach ($assignments as $assignment) {
+                if ($tkkDate && $assignment->date >= $tkkDate) {
+                    continue;
+                }
+                if (!$isValidOvertime($assignment->npk, $assignment->date)) {
+                    continue;
+                }
+                $rate = $this->getInsentifByEfficiency($assignment->efficiency, $formula);
+                $amount += $rate * $assignment->piece;
+            }
+        } else {
+            // Operator pembanding diambil PER TANGGAL, mengikuti kolom "tim" milik
+            // employee non operator itu sendiri pada tanggal tsb:
+            //   - tim = 1  -> hanya operator dengan tim = 1
+            //   - tim = 2  -> hanya operator dengan tim = 2
+            //   - tim null -> semua operator (tanpa filter tim)
+            $employeeAssignmentsByDate = $assignments->groupBy('date');
+
+            $totalDeptInsentif = 0;
+            $operatorNpks = [];
+
+            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
+                if ($tkkDate && $date >= $tkkDate) {
+                    continue;
+                }
+
+                $tim = $rowsForDate
+                    ->pluck('tim')
+                    ->filter(fn($t) => $t !== null && $t !== '')
+                    ->first();
+
+                $operatorQuery = DB::table('heat_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->where('role', '=', 'operator')
+                    ->where('date', $date);
+
+                if (!is_null($tim)) {
+                    $operatorQuery->where('tim', $tim);
+                }
+
+                $operatorsForDate = $operatorQuery->get();
+
+                foreach ($operatorsForDate as $operator) {
+                    if (!$isValidOvertime($operator->npk, $operator->date)) {
+                        continue;
+                    }
+                    $rate = $this->getInsentifByEfficiency($operator->efficiency, $formula);
+                    $totalDeptInsentif += $rate * $operator->piece;
+                    $operatorNpks[] = $operator->npk;
+                }
+            }
+
+            $jumlahOperator = collect($operatorNpks)->unique()->count();
+
+            $amount += $this->calculateRoleHeatInsentif($role, 'heat', $totalDeptInsentif, $jumlahOperator);
+        }
+
+        return $amount;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CUTTING INSENTIF (DIPORT VERBATIM DARI CuttingInsentifMasterController::
+    | calculateCutting). Dipanggil SEKALI PER (npk, role).
+    |--------------------------------------------------------------------------
+    */
+    private function calculateCuttingFromController($employee, $period, $formula, $role)
+    {
+        $amount = 0;
+
+        $tkkDate = !empty($employee->TKK)
+            ? Carbon::parse($employee->TKK)->format('Y-m-d')
+            : null;
+
+        $overtimes = DB::table('overtimes')
+            ->where('NPK', $employee->NPK)
+            ->whereBetween('OVERTIME_DATE', [
+                $period->start_date,
+                $period->end_date
+            ])
+            ->get()
+            ->keyBy(fn($o) => $o->OVERTIME_DATE);
+
+        $isValidOvertime = function ($date) use ($overtimes) {
+            if (!isset($overtimes[$date])) {
+                return true;
+            }
+            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
+            if ($lembur === null || $lembur === '') {
+                return true;
+            }
+            if (is_numeric($lembur)) {
+                return true;
+            }
+            return false;
+        };
+
+        $employeeDates = DB::table('employee_cutting_assignments')
+            ->where('period_id', $period->id)
+            ->where('npk', $employee->NPK)
+            ->pluck('start_date')
+            ->unique()
+            ->toArray();
+
+        $cuttingEfficiencies = DB::table('cutting_efficiencies')
+            ->where('period_id', $period->id)
+            ->whereBetween('date', [$period->start_date, $period->end_date])
+            ->whereIn('date', $employeeDates)
+            ->get();
+
+        foreach ($cuttingEfficiencies as $row) {
+            if ($tkkDate && $row->date >= $tkkDate) {
+                continue;
+            }
+            if (!$isValidOvertime($row->date)) {
+                continue;
+            }
+            $insentif = $this->getInsentifByEfficiency($row->efficiency, $formula);
+            $amount += $this->calculateRoleCuttingInsentif($role, 'cutting', $insentif);
+        }
+
+        return $amount;
     }
 
     private function calculateRoleHeatInsentif(

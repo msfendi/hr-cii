@@ -424,6 +424,11 @@ class PadInsentifMasterController extends Controller
                 $employee->role,
             );
 
+            // 🔹 PERBAIKAN: bulatkan hasil insentif supaya tidak selisih
+            // dengan job (GeneratePayrollProcess/V2 membulatkan tiap
+            // komponen sebelum dijumlahkan ke grandTotal).
+            $pad = round((float) $pad, 0);
+
             if ($pad <= 0) continue;
 
             $results[] = [
@@ -437,9 +442,78 @@ class PadInsentifMasterController extends Controller
             ];
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | GABUNGKAN PER NPK (FIX: 1 NPK 2 ROLE DALAM 1 BULAN)
+        |--------------------------------------------------------------------------
+        | Sebelum ini, tiap (NPK, role) jadi baris terpisah di $results, jadi
+        | kalau 1 NPK punya 2 role dalam periode yang sama (mis. operator lalu
+        | jadi leader), insentifnya muncul sebagai 2 baris berbeda dan TIDAK
+        | dijumlah. Di sini digabung jadi 1 baris per NPK, insentif diakumulasi,
+        | dan role ditampilkan gabungan (mis. "operator, leader").
+        |--------------------------------------------------------------------------
+        */
+        $results = $this->mergeInsentifByNpk($results, 'pad_insentif');
+
         return response()->json([
             'data' => $results
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | GABUNGKAN HASIL INSENTIF PER NPK (SUM LINTAS ROLE)
+    |--------------------------------------------------------------------------
+    */
+
+    private function mergeInsentifByNpk(array $results, string $amountKey): array
+    {
+        $merged = [];
+
+        foreach ($results as $row) {
+            $npk = $row['npk'];
+
+            if (!isset($merged[$npk])) {
+                $merged[$npk] = $row;
+                $merged[$npk]['role'] = [$row['role']];
+                if (array_key_exists('dept', $row)) {
+                    $merged[$npk]['dept'] = [$row['dept']];
+                }
+                if (array_key_exists('line_info', $row)) {
+                    $merged[$npk]['line_info'] = [$row['line_info']];
+                }
+                continue;
+            }
+
+            $merged[$npk][$amountKey] += $row[$amountKey];
+
+            if (!in_array($row['role'], $merged[$npk]['role'], true)) {
+                $merged[$npk]['role'][] = $row['role'];
+            }
+
+            if (array_key_exists('dept', $row) && !in_array($row['dept'], $merged[$npk]['dept'], true)) {
+                $merged[$npk]['dept'][] = $row['dept'];
+            }
+
+            if (array_key_exists('line_info', $row) && !in_array($row['line_info'], $merged[$npk]['line_info'], true)) {
+                $merged[$npk]['line_info'][] = $row['line_info'];
+            }
+        }
+
+        return array_values(array_map(function ($row) {
+            $row['role'] = implode(', ', array_filter($row['role']));
+
+            if (array_key_exists('dept', $row) && is_array($row['dept'])) {
+                $row['dept'] = implode(' | ', array_unique(array_filter($row['dept'])));
+            }
+
+            if (array_key_exists('line_info', $row) && is_array($row['line_info'])) {
+                $filtered = array_filter($row['line_info'], fn($v) => $v !== null && $v !== '-' && $v !== '');
+                $row['line_info'] = $filtered ? implode(' | ', array_unique($filtered)) : '-';
+            }
+
+            return $row;
+        }, $merged));
     }
 
     /*
@@ -539,10 +613,18 @@ class PadInsentifMasterController extends Controller
     |--------------------------------------------------------------------------
     | LOAD ASSIGNMENT
     |--------------------------------------------------------------------------
+    | Difilter berdasarkan $role yang sedang dihitung. Karyawan bisa punya
+    | lebih dari satu role dalam 1 periode (mis. operator tgl 3-4 Agustus,
+    | lalu jadi leader mulai tgl 5) — calculatePad() dipanggil terpisah per
+    | (npk, role) dari check(), jadi assignment yang diambil di sini juga
+    | harus dibatasi ke role tsb saja supaya tanggal role lain tidak ikut
+    | tercampur ke perhitungan.
+    |--------------------------------------------------------------------------
     */
         $assignments = DB::table('pad_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
+            ->where('role', $role)
             ->whereBetween('date', [$period->start_date, $period->end_date])
             ->get();
 
@@ -584,70 +666,84 @@ class PadInsentifMasterController extends Controller
         |--------------------------------------------------------------------------
         | NON OPERATOR (SPV / LEADER / HELPER)
         |--------------------------------------------------------------------------
+        | Operator pembanding diambil PER TANGGAL, mengikuti kolom "tim" milik
+        | employee (non operator) itu sendiri pada tanggal tsb:
+        |   - tim = 1  -> hanya operator dengan tim = 1
+        |   - tim = 2  -> hanya operator dengan tim = 2
+        |   - tim null -> semua operator (tanpa filter tim)
+        |--------------------------------------------------------------------------
         */ else {
-            $employeeDates = DB::table('pad_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('npk', $employee->NPK)
-                ->pluck('date')
-                ->unique()
-                ->toArray();
-            // dd($employeeDates);
+            // Assignment milik employee (non operator) ini sendiri, dikelompokkan per tanggal
+            $employeeAssignmentsByDate = $assignments->groupBy('date');
+            // dd($employeeAssignmentsByDate);
 
-            /*
-            |----------------------------------
-            | TOTAL DEPT INSENTIF
-            | ONLY VALID OPERATOR
-            |----------------------------------
-            */
             $totalDeptInsentif = 0;
+            $operatorNpks = [];
 
+            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
 
-            $operators = DB::table('pad_efficiencies')
-                ->where('period_id', $period->id)
-                ->where('role', '=', 'operator')
-                ->whereBetween('date', [$period->start_date, $period->end_date])
-                ->whereIn('date', $employeeDates)
-                ->get();
-
-            // dd($operators);
-
-
-            foreach ($operators as $operator) {
                 /*
                 |--------------------------------------------------------------------------
                 | CHECK RESIGN (NEW)
                 |--------------------------------------------------------------------------
                 */
-                if ($tkkDate && $operator->date >= $tkkDate) {
-                    continue;
-                }
-                // FILTER HANYA NUMERATOR
-                if (!$isValidOvertime($operator->npk, $operator->date)) {
+                if ($tkkDate && $date >= $tkkDate) {
                     continue;
                 }
 
-                $rate = $this->getInsentifByEfficiency(
-                    $operator->efficiency,
-                    $formula
-                );
+                /*
+                |--------------------------------------------------------------------------
+                | AMBIL TIM EMPLOYEE UNTUK TANGGAL INI
+                |--------------------------------------------------------------------------
+                */
+                $tim = $rowsForDate
+                    ->pluck('tim')
+                    ->filter(fn($t) => $t !== null && $t !== '')
+                    ->first();
 
-                $totalDeptInsentif += $rate * $operator->piece;
+                /*
+                |----------------------------------
+                | TOTAL DEPT INSENTIF (NUMERATOR)
+                | ONLY VALID OPERATOR, TIM SAMA (JIKA ADA)
+                |----------------------------------
+                */
+                $operatorQuery = DB::table('pad_efficiencies')
+                    ->where('period_id', $period->id)
+                    ->where('role', '=', 'operator')
+                    ->where('date', $date);
 
-                // dd($totalDeptInsentif);
+                if (!is_null($tim)) {
+                    $operatorQuery->where('tim', $tim);
+                }
+
+                $operatorsForDate = $operatorQuery->get();
+
+                // dd($tim, $operatorsForDate);
+
+                foreach ($operatorsForDate as $operator) {
+                    // FILTER HANYA NUMERATOR
+                    if (!$isValidOvertime($operator->npk, $operator->date)) {
+                        continue;
+                    }
+
+                    $rate = $this->getInsentifByEfficiency(
+                        $operator->efficiency,
+                        $formula
+                    );
+
+                    $totalDeptInsentif += $rate * $operator->piece;
+                    $operatorNpks[] = $operator->npk;
+
+                    // dd($totalDeptInsentif);
+                }
             }
 
             /*
                 |----------------------------------
-                | DENOMINATOR (ALL OPERATOR)
+                | DENOMINATOR (ALL OPERATOR, TIM SAMA PER TANGGAL)
                 |----------------------------------
                 */
-            $jumlahOperator = DB::table('pad_efficiencies as pe')
-                ->where('pe.period_id', $period->id)
-                ->whereIn('pe.date', $employeeDates)
-                ->where('pe.role', '=', 'operator')
-                ->pluck('pe.npk')
-                ->unique()
-                ->count();
+            $jumlahOperator = collect($operatorNpks)->unique()->count();
 
             // dd($totalDeptInsentif, $jumlahOperator);
 

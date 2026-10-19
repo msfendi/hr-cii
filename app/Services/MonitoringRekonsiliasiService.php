@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Satu service untuk dashboard Rekonsiliasi (gabungan), menarik data dari:
- *  - mon_orders          : Contract Qty (qty_ord) & info brand/style untuk header CPO
+ *  - mon_orders          : info brand/style untuk header CPO (Contract Qty kini dari mon_work_orders.jumlah_prod unik per prod_id)
  *  - mon_rekonsiliasis   : material achievement, top excess, detail per material
  *  - mon_prod_lines      : tahapan produksi per department (Production Result),
  *                          + tahap Warehouse (dari kolom `destination`),
@@ -265,7 +265,7 @@ class MonitoringRekonsiliasiService
      */
     private function rekonQuery()
     {
-        $query = DB::table('mon_rekonsiliasis');
+        $query = DB::table('mon_purchase_orders');
 
         if (!$this->hasAnyFilterInput()) {
             return $query;
@@ -296,6 +296,45 @@ class MonitoringRekonsiliasiService
         }
 
         return $query;
+    }
+
+    /**
+     * Subquery mon_work_orders dengan 1 baris per (prod_id, code_prod).
+     *
+     * mon_work_orders menyimpan 1 baris per KOMPONEN BOM, jadi `jumlah_prod`
+     * (qty produksi) diulang di setiap baris komponen milik prod_id yang
+     * sama. SUM(jumlah_prod) langsung = qty x jumlah komponen. Karena itu
+     * di-collapse dulu per prod_id dengan MAX(jumlah_prod), baru di-SUM.
+     *
+     * Scope filter SAMA dengan scopeByCodeProd() (Buyer/Style/CPO -> LIKE
+     * ke code_prod, OCF/Sub Ref/Negara -> LIKE langsung ke code_prod).
+     */
+    private function workOrderProdSubquery()
+    {
+        $sub = DB::table('mon_work_orders')
+            ->select('prod_id', 'code_prod')
+            ->selectRaw('MAX(jumlah_prod) as jumlah_prod')
+            ->selectRaw('MAX(product_name) as product_name')
+            ->selectRaw('MAX(tgl_prod) as tgl_prod')
+            ->selectRaw('MAX(tgl_doc) as tgl_doc')
+            ->groupBy('prod_id', 'code_prod');
+
+        if ($this->hasAnyFilterInput()) {
+            $this->scopeByCodeProd($sub, $this->filterUraianListForCodeProdScope());
+        }
+
+        return $sub;
+    }
+
+    /**
+     * Qty referensi / "Contract" = SUM(mon_work_orders.jumlah_prod) unik per
+     * prod_id (BUKAN mon_orders.qty_ord lagi).
+     */
+    private function workOrderQty(): float
+    {
+        return (float) (DB::query()
+            ->fromSub($this->workOrderProdSubquery(), 'wo')
+            ->sum('jumlah_prod') ?? 0);
     }
 
     private function orderQuery()
@@ -709,7 +748,8 @@ class MonitoringRekonsiliasiService
      * material kain (satuan_code = 'KGM'), di-scope ke CPO terpilih.
      *  - ORDER    : SUM(mon_rekonsiliasis.jumlah_order) WHERE satuan_code = 'KGM'.
      *  - RECEIVED : SUM(mon_rekonsiliasis.jumlah_doc) WHERE satuan_code = 'KGM'.
-     *  - OUT WIP  : SUM(mon_rekonsiliasis.out_req) WHERE satuan_code = 'KGM'.
+     *  - OUT WIP REQ : SUM(mon_rekonsiliasis.total_req) WHERE satuan_order = 'KGM'.
+     *  - OUT WIP DOC : SUM(mon_rekonsiliasis.total_doc) WHERE satuan_order = 'KGM'.
      *  - STOCK    : SUM(mon_rekonsiliasis.saldo_gudang) WHERE satuan_code = 'KGM'.
      *  - NEED     : SUM(mon_work_orders.jumlah_prod * mon_work_orders.cons)
      *               WHERE satuan_code = 'KGM', di-scope melalui join ke
@@ -720,10 +760,11 @@ class MonitoringRekonsiliasiService
      */
     public function fabricQty(): array
     {
-        $order    = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('jumlah_order') ?? 0);
-        $received = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('jumlah_doc') ?? 0);
-        $outWip   = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('out_req') ?? 0);
-        $stock    = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('saldo_gudang') ?? 0);
+        $order    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('jumlah_order') ?? 0);
+        $received = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_in') ?? 0);
+        $outWipReq = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_req') ?? 0);
+        $outWipDoc = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_doc') ?? 0);
+        $stock    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_gudang') ?? 0);
 
         // NEED dari mon_work_orders: SUM(jumlah_prod * cons) per row (bukan
         // lagi SUM(request)), di-scope via mon_boms supaya hanya menghitung
@@ -731,9 +772,11 @@ class MonitoringRekonsiliasiService
         // level CPO, jadi OCF/Sub Ref di sini tetap lewat bridge exact-match
         // mon_orders (filterUraianList()), bukan LIKE ke kolom teks bebas.
         $need = 0.0;
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
         if ($this->hasCpo()) {
             $need = (float) DB::table('mon_work_orders as wo')
-                ->whereIn('wo.uraian', $this->filterUraianList())
+                ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%'])
+                // ->whereIn('wo.uraian', $this->filterUraianList())
                 ->where('wo.satuan_code', 'KGM')
                 ->selectRaw('SUM(wo.jumlah_prod * wo.cons) as total')
                 ->value('total') ?? 0;
@@ -742,15 +785,17 @@ class MonitoringRekonsiliasiService
         // Perhitungan baru (persentase, konsisten dengan materialAchievement()):
         //  - order    : ORDER / NEED
         //  - received : RECEIVED / NEED
-        //  - out_wip  : OUT WIP / RECEIVED
-        //  - stock    : STOCK / RECEIVED
+        //  - out_wip_req : OUT WIP REQ / NEED
+        //  - out_wip_doc : OUT WIP DOC / NEED
+        //  - stock    : STOCK / NEED
         $pct = fn($num, $denom) => $denom > 0 ? round(max(0, (float) $num) / $denom * 100, 1) : 0;
 
         return [
             'need'     => $need,
-            'order'    => $pct($order, $need),
-            'received' => $pct($received, $need),
-            'out_wip'  => $pct($outWip, $received),
+            'order'    => $pct($order, 1),
+            'received' => $pct($received, $order),
+            'out_wip_req' => $pct($outWipReq, $received),
+            'out_wip_doc' => $pct($outWipDoc, $received),
             'stock'    => $pct($stock, $received),
         ];
     }
@@ -776,7 +821,7 @@ class MonitoringRekonsiliasiService
      */
     public function fabricUsage(): array
     {
-        $totalOutReq = (float) ($this->rekonQuery()->where('satuan_code', 'KGM')->sum('out_req') ?? 0);
+        $totalOutReq = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('out_req') ?? 0);
 
         $scrapQty = 0.0;
         $outputCutting = 0.0;
@@ -946,7 +991,7 @@ class MonitoringRekonsiliasiService
      */
     public function summary(): array
     {
-        $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
+        $contract = $this->workOrderQty();
         $shipment = (float) ($this->shipmentSumByCategory(MsBarang::CATEGORY_JADI) ?? 0);
         $balance  = $contract - $shipment;
 
@@ -973,17 +1018,16 @@ class MonitoringRekonsiliasiService
     }
 
     /**
-     * "MATERIAL ACHIEVEMENT": persentase tiap tahap dihitung berantai,
-     * dengan NEED sebagai baseline (selalu 100% kalau NEED > 0):
-     *  - NEED%     : NEED / NEED (patokan, selalu 100%), dengan NEED = SUM(mon_work_orders.jumlah_prod * mon_work_orders.cons).
-     *  - ORDER%    : mon_rekonsiliasis.jumlah_order / NEED.
-     *  - RECEIVED% : (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc) / NEED.
-     *  - OUT PROD% : mon_rekonsiliasis.out_req / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
-     *  - STOCK%    : mon_rekonsiliasis.saldo_gudang / (mon_rekonsiliasis.jumlah_doc - mon_rekonsiliasis.out_doc).
+     * "MATERIAL ACHIEVEMENT": persentase tiap tahap dengan ORDER sebagai baseline:
+     *  - ORDER%    : 100% (baseline, kalau jumlah_order > 0).
+     *  - RECEIVED% : jumlah_doc (received) / jumlah_order.
+     *  - OUT PROD% : out_req / jumlah_doc (received).
+     *  - OUT DOC%  : out_doc / jumlah_doc (received).
+     *  - STOCK%    : saldo_gudang (total_gudang) / jumlah_doc (received).
      *
-     * `out_doc` (mon_rekonsiliasis.out_doc) dikurangkan dari jumlah_doc untuk
-     * mendapatkan "jumlah diterima bersih" yang jadi pembagi OUT PROD% &
-     * STOCK%, sekaligus pembilang RECEIVED%.
+     * NEED (SUM(mon_work_orders.jumlah_prod * cons)) tetap dibawakan sebagai qty
+     * informasi (`need_qty`), tidak lagi jadi pembagi persentase.
+     * Blade hanya menampilkan field *_pct dari sini, tidak menghitung ulang.
      *
      * Setiap baris juga dibawakan `barang_category` (dari mon_ms_barangs, via
      * barang_code) supaya frontend bisa memecah chart menjadi 3 card:
@@ -998,8 +1042,9 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
             ->selectRaw('SUM(out_doc) as out_doc')
             ->selectRaw('SUM(out_req) as out_req')
-            ->selectRaw('SUM(saldo_gudang) as saldo_gudang')
+            ->selectRaw('SUM(total_gudang) as saldo_gudang')
             ->selectRaw('SUM(harga_total) as harga_total')
+            ->where('jumlah_doc', '!=', 0)
             ->groupBy('barang_code', 'barang_name')
             ->orderBy('barang_name')
             ->get();
@@ -1012,9 +1057,11 @@ class MonitoringRekonsiliasiService
         // per row (bukan lagi SUM(request)), di-scope ke CPO yang sama
         // dengan widget lain (lihat fabricQty()).
         $needByCode = collect();
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
         if ($this->hasCpo()) {
             $needByCode = DB::table('mon_work_orders')
-                ->whereIn('uraian', $this->filterUraianList())
+                // ->whereIn('uraian', $this->filterUraianList())
+                ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%'])
                 ->select('barang_code')
                 ->selectRaw('SUM(jumlah_prod * cons) as request')
                 ->groupBy('barang_code')
@@ -1032,9 +1079,6 @@ class MonitoringRekonsiliasiService
             $order  = (float) $r->jumlah_order;
             $doc    = (float) $r->jumlah_doc;
             $outDoc = (float) $r->out_doc;
-            // Jumlah diterima bersih = jumlah_doc - out_doc, dipakai sebagai
-            // pembagi OUT PROD% & STOCK%, dan pembilang RECEIVED%.
-            $netReceived = $doc - $outDoc;
             $need   = (float) ($needByCode[$r->barang_code]->request ?? 0);
 
             $pct = fn($num, $denom) => $denom > 0 ? round(max(0, (float) $num) / $denom * 100) : 0;
@@ -1048,18 +1092,30 @@ class MonitoringRekonsiliasiService
                 // barang_code) -- dipakai frontend untuk ditampilkan di
                 // tooltip chart Material/Fabric Achievement saat di-hover.
                 'harga_total'     => (float) ($r->harga_total ?? 0),
-                // NEED% jadi baseline/patokan (selalu 100% kalau NEED > 0),
-                // ORDER% & RECEIVED% sekarang dihitung terhadap NEED (bukan
-                // lagi terhadap ORDER itu sendiri) -- lihat instruksi
-                // perubahan formula fabricQty().
+                // Aturan persentase Material/Fabric Achievement (SATU-SATUNYA sumber
+                // hitung; blade hanya menampilkan field ini, tidak menghitung ulang):
+                //   ORDER%    = 100% (baseline, kalau ada order)
+                //   RECEIVED% = received (jumlah_doc) / order
+                //   OUT PROD% = out_req / received
+                //   OUT DOC%  = out_doc / received
+                //   STOCK%    = saldo_gudang / received
                 'need_pct'        => $pct($need, $need),
-                'order_pct'       => $pct($order, $need),
-                // RECEIVED% = (jumlah_doc - out_doc) / need.
+                'order_pct'       => $order > 0 ? 100 : 0,
                 'received_pct'    => $pct($doc, $order),
-                // OUT PROD% = out_req / (jumlah_doc - out_doc).
-                'out_prod_pct'    => $pct($r->out_req, $netReceived),
-                // STOCK% = saldo_gudang / (jumlah_doc - out_doc).
-                'stock_pct'       => $pct($r->saldo_gudang, $netReceived),
+                'out_prod_pct'    => $pct($r->out_req, $doc),
+                'out_req_pct'     => $pct($r->out_req, $doc),
+                'out_doc_pct'     => $pct($outDoc, $doc),
+                'stock_pct'       => $pct($r->saldo_gudang, $doc),
+                // Qty mentah (bukan persentase) untuk masing-masing bar --
+                // dipakai frontend supaya tooltip chart Material Achievement
+                // bisa menampilkan qty asli di samping persentase saat di-hover.
+                'need_qty'        => $need,
+                'order_qty'       => $order,
+                'received_qty'    => $doc,
+                'out_prod_qty'    => (float) $r->out_req,
+                'out_req_qty'     => (float) $r->out_req,
+                'out_doc_qty'     => $outDoc,
+                'stock_qty'       => (float) $r->saldo_gudang,
             ];
         });
     }
@@ -1102,7 +1158,8 @@ class MonitoringRekonsiliasiService
      *
      * Setiap department di atas juga dilengkapi `remarks` (koleksi object
      * {id, remark} dari mon_stage_remarks, dicocokkan lewat department_id
-     * -- dan OCF kalau filter OCF aktif) supaya frontend bisa menampilkannya
+     * -- plus OCF (kolom ocf_no) kalau filter OCF aktif, atau CPO (kolom cpo)
+     * kalau filter level CPO aktif) supaya frontend bisa menampilkannya
      * di bawah persentase loss pada masing-masing stage box, LENGKAP dengan
      * `id` supaya tombol hapus per baris remark bisa memanggil route
      * monitoring.rekonsiliasi.stage-remark.destroy.
@@ -1114,7 +1171,7 @@ class MonitoringRekonsiliasiService
      */
     public function productionPipeline(): array
     {
-        $contract = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
+        $contract = $this->workOrderQty();
 
         $deptCutting = $this->prodLineSumByDepartment('Cutting', MsBarang::CATEGORY_WIP);
         $deptSewing  = $this->prodLineSumByDepartment('Sewing', MsBarang::CATEGORY_JADI);
@@ -1163,28 +1220,37 @@ class MonitoringRekonsiliasiService
         $shipmentLoss    = $shipment - $contract;
         $shipmentLossPct = $contract > 0 ? round($shipment / $contract * 100, 2) : 0;
 
-        //  - Total process loss   = loss sewing + loss qc + loss packing
+        //  - Total process loss   = loss sewing + loss packing (stage QC di-skip)
         //  - Total process loss % = total process loss / contract total
         $lossSewing  = $deptSewing - $destSewing;
-        $lossQc      = $deptQc - $deptSewing;
         $lossPacking = $deptPacking - $destPacking;
-        $totalLoss   = $lossSewing + $lossQc + $lossPacking;
+        $totalLoss   = $lossSewing + $lossPacking;
         $lossPct     = $contract > 0 ? round($totalLoss / $contract * 100, 2) : 0;
 
         // Balance Garment Stock = (Warehouse [Work In Process] + Warehouse
         // [Sabkon]) - Shipment (Total).
         $balanceGarmentStock = ($destWarehouse + $sabkonWarehouse) - $shipment;
 
+        // Remark untuk kotak Shipment (Total) (department_id 'Shipment' di
+        // mon_stage_remarks).
+        $shipmentRemarks = $this->stageRemarksByDepartment('Shipment');
+
         // Remark untuk kotak Balance Garment Stock (department_id khusus
         // di mon_stage_remarks, tidak terhubung ke stage produksi manapun).
         $balanceGarmentStockRemarks = $this->stageRemarksByDepartment('Balance Garment Stock');
+
+        // Remark untuk kotak Total Process Loss (department_id khusus
+        // 'Total Process Loss' di mon_stage_remarks).
+        $totalLossRemarks = $this->stageRemarksByDepartment('Total Process Loss');
 
         return [
             'contract'    => $contract,
             'departments' => $departments,
             'shipment'    => $shipment,
+            'shipment_remarks' => $shipmentRemarks,
             'total_loss'  => $totalLoss,
             'loss_pct'    => $lossPct,
+            'total_loss_remarks' => $totalLossRemarks,
 
             // Cabang Sabkon (Pabrik Luar) -> Warehouse (Sabkon), ditampilkan
             // sebagai grup terpisah di sebelah flow produksi internal.
@@ -1212,7 +1278,6 @@ class MonitoringRekonsiliasiService
 
             // Komponen Total Process Loss.
             'loss_sewing'  => $lossSewing,
-            'loss_qc'      => $lossQc,
             'loss_packing' => $lossPacking,
 
             // Shipment vs Total Contract.
@@ -1352,16 +1417,67 @@ class MonitoringRekonsiliasiService
             ->where('mon_prod_qc.department_id', $departmentId)
             ->selectRaw('SUM(mon_prod_qc.jumlah) as jumlah');
 
-        $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
+        $this->scopeProdQc($query);
 
         return (float) ($query->value('jumlah') ?? 0);
     }
 
     /**
+     * Scope tabel manual-import (mon_prod_qc / mon_stage_remarks) ke filter
+     * aktif. Kedua tabel punya kolom OCF (`code_prod` / `ocf_no`) DAN kolom
+     * `cpo` (diisi dari kolom cpo di file import), jadi scope-nya:
+     *  - Filter OCF aktif                   -> LIKE '%{ocf}%' ke kolom OCF.
+     *  - Filter level CPO (CPO/uraian, Buyer, Style, Negara, Sub Ref)
+     *    di-resolve ke daftar CPO (cpoListExcluding(['ocf'])) -> whereIn ke
+     *    kolom `cpo` -- BUKAN lagi lewat OCF.
+     *  - Keduanya aktif -> di-AND-kan.
+     * Baris lama yang kolom `cpo`-nya masih NULL tidak ikut ketika filter
+     * level CPO aktif (tetap muncul untuk filter OCF saja).
+     */
+    private function scopeByCpoOrOcf($query, string $cpoColumn, string $ocfColumn): void
+    {
+        $ocf = strtoupper(trim((string) ($this->filters['ocf'] ?? '')));
+        if ($ocf !== '') {
+            $query->whereNotNull($ocfColumn)
+                ->whereRaw("UPPER({$ocfColumn}) LIKE ?", ['%' . $ocf . '%']);
+        }
+
+        $cpoList = $this->cpoListExcluding(['ocf']);
+        if ($cpoList === null) {
+            return;
+        }
+
+        if (empty($cpoList)) {
+            // Filter aktif tapi tidak match CPO apapun -> kosong.
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        // Chunk supaya aman dari batas 2100 parameter SQL Server.
+        $query->where(function ($q) use ($cpoColumn, $cpoList) {
+            foreach (array_chunk(array_values($cpoList), 500) as $chunk) {
+                $q->orWhereIn($cpoColumn, $chunk);
+            }
+        });
+    }
+
+    /**
+     * Scope mon_prod_qc ke filter aktif: OCF -> code_prod, CPO -> cpo
+     * (lihat scopeByCpoOrOcf()).
+     */
+    private function scopeProdQc($query)
+    {
+        $this->scopeByCpoOrOcf($query, 'mon_prod_qc.cpo', 'mon_prod_qc.code_prod');
+
+        return $query;
+    }
+
+    /**
      * Ambil daftar remark (mon_stage_remarks.id + .remark) untuk 1
-     * department_id, dicocokkan juga dengan filter OCF yang aktif (kolom
-     * mon_stage_remarks.ocf_no) -- dipakai untuk menampilkan remark di
-     * bawah persentase loss pada tiap stage box di PRODUCTION FLOW /
+     * department_id, di-scope ke filter aktif lewat scopeByCpoOrOcf():
+     * filter OCF -> kolom ocf_no, filter CPO (dan Buyer/Style/Negara/Sub Ref
+     * yang di-resolve ke CPO) -> kolom cpo. Dipakai untuk menampilkan remark
+     * di bawah persentase loss pada tiap stage box di PRODUCTION FLOW /
      * STAGE PIPELINE.
      *
      * Balikannya berupa Collection of object {id, remark} (BUKAN cuma
@@ -1376,10 +1492,9 @@ class MonitoringRekonsiliasiService
         $query = DB::table('mon_stage_remarks')
             ->where('department_id', $departmentId);
 
-        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
-        if ($ocf !== '') {
-            $query->whereNotNull('ocf_no')
-                ->whereRaw('UPPER(ocf_no) LIKE ?', ['%' . strtoupper($ocf) . '%']);
+        // Tanpa filter apapun, semua remark ditampilkan (perilaku lama).
+        if ($this->hasAnyFilterInput()) {
+            $this->scopeByCpoOrOcf($query, 'cpo', 'ocf_no');
         }
 
         return $query->orderByDesc('id')
@@ -1451,9 +1566,9 @@ class MonitoringRekonsiliasiService
     {
         return $this->rekonQuery()
             ->select('barang_name')
-            ->selectRaw('SUM(saldo_gudang) as saldo_gudang')
+            ->selectRaw('SUM(total_gudang) as saldo_gudang')
             ->groupBy('barang_name')
-            ->havingRaw('SUM(saldo_gudang) > 0')
+            ->havingRaw('SUM(total_gudang) > 0')
             ->orderByDesc('saldo_gudang')
             ->limit($limit)
             ->get();
@@ -1468,30 +1583,30 @@ class MonitoringRekonsiliasiService
 
         $query = $this->rekonQuery()
             ->leftJoinSub($shipmentAgg, 'ship', function ($join) {
-                $join->on('ship.barang_code', '=', 'mon_rekonsiliasis.barang_code');
+                $join->on('ship.barang_code', '=', 'mon_purchase_orders.barang_code');
             });
 
         return $query
             ->select(
-                'mon_rekonsiliasis.no_po',
-                'mon_rekonsiliasis.jenis_po',
-                'mon_rekonsiliasis.tgl_po',
-                'mon_rekonsiliasis.tgl_pengiriman',
-                'mon_rekonsiliasis.supplier_name',
-                'mon_rekonsiliasis.barang_code',
-                'mon_rekonsiliasis.barang_name',
-                'mon_rekonsiliasis.satuan_order',
-                'mon_rekonsiliasis.jumlah_order',
-                'mon_rekonsiliasis.jumlah_doc',
-                'mon_rekonsiliasis.out_req',
-                'mon_rekonsiliasis.out_prod',
-                'mon_rekonsiliasis.sisa',
-                'mon_rekonsiliasis.saldo_wip',
-                'mon_rekonsiliasis.saldo_gudang',
-                'mon_rekonsiliasis.harga_total'
+                'mon_purchase_orders.no_po',
+                'mon_purchase_orders.jenis_po',
+                'mon_purchase_orders.tgl_po',
+                'mon_purchase_orders.tgl_pengiriman',
+                'mon_purchase_orders.supplier_name',
+                'mon_purchase_orders.barang_code',
+                'mon_purchase_orders.barang_name',
+                'mon_purchase_orders.satuan_order',
+                'mon_purchase_orders.jumlah_order',
+                'mon_purchase_orders.jumlah_doc',
+                'mon_purchase_orders.out_req',
+                'mon_purchase_orders.out_prod',
+                'mon_purchase_orders.sisa',
+                // 'mon_purchase_orders.saldo_wip',
+                // 'mon_purchase_orders.saldo_gudang',
+                'mon_purchase_orders.harga_total'
             )
             ->selectRaw('COALESCE(ship.out_doc, 0) as out_doc')
-            ->orderBy('mon_rekonsiliasis.barang_name')
+            ->orderBy('mon_purchase_orders.barang_name')
             ->get();
     }
 
@@ -1562,16 +1677,10 @@ class MonitoringRekonsiliasiService
             $p['dept_sewing'] - $p['dest_sewing']
         ));
 
+        // Stage QC di-skip: Packing langsung menggunakan dept Sewing sebagai basis input.
         $steps->push($this->lossStep(
-            'Sewing → QC',
+            'Sewing → Packing',
             $p['dept_sewing'],
-            $p['dept_qc'],
-            $p['dept_qc'] - $p['dept_sewing']
-        ));
-
-        $steps->push($this->lossStep(
-            'QC → Packing',
-            $p['dept_qc'],
             $p['dept_packing'],
             $p['dept_packing'] - $p['dest_packing']
         ));
@@ -1682,7 +1791,7 @@ class MonitoringRekonsiliasiService
     private function shipmentPlanVsActualByDate(): array
     {
         $actualRows = $this->shipmentByDate();
-        $totalPlan  = (float) ($this->orderQuery()->sum('qty_ord') ?? 0);
+        $totalPlan  = $this->workOrderQty();
 
         $labels = $actualRows->pluck('tgl_bukti')->values()->all();
         $actual = $actualRows->pluck('jumlah_barang')->map(fn($v) => (float) $v)->values()->all();
@@ -1928,5 +2037,663 @@ class MonitoringRekonsiliasiService
         $this->filters = $originalFilters;
 
         return $this->matchNegaraFromOrders($cpoScope);
+    }
+
+    // =====================================================================
+    // DETAIL BREAKDOWN (accordion "DETAIL DATA" di dashboard)
+    // =====================================================================
+    // Setiap method di bawah memakai scope query yang SAMA PERSIS dengan
+    // method summary-nya (orderQuery(), scopeByCodeProd(), rekonQuery(),
+    // shipmentQuery(), subkonSumByField(), NEED mon_work_orders), jadi
+    // total breakdown = angka di card summary. Bedanya, di sini baris
+    // sumbernya dirinci (grup + baris mentah) -- bukan cuma SUM().
+    //
+    // Untuk menjaga ukuran payload, tiap tabel dibatasi DETAIL_ROW_LIMIT
+    // baris; `total`/`row_count` SELALU dihitung dari SELURUH baris (bukan
+    // dari baris yang dipotong), jadi frontend bisa menandai "dipotong".
+
+    /** Batas baris per tabel breakdown (grup maupun baris mentah). */
+    private const DETAIL_ROW_LIMIT = 500;
+
+    /**
+     * Breakdown lengkap semua card, dikirim di key `detailBreakdown` pada
+     * endpoint data(). Kosong kalau belum ada filter sama sekali.
+     */
+    public function detailBreakdown(): array
+    {
+        if (!$this->hasAnyFilterInput()) {
+            return [];
+        }
+
+        return [
+            'row_limit'    => self::DETAIL_ROW_LIMIT,
+            'contract'     => $this->contractDetail(),
+            'wip'          => $this->wipStageDetail(),
+            'sabkon'       => $this->sabkonDetail(),
+            'materials'    => [
+                'fabric'    => $this->materialDetailByGroup(MsBarang::GROUP_FABRIC),
+                'aksesoris' => $this->materialDetailByGroup(MsBarang::GROUP_AKSESORIS),
+                'packing'   => $this->materialDetailByGroup(MsBarang::GROUP_PACKING),
+            ],
+            'fabric_usage' => $this->fabricUsageDetail(),
+            'shipment'     => $this->shipmentBreakdown(),
+        ];
+    }
+
+    /**
+     * Total Contract: baris mon_work_orders (unik per prod_id) yang membentuk
+     * SUM(jumlah_prod) (workOrderProdSubquery() -- sama dengan
+     * productionPipeline()['contract']).
+     */
+    private function contractDetail(): array
+    {
+        $totals = DB::query()
+            ->fromSub($this->workOrderProdSubquery(), 'wo')
+            ->selectRaw('COUNT(*) as row_count, SUM(jumlah_prod) as total')
+            ->first();
+
+        $rows = DB::query()
+            ->fromSub($this->workOrderProdSubquery(), 'wo')
+            ->select('prod_id', 'code_prod', 'product_name', 'jumlah_prod', 'tgl_prod', 'tgl_doc')
+            ->orderBy('code_prod')
+            ->orderBy('prod_id')
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        return [
+            'row_count' => (int) ($totals->row_count ?? 0),
+            'total'     => (float) ($totals->total ?? 0),
+            'rows'      => $rows,
+        ];
+    }
+
+    /**
+     * Konfigurasi sumber qty tiap tahap Work In Process -- sama dengan
+     * yang dipakai productionPipeline() (prodLineSumByDepartment(),
+     * prodLineSumByDestination(), prodQcSumByDepartment()). Dua entri
+     * `basis_*` adalah komponen rumus loss (dest_sewing & dest_packing)
+     * yang tidak tampil sebagai box tapi menentukan angka Loss Sewing /
+     * Packing.
+     */
+    private function wipStageConfigs(): array
+    {
+        return [
+            'Cutting'   => ['source' => 'dept', 'value' => 'Cutting',   'category' => MsBarang::CATEGORY_WIP],
+            'Sewing'    => ['source' => 'dept', 'value' => 'Sewing',    'category' => MsBarang::CATEGORY_JADI],
+            'QC'        => ['source' => 'qc',   'value' => 'QC',        'category' => null],
+            'Packing'   => ['source' => 'dept', 'value' => 'Packing',   'category' => MsBarang::CATEGORY_JADI],
+            'Warehouse' => ['source' => 'dest', 'value' => 'Warehouse', 'category' => MsBarang::CATEGORY_JADI],
+            // Basis rumus loss (bukan box pipeline):
+            'basis_dest_sewing'  => ['source' => 'dest', 'value' => 'Sewing',  'category' => MsBarang::CATEGORY_WIP],
+            'basis_dest_packing' => ['source' => 'dest', 'value' => 'Packing', 'category' => MsBarang::CATEGORY_JADI],
+        ];
+    }
+
+    /** Query dasar 1 tahap WIP, sudah di-scope persis seperti summary-nya. */
+    private function wipStageBaseQuery(array $cfg)
+    {
+        if ($cfg['source'] === 'qc') {
+            $query = DB::table('mon_prod_qc')->where('mon_prod_qc.department_id', $cfg['value']);
+        } else {
+            $query = DB::table('mon_prod_lines');
+
+            if ($cfg['source'] === 'dept') {
+                $query->where('mon_prod_lines.department_id', $cfg['value']);
+            } else {
+                $query->where('mon_prod_lines.destination', 'like', "%{$cfg['value']}%");
+            }
+
+            if ($cfg['category'] !== null) {
+                $query->join('mon_ms_barangs', 'mon_ms_barangs.barang_code', '=', 'mon_prod_lines.barang_code')
+                    ->where('mon_ms_barangs.barang_category', $cfg['category']);
+            }
+        }
+
+        if ($cfg['source'] === 'qc') {
+            $this->scopeProdQc($query);
+        } else {
+            $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
+        }
+
+        return $query;
+    }
+
+    /**
+     * Work In Process (Chutex): per tahap -> `groups` (per code_prod/CPO +
+     * barang + department + destination) dan `rows` (baris mentah
+     * mon_prod_lines: 1 baris = 1 line surat jalan).
+     */
+    private function wipStageDetail(): array
+    {
+        $result = [];
+
+        foreach ($this->wipStageConfigs() as $stage => $cfg) {
+            if ($cfg['source'] === 'qc') {
+                $result[$stage] = $this->qcStageDetail($cfg);
+                continue;
+            }
+
+            $totals = $this->wipStageBaseQuery($cfg)
+                ->selectRaw('COUNT(*) as row_count, SUM(mon_prod_lines.jumlah) as total')
+                ->first();
+
+            $groups = $this->wipStageBaseQuery($cfg)
+                ->select(
+                    'mon_prod_lines.code_prod',
+                    'mon_prod_lines.department_id',
+                    'mon_prod_lines.destination',
+                    'mon_prod_lines.barang_code',
+                    'mon_prod_lines.barang_name'
+                )
+                ->selectRaw('COUNT(*) as doc_count')
+                ->selectRaw('SUM(mon_prod_lines.jumlah) as jumlah')
+                ->selectRaw('MIN(mon_prod_lines.tgl_produksi) as first_date')
+                ->selectRaw('MAX(mon_prod_lines.tgl_produksi) as last_date')
+                // Jumlah hari AKTIF = banyaknya tanggal produksi yang berbeda
+                // (bukan last_date - first_date, yang ikut menghitung hari kosong).
+                ->selectRaw('COUNT(DISTINCT mon_prod_lines.tgl_produksi) as active_days')
+                ->groupBy(
+                    'mon_prod_lines.code_prod',
+                    'mon_prod_lines.department_id',
+                    'mon_prod_lines.destination',
+                    'mon_prod_lines.barang_code',
+                    'mon_prod_lines.barang_name'
+                )
+                ->orderByDesc(DB::raw('SUM(mon_prod_lines.jumlah)'))
+                ->limit(self::DETAIL_ROW_LIMIT)
+                ->get();
+
+            $rows = $this->wipStageBaseQuery($cfg)
+                ->select(
+                    'mon_prod_lines.tgl_produksi',
+                    'mon_prod_lines.no_surat_jalan',
+                    'mon_prod_lines.code_prod',
+                    'mon_prod_lines.department_id',
+                    'mon_prod_lines.destination',
+                    'mon_prod_lines.barang_code',
+                    'mon_prod_lines.barang_name',
+                    'mon_prod_lines.jumlah',
+                    'mon_prod_lines.create_by'
+                )
+                ->orderByDesc('mon_prod_lines.tgl_produksi')
+                ->orderByDesc('mon_prod_lines.id')
+                ->limit(self::DETAIL_ROW_LIMIT)
+                ->get();
+
+            $result[$stage] = [
+                'row_count' => (int) ($totals->row_count ?? 0),
+                'total'     => (float) ($totals->total ?? 0),
+                'groups'    => $groups,
+                'rows'      => $rows,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Tahap QC bersumber dari mon_prod_qc (tidak punya barang/surat jalan/
+     * tanggal produksi) -- dibentuk ke struktur yang sama dengan tahap
+     * lain supaya frontend bisa memakai 1 renderer.
+     */
+    private function qcStageDetail(array $cfg): array
+    {
+        $totals = $this->wipStageBaseQuery($cfg)
+            ->selectRaw('COUNT(*) as row_count, SUM(mon_prod_qc.jumlah) as total')
+            ->first();
+
+        $qcRows = $this->wipStageBaseQuery($cfg)
+            ->select('mon_prod_qc.id', 'mon_prod_qc.code_prod', 'mon_prod_qc.department_id', 'mon_prod_qc.jumlah', 'mon_prod_qc.created_at')
+            ->orderByDesc('mon_prod_qc.id')
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        $groups = $this->wipStageBaseQuery($cfg)
+            ->select('mon_prod_qc.code_prod', 'mon_prod_qc.department_id')
+            ->selectRaw('COUNT(*) as doc_count')
+            ->selectRaw('SUM(mon_prod_qc.jumlah) as jumlah')
+            ->groupBy('mon_prod_qc.code_prod', 'mon_prod_qc.department_id')
+            ->orderByDesc(DB::raw('SUM(mon_prod_qc.jumlah)'))
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get()
+            ->map(fn($g) => (object) [
+                'code_prod'     => $g->code_prod,
+                'department_id' => $g->department_id,
+                'destination'   => null,
+                'barang_code'   => null,
+                'barang_name'   => null,
+                'doc_count'     => (int) $g->doc_count,
+                'jumlah'        => (float) $g->jumlah,
+                'first_date'    => null,
+                'last_date'     => null,
+                'active_days'   => null,
+            ]);
+
+        $rows = $qcRows->map(fn($r) => (object) [
+            'tgl_produksi'   => $r->created_at,
+            'no_surat_jalan' => null,
+            'code_prod'      => $r->code_prod,
+            'department_id'  => $r->department_id,
+            'destination'    => null,
+            'barang_code'    => null,
+            'barang_name'    => null,
+            'jumlah'         => (float) $r->jumlah,
+            'create_by'      => null,
+        ]);
+
+        return [
+            'row_count' => (int) ($totals->row_count ?? 0),
+            'total'     => (float) ($totals->total ?? 0),
+            'groups'    => $groups,
+            'rows'      => $rows,
+        ];
+    }
+
+    /**
+     * Sabkon Process: baris mon_subkons yang membentuk SUM(qty_result_order)
+     * (Sabkon / Pabrik Luar) dan SUM(qty_result_aktual) (Warehouse Sabkon).
+     * Di-scope HANYA lewat filter OCF -> no_order (lihat subkonSumByField()).
+     */
+    private function sabkonDetail(): array
+    {
+        $empty = [
+            'row_count' => 0,
+            'totals'    => ['qty_material_order' => 0, 'qty_result_order' => 0, 'qty_material_aktual' => 0, 'qty_result_aktual' => 0],
+            'by_supplier' => [],
+            'rows'      => [],
+        ];
+
+        $ocf = trim((string) ($this->filters['ocf'] ?? ''));
+        if ($ocf === '') {
+            return $empty;
+        }
+
+        $base = fn() => DB::table('mon_subkons')
+            ->whereRaw('UPPER(no_order) LIKE ?', ['%' . strtoupper($ocf) . '%']);
+
+        $totals = $base()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(qty_material_order) as qty_material_order')
+            ->selectRaw('SUM(qty_result_order) as qty_result_order')
+            ->selectRaw('SUM(qty_material_aktual) as qty_material_aktual')
+            ->selectRaw('SUM(qty_result_aktual) as qty_result_aktual')
+            ->first();
+
+        $bySupplier = $base()
+            ->select('supplier_code', 'supplier_name')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(qty_material_order) as qty_material_order')
+            ->selectRaw('SUM(qty_result_order) as qty_result_order')
+            ->selectRaw('SUM(qty_material_aktual) as qty_material_aktual')
+            ->selectRaw('SUM(qty_result_aktual) as qty_result_aktual')
+            ->groupBy('supplier_code', 'supplier_name')
+            ->orderByDesc(DB::raw('SUM(qty_result_order)'))
+            ->get();
+
+        $rows = $base()
+            ->select('id_order', 'no_order', 'tgl_order', 'jenis', 'supplier_code', 'supplier_name', 'qty_material_order', 'qty_result_order', 'qty_material_aktual', 'qty_result_aktual')
+            ->orderByDesc('tgl_order')
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        return [
+            'row_count' => (int) ($totals->row_count ?? 0),
+            'totals'    => [
+                'qty_material_order'  => (float) ($totals->qty_material_order ?? 0),
+                'qty_result_order'    => (float) ($totals->qty_result_order ?? 0),
+                'qty_material_aktual' => (float) ($totals->qty_material_aktual ?? 0),
+                'qty_result_aktual'   => (float) ($totals->qty_result_aktual ?? 0),
+            ],
+            'by_supplier' => $bySupplier,
+            'rows'        => $rows,
+        ];
+    }
+
+    /**
+     * Fabric Achievement / Material Achievement (Sewing Trim & Packing Trim):
+     * breakdown per kelompok barang (Fabric / Aksesoris / Packing) menurut
+     * kategori mon_ms_barangs -- kelompok yang sama dengan
+     * materialAchievementGroup().
+     *
+     *  - `po_rows`   : baris mon_purchase_orders (rekonQuery(), jumlah_doc != 0)
+     *                  yang di-SUM per barang_code di materialAchievement()
+     *                  -> Order (jumlah_order), Received (jumlah_doc),
+     *                  Out Doc (out_doc), Out Prod (out_req), Stock (total_gudang).
+     *  - `need_rows` : baris mon_work_orders pembentuk NEED
+     *                  (SUM(jumlah_prod * cons)), di-scope IDENTIK dengan NEED
+     *                  di materialAchievement().
+     */
+    private function materialDetailByGroup(array $categories): array
+    {
+        $codesInGroup = fn($q) => $q->select('barang_code')
+            ->from('mon_ms_barangs')
+            ->whereIn('barang_category', $categories);
+
+        $poBase = fn() => $this->rekonQuery()
+            ->where('mon_purchase_orders.jumlah_doc', '!=', 0)
+            ->whereIn('mon_purchase_orders.barang_code', $codesInGroup);
+
+        $poTotals = $poBase()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(mon_purchase_orders.jumlah_order) as jumlah_order')
+            ->selectRaw('SUM(mon_purchase_orders.jumlah_doc) as jumlah_doc')
+            ->selectRaw('SUM(mon_purchase_orders.out_doc) as out_doc')
+            ->selectRaw('SUM(mon_purchase_orders.out_req) as out_req')
+            ->selectRaw('SUM(mon_purchase_orders.total_gudang) as saldo_gudang')
+            ->selectRaw('SUM(mon_purchase_orders.harga_total) as harga_total')
+            ->first();
+
+        $poRows = $poBase()
+            ->select(
+                'mon_purchase_orders.no_po',
+                'mon_purchase_orders.jenis_po',
+                'mon_purchase_orders.tgl_po',
+                'mon_purchase_orders.tgl_pengiriman',
+                'mon_purchase_orders.supplier_name',
+                'mon_purchase_orders.uraian',
+                'mon_purchase_orders.spesifikasi',
+                'mon_purchase_orders.barang_code',
+                'mon_purchase_orders.barang_name',
+                'mon_purchase_orders.satuan_order',
+                'mon_purchase_orders.jumlah_order',
+                'mon_purchase_orders.jumlah_doc',
+                'mon_purchase_orders.out_doc',
+                'mon_purchase_orders.out_req',
+                'mon_purchase_orders.out_prod',
+                'mon_purchase_orders.sisa',
+                'mon_purchase_orders.harga_total'
+            )
+            ->selectRaw('mon_purchase_orders.total_gudang as saldo_gudang')
+            ->orderBy('mon_purchase_orders.barang_name')
+            ->orderBy('mon_purchase_orders.tgl_po')
+            ->orderBy('mon_purchase_orders.no_po')
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        // NEED: sama persis dengan materialAchievement() -- hanya dihitung
+        // kalau ada CPO ter-resolve (hasCpo()), dan di-scope LIKE OCF ke
+        // mon_work_orders.code_prod.
+        $needRows   = collect();
+        $needTotals = (object) ['row_count' => 0, 'jumlah_prod' => 0, 'need' => 0];
+
+        if ($this->hasCpo()) {
+            $ocf = trim((string) ($this->filters['ocf'] ?? ''));
+
+            $needBase = fn() => DB::table('mon_work_orders')
+                ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%'])
+                ->whereIn('barang_code', $codesInGroup);
+
+            $needTotals = $needBase()
+                ->selectRaw('COUNT(*) as row_count')
+                ->selectRaw('SUM(jumlah_prod * cons) as need')
+                ->first();
+
+            // jumlah_prod di mon_work_orders di-repeat per baris BOM/komponen
+            // (1 prod_id = N baris komponen, jumlah_prod sama). SUM(jumlah_prod)
+            // langsung = qty x jumlah komponen. Total produksi yang benar =
+            // jumlah_prod per prod_id (unik), tanpa filter kelompok barang,
+            // karena filter kelompok hanya relevan untuk NEED (komponen).
+            $prodTotal = DB::table(
+                DB::table('mon_work_orders')
+                    ->whereRaw('UPPER(code_prod) LIKE ?', ['%' . strtoupper($ocf) . '%'])
+                    ->select('prod_id')
+                    ->selectRaw('MAX(jumlah_prod) as jumlah_prod')
+                    ->groupBy('prod_id'),
+                'wo_prod'
+            )->selectRaw('SUM(jumlah_prod) as jumlah_prod')->value('jumlah_prod');
+
+            $needTotals->jumlah_prod = (float) ($prodTotal ?? 0);
+
+            $needRows = $needBase()
+                ->select('barang_code', 'barang_name', 'code_prod', 'product_code', 'cons')
+                ->selectRaw('SUM(jumlah_prod) as jumlah_prod')
+                ->selectRaw('SUM(jumlah_prod * cons) as need')
+                ->groupBy('barang_code', 'barang_name', 'code_prod', 'product_code', 'cons')
+                ->orderBy('barang_name')
+                ->orderBy('code_prod')
+                ->limit(self::DETAIL_ROW_LIMIT)
+                ->get();
+        }
+
+        return [
+            'po' => [
+                'row_count' => (int) ($poTotals->row_count ?? 0),
+                'totals'    => [
+                    'jumlah_order' => (float) ($poTotals->jumlah_order ?? 0),
+                    'jumlah_doc'   => (float) ($poTotals->jumlah_doc ?? 0),
+                    'out_doc'      => (float) ($poTotals->out_doc ?? 0),
+                    'out_req'      => (float) ($poTotals->out_req ?? 0),
+                    'saldo_gudang' => (float) ($poTotals->saldo_gudang ?? 0),
+                    'harga_total'  => (float) ($poTotals->harga_total ?? 0),
+                ],
+                'rows' => $poRows,
+            ],
+            'need' => [
+                'row_count' => (int) ($needTotals->row_count ?? 0),
+                'totals'    => [
+                    'jumlah_prod' => (float) ($needTotals->jumlah_prod ?? 0),
+                    'need'        => (float) ($needTotals->need ?? 0),
+                ],
+                'rows' => $needRows,
+            ],
+        ];
+    }
+
+    /**
+     * Fabric Usage Percentage: dua komponen rumusnya dirinci.
+     *  - Total Out Req = SUM(mon_purchase_orders.out_req) WHERE satuan_order = 'KGM'
+     *    -> `out_req` (per barang & per baris PO).
+     *  - Scrap Qty     = SUM(mon_prod_lines.jumlah) WHERE barang_code = '01SCRP00001'
+     *    -> `scrap` (per code_prod / department / destination).
+     */
+    private function fabricUsageDetail(): array
+    {
+        $outReqBase = fn() => $this->rekonQuery()->where('satuan_order', 'KGM');
+
+        $outReqTotals = $outReqBase()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_order) as jumlah_order')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
+            ->selectRaw('SUM(out_req) as out_req')
+            ->first();
+
+        $outReqByBarang = $outReqBase()
+            ->select('barang_code', 'barang_name')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_order) as jumlah_order')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
+            ->selectRaw('SUM(out_req) as out_req')
+            ->groupBy('barang_code', 'barang_name')
+            ->orderByDesc(DB::raw('SUM(out_req)'))
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        // Baris PO dengan out_req <> 0 -- total & jumlah barisnya dihitung
+        // dari himpunan yang SAMA dengan baris yang ditampilkan, supaya
+        // footer tabel (Order / Received / Out Req) konsisten dengan barisnya.
+        $outReqNonZero = fn() => $outReqBase()->where('out_req', '!=', 0);
+
+        $nonZeroTotals = $outReqNonZero()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_order) as jumlah_order')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
+            ->selectRaw('SUM(out_req) as out_req')
+            ->first();
+
+        $outReqRows = $outReqNonZero()
+            ->select('no_po', 'tgl_po', 'supplier_name', 'uraian', 'barang_code', 'barang_name', 'satuan_order', 'jumlah_order', 'jumlah_doc', 'out_req')
+            ->orderBy('barang_name')
+            ->orderBy('tgl_po')
+            ->orderBy('no_po')
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        $scrapBase = function () {
+            $query = DB::table('mon_prod_lines')->where('barang_code', '01SCRP00001');
+            $this->scopeByCodeProd($query, $this->filterUraianListForCodeProdScope());
+            return $query;
+        };
+
+        $scrapTotals = $scrapBase()
+            ->selectRaw('COUNT(*) as row_count, SUM(jumlah) as total')
+            ->first();
+
+        $scrapGroups = $scrapBase()
+            ->select('code_prod', 'department_id', 'destination')
+            ->selectRaw('COUNT(*) as doc_count')
+            ->selectRaw('SUM(jumlah) as jumlah')
+            ->groupBy('code_prod', 'department_id', 'destination')
+            ->orderByDesc(DB::raw('SUM(jumlah)'))
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        return [
+            'out_req' => [
+                'row_count' => (int) ($outReqTotals->row_count ?? 0),
+                'totals'    => [
+                    'jumlah_order' => (float) ($outReqTotals->jumlah_order ?? 0),
+                    'jumlah_doc'   => (float) ($outReqTotals->jumlah_doc ?? 0),
+                    'out_req'      => (float) ($outReqTotals->out_req ?? 0),
+                ],
+                'by_barang' => $outReqByBarang,
+                'rows'      => $outReqRows,
+                'nonzero'   => [
+                    'row_count' => (int) ($nonZeroTotals->row_count ?? 0),
+                    'totals'    => [
+                        'jumlah_order' => (float) ($nonZeroTotals->jumlah_order ?? 0),
+                        'jumlah_doc'   => (float) ($nonZeroTotals->jumlah_doc ?? 0),
+                        'out_req'      => (float) ($nonZeroTotals->out_req ?? 0),
+                    ],
+                ],
+            ],
+            'scrap' => [
+                'row_count' => (int) ($scrapTotals->row_count ?? 0),
+                'total'     => (float) ($scrapTotals->total ?? 0),
+                'groups'    => $scrapGroups,
+            ],
+        ];
+    }
+
+    /**
+     * Shipment By Date: dokumen shipment (mon_shipments via shipmentQuery())
+     * yang membentuk grafik per tanggal `tgl_bukti`.
+     *  - `totals.all`         : semua kategori (= total grafik shipmentByDate()).
+     *  - `totals.barang_jadi` : hanya Barang Jadi (= box "Shipment (Total)"
+     *                           di pipeline, shipmentSumByCategory(JADI)).
+     *  - `totals.bc30`        : hanya dokumen BC 3.0 (dasar tabel `by_date`).
+     *  - `by_date`            : per tanggal + no_bukti, HANYA BC 3.0.
+     *  - `rows`               : baris dokumen mentah.
+     */
+    private function shipmentBreakdown(): array
+    {
+        $all = $this->shipmentQuery()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->first();
+
+        $jadi = $this->shipmentQuery()
+            ->where('barang_category', MsBarang::CATEGORY_JADI)
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->first();
+
+        // Tabel "Per Kategori Barang" hanya menampilkan Barang Jadi.
+        $byCategory = $this->shipmentQuery()
+            ->where('barang_category', MsBarang::CATEGORY_JADI)
+            ->select('barang_category')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->groupBy('barang_category')
+            ->get();
+
+        // Tabel "Per Tanggal & No. Bukti" hanya menampilkan dokumen BC 3.0.
+        $bc30Base = fn() => $this->shipmentQuery()
+            ->whereRaw("UPPER(LTRIM(RTRIM(jenis_doc))) = 'BC 3.0'");
+
+        $bc30 = $bc30Base()
+            ->whereNotNull('tgl_bukti')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->selectRaw('SUM(nilai_barang) as nilai_barang')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
+            ->first();
+
+        $byDate = $bc30Base()
+            ->whereNotNull('tgl_bukti')
+            ->select('tgl_bukti', 'no_bukti', 'jenis_doc')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->selectRaw('SUM(nilai_barang) as nilai_barang')
+            ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
+            ->groupBy('tgl_bukti', 'no_bukti', 'jenis_doc')
+            ->orderByDesc('tgl_bukti')
+            ->orderBy('no_bukti')
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        // Tabel "Baris Dokumen Shipment" juga hanya BC 3.0 (tanpa syarat
+        // tgl_bukti, jadi totalnya dihitung terpisah dari $bc30 di atas).
+        $bc30Rows = $bc30Base()
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(jumlah_barang) as jumlah_barang')
+            ->selectRaw('SUM(nilai_fob) as nilai_fob')
+            ->first();
+
+        $rows = $bc30Base()
+            ->select(
+                'tgl_bukti',
+                'no_bukti',
+                'jenis_doc',
+                'no_aju',
+                'no_invoice',
+                'jenis_ps',
+                'no_ps',
+                'uraian',
+                'supplier_name',
+                'barang_code',
+                'barang_name',
+                'barang_category',
+                'satuan_doc',
+                'jumlah_barang',
+                'nilai_fob',
+                'berat'
+            )
+            ->orderByDesc('tgl_bukti')
+            ->orderBy('no_bukti')
+            ->limit(self::DETAIL_ROW_LIMIT)
+            ->get();
+
+        return [
+            'totals' => [
+                'all' => [
+                    'row_count'     => (int) ($all->row_count ?? 0),
+                    'jumlah_barang' => (float) ($all->jumlah_barang ?? 0),
+                    'nilai_fob'     => (float) ($all->nilai_fob ?? 0),
+                ],
+                'barang_jadi' => [
+                    'row_count'     => (int) ($jadi->row_count ?? 0),
+                    'jumlah_barang' => (float) ($jadi->jumlah_barang ?? 0),
+                ],
+                'bc30_rows' => [
+                    'row_count'     => (int) ($bc30Rows->row_count ?? 0),
+                    'jumlah_barang' => (float) ($bc30Rows->jumlah_barang ?? 0),
+                    'nilai_fob'     => (float) ($bc30Rows->nilai_fob ?? 0),
+                ],
+                'bc30' => [
+                    'row_count'     => (int) ($bc30->row_count ?? 0),
+                    'jumlah_barang' => (float) ($bc30->jumlah_barang ?? 0),
+                    'nilai_fob'     => (float) ($bc30->nilai_fob ?? 0),
+                    'nilai_barang'  => (float) ($bc30->nilai_barang ?? 0),
+                    'jumlah_doc'    => (float) ($bc30->jumlah_doc ?? 0),
+                ],
+            ],
+            'by_category' => $byCategory,
+            'by_date'     => $byDate,
+            'rows'        => $rows,
+        ];
     }
 }

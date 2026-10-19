@@ -68,8 +68,13 @@
           <img src="{{ public_path('img/chutex_logo.png') }}" width="70">
         </td>
         <td class="center bold" style="font-size:18px;"> BLANKO TEST <br>KESEHATAN </td>
-      </tr>
-    </table>
+        <td class="center">
+          <span>No Dok.</span>: CII.FM.HR.01.03 <br> 
+          <span>Active Date</span>: 13 Mei 2025 </td><br>
+          <span>Rev</span>: 00 </td><br>
+          <span>Rev Date</span>: 9 Juli 2025 </td>
+        </tr>
+      </table>
     {{-- ================= IDENTITAS ================= --}}
     <table class="header">
       <tr>

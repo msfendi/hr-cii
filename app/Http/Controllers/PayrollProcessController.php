@@ -605,6 +605,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
             'pad'     => ['table' => 'pad_efficiencies',      'label' => 'Pad Print Efficiency'],
             'cutting' => ['table' => 'cutting_efficiencies',  'label' => 'Cutting Efficiency'],
             'heat'    => ['table' => 'heat_efficiencies',     'label' => 'Heat Press Efficiency'],
+            'qc'    => ['table' => 'qc_efficiencies',     'label' => 'QC Efficiency'],
         ];
 
         $insentifDetail = [];
@@ -612,7 +613,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
         foreach ($insentifTables as $key => $info) {
 
-            $lastDate = DB::table($info['table'])->max('date');
+            $lastDate = DB::table($info['table'])->max('updated_at');
 
             $insentifDetail[$key] = [
                 'label'     => $info['label'],
@@ -878,7 +879,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','BR','OUT','CU')
                     THEN 1
 
                 ELSE 0
@@ -891,7 +892,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
 
                 WHEN JUMLAH_JAM_LEMBUR IS NOT NULL
                     AND TRY_CAST(JUMLAH_JAM_LEMBUR AS FLOAT) IS NULL
-                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD')
+                    AND UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA','P1','H','BR','OUT','SD','CU')
                     THEN JUMLAH_JAM_LEMBUR
             END AS absence_status
         ")
@@ -1218,7 +1219,8 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                 'd.DEPARTEMENT as dept',
                 'prd.components',
                 'prd.total_salary',
-                'emp.IS_STAFF',
+                'prd.employee_staff as IS_STAFF',
+                'prd.employee_expat as IS_EXPAT',
                 'd.IS_SEWING',
                 'p.KETERANGAN'
             );
@@ -1230,7 +1232,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
     */
 
         if (!$user->hasRole('Admin')) {
-            \App\Services\PayrollRoleFilterService::applyToQuery($query, $payrollRole, 'emp.IS_STAFF', 'd.IS_SEWING');
+            \App\Services\PayrollRoleFilterService::applyToQuery($query, $payrollRole, 'prd.employee_staff', 'd.IS_SEWING');
         }
 
         /*
@@ -1738,6 +1740,7 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                     ($components['monthly_premi'] ?? 0) +
                     ($components['long_service_allowance'] ?? 0) +
                     ($components['allowance'] ?? 0) +
+                    ($components['meal_allowance'] ?? 0) +
                     ($components['sewing_insentif'] ?? 0) +
                     ($components['pad_insentif'] ?? 0) +
                     ($components['cutting_insentif'] ?? 0) +

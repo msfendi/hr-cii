@@ -178,9 +178,9 @@
                         <span class="material-symbols-outlined">mark_email_unread</span>
                         <p>
                             Ada pertanyaan? Hubungi kami di
-                            <a href="mailto:hrd@chutex.co.id"
+                            <a href="mailto:recruitment@chutex.id"
                                class="text-primary font-bold hover:underline break-all">
-                                hrd@chutex.co.id
+                                recruitment@chutex.id
                             </a>
                         </p>
                     </div>

@@ -25,7 +25,8 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
             'role',
             'efficiency',
             'piece',
-            'date'
+            'date',
+            'tim'
         ];
     }
     public static function afterSheet(AfterSheet $event)
@@ -34,10 +35,10 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $spreadsheet = $sheet->getParent();
 
         // bold header
-        $sheet->getStyle('A1:E1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:F1')->getFont()->setBold(true);
 
         // auto width
-        foreach (range('A', 'E') as $column) {
+        foreach (range('A', 'F') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
@@ -52,6 +53,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D2', '3517');
         $date = Date::stringToExcel('2026-01-12');
         $sheet->setCellValue('E2', $date);
+        $sheet->setCellValue('F2', 1);
 
         $sheet->setCellValue('A3', 'C-00827');
         $sheet->setCellValue('B3', 'operator');
@@ -59,6 +61,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D3', '3724');
         $date = Date::stringToExcel('2026-01-13');
         $sheet->setCellValue('E3', $date);
+        $sheet->setCellValue('F3', 1);
 
         $sheet->setCellValue('A4', 'C-00827');
         $sheet->setCellValue('B4', 'operator');
@@ -66,6 +69,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('D4', '3724');
         $date = Date::stringToExcel('2026-01-14');
         $sheet->setCellValue('E4', $date);
+        $sheet->setCellValue('F4', 2);
 
         $roles = DB::table('insentif_role_formulas')
             ->where('dept', 'heat')
@@ -92,7 +96,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
 
         $lastRow = count($roles);
 
-        // Apply dropdown to C2:C5000
+        // Apply dropdown (role) to B2:B5000
         for ($row = 2; $row <= 5000; $row++) {
             $validation = $sheet->getCell('B' . $row)->getDataValidation();
 

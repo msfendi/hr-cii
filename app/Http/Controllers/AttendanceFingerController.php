@@ -413,6 +413,11 @@ class AttendanceFingerController extends Controller
             //     // $tomorrow DIHAPUS
             // ]);
 
+            //     return datatables()->of($data)->addIndexColumn()->make(true);
+            // } catch (\Exception $e) {
+            //     return response()->json(['error' => $e->getMessage()]);
+            // }
+
 
             // $date      = $request->filled('date') ? $request->date : now()->toDateString();
             // $yesterday = \Carbon\Carbon::parse($date)->subDay()->format('Y-m-d');
@@ -1147,30 +1152,21 @@ class AttendanceFingerController extends Controller
                 {$deptFilter}
             ),
             att_log_window AS (
-                -- Ambil dari D-1 sampai D+2 untuk cover:
-                -- • Early check-in (4 jam sebelum shift mulai D+1)
-                -- • Late check-out night shift (D+1 07:30)
-                -- • Normal shift lembur tengah malam (D 23:59)
                 SELECT pin, scan_date
                 FROM att_log
                 WHERE scan_date >= DATEADD(DAY, -1, CAST(? AS DATETIME))
-                AND scan_date <  DATEADD(DAY,  2, CAST(? AS DATETIME))
+                  AND scan_date <  DATEADD(DAY, 2, CAST(? AS DATETIME))
             ),
             candidate AS (
-                -- Kumpulkan semua kombinasi (npk, work_date) yang mungkin relevan
-                -- termasuk ±1 hari dari scan date untuk handle night shift
                 SELECT DISTINCT npk, work_date FROM (
-                    SELECT e.npk, CAST(a.scan_date AS DATE)                    AS work_date
-                    FROM emp e
-                    JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
+                    SELECT e.npk, CAST(a.scan_date AS DATE) AS work_date
+                    FROM emp e JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
                     UNION ALL
-                    SELECT e.npk, DATEADD(DAY, -1, CAST(a.scan_date AS DATE)) AS work_date
-                    FROM emp e
-                    JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
+                    SELECT e.npk, DATEADD(DAY, -1, CAST(a.scan_date AS DATE))
+                    FROM emp e JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
                     UNION ALL
-                    SELECT e.npk, DATEADD(DAY,  1, CAST(a.scan_date AS DATE)) AS work_date
-                    FROM emp e
-                    JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
+                    SELECT e.npk, DATEADD(DAY, 1, CAST(a.scan_date AS DATE))
+                    FROM emp e JOIN att_log_window a ON CAST(a.pin AS VARCHAR) = CAST(e.pin AS VARCHAR)
                 ) x
                 WHERE work_date BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
             ),
@@ -1180,91 +1176,40 @@ class AttendanceFingerController extends Controller
                 JOIN emp e ON e.npk = c.npk
             ),
             emp_shift AS (
-                -- Resolve shift hari ini dan shift kemarin per work_date
                 SELECT
                     ce.*,
-                    COALESCE(s.work_start,  '08:00:00') AS work_start,
-                    COALESCE(s.work_end,    '17:00:00') AS work_end,
+                    COALESCE(s.work_start, '08:00:00')  AS work_start,
+                    COALESCE(s.work_end, '17:00:00')    AS work_end,
                     COALESCE(ps.work_start, '08:00:00') AS prev_work_start,
-                    COALESCE(ps.work_end,   '17:00:00') AS prev_work_end
+                    COALESCE(ps.work_end, '17:00:00')   AS prev_work_end
                 FROM cand_emp ce
                 LEFT JOIN employee_shifts es
-                    ON es.npk = ce.npk
-                    AND CAST(es.shift_date AS DATE) = ce.work_date
-                LEFT JOIN shifts s  ON s.id  = es.shift_id
+                    ON es.npk = ce.npk AND CAST(es.shift_date AS DATE) = ce.work_date
+                LEFT JOIN shifts s ON s.id = es.shift_id
                 LEFT JOIN employee_shifts pes
-                    ON pes.npk = ce.npk
-                    AND CAST(pes.shift_date AS DATE) = DATEADD(DAY, -1, ce.work_date)
+                    ON pes.npk = ce.npk AND CAST(pes.shift_date AS DATE) = DATEADD(DAY, -1, ce.work_date)
                 LEFT JOIN shifts ps ON ps.id = pes.shift_id
             ),
             emp_bounds AS (
-                -- Hitung datetime absolut untuk shift_start, shift_end, dan prev_shift_end
                 SELECT
                     es.*,
-
-                    -- Jam mulai shift hari ini
-                    CAST(
-                        CONVERT(VARCHAR(10), es.work_date, 120)
-                        + ' ' + CONVERT(VARCHAR(8), es.work_start, 108)
-                    AS DATETIME) AS shift_start_dt,
-
-                    -- Jam selesai shift hari ini
-                    -- Night shift (work_end < work_start) → +1 hari
-                    -- Normal shift                        → hari yang sama
+                    CAST(CONVERT(VARCHAR(10), es.work_date, 120) + ' ' + CONVERT(VARCHAR(8), es.work_start, 108) AS DATETIME) AS shift_start_dt,
                     CASE
                         WHEN es.work_end < es.work_start
-                            THEN DATEADD(DAY, 1,
-                                    CAST(CONVERT(VARCHAR(10), es.work_date, 120)
-                                        + ' ' + CONVERT(VARCHAR(8), es.work_end, 108) AS DATETIME))
-                        ELSE CAST(CONVERT(VARCHAR(10), es.work_date, 120)
-                                + ' ' + CONVERT(VARCHAR(8), es.work_end, 108) AS DATETIME)
+                            THEN DATEADD(DAY, 1, CAST(CONVERT(VARCHAR(10), es.work_date, 120) + ' ' + CONVERT(VARCHAR(8), es.work_end, 108) AS DATETIME))
+                        ELSE CAST(CONVERT(VARCHAR(10), es.work_date, 120) + ' ' + CONVERT(VARCHAR(8), es.work_end, 108) AS DATETIME)
                     END AS shift_end_dt,
-
-                    -- Jam selesai shift KEMARIN
-                    -- Jika kemarin night shift → end-nya jatuh di work_date ini (yesterday+1)
-                    -- Jika kemarin normal      → end-nya di work_date-1
                     CASE
                         WHEN es.prev_work_end < es.prev_work_start
-                            THEN DATEADD(DAY, 1,
-                                    CAST(CONVERT(VARCHAR(10), DATEADD(DAY, -1, es.work_date), 120)
-                                        + ' ' + CONVERT(VARCHAR(8), es.prev_work_end, 108) AS DATETIME))
-                        ELSE CAST(CONVERT(VARCHAR(10), DATEADD(DAY, -1, es.work_date), 120)
-                                + ' ' + CONVERT(VARCHAR(8), es.prev_work_end, 108) AS DATETIME)
+                            THEN DATEADD(DAY, 1, CAST(CONVERT(VARCHAR(10), DATEADD(DAY, -1, es.work_date), 120) + ' ' + CONVERT(VARCHAR(8), es.prev_work_end, 108) AS DATETIME))
+                        ELSE CAST(CONVERT(VARCHAR(10), DATEADD(DAY, -1, es.work_date), 120) + ' ' + CONVERT(VARCHAR(8), es.prev_work_end, 108) AS DATETIME)
                     END AS prev_shift_end_dt
-
                 FROM emp_shift es
             ),
             emp_window AS (
                 SELECT
                     eb.*,
-
-                    /*
-                    * FIX: scan_upper_bound dinamis berdasarkan tipe shift
-                    *
-                    * ┌─────────────────┬──────────────────────────────────────────┐
-                    * │ Night shift     │ shift_end_dt + 120 menit                 │
-                    * │ (end < start)   │ Contoh: 05:30 + 120min = 07:30           │
-                    * │                 │ Presisi cross-midnight, bukan overtime    │
-                    * ├─────────────────┼──────────────────────────────────────────┤
-                    * │ Normal shift    │ 23:59:59 of work_date                    │
-                    * │                 │ Cover overtime hingga menjelang tengah    │
-                    * │                 │ malam tanpa risiko overlap ke hari        │
-                    * │                 │ berikutnya                               │
-                    * └─────────────────┴──────────────────────────────────────────┘
-                    *
-                    * Formula 23:59:59:
-                    *   DATEADD(DAY, 1, work_date 00:00:00) - 1 detik = work_date 23:59:59
-                    */
-                    CASE
-                        WHEN eb.work_end < eb.work_start
-                            THEN DATEADD(MINUTE, 120, eb.shift_end_dt)
-                        ELSE DATEADD(SECOND, -1,
-                                DATEADD(DAY, 1,
-                                    CAST(CONVERT(VARCHAR(10), eb.work_date, 120) AS DATETIME)
-                                )
-                            )
-                    END AS scan_upper_bound
-
+                    DATEADD(MINUTE, 120, eb.shift_end_dt) AS scan_upper_bound
                 FROM emp_bounds eb
             ),
             scans AS (
@@ -1276,51 +1221,17 @@ class AttendanceFingerController extends Controller
                 FROM emp_window ew
                 JOIN att_log_window a
                     ON CAST(a.pin AS VARCHAR) = CAST(ew.pin AS VARCHAR)
-
-                    -- Batas bawah: 4 jam sebelum shift mulai (toleransi early check-in)
                     AND a.scan_date >= DATEADD(HOUR, -4, ew.shift_start_dt)
-
-                    -- Batas atas: simetris dengan scan_upper_bound
                     AND a.scan_date <= ew.scan_upper_bound
-
-                    /*
-                    * FIX: Exclusion simetris dengan scan_upper_bound
-                    *
-                    * Jika shift KEMARIN adalah night shift:
-                    *   exclusion = prev_shift_end + 120min
-                    *   Contoh prev end 05:30 → blokir scan ≤ 07:30
-                    *
-                    * Jika shift KEMARIN adalah normal shift:
-                    *   exclusion = 23:59:59 kemarin
-                    *   = DATEADD(SECOND, -1, work_date 00:00:00)
-                    *
-                    * Bukti simetri (zero gap, zero overlap):
-                    *   Batas ATAS  hari N   = 23:59:59 hari N
-                    *   Batas BAWAH hari N+1 = 23:59:59 hari N  ← IDENTIK ✓
-                    */
-                    AND a.scan_date >
-                        CASE
-                            WHEN ew.prev_work_end < ew.prev_work_start
-                                THEN DATEADD(MINUTE, 120, ew.prev_shift_end_dt)
-                            ELSE DATEADD(SECOND, -1,
-                                    CAST(CONVERT(VARCHAR(10), ew.work_date, 120) AS DATETIME)
-                                )
-                            -- = 23:59:59 of (work_date - 1) = yesterday end of day
-                        END
+                    AND a.scan_date > DATEADD(MINUTE, 120, ew.prev_shift_end_dt)
             ),
             scan_ranked AS (
                 SELECT
                     npk, work_date, scan_date, shift_start_dt,
                     ABS(DATEDIFF(MINUTE, scan_date, shift_start_dt)) AS dist_to_start,
                     ABS(DATEDIFF(MINUTE, scan_date, shift_end_dt))   AS dist_to_end,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY npk, work_date
-                        ORDER BY ABS(DATEDIFF(MINUTE, scan_date, shift_start_dt))
-                    ) AS rn_masuk,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY npk, work_date
-                        ORDER BY ABS(DATEDIFF(MINUTE, scan_date, shift_end_dt))
-                    ) AS rn_pulang,
+                    ROW_NUMBER() OVER (PARTITION BY npk, work_date ORDER BY ABS(DATEDIFF(MINUTE, scan_date, shift_start_dt))) AS rn_masuk,
+                    ROW_NUMBER() OVER (PARTITION BY npk, work_date ORDER BY ABS(DATEDIFF(MINUTE, scan_date, shift_end_dt)))   AS rn_pulang,
                     COUNT(*) OVER (PARTITION BY npk, work_date) AS total_scan
                 FROM scans
             ),
@@ -1333,13 +1244,13 @@ class AttendanceFingerController extends Controller
                 g.npk, g.nama, g.bagian, g.work_date,
 
                 CASE
-                    WHEN m.scan_date IS NULL                                   THEN 'not scanned'
+                    WHEN m.scan_date IS NULL THEN 'not scanned'
                     WHEN m.total_scan = 1 AND m.dist_to_end < m.dist_to_start THEN 'not scanned'
                     ELSE CONVERT(VARCHAR(8), m.scan_date, 108)
                 END AS jam_masuk,
 
                 CASE
-                    WHEN p.scan_date IS NULL                                    THEN 'not scanned'
+                    WHEN p.scan_date IS NULL THEN 'not scanned'
                     WHEN p.total_scan = 1 AND p.dist_to_start <= p.dist_to_end THEN 'not scanned'
                     ELSE CONVERT(VARCHAR(8), p.scan_date, 108)
                 END AS jam_pulang,
@@ -1352,7 +1263,7 @@ class AttendanceFingerController extends Controller
                 END AS is_late
 
             FROM grid g
-            LEFT JOIN scan_ranked m ON m.npk = g.npk AND m.work_date = g.work_date AND m.rn_masuk  = 1
+            LEFT JOIN scan_ranked m ON m.npk = g.npk AND m.work_date = g.work_date AND m.rn_masuk = 1
             LEFT JOIN scan_ranked p ON p.npk = g.npk AND p.work_date = g.work_date AND p.rn_pulang = 1
             ORDER BY g.bagian ASC, g.npk ASC, g.work_date ASC
             OPTION (MAXRECURSION 400)

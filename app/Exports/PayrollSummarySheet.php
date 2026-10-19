@@ -36,6 +36,8 @@ class PayrollSummarySheet
 
     protected $earning = [];
     protected $deduction = [];
+    protected $adjustment = []; // selisih staff expat, ditambahkan ke Net Payroll
+    protected $countDays = 0;
 
     public function __construct($run_id)
     {
@@ -46,6 +48,7 @@ class PayrollSummarySheet
         foreach ($this->groups as $k => $v) {
             $this->earning[$k] = 0;
             $this->deduction[$k] = 0;
+            $this->adjustment[$k] = 0;
         }
 
         $this->period = DB::table('payroll_runs as pr')
@@ -53,7 +56,55 @@ class PayrollSummarySheet
             ->where('pr.id', $this->run_id)
             ->select('pp.start_date', 'pp.end_date')
             ->first();
+
+        $this->countDays = \Carbon\Carbon::parse($this->period->start_date)
+            ->diffInDays(\Carbon\Carbon::parse($this->period->end_date)) + 1;
     }
+
+    /**
+     * Subquery kontrak terbaru yang berlaku di periode (sama seperti GeneratePayrollProcess).
+     * Dipakai untuk mengambil salary & daily_salary karyawan.
+     */
+    protected function latestContractSub()
+    {
+        $periodStart = $this->period->start_date;
+        $periodEnd   = $this->period->end_date;
+
+        return DB::table('employees_contract as ec1')
+            ->select('ec1.npk', 'ec1.salary', 'ec1.daily_salary', 'ec1.type')
+            ->whereDate('ec1.start_date', '<=', $periodEnd)
+            ->whereDate('ec1.end_date', '>=', $periodStart)
+            ->whereRaw("
+                ec1.id = (
+                    SELECT TOP 1 ec2.id
+                    FROM employees_contract ec2
+                    WHERE ec2.npk = ec1.npk
+                      AND ec2.start_date <= ?
+                      AND ec2.end_date >= ?
+                    ORDER BY ec2.contract_ke DESC,
+                             ec2.start_date DESC
+                )
+            ", [$periodEnd, $periodStart]);
+    }
+
+    /**
+     * Selisih khusus STAFF + EXPAT bertipe Daily:
+     * (daily_salary * count_days) - salary
+     * Expat bertipe Contract tidak kena (daily_salary = 0).
+     */
+    protected function expatStaffDiff($row): float
+    {
+        if ($row->IS_STAFF_PRD != 1 || $row->IS_EXPAT_PRD != 1) {
+            return 0.0;
+        }
+
+        if (strtolower(trim($row->contract_type ?? '')) !== 'daily' || (float) $row->daily_salary <= 0) {
+            return 0.0;
+        }
+
+        return ((float) $row->daily_salary * (float) $this->countDays) - (float) $row->salary;
+    }
+
 
     /**
      * Tentukan tabel payroll_run_details yang dipakai berdasarkan route saat ini.
@@ -160,7 +211,7 @@ class PayrollSummarySheet
 
             $sheet->setCellValue($col . $base, $this->earning[$grp]);
             $sheet->setCellValue($col . ($base + 1), $this->deduction[$grp]);
-            $sheet->setCellValue($col . ($base + 2), $this->earning[$grp] + $this->deduction[$grp]);
+            $sheet->setCellValue($col . ($base + 2), $this->earning[$grp] + $this->deduction[$grp] + $this->adjustment[$grp]);
         }
 
         // =========================
@@ -220,6 +271,9 @@ class PayrollSummarySheet
             ->leftJoinSub($union, 'bio', function ($join) {
                 $join->on('bio.NPK', '=', 'prd.employee_npk');
             })
+            ->leftJoinSub($this->latestContractSub(), 'ec', function ($join) {
+                $join->on('ec.npk', '=', 'prd.employee_npk');
+            })
             ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'prd.employee_dept')
             ->where('prd.run_id', $this->run_id)
             ->select(
@@ -230,6 +284,11 @@ class PayrollSummarySheet
                 'bio.IS_STAFF',
                 'd.IS_SEWING',
                 'bio.KETERANGAN',
+                'prd.employee_staff as IS_STAFF_PRD',
+                'prd.employee_expat as IS_EXPAT_PRD',
+                'ec.salary',
+                'ec.daily_salary',
+                'ec.type as contract_type',
             );
     }
 
@@ -314,6 +373,14 @@ class PayrollSummarySheet
 
             if ($isNonSewing) {
                 $groups[] = 'active_non_sewing';
+            }
+        }
+
+        // Selisih staff expat -> masuk ke Net Payroll tiap group yang cocok
+        $diff = $this->expatStaffDiff($row);
+        if ($diff != 0) {
+            foreach ($groups as $grp) {
+                $this->adjustment[$grp] += $diff;
             }
         }
 

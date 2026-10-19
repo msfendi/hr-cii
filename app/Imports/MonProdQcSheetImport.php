@@ -17,29 +17,64 @@ use Maatwebsite\Excel\Concerns\WithValidation;
  * MonProdQcImport::sheets() -- sheet tersembunyi "Lists" tidak lewat class
  * ini sama sekali.
  *
- * Setiap baris valid langsung di-insert sebagai baris baru.
+ * Setiap baris valid di-create atau di-update berdasarkan kombinasi
+ * cpo + code_prod + department_id. Kolom `cpo` opsional di file (kalau
+ * kosong / kolomnya tidak ada, disimpan NULL).
  */
 class MonProdQcSheetImport implements ToModel, WithHeadingRow, WithValidation, SkipsEmptyRows
 {
     use Importable;
 
-    public function __construct(private MonStageDataService $service)
-    {
-    }
+    public function __construct(private MonStageDataService $service) {}
 
     public function model(array $row)
     {
-        return new MonProdQc([
-            'code_prod'     => strtoupper(trim((string) $row['code_prod'])),
-            'department_id' => trim((string) $row['department_id']),
-            'jumlah'        => (int) $row['jumlah'],
-        ]);
+        $cpo = trim((string) ($row['cpo'] ?? ''));
+
+        // Create-or-update berdasarkan kombinasi cpo + code_prod + department_id.
+        // cpo kosong -> NULL (updateOrCreate otomatis memakai IS NULL).
+        MonProdQc::updateOrCreate(
+            [
+                'cpo'           => $cpo !== '' ? $cpo : null,
+                'code_prod'     => strtoupper(trim((string) $row['code_prod'])),
+                'department_id' => trim((string) $row['department_id']),
+            ],
+            [
+                'jumlah'        => (int) $row['jumlah'],
+            ]
+        );
+
+        // Sudah disimpan lewat updateOrCreate, jadi return null agar
+        // Maatwebsite tidak melakukan insert/save lagi.
+        return null;
+    }
+
+    /**
+     * Excel membaca sel yang isinya angka (mis. kode CPO "12345") sebagai
+     * int/float, padahal rule `string` menolaknya. Samakan semua kolom
+     * teks jadi string (di-trim) sebelum divalidasi; cpo kosong -> null
+     * supaya lolos rule `nullable`.
+     */
+    public function prepareForValidation($data, int $index)
+    {
+        foreach (['code_prod', 'cpo', 'department_id'] as $key) {
+            if (array_key_exists($key, $data) && $data[$key] !== null) {
+                $data[$key] = trim((string) $data[$key]);
+            }
+        }
+
+        if (array_key_exists('cpo', $data) && $data['cpo'] === '') {
+            $data['cpo'] = null;
+        }
+
+        return $data;
     }
 
     public function rules(): array
     {
         return [
             'code_prod'     => ['required', 'string', 'max:100'],
+            'cpo'           => ['nullable', 'string', 'max:100'],
             'department_id' => ['required', 'string', Rule::in(MonStageDataService::DEPARTMENTS)],
             'jumlah'        => ['required', 'numeric', 'min:0'],
         ];

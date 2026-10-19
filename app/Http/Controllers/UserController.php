@@ -45,6 +45,28 @@ class UserController extends Controller
         return redirect()->intended('user/index');
     }
 
+    public function toggleStatus($id)
+    {
+        $user = User::findOrFail($id);
+
+        // jangan sampai admin menonaktifkan akunnya sendiri
+        if (Auth::id() === $user->id) {
+            Alert::error('Gagal!', 'Anda tidak dapat menonaktifkan akun Anda sendiri.');
+            return redirect('user/index');
+        }
+
+        $user->disabled = $user->disabled ? 0 : 1;
+        $user->save();
+
+        if ($user->disabled) {
+            Alert::success('Disabled Successfully!', 'User ' . $user->name . ' berhasil dinonaktifkan!');
+        } else {
+            Alert::success('Enabled Successfully!', 'User ' . $user->name . ' berhasil diaktifkan!');
+        }
+
+        return redirect('user/index');
+    }
+
     public function assign($id)
     {
         $modelhasroles = User::select('users.name', 'users.email', 'users.id', 'model_has_roles.*')

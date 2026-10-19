@@ -347,6 +347,55 @@ class MonitoringDashboardService
     }
 
     /**
+     * Filter khusus tabel mon_purchase_orders (pivot Material Purchase).
+     *
+     * Kalau filter OCF aktif -> HANYA filter OCF yang dipakai, dicocokkan ke
+     * kolom `spesifikasi` PO (contoh: "... MUSK MELON OCF 267C0207-A4").
+     * Alasannya: kolom `uraian` di mon_purchase_orders sering kosong untuk PO
+     * yang OCF-nya cuma tertulis di spesifikasi, jadi jembatan OCF -> uraian
+     * (lewat mon_orders.ocf_no) membuat baris PO tersebut ikut terbuang.
+     * Filter uraian/brand/style TIDAK ikut dipakai saat OCF aktif.
+     *
+     * Kalau OCF tidak aktif -> perilaku lama (uraian + jembatan brand/style).
+     */
+    private function applyPurchaseOrderFilters($query, string $prefix = 'po'): void
+    {
+        if ($this->hasFilterValue('ocf')) {
+            $this->applyOcfSpesifikasiFilter($query, "{$prefix}.spesifikasi");
+            return;
+        }
+
+        $this->applyFilterValue($query, "{$prefix}.uraian", 'uraian');
+        $this->applyUraianBridgeFilter($query, "{$prefix}.uraian");
+    }
+
+    /**
+     * WHERE spesifikasi LIKE '%<ocf>%' (mendukung 1 nilai atau array nilai OCF).
+     * Karakter khusus LIKE SQL Server (% _ [) di-escape supaya dianggap literal.
+     * Suffix seperti "-A4" / "-B" / "-A" tetap ikut cocok.
+     */
+    private function applyOcfSpesifikasiFilter($query, string $column): void
+    {
+        $values = $this->filters['ocf'] ?? [];
+        $values = is_array($values) ? $values : [$values];
+        $values = array_values(array_filter(
+            array_map(fn($v) => trim((string) $v), $values),
+            fn($v) => $v !== ''
+        ));
+
+        if (empty($values)) {
+            return;
+        }
+
+        $query->where(function ($q) use ($values, $column) {
+            foreach ($values as $ocf) {
+                $escaped = str_replace(['[', '%', '_'], ['[[]', '[%]', '[_]'], $ocf);
+                $q->orWhere($column, 'like', '%' . $escaped . '%');
+            }
+        });
+    }
+
+    /**
      * Pivot ORDER: qty order per uraian / brand / style
      */
     public function orderPivot(): Collection
@@ -386,8 +435,7 @@ class MonitoringDashboardService
             ->selectRaw('SUM(po.jumlah_order) as total_jumlah_order')
             ->groupBy('po.barang_code');
 
-        $this->applyFilterValue($topCodesQuery, 'po.uraian', 'uraian');
-        $this->applyUraianBridgeFilter($topCodesQuery, 'po.uraian');
+        $this->applyPurchaseOrderFilters($topCodesQuery, 'po');
 
         $topCodes = $limit
             ? $topCodesQuery->orderByDesc('total_jumlah_order')->limit($limit)->pluck('barang_code')
@@ -428,8 +476,7 @@ class MonitoringDashboardService
             ->orderBy('po.valas')
             ->orderBy('po.spesifikasi');
 
-        $this->applyFilterValue($query, 'po.uraian', 'uraian');
-        $this->applyUraianBridgeFilter($query, 'po.uraian');
+        $this->applyPurchaseOrderFilters($query, 'po');
 
         $rows = $query->get();
 

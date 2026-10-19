@@ -196,7 +196,7 @@ class AdminLeaveBalanceController extends Controller
         ]);
     }
 
-    /**
+     /**
      * Generate saldo cuti non-tahunan (semua jenis cuti selain tahunan) untuk seluruh karyawan aktif.
      */
     public function generateNonAnnualBalance(Request $request, LeaveBalanceGenerationService $leaveBalanceGenerationService)

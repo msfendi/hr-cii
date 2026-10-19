@@ -146,6 +146,11 @@ body{ background-color: #f4f6fb; }
                                 <span class="tab-number">5</span> Chu Family
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="tab-link-6" data-toggle="tab" href="#section-6" role="tab">
+                                <span class="tab-number">6</span> Kontrak Expat
+                            </a>
+                        </li>
                     </ul>
 
                     <div class="tab-content" id="recapTabsContent">
@@ -169,13 +174,31 @@ body{ background-color: #f4f6fb; }
                                                 @endforeach
                                             </select>
                                         </div>
+                                        <div class="col-md-2 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Bulan</label>
+                                            <select id="monthSelect" class="form-control" style="width:100%">
+                                                <option value="">Semua Bulan</option>
+                                                <option value="1">Januari</option>
+                                                <option value="2">Februari</option>
+                                                <option value="3">Maret</option>
+                                                <option value="4">April</option>
+                                                <option value="5">Mei</option>
+                                                <option value="6">Juni</option>
+                                                <option value="7">Juli</option>
+                                                <option value="8">Agustus</option>
+                                                <option value="9">September</option>
+                                                <option value="10">Oktober</option>
+                                                <option value="11">November</option>
+                                                <option value="12">Desember</option>
+                                            </select>
+                                        </div>
                                         <div class="col-md-3 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Expat (NPK)</label>
                                             <select id="npkSelect" class="form-control" style="width:100%">
                                                 <option value="">Semua Expat</option>
                                             </select>
                                         </div>
-                                        <div class="col-md-3 mb-3">
+                                        <div class="col-md-2 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Kewarganegaraan</label>
                                             <select id="nationalitySelect" class="form-control" style="width:100%">
                                                 <option value="">Semua</option>
@@ -184,7 +207,7 @@ body{ background-color: #f4f6fb; }
                                                 @endforeach
                                             </select>
                                         </div>
-                                        <div class="col-md-4 mb-3">
+                                        <div class="col-md-3 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Jenis Biaya</label>
                                             <select id="costTypeSelect" class="form-control" style="width:100%">
                                                 <option value="all">Semua (Direct + Leave Expense)</option>
@@ -295,12 +318,30 @@ body{ background-color: #f4f6fb; }
                             <div class="card-body">
                                 <form id="detailFilterForm" class="filter-form">
                                     <div class="row align-items-start">
-                                        <div class="col-md-3 mb-3">
+                                        <div class="col-md-2 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Tahun</label>
                                             <select id="detailYearSelect" class="form-control" style="width:100%">
                                                 @foreach ($years as $y)
                                                     <option value="{{ $y }}">{{ $y }}</option>
                                                 @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2 mb-3">
+                                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Bulan</label>
+                                            <select id="detailMonthSelect" class="form-control" style="width:100%">
+                                                <option value="">Semua Bulan</option>
+                                                <option value="1">Januari</option>
+                                                <option value="2">Februari</option>
+                                                <option value="3">Maret</option>
+                                                <option value="4">April</option>
+                                                <option value="5">Mei</option>
+                                                <option value="6">Juni</option>
+                                                <option value="7">Juli</option>
+                                                <option value="8">Agustus</option>
+                                                <option value="9">September</option>
+                                                <option value="10">Oktober</option>
+                                                <option value="11">November</option>
+                                                <option value="12">Desember</option>
                                             </select>
                                         </div>
                                         <div class="col-md-4 mb-3">
@@ -309,7 +350,7 @@ body{ background-color: #f4f6fb; }
                                                 <option value="">Semua Expat</option>
                                             </select>
                                         </div>
-                                        <div class="col-md-5 mb-3">
+                                        <div class="col-md-4 mb-3">
                                             <label class="small font-weight-bold text-gray-600 mb-1 d-block">Kewarganegaraan</label>
                                             <select id="detailNationalitySelect" class="form-control" style="width:100%">
                                                 <option value="">Semua</option>
@@ -762,6 +803,38 @@ body{ background-color: #f4f6fb; }
                         </div>
                     </div>
 
+                    {{-- ===================== SECTION 6: KONTRAK EXPAT ===================== --}}
+                    <div class="tab-pane fade section-block" id="section-6" role="tabpanel">
+                        <div class="section-title"><span class="section-number">6</span><h2>Kontrak Expat</h2></div>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap">
+                                <h6 class="m-0 font-weight-bold text-primary">
+                                    <i class="fas fa-file-contract mr-1"></i> Daftar Expat &amp; Kontrak Kerja
+                                </h6>
+                                <button type="button" class="btn btn-primary btn-sm shadow-sm" data-toggle="modal" data-target="#uploadDocumentModal">
+                                    <i class="fas fa-upload fa-sm mr-1"></i> Upload Dokumen
+                                </button>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered table-hover mb-0 small" id="contractTable" width="100%">
+                                        <thead>
+                                            <tr>
+                                                <th>NPK</th>
+                                                <th>Nama</th>
+                                                <th>Kewarganegaraan</th>
+                                                <th class="text-center">Kontrak</th>
+                                                <th class="text-center">Dokumen</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     </div>
                     <!-- /.tab-content -->
 
@@ -870,6 +943,120 @@ body{ background-color: #f4f6fb; }
         </div>
     </div>
 
+    {{-- ===================== MODAL: UPLOAD DOKUMEN EXPAT ===================== --}}
+    <div class="modal fade" id="uploadDocumentModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form id="uploadDocumentForm" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="uploadDocumentModalLabel"><i class="fas fa-upload mr-1"></i> Upload Dokumen Expat</h5>
+                        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Expat</label>
+                            <select id="uploadNpkSelect" name="npk" class="form-control" style="width:100%" required>
+                                <option value="">-- Pilih Expat --</option>
+                                @foreach ($expats as $e)
+                                    <option value="{{ $e->NPK }}">{{ $e->NPK }} - {{ $e->NAMA_KARYAWAN }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Jenis Dokumen</label>
+                            <select id="uploadDocTypeSelect" name="document_type" class="form-control" style="width:100%" required>
+                                <option value="">-- Pilih Jenis Dokumen --</option>
+                                <option value="Paspor">Paspor</option>
+                                <option value="KITAS">KITAS</option>
+                                <option value="RPTKA">RPTKA</option>
+                                <option value="MERP">MERP</option>
+                                <option value="Kontrak Kerja">Kontrak Kerja</option>
+                                <option value="Visa">Visa</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">File Dokumen</label>
+                            <input type="file" name="file" id="uploadFileInput" class="form-control-file" accept=".pdf,.jpg,.jpeg,.png" required>
+                            <small class="form-text text-muted">Format: PDF, JPG, PNG. Maks. 5MB.</small>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="small font-weight-bold text-gray-600 mb-1 d-block">Catatan (Opsional)</label>
+                            <textarea name="notes" id="uploadNotesInput" class="form-control" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-upload fa-sm mr-1"></i> Upload</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===================== MODAL: DETAIL KONTRAK EXPAT ===================== --}}
+    <div class="modal fade" id="contractDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="contractDetailModalLabel"><i class="fas fa-file-contract mr-1"></i> Detail Kontrak</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0 small">
+                            <thead>
+                                <tr>
+                                    <th>No. Kontrak</th>
+                                    <th>Jenis Kontrak</th>
+                                    <th>Tanggal Mulai</th>
+                                    <th>Tanggal Berakhir</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalContractBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===================== MODAL: DETAIL DOKUMEN EXPAT ===================== --}}
+    <div class="modal fade" id="documentDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="documentDetailModalLabel"><i class="fas fa-folder-open mr-1"></i> Detail Dokumen</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div id="modalDocumentCategories" class="mb-3"></div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0 small">
+                            <thead>
+                                <tr>
+                                    <th>Jenis Dokumen</th>
+                                    <th>Nama File</th>
+                                    <th>Tanggal Upload</th>
+                                    <th class="text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalDocumentBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
@@ -934,6 +1121,7 @@ body{ background-color: #f4f6fb; }
         function loadChartData() {
             const params = {
                 year: $('#yearSelect').val(),
+                month: $('#monthSelect').val(),
                 npk: $('#npkSelect').val(),
                 nationality: $('#nationalitySelect').val(),
                 cost_type: $('#costTypeSelect').val(),
@@ -1108,6 +1296,7 @@ body{ background-color: #f4f6fb; }
         function loadDetailData() {
             const params = {
                 year: $('#detailYearSelect').val(),
+                month: $('#detailMonthSelect').val(),
                 npk: $('#detailNpkSelect').val(),
                 nationality: $('#detailNationalitySelect').val(),
             };
@@ -1116,7 +1305,7 @@ body{ background-color: #f4f6fb; }
             fetch("{{ route('expat-dashboard.recap-data') }}?" + new URLSearchParams(params))
                 .then(res => res.json())
                 .then(data => {
-                    $('#detailPeriodLabel').text('Tahun ' + params.year);
+                    $('#detailPeriodLabel').text(params.month ? (formatMonthIndonesia(params.year + '-' + String(params.month).padStart(2, '0'))) : ('Tahun ' + params.year));
 
                     expatRecapTable.clear();
                     expatRecapTable.rows.add(data.recap);
@@ -1560,6 +1749,200 @@ body{ background-color: #f4f6fb; }
         }
 
         /* =====================================================================
+        * SECTION 6: KONTRAK EXPAT & UPLOAD DOKUMEN
+        * ===================================================================== */
+
+        let contractTable = null;
+
+        function initContractTables() {
+            contractTable = $('#contractTable').DataTable({
+                data: [],
+                columns: [
+                    { data: 'npk', title: 'NPK' },
+                    { data: 'name', title: 'Nama' },
+                    { data: 'nationality', title: 'Kewarganegaraan', defaultContent: '-' },
+                    {
+                        data: null, title: 'Kontrak', className: 'text-center', orderable: false,
+                        render: (row) => `
+                            <button type="button" class="btn btn-outline-primary btn-sm btn-contract-detail" data-npk="${row.npk}" data-name="${row.name ?? ''}">
+                                <i class="fas fa-file-contract mr-1"></i> ${row.contract_count} Kontrak
+                            </button>
+                        `
+                    },
+                    {
+                        data: null, title: 'Dokumen', className: 'text-center', orderable: false,
+                        render: (row) => `
+                            <button type="button" class="btn btn-outline-info btn-sm btn-document-detail" data-npk="${row.npk}" data-name="${row.name ?? ''}">
+                                <i class="fas fa-folder-open mr-1"></i> ${row.document_count} Dokumen
+                            </button>
+                        `
+                    },
+                ],
+                order: [[1, 'asc']],
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                language: {
+                    search: 'Cari:', lengthMenu: 'Tampilkan _MENU_ data',
+                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ expat', infoEmpty: 'Tidak ada data',
+                    infoFiltered: '(difilter dari _MAX_ total data)', zeroRecords: 'Tidak ada expat yang cocok',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                }
+            });
+        }
+
+        function loadContractData() {
+            showLoadingSwal('Memuat data kontrak expat...');
+
+            fetch("{{ route('expat-dashboard.contract-data') }}")
+                .then(res => res.json())
+                .then(data => {
+                    contractTable.clear();
+                    contractTable.rows.add(data.data);
+                    contractTable.draw();
+                })
+                .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat memuat data.', 'error'))
+                .finally(() => hideLoadingSwal());
+        }
+
+        // ----- Modal: Detail Kontrak (1 expat bisa punya beberapa kontrak) -----
+        $(document).on('click', '.btn-contract-detail', function () {
+            const npk = $(this).data('npk');
+            const name = $(this).data('name');
+
+            showLoadingSwal('Memuat detail kontrak...');
+
+            fetch("{{ url('expat-dashboard/contract-detail') }}/" + npk)
+                .then(res => res.json())
+                .then(data => {
+                    $('#contractDetailModalLabel').html(`<i class="fas fa-file-contract mr-1"></i> Detail Kontrak - ${name}`);
+
+                    const rows = data.data.map(c => `
+                        <tr>
+                            <td>${c.contract_ke ?? '-'}</td>
+                            <td>${c.type ?? '-'}</td>
+                            <td>${formatDateIndo(c.start_date)}</td>
+                            <td>${formatDateIndo(c.end_date)}</td>
+                            <td>${c.status_contract ? `<span class="badge badge-info">${c.status_contract}</span>` : '-'}</td>
+                        </tr>
+                    `).join('') || `<tr><td colspan="5" class="text-center text-muted py-3">Belum ada data kontrak.</td></tr>`;
+
+                    $('#modalContractBody').html(rows);
+                    $('#contractDetailModal').modal('show');
+                })
+                .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat memuat detail kontrak.', 'error'))
+                .finally(() => hideLoadingSwal());
+        });
+
+        // ----- Modal: Detail Dokumen (jumlah, kategori, dan aksi buka/hapus) -----
+        function showDocumentDetail(npk, name) {
+            showLoadingSwal('Memuat detail dokumen...');
+
+            fetch("{{ route('expat-dashboard.document-list') }}?" + new URLSearchParams({ npk }))
+                .then(res => res.json())
+                .then(data => {
+                    $('#documentDetailModalLabel').html(`<i class="fas fa-folder-open mr-1"></i> Detail Dokumen - ${name}`);
+
+                    const categories = [...new Set(data.data.map(d => d.document_type))];
+                    $('#modalDocumentCategories').html(
+                        categories.length
+                            ? categories.map(c => `<span class="badge badge-primary mr-1">${c}</span>`).join('')
+                            : '<span class="text-muted small">Belum ada kategori dokumen.</span>'
+                    );
+
+                    const rows = data.data.map(d => `
+                        <tr>
+                            <td>${d.document_type}</td>
+                            <td>${d.file_name}</td>
+                            <td>${formatDateIndo(d.created_at)}</td>
+                            <td class="text-center">
+                                <a href="${d.file_url}" target="_blank" class="btn btn-info btn-sm" title="Lihat / Unduh">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <button type="button" class="btn btn-danger btn-sm btn-delete-doc" data-id="${d.id}" data-npk="${npk}" data-name="${name}" title="Hapus">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('') || `<tr><td colspan="4" class="text-center text-muted py-3">Belum ada dokumen.</td></tr>`;
+
+                    $('#modalDocumentBody').html(rows);
+                    $('#documentDetailModal').modal('show');
+                })
+                .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat memuat detail dokumen.', 'error'))
+                .finally(() => hideLoadingSwal());
+        }
+
+        $(document).on('click', '.btn-document-detail', function () {
+            showDocumentDetail($(this).data('npk'), $(this).data('name'));
+        });
+
+        $('#uploadDocumentForm').on('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            showLoadingSwal('Mengupload dokumen...');
+
+            fetch("{{ route('expat-dashboard.document-store') }}", {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: formData,
+            })
+                .then(res => res.json().then(body => ({ ok: res.ok, body })))
+                .then(({ ok, body }) => {
+                    hideLoadingSwal();
+                    if (!ok) {
+                        const firstError = body.errors ? Object.values(body.errors)[0][0] : (body.message || 'Terjadi kesalahan.');
+                        Swal.fire('Gagal', firstError, 'error');
+                        return;
+                    }
+
+                    $('#uploadDocumentModal').modal('hide');
+                    document.getElementById('uploadDocumentForm').reset();
+                    $('#uploadNpkSelect').val(null).trigger('change');
+                    $('#uploadDocTypeSelect').val(null).trigger('change');
+
+                    Swal.fire('Berhasil', body.message || 'Dokumen berhasil diupload', 'success');
+                    loadContractData();
+                })
+                .catch(() => {
+                    hideLoadingSwal();
+                    Swal.fire('Gagal', 'Terjadi kesalahan saat mengupload dokumen.', 'error');
+                });
+        });
+
+        $(document).on('click', '.btn-delete-doc', function () {
+            const id = $(this).data('id');
+            const npk = $(this).data('npk');
+            const name = $(this).data('name');
+
+            Swal.fire({
+                title: 'Hapus dokumen ini?',
+                text: 'Dokumen yang dihapus tidak dapat dikembalikan.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, hapus',
+                cancelButtonText: 'Batal',
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+
+                showLoadingSwal('Menghapus dokumen...');
+
+                fetch("{{ url('expat-dashboard/document') }}/" + id, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                })
+                    .then(res => res.json())
+                    .then(body => {
+                        Swal.fire('Berhasil', body.message || 'Dokumen berhasil dihapus', 'success');
+                        loadContractData();
+                        showDocumentDetail(npk, name);
+                    })
+                    .catch(() => Swal.fire('Gagal', 'Terjadi kesalahan saat menghapus dokumen.', 'error'))
+                    .finally(() => hideLoadingSwal());
+            });
+        });
+
+        /* =====================================================================
          * INIT
          * ===================================================================== */
 
@@ -1568,9 +1951,11 @@ body{ background-color: #f4f6fb; }
             initDocTable();
             initGuestTables();
             initFamilyTables();
+            initContractTables();
 
             // Section 1
             $('#yearSelect').select2({ minimumResultsForSearch: 0 });
+            $('#monthSelect').select2({ minimumResultsForSearch: 0 });
             $('#npkSelect').select2(employeeSelect2Config());
             $('#nationalitySelect').select2({ placeholder: 'Semua', allowClear: true });
             $('#costTypeSelect').select2({ minimumResultsForSearch: 0 });
@@ -1578,6 +1963,7 @@ body{ background-color: #f4f6fb; }
             $('#filterForm').on('submit', function (e) { e.preventDefault(); loadChartData(); });
             $('#resetFilter').on('click', function () {
                 $('#yearSelect').prop('selectedIndex', 0).trigger('change');
+                $('#monthSelect').val('').trigger('change');
                 $('#npkSelect').val(null).trigger('change');
                 $('#nationalitySelect').val(null).trigger('change');
                 $('#costTypeSelect').val('all').trigger('change');
@@ -1586,12 +1972,14 @@ body{ background-color: #f4f6fb; }
 
             // Section 2
             $('#detailYearSelect').select2({ minimumResultsForSearch: 0 });
+            $('#detailMonthSelect').select2({ minimumResultsForSearch: 0 });
             $('#detailNpkSelect').select2(employeeSelect2Config());
             $('#detailNationalitySelect').select2({ placeholder: 'Semua', allowClear: true });
 
             $('#detailFilterForm').on('submit', function (e) { e.preventDefault(); loadDetailData(); });
             $('#detailResetFilter').on('click', function () {
                 $('#detailYearSelect').prop('selectedIndex', 0).trigger('change');
+                $('#detailMonthSelect').val('').trigger('change');
                 $('#detailNpkSelect').val(null).trigger('change');
                 $('#detailNationalitySelect').val(null).trigger('change');
                 loadDetailData();
@@ -1630,8 +2018,12 @@ body{ background-color: #f4f6fb; }
                 loadFamilyDashboard();
             });
 
+            // Section 6 - Kontrak Expat & Upload Dokumen
+            $('#uploadNpkSelect').select2({ dropdownParent: $('#uploadDocumentModal'), placeholder: '-- Pilih Expat --' });
+            $('#uploadDocTypeSelect').select2({ dropdownParent: $('#uploadDocumentModal'), minimumResultsForSearch: 0, placeholder: '-- Pilih Jenis Dokumen --' });
+
             // Lazy-load per tab
-            const loadedTabs = { 1: false, 2: false, 3: false, 4: false, 5: false }; // UPDATE
+            const loadedTabs = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false }; // UPDATE
             loadChartData();
             loadedTabs[1] = true;
 
@@ -1642,11 +2034,13 @@ body{ background-color: #f4f6fb; }
                 if (target === '#section-3' && !loadedTabs[3]) { loadDocumentData(); loadedTabs[3] = true; }
                 if (target === '#section-4' && !loadedTabs[4]) { loadGuestDashboard(); loadedTabs[4] = true; } // TAMBAHAN
                 if (target === '#section-5' && !loadedTabs[5]) { loadFamilyDashboard(); loadedTabs[5] = true; } // TAMBAHAN
+                if (target === '#section-6' && !loadedTabs[6]) { loadContractData(); loadedTabs[6] = true; } // TAMBAHAN
 
                 if (target === '#section-2') { if (expatRecapTable) expatRecapTable.columns.adjust(); if (componentChart) componentChart.resize(); if (onleaveTypeChart) onleaveTypeChart.resize(); }
                 if (target === '#section-3') { if (docTable) docTable.columns.adjust(); if (docTypeChart) docTypeChart.resize(); }
                 if (target === '#section-4') { if (guestTable) guestTable.columns.adjust(); if (guestExpiringTable) guestExpiringTable.columns.adjust(); if (guestDocTypeChart) guestDocTypeChart.resize(); } // TAMBAHAN
                 if (target === '#section-5') { if (familyTable) familyTable.columns.adjust(); if (familyExpiringTable) familyExpiringTable.columns.adjust(); if (familyDocTypeChart) familyDocTypeChart.resize(); } // TAMBAHAN
+                if (target === '#section-6') { if (contractTable) contractTable.columns.adjust(); } // TAMBAHAN
             });
         });
     </script>

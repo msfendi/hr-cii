@@ -143,6 +143,10 @@ class MonitoringRekonsiliasiController extends Controller
             'shipmentDetail'       => $service->shipmentDetail(),
             'pipelineLossSteps'    => $service->pipelineLossSteps(),
             'shipmentByCategory'   => $service->shipmentByCategory(),
+            // Breakdown detail per card (accordion "DETAIL DATA"): baris
+            // sumber di balik angka summary -- lihat
+            // MonitoringRekonsiliasiService::detailBreakdown().
+            'detailBreakdown'      => $service->detailBreakdown(),
             // Dropdown Buyer/Style/CPO(Uraian)/OCF/Sub Ref/Negara, sudah
             // di-cascade dua arah mengikuti filter yang sedang aktif.
             // `ocfOptions`/`subRefOptions` dipertahankan sebagai key
@@ -238,6 +242,7 @@ class MonitoringRekonsiliasiController extends Controller
             'shipmentDetail'       => [],
             'pipelineLossSteps'    => [],
             'shipmentByCategory'   => [],
+            'detailBreakdown'      => [],
             // Dropdown tetap dikirim meski widget lain kosong, supaya
             // Buyer/Style/CPO/OCF/Sub Ref/Negara tetap ter-render dengan
             // cascade yang benar walau belum ada filter yang match apapun.

@@ -11,12 +11,11 @@ use RealRashid\SweetAlert\Facades\Alert;
 use App\Exports\PKWTExport;
 use App\Models\EmployeeMutation;
 use App\Models\PayrollMaster;
-use App\Models\PelamarDetails;
+use App\Models\Permission;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
-use App\Models\Permission;
 use setasign\Fpdi\Fpdi;
 
 class BiodataController extends Controller
@@ -52,7 +51,6 @@ class BiodataController extends Controller
             ->whereIn('role_id', $userRoleIds)
             ->exists();
     }
-
     /**
      * Display a listing of the resource.
      */
@@ -603,9 +601,9 @@ class BiodataController extends Controller
         }
 
         return response()->json([
-            'npk'            => $npk,
-            'count'          => count($docs),
-            'docs'           => $docs,
+            'npk'   => $npk,
+            'count' => count($docs),
+            'docs'  => $docs,
             'can_export_all' => $this->hasExportAllDocsPermission(),
         ]);
     }
@@ -850,14 +848,6 @@ class BiodataController extends Controller
     {
         if (!$this->hasExportAllDocsPermission()) {
             abort(403, 'Anda tidak memiliki akses untuk mendownload semua dokumen.');
-        }
-
-        // Pastikan FPDF ter-load jika belum di-autoload composer
-        if (!class_exists('FPDF', false)) {
-            $fpdfPath = dirname(__DIR__, 3) . '/vendor/setasign/fpdf/fpdf.php';
-            if (file_exists($fpdfPath)) {
-                require_once $fpdfPath;
-            }
         }
 
         $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $npk)->first();

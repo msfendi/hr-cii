@@ -13,7 +13,9 @@ use App\Exports\ExpatOnleaveTemplateExport;
 use App\Exports\ExpatRekapExport;
 use App\Models\ExpatCost;
 use App\Models\ExpatCostComponent;
+use App\Models\ExpatDocument;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class ExpatController extends Controller
@@ -480,12 +482,20 @@ class ExpatController extends Controller
         $familyNationalities = \App\Models\ChuFamily::whereNotNull('nationality')
             ->distinct()->orderBy('nationality')->pluck('nationality');
 
+        // TAMBAHAN untuk section 6: Kontrak Expat & Upload Dokumen
+        $expats = DB::table('BIODATA')
+            ->where('IS_EXPAT', 1)
+            ->select('NPK', 'NAMA_KARYAWAN')
+            ->orderBy('NAMA_KARYAWAN')
+            ->get();
+
         return view('expat_dashboard.index', compact(
             'years',
             'nationalities',
             'components',
             'guestNationalities',
-            'familyNationalities'
+            'familyNationalities',
+            'expats'
         ));
     }
 
@@ -516,6 +526,7 @@ class ExpatController extends Controller
     public function chartData(Request $request)
     {
         $year = $request->year ?? date('Y');
+        $month = $request->month; // NEW: filter per bulan (1-12), kosong = semua bulan
         $npk = $request->npk;
         $nationality = $request->nationality;
         $costType = $request->cost_type ?? 'all'; // all | direct | onleave
@@ -527,6 +538,7 @@ class ExpatController extends Controller
 
         // ===== DIRECT COST per bulan =====
         $directQuery = ExpatCost::whereYear('transactions_date', $year);
+        if ($month) $directQuery->whereMonth('transactions_date', $month);
         if ($npk) $directQuery->where('npk', $npk);
         if ($npksFilter) $directQuery->whereIn('npk', $npksFilter);
 
@@ -551,6 +563,7 @@ class ExpatController extends Controller
                 if (!$date) continue;
                 $carbon = \Carbon\Carbon::parse($date);
                 if ($carbon->year != $year) continue;
+                if ($month && $carbon->month != $month) continue; // NEW: filter per bulan
 
                 $onleaveByMonth[$carbon->month]['total'] += (float) $amt;
                 $onleaveByMonth[$carbon->month]['jml']++;
@@ -591,7 +604,9 @@ class ExpatController extends Controller
             'grand_total' => $grandTotal,
             'avg_per_month' => $monthsWithData ? round($grandTotal / $monthsWithData, 2) : 0,
             'total_transaksi' => $totalTransaksi,
-            'range' => ['start' => "{$year}-01", 'end' => "{$year}-12"],
+            'range' => $month
+                ? ['start' => sprintf('%04d-%02d', $year, $month), 'end' => sprintf('%04d-%02d', $year, $month)]
+                : ['start' => "{$year}-01", 'end' => "{$year}-12"],
         ]);
     }
 
@@ -604,6 +619,7 @@ class ExpatController extends Controller
     public function recapData(Request $request)
     {
         $year = $request->year ?? date('Y');
+        $month = $request->month; // NEW: filter per bulan (1-12), kosong = semua bulan
         $npk = $request->npk;
         $nationality = $request->nationality;
 
@@ -613,7 +629,10 @@ class ExpatController extends Controller
         $expats = $expatQuery->get();
 
         // Direct cost per npk
-        $directPerNpk = ExpatCost::whereYear('transactions_date', $year)
+        $directQuery = ExpatCost::whereYear('transactions_date', $year);
+        if ($month) $directQuery->whereMonth('transactions_date', $month);
+
+        $directPerNpk = $directQuery
             ->selectRaw('npk, SUM(amount) as total, COUNT(*) as jml')
             ->groupBy('npk')
             ->get()
@@ -626,15 +645,32 @@ class ExpatController extends Controller
 
         foreach ($onleaveRows as $row) {
             $amounts = is_array($row->amount) ? $row->amount : (json_decode($row->amount, true) ?? []);
-            $sum = collect($amounts)->map(fn($v) => (float) $v)->sum();
+            $dates = is_array($row->transactions_date) ? $row->transactions_date : (json_decode($row->transactions_date, true) ?? []);
+
+            if ($month) {
+                // Hanya jumlahkan transaksi yang jatuh pada bulan terpilih
+                $sum = 0;
+                foreach ($amounts as $i => $amt) {
+                    $date = $dates[$i] ?? null;
+                    if (!$date) continue;
+                    if ((int) \Carbon\Carbon::parse($date)->month !== (int) $month) continue;
+                    $sum += (float) $amt;
+                }
+                if ($sum <= 0) continue; // tidak ada transaksi di bulan ini, lewati baris
+            } else {
+                $sum = collect($amounts)->map(fn($v) => (float) $v)->sum();
+            }
 
             $onleavePerNpk[$row->npk] = ($onleavePerNpk[$row->npk] ?? 0) + $sum;
             $onleaveByType[$row->leave_type] = ($onleaveByType[$row->leave_type] ?? 0) + 1;
         }
 
         // Biaya per komponen (direct cost)
-        $costByComponent = ExpatCost::join('expat_cost_components', 'expat_cost.component', '=', 'expat_cost_components.id')
-            ->whereYear('expat_cost.transactions_date', $year)
+        $costByComponentQuery = ExpatCost::join('expat_cost_components', 'expat_cost.component', '=', 'expat_cost_components.id')
+            ->whereYear('expat_cost.transactions_date', $year);
+        if ($month) $costByComponentQuery->whereMonth('expat_cost.transactions_date', $month);
+
+        $costByComponent = $costByComponentQuery
             ->selectRaw('expat_cost_components.component as name, SUM(expat_cost.amount) as total')
             ->groupBy('expat_cost_components.component')
             ->orderByDesc('total')
@@ -764,6 +800,142 @@ class ExpatController extends Controller
             'expiring_count' => $expiring->count(),
             'expiring' => $expiring,
             'count_by_type' => collect($docTypes)->mapWithKeys(fn($label) => [$label => $countByType[$label] ?? 0]),
+        ]);
+    }
+
+    /*
+|--------------------------------------------------------------------------
+| SECTION 6: Kontrak Expat & Upload Dokumen
+|--------------------------------------------------------------------------
+*/
+
+    /**
+     * Daftar expat (BIODATA.IS_EXPAT = 1) dengan ringkasan jumlah kontrak
+     * (dari employees_contract) dan jumlah dokumen (dari expat_documents)
+     * per NPK. Detail masing-masing dibuka lewat modal (lihat contractDetail()
+     * dan expatDocumentList()).
+     */
+    public function contractData(Request $request)
+    {
+        $nationality = $request->nationality;
+
+        $contractCounts = DB::table('employees_contract')
+            ->select('npk', DB::raw('COUNT(*) as total'))
+            ->groupBy('npk');
+
+        $documentCounts = DB::table('expat_documents')
+            ->select('npk', DB::raw('COUNT(*) as total'))
+            ->groupBy('npk');
+
+        $data = DB::table('BIODATA')
+            ->where('BIODATA.IS_EXPAT', 1)
+            ->leftJoin('expat_master', 'BIODATA.NPK', '=', 'expat_master.npk')
+            ->leftJoinSub($contractCounts, 'cc', fn($join) => $join->on('BIODATA.NPK', '=', 'cc.npk'))
+            ->leftJoinSub($documentCounts, 'dc', fn($join) => $join->on('BIODATA.NPK', '=', 'dc.npk'))
+            ->when($nationality, fn($q) => $q->where('expat_master.nationality', $nationality))
+            ->select(
+                'BIODATA.NPK as npk',
+                'BIODATA.NAMA_KARYAWAN as name',
+                'expat_master.nationality',
+                DB::raw('COALESCE(cc.total, 0) as contract_count'),
+                DB::raw('COALESCE(dc.total, 0) as document_count')
+            )
+            ->orderBy('BIODATA.NAMA_KARYAWAN')
+            ->get();
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Detail seluruh kontrak milik satu expat (1 expat bisa punya beberapa kontrak).
+     * Diurutkan dari kontrak terlama ke terbaru.
+     */
+    public function contractDetail($npk)
+    {
+        $data = DB::table('employees_contract')
+            ->where('npk', $npk)
+            ->select(
+                'contract_ke',
+                'type',
+                'start_date',
+                'end_date',
+                'month_duration',
+                'status_contract'
+            )
+            ->orderBy('start_date', 'asc')
+            ->get();
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Daftar dokumen expat yang sudah diupload. Bisa difilter per NPK
+     * (dipakai oleh modal detail dokumen di tabel kontrak expat).
+     */
+    public function expatDocumentList(Request $request)
+    {
+        $npk = $request->npk;
+
+        $data = ExpatDocument::leftJoin('BIODATA', 'expat_documents.npk', '=', 'BIODATA.NPK')
+            ->when($npk, fn($q) => $q->where('expat_documents.npk', $npk))
+            ->select('expat_documents.*', 'BIODATA.NAMA_KARYAWAN as name')
+            ->orderByDesc('expat_documents.created_at')
+            ->get()
+            ->map(function ($row) {
+                $row->file_url = Storage::disk('public')->url($row->file_path);
+                return $row;
+            });
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Simpan upload dokumen expat baru.
+     */
+    public function storeExpatDocument(Request $request)
+    {
+        $request->validate([
+            'npk' => 'required',
+            'document_type' => 'required|string|max:50',
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'notes' => 'nullable|string',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('expat-documents/' . $request->npk, 'public');
+
+        ExpatDocument::create([
+            'npk' => $request->npk,
+            'document_type' => $request->document_type,
+            'file_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'file_size' => $file->getSize(),
+            'notes' => $request->notes,
+            'uploaded_by' => auth()->id(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dokumen expat berhasil diupload',
+        ]);
+    }
+
+    /**
+     * Hapus dokumen expat (file + record).
+     */
+    public function destroyExpatDocument($id)
+    {
+        $doc = ExpatDocument::findOrFail($id);
+
+        if ($doc->file_path) {
+            Storage::disk('public')->delete($doc->file_path);
+        }
+
+        $doc->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dokumen expat berhasil dihapus',
         ]);
     }
 }

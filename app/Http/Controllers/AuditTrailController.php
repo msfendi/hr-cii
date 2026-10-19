@@ -56,11 +56,11 @@ class AuditTrailController extends Controller
             ->addColumn('model_name', fn(AuditTrail $row) => class_basename($row->auditable_type))
             ->addColumn('event_badge', function (AuditTrail $row) {
                 $color = match ($row->event) {
-                    'created'  => 'success',
-                    'updated'  => 'warning',
-                    'deleted'  => 'danger',
+                    'created' => 'success',
+                    'updated' => 'warning',
+                    'deleted' => 'danger',
                     'generate' => 'info',
-                    default    => 'secondary',
+                    default => 'secondary',
                 };
 
                 return '<span class="badge badge-' . $color . '">' . strtoupper($row->event) . '</span>';

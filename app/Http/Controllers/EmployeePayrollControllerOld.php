@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Cmixin\BusinessDay;
 
-class EmployeePayrollController extends Controller
+class EmployeePayrollControllerOld extends Controller
 {
 
     public function index(Request $request)

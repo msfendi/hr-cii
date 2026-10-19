@@ -24,6 +24,7 @@ class PadEfficiencySheet implements WithTitle, WithHeadings, WithEvents
             'npk',
             'name',
             'role',
+            'tim',
             'efficiency',
             'piece',
             'date'
@@ -35,13 +36,13 @@ class PadEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $spreadsheet = $sheet->getParent();
 
         // bold header
-        $sheet->getStyle('A1:F1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:G1')->getFont()->setBold(true);
 
         // auto width
-        foreach (range('A', 'F') as $column) {
+        foreach (range('A', 'G') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
-        $sheet->getStyle('F:F')
+        $sheet->getStyle('G:G')
             ->getNumberFormat()
             ->setFormatCode(NumberFormat::FORMAT_DATE_DDMMYYYY);
 
@@ -49,18 +50,20 @@ class PadEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $sheet->setCellValue('A2', 'C-00827');
         $sheet->setCellValue('B2', 'DIMAS GALANG RAMADHAN');
         $sheet->setCellValue('C2', 'operator');
-        $sheet->setCellValue('D2', '85');
-        $sheet->setCellValue('E2', '3517');
+        $sheet->setCellValue('D2', '1');
+        $sheet->setCellValue('E2', '85');
+        $sheet->setCellValue('F2', '3517');
         $date = Date::stringToExcel('2026-01-12');
-        $sheet->setCellValue('F2', $date);
+        $sheet->setCellValue('G2', $date);
 
         $sheet->setCellValue('A3', 'C-00827');
         $sheet->setCellValue('B3', 'DIMAS GALANG RAMADHAN');
         $sheet->setCellValue('C3', 'operator');
-        $sheet->setCellValue('D3', '90');
-        $sheet->setCellValue('E3', '3724');
+        $sheet->setCellValue('D3', '1');
+        $sheet->setCellValue('E3', '90');
+        $sheet->setCellValue('F3', '3724');
         $date = Date::stringToExcel('2026-01-13');
-        $sheet->setCellValue('F3', $date);
+        $sheet->setCellValue('G3', $date);
 
 
         $roles = DB::table('insentif_role_formulas')

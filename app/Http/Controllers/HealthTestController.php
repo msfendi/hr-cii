@@ -22,6 +22,7 @@ class HealthTestController extends Controller
                 'pelamar.NAMA as nama',
                 'pelamar_details.file_surat_sehat'
             )
+            ->whereNotNull('pelamar_details.file_surat_sehat')
             ->latest('health_tests.created_at')
             ->get();
 
@@ -84,6 +85,7 @@ class HealthTestController extends Controller
         */
         $pelamar = DB::table('pelamar')
             ->where('NIK', $request->nik)
+            ->whereNull('NPK')
             ->first();
 
         if ($pelamar) {

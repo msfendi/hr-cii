@@ -249,6 +249,7 @@
                                     <th>Monthly Premi</th>
                                     <th>Long Service</th>
                                     <th>Allowance</th>
+                                    <th>Meal Allowance</th>
                                     <th>Sewing Insentif</th>
                                     <th>Pad Print Insentif</th>
                                     <th>Cutting Insentif</th>
@@ -303,6 +304,7 @@
                                     <th></th>
                                     <th></th>
 
+                        <th></th>
                     </tr>
 
                 </tfoot>
@@ -619,6 +621,19 @@ buttons: [
                     }
 
                     return salaryMaskColored(data ?? 0, row.components?.allowance?.type);
+                }
+            },
+
+            {
+                data:'components.meal_allowance.amount',
+                defaultContent:0,
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMaskColored(data ?? 0, row.components?.meal_allowance?.type);
                 }
             },
 
@@ -1183,7 +1198,7 @@ buttons: [
                 6,7,8,
                 9,10,11,12,
                 13,14,15,16,
-                17,18,19,20,21,22,23,24,25,26
+                17,18,19,20,21,22,23,24,25,26,27
             ];
 
             // let ijinTotal = api

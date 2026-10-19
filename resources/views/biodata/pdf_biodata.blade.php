@@ -512,8 +512,9 @@
             <td width="190" valign="middle">
                 <div class="meta-box">
                     <div><span class="meta-label">No</span>: CII.FM.HR.01.04</div>
-                    <div><span class="meta-label">Tanggal</span>: {{ now()->translatedFormat('d F Y') }}</div>
-                    <div><span class="meta-label">NPK</span>: {{ $npk }}</div>
+                    <div><span class="meta-label">Active Date</span>: 13 Mei 2025</div>
+                    <div><span class="meta-label">Rev</span>: 00</div>
+                    <div><span class="meta-label">Rev Date</span>: 9 Juli 2025</div>
                 </div>
             </td>
         </tr>
@@ -1021,41 +1022,12 @@
     </div>
 
     {{-- PERNYATAAN --}}
-    <div class="statement">
+    {{-- <div class="statement">
         <strong>Pernyataan:</strong>
         Saya menyatakan bahwa keterangan yang saya berikan di atas adalah benar dan dapat dipertanggungjawabkan.
         Apabila di kemudian hari terbukti ada keterangan yang tidak benar, saya bersedia menerima sanksi atau tindakan
         sesuai peraturan perusahaan.
-    </div>
-
-    {{-- TANDA TANGAN --}}
-    <table class="signature-table">
-        <tr>
-            <td>
-                <div class="sign-box">
-                    <div class="sign-role">
-                        Mengetahui,<br>
-                        HRD / Personalia
-                    </div>
-                    <div class="sign-name">
-                        (&nbsp;....................................&nbsp;)
-                    </div>
-                </div>
-            </td>
-
-            <td>
-                <div class="sign-box">
-                    <div class="sign-role">
-                        {{ $alamatKab }}, {{ now()->translatedFormat('d F Y') }}<br>
-                        Karyawan Bersangkutan
-                    </div>
-                    <div class="sign-name">
-                        ({{ $nama && $nama !== '-' ? $nama : '............................' }})
-                    </div>
-                </div>
-            </td>
-        </tr>
-    </table>
+    </div> --}}
 </body>
 
 </html>

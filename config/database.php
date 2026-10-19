@@ -113,6 +113,20 @@ return [
         //     // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         // ],
 
+        'sqlsrv_readonly' => [
+            'driver' => 'sqlsrv',
+            'host' => env('DB_READONLY_HOST', '127.0.0.1'),
+            'port' => env('DB_READONLY_PORT', '1433'),
+            'database' => env('DB_READONLY_DATABASE', 'forge'),
+            'username' => env('DB_READONLY_USERNAME', 'app_readonly'),
+            'password' => env('DB_READONLY_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            // Trust server certificate umum dipakai untuk koneksi SQL Server lokal/internal.
+            'trust_server_certificate' => true,
+        ],
+
         'cii' => [
             'driver' => 'sqlsrv',
             'url' => env('DATABASE_URL'),

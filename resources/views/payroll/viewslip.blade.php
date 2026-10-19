@@ -485,7 +485,7 @@
                     </table>
                 </td>
                 <td class="text-cell">
-                    <div class="company-name">PT CHUTEX INTERNATIONAL</div>
+                    <div class="company-name">PT CHUTEX INTERNATIONAL INDONESIA</div>
                     <div class="doc-title">Slip Gaji Karyawan</div>
                 </td>
                 <td style="width:120px; text-align:right;">
@@ -530,6 +530,7 @@
                             @php
                                 $labels = [
                                     'sixs_insentif' => '6S Insentif',
+                                    'qc_insentif' => 'QC Insentif',
                                     'night_shift_compensation' => 'Night Shift Compensation',
                                 ];
                                 $label = $labels[$name] ?? ucwords(str_replace('_', ' ', $name));
@@ -622,7 +623,7 @@
                     </table>
                 </td>
                 <td class="text-cell">
-                    <div class="company-name">PT CHUTEX INTERNATIONAL</div>
+                    <div class="company-name">PT CHUTEX INTERNATIONAL INDONESIA</div>
                     <div class="doc-title">Rekap Absensi Karyawan</div>
                 </td>
                 <td style="width:120px; text-align:right;">
@@ -679,7 +680,10 @@
                 ];
                 $day = $hariIndo[$date->format('l')];
                 $isWeekend = $date->isWeekend();
-                $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []);
+                // shifts.is_holiday = 1 (dikirim controller sebagai
+                // $row->is_shift_holiday) membuat hari itu tampil sebagai
+                // hari libur juga, di luar tabel holidays nasional.
+                $isHoliday = in_array($date->format('Y-m-d'), $holidays ?? []) || ($row->is_shift_holiday ?? false);
                 $rowClass = '';
                 if($isHoliday){
                     $rowClass = 'holiday';
@@ -704,7 +708,7 @@
                     $badgeClass = 'badge-lembur';
                 } elseif($row->status === 'Libur'){
                     $badgeClass = 'badge-libur';
-                } elseif(in_array($row->status, ['MA', 'BR', 'P1', 'SD', 'CT', 'H', 'OUT', 'PE', 'Tidak Finger'])){
+                } elseif(in_array($row->status, ['MA', 'BR', 'P1', 'SD', 'CT','CU', 'H', 'OUT', 'PE', 'Tidak Finger'])){
                     $badgeClass = 'badge-absen';
                 }
                 @endphp
@@ -775,7 +779,7 @@
                     </table>
                 </td>
                 <td class="text-cell">
-                    <div class="company-name">PT CHUTEX INTERNATIONAL</div>
+                    <div class="company-name">PT CHUTEX INTERNATIONAL INDONESIA</div>
                     <div class="doc-title">Detail Ijin Meninggalkan Pekerjaan</div>
                 </td>
                 <td style="width:120px; text-align:right;">
