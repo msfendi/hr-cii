@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use RealRashid\SweetAlert\Facades\Alert;
+use Maatwebsite\Excel\Validators\ValidationException as ExcelValidationException;
 
 class LineInsentifMasterController extends Controller
 {
@@ -239,10 +240,20 @@ class LineInsentifMasterController extends Controller
         // LineEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
-            Excel::import(
-                new LineInsentifImport($request->period_id),
-                $request->file('file')
-            );
+            try {
+                Excel::import(new LineInsentifImport($request->period_id), $request->file('file'));
+
+                return response()->json(['message' => 'Import berhasil']);
+            } catch (ExcelValidationException $e) {
+                $errors = [];
+                foreach ($e->failures() as $f) {
+                    $errors[] = "Baris {$f->row()} kolom {$f->attribute()}: " . implode(', ', $f->errors());
+                }
+                return response()->json(['message' => 'Validasi gagal', 'errors' => ['file' => $errors]], 422);
+            } catch (\Throwable $e) {
+                report($e);
+                return response()->json(['message' => $e->getMessage()], 500);
+            }
         }
 
         /*

@@ -19,6 +19,8 @@
                  data-lock-url="{{ route('monitoring.rekonsiliasi.lock.store') }}"
                  data-calendar-url="{{ route('monitoring.rekonsiliasi.calendar') }}"
                  data-calendar-detail-url="{{ route('monitoring.rekonsiliasi.calendar.detail') }}"
+                 data-sync-bom-url="{{ route('monitoring.sync.bom') }}"
+                 data-sync-po-url="{{ route('monitoring.sync.po') }}"
                  data-sync-rekon-url="{{ route('monitoring.rekonsiliasi.sync') }}"
                  data-sync-prodline-url="{{ route('monitoring.rekonsiliasi.sync-prod-line') }}"
                  data-sync-shipment-url="{{ route('monitoring.rekonsiliasi.sync-shipment') }}"
@@ -112,6 +114,12 @@
                                 @endcanRoute
 
                                 @php $canSyncAny = false; @endphp
+                                @canRoute('monitoring.sync.bom')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
+                                @canRoute('monitoring.sync.po')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync')
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
@@ -1039,6 +1047,8 @@
     const endpoint = app.dataset.endpoint;
     const calendarUrl = app.dataset.calendarUrl;
     const calendarDetailUrl = app.dataset.calendarDetailUrl;
+    const syncBomUrl = app.dataset.syncBomUrl;
+    const syncPoUrl = app.dataset.syncPoUrl;
     const syncRekonUrl = app.dataset.syncRekonUrl;
     const syncProdlineUrl = app.dataset.syncProdlineUrl;
     const syncShipmentUrl = app.dataset.syncShipmentUrl;
@@ -2633,6 +2643,8 @@ function updateFormulaWithColors() {
             { url: syncMsNegaraUrl, label: 'Sync Master Negara' },
             { url: syncMsSupplierUrl, label: 'Sync Master Supplier' },
             { url: syncMsBarangUrl, label: 'Sync Master Barang' },
+            { url: syncBomUrl, label: 'Sync BOM' },
+            { url: syncPoUrl, label: 'Sync PO' },
             { url: syncRekonUrl, label: 'Sync Rekonsiliasi' },
             { url: syncProdlineUrl, label: 'Sync Production Line' },
             { url: syncShipmentUrl, label: 'Sync Shipment' },

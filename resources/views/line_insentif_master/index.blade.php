@@ -507,12 +507,34 @@ $('#importForm').submit(function(e){
 
         error:function(xhr){
 
+            let esc = (v) => $('<div>').text(v ?? '').html();
+            let res = xhr.responseJSON;
+            let detail = '';
+
+            if (res && res.errors) {
+                // 422 validasi (Laravel / Maatwebsite)
+                let items = Object.values(res.errors).flat()
+                    .map(e => '<li>' + esc(e) + '</li>').join('');
+                detail = '<ul style="padding-left:18px;margin:0">' + items + '</ul>';
+            } else if (res && res.message) {
+                detail = esc(res.message);
+            } else if (xhr.status === 0) {
+                detail = 'Tidak dapat terhubung ke server / koneksi terputus.';
+            } else if (xhr.status === 413) {
+                detail = 'Ukuran file terlalu besar (batas upload server terlampaui).';
+            } else if (xhr.status === 419) {
+                detail = 'Sesi habis (CSRF). Muat ulang halaman lalu coba lagi.';
+            } else {
+                detail = 'HTTP ' + xhr.status + ' ' + esc(xhr.statusText);
+            }
+
             Swal.fire({
                 icon:'error',
                 title:'Import gagal',
-                text:xhr.responseJSON?.message ?? 'Terjadi kesalahan',
-                timer:2500,
-                showConfirmButton:false // ✅ TANPA OK
+                html:'<div style="text-align:left;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word">'
+                    + detail + '</div>',
+                confirmButtonText:'Tutup',
+                width:600
             });
 
         }
