@@ -27,7 +27,10 @@ class LeaveBalanceGenerationService
      */
     public function generate(int $year): array
     {
-        $leaveTypes = LeaveTypes::where('is_active', true)->get();
+        // Hanya cuti tahunan yang memakai saldo. Jenis cuti lain dibatasi per pengajuan.
+        $leaveTypes = LeaveTypes::where('is_active', true)->get()->filter(function ($type) {
+            return $type->usesBalance();
+        });
 
         if ($leaveTypes->isEmpty()) {
             return [
@@ -194,15 +197,15 @@ class LeaveBalanceGenerationService
 
         $year = $year ?? (int) date('Y');
 
-        // Ambil semua leave types yang aktif KECUALI cuti tahunan
+        // Ambil jenis cuti berbasis saldo (cuti tahunan saja)
         $leaveTypes = LeaveTypes::where('is_active', true)->get()->filter(function ($type) {
-            return !$this->isAnnualLeave($type);
+            return $type->usesBalance();
         });
 
         if ($leaveTypes->isEmpty()) {
             return [
                 'success' => true,
-                'message' => 'Tidak ada Leave Types non-tahunan yang aktif',
+                'message' => 'Tidak ada jenis cuti berbasis saldo yang aktif',
                 'created' => 0,
                 'skipped' => 0,
             ];
@@ -254,7 +257,7 @@ class LeaveBalanceGenerationService
                     'old_values'     => null,
                     'new_values'     => [
                         'action'         => 'generate_leave_balances_employee',
-                        'description'    => "Auto-generate leave balance non-tahunan untuk NPK $npk",
+                        'description'    => "Auto-generate saldo cuti tahunan untuk NPK $npk",
                         'npk'            => $npk,
                         'year'           => $year,
                         'created_count'  => $created,
@@ -296,7 +299,7 @@ class LeaveBalanceGenerationService
     }
 
     /**
-     * Generate leave balance non-tahunan untuk seluruh karyawan aktif (TKK NULL).
+     * Generate saldo cuti tahunan untuk seluruh karyawan aktif (TKK NULL).
      */
     public function generateNonAnnualForActiveEmployees(?int $year = null): array
     {
@@ -328,7 +331,7 @@ class LeaveBalanceGenerationService
                 'old_values'     => null,
                 'new_values'     => [
                     'action'          => 'generate_non_annual_all_active_employees',
-                    'description'     => "Batch generate leave balance non-tahunan seluruh karyawan aktif tahun $year",
+                    'description'     => "Batch generate saldo cuti tahunan seluruh karyawan aktif tahun $year",
                     'year'            => $year,
                     'employees_count' => $employees->count(),
                     'created_count'   => $totalCreated,

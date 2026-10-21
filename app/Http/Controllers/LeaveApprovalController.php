@@ -217,6 +217,7 @@ class LeaveApprovalController extends Controller
                 'start_date_formatted'=> Carbon::parse($req->start_date)->format('d M Y'),
                 'end_date_formatted'  => Carbon::parse($req->end_date)->format('d M Y'),
                 'total_days'          => $req->total_days,
+                'custom_dates'        => $req->custom_dates ? json_decode($req->custom_dates, true) : null,
                 'reason'              => $req->reason,
                 'status'              => $req->status,
                 'comment'             => $req->comment,
@@ -570,25 +571,31 @@ class LeaveApprovalController extends Controller
      */
     private function finalizeApproval(LeaveRequest $leave)
     {
-        $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+        $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
 
-        if ($isNegativeLeave) {
-            DB::table('leave_balances')
-                ->where('NPK', $leave->NPK)
-                ->where('leave_type_id', $leave->leave_type_id)
-                ->where('year', date('Y'))
-                ->update([
-                    'negative_leave' => DB::raw('COALESCE(negative_leave, 0) + ' . $leave->total_days)
-                ]);
-        } else {
-            DB::table('leave_balances')
-                ->where('NPK', $leave->NPK)
-                ->where('leave_type_id', $leave->leave_type_id)
-                ->where('year', date('Y'))
-                ->update([
-                    'used_days' => DB::raw('used_days + ' . $leave->total_days),
-                    'remained_days' => DB::raw('remained_days - ' . $leave->total_days)
-                ]);
+        // Hanya cuti tahunan yang memakai saldo; jenis cuti lain dibatasi per pengajuan
+        // sehingga tidak perlu memotong saldo.
+        if ($leaveType && $leaveType->usesBalance()) {
+            $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+
+            if ($isNegativeLeave) {
+                DB::table('leave_balances')
+                    ->where('NPK', $leave->NPK)
+                    ->where('leave_type_id', $leave->leave_type_id)
+                    ->where('year', date('Y'))
+                    ->update([
+                        'negative_leave' => DB::raw('COALESCE(negative_leave, 0) + ' . $leave->total_days)
+                    ]);
+            } else {
+                DB::table('leave_balances')
+                    ->where('NPK', $leave->NPK)
+                    ->where('leave_type_id', $leave->leave_type_id)
+                    ->where('year', date('Y'))
+                    ->update([
+                        'used_days' => DB::raw('used_days + ' . $leave->total_days),
+                        'remained_days' => DB::raw('remained_days - ' . $leave->total_days)
+                    ]);
+            }
         }
 
         $karyawan = DB::connection('cii')->table('BIODATA')
@@ -606,11 +613,14 @@ class LeaveApprovalController extends Controller
         $startDate = Carbon::parse($leave->start_date);
         $endDate = Carbon::parse($leave->end_date);
 
-        // Khusus tipe cuti 'pribadi' (atau ID 14), kode JUMLAH_JAM_LEMBUR adalah 'CU', selain itu 'CT' (hutang cuti tetap 'CT')
-        $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
+        // Khusus tipe cuti 'pribadi', kode JUMLAH_JAM_LEMBUR adalah 'CU', selain itu 'CT' (hutang cuti tetap 'CT')
         $overtimeCode = ($leaveType && $leaveType->code === 'pribadi') ? 'CU' : 'CT';
 
-        for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+        // Pengajuan dengan tanggal bebas (custom_dates) hanya memakai tanggal-tanggal
+        // yang benar-benar dipilih, bukan seluruh rentang min..max.
+        $leaveDates = $leave->leaveDates();
+
+        foreach ($leaveDates as $date) {
             $dayOfWeek = $date->dayOfWeek; // 0 = Minggu, 6 = Sabtu
             $dateString = $date->format('Y-m-d');
 
@@ -643,29 +653,41 @@ class LeaveApprovalController extends Controller
      */
     private function reverseFinalize(LeaveRequest $leave)
     {
-        $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+        $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
 
-        if ($isNegativeLeave) {
-            DB::table('leave_balances')
-                ->where('NPK', $leave->NPK)
-                ->where('leave_type_id', $leave->leave_type_id)
-                ->where('year', date('Y'))
-                ->update([
-                    'negative_leave' => DB::raw('GREATEST(0, COALESCE(negative_leave, 0) - ' . $leave->total_days . ')')
-                ]);
-        } else {
-            DB::table('leave_balances')
-                ->where('NPK', $leave->NPK)
-                ->where('leave_type_id', $leave->leave_type_id)
-                ->where('year', date('Y'))
-                ->update([
-                    'used_days' => DB::raw('used_days - ' . $leave->total_days),
-                    'remained_days' => DB::raw('remained_days + ' . $leave->total_days)
-                ]);
+        // Hanya cuti tahunan yang memakai saldo; jenis lain tidak menyentuh leave_balances.
+        if ($leaveType && $leaveType->usesBalance()) {
+            $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
+
+            if ($isNegativeLeave) {
+                DB::table('leave_balances')
+                    ->where('NPK', $leave->NPK)
+                    ->where('leave_type_id', $leave->leave_type_id)
+                    ->where('year', date('Y'))
+                    ->update([
+                        'negative_leave' => DB::raw('GREATEST(0, COALESCE(negative_leave, 0) - ' . $leave->total_days . ')')
+                    ]);
+            } else {
+                DB::table('leave_balances')
+                    ->where('NPK', $leave->NPK)
+                    ->where('leave_type_id', $leave->leave_type_id)
+                    ->where('year', date('Y'))
+                    ->update([
+                        'used_days' => DB::raw('used_days - ' . $leave->total_days),
+                        'remained_days' => DB::raw('remained_days + ' . $leave->total_days)
+                    ]);
+            }
         }
 
+        // Hanya tanggal-tanggal yang benar-benar dipakai pengajuan ini yang dikembalikan
+        // (untuk pengajuan tanggal bebas, hanya tanggal yang dipilih).
+        $dateStrings = array_map(
+            fn ($d) => $d->format('Y-m-d'),
+            $leave->leaveDates()
+        );
+
         Overtime::where('NPK', $leave->NPK)
-            ->whereBetween('OVERTIME_DATE', [$leave->start_date, $leave->end_date])
+            ->whereIn('OVERTIME_DATE', $dateStrings)
             ->whereIn('JUMLAH_JAM_LEMBUR', ['CT', 'CU'])
             ->update([
                 'JUMLAH_JAM_LEMBUR' => null,

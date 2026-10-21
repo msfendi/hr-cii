@@ -257,11 +257,13 @@ class PayrollApproveController extends Controller
     */
         $aktif = DB::table('BIODATA as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN')
+            ->whereRaw("ISNULL(b.IS_EXCLUDE, '0') <> '1'");
 
         $keluar = DB::table('BIODATA_KELUAR as b')
             ->leftJoin('PKWT as p', 'b.NPK', '=', 'p.NPK')
-            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN');
+            ->select('b.NPK', 'b.id_dept', 'p.TKK', 'p.TMK', 'b.IS_STAFF', 'p.KETERANGAN')
+            ->whereRaw("ISNULL(b.IS_EXCLUDE, '0') <> '1'");
 
         $union = $aktif->union($keluar);
 
@@ -290,17 +292,15 @@ class PayrollApproveController extends Controller
                 }
             )
             ->where('prd.run_id', $runId)
+            // 🔥 Exclude karyawan IS_EXCLUDE = 1 (aktif maupun keluar)
+            ->whereRaw("NOT EXISTS (
+        SELECT 1 FROM BIODATA ex_a
+        WHERE ex_a.NPK = prd.employee_npk AND ex_a.IS_EXCLUDE = '1')")
+            ->whereRaw("NOT EXISTS (
+        SELECT 1 FROM BIODATA_KELUAR ex_k
+        WHERE ex_k.NPK = prd.employee_npk AND ex_k.IS_EXCLUDE = '1')")
             ->select(
-                'prd.employee_npk',
-                'prd.employee_name',
-                'prd.total_salary',
-                'pm.bank_account',
-                'd.DEPARTEMENT',
-                'd.IS_SEWING',
-                'bio.IS_STAFF',
-                'bio.TKK',
-                'bio.TMK',
-                'bio.KETERANGAN'
+                // ... tetap sama
             )
             ->orderBy('d.DEPARTEMENT')
             ->orderBy('prd.employee_npk');

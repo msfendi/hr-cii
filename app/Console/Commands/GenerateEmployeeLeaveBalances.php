@@ -19,7 +19,7 @@ class GenerateEmployeeLeaveBalances extends Command
      *
      * @var string
      */
-    protected $description = 'Generate leave balance karyawan untuk jenis cuti aktif di leave_types (kecuali cuti tahunan)';
+    protected $description = 'Generate saldo cuti tahunan (berbasis saldo) untuk karyawan';
 
     /**
      * Execute the console command.

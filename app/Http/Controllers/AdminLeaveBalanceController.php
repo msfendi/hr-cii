@@ -68,6 +68,9 @@ class AdminLeaveBalanceController extends Controller
         });
 
         $leaveTypes = LeaveTypes::where('is_active', true)->get();
+
+        // Jenis cuti yang boleh di-set saldo (hanya cuti tahunan)
+        $balanceLeaveTypes = $leaveTypes->filter(fn ($type) => $type->usesBalance())->values();
         
         $details = $leaveTypes->map(function($type) use ($balances_with_calc) {
             $rec = $balances_with_calc->firstWhere('leave_type_id', $type->id);
@@ -79,6 +82,11 @@ class AdminLeaveBalanceController extends Controller
                 'default_days'  => $type->default_days,           // Jatah resmi dari leave_types
                 'used_days'     => $rec ? $rec->used_days : 0,    // Hari terpakai
                 'remained_days' => $rec ? $rec->remained_days : 0, // Sisa aktual dari leave_balances
+                'uses_balance'  => $type->usesBalance(),          // Hanya cuti tahunan yang memakai saldo
+                'count_calendar_days' => $type->countsCalendarDays(),
+                'is_exact'      => $type->requiresExactDays(),   // Jumlah hari wajib persis = default_days
+                'is_unlimited'  => $type->isUnlimited(),         // Tanpa batas hari (Cuti Pribadi/Unpaid)
+                'max_requests'  => $type->maxRequests(),         // Batas jumlah pengajuan seumur hidup
             ];
         });
 
@@ -114,7 +122,7 @@ class AdminLeaveBalanceController extends Controller
             ];
         }
 
-        return view('leave-balance.show', compact('employee', 'year', 'details', 'leaveTypes', 'leaveHistory'));
+        return view('leave-balance.show', compact('employee', 'year', 'details', 'leaveTypes', 'balanceLeaveTypes', 'leaveHistory'));
     }
 
     public function storeBalance(Request $request)
@@ -126,6 +134,14 @@ class AdminLeaveBalanceController extends Controller
             'remained_days' => 'required|numeric',
             'used_days' => 'required|numeric',
         ]);
+
+        $leaveType = LeaveTypes::find($request->leave_type_id);
+        if (!$leaveType || !$leaveType->usesBalance()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya Cuti Tahunan yang memiliki saldo. Jenis cuti lain dibatasi per pengajuan.',
+            ], 422);
+        }
 
         $balance = LeaveBalances::updateOrCreate(
             [
@@ -147,6 +163,14 @@ class AdminLeaveBalanceController extends Controller
         $balance = LeaveBalances::find($id);
         if (!$balance) {
             return response()->json(['status' => 'error', 'message' => 'Data not found'], 404);
+        }
+
+        $leaveType = LeaveTypes::find($balance->leave_type_id);
+        if (!$leaveType || !$leaveType->usesBalance()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Hanya Cuti Tahunan yang memiliki saldo. Jenis cuti lain dibatasi per pengajuan.',
+            ], 422);
         }
 
         $balance->update($request->only(['remained_days', 'used_days']));

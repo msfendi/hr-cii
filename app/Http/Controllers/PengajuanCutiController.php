@@ -9,7 +9,8 @@ use App\Models\Holiday;
 use App\Models\LeaveBalances;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
-use App\Services\LeaveBalanceGenerationService;
+use App\Services\LeaveDayService;
+use App\Services\LeaveRuleService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +82,7 @@ class PengajuanCutiController extends Controller
         return redirect()->route('pengajuan-cuti.form');
     }
 
-    public function form(Request $request)
+    public function form(Request $request, LeaveRuleService $leaveRuleService)
     {
         $npk = session('cuti_employee_npk');
         if (!$npk) {
@@ -117,30 +118,50 @@ class PengajuanCutiController extends Controller
             return Carbon::parse($date)->format('Y-m-d');
         })->toArray();
 
-        // Pastikan leave balance non-tahunan sudah tergenerate jika belum ada
-        app(LeaveBalanceGenerationService::class)->generateForEmployee($npk, $employee->JK, (int) date('Y'));
+        // Hanya Cuti Tahunan yang memakai saldo (balance). Jenis cuti lain
+        // dibatasi per pengajuan (maksimal N hari), tidak mengurangi saldo.
+        $annualType = $masterLeaveType->first(fn ($type) => $type->usesBalance());
 
-        // Ambil daftar balance cuti karyawan untuk tahun berjalan
-        $leaveBalances = DB::table('leave_balances')
-            ->join('leave_types', 'leave_balances.leave_type_id', '=', 'leave_types.id')
-            ->where('leave_balances.NPK', $npk)
-            ->where('leave_balances.year', date('Y'))
-            ->select(
-                'leave_types.id as leave_type_id',
-                'leave_types.name as leave_type_name',
-                'leave_types.code as leave_type_code',
-                'leave_balances.remained_days',
-                'leave_balances.used_days',
-                'leave_balances.negative_leave'
-            )
-            ->get();
+        $annualBalance = null;
+        if ($annualType) {
+            $annualBalance = DB::table('leave_balances')
+                ->where('NPK', $npk)
+                ->where('leave_type_id', $annualType->id)
+                ->where('year', date('Y'))
+                ->first();
+        }
+
+        // Cuti selain tahunan & selain pribadi (mis. menikah, duka, melahirkan, dll.)
+        $otherLeaveTypes = $masterLeaveType
+            ->filter(fn ($type) => !$type->usesBalance() && !$type->isPersonal())
+            ->values();
+
+        // Cuti Pribadi (Unpaid)
+        $personalLeaveType = $masterLeaveType->first(fn ($type) => $type->isPersonal());
+
+        // Kuota pengajuan per jenis cuti (seumur hidup).
+        // Jenis cuti yang kuota pengajuannya sudah tercapai TIDAK bisa dipakai lagi.
+        $leaveQuotas = [];
+        foreach ($masterLeaveType as $type) {
+            $leaveQuotas[$type->id] = $leaveRuleService->quota($type, $npk);
+        }
 
         $leaveReasons = DB::table('leave_reasons')
             ->select('id', 'leave_type_id', 'reason')
             ->orderBy('id', 'asc')
             ->get();
 
-        return view('cuti.form', compact('employee', 'masterLeaveType', 'holidays', 'leaveBalances', 'leaveReasons'));
+        return view('cuti.form', compact(
+            'employee',
+            'masterLeaveType',
+            'holidays',
+            'annualType',
+            'annualBalance',
+            'otherLeaveTypes',
+            'personalLeaveType',
+            'leaveReasons',
+            'leaveQuotas'
+        ));
     }
 
     /**
@@ -158,7 +179,7 @@ class PengajuanCutiController extends Controller
      *   leaves[0][jenis_cuti], leaves[0][tanggal_mulai], leaves[0][tanggal_selesai], leaves[0][keterangan]
      *   leaves[1][...], dst.
      */
-    public function submitForm(Request $request)
+    public function submitForm(Request $request, LeaveRuleService $leaveRuleService)
     {
         try {
             $employee = Biodata::where('NPK', $request->npk)->first();
@@ -178,13 +199,14 @@ class PengajuanCutiController extends Controller
                 'leaves'                     => 'required|array|min:1',
                 // distinct: satu jenis cuti hanya boleh dipilih di satu form dalam sekali kirim
                 'leaves.*.jenis_cuti'        => 'required|exists:leave_types,id|distinct',
-                'leaves.*.tanggal_mulai'     => 'required|date',
+                'leaves.*.tanggal_mulai'     => 'nullable|date',
                 // tanggal_selesai = hari terakhir cuti (inclusive), boleh sama dengan tanggal_mulai untuk cuti 1 hari
-                'leaves.*.tanggal_selesai'   => 'required|date|after_or_equal:leaves.*.tanggal_mulai',
+                'leaves.*.tanggal_selesai'   => 'nullable|date',
+                'leaves.*.custom_dates'       => 'nullable|array',
+                'leaves.*.custom_dates.*'     => 'date',
                 'leaves.*.keterangan'        => 'required|string',
             ], [
                 'leaves.*.jenis_cuti.distinct' => 'Jenis cuti yang sama tidak boleh dipilih lebih dari sekali dalam satu pengajuan.',
-                'leaves.*.tanggal_selesai.after_or_equal' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
             ]);
 
             $deptId = (string) $employee->ID_DEPT;
@@ -228,95 +250,59 @@ class PengajuanCutiController extends Controller
             // ── Tahap 1: Validasi SEMUA baris cuti dulu, sebelum menyimpan apapun ──
             $preparedLeaves = [];
 
-            // Jenis cuti yang WAJIB upload lampiran file
-            $attachRequiredCodes = [
-                'menikah', 'menikahkan_anak', 'suami_istri_meninggal',
-                'keluarga_meninggal', 'anak_meninggal', 'menantu_meninggal',
-                'orang_tua_meninggal',
-            ];
             foreach ($leaves as $i => $leave) {
                 $rowLabel = 'Cuti #' . ((int) $i + 1);
 
-                $startDate = Carbon::parse($leave['tanggal_mulai']);
-                $endDate   = Carbon::parse($leave['tanggal_selesai']);
-
-                // tanggal_selesai = hari terakhir cuti (inclusive), tidak boleh sebelum tanggal_mulai
-                if ($endDate->lt($startDate)) {
-                    Alert::error('Error', "$rowLabel: Tanggal selesai tidak boleh sebelum tanggal mulai.");
+                // Ambil jenis cuti (menentukan mode tanggal: rentang / bebas / kalender)
+                $leaveType = LeaveTypes::find($leave['jenis_cuti']);
+                if (!$leaveType) {
+                    Alert::error('Error', "$rowLabel: Jenis cuti tidak valid.");
                     return back();
                 }
+
+                // Validasi aturan pengajuan (mode tanggal, jumlah hari, rentang 30 hari,
+                // saldo cuti tahunan, batas jumlah pengajuan).
+                $result = $leaveRuleService->evaluate(
+                    $leaveType,
+                    (string) $request->npk,
+                    is_array($leave['custom_dates'] ?? null) ? $leave['custom_dates'] : [],
+                    $leave['tanggal_mulai'] ?? null,
+                    $leave['tanggal_selesai'] ?? null
+                );
+
+                if (!$result['ok']) {
+                    Alert::error('Error', "$rowLabel: " . $result['error']);
+                    return back();
+                }
+
+                $dateMode        = $result['mode'];
+                $total_days      = $result['total_days'];
+                $startDate       = $result['start'];
+                $endDate         = $result['end'];
+                $isNegativeLeave = $result['is_negative_leave'];
+                $customDates     = $result['custom_dates'] ?? [];
 
                 // ── Cek tumpang tindih terhadap baris cuti lain dalam pengajuan yang sama ──
                 // Interval dianggap tertutup/inclusive [start, end] karena tanggal_selesai adalah
                 // hari cuti terakhir (bukan hari kembali kerja).
-                foreach ($preparedLeaves as $prevIndex => $prev) {
-                    $prevStart = Carbon::parse($prev['start_date']);
-                    $prevEnd   = Carbon::parse($prev['end_date']);
+                $currentDates = $result['dates'];
 
-                    $overlap = $startDate->lte($prevEnd) && $prevStart->lte($endDate);
+                foreach ($preparedLeaves as $prevIndex => $prev) {
+                    $overlap = $this->hasDateOverlap(
+                        $dateMode,
+                        $currentDates,
+                        $prev['date_mode'],
+                        $prev['date_dates']
+                    );
+
                     if ($overlap) {
                         Alert::error('Error', "$rowLabel: Tanggal bertumpang tindih dengan Cuti #" . ($prevIndex + 1) . ".");
                         return back();
                     }
                 }
 
-                $holidays = Holiday::whereBetween('holiday_date', [
-                    $startDate->format('Y-m-d'),
-                    $endDate->format('Y-m-d')
-                ])->get()->map(function ($h) {
-                    return Carbon::parse($h->holiday_date)->format('Y-m-d');
-                })->toArray();
-
-                // Hitung hari kerja dari tanggal_mulai s.d. tanggal_selesai (inclusive, kedua tanggal
-                // dihitung sebagai hari cuti), melewati akhir pekan & hari libur.
-                $total_days = 0;
-                for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
-                    if ($date->isWeekend() || in_array($date->format('Y-m-d'), $holidays)) {
-                        continue;
-                    }
-                    $total_days++;
-                }
-
-                if ($total_days <= 0) {
-                    Alert::error('Error', "$rowLabel: Rentang tanggal tidak valid (hanya berisi akhir pekan/hari libur).");
-                    return back();
-                }
-
-                $balance = LeaveBalances::where('NPK', $request->npk)
-                    ->where('leave_type_id', $leave['jenis_cuti'])
-                    ->where('year', $startDate->year)
-                    ->first();
-
-                if (!$balance) {
-                    $leaveType = LeaveTypes::find($leave['jenis_cuti']);
-                    if ($leaveType && strtolower(trim($leaveType->code)) !== 'tahunan') {
-                        app(LeaveBalanceGenerationService::class)->generateForEmployee($request->npk, null, (int) $startDate->year);
-                        $balance = LeaveBalances::where('NPK', $request->npk)
-                            ->where('leave_type_id', $leave['jenis_cuti'])
-                            ->where('year', $startDate->year)
-                            ->first();
-                    }
-                }
-
-                if (!$balance) {
-                    Alert::error('Error', "$rowLabel: Jatah cuti tidak ditemukan. Hubungi HR untuk informasi lebih lanjut.");
-                    return back();
-                }
-
-                // Cek apakah jenis cuti ini adalah Cuti Tahunan dan saldo cutinya sudah habis
-                $leaveType = LeaveTypes::find($leave['jenis_cuti']);
-                $isTahunan = $leaveType && $leaveType->code === 'tahunan';
-                $isNegativeLeave = $isTahunan && ($balance->remained_days <= 0);
-
-                // Sisa hari cuti membatasi rentang tanggal selesai yang boleh diajukan,
-                // kecuali untuk cuti tahunan dengan saldo habis (menggunakan Hutang Cuti).
-                if (!$isNegativeLeave && $balance->remained_days < $total_days) {
-                    Alert::error('Error', "$rowLabel: Jumlah Hari Cuti ({$total_days} hari) Melebihi Sisa Jatah Cuti ({$balance->remained_days} hari).");
-                    return back();
-                }
-
                 // ── Validasi lampiran file untuk jenis cuti tertentu ──
-                $requiresAttach = $leaveType && in_array($leaveType->code, $attachRequiredCodes);
+                $requiresAttach = $leaveType && $leaveType->requiresAttachment();
 
                 if ($requiresAttach && !$request->hasFile("leaves.{$i}.attach_files")) {
                     Alert::error('Error', "$rowLabel: Lampiran file wajib diupload untuk jenis cuti {$leaveType->name}.");
@@ -349,12 +335,15 @@ class PengajuanCutiController extends Controller
 
                 $preparedLeaves[] = [
                     'leave_type_id'     => $leave['jenis_cuti'],
-                    'start_date'        => $leave['tanggal_mulai'],
-                    'end_date'          => $leave['tanggal_selesai'],
+                    'start_date'        => $startDate->format('Y-m-d'),
+                    'end_date'          => $endDate->format('Y-m-d'),
                     'total_days'        => $total_days,
                     'reason'            => $reason,
                     'is_negative_leave' => $isNegativeLeave,
                     'file_index'        => $i,
+                    'date_mode'         => $dateMode,
+                    'date_dates'        => $currentDates,
+                    'custom_dates'      => $dateMode === 'custom' ? $customDates : null,
                 ];
             }
 
@@ -394,6 +383,9 @@ class PengajuanCutiController extends Controller
                         'token'             => $token,
                         'void'              => 'false',
                         'attach_files'      => $leaveData['attach_files'],
+                        'custom_dates'      => $leaveData['custom_dates']
+                            ? json_encode($leaveData['custom_dates'])
+                            : null,
                     ]);
                 }
             }
@@ -410,11 +402,53 @@ class PengajuanCutiController extends Controller
     }
 
     /**
+     * Cek apakah dua kumpulan tanggal bertumpang tindih.
+     *
+     * - mode 'range'  : $dates = [tanggal_mulai, tanggal_selesai] (interval tertutup/inclusive)
+     * - mode 'custom' : $dates = daftar tanggal (Y-m-d) yang dipilih bebas
+     */
+    private function hasDateOverlap(string $modeA, array $datesA, string $modeB, array $datesB): bool
+    {
+        if (empty($datesA) || empty($datesB)) {
+            return false;
+        }
+
+        if ($modeA === 'custom' && $modeB === 'custom') {
+            return (bool) array_intersect($datesA, $datesB);
+        }
+
+        if ($modeA === 'custom') {
+            [$start, $end] = $datesB;
+            foreach ($datesA as $date) {
+                if ($date >= $start && $date <= $end) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if ($modeB === 'custom') {
+            [$start, $end] = $datesA;
+            foreach ($datesB as $date) {
+                if ($date >= $start && $date <= $end) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        [$startA, $endA] = $datesA;
+        [$startB, $endB] = $datesB;
+
+        return $startA <= $endB && $startB <= $endA;
+    }
+
+    /**
      * Cek sisa saldo cuti, dan (opsional) hitung batas maksimum tanggal selesai
      * berdasarkan sisa saldo + tanggal mulai yang dipilih (dipakai front-end untuk
      * membatasi date-picker "Tanggal Selesai").
      */
-    public function getLeaveBalance(Request $request)
+    public function getLeaveBalance(Request $request, LeaveDayService $leaveDayService, LeaveRuleService $leaveRuleService)
     {
         $npk = $request->npk;
         $leaveTypeId = $request->leave_type_id;
@@ -425,77 +459,94 @@ class PengajuanCutiController extends Controller
             return response()->json(['success' => false, 'error' => 'Invalid parameters'], 400);
         }
 
+        $leaveType = LeaveTypes::find($leaveTypeId);
+        if (!$leaveType) {
+            return response()->json(['success' => false, 'error' => 'Jenis cuti tidak ditemukan'], 404);
+        }
+
         $balance = LeaveBalances::where('NPK', $npk)
             ->where('leave_type_id', $leaveTypeId)
             ->where('year', $year)
             ->first();
 
-        if (!$balance) {
-            $leaveType = LeaveTypes::find($leaveTypeId);
-            if ($leaveType && strtolower(trim($leaveType->code)) !== 'tahunan') {
-                app(LeaveBalanceGenerationService::class)->generateForEmployee($npk, null, (int) $year);
-                $balance = LeaveBalances::where('NPK', $npk)
-                    ->where('leave_type_id', $leaveTypeId)
-                    ->where('year', $year)
-                    ->first();
-            }
-        }
+        // Kuota pengajuan (seumur hidup) untuk jenis cuti ini
+        $quota = $leaveRuleService->quota($leaveType, $npk);
 
-        $remained = $balance ? $balance->remained_days : 0;
-        $used = $balance ? $balance->used_days : 0;
+        if ($leaveType->usesBalance()) {
+            // Cuti Tahunan: memakai saldo (bisa Hutang Cuti bila saldo habis)
+            if (!$balance) {
+                $remained = 0;
+                $used = 0;
+                $isNegativeLeave = false;
+                $keterangan = 'Belum ada saldo cuti tahunan untuk tahun berjalan. Silakan hubungi HR.';
+            } else {
+                $remained = (int) $balance->remained_days;
+                $used = (int) $balance->used_days;
+                $isNegativeLeave = $remained <= 0;
 
-        // Hitung tanggal selesai maksimum yang masih memenuhi sisa saldo cuti (inclusive),
-        // dengan melewati akhir pekan & hari libur.
-        $maxEndDate = null;
-        if ($startDate && $remained > 0) {
-            try {
-                $holidays = Holiday::pluck('holiday_date')->map(function ($d) {
-                    return Carbon::parse($d)->format('Y-m-d');
-                })->toArray();
-
-                $count = 0;
-                $cursor = Carbon::parse($startDate);
-                // Batas pengaman agar tidak infinite loop jika data tidak wajar
-                $guard = 0;
-                while ($count < $remained && $guard < 3650) {
-                    if (!$cursor->isWeekend() && !in_array($cursor->format('Y-m-d'), $holidays)) {
-                        $count++;
-                    }
-                    if ($count >= $remained) {
-                        break;
-                    }
-                    $cursor->addDay();
-                    $guard++;
+                if ($isNegativeLeave) {
+                    $currentNegative = (int) ($balance->negative_leave ?? 0);
+                    $keterangan = "Saldo cuti tahunan Anda telah habis (0 hari). Pengajuan ini akan dicatat sebagai Hutang Cuti (Total hutang cuti saat ini: {$currentNegative} hari).";
+                } else {
+                    $keterangan = "Sisa cuti tahunan Anda: {$remained} hari, Terpakai: {$used}";
                 }
-                // $cursor sekarang berada di hari cuti terakhir yang masih tercakup sisa saldo (inclusive)
-                $maxEndDate = $cursor->format('Y-m-d');
-            } catch (\Exception $e) {
-                $maxEndDate = null;
             }
+        } else {
+            // Cuti selain tahunan: dibatasi per pengajuan, tidak memakai saldo
+            $remained = $leaveType->isUnlimited() ? 0 : $leaveType->maxDaysPerRequest();
+            $used = 0;
+            $isNegativeLeave = false;
+            $keterangan = $leaveType->isUnlimited()
+                ? "{$leaveType->name} tidak memiliki batas hari per pengajuan."
+                : "Batas maksimal pengajuan {$leaveType->name}: {$remained} hari per pengajuan";
         }
 
-        $leaveType = LeaveTypes::find($leaveTypeId);
-        $isTahunan = $leaveType && $leaveType->code === 'tahunan';
-        $isNegativeLeave = $isTahunan && $remained <= 0;
+        if ($quota['max'] !== null) {
+            $keterangan .= " Batas pengajuan: {$quota['used']}/{$quota['max']} pengajuan.";
+        }
 
-        if ($isNegativeLeave) {
-            $currentNegative = $balance ? (int)($balance->negative_leave ?? 0) : 0;
-            $keterangan = "Saldo cuti tahunan Anda telah habis (0 hari). Pengajuan ini akan dicatat sebagai Hutang Cuti (Total hutang cuti saat ini: {$currentNegative} hari).";
-        } elseif ($balance) {
-            $keterangan = "Sisa cuti Anda: {$remained} hari, Terpakai: {$used}";
-        } else {
-            $keterangan = 'Belum ada data jatah cuti untuk jenis ini di tahun berjalan.';
+        // Hitung batas jumlah tanggal yang boleh dipilih:
+        // - Cuti Tahunan  → dibatasi sisa saldo
+        // - Cuti biasa    → wajib persis default_days hari
+        // - Cuti Pribadi  → tanpa batas
+        $maxEndDate = null;
+        $maxDates   = null;
+        $requiredDates = null;
+
+        if ($leaveType->usesCustomDates()) {
+            if ($leaveType->isUnlimited()) {
+                $maxDates = null;
+            } elseif ($leaveType->usesBalance()) {
+                $maxDates = $isNegativeLeave ? null : $remained;
+            } else {
+                $maxDates = $leaveType->maxDaysPerRequest();
+                $requiredDates = $leaveType->requiresExactDays() ? $leaveType->maxDaysPerRequest() : null;
+            }
+        } elseif ($startDate && $remained > 0 && !$isNegativeLeave) {
+            // Mode rentang (melahirkan/keguguran): batas tanggal selesai
+            $maxEnd = $leaveDayService->maxEndDate($leaveType, Carbon::parse($startDate), $remained);
+            $maxEndDate = $maxEnd ? $maxEnd->format('Y-m-d') : null;
         }
 
         return response()->json([
-            'success'           => true,
-            'sisa'              => $remained,
-            'keterangan'        => $keterangan,
-            'remained_days'     => $remained,
-            'used_days'         => $used,
-            'is_negative_leave' => $isNegativeLeave,
-            'negative_leave'    => $balance ? (int)($balance->negative_leave ?? 0) : 0,
-            'max_end_date'      => $isNegativeLeave ? null : $maxEndDate,
+            'success'            => true,
+            'sisa'               => $remained,
+            'keterangan'         => $keterangan,
+            'remained_days'      => $remained,
+            'used_days'          => $used,
+            'is_balance_based'   => $leaveType->usesBalance(),
+            'uses_custom_dates'  => $leaveType->usesCustomDates(),
+            'is_negative_leave'  => $isNegativeLeave,
+            'negative_leave'     => $balance ? (int) ($balance->negative_leave ?? 0) : 0,
+            'max_end_date'       => $isNegativeLeave ? null : $maxEndDate,
+            'max_dates'          => $maxDates,
+            'required_dates'     => $requiredDates,
+            'window_days'        => $leaveType->requiresDateWindow() ? $leaveType->dateWindowDays() : null,
+            'unlimited'          => $leaveType->isUnlimited(),
+            'max_requests'       => $quota['max'],
+            'used_requests'      => $quota['used'],
+            'remaining_requests' => $quota['remaining'],
+            'quota_exhausted'    => $quota['exhausted'],
         ]);
     }
 
@@ -649,6 +700,7 @@ class PengajuanCutiController extends Controller
                 'start_date_formatted'=> Carbon::parse($req->start_date)->format('d M Y'),
                 'end_date_formatted'  => Carbon::parse($req->end_date)->format('d M Y'),
                 'total_days'          => $req->total_days,
+                'custom_dates'        => $req->custom_dates ? json_decode($req->custom_dates, true) : null,
                 'reason'              => $req->reason,
                 'status'              => $overallStatus,
                 'comment'             => $rejectComment ?: $req->comment,

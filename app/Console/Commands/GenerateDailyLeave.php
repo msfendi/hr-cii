@@ -33,7 +33,10 @@ class GenerateDailyLeave extends Command
         $today = now();
         $year = $today->year;
 
-        $leaveTypes = LeaveTypes::where('is_active', true)->get();
+        // Hanya cuti tahunan yang memakai saldo.
+        $leaveTypes = LeaveTypes::where('is_active', true)->get()->filter(function ($type) {
+            return $type->usesBalance();
+        });
         if ($leaveTypes->isEmpty()) {
             $this->error('No active Leave Types found.');
             return;
