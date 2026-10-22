@@ -611,7 +611,7 @@
         margin-bottom: 0;
     }
 
-    .leave-reason-radio-card .custom-control-input:checked ~ .custom-control-label {
+    .leave-reason-radio-card .custom-control-input:checked~.custom-control-label {
         color: #224abe;
         font-weight: 700;
     }
@@ -730,8 +730,8 @@
                                             </div>
                                         </div>
 
-                                        {{-- Saldo Cuti Karyawan (Collapsible Panel) --}}
-                                        @if(isset($leaveBalances) && $leaveBalances->count() > 0)
+                                        {{-- Saldo & Jatah Cuti Karyawan (Collapsible Panel) --}}
+                                        @if($annualType || $otherLeaveTypes->count() > 0 || $personalLeaveType)
                                             <div class="card border mb-4"
                                                 style="border-radius: 0.65rem; border-color: #e3e6f0; background: #fff; overflow: hidden;">
                                                 <a href="#collapseSaldoCuti"
@@ -744,7 +744,7 @@
                                                             <i class="fas fa-wallet text-primary mr-2"
                                                                 style="font-size: 0.92rem;"></i>
                                                             <span class="font-weight-bold text-gray-800"
-                                                                style="font-size: 0.85rem;">Sisa Saldo Cuti
+                                                                style="font-size: 0.85rem;">Saldo & Jatah Cuti
                                                                 ({{ date('Y') }})</span>
                                                         </div>
                                                         <div class="d-flex align-items-center text-primary font-weight-bold"
@@ -759,17 +759,24 @@
                                                     <div class="card-body p-3 pt-2 border-top"
                                                         style="border-color: #edf2f7 !important;">
                                                         <div class="row pt-1">
-                                                            @foreach($leaveBalances as $bal)
+
+                                                            {{-- ── Baris 1: Cuti Tahunan (berbasis saldo) ── --}}
+                                                            <div class="col-12">
+                                                                <div class="text-uppercase text-primary font-weight-bold mb-2"
+                                                                    style="font-size: 0.72rem; letter-spacing: .4px;">
+                                                                    <i class="fas fa-sun mr-1"></i> Cuti Tahunan
+                                                                </div>
+                                                            </div>
+                                                            @if($annualType)
                                                                 @php
-                                                                    $sisa = (int) $bal->remained_days;
-                                                                    $used = (int) $bal->used_days;
-                                                                    $hutang = (int) ($bal->negative_leave ?? 0);
+                                                                    $sisa = $annualBalance ? (int) $annualBalance->remained_days : 0;
+                                                                    $used = $annualBalance ? (int) $annualBalance->used_days : 0;
+                                                                    $hutang = $annualBalance ? (int) ($annualBalance->negative_leave ?? 0) : 0;
                                                                     $badgeBg = $sisa <= 2 ? '#fef2f2' : ($sisa <= 5 ? '#fefce8' : '#f0fdf4');
                                                                     $badgeBorder = $sisa <= 2 ? '#fecaca' : ($sisa <= 5 ? '#fef08a' : '#bbf7d0');
                                                                     $badgeText = $sisa <= 2 ? '#b91c1c' : ($sisa <= 5 ? '#a16207' : '#15803d');
                                                                 @endphp
-                                                                <div
-                                                                    class="col-sm-6 {{ $leaveBalances->count() >= 3 ? 'col-lg-4' : '' }} mb-2">
+                                                                <div class="col-sm-6 col-lg-4 mb-2">
                                                                     <div class="card h-100 border shadow-none"
                                                                         style="border-radius: 0.55rem; border-color: #e3e6f0 !important; background: #fafbfc;">
                                                                         <div
@@ -779,11 +786,14 @@
                                                                                 <span
                                                                                     class="font-weight-bold text-gray-800 text-truncate mr-2"
                                                                                     style="font-size: 0.83rem;"
-                                                                                    title="{{ $bal->leave_type_name }}">
-                                                                                    {{ $bal->leave_type_name }}
+                                                                                    title="{{ $annualType->name }}">
+                                                                                    {{ $annualType->name }}
                                                                                 </span>
                                                                                 @if($hutang > 0)
-                                                                                    <span class="badge badge-warning text-dark font-weight-bold" style="font-size: 0.68rem;" title="Total Hutang Cuti">
+                                                                                    <span
+                                                                                        class="badge badge-warning text-dark font-weight-bold"
+                                                                                        style="font-size: 0.68rem;"
+                                                                                        title="Total Hutang Cuti">
                                                                                         Hutang: {{ $hutang }} hr
                                                                                     </span>
                                                                                 @endif
@@ -799,17 +809,136 @@
                                                                                         class="fas fa-history mr-1 font-weight-bold text-gray-800"></i>
                                                                                     Terpakai:</span>
                                                                                 <span
-                                                                                    class="font-weight-bold text-gray-600">{{ $used }}
-                                                                                </span>
+                                                                                    class="font-weight-bold text-gray-600">{{ $used }}</span>
                                                                             </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            @endforeach
+                                                            @else
+                                                                <div class="col-12 mb-2">
+                                                                    <div class="alert alert-light border text-muted small mb-0 py-2 px-3"
+                                                                        style="border-radius:.5rem;">
+                                                                        Belum ada saldo Cuti Tahunan untuk tahun
+                                                                        {{ date('Y') }}.
+                                                                    </div>
+                                                                </div>
+                                                            @endif
+
+                                                            {{-- ── Baris 2: Cuti Lainnya (dibatasi per pengajuan) ── --}}
+                                                            
+                                                            @if($otherLeaveTypes->count() > 0)
+                                                                <div class="col-12 mt-2">
+                                                                    <div class="text-uppercase text-primary font-weight-bold mb-2"
+                                                                        style="font-size: 0.72rem; letter-spacing: .4px;">
+                                                                        <i class="fas fa-briefcase-medical mr-1"></i>
+                                                                        Cuti Lainnya
+                                                                        <span class="text-muted font-weight-normal"
+                                                                            style="text-transform: none;">
+                                                                            (maks. per pengajuan)
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                @foreach($otherLeaveTypes as $type)
+                                                                    <div class="col-sm-6 col-lg-4 mb-2">
+                                                                        <div class="card h-100 border shadow-none"
+                                                                            style="border-radius: 0.55rem; border-color: #e3e6f0 !important; background: #fafbfc;">
+                                                                            <div class="card-body p-2 px-3 d-flex flex-column justify-content-between">
+                                                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                                                    <span class="font-weight-bold text-gray-800 text-truncate mr-2"
+                                                                                        style="font-size: 0.83rem;"
+                                                                                        title="{{ $type->name }}">
+                                                                                        {{ $type->name }}
+                                                                                    </span>
+
+                                                                                    {{-- <span class="badge badge-success font-weight-bold"
+                                                                                        style="font-size: 0.68rem;">
+                                                                                        Dibayar
+                                                                                    </span> --}}
+                                                                                </div>
+
+                                                                                <div class="d-flex align-items-center justify-content-between text-muted"
+                                                                                    style="font-size: 0.74rem;">
+                                                                                    <span class="badge px-2 py-1 font-weight-bold"
+                                                                                        style="background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; border-radius: 20px; font-size: 0.7rem; white-space: nowrap;">
+                                                                                        {{ $type->isUnlimited() ? 'Tanpa Batas' : 'maks. ' . $type->maxDaysPerRequest() . ' hari' }}
+                                                                                    </span>
+
+                                                                                    <span>
+                                                                                        @if($type->countsCalendarDays())
+                                                                                            <i class="fas fa-calendar-alt mr-1"></i>Semua Hari
+                                                                                        @elseif($type->requiresExactDays())
+                                                                                            @php
+                                                                                                $quota = $leaveQuotas[$type->id] ?? null;
+                                                                                            @endphp
+
+                                                                                            @if($quota && $quota['max'] !== null)
+                                                                                                <div class="d-flex align-items-center justify-content-between text-muted mt-1"
+                                                                                                    style="font-size: 0.72rem;">
+                                                                                                    {{-- <span class="badge px-2 py-1 font-weight-bold"
+                                                                                                        style="background: {{ $quota['exhausted'] ? '#fef2f2' : '#f8f9fc' }};
+                                                                                                            color: {{ $quota['exhausted'] ? '#b91c1c' : '#6b7280' }};
+                                                                                                            border: 1px solid {{ $quota['exhausted'] ? '#fecaca' : '#e5e7eb' }};
+                                                                                                            border-radius: 20px;
+                                                                                                            font-size: 0.68rem;
+                                                                                                            white-space: nowrap;">
+                                                                                                        Pengajuan: {{ $quota['used'] }}/{{ $quota['max'] }}
+                                                                                                    </span> --}}
+                                                                                                </div>
+                                                                                            @endif
+                                                                                        @elseif($type->usesBalance())
+                                                                                            <i class="fas fa-wallet mr-1"></i>Saldo
+                                                                                        @else
+                                                                                            <i class="fas fa-calendar-day mr-1"></i>Hari Kerja
+                                                                                        @endif
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                @endforeach
+                                                            @endif
+
+
+                                                                {{-- ── Baris 3: Cuti Pribadi ── --}}
+                                                                @if($personalLeaveType)
+                                                                    <div class="col-12 mt-2">
+                                                                        <div class="text-uppercase text-primary font-weight-bold mb-2"
+                                                                            style="font-size: 0.72rem; letter-spacing: .4px;">
+                                                                            <i class="fas fa-user-clock mr-1"></i> Cuti Pribadi
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-sm-6 col-lg-4 mb-2">
+                                                                        <div class="card h-100 border shadow-none"
+                                                                            style="border-radius: 0.55rem; border-color: #e3e6f0 !important; background: #fafbfc;">
+                                                                            <div
+                                                                                class="card-body p-2 px-3 d-flex flex-column justify-content-between">
+                                                                                <div
+                                                                                    class="d-flex justify-content-between align-items-center mb-1">
+                                                                                    <span
+                                                                                        class="font-weight-bold text-gray-800 text-truncate mr-2"
+                                                                                        style="font-size: 0.83rem;"
+                                                                                        title="{{ $personalLeaveType->name }}">
+                                                                                        {{ $personalLeaveType->name }}
+                                                                                    </span>
+                                                                                    <span class="badge badge-secondary font-weight-bold" style="font-size: 0.68rem;">Unpaid</span>
+                                                                                </div>
+                                                                                <div class="d-flex align-items-center justify-content-between text-muted"
+                                                                                    style="font-size: 0.74rem;">
+                                                                                    <span class="badge px-2 py-1 font-weight-bold"
+                                                                                        style="background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 20px; font-size: 0.7rem; white-space: nowrap;">
+                                                                                        {{ $personalLeaveType->isUnlimited() ? 'Tanpa Batas' : 'maks. ' . $personalLeaveType->maxDaysPerRequest() . ' hari' }}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                @endif
+
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
                                         @else
                                             <div class="card border mb-4"
                                                 style="border-radius: 0.65rem; border-color: #e3e6f0; background: #fff; overflow: hidden;">
@@ -819,7 +948,7 @@
                                                         <i class="fas fa-wallet text-muted mr-2"
                                                             style="font-size: 0.92rem;"></i>
                                                         <span class="font-weight-bold text-gray-800"
-                                                            style="font-size: 0.85rem;">Sisa Saldo Cuti ({{ date('Y') }})</span>
+                                                            style="font-size: 0.85rem;">Saldo & Jatah Cuti ({{ date('Y') }})</span>
                                                     </div>
                                                     <span class="badge badge-light border text-muted" style="font-size: 0.72rem;">Belum Ada Saldo</span>
                                                 </div>
@@ -827,8 +956,8 @@
                                                     style="border-color: #edf2f7 !important; background: #fafbfc;">
                                                     <div class="py-2">
                                                         <i class="fas fa-calendar-times text-muted mb-2" style="font-size: 1.6rem; opacity: 0.55;"></i>
-                                                        <div class="font-weight-bold text-gray-800" style="font-size: 0.88rem;">Belum Memiliki Saldo Cuti</div>
-                                                        <div class="text-muted small mt-1">Anda belum memiliki saldo cuti di tahun berjalan ({{ date('Y') }}). Silakan hubungi bagian HRD untuk informasi lebih lanjut.</div>
+                                                        <div class="font-weight-bold text-gray-800" style="font-size: 0.88rem;">Belum Ada Saldo Cuti</div>
+                                                        <div class="text-muted small mt-1">Silakan hubungi bagian HRD untuk informasi lebih lanjut.</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -934,16 +1063,39 @@
 
         /* ══ Data dari server ══ */
         // masterLeaveType sudah difilter di controller sesuai gender karyawan (gender_type 'A' = semua)
-        const leaveTypeOptions = @json($masterLeaveType->map(function ($t) {
-            return ['id' => $t->id, 'name' => $t->name, 'code' => $t->code];
-        }));
+        @php
+            $leaveTypeOptions = $masterLeaveType->map(function ($t) {
+                $quota = $leaveQuotas[$t->id] ?? ['max' => null, 'used' => 0, 'remaining' => null, 'exhausted' => false];
+
+                return [
+                    'id'                   => $t->id,
+                    'name'                 => $t->name,
+                    'code'                 => $t->code,
+                    'calendar'             => $t->countsCalendarDays(),
+                    'uses_balance'         => $t->usesBalance(),
+                    'custom'               => $t->usesCustomDates(),
+                    'unlimited'            => $t->isUnlimited(),
+                    // jumlah hari WAJIB dipilih persis (null = tidak wajib tepat)
+                    'required_days'        => $t->requiresExactDays() ? $t->maxDaysPerRequest() : null,
+                    // batas jumlah tanggal (0 = batas diambil dari server, mis. sisa saldo cuti tahunan)
+                    'max_days'             => $t->requiresExactDays() ? $t->maxDaysPerRequest() : 0,
+                    // rentang maksimum dari tanggal pertama (null = tanpa batas)
+                    'window_days'          => $t->requiresDateWindow() ? $t->dateWindowDays() : null,
+                    'max_requests'         => $quota['max'],
+                    'used_requests'        => $quota['used'],
+                    'remaining_requests'   => $quota['remaining'],
+                    'exhausted'            => $quota['exhausted'],
+                    'requires_attachment'  => $t->requiresAttachment(),
+                ];
+            })->values();
+        @endphp
+        const leaveTypeOptions = @json($leaveTypeOptions);
         const holidays = @json($holidays ?? []);
         const leaveReasons = @json($leaveReasons ?? []);
         const employeeNpk = @json($employee->NPK);
 
-        // Jenis cuti yang WAJIB upload lampiran file
-        const attachRequiredCodes = ['menikah', 'menikahkan_anak', 'suami_istri_meninggal',
-            'keluarga_meninggal', 'anak_meninggal', 'menantu_meninggal', 'orang_tua_meninggal'];
+        // Jenis cuti yang WAJIB upload lampiran file (sumber: App\Models\LeaveTypes)
+        const attachRequiredCodes = @json(\App\Models\LeaveTypes::ATTACH_REQUIRED_CODES);
         const getBalanceUrl = @json(route('pengajuan-cuti.get-leave-balance'));
 
         const now = new Date();
@@ -958,13 +1110,26 @@
             return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][parseInt(m) - 1]} ${y}`;
         };
 
+        // Cek apakah jenis cuti blok ini menghitung hari kalender (mis. melahirkan/keguguran).
+        const isCalendarBlock = (block) => {
+            const jenis = block.querySelector('.leave-jenis');
+            if (!jenis) return false;
+            const opt = jenis.options[jenis.selectedIndex];
+            return opt ? opt.getAttribute('data-calendar') === '1' : false;
+        };
+
         // tanggal_mulai dan tanggal_selesai dihitung INCLUSIVE (keduanya adalah hari cuti).
-        // Rentang [tanggal_mulai, tanggal_selesai] — melewati akhir pekan & hari libur.
-        const computeWorkingDays = (startVal, endVal) => {
+        // - Jenis kalender: seluruh hari dihitung (termasuk akhir pekan & hari libur).
+        // - Jenis lain: hanya hari kerja (akhir pekan & hari libur dilewati).
+        const computeLeaveDays = (startVal, endVal, isCalendar = false) => {
             if (!startVal || !endVal) return 0;
             let start = new Date(startVal);
             let end = new Date(endVal);
             if (end < start) return -1;
+
+            if (isCalendar) {
+                return Math.floor((end - start) / 86400000) + 1;
+            }
 
             let diff = 0;
             let current = new Date(start);
@@ -980,8 +1145,132 @@
             return diff;
         };
 
+        /* ── Helper tanggal ── */
+        const toYmd = (date) => {
+            const t = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+            return t.toISOString().split('T')[0];
+        };
+
+        const isWeekendOrHoliday = (ymd) => {
+            const d = new Date(ymd + 'T00:00:00');
+            const dow = d.getDay();
+            return dow === 0 || dow === 6 || holidays.includes(ymd);
+        };
+
+        /* ── Blok dengan mode "tanggal bebas" (custom dates) ──
+           Cuti Tahunan, Cuti Melahirkan & Cuti Keguguran tetap memakai rentang tanggal.
+           Jenis cuti lainnya boleh memilih tanggal satu per satu (tidak harus berurutan). */
+        const isCustomBlock = (block) => {
+            const jenis = block.querySelector('.leave-jenis');
+            if (!jenis || !jenis.value) return false;
+            const opt = jenis.options[jenis.selectedIndex];
+            return opt ? opt.getAttribute('data-custom') === '1' : false;
+        };
+
+        // Daftar tanggal yang dipilih pada blok (mode custom), format Y-m-d
+        const getCustomDates = (block) => {
+            const wrap = block.querySelector('.leave-custom-hidden');
+            if (!wrap) return [];
+            return Array.from(wrap.querySelectorAll('input[name$="[custom_dates][]"]'))
+                .map(i => i.value)
+                .filter(Boolean)
+                .sort();
+        };
+
+        // Hitung jumlah hari kerja dari daftar tanggal bebas (weekend & hari libur dilewati)
+        const computeCustomDays = (dates) => {
+            if (!dates || !dates.length) return 0;
+            return dates.filter(d => !isWeekendOrHoliday(d)).length;
+        };
+
+        /* ── Info aturan jenis cuti (diambil dari server lewat endpoint saldo) ── */
+        const getLeaveInfo = (block) => block._leaveInfo || null;
+
+        // Opsi <option> yang sedang dipilih pada blok
+        const getSelectedOption = (block) => {
+            const jenis = block.querySelector('.leave-jenis');
+            if (!jenis || !jenis.value) return null;
+            return jenis.options[jenis.selectedIndex] || null;
+        };
+
+        // Batas JUMLAH tanggal yang boleh dipilih (null = tanpa batas)
+        const getMaxDates = (block) => {
+            const info = getLeaveInfo(block);
+            if (info) {
+                if (info.unlimited) return null;
+                return (info.max_dates === null || info.max_dates === undefined) ? null : info.max_dates;
+            }
+            const opt = getSelectedOption(block);
+            const maxDays = opt ? parseInt(opt.getAttribute('data-max-days') || '0', 10) : 0;
+            return maxDays > 0 ? maxDays : null;
+        };
+
+        // Jumlah hari yang WAJIB dipilih persis (null = tidak wajib tepat)
+        const getRequiredDates = (block) => {
+            const info = getLeaveInfo(block);
+            if (info) {
+                return (info.required_dates === null || info.required_dates === undefined) ? null : info.required_dates;
+            }
+            const opt = getSelectedOption(block);
+            const required = opt ? parseInt(opt.getAttribute('data-max-days') || '0', 10) : 0;
+            return required > 0 ? required : null;
+        };
+
+        // Rentang maksimum (hari kalender) dari tanggal pertama (0 = tanpa batas)
+        const getWindowDays = (block) => {
+            const info = getLeaveInfo(block);
+            if (info) {
+                return (info.window_days === null || info.window_days === undefined) ? 0 : info.window_days;
+            }
+            const opt = getSelectedOption(block);
+            return opt ? parseInt(opt.getAttribute('data-window-days') || '0', 10) : 0;
+        };
+
+        // Kuota pengajuan (seumur hidup) jenis cuti ini
+        const getQuota = (block) => {
+            const info = getLeaveInfo(block);
+            return info ? info : null;
+        };
+
+        // Tambah hari kalender ke tanggal Y-m-d
+        const addDaysYmd = (ymd, days) => {
+            const d = new Date(ymd + 'T00:00:00');
+            d.setDate(d.getDate() + days);
+            return toYmd(d);
+        };
+
+        // Tampilkan daftar tanggal terpilih sebagai chip + hidden input untuk submit
+        const renderCustomChips = (block) => {
+            const chips = block.querySelector('.leave-custom-chips');
+            const hidden = block.querySelector('.leave-custom-hidden');
+            const input = block.querySelector('.leave-custom-date');
+            if (!chips || !hidden) return;
+
+            const dates = getCustomDates(block);
+            const name = hidden.dataset.name || '';
+
+            chips.innerHTML = (dates.length
+                ? `<span class="badge badge-light border text-primary px-2 py-1 mr-1" style="font-size:.72rem;">
+                       ${dates.length} tanggal dipilih
+                   </span>`
+                : '') + dates.map(d => `
+                <span class="badge badge-info px-2 py-2" style="font-size:.75rem; border-radius:.4rem;">
+                    ${formatDate(d)}
+                    <button type="button" class="btn-remove-custom-date ml-1" data-date="${d}"
+                        style="border:none; background:transparent; color:#fff; padding:0; line-height:1;"
+                        title="Hapus tanggal ini">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </span>`).join('');
+
+            hidden.innerHTML = dates.map(d =>
+                `<input type="hidden" name="${name}[custom_dates][]" value="${d}">`
+            ).join('');
+        };
+
         /* ── Cek tumpang tindih tanggal antar blok (interval tertutup/inclusive [mulai, selesai]) ── */
         const getBlockRange = (block) => {
+            if (isCustomBlock(block)) return null;
             const mulai = block.querySelector('.leave-mulai').value;
             const selesai = block.querySelector('.leave-selesai').value;
             if (!mulai || !selesai) return null;
@@ -989,6 +1278,28 @@
         };
 
         const rangesOverlap = (a, b) => (a.start <= b.end) && (b.start <= a.end);
+
+        // Dua blok bertumpang tindih bila ada tanggal yang sama-sama dipakai
+        const blockDatesOverlap = (a, b) => {
+            const aDates = getCustomDates(a.block);
+            const bDates = getCustomDates(b.block);
+            const aRange = a.range;
+            const bRange = b.range;
+
+            if (aDates.length && bDates.length) {
+                return aDates.some(d => bDates.includes(d));
+            }
+            if (aDates.length) {
+                return aDates.some(d => bRange && d >= bRange.start && d <= bRange.end);
+            }
+            if (bDates.length) {
+                return bDates.some(d => aRange && d >= aRange.start && d <= aRange.end);
+            }
+            if (aRange && bRange) {
+                return rangesOverlap(aRange, bRange);
+            }
+            return false;
+        };
 
         const checkOverlaps = () => {
             const blocks = Array.from(document.querySelectorAll('.leave-block'));
@@ -1000,13 +1311,18 @@
                 info.innerHTML = '';
             });
 
-            for (let i = 0; i < blocks.length; i++) {
-                const rangeI = getBlockRange(blocks[i]);
-                if (!rangeI) continue;
+            const infos = blocks.map(b => ({
+                block: b,
+                range: getBlockRange(b)
+            }));
+
+            for (let i = 0; i < infos.length; i++) {
+                const hasI = infos[i].range || getCustomDates(infos[i].block).length;
+                if (!hasI) continue;
                 for (let j = 0; j < i; j++) {
-                    const rangeJ = getBlockRange(blocks[j]);
-                    if (!rangeJ) continue;
-                    if (rangesOverlap(rangeI, rangeJ)) {
+                    const hasJ = infos[j].range || getCustomDates(infos[j].block).length;
+                    if (!hasJ) continue;
+                    if (blockDatesOverlap(infos[i], infos[j])) {
                         anyOverlap = true;
                         const info = blocks[i].querySelector('.leave-overlap-info');
                         info.style.display = 'block';
@@ -1029,7 +1345,9 @@
                 const currentVal = select.value;
                 Array.from(select.options).forEach(opt => {
                     if (!opt.value) return; // lewati placeholder "— Pilih Jenis Cuti —"
-                    opt.disabled = selectedValues.includes(opt.value) && opt.value !== currentVal;
+                    // Jenis cuti yang batas pengajuannya sudah tercapai TIDAK bisa dipakai lagi
+                    const exhausted = opt.getAttribute('data-exhausted') === '1';
+                    opt.disabled = exhausted || (selectedValues.includes(opt.value) && opt.value !== currentVal);
                 });
             });
         };
@@ -1041,6 +1359,7 @@
         function initBlockDatepickers(block) {
             const mulaiInput = block.querySelector('.leave-mulai');
             const selesaiInput = block.querySelector('.leave-selesai');
+            const customInput = block.querySelector('.leave-custom-date');
 
             flatpickr(mulaiInput, {
                 dateFormat: 'Y-m-d',
@@ -1059,13 +1378,69 @@
                     refreshAllDatepickersDisabledDates();
                 }
             });
+
+            if (customInput) {
+                customInput._prevDates = [];
+                flatpickr(customInput, {
+                    mode: 'multiple',
+                    dateFormat: 'Y-m-d',
+                    disableMobile: true,
+                    onChange: (selectedDates) => {
+                        const selected = selectedDates.map(toYmd).sort();
+                        const prev = (customInput._prevDates || []).slice().sort();
+                        const added = selected.filter(d => !prev.includes(d));
+
+                        let errorMsg = null;
+
+                        // 1) Semua tanggal harus berada dalam rentang N hari dari tanggal pertama
+                        const windowDays = getWindowDays(block);
+                        if (windowDays > 0 && selected.length) {
+                            const limit = addDaysYmd(selected[0], windowDays);
+                            const outside = added.filter(d => d > limit);
+                            if (outside.length) {
+                                errorMsg = `Tanggal ${formatDate(outside[0])} berada di luar rentang ${windowDays} hari dari tanggal pertama (${formatDate(selected[0])}). Tanggal maksimal: ${formatDate(limit)}.`;
+                            }
+                        }
+
+                        // 2) Batas jumlah tanggal (sisa saldo / jumlah hari wajib / kuota)
+                        if (!errorMsg) {
+                            const maxDates = getMaxDates(block);
+                            if (maxDates !== null && selected.length > maxDates) {
+                                errorMsg = `Jumlah tanggal yang dipilih melebihi batas maksimal ${maxDates} hari untuk jenis cuti ini.`;
+                            }
+                        }
+
+                        if (errorMsg) {
+                            // Kembalikan ke pilihan sebelumnya
+                            customInput._flatpickr.setDate(prev, true);
+                            alert(errorMsg);
+                            return;
+                        }
+
+                        customInput._prevDates = selected;
+
+                        const wrap = block.querySelector('.leave-custom-hidden');
+                        if (wrap) {
+                            const name = wrap.dataset.name;
+                            wrap.innerHTML = selected
+                                .map(d => `<input type="hidden" name="${name}[custom_dates][]" value="${d}">`)
+                                .join('');
+                        }
+                        renderCustomChips(block);
+                        handleBlockDateChange(block);
+                        refreshAllDatepickersDisabledDates();
+                    }
+                });
+            }
         }
 
         function destroyBlockDatepickers(block) {
             const mulaiInput = block.querySelector('.leave-mulai');
             const selesaiInput = block.querySelector('.leave-selesai');
+            const customInput = block.querySelector('.leave-custom-date');
             if (mulaiInput._flatpickr) mulaiInput._flatpickr.destroy();
             if (selesaiInput._flatpickr) selesaiInput._flatpickr.destroy();
+            if (customInput && customInput._flatpickr) customInput._flatpickr.destroy();
         }
 
         function refreshAllDatepickersDisabledDates() {
@@ -1076,17 +1451,84 @@
                 const others = withRanges.filter(r => r.block !== b && r.range);
                 const disableRanges = others.map(r => ({ from: r.range.start, to: r.range.end }));
 
+                // Tanggal yang sudah dipilih di blok lain (mode custom)
+                const usedDates = [];
+                blocks.forEach(other => {
+                    if (other === b) return;
+                    getCustomDates(other).forEach(d => usedDates.push(d));
+                });
+
                 const mulaiInput = b.querySelector('.leave-mulai');
                 const selesaiInput = b.querySelector('.leave-selesai');
                 if (mulaiInput._flatpickr) mulaiInput._flatpickr.set('disable', disableRanges);
                 if (selesaiInput._flatpickr) selesaiInput._flatpickr.set('disable', disableRanges);
+
+                const customInput = b.querySelector('.leave-custom-date');
+                if (customInput && customInput._flatpickr) {
+                    customInput._flatpickr.set('disable', [
+                        // Weekend & hari libur tidak bisa dipilih (tidak dihitung sebagai hari cuti)
+                        (date) => {
+                            const dow = date.getDay();
+                            return dow === 0 || dow === 6;
+                        },
+                        (date) => holidays.includes(toYmd(date)),
+                        ...disableRanges,
+                        ...usedDates.map(d => {
+                            const [y, m, day] = d.split('-').map(Number);
+                            return new Date(y, m - 1, day);
+                        })
+                    ]);
+                }
             });
+        }
+
+        /* ── Mode tanggal: rentang (tahunan / melahirkan / keguguran) vs tanggal bebas ── */
+        function toggleBlockDateMode(block) {
+            const rangeRow = block.querySelector('.leave-range-row');
+            const customRow = block.querySelector('.leave-custom-row');
+            const mulaiInput = block.querySelector('.leave-mulai');
+            const selesaiInput = block.querySelector('.leave-selesai');
+            const customInput = block.querySelector('.leave-custom-date');
+            const hiddenWrap = block.querySelector('.leave-custom-hidden');
+
+            const custom = isCustomBlock(block);
+
+            if (rangeRow) rangeRow.style.display = custom ? 'none' : '';
+            if (customRow) customRow.style.display = custom ? '' : 'none';
+
+            // Aturan required HTML5 mengikuti mode yang aktif
+            if (mulaiInput) mulaiInput.required = !custom;
+            if (selesaiInput) selesaiInput.required = !custom;
+
+            if (custom) {
+                // Bersihkan sisa input rentang supaya tidak terkirim
+                if (mulaiInput) {
+                    if (mulaiInput._flatpickr) mulaiInput._flatpickr.clear();
+                    else mulaiInput.value = '';
+                }
+                if (selesaiInput) {
+                    if (selesaiInput._flatpickr) selesaiInput._flatpickr.clear();
+                    else selesaiInput.value = '';
+                }
+                if (hiddenWrap) hiddenWrap.innerHTML = '';
+                if (customInput) customInput._prevDates = [];
+                renderCustomChips(block);
+            } else {
+                // Kembali ke mode rentang: bersihkan tanggal bebas yang sempat dipilih
+                if (hiddenWrap) hiddenWrap.innerHTML = '';
+                if (customInput && customInput._flatpickr) {
+                    customInput._flatpickr.clear();
+                }
+                if (customInput) customInput._prevDates = [];
+                const chipsWrap = block.querySelector('.leave-custom-chips');
+                if (chipsWrap) chipsWrap.innerHTML = '';
+            }
         }
 
         /* ── Membangun 1 blok cuti ── */
         function createLeaveBlockHTML(idx) {
             const optionsHtml = leaveTypeOptions.map(o =>
-                `<option value="${o.id}" data-name="${o.name.replace(/"/g, '&quot;')}" data-code="${o.code}">${o.name}</option>`
+                `<option value="${o.id}" data-name="${o.name.replace(/"/g, '&quot;')}" data-code="${o.code}" data-calendar="${o.calendar ? 1 : 0}" data-custom="${o.custom ? 1 : 0}" data-max-days="${o.max_days || 0}" data-window-days="${o.window_days || 0}" data-exhausted="${o.exhausted ? 1 : 0}" ${o.exhausted ? 'disabled' : ''}>${o.name}${o.exhausted ? ' — batas pengajuan tercapai' : ''}</option>`
             ).join('');
 
             return `
@@ -1108,7 +1550,7 @@
                     </select>
                 </div>
 
-                <div class="row">
+                <div class="row leave-range-row">
                     <div class="col-md-6 form-group mb-4">
                         <label class="font-weight-bold text-gray-700 small">Tanggal Mulai <span class="text-danger">*</span></label>
                         <input type="text" class="form-control leave-mulai" name="leaves[${idx}][tanggal_mulai]"
@@ -1118,6 +1560,21 @@
                         <label class="font-weight-bold text-gray-700 small">Tanggal Selesai <span class="text-danger">*</span></label>
                         <input type="text" class="form-control leave-selesai" name="leaves[${idx}][tanggal_selesai]"
                             placeholder="Pilih tanggal" autocomplete="off" readonly required>
+                    </div>
+                </div>
+
+                {{-- Mode tanggal bebas: untuk cuti selain Cuti Tahunan, Cuti Melahirkan & Cuti Keguguran --}}
+                <div class="leave-custom-row" style="display:none;">
+                    <div class="form-group mb-4">
+                        <label class="font-weight-bold text-gray-700 small">Pilih Tanggal <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control leave-custom-date" placeholder="Klik untuk memilih tanggal"
+                            autocomplete="off" readonly>
+                        <small class="form-text text-muted mt-1" style="font-size:.78rem;">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Boleh memilih tanggal satu per satu, tidak harus berurutan. Weekend & hari libur otomatis dilewati.
+                        </small>
+                        <div class="d-flex flex-wrap mt-2 leave-custom-chips" style="gap:6px;"></div>
+                        <div class="leave-custom-hidden" data-name="leaves[${idx}]"></div>
                     </div>
                 </div>
 
@@ -1246,6 +1703,28 @@
             const hariDisp = block.querySelector('.leave-hari-display');
             const sisaInfo = block.querySelector('.leave-sisa-info');
 
+            // ── Mode tanggal bebas: jumlah hari = tanggal kerja yang dipilih ──
+            if (isCustomBlock(block)) {
+                const dates = getCustomDates(block);
+                const customDiff = computeCustomDays(dates);
+
+                if (customDiff > 0) {
+                    hariDisp.value = `${customDiff} Hari`;
+                } else {
+                    hariDisp.value = dates.length ? 'Tidak ada hari kerja' : '';
+                }
+
+                // Selalu ambil info aturan jenis cuti (batas tanggal, kuota pengajuan)
+                if (jenis.value) {
+                    checkBlockBalance(block, customDiff);
+                } else {
+                    sisaInfo.style.display = 'none';
+                }
+
+                checkOverlaps();
+                return;
+            }
+
             // Tanggal selesai tidak boleh sebelum tanggal mulai (boleh sama = cuti 1 hari)
             if (mulai.value && selesai._flatpickr) {
                 selesai._flatpickr.set('minDate', mulai.value);
@@ -1254,7 +1733,7 @@
                 }
             }
 
-            const diff = computeWorkingDays(mulai.value, selesai.value);
+            const diff = computeLeaveDays(mulai.value, selesai.value, isCalendarBlock(block));
 
             if (diff > 0) {
                 hariDisp.value = `${diff} Hari`;
@@ -1278,6 +1757,7 @@
             const selesai = block.querySelector('.leave-selesai');
             const hariDisp = block.querySelector('.leave-hari-display');
             const sisaInfo = block.querySelector('.leave-sisa-info');
+            const customMode = isCustomBlock(block);
 
             sisaInfo.style.display = 'block';
             sisaInfo.className = 'form-text text-info mt-2 small font-weight-bold leave-sisa-info';
@@ -1298,6 +1778,37 @@
                         return;
                     }
 
+                    // Simpan info aturan jenis cuti (batas tanggal, kuota pengajuan)
+                    block._leaveInfo = res;
+
+                    // ── Mode tanggal bebas: batasi JUMLAH tanggal, bukan rentang tanggal ──
+                    if (customMode) {
+                        const dates = getCustomDates(block);
+                        const customDiff = computeCustomDays(dates);
+                        const maxDates = (res.max_dates === null || res.max_dates === undefined) ? null : res.max_dates;
+                        const required = (res.required_dates === null || res.required_dates === undefined) ? null : res.required_dates;
+                        const quotaText = (res.max_requests === null || res.max_requests === undefined)
+                            ? ''
+                            : ` Batas pengajuan: <strong>${res.used_requests}/${res.max_requests}</strong> (sisa ${res.remaining_requests} pengajuan).`;
+
+                        if (res.quota_exhausted) {
+                            sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-ban mr-1"></i> Batas pengajuan ${res.keterangan ? '' : ''}jenis cuti ini sudah tercapai (maksimal ${res.max_requests} pengajuan). Jenis cuti ini tidak dapat digunakan lagi.`;
+                        } else if (required !== null && customDiff !== required) {
+                            sisaInfo.className = 'form-text text-warning mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Wajib memilih tepat <strong>${required} hari kerja</strong> (terpilih ${customDiff} hari).${quotaText}`;
+                        } else if (maxDates !== null && customDiff > maxDates) {
+                            sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Jumlah hari melebihi batas maksimal pengajuan.${quotaText}`;
+                        } else {
+                            sisaInfo.className = 'form-text text-success mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}.${quotaText}`;
+                        }
+
+                        refreshAllDatepickersDisabledDates();
+                        return;
+                    }
+
                     // Batasi tanggal selesai sesuai sisa saldo cuti yang tersedia
                     if (res.max_end_date) {
                         if (selesai._flatpickr) selesai._flatpickr.set('maxDate', res.max_end_date);
@@ -1311,7 +1822,7 @@
                         delete selesai.dataset.maxEnd;
                     }
 
-                    const recalculatedDiff = computeWorkingDays(mulai.value, selesai.value);
+                    const recalculatedDiff = computeLeaveDays(mulai.value, selesai.value, isCalendarBlock(block));
                     const effectiveDiff = selesai.value ? recalculatedDiff : days;
 
                     if (res.is_negative_leave) {
@@ -1321,6 +1832,16 @@
 
                         sisaInfo.className = 'form-text text-warning mt-2 small font-weight-bold leave-sisa-info';
                         sisaInfo.innerHTML = `<span class="badge badge-warning text-dark mr-1" style="font-size:0.75rem;"><i class="fas fa-exclamation-triangle fa-xs"></i> HUTANG CUTI</span> ${res.keterangan}`;
+                    } else if (res.is_balance_based === false) {
+                        delete selesai.dataset.isNegative;
+                        if (effectiveDiff > res.sisa) {
+                            sisaInfo.className = 'form-text text-danger mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${res.keterangan}. Jumlah hari melebihi batas maksimal pengajuan.`;
+                        } else {
+                            const maxInfo = res.max_end_date ? ` Maks. tanggal selesai: <strong>${formatDate(res.max_end_date)}</strong>.` : '';
+                            sisaInfo.className = 'form-text text-success mt-2 small font-weight-bold leave-sisa-info';
+                            sisaInfo.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${res.keterangan}. Jumlah hari sesuai batas pengajuan.${maxInfo}`;
+                        }
                     } else {
                         delete selesai.dataset.isNegative;
                         if (res.sisa <= 0) {
@@ -1652,6 +2173,7 @@
         document.getElementById('leaves-container').addEventListener('change', function (e) {
             if (e.target.matches('.leave-jenis')) {
                 updateJenisAvailability();
+                toggleBlockDateMode(e.target.closest('.leave-block'));
                 handleBlockDateChange(e.target.closest('.leave-block'));
                 updateLeaveReasons(e.target.closest('.leave-block'));
 
@@ -1722,6 +2244,23 @@
                 }
             }
 
+            // Hapus satu tanggal pada mode "tanggal bebas"
+            const removeDateBtn = e.target.closest('.btn-remove-custom-date');
+            if (removeDateBtn) {
+                const block = removeDateBtn.closest('.leave-block');
+                const date = removeDateBtn.getAttribute('data-date');
+                const customInput = block.querySelector('.leave-custom-date');
+                if (customInput && customInput._flatpickr) {
+                    const remaining = customInput._flatpickr.selectedDates
+                        .filter(d => toYmd(d) !== date);
+                    customInput._flatpickr.setDate(remaining, true);
+                }
+                renderCustomChips(block);
+                handleBlockDateChange(block);
+                refreshAllDatepickersDisabledDates();
+                return;
+            }
+
             const removeBtn = e.target.closest('.btn-remove-leave');
             if (removeBtn) {
                 const block = removeBtn.closest('.leave-block');
@@ -1760,8 +2299,20 @@
                 const nomor = block.querySelector('.font-weight-bold.text-primary.small').textContent.trim();
 
                 if (!jenis.value) { jenis.reportValidity(); return; }
-                if (!mulai.value) { mulai.reportValidity(); return; }
-                if (!selesai.value) { selesai.reportValidity(); return; }
+
+                const customMode = isCustomBlock(block);
+                const customDates = customMode ? getCustomDates(block) : [];
+
+                if (customMode) {
+                    if (!customDates.length) {
+                        alert(`${nomor}: Pilih minimal satu tanggal cuti.`);
+                        return;
+                    }
+                } else {
+                    if (!mulai.value) { mulai.reportValidity(); return; }
+                    if (!selesai.value) { selesai.reportValidity(); return; }
+                }
+
                 if (!ket.value.trim()) {
                     const customBox = block.querySelector('.leave-reason-custom-box');
                     const customTextarea = block.querySelector('.leave-custom-textarea');
@@ -1796,15 +2347,20 @@
                 //     return;
                 // }
 
-                const diff = computeWorkingDays(mulai.value, selesai.value);
+                const diff = customMode
+                    ? computeCustomDays(customDates)
+                    : computeLeaveDays(mulai.value, selesai.value, isCalendarBlock(block));
+
                 if (!diff || diff <= 0) {
-                    alert(`${nomor}: Format tanggal tidak valid (tanggal mulai harus lebih awal atau sama dengan tanggal selesai, dan bukan hanya akhir pekan/libur).`);
+                    alert(customMode
+                        ? `${nomor}: Tanggal yang dipilih tidak valid (tidak ada hari kerja).`
+                        : `${nomor}: Format tanggal tidak valid (tanggal mulai harus lebih awal atau sama dengan tanggal selesai, dan bukan hanya akhir pekan/libur).`);
                     return;
                 }
 
                 const isNegative = selesai.dataset.isNegative === 'true';
                 const maxAttr = selesai.dataset.maxEnd;
-                if (!isNegative && maxAttr && selesai.value > maxAttr) {
+                if (!customMode && !isNegative && maxAttr && selesai.value > maxAttr) {
                     alert(`${nomor}: Tanggal selesai melebihi sisa saldo cuti yang tersedia.`);
                     return;
                 }
@@ -1826,6 +2382,13 @@
                         <span class="review-label">Jenis Cuti</span>
                         <span class="review-value"><span class="badge badge-primary px-2 py-1">${leaveName}</span>${hutangBadge}</span>
                     </div>
+                    ${customMode ? `
+                    <div class="review-row align-items-start">
+                        <span class="review-label pt-1">Tanggal Dipilih</span>
+                        <div class="review-value d-flex flex-wrap" style="gap: 5px;">
+                            ${customDates.map(d => `<span class="badge badge-info px-2 py-1" style="font-size:.72rem;">${formatDate(d)}</span>`).join('')}
+                        </div>
+                    </div>` : `
                     <div class="review-row">
                         <span class="review-label">Tanggal Mulai</span>
                         <span class="review-value">${formatDate(mulai.value)}</span>
@@ -1833,7 +2396,7 @@
                     <div class="review-row">
                         <span class="review-label">Tanggal Selesai</span>
                         <span class="review-value">${formatDate(selesai.value)}</span>
-                    </div>
+                    </div>`}
                     <div class="review-row">
                         <span class="review-label">Total Hari</span>
                         <span class="review-value text-primary">${diff} Hari</span>

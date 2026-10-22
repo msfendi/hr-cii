@@ -350,7 +350,15 @@
                 $('#detailHari').text(row.total_days ? (row.total_days + ' hari') : '-');
                 var startText = row.start_date_formatted || row.start_date || '-';
                 var endText = row.end_date_formatted || row.end_date || '-';
-                $('#detailPeriode').text(startText + ' s/d ' + endText);
+                if (row.custom_dates && row.custom_dates.length) {
+                    // Pengajuan bermode tanggal bebas: tampilkan tanggal yang benar-benar dipilih
+                    $('#detailPeriode').html(row.custom_dates.map(function (d) {
+                        var t = String(d).split('-');
+                        return '<span class="badge badge-info px-2 py-1 mr-1" style="font-size:.7rem;">' + t[2] + '/' + t[1] + '/' + t[0] + '</span>';
+                    }).join(''));
+                } else {
+                    $('#detailPeriode').text(startText + ' s/d ' + endText);
+                }
                 $('#detailDiajukan').text(row.created_at || '-');
                 $('#detailAlasan').text(row.reason || '-');
                 $('#detailApproversContent').html(row.status_approver || '<span class="text-muted">-</span>');

@@ -77,39 +77,71 @@
                                             </thead>
                                             <tbody>
                                                 @forelse($details as $item)
-                                                    <tr>
-                                                        <td class="font-weight-bold">
-                                                            {{ $item->type_name }}
-                                                        </td>
-                                                        <td class="text-center">
-                                                            {{ $item->default_days }}
-                                                        </td>
-                                                        <td
-                                                            class="text-center {{ $item->used_days > 0 ? 'text-danger font-weight-bold' : 'text-muted' }}">
-                                                            {{ $item->used_days }}
-                                                        </td>
-                                                        <td class="text-center font-weight-bold">{{ $item->remained_days }}
-                                                        </td>
-                                                        <td class="text-center">
-                                                            @if($item->balance_id)
-                                                                <button class="btn btn-warning btn-sm btn-edit-balance"
-                                                                    data-id="{{ $item->balance_id }}"
-                                                                    data-type="{{ $item->type_name }}"
-                                                                    data-typeid="{{ $item->leave_type_id }}"
-                                                                    data-remained="{{ $item->remained_days }}"
-                                                                    data-used="{{ $item->used_days }}">
-                                                                    <i class="fas fa-edit"></i> Edit
-                                                                </button>
-                                                                <button class="btn btn-danger btn-sm btn-delete-balance"
-                                                                    data-id="{{ $item->balance_id }}"
-                                                                    data-type="{{ $item->type_name }}">
-                                                                    <i class="fas fa-trash"></i>
-                                                                </button>
-                                                            @else
-                                                                <span class="badge badge-secondary">Belum di-set</span>
-                                                            @endif
-                                                        </td>
-                                                    </tr>
+                                                    @if($item->uses_balance)
+                                                        <tr>
+                                                            <td class="font-weight-bold">
+                                                                {{ $item->type_name }}
+                                                                @if($item->count_calendar_days)
+                                                                    <br><small class="text-muted font-weight-normal">Hitung hari kalender</small>
+                                                                @endif
+                                                            </td>
+                                                            <td class="text-center">
+                                                                {{ $item->default_days }}
+                                                            </td>
+                                                            <td
+                                                                class="text-center {{ $item->used_days > 0 ? 'text-danger font-weight-bold' : 'text-muted' }}">
+                                                                {{ $item->used_days }}
+                                                            </td>
+                                                            <td class="text-center font-weight-bold">{{ $item->remained_days }}
+                                                            </td>
+                                                            <td class="text-center">
+                                                                @if($item->balance_id)
+                                                                    <button class="btn btn-warning btn-sm btn-edit-balance"
+                                                                        data-id="{{ $item->balance_id }}"
+                                                                        data-type="{{ $item->type_name }}"
+                                                                        data-typeid="{{ $item->leave_type_id }}"
+                                                                        data-remained="{{ $item->remained_days }}"
+                                                                        data-used="{{ $item->used_days }}">
+                                                                        <i class="fas fa-edit"></i> Edit
+                                                                    </button>
+                                                                    <button class="btn btn-danger btn-sm btn-delete-balance"
+                                                                        data-id="{{ $item->balance_id }}"
+                                                                        data-type="{{ $item->type_name }}">
+                                                                        <i class="fas fa-trash"></i>
+                                                                    </button>
+                                                                @else
+                                                                    <span class="badge badge-secondary">Belum di-set</span>
+                                                                @endif
+                                                            </td>
+                                                        </tr>
+                                                    @else
+                                                        <tr class="bg-light">
+                                                            <td class="font-weight-bold text-muted">
+                                                                {{ $item->type_name }}
+                                                                @if($item->count_calendar_days)
+                                                                    <br><small class="text-muted font-weight-normal">Hitung hari kalender</small>
+                                                                @endif
+                                                            </td>
+                                                            <td class="text-center text-muted" colspan="3">
+                                                                @if($item->is_unlimited)
+                                                                    Tanpa batas hari per pengajuan
+                                                                @elseif($item->is_exact)
+                                                                    Tepat <strong>{{ $item->default_days }}</strong> hari per pengajuan
+                                                                @else
+                                                                    Maks. <strong>{{ $item->default_days }}</strong> hari per pengajuan
+                                                                @endif
+                                                                <br>
+                                                                @if($item->max_requests)
+                                                                    Maks. <strong>{{ $item->max_requests }}</strong> pengajuan (seumur hidup)
+                                                                @else
+                                                                    Tanpa batas jumlah pengajuan
+                                                                @endif
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <span class="badge badge-light border text-muted">Per pengajuan</span>
+                                                            </td>
+                                                        </tr>
+                                                    @endif
                                                 @empty
                                                     <tr>
                                                         <td colspan="5" class="text-center py-4">
@@ -200,7 +232,7 @@
                                 class="text-danger">*</span></label>
                         <select id="balance_leave_type_id" class="form-control">
                             <option value="">-- Pilih Jenis Cuti --</option>
-                            @foreach($leaveTypes as $type)
+                            @foreach($balanceLeaveTypes as $type)
                                 <option value="{{ $type->id }}">{{ $type->name }}</option>
                             @endforeach
                         </select>

@@ -19,7 +19,9 @@ class LeavesBalancesSeeder extends Seeder
         // Ambil tahun dari argumen CLI jika ada, default tahun sekarang
         $year = (int) ($this->command->hasOption('year') && $this->command->option('year') ? $this->command->option('year') : now()->year);
  
-        $leaveTypes = LeaveTypes::where('is_active', true)->get();
+        // Hanya Cuti Tahunan yang memakai saldo (balance).
+        // Jenis cuti lain dibatasi per pengajuan & tidak memakai saldo.
+        $leaveTypes = LeaveTypes::where('is_active', true)->get()->filter(fn ($type) => $type->usesBalance())->values();
         $employees  = Biodata::leftJoin('PKWT', 'BIODATA.NPK', 'PKWT.NPK')->select('BIODATA.*', 'PKWT.TMK')->get();
  
         if ($leaveTypes->isEmpty()) {
@@ -73,19 +75,12 @@ class LeavesBalancesSeeder extends Seeder
     /**
      * Hitung jatah cuti.
      * Karyawan baru mendapatkan cuti penuh setelah 1 tahun berjalan.
-     *
-     * Jenis cuti lain (pernikahan, melahirkan, dll.) selalu penuh.
      */
     private function calculateRemainedDays(LeaveTypes $type, Biodata $employee, int $year): int
     {
-        // Jenis cuti selain tahunan → selalu penuh
-        if ($type->code !== 'tahunan') {
-            return $type->default_days;
-        }
- 
         // Jika tidak ada TMK → berikan penuh
         if (! $employee->TMK) {
-            return $type->default_days;
+            return (int) $type->default_days;
         }
  
         $joinDate   = \Carbon\Carbon::parse($employee->TMK);
@@ -94,7 +89,7 @@ class LeavesBalancesSeeder extends Seeder
  
         // Karyawan mendapatkan full cuti di tahun berikutnya (setelah 1 tahun berjalan)
         if ($joinYear < $targetYear) {
-            return $type->default_days;
+            return (int) $type->default_days;
         }
  
         // Karyawan di tahun pertama bergabung belum mendapatkan jatah cuti tahunan
