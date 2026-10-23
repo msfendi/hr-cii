@@ -265,6 +265,7 @@
                                     <th>Cutting Insentif</th>
                                     <th>Heat Insentif</th>
                                     <th>6S Insentif</th>
+                                    <th>Line Jumper Insentif</th>
                                     <th>Night Shift Compensation</th>
                                     <th>Adjusments</th>
                                     <th>BPJS Kes</th>
@@ -290,6 +291,7 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -1101,7 +1103,7 @@ buttons: [
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
                 11,12,13,14,15,16,17,18,
-                19,20,21,22,23,24,25,26,27,28,29
+                19,20,21,22,23,24,25,26,27,28,29,30
             ],
 
             format: {
@@ -1356,6 +1358,19 @@ buttons: [
                     }
 
                     return salaryMaskColored(data ?? 0, row.components?.sixs_insentif?.type);
+                }
+            },
+
+            {
+                data:'components.line_jumper_insentif.amount',
+                defaultContent:0,
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMaskColored(data ?? 0, row.components?.line_jumper_insentif?.type);
                 }
             },
 
@@ -1791,15 +1806,16 @@ buttons: [
         {index:16, field:'cutting_insentif'},
         {index:17, field:'heat_insentif'},
         {index:18, field:'sixs_insentif'},
-        {index:19, field:'night_shift_compensation'},
-        {index:20, field:'adjusment'},
-        {index:21, field:'bpjs_kesehatan'},
-        {index:22, field:'bpjs_ketenagakerjaan'},
-        {index:23, field:'pph_21'},
-        {index:24, field:'pph_21_deduction'},
-        {index:25, field:'absence_deduction'},
-        {index:26, field:'late_deduction'},
-        {index:27, field:'work_leave_deduction'}
+        {index:19, field:'line_jumper_insentif'},
+        {index:20, field:'night_shift_compensation'},
+        {index:21, field:'adjusment'},
+        {index:22, field:'bpjs_kesehatan'},
+        {index:23, field:'bpjs_ketenagakerjaan'},
+        {index:24, field:'pph_21'},
+        {index:25, field:'pph_21_deduction'},
+        {index:26, field:'absence_deduction'},
+        {index:27, field:'late_deduction'},
+        {index:28, field:'work_leave_deduction'}
     ];
 
     currencyFields.forEach(function(cfg){
@@ -1836,12 +1852,12 @@ buttons: [
 
     });
 
-    // TOTAL SALARY (kolom 28) tetap net, tanpa dibalik tandanya
+    // TOTAL SALARY (kolom 29) tetap net, tanpa dibalik tandanya
     let totalSalarySum = rowsData.reduce(function(sum, rowData){
         return sum + Number(rowData.total_salary || 0);
     }, 0);
 
-    $(api.column(28).footer())
+    $(api.column(29).footer())
         .html(formatRupiah(totalSalarySum));
 
 }

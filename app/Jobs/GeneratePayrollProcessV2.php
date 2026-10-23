@@ -1202,6 +1202,35 @@ END AS special_overtime_hours
         $sixsInsentifComponent = PayrollComponent::where('code', 'sixs_insentif')->first();
         $sixsInsentifFormula = $sixsInsentifComponent->formula;
 
+        // Line Jumper insentif (disamakan dengan LineJumperInsentifMasterController::check()).
+        // - Tier per jumlah operasi (JSON {"3":450000,"4":600000,"5":750000}) ada di
+        //   payroll_components code `line_jumper_insentif`.
+        // - Potongan QC ada di insentif_role_formulas (role `jumper`, dept `line_jumper`),
+        //   variable `insentif` & `qc_violation`.
+        // Null-safe: kalau komponen belum dibuat di DB, blok ini dilewati dan
+        // komponen lain tidak terpengaruh.
+        $lineJumperInsentifComponent = PayrollComponent::where('code', 'line_jumper_insentif')->first();
+        $lineJumperInsentifFormula = $lineJumperInsentifComponent
+            ? (json_decode($lineJumperInsentifComponent->formula, true) ?: [])
+            : [];
+        $lineJumperRoleFormula = null;
+        $lineJumperOperationCounts = [];
+
+        if ($lineJumperInsentifComponent) {
+            $lineJumperRoleFormula = InsentifRoleFormula::where('role', 'jumper')
+                ->where('dept', 'line_jumper')
+                ->value('formula');
+
+            // jumlah operasi per NPK pada periode ini (1 baris = 1 operasi unik)
+            $lineJumperOperationCounts = DB::table('line_jumper_operations')
+                ->where('period_id', $period->id)
+                ->select('npk', DB::raw('COUNT(*) as total_operation'))
+                ->groupBy('npk')
+                ->get()
+                ->mapWithKeys(fn($r) => [mb_strtoupper(trim((string) $r->npk)) => (int) $r->total_operation])
+                ->all();
+        }
+
         $BPJSKesehatanComponent = PayrollComponent::where('code', 'bpjs_kesehatan')->first();
         $BPJSKesehatanFormula = $BPJSKesehatanComponent->formula;
 
@@ -2590,6 +2619,30 @@ END AS special_overtime_hours
                                 $jumlahOperator
                             );
                         }
+                    } else if ($component->code === 'line_jumper_insentif') {
+                        // Disamakan dengan LineJumperInsentifMasterController::check():
+                        // 1) Hanya karyawan dengan TKK kosong atau TKK di dalam periode.
+                        // 2) Jumlah operasi unik per NPK dari line_jumper_operations.
+                        // 3) Tier dari payroll_components, dipotong qc_violation
+                        //    (formula role jumper), lalu dibulatkan (round komponen di bawah).
+                        $amount = 0;
+
+                        $jumperTkkOk = empty($employee->TKK)
+                            || (
+                                Carbon::parse($employee->TKK)->format('Y-m-d') >= Carbon::parse($period->start_date)->format('Y-m-d')
+                                && Carbon::parse($employee->TKK)->format('Y-m-d') <= Carbon::parse($period->end_date)->format('Y-m-d')
+                            );
+
+                        $jumperTotalOperation = $lineJumperOperationCounts[mb_strtoupper(trim((string) $employee->NPK))] ?? 0;
+
+                        if ($jumperTkkOk && $jumperTotalOperation > 0) {
+                            $amount = $this->calculateLineJumperInsentif(
+                                $jumperTotalOperation,
+                                $lineJumperInsentifFormula,
+                                $lineJumperRoleFormula,
+                                $qcViolationPercentage
+                            );
+                        }
                     } else if ($component->code === 'cutting_insentif') {
                         // Disamakan dengan CuttingInsentifMasterController::check()+
                         // calculateCutting(): dipanggil SEKALI PER role yang benar-benar
@@ -3295,6 +3348,55 @@ END AS special_overtime_hours
         } catch (\Throwable $e) {
 
             return $totalLineInsentif;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | LINE JUMPER INSENTIF (COPY LineJumperInsentifMasterController)
+    |--------------------------------------------------------------------------
+    | Tier {"3":450000,"4":600000,"5":750000}: 5 atau lebih => 750.000,
+    | 4 => 600.000, 3 => 450.000, kurang dari 3 => 0.
+    */
+    private function getLineJumperInsentifByOperation(int $totalOperation, array $tiers)
+    {
+        krsort($tiers, SORT_NUMERIC);
+
+        foreach ($tiers as $threshold => $value) {
+            if ($totalOperation >= (int) $threshold) {
+                return $value;
+            }
+        }
+
+        return 0;
+    }
+
+    private function calculateLineJumperInsentif(int $totalOperation, array $tiers, ?string $roleFormula, float $qcViolation)
+    {
+        $insentif = (float) $this->getLineJumperInsentifByOperation($totalOperation, $tiers);
+
+        if ($insentif <= 0) {
+            return 0;
+        }
+
+        // tidak ada formula di insentif_role_formulas -> insentif apa adanya
+        if (!$roleFormula) {
+            return $insentif;
+        }
+
+        $formula = strtr($roleFormula, [
+            'qc_violation' => sprintf('%.4F', $qcViolation),
+            'insentif'     => sprintf('%.4F', $insentif),
+        ]);
+
+        try {
+            if (!preg_match('/^[0-9\.\+\-\*\/\(\) ]+$/', $formula)) {
+                throw new \Exception('Invalid formula');
+            }
+
+            return eval("return {$formula};");
+        } catch (\Throwable $e) {
+            return $insentif;
         }
     }
 

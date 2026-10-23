@@ -395,6 +395,7 @@
                                         <th>Cutting Insentif</th>
                                         <th>Heat Insentif</th>
                                         <th>6S Insentif</th>
+                                        <th>Line Jumper Insentif</th>
                                         <th>Night Shift Compensation</th>
                                         <th>Adjusments</th>
                                         <th>BPJS Kes</th>
@@ -413,6 +414,7 @@
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -1115,6 +1117,11 @@ $(document).on('click','.btn-export',function(e){
                     return formatRupiahColored(data ?? 0, row.components?.sixs_insentif?.type);
                 }
             },
+            { data:'components.line_jumper_insentif.amount', defaultContent:0, render:function(data,type,row){
+                    if(type !== 'display'){ return data ?? 0; }
+                    return formatRupiahColored(data ?? 0, row.components?.line_jumper_insentif?.type);
+                }
+            },
             { data:'components.night_shift_compensation.amount', defaultContent:0, render:function(data,type,row){
                     if(type !== 'display'){ return data ?? 0; }
                     return formatRupiahColored(data ?? 0, row.components?.night_shift_compensation?.type);
@@ -1260,7 +1267,7 @@ $(document).on('click','.btn-export',function(e){
                 13,
                 14,15,16,
                 17,18,19,20,21,
-                22,23,24,25,26
+                22,23,24,25,26,27
             ];
 
             cols.forEach(function(colIndex){

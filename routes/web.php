@@ -115,6 +115,7 @@ use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
+use App\Http\Controllers\LineJumperInsentifMasterController;
 
 /*
 |--------------------------------------------------------------------------
@@ -460,6 +461,16 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/cutting-insentif-master/import', [CuttingInsentifMasterController::class, 'import'])->name('cutting-insentif-master.import')->middleware(['auth', 'permission']);
     Route::get('/cutting-insentif-master/{period}/check', [CuttingInsentifMasterController::class, 'check'])->name('cutting-insentif-master.check')->middleware(['auth', 'permission']);
     Route::get('/cutting-insentif-master/{period}/data', [CuttingInsentifMasterController::class, 'getData'])->name('cutting-insentif-master.data')->middleware(['auth', 'permission']);
+
+    // Line Jumper Insentif
+    Route::prefix('line-jumper-insentif-master')->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [LineJumperInsentifMasterController::class, 'index'])->name('line-jumper-insentif-master.index');
+        Route::get('/template', [LineJumperInsentifMasterController::class, 'template'])->name('line-jumper-insentif-master.template');
+        Route::post('/import', [LineJumperInsentifMasterController::class, 'import'])->name('line-jumper-insentif-master.import');
+        Route::get('/{period}/check', [LineJumperInsentifMasterController::class, 'check'])->name('line-jumper-insentif-master.check');
+        Route::get('/{period}/data', [LineJumperInsentifMasterController::class, 'getData'])->name('line-jumper-insentif-master.data');
+        Route::get('/{id}/delete', [LineJumperInsentifMasterController::class, 'destroy'])->name('line-jumper-insentif-master.delete');
+    });
 
     // Pad Print Insentif Master
     Route::get('pad-insentif-master/index', [PadInsentifMasterController::class, 'index'])->name('pad-insentif-master.index')->middleware(['auth', 'permission']);

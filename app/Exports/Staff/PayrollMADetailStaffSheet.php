@@ -8,6 +8,7 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class PayrollMADetailStaffSheet
 {
@@ -63,7 +64,7 @@ class PayrollMADetailStaffSheet
         }
 
         // STYLE HEADER
-        $lastCol = chr(64 + count($headings));
+        $lastCol = Coordinate::stringFromColumnIndex(count($headings));
 
         $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
             'font' => [
@@ -115,7 +116,8 @@ class PayrollMADetailStaffSheet
         // ======================
         // NUMBER FORMAT
         // ======================
-        foreach (range('D', $lastCol) as $colLetter) {
+        for ($i = 4; $i <= count($headings); $i++) {
+            $colLetter = Coordinate::stringFromColumnIndex($i);
             $sheet->getStyle("{$colLetter}2:{$colLetter}{$rowNum}")
                 ->getNumberFormat()
                 ->setFormatCode('"Rp" #,##0;[Red]-"Rp" #,##0');
@@ -124,7 +126,8 @@ class PayrollMADetailStaffSheet
         // ======================
         // AUTO SIZE COLUMN
         // ======================
-        foreach (range('A', $lastCol) as $colLetter) {
+        for ($i = 1; $i <= count($headings); $i++) {
+            $colLetter = Coordinate::stringFromColumnIndex($i);
             $sheet->getColumnDimension($colLetter)->setAutoSize(true);
         }
     }
@@ -194,6 +197,7 @@ class PayrollMADetailStaffSheet
             'heat_insentif',
             'sixs_insentif',
             'qc_insentif',
+            'line_jumper_insentif',
             'night_shift_compensation',
             'adjusment',
             'bpjs_kesehatan',
@@ -261,6 +265,7 @@ class PayrollMADetailStaffSheet
             'Heat Seal Insentif',
             'Six S Insentif',
             'QC Insentif',
+            'Line Jumper Insentif',
             'Night Shift Compensation',
             'Adjusment',
 
