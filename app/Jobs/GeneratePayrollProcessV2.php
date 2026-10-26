@@ -1215,6 +1215,7 @@ END AS special_overtime_hours
             : [];
         $lineJumperRoleFormula = null;
         $lineJumperOperationCounts = [];
+        $lineJumperMangkirCounts = [];
 
         if ($lineJumperInsentifComponent) {
             $lineJumperRoleFormula = InsentifRoleFormula::where('role', 'jumper')
@@ -1228,6 +1229,21 @@ END AS special_overtime_hours
                 ->groupBy('npk')
                 ->get()
                 ->mapWithKeys(fn($r) => [mb_strtoupper(trim((string) $r->npk)) => (int) $r->total_operation])
+                ->all();
+
+            // jumlah hari tidak masuk per NPK pada periode ini: tanggal di table `overtimes`
+            // yang JUMLAH_JAM_LEMBUR-nya 'MA' atau 'P1' (1 tanggal dihitung 1x)
+            // Aturan: 1x tidak masuk => insentif dipotong 50%, 2x atau lebih => 0.
+            $lineJumperMangkirCounts = DB::table('overtimes')
+                ->whereRaw('CAST(OVERTIME_DATE AS DATE) BETWEEN ? AND ?', [
+                    Carbon::parse($period->start_date)->format('Y-m-d'),
+                    Carbon::parse($period->end_date)->format('Y-m-d'),
+                ])
+                ->whereRaw("UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA', 'P1')")
+                ->select('NPK', DB::raw('COUNT(DISTINCT CAST(OVERTIME_DATE AS DATE)) as total_mangkir'))
+                ->groupBy('NPK')
+                ->get()
+                ->mapWithKeys(fn($r) => [mb_strtoupper(trim((string) $r->NPK)) => (int) $r->total_mangkir])
                 ->all();
         }
 
@@ -2625,6 +2641,7 @@ END AS special_overtime_hours
                         // 2) Jumlah operasi unik per NPK dari line_jumper_operations.
                         // 3) Tier dari payroll_components, dipotong qc_violation
                         //    (formula role jumper), lalu dibulatkan (round komponen di bawah).
+                        // 4) Tidak masuk (MA/P1 di overtimes): 1x => insentif dipotong 50%, 2x atau lebih => 0.
                         $amount = 0;
 
                         $jumperTkkOk = empty($employee->TKK)
@@ -2640,7 +2657,8 @@ END AS special_overtime_hours
                                 $jumperTotalOperation,
                                 $lineJumperInsentifFormula,
                                 $lineJumperRoleFormula,
-                                $qcViolationPercentage
+                                $qcViolationPercentage,
+                                $lineJumperMangkirCounts[mb_strtoupper(trim((string) $employee->NPK))] ?? 0
                             );
                         }
                     } else if ($component->code === 'cutting_insentif') {
@@ -3371,9 +3389,18 @@ END AS special_overtime_hours
         return 0;
     }
 
-    private function calculateLineJumperInsentif(int $totalOperation, array $tiers, ?string $roleFormula, float $qcViolation)
+    private function calculateLineJumperInsentif(int $totalOperation, array $tiers, ?string $roleFormula, float $qcViolation, int $mangkirCount = 0)
     {
         $insentif = (float) $this->getLineJumperInsentifByOperation($totalOperation, $tiers);
+
+        // Tidak masuk (MA/P1 di overtimes): 2x atau lebih => 0, 1x => dipotong 50%
+        if ($mangkirCount >= 2) {
+            return 0;
+        }
+
+        if ($mangkirCount === 1) {
+            $insentif = $insentif * 0.5;
+        }
 
         if ($insentif <= 0) {
             return 0;

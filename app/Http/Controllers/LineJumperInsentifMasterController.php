@@ -319,6 +319,13 @@ class LineJumperInsentifMasterController extends Controller
 
         /*
         |--------------------------------------------------------------------------
+        | JUMLAH HARI MANGKIR (MA di overtimes) PER NPK
+        |--------------------------------------------------------------------------
+        */
+        $mangkirCounts = $this->getMangkirCounts($period);
+
+        /*
+        |--------------------------------------------------------------------------
         | EMPLOYEE SOURCE
         |--------------------------------------------------------------------------
         */
@@ -379,11 +386,14 @@ class LineJumperInsentifMasterController extends Controller
 
         foreach ($employees as $employee) {
 
+            $totalMangkir = $mangkirCounts[mb_strtoupper(trim((string) $employee->NPK))] ?? 0;
+
             $amount = $this->calculateJumper(
                 (int) $employee->total_operation,
                 $tiers,
                 $roleFormula,
-                $qcViolation
+                $qcViolation,
+                $totalMangkir
             );
 
             // dibulatkan supaya sama dengan job payroll
@@ -397,6 +407,7 @@ class LineJumperInsentifMasterController extends Controller
                 'dept'            => $employee->DEPARTEMENT,
                 'role'            => self::ROLE,
                 'total_operation' => (int) $employee->total_operation,
+                'total_mangkir'   => $totalMangkir,
                 'jumper_insentif' => $amount,
                 'tkk'             => $employee->tkk,
                 'status'          => $employee->tkk ? 'Resign' : 'Active',
@@ -407,6 +418,29 @@ class LineJumperInsentifMasterController extends Controller
             'qc_violation' => $qcViolation,
             'data'         => $results,
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | JUMLAH HARI TIDAK MASUK (MA / P1) PER NPK
+    |--------------------------------------------------------------------------
+    | Tanggal di table overtimes pada periode yang JUMLAH_JAM_LEMBUR-nya 'MA' atau 'P1'
+    | (1 tanggal dihitung 1x). Sama dengan perhitungan di GeneratePayrollProcess.
+    | 1x => insentif dipotong 50%, 2x atau lebih => 0.
+    */
+    private function getMangkirCounts($period): array
+    {
+        return DB::table('overtimes')
+            ->whereRaw('CAST(OVERTIME_DATE AS DATE) BETWEEN ? AND ?', [
+                \Carbon\Carbon::parse($period->start_date)->format('Y-m-d'),
+                \Carbon\Carbon::parse($period->end_date)->format('Y-m-d'),
+            ])
+            ->whereRaw("UPPER(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR))) IN ('MA', 'P1')")
+            ->select('NPK', DB::raw('COUNT(DISTINCT CAST(OVERTIME_DATE AS DATE)) as total_mangkir'))
+            ->groupBy('NPK')
+            ->get()
+            ->mapWithKeys(fn($r) => [mb_strtoupper(trim((string) $r->NPK)) => (int) $r->total_mangkir])
+            ->all();
     }
 
     /*
@@ -452,9 +486,18 @@ class LineJumperInsentifMasterController extends Controller
     | HITUNG INSENTIF JUMPER
     |--------------------------------------------------------------------------
     */
-    private function calculateJumper(int $totalOperation, array $tiers, ?string $roleFormula, float $qcViolation)
+    private function calculateJumper(int $totalOperation, array $tiers, ?string $roleFormula, float $qcViolation, int $mangkirCount = 0)
     {
         $insentif = (float) $this->getInsentifByOperation($totalOperation, $tiers);
+
+        // Tidak masuk (MA/P1 di overtimes): 2x atau lebih => 0, 1x => dipotong 50%
+        if ($mangkirCount >= 2) {
+            return 0;
+        }
+
+        if ($mangkirCount === 1) {
+            $insentif = $insentif * 0.5;
+        }
 
         if ($insentif <= 0) {
             return 0;
