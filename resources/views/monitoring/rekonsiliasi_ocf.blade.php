@@ -28,6 +28,7 @@
                  data-sync-ms-barang-url="{{ route('monitoring.rekonsiliasi.sync-ms-barang') }}"
                  data-sync-ms-negara-url="{{ route('monitoring.rekonsiliasi.sync-ms-negara') }}"
                  data-sync-ms-supplier-url="{{ route('monitoring.rekonsiliasi.sync-ms-supplier') }}"
+                 data-sync-stock-fisik-url="{{ route('monitoring.rekonsiliasi.sync-stock-fisik') }}"
                  data-sync-subkon-url="{{ route('monitoring.rekonsiliasi.sync-subkon') }}"
                  data-import-stage-remark-url="{{ route('monitoring.rekonsiliasi.stage-remark.import') }}"
                  data-import-prod-qc-url="{{ route('monitoring.rekonsiliasi.prod-qc.import') }}"
@@ -139,6 +140,9 @@
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-ms-supplier')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.sync-stock-fisik')
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-subkon')
@@ -1056,6 +1060,7 @@
     const syncMsBarangUrl = app.dataset.syncMsBarangUrl;
     const syncMsNegaraUrl = app.dataset.syncMsNegaraUrl;
     const syncMsSupplierUrl = app.dataset.syncMsSupplierUrl;
+    const syncStockFisikUrl = app.dataset.syncStockFisikUrl;
     const syncSubkonUrl = app.dataset.syncSubkonUrl;
     const importStageRemarkUrl = app.dataset.importStageRemarkUrl;
     const importProdQcUrl = app.dataset.importProdQcUrl;
@@ -2638,7 +2643,34 @@ function updateFormulaWithColors() {
         }
     }
 
+    // ===== DEBUG SEMENTARA =====
+    // Tombol "Sync All Data" sementara HANYA menjalankan Sync Stock Fisik, tanpa
+    // SweetAlert, supaya error 500-nya kelihatan di DevTools (tab Network /
+    // Console). Versi lengkap tetap ada di runSyncAllOriginal() di bawah --
+    // kembalikan dengan mengganti nama fungsi ini.
     function runSyncAll() {
+        if (!syncStockFisikUrl) {
+            console.error('[sync-stock-fisik] URL kosong (route / permission belum terdaftar).');
+            return;
+        }
+
+        if (btnSyncAll) btnSyncAll.disabled = true;
+        console.log('[sync-stock-fisik] POST', syncStockFisikUrl);
+
+        fetch(syncStockFisikUrl, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+        })
+            .then(async (response) => {
+                const text = await response.text();
+                console.log('[sync-stock-fisik] status', response.status);
+                console.log('[sync-stock-fisik] response', text);
+            })
+            .catch((err) => console.error('[sync-stock-fisik] request gagal', err))
+            .finally(() => { if (btnSyncAll) btnSyncAll.disabled = false; });
+    }
+
+    function runSyncAllOriginal() {
         const steps = [
             { url: syncMsNegaraUrl, label: 'Sync Master Negara' },
             { url: syncMsSupplierUrl, label: 'Sync Master Supplier' },
@@ -2649,6 +2681,7 @@ function updateFormulaWithColors() {
             { url: syncProdlineUrl, label: 'Sync Production Line' },
             { url: syncShipmentUrl, label: 'Sync Shipment' },
             { url: syncWorkOrderUrl, label: 'Sync Work Order' },
+            { url: syncStockFisikUrl, label: 'Sync Stock Fisik' },
             { url: syncSubkonUrl, label: 'Sync Subkon' },
         ].filter(s => !!s.url);
 

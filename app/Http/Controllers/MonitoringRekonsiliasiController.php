@@ -300,6 +300,16 @@ class MonitoringRekonsiliasiController extends Controller
     }
 
     /**
+     * Tombol "Sync Stock Fisik" -> php artisan monitoring:sync-stock-fisik
+     * (tidak ada opsi --year, selalu kosongkan mon_stock_fisik lalu insert
+     * ulang stok fisik dari dokumen BC + hasil produksi).
+     */
+    public function syncStockFisik(Request $request)
+    {
+        return $this->runSyncCommandNoYear('monitoring:sync-stock-fisik');
+    }
+
+    /**
      * Tombol "Sync Master Negara" -> php artisan monitoring:sync-ms-negara
      * (master data, tidak ada opsi --year, selalu kosongkan tabel lalu insert
      * ulang semua negara_code -- bukan upsert).

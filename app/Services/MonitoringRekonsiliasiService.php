@@ -299,6 +299,112 @@ class MonitoringRekonsiliasiService
     }
 
     /**
+     * Daftar query mon_stock_fisik yang sudah di-scope sesuai filter aktif
+     * (hasilnya dijumlahkan oleh pemanggil -- lihat stockFisikSum() dan
+     * stockFisikByBarang()). Dipecah per chunk uraian supaya aman dari batas
+     * 2100 parameter SQL Server kalau Buyer/Style me-resolve banyak CPO.
+     *
+     * mon_stock_fisik punya 2 tipe baris (kolom `tipe`, diisi saat sync):
+     *  - 'dokumen'  : jenis_doc diawali "BC"  -> filter ke kolom `spesifikasi`
+     *  - 'produksi' : jenis_doc selain "BC"   -> filter ke kolom `jenis_doc`
+     *
+     * Filter OCF / Sub Ref -> LIKE '%{nilai}%' ke kolom di atas (sesuai tipe).
+     * Filter CPO (uraian, atau hasil resolve Buyer/Style/Negara) -> LIKE ke
+     * kolom yang sama, OR antar CPO. OCF/Sub Ref dan CPO di-AND-kan.
+     * Basis resolve CPO-nya sama persis dengan rekonQuery().
+     *
+     * @return \Illuminate\Database\Query\Builder[]
+     */
+    private function stockFisikQueries(): array
+    {
+        if (!$this->hasAnyFilterInput()) {
+            return [DB::table('mon_stock_fisik')];
+        }
+
+        $core   = $this->cpoListExcluding(['ocf', 'sub_ref']);
+        $ocf    = strtoupper(trim((string) ($this->filters['ocf'] ?? '')));
+        $subRef = strtoupper(trim((string) ($this->filters['sub_ref'] ?? '')));
+
+        // null = tidak ada filter CPO; [] = filter aktif tapi 0 CPO match.
+        $chunks = $core === null ? [null] : (count($core) === 0 ? [[]] : array_chunk($core, 400));
+
+        $queries = [];
+        foreach ($chunks as $chunk) {
+            $q = DB::table('mon_stock_fisik');
+
+            if (is_array($chunk) && count($chunk) === 0) {
+                $queries[] = $q->whereRaw('1 = 0');
+                continue;
+            }
+
+            $q->where(function ($w) use ($chunk, $ocf, $subRef) {
+                foreach (['dokumen' => 'spesifikasi', 'produksi' => 'jenis_doc'] as $tipe => $col) {
+                    $w->orWhere(function ($t) use ($tipe, $col, $chunk, $ocf, $subRef) {
+                        $t->where('tipe', $tipe);
+
+                        if ($ocf !== '') {
+                            $t->whereRaw("UPPER({$col}) LIKE ?", ['%' . $ocf . '%']);
+                        }
+                        if ($subRef !== '') {
+                            $t->whereRaw("UPPER({$col}) LIKE ?", ['%' . $subRef . '%']);
+                        }
+                        if ($chunk !== null) {
+                            $t->where(function ($c) use ($chunk, $col) {
+                                foreach ($chunk as $uraian) {
+                                    $c->orWhereRaw("UPPER({$col}) LIKE ?", ['%' . strtoupper((string) $uraian) . '%']);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+
+            $queries[] = $q;
+        }
+
+        return $queries;
+    }
+
+    /**
+     * Total saldo gudang dari mon_stock_fisik (saldo dokumen + saldo produksi),
+     * opsional dibatasi satuan_code (mis. 'KGM').
+     */
+    private function stockFisikSum(?string $satuanCode = null): float
+    {
+        $total = 0.0;
+        foreach ($this->stockFisikQueries() as $q) {
+            if ($satuanCode !== null) {
+                $q->where('satuan_code', $satuanCode);
+            }
+            $total += (float) ($q->sum('saldo') ?? 0);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Saldo gudang per barang_code dari mon_stock_fisik
+     * (saldo dokumen + saldo produksi) -> [barang_code => saldo].
+     */
+    private function stockFisikByBarang(): array
+    {
+        $result = [];
+        foreach ($this->stockFisikQueries() as $q) {
+            $rows = $q->select('barang_code')
+                ->selectRaw('SUM(saldo) as saldo')
+                ->groupBy('barang_code')
+                ->get();
+
+            foreach ($rows as $r) {
+                $code = trim((string) $r->barang_code);
+                $result[$code] = ($result[$code] ?? 0) + (float) $r->saldo;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Subquery mon_work_orders dengan 1 baris per (prod_id, code_prod).
      *
      * mon_work_orders menyimpan 1 baris per KOMPONEN BOM, jadi `jumlah_prod`
@@ -764,7 +870,8 @@ class MonitoringRekonsiliasiService
         $received = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_in') ?? 0);
         $outWipReq = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_req') ?? 0);
         $outWipDoc = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_doc') ?? 0);
-        $stock    = (float) ($this->rekonQuery()->where('satuan_order', 'KGM')->sum('total_gudang') ?? 0);
+        // STOCK: saldo gudang dari mon_stock_fisik (dokumen BC + produksi), bukan lagi mon_purchase_orders.total_gudang.
+        $stock    = $this->stockFisikSum('KGM');
 
         // NEED dari mon_work_orders: SUM(jumlah_prod * cons) per row (bukan
         // lagi SUM(request)), di-scope via mon_boms supaya hanya menghitung
@@ -1042,7 +1149,6 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(jumlah_doc) as jumlah_doc')
             ->selectRaw('SUM(out_doc) as out_doc')
             ->selectRaw('SUM(out_req) as out_req')
-            ->selectRaw('SUM(total_gudang) as saldo_gudang')
             ->selectRaw('SUM(harga_total) as harga_total')
             ->where('jumlah_doc', '!=', 0)
             ->groupBy('barang_code', 'barang_name')
@@ -1069,13 +1175,17 @@ class MonitoringRekonsiliasiService
                 ->keyBy('barang_code');
         }
 
+        // Saldo gudang per barang_code dari mon_stock_fisik (dokumen + produksi).
+        $stockByCode = $this->stockFisikByBarang();
+
         // Kategori barang (Fabric/Aksesoris/Packing) dari mon_ms_barangs.
         $codes = $rows->pluck('barang_code')->filter()->unique()->values();
         $categoryByCode = $codes->isEmpty()
             ? collect()
             : DB::table('mon_ms_barangs')->whereIn('barang_code', $codes)->pluck('barang_category', 'barang_code');
 
-        return $rows->map(function ($r) use ($needByCode, $categoryByCode) {
+        return $rows->map(function ($r) use ($needByCode, $categoryByCode, $stockByCode) {
+            $saldoGudang = (float) ($stockByCode[trim((string) $r->barang_code)] ?? 0);
             $order  = (float) $r->jumlah_order;
             $doc    = (float) $r->jumlah_doc;
             $outDoc = (float) $r->out_doc;
@@ -1105,7 +1215,7 @@ class MonitoringRekonsiliasiService
                 'out_prod_pct'    => $pct($r->out_req, $doc),
                 'out_req_pct'     => $pct($r->out_req, $doc),
                 'out_doc_pct'     => $pct($outDoc, $doc),
-                'stock_pct'       => $pct($r->saldo_gudang, $doc),
+                'stock_pct'       => $pct($saldoGudang, $doc),
                 // Qty mentah (bukan persentase) untuk masing-masing bar --
                 // dipakai frontend supaya tooltip chart Material Achievement
                 // bisa menampilkan qty asli di samping persentase saat di-hover.
@@ -1115,7 +1225,7 @@ class MonitoringRekonsiliasiService
                 'out_prod_qty'    => (float) $r->out_req,
                 'out_req_qty'     => (float) $r->out_req,
                 'out_doc_qty'     => $outDoc,
-                'stock_qty'       => (float) $r->saldo_gudang,
+                'stock_qty'       => $saldoGudang,
             ];
         });
     }
@@ -2358,7 +2468,7 @@ class MonitoringRekonsiliasiService
      *  - `po_rows`   : baris mon_purchase_orders (rekonQuery(), jumlah_doc != 0)
      *                  yang di-SUM per barang_code di materialAchievement()
      *                  -> Order (jumlah_order), Received (jumlah_doc),
-     *                  Out Doc (out_doc), Out Prod (out_req), Stock (total_gudang).
+     *                  Out Doc (out_doc), Out Prod (out_req). Stock dari mon_stock_fisik (key `stock`).
      *  - `need_rows` : baris mon_work_orders pembentuk NEED
      *                  (SUM(jumlah_prod * cons)), di-scope IDENTIK dengan NEED
      *                  di materialAchievement().
@@ -2379,9 +2489,35 @@ class MonitoringRekonsiliasiService
             ->selectRaw('SUM(mon_purchase_orders.jumlah_doc) as jumlah_doc')
             ->selectRaw('SUM(mon_purchase_orders.out_doc) as out_doc')
             ->selectRaw('SUM(mon_purchase_orders.out_req) as out_req')
-            ->selectRaw('SUM(mon_purchase_orders.total_gudang) as saldo_gudang')
             ->selectRaw('SUM(mon_purchase_orders.harga_total) as harga_total')
             ->first();
+
+        // Stock / saldo gudang: dari mon_stock_fisik (saldo dokumen BC + saldo
+        // produksi), di-scope filter yang sama dengan materialAchievement() dan
+        // dibatasi ke barang_code kelompok ini. Bukan lagi total_gudang PO.
+        $stockTotal = 0.0;
+        $stockCount = 0;
+        $stockRows  = collect();
+        foreach ($this->stockFisikQueries() as $q) {
+            $q->whereIn('barang_code', $codesInGroup);
+
+            $agg = (clone $q)
+                ->selectRaw('COUNT(*) as row_count')
+                ->selectRaw('SUM(saldo) as saldo')
+                ->first();
+            $stockCount += (int) ($agg->row_count ?? 0);
+            $stockTotal += (float) ($agg->saldo ?? 0);
+
+            $stockRows = $stockRows->concat(
+                $q->select('tipe', 'jenis_doc', 'barang_code', 'barang_name', 'satuan_code', 'spesifikasi', 'saldo', 'harga_satuan', 'nilai_harga')
+                    ->orderBy('barang_name')
+                    ->orderBy('tipe')
+                    ->orderBy('jenis_doc')
+                    ->limit(self::DETAIL_ROW_LIMIT)
+                    ->get()
+            );
+        }
+        $stockRows = $stockRows->take(self::DETAIL_ROW_LIMIT)->values();
 
         $poRows = $poBase()
             ->select(
@@ -2403,7 +2539,6 @@ class MonitoringRekonsiliasiService
                 'mon_purchase_orders.sisa',
                 'mon_purchase_orders.harga_total'
             )
-            ->selectRaw('mon_purchase_orders.total_gudang as saldo_gudang')
             ->orderBy('mon_purchase_orders.barang_name')
             ->orderBy('mon_purchase_orders.tgl_po')
             ->orderBy('mon_purchase_orders.no_po')
@@ -2463,10 +2598,16 @@ class MonitoringRekonsiliasiService
                     'jumlah_doc'   => (float) ($poTotals->jumlah_doc ?? 0),
                     'out_doc'      => (float) ($poTotals->out_doc ?? 0),
                     'out_req'      => (float) ($poTotals->out_req ?? 0),
-                    'saldo_gudang' => (float) ($poTotals->saldo_gudang ?? 0),
+                    'saldo_gudang' => $stockTotal,
                     'harga_total'  => (float) ($poTotals->harga_total ?? 0),
                 ],
                 'rows' => $poRows,
+            ],
+            // Baris pembentuk Stock (mon_stock_fisik): tipe dokumen (BC) & produksi.
+            'stock' => [
+                'row_count' => $stockCount,
+                'totals'    => ['saldo' => $stockTotal],
+                'rows'      => $stockRows,
             ],
             'need' => [
                 'row_count' => (int) ($needTotals->row_count ?? 0),

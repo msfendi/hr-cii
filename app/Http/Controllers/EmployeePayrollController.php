@@ -121,7 +121,7 @@ class EmployeePayrollController extends Controller
         ]);
     }
 
-    public function showSlip($run_id, $npk)
+    public function showSlip($run_id, $npk, $asView = false)
     {
         // $birth = DB::table('PKWT')->select('KTP', 'TGLLAHIR')
         //     ->where('NPK', $npk)
@@ -230,24 +230,24 @@ class EmployeePayrollController extends Controller
         $startDate = Carbon::parse($period->start_date)->startOfDay();
         $endDate   = Carbon::parse($period->end_date)->endOfDay();
 
-    //     $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
-    //         ->selectRaw("
-    //     npk,
-    //     SUM(
-    //         CASE
-    //             WHEN jam_kembali IS NOT NULL
-    //             THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
-    //             ELSE 0
-    //         END
-    //     ) as total_ijin_minutes
-    // ")
-    //         ->whereBetween('tanggal', [$startDate, $endDate])
-    //         ->where('npk', $npk)
-    //         ->groupBy('npk')
-    //         ->get()
-    //         ->keyBy('npk');
+        //     $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+        //         ->selectRaw("
+        //     npk,
+        //     SUM(
+        //         CASE
+        //             WHEN jam_kembali IS NOT NULL
+        //             THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+        //             ELSE 0
+        //         END
+        //     ) as total_ijin_minutes
+        // ")
+        //         ->whereBetween('tanggal', [$startDate, $endDate])
+        //         ->where('npk', $npk)
+        //         ->groupBy('npk')
+        //         ->get()
+        //         ->keyBy('npk');
 
-            $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
+        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans')
             ->selectRaw("
                 ijin_meninggalkan_pekerjaans.npk,
                 SUM(
@@ -269,29 +269,29 @@ class EmployeePayrollController extends Controller
             ->get()
             ->keyBy('npk');
 
-    //     $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
-    //         ->selectRaw("
-    //     ijin_meninggalkan_pekerjaans.npk,
-    //     NAMA_KARYAWAN,
-    //     DEPARTEMENT,
-    //     tanggal,
-    //     jam_keluar,
-    //     rencana_kembali,
-    //     jam_kembali,
-    //     reason,
-    //     CASE 
-    //         WHEN jam_kembali IS NOT NULL 
-    //         THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
-    //         ELSE 0 
-    //     END as ijin_minutes
-    // ")
-    //         ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
-    //         ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
-    //         ->whereBetween('tanggal', [$startDate, $endDate])
-    //         ->where('ijin_meninggalkan_pekerjaans.npk', $npk)
-    //         ->orderBy('tanggal', 'asc')
-    //         ->get()
-    //         ->groupBy('npk');
+        //     $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
+        //         ->selectRaw("
+        //     ijin_meninggalkan_pekerjaans.npk,
+        //     NAMA_KARYAWAN,
+        //     DEPARTEMENT,
+        //     tanggal,
+        //     jam_keluar,
+        //     rencana_kembali,
+        //     jam_kembali,
+        //     reason,
+        //     CASE 
+        //         WHEN jam_kembali IS NOT NULL 
+        //         THEN DATEDIFF(MINUTE, jam_keluar, jam_kembali)
+        //         ELSE 0 
+        //     END as ijin_minutes
+        // ")
+        //         ->leftJoin('BIODATA', 'BIODATA.NPK', '=', 'ijin_meninggalkan_pekerjaans.npk')
+        //         ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'BIODATA.ID_DEPT')
+        //         ->whereBetween('tanggal', [$startDate, $endDate])
+        //         ->where('ijin_meninggalkan_pekerjaans.npk', $npk)
+        //         ->orderBy('tanggal', 'asc')
+        //         ->get()
+        //         ->groupBy('npk');
 
 
         $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans')
@@ -814,6 +814,21 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         |--------------------------------------------------------------------------
         */
 
+        if ($asView) {
+            return view('payroll.viewslip', [
+                'employee' => $employee,
+                'earnings' => $earnings,
+                'deductions' => $deductions,
+                'attendance' => $attendance,
+                'summary' => $summary,
+                'holidays' => $holidays,
+                'late_minutes' => $late_minutes,
+                'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+                'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
+                'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
+            ]);
+        }
+
         $pdf = Pdf::loadView('payroll.viewslip', [
             'employee' => $employee,
             'earnings' => $earnings,
@@ -848,7 +863,7 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         // ]);
     }
 
-    public function showSlipAudit($run_id, $npk)
+    public function showSlipAudit($run_id, $npk, $asView = false)
     {
 
         $birth = DB::table('PKWT')
@@ -1367,6 +1382,21 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
     |--------------------------------------------------------------------------
     */
 
+        if ($asView) {
+            return view('payroll.viewslip', [
+                'employee' => $employee,
+                'earnings' => $earnings,
+                'deductions' => $deductions,
+                'attendance' => $attendance,
+                'summary' => $summary,
+                'holidays' => $holidays,
+                'late_minutes' => $late_minutes,
+                'ijin_details' => ($ijinDetails[$npk] ?? collect())->values(),
+                'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
+                'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
+            ]);
+        }
+
         $pdf = Pdf::loadView('payroll.viewslip', [
             'employee' => $employee,
             'earnings' => $earnings,
@@ -1398,6 +1428,22 @@ OVERRIDE JAM MASUK DARI EMPLOYEE_LATES (JIKA ADA)
         //     'adjusment_details' => ($payrollAdjustmentDetails[$npk] ?? collect())->values(),
         //     'total_ijin' => optional($ijinSummary->get($npk))->total_ijin_minutes ?? 0,
         // ]);
+    }
+
+    /**
+     * View slip langsung render blade (tanpa download PDF).
+     */
+    public function viewSlip($run_id, $npk)
+    {
+        return $this->showSlip($run_id, $npk, true);
+    }
+
+    /**
+     * View slip audit langsung render blade (tanpa download PDF).
+     */
+    public function viewSlipAudit($run_id, $npk)
+    {
+        return $this->showSlipAudit($run_id, $npk, true);
     }
 
     /**

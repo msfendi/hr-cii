@@ -1157,10 +1157,6 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
     // Route::get('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process');
 
-    // Employee Payroll
-    Route::get('/employee-payroll/show-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlipAudit'])->name('employee-payroll.view-slip-audit');
-    Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
-    Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
     Route::get('/payroll-process/slip-live/{period_id}/{npk}', [EmployeePayrollController::class, 'showSlipLive'])->name('payroll-process.slip-live');
 
     // Employee Thr
@@ -1201,6 +1197,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/rekonsiliasi/sync-work-order', [MonitoringRekonsiliasiController::class, 'syncWorkOrder'])->name('rekonsiliasi.sync-work-order');
         Route::post('/rekonsiliasi/sync-ms-barang', [MonitoringRekonsiliasiController::class, 'syncMsBarang'])->name('rekonsiliasi.sync-ms-barang');
         Route::post('/rekonsiliasi/sync-subkon', [MonitoringRekonsiliasiController::class, 'syncSubkon'])->name('rekonsiliasi.sync-subkon');
+        Route::post('/rekonsiliasi/sync-stock-fisik', [MonitoringRekonsiliasiController::class, 'syncStockFisik'])->name('rekonsiliasi.sync-stock-fisik');
         Route::delete('/rekonsiliasi/stage-remark/{id}', [MonitoringRekonsiliasiController::class, 'destroyStageRemark'])->name('rekonsiliasi.stage-remark.destroy');
 
         // -- Kalender "Shipment Date" (mirip kalender Production Delivery di dashboard Gabungan) --
@@ -1286,6 +1283,11 @@ Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::cla
 Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
+Route::get('/employee-payroll/show-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlipAudit'])->name('employee-payroll.view-slip-audit');
+Route::get('/employee-payroll/view/{run_id}/{npk}', [EmployeePayrollController::class, 'viewSlip'])->name('employee-payroll.view-slip-html');
+Route::get('/employee-payroll/view-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'viewSlipAudit'])->name('employee-payroll.view-slip-audit-html');
+Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
+Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
 
 
 

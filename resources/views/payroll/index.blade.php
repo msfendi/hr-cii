@@ -407,13 +407,15 @@
                                         <th>Work Leave Deduction</th>
                                         <th>Total Salary</th>
                                         <th>Status</th>
-                                        <th>Slip</th>
+                                        <th>View Slip</th>
+                                        <th>PDF Slip</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
                                 <tfoot>
                                     <tr style="font-weight:bold;background:#f8f9fc">
                                         <th colspan="3" class="text-right">TOTAL</th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -1199,30 +1201,61 @@ $(document).on('click','.btn-export',function(e){
             },
 
             {
+                // KOLOM: VIEW SLIP (render blade, tanpa download)
                 data:null,
                 orderable:false,
                 searchable:false,
+                className:'text-center',
                 render:function(data,type,row){
 
-                    let viewUrl =
-                        "/employee-payroll/show/"
-                        + row.run_id + "/" + row.employee_npk;
+                    let key = row.run_id + "/" + row.employee_npk;
 
-                    let viewUrlAudit =
-                        "/employee-payroll/show-audit/"
-                        + row.run_id + "/" + row.employee_npk;
+                    let viewUrl      = "/employee-payroll/view/" + key;
+                    let viewAuditUrl = "/employee-payroll/view-audit/" + key;
 
                     return `
-                        <a href="${viewUrl}" 
-                        class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center mb-1"
-                        title="View Slip">
-                            <i class="fa fa-eye"></i>
-                        </a>
-                        <a href="${viewUrlAudit}" 
-                        class="btn btn-warning btn-circle btn-sm d-flex align-items-center justify-content-center"
-                        title="View Slip Audit">
-                            <i class="fa fa-clipboard-check"></i>
-                        </a>
+                        <div class="d-flex justify-content-center" style="gap:4px;">
+                            <a href="${viewUrl}" target="_blank"
+                            class="btn btn-primary btn-circle btn-sm d-flex align-items-center justify-content-center"
+                            title="View Slip">
+                                <i class="fa fa-eye"></i>
+                            </a>
+                            <a href="${viewAuditUrl}" target="_blank"
+                            class="btn btn-warning btn-circle btn-sm d-flex align-items-center justify-content-center"
+                            title="View Slip Audit">
+                                <i class="fa fa-clipboard-check"></i>
+                            </a>
+                        </div>
+                    `;
+                }
+            },
+
+            {
+                // KOLOM: PDF SLIP (download PDF ber-password)
+                data:null,
+                orderable:false,
+                searchable:false,
+                className:'text-center',
+                render:function(data,type,row){
+
+                    let key = row.run_id + "/" + row.employee_npk;
+
+                    let pdfUrl      = "/employee-payroll/show/" + key;
+                    let pdfAuditUrl = "/employee-payroll/show-audit/" + key;
+
+                    return `
+                        <div class="d-flex justify-content-center" style="gap:4px;">
+                            <a href="${pdfUrl}"
+                            class="btn btn-danger btn-circle btn-sm d-flex align-items-center justify-content-center"
+                            title="Download Slip PDF">
+                                <i class="fa fa-file-pdf"></i>
+                            </a>
+                            <a href="${pdfAuditUrl}"
+                            class="btn btn-secondary btn-circle btn-sm d-flex align-items-center justify-content-center"
+                            title="Download Slip Audit PDF">
+                                <i class="fa fa-file-download"></i>
+                            </a>
+                        </div>
                     `;
                 }
             }

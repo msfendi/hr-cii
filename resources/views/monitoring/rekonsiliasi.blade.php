@@ -28,6 +28,7 @@
                  data-sync-ms-barang-url="{{ route('monitoring.rekonsiliasi.sync-ms-barang') }}"
                  data-sync-ms-negara-url="{{ route('monitoring.rekonsiliasi.sync-ms-negara') }}"
                  data-sync-ms-supplier-url="{{ route('monitoring.rekonsiliasi.sync-ms-supplier') }}"
+                 data-sync-stock-fisik-url="{{ route('monitoring.rekonsiliasi.sync-stock-fisik') }}"
                  data-sync-subkon-url="{{ route('monitoring.rekonsiliasi.sync-subkon') }}"
                  data-import-stage-remark-url="{{ route('monitoring.rekonsiliasi.stage-remark.import') }}"
                  data-import-prod-qc-url="{{ route('monitoring.rekonsiliasi.prod-qc.import') }}"
@@ -139,6 +140,9 @@
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-ms-supplier')
+                                    @php $canSyncAny = true; @endphp
+                                @endcanRoute
+                                @canRoute('monitoring.rekonsiliasi.sync-stock-fisik')
                                     @php $canSyncAny = true; @endphp
                                 @endcanRoute
                                 @canRoute('monitoring.rekonsiliasi.sync-subkon')
@@ -1056,6 +1060,7 @@
     const syncMsBarangUrl = app.dataset.syncMsBarangUrl;
     const syncMsNegaraUrl = app.dataset.syncMsNegaraUrl;
     const syncMsSupplierUrl = app.dataset.syncMsSupplierUrl;
+    const syncStockFisikUrl = app.dataset.syncStockFisikUrl;
     const syncSubkonUrl = app.dataset.syncSubkonUrl;
     const importStageRemarkUrl = app.dataset.importStageRemarkUrl;
     const importProdQcUrl = app.dataset.importProdQcUrl;
@@ -2649,6 +2654,7 @@ function updateFormulaWithColors() {
             { url: syncProdlineUrl, label: 'Sync Production Line' },
             { url: syncShipmentUrl, label: 'Sync Shipment' },
             { url: syncWorkOrderUrl, label: 'Sync Work Order' },
+            { url: syncStockFisikUrl, label: 'Sync Stock Fisik' },
             { url: syncSubkonUrl, label: 'Sync Subkon' },
         ].filter(s => !!s.url);
 
