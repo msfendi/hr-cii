@@ -209,7 +209,8 @@
     const fromEl = document.getElementById('sum-from');
     const toEl = document.getElementById('sum-to');
 
-    const fmt = (v, d = 0) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: d }).format(Number(v || 0));
+    // Semua angka: selalu tepat 2 angka di belakang koma
+    const fmt = (v) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v || 0));
     const rp = (v) => 'Rp ' + fmt(v);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const qs = () => new URLSearchParams({ date_from: fromEl.value, date_to: toEl.value, mode }).toString();
@@ -232,11 +233,11 @@
         if (!items.length) return '<div class="text-muted small text-center py-3">No data</div>';
         if (usePct) {
             const pv = (i) => usePct === 'pct' ? i.pct : i.ship_pct;
-            const fmtP = (v) => v === null || v === undefined ? '-' : new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(v) + '%';
+            const fmtP = (v) => v === null || v === undefined ? '-' : new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + '%';
             return items.map((i, idx) => `<div class="sum-rank">
                 <span class="no">${idx + 1}</span><span class="ocf">${esc(i.ocf)}</span><span class="buyer" title="${esc(i.buyer)}">${esc(i.buyer || '-')}</span>
                 <div class="sum-bar-wrap"><div class="sum-bar" style="width:${Math.min(100, Math.abs(pv(i) || 0)).toFixed(1)}%;background:${color}"></div></div>
-                <span class="num" title="${lbl}: ${fmt(i.value, 2)} ${unit}">${fmtP(pv(i))}</span></div>`).join('');
+                <span class="num" title="${lbl}: ${fmt(i.value)} ${unit}">${fmtP(pv(i))}</span></div>`).join('');
         }
         const max = Math.max(...items.map(i => i.value), 1);
         return items.map((i, idx) => `<div class="sum-rank">

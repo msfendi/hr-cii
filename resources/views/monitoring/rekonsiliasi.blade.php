@@ -1090,7 +1090,10 @@
         $(this).select2({ width: '100%', placeholder: $(this).data('placeholder') || '', allowClear: true });
     });
 
-    const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(Number(v || 0));
+    // Semua angka kuantitas/nilai: selalu tepat 2 angka di belakang koma
+    const fmtNum = (v) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v || 0));
+    // Khusus hitungan bulat (jumlah baris, hari aktif, jumlah dokumen) -- tanpa desimal
+    const fmtInt = (v) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Number(v || 0));
 
     // Escape teks bebas (mis. remark dari mon_stage_remarks) sebelum
     // disisipkan lewat innerHTML, supaya aman dari HTML/markup liar.
@@ -1110,8 +1113,7 @@
         if (isNaN(num)) return '-';
         const sign = num < 0 ? '-' : '';
         const abs = Math.abs(num);
-        const rounded = Math.round(abs * 10) / 10;
-        const formatted = rounded.toFixed(1).replace('.', ',');
+        const formatted = abs.toFixed(2).replace('.', ',');
         return sign + formatted + '%';
     }
 
@@ -1120,8 +1122,7 @@
         const num = parseFloat(value);
         if (isNaN(num)) return '-';
         const abs = Math.abs(num);
-        const rounded = Math.round(abs * 10) / 10;
-        const formatted = rounded.toFixed(1).replace('.', ',');
+        const formatted = abs.toFixed(2).replace('.', ',');
         return (num < 0 ? '' : '+') + formatted + '%';
     }
 
@@ -1311,7 +1312,7 @@
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: (c) => `${c.parsed.toFixed(1).replace('.', ',')}%`
+                        label: (c) => `${c.parsed.toFixed(2).replace('.', ',')}%`
                     }
                 },
             },
@@ -1330,7 +1331,7 @@
                 chart.data.datasets[0].data.forEach((value, i) => {
                     if (!value) return;
                     const pos = meta.data[i].tooltipPosition();
-                    const formatted = value.toFixed(1).replace('.', ',') + '%';
+                    const formatted = value.toFixed(2).replace('.', ',') + '%';
                     c.fillText(formatted, pos.x, pos.y);
                 });
                 c.restore();
@@ -1408,7 +1409,7 @@
                             const qtyKey = c.dataset.qtyKey;
                             const qty = (r && qtyKey) ? r[qtyKey] : undefined;
                             const qtyStr = (qty === undefined || qty === null) ? '' : `  |  Qty: ${fmtNum(qty)}`;
-                            return `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')}%${qtyStr}`;
+                            return `${c.dataset.label}: ${c.parsed.y.toFixed(2).replace('.', ',')}%${qtyStr}`;
                         }
                     }
                 },
@@ -1429,7 +1430,7 @@
                 const value = dataset.data[i];
                 if (value === null || value === undefined || value === 0) return;
                 // Ubah format di sini
-                const label = `${Math.round(value)}`;
+                const label = Number(value).toFixed(2).replace('.', ',');
                 let x = bar.x;
                 let y = bar.y - 6;
                 let baseline = 'bottom';
@@ -1959,9 +1960,9 @@ function updateFormulaWithColors() {
     // service), BUKAN selisih Tgl Akhir - Tgl Awal -- hari tanpa data tidak dihitung.
     const dDays = (activeDays) => {
         if (activeDays === null || activeDays === undefined || activeDays === '') return '-';
-        return fmtNum(activeDays);
+        return fmtInt(activeDays);
     };
-    const dDec = (v, d) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: d ?? 4 }).format(Number(v || 0));
+    const dDec = (v, d) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v || 0));
     const dSum = (rows, key) => (rows || []).reduce((s, r) => s + (parseFloat(r[key]) || 0), 0);
 
     function dLossClass(n) { return n < 0 ? 'd-loss-negative' : (n > 0 ? 'd-loss-positive' : 'd-loss-zero'); }
@@ -2039,7 +2040,7 @@ function updateFormulaWithColors() {
             ? `<input type="search" class="form-control form-control-sm rekon-detail-filter" placeholder="Cari di tabel ini..." data-target="${id}">`
             : '';
         const note = truncated
-            ? `<div class="rekon-detail-note rekon-detail-note-warn"><i class="fas fa-exclamation-triangle mr-1"></i>Menampilkan ${fmtNum(rows.length)} dari ${fmtNum(opts.total)} baris (dibatasi ${fmtNum(limit)}). Total di footer = seluruh baris; saat memakai pencarian, total dihitung dari baris yang dimuat saja. Persempit filter untuk melihat sisanya.</div>`
+            ? `<div class="rekon-detail-note rekon-detail-note-warn"><i class="fas fa-exclamation-triangle mr-1"></i>Menampilkan ${fmtInt(rows.length)} dari ${fmtInt(opts.total)} baris (dibatasi ${fmtInt(limit)}). Total di footer = seluruh baris; saat memakai pencarian, total dihitung dari baris yang dimuat saja. Persempit filter untuk melihat sisanya.</div>`
             : '';
         return `${filter}<div class="rekon-detail-box"><table id="${id}" class="table table-bordered table-sm rekon-detail-table" data-trunc="${truncated ? 1 : 0}"><thead><tr>${thead}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${note}`;
     }
@@ -2079,7 +2080,7 @@ function updateFormulaWithColors() {
             td.textContent = td.dataset.dec !== '' ? dDec(sum, Number(td.dataset.dec)) : fmtNum(sum);
         });
         if (label) {
-            label.textContent = `Total (hasil cari: ${fmtNum(shown.length)} baris)`
+            label.textContent = `Total (hasil cari: ${fmtInt(shown.length)} baris)`
                 + (table.dataset.trunc === '1' ? ' — dari baris yang dimuat' : '');
         }
     }
@@ -2103,13 +2104,13 @@ function updateFormulaWithColors() {
     // ---------- Work In Process (Chutex) ----------
     function dStagePane(stageKey, d, summaryValue, note) {
         d = d || { row_count: 0, total: 0, groups: [], rows: [] };
-        const head = `<div class="mb-2"><strong>Total ${fmtNum(d.total)}</strong> dari ${fmtNum(d.row_count)} baris ${dRecon(d.total, summaryValue, 'Bandingkan dengan angka di card pipeline')}${note ? `<div class="rekon-detail-note">${note}</div>` : ''}</div>`;
+        const head = `<div class="mb-2"><strong>Total ${fmtNum(d.total)}</strong> dari ${fmtInt(d.row_count)} baris ${dRecon(d.total, summaryValue, 'Bandingkan dengan angka di card pipeline')}${note ? `<div class="rekon-detail-note">${note}</div>` : ''}</div>`;
 
         const isQc = stageKey === 'QC';
         const groupCols = isQc
             ? [
                 { label: 'Code Prod (OCF)', val: r => dv(r.code_prod) },
-                { label: 'Jumlah Input', right: true, val: r => fmtNum(r.doc_count) },
+                { label: 'Jumlah Input', right: true, val: r => fmtInt(r.doc_count) },
                 { label: 'Jumlah (Pcs)', right: true, val: r => fmtNum(r.jumlah) },
             ]
             : [
@@ -2275,12 +2276,12 @@ function updateFormulaWithColors() {
             { label: 'Tgl Bukti', val: r => dDate(r.tgl_bukti) },
             { label: 'Jumlah Barang', right: true, val: r => fmtNum(r.jumlah_barang) },
             { label: 'Total CM Price', right: true, val: r => fmtNum(r.nilai_barang) },
-            { label: 'CM Cost/Pce', right: true, val: r => dDec(cmPerPce(r.nilai_barang, r.jumlah_doc), 4) },
+            { label: 'CM Cost/Pce', right: true, val: r => dDec(cmPerPce(r.nilai_barang, r.jumlah_doc), 2) },
         ], byDateRows, {
             foot: dFoot(1, [
                 dS(fmtNum(tb.jumlah_barang), 'jumlah_barang'),
                 dS(fmtNum(tb.nilai_barang), 'nilai_barang'),
-                dS(dDec(cmPerPce(tb.nilai_barang, tb.jumlah_doc), 4), 'nilai_barang', 4, 'jumlah_doc'),
+                dS(dDec(cmPerPce(tb.nilai_barang, tb.jumlah_doc), 2), 'nilai_barang', 2, 'jumlah_doc'),
             ]),
         });
 
