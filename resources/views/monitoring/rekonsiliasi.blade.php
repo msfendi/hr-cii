@@ -1559,7 +1559,7 @@ function updateFormulaWithColors() {
 
             let lossDisplay = '-';
             if (lossValue !== null) {
-                lossDisplay = lossSign + fmtNum(Math.abs(lossValue));
+                lossDisplay = lossSign + fmtInt(Math.abs(lossValue));
             }
 
             let lossPctDisplay = '-';
@@ -1585,7 +1585,7 @@ function updateFormulaWithColors() {
                 <div class="rekon-pipe-box theme-${theme}">
                     <div class="rekon-pipe-header">${label}</div>
                     <div class="rekon-pipe-body">
-                        <div class="rekon-pipe-output">${fmtNum(value)}</div>
+                        <div class="rekon-pipe-output">${fmtInt(value)}</div>
                         <div class="rekon-pipe-output-pct">${outputPctDisplay}</div>
                         ${unit ? `<div class="text-uppercase" style="font-size:.65rem;">${unit}</div>` : ''}
                         ${lossRow}
@@ -1662,7 +1662,7 @@ function updateFormulaWithColors() {
                 <div class="rekon-pipe-box theme-neutral rekon-pipe-total">
                     <div class="rekon-pipe-header">Balance Garment Stock</div>
                     <div class="rekon-pipe-body">
-                        <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtNum(Math.abs(balanceGarmentStock))}</div>
+                        <div class="rekon-pipe-output ${balanceColorClass}">${balanceSign}${fmtInt(Math.abs(balanceGarmentStock))}</div>
                         <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
                         ${balanceRemarksRow}
                     </div>
@@ -1693,7 +1693,7 @@ function updateFormulaWithColors() {
             <div class="rekon-pipe-box theme-loss rekon-pipe-total">
                 <div class="rekon-pipe-header">Balance</div>
                 <div class="rekon-pipe-body">
-                    <div class="rekon-pipe-output ${totalLossColorClass}">${totalLossSign}${fmtNum(Math.abs(totalLoss))}</div>
+                    <div class="rekon-pipe-output ${totalLossColorClass}">${totalLossSign}${fmtInt(Math.abs(totalLoss))}</div>
                     <div class="rekon-pipe-output-pct ${totalLossColorClass}">${totalLossSign}${fmtPct(Math.abs(totalLossPct))}</div>
                     <div class="text-uppercase" style="font-size:.65rem;">PCS</div>
                     ${totalLossRemarksRow}
