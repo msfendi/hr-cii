@@ -2643,34 +2643,7 @@ function updateFormulaWithColors() {
         }
     }
 
-    // ===== DEBUG SEMENTARA =====
-    // Tombol "Sync All Data" sementara HANYA menjalankan Sync Stock Fisik, tanpa
-    // SweetAlert, supaya error 500-nya kelihatan di DevTools (tab Network /
-    // Console). Versi lengkap tetap ada di runSyncAllOriginal() di bawah --
-    // kembalikan dengan mengganti nama fungsi ini.
     function runSyncAll() {
-        if (!syncStockFisikUrl) {
-            console.error('[sync-stock-fisik] URL kosong (route / permission belum terdaftar).');
-            return;
-        }
-
-        if (btnSyncAll) btnSyncAll.disabled = true;
-        console.log('[sync-stock-fisik] POST', syncStockFisikUrl);
-
-        fetch(syncStockFisikUrl, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
-        })
-            .then(async (response) => {
-                const text = await response.text();
-                console.log('[sync-stock-fisik] status', response.status);
-                console.log('[sync-stock-fisik] response', text);
-            })
-            .catch((err) => console.error('[sync-stock-fisik] request gagal', err))
-            .finally(() => { if (btnSyncAll) btnSyncAll.disabled = false; });
-    }
-
-    function runSyncAllOriginal() {
         const steps = [
             { url: syncMsNegaraUrl, label: 'Sync Master Negara' },
             { url: syncMsSupplierUrl, label: 'Sync Master Supplier' },
