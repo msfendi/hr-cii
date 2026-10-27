@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
-@include('sweetalert::alert')
 <body id="page-top">
     <div id="wrapper">
         @include('layout.sidebar')
@@ -56,13 +55,13 @@
                                 <div>
                                     <label>NPK :</label>
                                     <select id="npk" class="form-control" name="npk" required>
-                                        <option value="">Select Employee</option>
+                                        <option value=""></option>
                                         @foreach ($employees as $employee)
                                             <option value="{{ $employee->NPK }}" {{ old('npk') == $employee->NPK ? 'selected' : '' }}>
                                                 {{ $employee->NPK }} - {{ $employee->NAMA_KARYAWAN }}
                                             </option>
                                         @endforeach
-                                        </select>
+                                    </select>
                                 </div>
                                 <br>
                                 <div>
@@ -91,15 +90,24 @@
             @include('layout.footer')
         </div>
     </div>
+
+    {{-- Scripts: semua di dalam <body> --}}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css" rel="stylesheet" />
+
+    {{-- jQuery hanya dimuat jika belum ada (mis. dari layout.header / layout.footer) --}}
+    <script>
+        window.jQuery || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"><\/script>');
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js"></script>
+
+    {{-- SweetAlert2 sudah dibawa oleh package, jadi CDN sweetalert2 dihapus --}}
+    @include('sweetalert::alert')
+
+    <script>
+        $("#npk").select2({
+            allowClear: true,
+            placeholder: 'Choose Employee'
+        });
+    </script>
 </body>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css" rel="stylesheet" />
-<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    $("#npk").select2({
-    allowClear:true,
-    placeholder:'Choose Employee'
-    });
-</script>
 </html>
