@@ -93,6 +93,7 @@ use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
+use App\Http\Controllers\FaceRecognitionController;
 use App\Http\Controllers\CanteenController;
 use App\Http\Controllers\CanteenReportController;
 use App\Http\Controllers\ChatbotController;
@@ -116,6 +117,7 @@ use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
+use App\Http\Controllers\RecruitmentAi\RecruitmentAiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -134,6 +136,14 @@ use App\Http\Controllers\LineJumperInsentifMasterController;
 
 Route::get('/', [HomeController::class, 'index'])->name('/');
 Route::get('/welcome', [HomeController::class, 'welcome'])->name('welcome');
+
+// Self Register Face Recognition (publik, tanpa login)
+Route::prefix('self-register-face')->name('self-register-face.')->group(function () {
+    Route::get('/', [FaceRecognitionController::class, 'selfRegisterPage'])->name('index');
+    Route::post('/verify', [FaceRecognitionController::class, 'selfRegisterVerify'])->name('verify');
+    Route::post('/store', [FaceRecognitionController::class, 'selfRegisterStore'])->name('store');
+    Route::post('/confirm', [FaceRecognitionController::class, 'selfRegisterConfirm'])->name('confirm');
+});
 // Route::get('/template/auditsewing', [TemplateController::class, 'auditsewing'])->name('template.auditsewing');
 // Route::get('/template/auditnonsewing', [TemplateController::class, 'auditnonsewing'])->name('template.auditnonsewing');
 
@@ -147,6 +157,10 @@ Route::group(['middleware' => 'guest'], function () {
     Route::post('/login/qrauth', [LoginController::class, 'qrauth'])
         ->middleware('throttle:5,1') // 5 percobaan per menit per IP
         ->name('login.qrauth');
+
+    Route::post('/login/face-auth', [LoginController::class, 'faceAuth'])
+        ->middleware('throttle:10,1') // 10 percobaan per menit per IP
+        ->name('login.face-auth');
 });
 
 Route::group(['middleware' => 'auth'], function () {
@@ -1114,6 +1128,18 @@ Route::group(['middleware' => 'auth'], function () {
             Route::delete('/admin/qr-devices/{qrDevice}', [QrDeviceController::class, 'destroy'])->name('qr-devices.destroy');
             Route::patch('/admin/qr-devices/{qrDevice}/rename', [QrDeviceController::class, 'rename'])->name('qr-devices.rename');
             Route::delete('qr-devices/pending/{uuid}', [QrDeviceController::class, 'destroyPendingAttempt'])->name('qr-devices.pending.destroy');
+
+            Route::prefix('admin/face-recognition')->name('face-recognition.')->group(function () {
+                Route::get('/', [FaceRecognitionController::class, 'index'])->name('index');
+                Route::post('/', [FaceRecognitionController::class, 'store'])->name('store');
+                Route::patch('/settings', [FaceRecognitionController::class, 'updateSettings'])->name('settings');
+                Route::post('/identify', [FaceRecognitionController::class, 'identify'])->name('identify');
+                Route::get('/lookup', [FaceRecognitionController::class, 'lookup'])->name('lookup');
+                Route::patch('/{employeeFace}/toggle', [FaceRecognitionController::class, 'toggle'])->name('toggle');
+                Route::patch('/{employeeFace}/toggle-can-login', [FaceRecognitionController::class, 'toggleCanLogin'])->name('can-login');
+                Route::patch('/{employeeFace}/toggle-login', [FaceRecognitionController::class, 'toggleCanLogin'])->name('toggle-login');
+                Route::delete('/{employeeFace}', [FaceRecognitionController::class, 'destroy'])->name('destroy');
+            });
         });
 
     Route::prefix('doorprize')
@@ -1282,6 +1308,9 @@ Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->na
 Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
 Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
+Route::post('/employee-payroll/face-identify', [EmployeePayrollController::class, 'faceIdentify'])
+    ->middleware('throttle:20,1')
+    ->name('employee-payroll.face-identify');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
 Route::get('/employee-payroll/show-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlipAudit'])->name('employee-payroll.view-slip-audit');
 Route::get('/employee-payroll/view/{run_id}/{npk}', [EmployeePayrollController::class, 'viewSlip'])->name('employee-payroll.view-slip-html');
@@ -1344,6 +1373,9 @@ Route::get('/test-reverb', function () {
     return 'Notification Event Sent!';
 })->name('test-reverb');
 
+
+// ============== RECRUITMENT FORM V1 ================
+
 Route::prefix('recruitments')->name('recruitments.')->group(function () {
     Route::get('/', fn() => redirect()->route('recruitments.step', ['step' => 1]))
         ->name('index');
@@ -1355,6 +1387,19 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
         ->where('step', '[1-8]');
     Route::get('/success', fn() => view('recruitments_form.success'))
         ->name('success');
+});
+
+
+// ============== RECRUITMENT FORM V2 ================
+
+Route::prefix('recruitment-ai')->name('recruitment-ai.')->group(function () {
+    Route::get('/', [RecruitmentAiController::class, 'show'])->name('form');
+    Route::post('/upload', [RecruitmentAiController::class, 'upload'])->name('upload');
+    Route::post('/upload/delete', [RecruitmentAiController::class, 'deleteDocument'])->name('upload.delete');
+    Route::post('/extract', [RecruitmentAiController::class, 'extract'])->name('extract');
+    Route::post('/reset-fields', [RecruitmentAiController::class, 'resetFields'])->name('reset-fields');
+    Route::post('/submit', [RecruitmentAiController::class, 'submit'])->name('submit');
+    Route::get('/success', [RecruitmentAiController::class, 'success'])->name('success');
 });
 
 
@@ -1418,6 +1463,7 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::get('/logout', [PengajuanCutiController::class, 'logout'])->name('pengajuan-cuti.logout');
     Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
     Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
+    Route::post('/face-login', [PengajuanCutiController::class, 'faceLogin'])->name('pengajuan-cuti.face-login');
     Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
     Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
     Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
