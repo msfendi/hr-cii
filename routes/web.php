@@ -117,7 +117,7 @@ use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
-use App\Http\Controllers\RecruitmentAi\RecruitmentAiController;
+use App\Http\Controllers\RecruitmentAiController;
 
 /*
 |--------------------------------------------------------------------------
