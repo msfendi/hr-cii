@@ -11,6 +11,7 @@ use Cmixin\BusinessDay;
 use App\Jobs\GeneratePayrollProcess;
 use App\Jobs\GeneratePayrollProcessV2;
 use App\Models\PayrollPeriod;
+use App\Services\FaceRecognitionService;
 
 class EmployeePayrollController extends Controller
 {
@@ -31,7 +32,9 @@ class EmployeePayrollController extends Controller
 
         return view('payroll.employee_payroll', [
             'npk' => $request->npk,
-            'periods' => $periods
+            'periods' => $periods,
+            'faceEnabled' => FaceRecognitionService::isEnabled(),
+            'qrEnabled'   => FaceRecognitionService::isQrEnabled(),
         ]);
     }
 
@@ -96,6 +99,10 @@ class EmployeePayrollController extends Controller
 
     public function qrLogin(Request $request)
     {
+        if (!\App\Services\FaceRecognitionService::isQrEnabled()) {
+            \Alert::error('Akses Ditolak', 'Fitur QR Login sedang dinonaktifkan oleh admin.');
+            return back();
+        }
         $npk = $request->npk;
         $runId = $request->run_id;
 
@@ -118,6 +125,90 @@ class EmployeePayrollController extends Controller
             'npk'      => $npk,
             'password' => $password,
             'run_id'   => $runId,
+        ]);
+    }
+
+    /**
+     * Identifikasi wajah untuk membuka slip payroll.
+     *
+     * Hanya mengembalikan NPK (belum login), password tanggal lahir tetap
+     * diminta pada step berikutnya seperti flow QR Code.
+     */
+    public function faceIdentify(Request $request)
+    {
+        if (!FaceRecognitionService::isEnabled()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Face recognition sedang dinonaktifkan oleh admin.',
+            ], 403);
+        }
+
+        $descriptor = FaceRecognitionService::normalizeDescriptor($request->input('descriptor'));
+
+        if ($descriptor === null) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Data wajah tidak valid. Silakan coba lagi.',
+            ], 422);
+        }
+
+        $result = FaceRecognitionService::match($descriptor);
+
+        if (!FaceRecognitionService::isConfidentMatch($result)) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Wajah tidak dikenali. Pastikan wajah sudah terdaftar di menu Manage Face Recognition.',
+            ], 401);
+        }
+
+        $face = $result['face'];
+
+        $data = DB::table('PKWT')
+            ->where('NPK', $face->npk)
+            ->first();
+
+        if (!$data) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Data karyawan untuk NPK ' . $face->npk . ' tidak ditemukan.',
+            ], 404);
+        }
+
+        if ($data->KETERANGAN === 'MA') {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Anda keluar sebagai Mangkir.',
+            ], 403);
+        }
+
+        $user = \App\Models\User::where('npk', $face->npk)->first();
+
+        if ($user && (int) $user->disabled === 1) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Akun Anda dinonaktifkan. Silakan hubungi admin HRIS.',
+            ], 403);
+        }
+
+        $name = $face->name;
+
+        if (!$name) {
+            try {
+                $name = DB::connection('cii')
+                    ->table('BIODATA')
+                    ->where('NPK', $face->npk)
+                    ->value('NAMA_KARYAWAN');
+            } catch (\Throwable $e) {
+                $name = null;
+            }
+        }
+
+        $face->update(['last_verified_at' => now()]);
+
+        return response()->json([
+            'status' => true,
+            'npk'    => $face->npk,
+            'name'   => $name ?: $face->npk,
         ]);
     }
 

@@ -342,6 +342,29 @@
 
             </div> -->
 
+            <!-- Self Register Face Recognition -->
+            <div class="col-lg-3 col-md-4 col-6">
+
+                <a href="/self-register-face" class="text-decoration-none">
+
+                    <div class="card menu-card shadow">
+
+                        <div class="card-body text-center">
+
+                            <div class="menu-icon-wrapper">
+                                <i class="fas fa-id-badge text-info"></i>
+                            </div>
+
+                            <h5>Self Register Wajah</h5>
+
+                        </div>
+
+                    </div>
+
+                </a>
+
+            </div>
+
             <!-- Tambahkan menu berikutnya di sini -->
             <div class="col-lg-3 col-md-4 col-6">
 

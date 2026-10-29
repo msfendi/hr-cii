@@ -54,6 +54,12 @@
                   </div>
                   {{-- ================= QR LOGIN ================= --}}
                   <div class="tab-pane fade show active" id="qrlogin">
+                     @if(!($qrEnabled ?? true))
+                     <div class="alert alert-warning text-center m-3">
+                        <i class="fas fa-ban mr-1"></i><strong>QR Login dinonaktifkan.</strong><br>
+                        <small>Fitur QR Login sedang dinonaktifkan oleh admin.</small>
+                     </div>
+                     @endif
                      <div id="step1">
                         <div class="form-group">
                            <label>Pilih Periode</label>

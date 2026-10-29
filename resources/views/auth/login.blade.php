@@ -2,6 +2,28 @@
 <html lang="en">
 @include('layout.header')
 <meta name="csrf-token" content="{{ csrf_token() }}">
+<style>
+    #faceVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Kamera pada halaman login dibuat persegi (1:1), bukan persegi panjang */
+    .camera-box-sm {
+        width: 100%;
+        max-width: 360px;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 20px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
 <body class="bg-gradient-primary">
     @include('sweetalert::alert')
 
@@ -109,10 +131,59 @@
                             <div class="text-center">
                                 <h1 class="h4 text-gray-900 mb-4">Sign In with ID Card</h1>
                             </div>
-                            <div class="camera-box-sm">
-                                <video id="video"></video>
-                            </div>
 
+                            @if ($faceEnabled ?? false)
+                            <ul class="nav nav-pills nav-fill mb-3" id="loginMethodTabs">
+                                <li class="nav-item">
+                                    <a class="nav-link active" data-toggle="tab" href="#idcardPane" id="idcardTabLink">
+                                        <i class="fas fa-id-card mr-1"></i> ID Card
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" data-toggle="tab" href="#facePane" id="faceTabLink">
+                                        <i class="fas fa-camera mr-1"></i> Face Recognition
+                                    </a>
+                                </li>
+                            </ul>
+                            @endif
+
+                            <div class="tab-content">
+                                <div class="tab-pane fade show active" id="idcardPane">
+                                    @if($qrEnabled ?? true)
+                                    <div class="camera-box-sm">
+                                        <video id="video"></video>
+                                    </div>
+                                    @if ($faceEnabled ?? false)
+                                    <p class="text-center text-muted small mt-2 mb-0">
+                                        Arahkan QR Code ID Card ke kamera
+                                    </p>
+                                    @endif
+                                    @else
+                                    <div class="alert alert-warning text-center mt-2">
+                                        <i class="fas fa-ban mr-1"></i>
+                                        <strong>QR Login dinonaktifkan.</strong><br>
+                                        <small>Fitur ini sedang dinonaktifkan oleh admin.<br>Silakan gunakan login Email atau Face Recognition.</small>
+                                    </div>
+                                    @endif
+                                </div>
+
+                                @if ($faceEnabled ?? false)
+                                <div class="tab-pane fade" id="facePane">
+                                    <div class="camera-box-sm">
+                                        <video id="faceVideo" autoplay muted playsinline></video>
+                                    </div>
+                                    <div id="faceLoginStatus" class="text-center small text-muted mt-2">
+                                        Kamera akan aktif otomatis saat tab ini dibuka.
+                                    </div>
+                                    <button type="button" id="faceLoginStart" class="btn btn-success btn-block mt-3 d-none">
+                                        <i class="fas fa-camera mr-1"></i> Coba Scan Lagi
+                                    </button>
+                                    <button type="button" id="faceLoginStop" class="btn btn-outline-secondary btn-block mt-2 d-none">
+                                        Berhenti
+                                    </button>
+                                </div>
+                                @endif
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -125,6 +196,10 @@
 </body>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+@if ($faceEnabled ?? false)
+<script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
+<script src="{{ asset('js/face-recognition.js') }}"></script>
+@endif
 
 <script>
 let scanned = false;
@@ -158,7 +233,7 @@ function getDeviceInfo() {
     return { device_uuid: deviceUuid, device_type: deviceType, platform, browser, device_name: deviceName };
 }
 
-codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+function onQrResult(result, err) {
     if (result && !scanned) {
         scanned = true;
         let rawText = result.text.trim();
@@ -214,7 +289,239 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
             });
         }, 1000);
     }
-});
+}
+
+let qrActive = false;
+
+function startQr() {
+    if (qrActive) {
+        return;
+    }
+
+    qrActive = true;
+    scanned = false;
+
+    const controls = codeReader.decodeFromVideoDevice(null, 'video', onQrResult);
+
+    if (controls && typeof controls.catch === 'function') {
+        controls.catch(() => {
+            // diabaikan: biasanya terjadi saat kamera dihentikan / pindah tab
+        });
+    }
+}
+
+function stopQr() {
+    if (!qrActive) {
+        return;
+    }
+
+    qrActive = false;
+
+    try {
+        codeReader.reset();
+    } catch (e) {
+        // abaikan
+    }
+}
+
+@if($qrEnabled ?? true)
+startQr();
+@endif
+
+@if ($faceEnabled ?? false)
+(function () {
+    const faceVideo = document.getElementById('faceVideo');
+    const statusEl   = document.getElementById('faceLoginStatus');
+    const startBtn   = document.getElementById('faceLoginStart');
+    const stopBtn    = document.getElementById('faceLoginStop');
+
+    const modelUrl   = "{{ asset('vendor-face-api/model') }}";
+    const faceAuthUrl = "{{ route('login.face-auth') }}";
+    const csrfToken  = document.querySelector('meta[name="csrf-token"]').content;
+
+    let active = false;
+    let busy = false;
+    let failedAttempts = 0;
+    let timer = null;
+
+    function setStatus(message, type) {
+        statusEl.textContent = message;
+        statusEl.className = 'text-center small mt-2 ' + (type === 'error'
+            ? 'text-danger'
+            : (type === 'success' ? 'text-success' : 'text-muted'));
+    }
+
+    function resetButtons(running) {
+        startBtn.classList.toggle('d-none', running);
+        stopBtn.classList.toggle('d-none', !running);
+    }
+
+    async function loop() {
+        if (!active) {
+            return;
+        }
+
+        if (!busy && faceVideo.readyState >= 2) {
+            busy = true;
+
+            try {
+                const detected = await FaceRecognition.detect(faceVideo);
+
+                if (detected) {
+                    active = false;
+                    setStatus('Wajah terdeteksi, memverifikasi...');
+
+                    const data = await fetch(faceAuthUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({ descriptor: detected.descriptor }),
+                    }).then(res => res.json());
+
+                    if (data.success) {
+                        setStatus('Wajah dikenali. Mengalihkan...', 'success');
+
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Login Berhasil',
+                            text: 'Selamat datang, ' + (data.name || data.npk),
+                            timer: 1200,
+                            showConfirmButton: false,
+                        });
+
+                        setTimeout(() => {
+                            window.location = data.redirect;
+                        }, 1200);
+
+                        return;
+                    }
+
+                    failedAttempts++;
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Verifikasi Gagal',
+                        text: data.message || 'Wajah tidak dikenali.',
+                    });
+
+                    if (failedAttempts >= 3) {
+                        resetButtons(false);
+                        FaceRecognition.stopCamera(faceVideo);
+                        setStatus('Terlalu banyak percobaan. Klik "Mulai Scan Wajah" untuk mencoba lagi.', 'error');
+                        busy = false;
+                        return;
+                    }
+
+                    setStatus('Wajah belum cocok. Posisikan wajah dengan jelas...', 'error');
+                    active = true;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                } else {
+                    setStatus('Wajah belum terdeteksi. Hadapkan wajah ke kamera.', 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                setStatus('Gagal memproses wajah: ' + error.message, 'error');
+            }
+
+            busy = false;
+        }
+
+        if (active) {
+            timer = setTimeout(loop, 700);
+        }
+    }
+
+    async function startFace() {
+        if (active) {
+            return;
+        }
+
+        failedAttempts = 0;
+        setStatus('Memuat model face recognition...');
+        startBtn.disabled = true;
+
+        try {
+            await FaceRecognition.loadModels(modelUrl);
+        } catch (error) {
+            console.error(error);
+            startBtn.disabled = false;
+            setStatus('Gagal memuat model face recognition. Periksa folder public/vendor-face-api.', 'error');
+            return;
+        }
+
+        try {
+            await FaceRecognition.startCamera(faceVideo);
+        } catch (error) {
+            console.error(error);
+            startBtn.disabled = false;
+            setStatus('Tidak dapat mengakses kamera: ' + error.message, 'error');
+            return;
+        }
+
+        startBtn.disabled = false;
+        active = true;
+        busy = false;
+        resetButtons(true);
+        setStatus('Posisikan wajah di dalam kamera...');
+        loop();
+    }
+
+    function stopFace() {
+        active = false;
+        busy = false;
+
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+
+        FaceRecognition.stopCamera(faceVideo);
+        resetButtons(false);
+        setStatus('Scan wajah dihentikan.', 'error');
+    }
+
+    startBtn.addEventListener('click', startFace);
+    stopBtn.addEventListener('click', stopFace);
+
+    // Hentikan kamera saat halaman ditinggalkan.
+    window.addEventListener('beforeunload', function () {
+        active = false;
+        FaceRecognition.stopCamera(faceVideo);
+    });
+
+    // Saat pindah tab: ID Card <-> Face Recognition.
+    // Camera face recognition OTOMATIS menyala (tanpa klik tombol).
+    function autoStartFace() {
+        if (active) {
+            return;
+        }
+
+        startFace();
+    }
+
+    if (window.jQuery) {
+        jQuery('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+            const target = jQuery(e.target).attr('href');
+
+            if (target === '#facePane') {
+                stopQr();
+                autoStartFace();
+            } else if (target === '#idcardPane') {
+                stopFace();
+                startQr();
+            }
+        });
+    }
+
+    // Jika tab Face Recognition sedang aktif saat halaman dimuat, langsung jalankan.
+    if (document.getElementById('facePane').classList.contains('active')) {
+        autoStartFace();
+    }
+})();
+@endif
 </script>
 <script>
 function refreshCaptcha() {

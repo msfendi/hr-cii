@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\QrAuthorizedDevice;
 use App\Models\QrScanLog;
 use App\Models\User;
+use App\Services\FaceRecognitionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -14,7 +15,10 @@ class LoginController extends Controller
 {
     public function login()
     {
-        return view('auth.login');
+        return view('auth.login', [
+            'faceEnabled' => FaceRecognitionService::isEnabled(),
+            'qrEnabled'   => FaceRecognitionService::isQrEnabled(),
+        ]);
     }
 
     public function captchaImage(Request $request)
@@ -128,6 +132,13 @@ class LoginController extends Controller
 
     public function qrauth(Request $request)
     {
+        if (!FaceRecognitionService::isQrEnabled()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Fitur QR Login sedang dinonaktifkan oleh admin.',
+            ], 403);
+        }
+
         $request->validate([
             'qrcode'      => ['required', 'string'],
             'device_uuid' => ['required', 'string', 'max:64'],
@@ -212,6 +223,79 @@ class LoginController extends Controller
         return response()->json([
             'success' => true,
             'redirect' => url('/home')
+        ]);
+    }
+
+    /**
+     * Login menggunakan Face Recognition.
+     *
+     * NPK hasil pengenalan wajah dicocokkan dengan kolom npk di tabel users.
+     */
+    public function faceAuth(Request $request)
+    {
+        if (!FaceRecognitionService::isEnabled()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Face recognition sedang dinonaktifkan oleh admin.',
+            ], 403);
+        }
+
+        $descriptor = FaceRecognitionService::normalizeDescriptor($request->input('descriptor'));
+
+        if ($descriptor === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data wajah tidak valid. Silakan coba lagi.',
+            ], 422);
+        }
+
+        $result = FaceRecognitionService::match($descriptor);
+
+        if (!FaceRecognitionService::isConfidentMatch($result)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Wajah tidak dikenali. Pastikan wajah sudah terdaftar di menu Manage Face Recognition.',
+            ], 401);
+        }
+
+        $face = $result['face'];
+
+        if (!(bool) ($face->can_login ?? false)) {
+            // Wajah terdaftar tapi TIDAK diberi hak login sistem.
+            return response()->json([
+                'success' => false,
+                'message' => 'Wajah Anda terdaftar namun belum diizinkan untuk login sistem. Hubungi admin HRIS.',
+            ], 403);
+        }
+
+        $user = User::where('npk', $face->npk)->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Wajah dikenali sebagai ' . $face->npk . ', tetapi NPK tersebut belum terdaftar sebagai user HRIS.',
+            ], 403);
+        }
+
+        if ((int) $user->disabled === 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun Anda dinonaktifkan. Silakan hubungi admin HRIS.',
+            ], 403);
+        }
+
+        $face->update(['last_verified_at' => now()]);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        Alert::success('Login Successfully!', 'Welcome To Chutex HRIS');
+
+        return response()->json([
+            'success'  => true,
+            'npk'      => $user->npk,
+            'name'     => $user->name,
+            'redirect' => url('/welcome'),
         ]);
     }
 }

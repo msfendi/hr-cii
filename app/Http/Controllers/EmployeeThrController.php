@@ -22,8 +22,9 @@ class EmployeeThrController extends Controller
             ->get();
 
         return view('thr.employee_thr', [
-            'npk' => $request->npk,
-            'periods' => $periods
+            'npk'        => $request->npk,
+            'periods'    => $periods,
+            'qrEnabled'  => FaceRecognitionService::isQrEnabled(),
         ]);
     }
 
@@ -75,6 +76,10 @@ class EmployeeThrController extends Controller
 
     public function qrLogin(Request $request)
     {
+        if (!\App\Services\FaceRecognitionService::isQrEnabled()) {
+            \Alert::error('Akses Ditolak', 'Fitur QR Login sedang dinonaktifkan oleh admin.');
+            return back();
+        }
 
         $npk = $request->npk;
         $run_id = $request->run_id;
