@@ -27,7 +27,13 @@ class FaceRecognitionController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('face_recognition.index', compact('settings', 'faces', 'users'));
+        // Daftar NPK yang punya akun di tabel users (key = NPK uppercase).
+        // Dipakai blade untuk badge "User aktif" / "Tanpa akun user".
+        $userNpks = $users->pluck('npk')
+            ->map(fn($n) => strtoupper(trim((string) $n)))
+            ->flip();
+
+        return view('face_recognition.index', compact('settings', 'faces', 'users', 'userNpks'));
     }
 
     /**

@@ -266,7 +266,7 @@
                             </td>
                             <td>
                               <strong>{{ $face->npk }}</strong>
-                              @if($face->user)
+                              @if(isset($userNpks[strtoupper(trim((string) $face->npk))]))
                               <br><span class="badge badge-light border">User aktif</span>
                               @else
                               <br><span class="badge badge-light border">Tanpa akun user</span>
