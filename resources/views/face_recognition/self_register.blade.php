@@ -2,11 +2,16 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Pendaftaran Biometrik Wajah Mandiri - PT Chutex International Indonesia</title>
-    
-    @include('layout.header')
+
+    <!-- Custom fonts & styles -->
+    <link rel="icon" type="image/x-icon" href="{{ asset('/storage/images/signature_icon.ico') }}">
+    <link href="{{ asset('vendor/fontawesome-free/css/all.min.css') }}" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
+    <link href="{{ asset('css/sb-admin-2.min.css') }}" rel="stylesheet">
 
     <style>
         body {
@@ -147,6 +152,18 @@
             <span></span>
         </div>
 
+        @if(isset($isFaceEnabled) && !$isFaceEnabled)
+            <div class="text-center py-4">
+                <div class="badge-icon bg-light text-danger mb-3" style="width: 60px; height: 60px; font-size: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-user-slash"></i>
+                </div>
+                <h5 class="font-weight-bold text-gray-800">Fitur Pendaftaran Dinonaktifkan</h5>
+                <p class="text-muted small mb-4">Pendaftaran biometrik wajah mandiri saat ini sedang dinonaktifkan oleh Administrator HRIS.</p>
+                <a href="{{ url('/') }}" class="btn btn-primary rounded-pill px-4 font-weight-bold shadow-sm">
+                    <i class="fas fa-home mr-1"></i> Kembali ke Beranda
+                </a>
+            </div>
+        @else
         <div id="srWizard">
 
             <!-- ================= STEP 1 : VERIFIKASI IDENTITAS ================= -->
@@ -274,11 +291,17 @@
             </div>
 
         </div>
+        @endif
     </div>
 </div>
 
 <!-- SCRIPTS -->
-<script src="{{ asset('vendor-face-api/face-api.min.js') }}"></script>
+<script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
+<script>
+    if (typeof faceapi === 'undefined') {
+        document.write('<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"><\/script>');
+    }
+</script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
@@ -310,6 +333,16 @@
 
     async function loadModels() {
         if (modelsLoaded) return;
+
+        if (typeof faceapi === 'undefined') {
+            console.error('Library faceapi belum siap.');
+            Swal.fire({
+                icon: 'error',
+                title: 'Library Belum Siap',
+                text: 'Library face-api.js belum berhasil dimuat. Harap periksa koneksi internet atau refresh halaman.'
+            });
+            throw new Error('faceapi is undefined');
+        }
 
         const loadFrom = async (url) => {
             if (faceapi.nets.tinyFaceDetector && !faceapi.nets.tinyFaceDetector.isLoaded) {

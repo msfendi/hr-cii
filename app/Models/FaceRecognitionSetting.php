@@ -30,26 +30,41 @@ class FaceRecognitionSetting extends Model
      */
     public static function current(): self
     {
-        $setting = static::query()->first();
+        try {
+            $setting = static::query()->first();
 
-        if (!$setting) {
-            $setting = new static();
-            $setting->is_enabled = true;
-            $setting->match_threshold = 0.500;
-            try {
-                if (Schema::hasColumn('face_recognition_settings', 'is_qr_login_enabled')) {
-                    $setting->is_qr_login_enabled   = true;
-                    $setting->is_qr_payroll_enabled = true;
-                    $setting->is_qr_thr_enabled     = true;
-                    $setting->is_qr_cuti_enabled    = true;
+            if (!$setting) {
+                $setting = new static();
+                $setting->is_enabled = true;
+                $setting->match_threshold = 0.500;
+                try {
+                    if (Schema::hasColumn('face_recognition_settings', 'is_qr_login_enabled')) {
+                        $setting->is_qr_login_enabled   = true;
+                        $setting->is_qr_payroll_enabled = true;
+                        $setting->is_qr_thr_enabled     = true;
+                        $setting->is_qr_cuti_enabled    = true;
+                    }
+                } catch (\Throwable $e) {
+                    // Skip jika kolom belum termigrasi
                 }
-            } catch (\Throwable $e) {
-                // Skip jika kolom belum termigrasi
+                try {
+                    $setting->save();
+                } catch (\Throwable $e) {
+                    // Abaikan jika tidak bisa disimpan (misal read-only DB)
+                }
             }
-            $setting->save();
-        }
 
-        return $setting;
+            return $setting;
+        } catch (\Throwable $e) {
+            $fallback = new static();
+            $fallback->is_enabled = true;
+            $fallback->match_threshold = 0.500;
+            $fallback->is_qr_login_enabled   = true;
+            $fallback->is_qr_payroll_enabled = true;
+            $fallback->is_qr_thr_enabled     = true;
+            $fallback->is_qr_cuti_enabled    = true;
+            return $fallback;
+        }
     }
 
     public function getIsQrLoginEnabledAttribute($value)

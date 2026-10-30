@@ -161,12 +161,6 @@
         <!-- End of Main Content -->
 
         @include('layout.footer')
-    </div>
-    <!-- End of Content Wrapper -->
-</div>
-<!-- End of Page Wrapper -->
-
-@include('layout.footerscript')
 
 <!-- Leaflet & SweetAlert2 JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

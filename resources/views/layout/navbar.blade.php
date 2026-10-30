@@ -1,9 +1,3 @@
-@php
-    // Karyawan yang masuk lewat sesi absensi wajah (tanpa akun di tabel users)
-    $faceMode    = !auth()->check() && session('face_recognition_auth');
-    $displayName = $faceMode ? session('face_name') : (auth()->user()->name ?? '-');
-    $logoutUrl   = $faceMode ? route('face.attendance.logout') : route('logout');
-@endphp
 <!-- Topbar -->
 <style>
     .ai-assistant-btn {
@@ -130,7 +124,6 @@
             </div>
         </li>
 
-        @unless ($faceMode)
         <li class="nav-item dropdown no-arrow mx-1">
             <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
             data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -161,15 +154,13 @@
             </div>
         </li>
 
-        @endunless
-
         <div class="topbar-divider d-none d-sm-block"></div>
 
         <!-- Nav Item - User Information -->
         <li class="nav-item dropdown no-arrow">
             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ $displayName }}</span>
+                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ auth()->user()->name }}</span>
                 <img class="img-profile rounded-circle"
                     src="{{asset('img/undraw_profile.svg')}}">
             </a>
@@ -180,7 +171,7 @@
                     <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
                     Profile
                 </a> -->
-                <a class="dropdown-item" href="{{ $logoutUrl }}">
+                <a class="dropdown-item" href="{{ route('logout') }}">
                     <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
                     Logout
                 </a>
@@ -191,3 +182,83 @@
 
 </nav>
 <!-- End of Topbar -->
+
+{{-- Fail-safe handler untuk Sidebar Toggle dan Profile/Alerts Dropdown --}}
+<script>
+(function() {
+    function initNavbarHandlers() {
+        // 1. Sidebar Toggle (Desktop & Mobile)
+        const toggleButtons = document.querySelectorAll('#sidebarToggle, #sidebarToggleTop');
+        toggleButtons.forEach(function(btn) {
+            if (btn.__sidebarToggleBound) return;
+            btn.__sidebarToggleBound = true;
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.body.classList.toggle('sidebar-toggled');
+                const sidebar = document.querySelector('.sidebar');
+                if (sidebar) {
+                    sidebar.classList.toggle('toggled');
+                    if (sidebar.classList.contains('toggled')) {
+                        const collapses = sidebar.querySelectorAll('.collapse');
+                        collapses.forEach(c => c.classList.remove('show'));
+                    }
+                }
+            });
+        });
+
+        // 2. User Profile Dropdown Toggle
+        const userDropdown = document.getElementById('userDropdown');
+        if (userDropdown && !userDropdown.__dropdownBound) {
+            userDropdown.__dropdownBound = true;
+            userDropdown.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const parent = this.closest('.dropdown');
+                const menu = parent ? parent.querySelector('.dropdown-menu') : null;
+                if (menu) {
+                    const isOpen = menu.classList.contains('show');
+                    document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+                    if (!isOpen) {
+                        menu.classList.add('show');
+                    }
+                }
+            });
+        }
+
+        // 3. Alerts / Notification Dropdown Toggle
+        const alertsDropdown = document.getElementById('alertsDropdown');
+        if (alertsDropdown && !alertsDropdown.__dropdownBound) {
+            alertsDropdown.__dropdownBound = true;
+            alertsDropdown.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const parent = this.closest('.dropdown');
+                const menu = parent ? parent.querySelector('.dropdown-menu') : null;
+                if (menu) {
+                    const isOpen = menu.classList.contains('show');
+                    document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+                    if (!isOpen) {
+                        menu.classList.add('show');
+                    }
+                }
+            });
+        }
+
+        // Close dropdowns on outside click
+        if (!document.__dropdownOutsideBound) {
+            document.__dropdownOutsideBound = true;
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.dropdown')) {
+                    document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+                }
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initNavbarHandlers);
+    } else {
+        initNavbarHandlers();
+    }
+})();
+</script>

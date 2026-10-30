@@ -272,10 +272,6 @@
         </div>
 
         @include('layout.footer')
-    </div>
-</div>
-
-@include('layout.footerscript')
 
 <!-- face-api.js -->
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>

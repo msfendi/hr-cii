@@ -75,6 +75,7 @@
    </li> -->
 
    {{-- MENU DINAMIS DARI DATABASE --}}
+   {{-- MENU DINAMIS DARI DATABASE --}}
 @foreach ($sidebarMenus as $menu)
 
     {{-- Hide jika parent kosong (tidak punya route dan tidak punya child) --}}
@@ -84,8 +85,18 @@
 
     @if ($menu->children->isEmpty())
         {{-- Parent tanpa child tetapi punya route --}}
+        @php
+            $parentUrl = '#';
+            if ($menu->route_name) {
+                if (\Illuminate\Support\Facades\Route::has($menu->route_name)) {
+                    $parentUrl = route($menu->route_name);
+                } elseif (str_starts_with($menu->route_name, '/')) {
+                    $parentUrl = url($menu->route_name);
+                }
+            }
+        @endphp
         <li class="nav-item" data-menu-item data-menu-name="{{ strtolower($menu->name) }}">
-            <a class="nav-link" href="{{ route($menu->route_name) }}">
+            <a class="nav-link" href="{{ $parentUrl }}">
                 <i class="{{ $menu->icon ?? 'fas fa-circle' }}"></i>
                 <span>{{ $menu->name }}</span>
             </a>
@@ -109,10 +120,20 @@
 
                 <div class="collapse-inner bg-white rounded">
                     @foreach ($menu->children as $child)
+                        @php
+                            $childUrl = '#';
+                            if ($child->route_name) {
+                                if (\Illuminate\Support\Facades\Route::has($child->route_name)) {
+                                    $childUrl = route($child->route_name);
+                                } elseif (str_starts_with($child->route_name, '/')) {
+                                    $childUrl = url($child->route_name);
+                                }
+                            }
+                        @endphp
                         <a class="collapse-item"
                            data-menu-child
                            data-menu-name="{{ strtolower($child->name) }}"
-                           href="{{ $child->route_name ? route($child->route_name) : '#' }}">
+                           href="{{ $childUrl }}">
                             {{ $child->name }}
                         </a>
                     @endforeach

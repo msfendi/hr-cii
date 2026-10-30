@@ -29,7 +29,6 @@ use App\Http\Controllers\AttendanceExpatController;
 use App\Http\Controllers\AuditRecapController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\BiodataKeluarController;
-use App\Http\Controllers\BiodataManageController;
 use App\Http\Controllers\BpjsExceptionController;
 use App\Http\Controllers\BreakMasterController;
 use App\Http\Controllers\ChuFamilyController;
@@ -120,6 +119,20 @@ use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
 
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register web routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "web" middleware group. Make something great!
+|
+*/
+
+// Route::get('/', function () {
+//     return view('welcome');
+// });
 
 Route::get('/', [HomeController::class, 'index'])->name('/');
 Route::get('/welcome', [HomeController::class, 'welcome'])->name('welcome');
@@ -179,11 +192,6 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
     Route::get('/biodata/generate-pdf/{npk}', [BiodataController::class, 'generatePdf'])->name('biodata.generate-pdf')->middleware(['auth', 'permission']);
     Route::get('/biodata/export-all-docs/{npk}', [BiodataController::class, 'exportAllDocs'])->name('biodata.export-all-docs')->middleware(['auth', 'permission']);
-    // BIODATA MANAGE (Halaman Terpadu Show, Update, dan Exit)
-    Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
-    Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
-    Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
-    Route::get('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
 
 
 
@@ -1476,4 +1484,12 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
     Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
     Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
+});
+
+// Alias nama rute format hyphen (face-attendance.*) untuk kecocokan menu database
+Route::name('face-attendance.')->group(function () {
+    Route::get('/face-attendance/portal', [FaceAttendanceController::class, 'index'])->name('index');
+    Route::get('/face-attendance/sign-in', [FaceAttendanceController::class, 'login'])->name('login');
+    Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
+    Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
 });

@@ -297,12 +297,16 @@ class FaceRecognitionController extends Controller
      */
     public function selfRegisterPage()
     {
-        if (!FaceRecognitionService::isEnabled()) {
-            Alert::error('Nonaktif', 'Fitur face recognition sedang dinonaktifkan oleh admin.');
-            return redirect('/');
+        $isEnabled = true;
+        try {
+            $isEnabled = FaceRecognitionService::isEnabled();
+        } catch (\Throwable $e) {
+            $isEnabled = true;
         }
 
-        return view('face_recognition.self_register');
+        return view('face_recognition.self_register', [
+            'isFaceEnabled' => $isEnabled,
+        ]);
     }
 
     /**

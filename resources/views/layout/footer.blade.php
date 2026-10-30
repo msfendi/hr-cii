@@ -274,15 +274,12 @@
     };
 
     // Initialize
-    // Notifikasi kontrak hanya untuk user HRIS (lonceng tidak ditampilkan pada sesi absensi wajah)
     document.addEventListener('DOMContentLoaded', () => {
-        if (document.getElementById('quickNotificationPanel')) {
-            NotificationManager.init();
-        }
+        NotificationManager.init();
     });
 
     // Request browser notification permission
-    if (document.getElementById('quickNotificationPanel') && 'Notification' in window && Notification.permission === 'default') {
+    if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
 </script>

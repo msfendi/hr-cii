@@ -26,23 +26,42 @@ class FaceRecognitionService
 
     public static function settings(): FaceRecognitionSetting
     {
-        return FaceRecognitionSetting::current();
+        try {
+            return FaceRecognitionSetting::current();
+        } catch (\Throwable $e) {
+            $fallback = new FaceRecognitionSetting();
+            $fallback->is_enabled = true;
+            $fallback->match_threshold = 0.500;
+            $fallback->is_qr_login_enabled   = true;
+            $fallback->is_qr_payroll_enabled = true;
+            $fallback->is_qr_thr_enabled     = true;
+            $fallback->is_qr_cuti_enabled    = true;
+            return $fallback;
+        }
     }
 
     public static function isEnabled(): bool
     {
-        return (bool) static::settings()->is_enabled;
+        try {
+            return (bool) static::settings()->is_enabled;
+        } catch (\Throwable $e) {
+            return true;
+        }
     }
 
     public static function threshold(): float
     {
-        $value = static::settings()->match_threshold;
+        try {
+            $value = static::settings()->match_threshold;
 
-        if (!is_numeric($value) || $value <= 0) {
+            if (!is_numeric($value) || $value <= 0) {
+                return static::DEFAULT_THRESHOLD;
+            }
+
+            return (float) $value;
+        } catch (\Throwable $e) {
             return static::DEFAULT_THRESHOLD;
         }
-
-        return (float) $value;
     }
 
     public static function isQrLoginEnabled(): bool
