@@ -32,8 +32,13 @@
         ? $roleusers[0]->rolename
         : 'User';
 
-    $currentRole = Role::where('name', $role)->first();
-    $sidebarMenus = $currentRole ? Menu::buildSidebarFor($currentRole) : collect();
+    try {
+        $currentRole = Role::where('name', $role)->first();
+        $sidebarMenus = $currentRole ? Menu::buildSidebarFor($currentRole) : collect();
+    } catch (\Throwable $e) {
+        $currentRole = null;
+        $sidebarMenus = collect();
+    }
 @endphp
 
 <!-- <script>

@@ -157,10 +157,20 @@
         <div class="topbar-divider d-none d-sm-block"></div>
 
         <!-- Nav Item - User Information -->
+        @php
+            $currentUserName = 'Tamu';
+            if (auth()->check() && auth()->user()) {
+                $currentUserName = auth()->user()->name;
+            } elseif (session()->has('face_attendance_name') && session('face_attendance_name')) {
+                $currentUserName = session('face_attendance_name');
+            } elseif (session()->has('face_attendance_npk') && session('face_attendance_npk')) {
+                $currentUserName = 'Karyawan (' . session('face_attendance_npk') . ')';
+            }
+        @endphp
         <li class="nav-item dropdown no-arrow">
             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ auth()->user()->name }}</span>
+                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ $currentUserName }}</span>
                 <img class="img-profile rounded-circle"
                     src="{{asset('img/undraw_profile.svg')}}">
             </a>
@@ -171,10 +181,25 @@
                     <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
                     Profile
                 </a> -->
-                <a class="dropdown-item" href="{{ route('logout') }}">
-                    <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
-                    Logout
-                </a>
+                @if(session()->has('face_attendance_npk') && !auth()->check())
+                    <form action="{{ route('face.attendance.logout-session') }}" method="POST" id="faceLogoutForm" style="display:none;">
+                        @csrf
+                    </form>
+                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('faceLogoutForm').submit();">
+                        <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Logout
+                    </a>
+                @elseif(auth()->check())
+                    <a class="dropdown-item" href="{{ route('logout') }}">
+                        <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Logout
+                    </a>
+                @else
+                    <a class="dropdown-item" href="{{ route('login') }}">
+                        <i class="fas fa-sign-in-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Login
+                    </a>
+                @endif
             </div>
         </li>
 
