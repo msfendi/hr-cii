@@ -29,6 +29,7 @@ use App\Http\Controllers\AttendanceExpatController;
 use App\Http\Controllers\AuditRecapController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\BiodataKeluarController;
+use App\Http\Controllers\BiodataManageController;
 use App\Http\Controllers\BpjsExceptionController;
 use App\Http\Controllers\BreakMasterController;
 use App\Http\Controllers\ChuFamilyController;
