@@ -500,7 +500,7 @@
         });
     }
 
-    // ── Auto calc end date ───────────────────────────────────────
+    // ── Auto calc end date (normal bulat) ─────────────────────────
     function recalcEndDate() {
         const tmk = $('#assign_tmk').val();
         const dur = parseInt($('#assign_duration').val());
@@ -511,34 +511,13 @@
         d.setMonth(d.getMonth() + dur);
         d.setDate(d.getDate() - 1);
 
-        const y = d.getFullYear();
-        const m = d.getMonth();
-
-        const options = [
-            new Date(y, m - 1, 20),
-            new Date(y, m, 7),
-            new Date(y, m, 20),
-            new Date(y, m + 1, 7)
-        ];
-
-        let closestDate = options[0];
-        let minDiff = Math.abs(d - closestDate);
-
-        for (let i = 1; i < options.length; i++) {
-            const diff = Math.abs(d - options[i]);
-            if (diff < minDiff) {
-                minDiff = diff;
-                closestDate = options[i];
-            }
-        }
-
-        const dd = String(closestDate.getDate()).padStart(2, '0');
-        const mm = String(closestDate.getMonth() + 1).padStart(2, '0');
-        const yyyy = closestDate.getFullYear();
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
         const iso = `${yyyy}-${mm}-${dd}`;
 
         $('#assign_end_date').val(iso);
-        $('#assign_end_date_display').val(closestDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }));
+        $('#assign_end_date_display').val(d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }));
     }
 
     $(document).ready(function () {

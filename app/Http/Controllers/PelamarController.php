@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pelamar;
+use App\Models\PKWT;
 use App\Models\SalaryApprove;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,7 +11,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Imports\PelamarImport;
 use App\Exports\PelamarTemplateExport;
-use App\Models\PKWT;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 use Illuminate\Support\Facades\Storage;
@@ -429,60 +429,18 @@ class PelamarController extends Controller
 
     private function calculateEndDateAndDayDuration($request, $startDate, $duration)
     {
-        $regularEndDate = $startDate->copy()->addMonths($duration)->subDay();
+        // Tanggal akhir dihitung normal bulat: startDate + duration bulan - 1 hari
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)
+            : $startDate->copy()->addMonths((int) $duration)->subDay();
 
-        $options = [
-            $regularEndDate->copy()->startOfMonth()->subMonth()->day(20),
-            $regularEndDate->copy()->startOfMonth()->day(7),
-            $regularEndDate->copy()->startOfMonth()->day(20),
-            $regularEndDate->copy()->startOfMonth()->addMonth()->day(7),
-        ];
+        // Durasi dihitung normal bulat (bulan penuh) tanpa pecahan hari / skip weekend
+        $actualMonthDuration = $request->end_date
+            ? (int) round($startDate->floatDiffInMonths($endDate->copy()->addDay()))
+            : (int) $duration;
 
-        $closestDate = $options[0];
-        $minDiff = abs($regularEndDate->diffInDays($closestDate, false));
-
-        foreach ($options as $opt) {
-            $diff = abs($regularEndDate->diffInDays($opt, false));
-            if ($diff < $minDiff) {
-                $minDiff = $diff;
-                $closestDate = $opt;
-            }
-        }
-
-        $endDate = $request->end_date ? Carbon::parse($request->end_date) : $closestDate;
-
-        // Hitung durasi bulan penuh aktual (floor) dari startDate ke endDate
-        // Misal: startDate=25/09, endDate=20/12 → 2 bulan (25/09→25/11)
-        $actualMonthDuration = (int) $startDate->copy()->diffInMonths($endDate);
-
-        // Batas akhir bulan penuh terakhir
-        $fullMonthEnd = $startDate->copy()->addMonths($actualMonthDuration);
-
-        // Hitung sisa hari kerja (Senin–Jumat) setelah bulan penuh tersebut hingga endDate
-        // Misal: startDate=25/09, endDate=20/12 → dayDuration = hari kerja 26/11 s.d. 20/12
-        $dayDuration = $fullMonthEnd->lt($endDate)
-            ? $this->countWorkingDays($fullMonthEnd->copy()->addDay(), $endDate)
-            : 0;
+        $dayDuration = 0;
 
         return [$endDate, $dayDuration, $actualMonthDuration];
-    }
-
-    /**
-     * Hitung jumlah hari kerja (Senin–Jumat) antara dua tanggal (inklusif kedua ujung).
-     */
-    private function countWorkingDays(Carbon $start, Carbon $end): int
-    {
-        $count   = 0;
-        $current = $start->copy()->startOfDay();
-        $endDay  = $end->copy()->startOfDay();
-
-        while ($current->lte($endDay)) {
-            if ($current->isWeekday()) {
-                $count++;
-            }
-            $current->addDay();
-        }
-
-        return $count;
     }
 }

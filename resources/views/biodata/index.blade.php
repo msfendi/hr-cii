@@ -1262,9 +1262,10 @@
                 {
                     data: null,
                     render: function (data, type, row) {
+                        // <a class="btn btn-primary btn-sm btn-show" data-npk="${row.NPK}">Show</a>
+                        // <a class="btn btn-warning btn-sm btn-edit" data-npk="${row.NPK}">Update Karyawan</a>
                         return `
-                            <a class="btn btn-primary btn-sm btn-show" data-npk="${row.NPK}">Show</a>
-                            <a class="btn btn-warning btn-sm btn-edit" data-npk="${row.NPK}">Update Karyawan</a>
+                            <a class="btn btn-primary btn-sm" href="/biodata/manage/${row.NPK}">Manage</a>
                             <a class="btn btn-info btn-sm btn-kontrak" data-npk="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}"><i class="fas fa-file-contract mr-1"></i>Kontrak</a>
                             <div class="dropdown d-inline-block">
                                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle doc-fold-btn"
@@ -1276,8 +1277,8 @@
                                     <span class="dropdown-item text-muted small">Loading...</span>
                                 </div>
                             </div>
-                            <a class="btn btn-danger btn-sm btn-exit" data-id="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}">Exit</a>
-                        `;
+                            `;
+                            // <a class="btn btn-danger btn-sm btn-exit" data-id="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}">Exit</a>
                     }
                 }
             ],

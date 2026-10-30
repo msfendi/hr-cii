@@ -5,8 +5,8 @@ use App\Events\TestEvent;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
-use App\Http\Controllers\FaceAttendanceController;
 use App\Http\Controllers\BiodataController;
+use App\Http\Controllers\FaceAttendanceController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\PelamarController;
@@ -118,7 +118,6 @@ use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
-use App\Http\Controllers\RecruitmentAi\RecruitmentAiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -138,7 +137,7 @@ use App\Http\Controllers\RecruitmentAi\RecruitmentAiController;
 Route::get('/', [HomeController::class, 'index'])->name('/');
 Route::get('/welcome', [HomeController::class, 'welcome'])->name('welcome');
 
-// Self Register Face Recognition (publik, tanpa login)
+// Self Register Face Recognition (publik)
 Route::prefix('self-register-face')->name('self-register-face.')->group(function () {
     Route::get('/', [FaceRecognitionController::class, 'selfRegisterPage'])->name('index');
     Route::post('/verify', [FaceRecognitionController::class, 'selfRegisterVerify'])->name('verify');
@@ -193,6 +192,11 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
     Route::get('/biodata/generate-pdf/{npk}', [BiodataController::class, 'generatePdf'])->name('biodata.generate-pdf')->middleware(['auth', 'permission']);
     Route::get('/biodata/export-all-docs/{npk}', [BiodataController::class, 'exportAllDocs'])->name('biodata.export-all-docs')->middleware(['auth', 'permission']);
+    // BIODATA MANAGE (Halaman Terpadu Show, Update, dan Exit)
+    Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
+    Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
+    Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
+    Route::get('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
 
 
 
@@ -1137,8 +1141,7 @@ Route::group(['middleware' => 'auth'], function () {
                 Route::post('/identify', [FaceRecognitionController::class, 'identify'])->name('identify');
                 Route::get('/lookup', [FaceRecognitionController::class, 'lookup'])->name('lookup');
                 Route::patch('/{employeeFace}/toggle', [FaceRecognitionController::class, 'toggle'])->name('toggle');
-                Route::patch('/{employeeFace}/toggle-can-login', [FaceRecognitionController::class, 'toggleCanLogin'])->name('can-login');
-                Route::patch('/{employeeFace}/toggle-login', [FaceRecognitionController::class, 'toggleCanLogin'])->name('toggle-login');
+                Route::match(['get', 'post', 'patch'], '/can-login/{employeeFace?}', [FaceRecognitionController::class, 'canLogin'])->name('can-login');
                 Route::delete('/{employeeFace}', [FaceRecognitionController::class, 'destroy'])->name('destroy');
             });
         });
@@ -1306,6 +1309,7 @@ Route::group(['middleware' => 'auth'], function () {
 // BATAS ROUTE TANPA AUTH
 
 Route::get('/employee-payroll', [EmployeePayrollController::class, 'index'])->name('employee-payroll.index');
+Route::get('/employee-payroll/login', [EmployeePayrollController::class, 'index'])->name('employee-payroll.login');
 Route::post('/employee-payroll/{npk}/show-slip', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.show-slip');
 Route::post('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrLogin'])->name('employee-payroll.qr-login');
@@ -1385,17 +1389,6 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
         ->where('step', '[1-8]');
     Route::get('/success', fn() => view('recruitments_form.success'))
         ->name('success');
-});
-
-
-Route::prefix('recruitment-ai')->name('recruitment-ai.')->group(function () {
-    Route::get('/', [RecruitmentAiController::class, 'show'])->name('form');
-    Route::post('/upload', [RecruitmentAiController::class, 'upload'])->name('upload');
-    Route::post('/upload/delete', [RecruitmentAiController::class, 'deleteDocument'])->name('upload.delete');
-    Route::post('/extract', [RecruitmentAiController::class, 'extract'])->name('extract');
-    Route::post('/reset-fields', [RecruitmentAiController::class, 'resetFields'])->name('reset-fields');
-    Route::post('/submit', [RecruitmentAiController::class, 'submit'])->name('submit');
-    Route::get('/success', [RecruitmentAiController::class, 'success'])->name('success');
 });
 
 
@@ -1479,27 +1472,21 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::post('/portal-approval/update/{id}', [LeaveApprovalController::class, 'portalUpdateDecision'])->name('pengajuan-cuti.portal-approval.update');
 });
 
-
 // ========================================
-// ABSENSI WAJAH GPS (FITUR BARU - tidak menyentuh coding lama)
+// FACE ATTENDANCE (GPS + FACE RECOGNITION)
 // ========================================
 Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
-    // Login via session face recognition (hanya karyawan yang sudah login face)
     Route::get('/login', [FaceAttendanceController::class, 'login'])->name('login');
-    Route::post('/login', [FaceAttendanceController::class, 'doLogin'])->name('doLogin');
-    Route::get('/logout', [FaceAttendanceController::class, 'logout'])->name('logout');
+    Route::post('/login-auth', [FaceAttendanceController::class, 'faceLoginAuthenticate'])->name('login-auth');
+    Route::get('/', [FaceAttendanceController::class, 'index'])->name('index');
+    Route::post('/store', [FaceAttendanceController::class, 'storeAttendance'])->name('store');
+    Route::get('/rekap', [FaceAttendanceController::class, 'rekap'])->name('rekap');
+    Route::post('/logout-session', [FaceAttendanceController::class, 'logoutSession'])->name('logout-session');
 
-    // Halaman utama absensi (hanya untuk sesi face recognition)
-    Route::get('/', [FaceAttendanceController::class, 'index'])->name('index')->middleware('face.attendance.auth');
-    Route::post('/absensi', [FaceAttendanceController::class, 'store'])->name('store')->middleware('face.attendance.auth');
-
-    // Rekap absensi 1 bulan
-    Route::get('/rekap', [FaceAttendanceController::class, 'recap'])->name('recap')->middleware('face.attendance.auth');
-
-    // HRD: Peta lokasi kerja (Leaflet + draw)
-    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map')->middleware(['auth', 'permission']);
-    Route::post('/location', [FaceAttendanceController::class, 'saveLocation'])->name('location.store')->middleware(['auth', 'permission']);
-    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations')->middleware(['auth', 'permission']);
-    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy')->middleware(['auth', 'permission']);
+    // Manage Geo Map & Lokasi Kerja (HRD/Admin)
+    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map');
+    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store');
+    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
+    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
+    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
 });
-

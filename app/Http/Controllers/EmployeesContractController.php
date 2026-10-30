@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Str;
+use App\Models\User;
 
 class EmployeesContractController extends Controller
 {
@@ -267,6 +268,14 @@ class EmployeesContractController extends Controller
             'allowance'       => 'nullable|numeric|min:0',
         ]);
 
+        if (!$this->canModifyContract((object) ['npk' => $data['npk']])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk menambahkan kontrak karyawan ini.',
+            ], 403);
+        }
+
+        $data['day_duration'] = 0;
         EmployeesContract::create($data);
 
         return response()->json(['success' => true, 'message' => 'Kontrak berhasil disimpan.']);
@@ -278,6 +287,14 @@ class EmployeesContractController extends Controller
     public function stop(string $id)
     {
         $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         $contract->update(['status_contract' => 'DIAKHIRI']);
 
         return response()->json(['success' => true, 'message' => 'Kontrak telah diakhiri.']);
@@ -289,6 +306,14 @@ class EmployeesContractController extends Controller
     public function finish(string $id)
     {
         $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         $contract->update(['status_contract' => 'HABIS']);
 
         return response()->json(['success' => true, 'message' => 'Kontrak telah selesai.']);
@@ -300,6 +325,14 @@ class EmployeesContractController extends Controller
     public function undo(string $id)
     {
         $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         $contract->update(['status_contract' => 'AKTIF']);
 
         return response()->json(['success' => true, 'message' => 'Status kontrak berhasil dikembalikan ke AKTIF.']);
@@ -328,6 +361,13 @@ class EmployeesContractController extends Controller
             ], 404);
         }
 
+        if (!$this->canModifyContract($old)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         if ($old->status_contract !== 'AKTIF') {
             return response()->json([
                 'success' => false,
@@ -342,15 +382,8 @@ class EmployeesContractController extends Controller
             // Tanggal mulai kontrak baru
             $newStart = Carbon::parse($old->end_date)->addDay();
 
-            // Tanggal akhir berdasarkan duration
+            // Tanggal akhir berdasarkan duration (normal bulat tanpa cut-off)
             $newEnd = $newStart->copy()->addMonths((int) $data['month_duration'])->subDay();
-
-            // Cut-off tanggal 7 / 20
-            if ($newEnd->day <= 13) {
-                $newEnd->day(7);
-            } else {
-                $newEnd->day(20);
-            }
 
             // 1. Update status kontrak lama menjadi DIPERPANJANG
             DB::connection('cii')->table('employees_contract')
@@ -418,94 +451,99 @@ class EmployeesContractController extends Controller
      * Kontrak lama → end_date diset ke tanggal split form, status DIPERPANJANG.
      * Kontrak baru → start_date diset dari form, contract_ke tetap sama, status AKTIF.
      */
-    public function split(Request $request, string $id)
-    {
-        $data = $request->validate([
-            'split_date'     => 'required|date_format:Y-m',
-            'month_duration' => 'nullable|numeric',
-            'salary'         => 'nullable|numeric|min:0',
-            'allowance'      => 'nullable|numeric|min:0',
-            'pph21'          => 'nullable|numeric|min:0',
-            'daily_salary'   => 'nullable|numeric|min:0',
-            'day_duration'   => 'nullable|numeric|min:0',
-        ]);
+    // public function split(Request $request, string $id)
+    // {
+    //     $data = $request->validate([
+    //         'split_date'     => 'required|date_format:Y-m',
+    //         'month_duration' => 'nullable|numeric',
+    //         'salary'         => 'nullable|numeric|min:0',
+    //         'allowance'      => 'nullable|numeric|min:0',
+    //         'pph21'          => 'nullable|numeric|min:0',
+    //         'daily_salary'   => 'nullable|numeric|min:0',
+    //         'day_duration'   => 'nullable|numeric|min:0',
+    //     ]);
 
-        $old = EmployeesContract::findOrFail($id);
+    //     $old = EmployeesContract::findOrFail($id);
 
-        if ($old->status_contract !== 'AKTIF') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya kontrak AKTIF yang bisa displit.',
-            ], 422);
-        }
+    //     if (!$this->canModifyContract($old)) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+    //         ], 403);
+    //     }
 
-        DB::connection('cii')->beginTransaction();
+    //     if ($old->status_contract !== 'AKTIF') {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Hanya kontrak AKTIF yang bisa displit.',
+    //         ], 422);
+    //     }
 
-        try {
-            // split_date berupa YYYY-MM, set ke tanggal 7 bulan tersebut, reset waktu agar komparasi akurat
-            $splitMonth = \Carbon\Carbon::createFromFormat('Y-m', $data['split_date'])->day(7)->startOfDay();
+    //     DB::connection('cii')->beginTransaction();
 
-            // Simpan end_date asli untuk dilanjutkan oleh kontrak baru
-            $originalEnd = \Carbon\Carbon::parse($old->end_date)->startOfDay();
+    //     try {
+    //         // split_date berupa YYYY-MM, set ke tanggal 7 bulan tersebut, reset waktu agar komparasi akurat
+    //         $splitMonth = \Carbon\Carbon::createFromFormat('Y-m', $data['split_date'])->day(7)->startOfDay();
 
-            // Hitung ulang durasi untuk adjustment lama
-            $oldStart = \Carbon\Carbon::parse($old->start_date)->startOfDay();
+    //         // Simpan end_date asli untuk dilanjutkan oleh kontrak baru
+    //         $originalEnd = \Carbon\Carbon::parse($old->end_date)->startOfDay();
 
-            // Normalisasi start_date ke awal siklus (tanggal 8) agar penghitungan bulan genap
-            // Contoh: 14 Mei dihitung dari 8 Mei. 5 Mei dihitung dari 8 April.
-            $normalizedStart = $oldStart->day <= 7
-                ? $oldStart->copy()->subMonth()->day(8)
-                : $oldStart->copy()->day(8);
+    //         // Hitung ulang durasi untuk adjustment lama
+    //         $oldStart = \Carbon\Carbon::parse($old->start_date)->startOfDay();
 
-            $oldEnd = $splitMonth->copy();
+    //         // Normalisasi start_date ke awal siklus (tanggal 8) agar penghitungan bulan genap
+    //         // Contoh: 14 Mei dihitung dari 8 Mei. 5 Mei dihitung dari 8 April.
+    //         $normalizedStart = $oldStart->day <= 7
+    //             ? $oldStart->copy()->subMonth()->day(8)
+    //             : $oldStart->copy()->day(8);
 
-            // Tambahkan 1 hari ke end_date saat menghitung bulan agar 8 s/d 7 terhitung pas 1 bulan penuh
-            $oldMonthDuration = $normalizedStart->diffInMonths($oldEnd->copy()->addDay());
-            $oldExactEndForDuration = $normalizedStart->copy()->addMonths($oldMonthDuration)->subDay();
-            $oldDayDuration = $oldExactEndForDuration->diffInDays($oldEnd, false);
+    //         $oldEnd = $splitMonth->copy();
 
-            // Update adjustment lama: end_date di tgl 7, durasi diperbarui
-            $old->update([
-                'end_date'        => $oldEnd->toDateString(),
-                'month_duration'  => (string) $oldMonthDuration,
-                'day_duration'    => (string) $oldDayDuration,
-                'status_contract' => 'ADJUSTMENT'
-            ]);
+    //         // Hitung durasi bulan penuh secara bulat (tanpa pecahan hari)
+    //         $oldMonthDuration = (int) round($oldStart->floatDiffInMonths($oldEnd->copy()->addDay()));
+    //         $oldDayDuration   = 0;
 
-            // Start date adjustment baru: esok harinya dari tgl 7, yaitu tgl 8
-            $newStart = $splitMonth->copy()->addDay();
+    //         // Update adjustment lama: end_date di tgl 7, durasi diperbarui
+    //         $old->update([
+    //             'end_date'        => $oldEnd->toDateString(),
+    //             'month_duration'  => (string) $oldMonthDuration,
+    //             'day_duration'    => '0',
+    //             'status_contract' => 'ADJUSTMENT'
+    //         ]);
 
-            // End date adjustment baru meneruskan sisa dari kontrak lama
-            $newEnd = $originalEnd;
-            // Hitung durasi sisa untuk adjustment baru
-            $newMonthDuration = $newStart->diffInMonths($newEnd->copy()->addDay());
-            $newExactEnd = $newStart->copy()->addMonths($newMonthDuration)->subDay();
-            $newDayDuration = $newExactEnd->diffInDays($newEnd, false);
+    //         // Start date adjustment baru: esok harinya dari tgl 7, yaitu tgl 8
+    //         $newStart = $splitMonth->copy()->addDay();
 
-            // Buat adjustment baru
-            EmployeesContract::create([
-                'npk'             => $old->npk,
-                'contract_ke'     => $old->contract_ke,
-                'start_date'      => $newStart->toDateString(),
-                'end_date'        => $newEnd->toDateString(),
-                'month_duration'  => (string) $newMonthDuration,
-                'day_duration'    => (string) $newDayDuration,
-                'status_contract' => 'AKTIF',
-                'type'            => 'CONTRACT',
-                'salary'          => (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '') ? $data['salary'] : $old->salary,
-                'allowance'       => (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '') ? $data['allowance'] : $old->allowance,
-                'pph21'           => (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '') ? $data['pph21'] : $old->pph21,
-                'daily_salary'    => (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '') ? $data['daily_salary'] : $old->daily_salary,
-            ]);
+    //         // End date adjustment baru meneruskan sisa dari kontrak lama
+    //         $newEnd = $originalEnd;
+    //         // Hitung durasi sisa untuk adjustment baru secara bulat
+    //         $newMonthDuration = (int) round($newStart->floatDiffInMonths($newEnd->copy()->addDay()));
+    //         $newDayDuration   = 0;
 
-            DB::connection('cii')->commit();
+    //         // Buat adjustment baru
+    //         EmployeesContract::create([
+    //             'npk'             => $old->npk,
+    //             'contract_ke'     => $old->contract_ke,
+    //             'start_date'      => $newStart->toDateString(),
+    //             'end_date'        => $newEnd->toDateString(),
+    //             'month_duration'  => (string) $newMonthDuration,
+    //             'day_duration'    => (string) $newDayDuration,
+    //             'status_contract' => 'AKTIF',
+    //             'type'            => 'CONTRACT',
+    //             'salary'          => (isset($data['salary']) && $data['salary'] !== null && $data['salary'] !== '') ? $data['salary'] : $old->salary,
+    //             'allowance'       => (isset($data['allowance']) && $data['allowance'] !== null && $data['allowance'] !== '') ? $data['allowance'] : $old->allowance,
+    //             'pph21'           => (isset($data['pph21']) && $data['pph21'] !== null && $data['pph21'] !== '') ? $data['pph21'] : $old->pph21,
+    //             'daily_salary'    => (isset($data['daily_salary']) && $data['daily_salary'] !== null && $data['daily_salary'] !== '') ? $data['daily_salary'] : $old->daily_salary,
+    //         ]);
 
-            return response()->json(['success' => true, 'message' => 'Kontrak berhasil displit.']);
-        } catch (\Exception $e) {
-            DB::connection('cii')->rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-    }
+    //         DB::connection('cii')->commit();
+
+    //         return response()->json(['success' => true, 'message' => 'Kontrak berhasil displit.']);
+    //     } catch (\Exception $e) {
+    //         DB::connection('cii')->rollBack();
+    //         return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    //     }
+    // }
 
     /**
      * POST — Update gaji / tunjangan / PPH21.
@@ -524,6 +562,13 @@ class EmployeesContractController extends Controller
 
         $contract = EmployeesContract::findOrFail($id);
 
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk memodifikasi kontrak ini.',
+            ], 403);
+        }
+
         // if ($contract->status_contract !== 'AKTIF') {
         //     return response()->json([
         //         'success' => false,
@@ -532,15 +577,14 @@ class EmployeesContractController extends Controller
         // }
 
 
-        // Calculate duration if dates are updated
+        // Calculate duration if dates are updated (dihitung normal bulat)
         if (isset($data['start_date']) || isset($data['end_date'])) {
             $start = \Carbon\Carbon::parse($data['start_date'] ?? $contract->start_date);
             $end   = \Carbon\Carbon::parse($data['end_date']   ?? $contract->end_date);
 
-            $fullMonths           = $start->diffInMonths($end);
-            $afterFullMonths      = $start->copy()->addMonths($fullMonths);
+            $fullMonths             = (int) round($start->floatDiffInMonths($end->copy()->addDay()));
             $data['month_duration'] = $fullMonths;
-            $data['day_duration']   = $afterFullMonths->diffInDays($end); // sisa hari setelah bulan penuh
+            $data['day_duration']   = 0;
         }
 
         // Hanya update field yang dikirim (bukan null)
@@ -554,9 +598,207 @@ class EmployeesContractController extends Controller
      */
     public function destroy(string $id)
     {
-        EmployeesContract::findOrFail($id)->delete();
+        $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk menghapus kontrak ini.',
+            ], 403);
+        }
+
+        if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
+            Storage::disk('public')->delete($contract->file_contract);
+        }
+
+        $contract->delete();
 
         return response()->json(['success' => true, 'message' => 'Kontrak berhasil dihapus.']);
+    }
+
+    /**
+     * POST — Unggah atau perbarui dokumen berkas kontrak karyawan.
+     */
+    public function uploadDocument(Request $request, string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk mengunggah dokumen kontrak ini.',
+            ], 403);
+        }
+
+        $request->validate([
+            'file_contract' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+        ], [
+            'file_contract.required' => 'Berkas kontrak wajib dipilih.',
+            'file_contract.file'     => 'Berkas yang dipilih tidak valid.',
+            'file_contract.mimes'    => 'Format berkas harus PDF, JPG, PNG, DOC, atau DOCX.',
+            'file_contract.max'      => 'Ukuran berkas maksimal 10 MB.',
+        ]);
+
+        try {
+            $file = $request->file('file_contract');
+            $ext = $file->getClientOriginalExtension();
+            $cleanNpk = preg_replace('/[^a-zA-Z0-9_-]/', '_', $contract->npk);
+            $filename = 'contract_' . $cleanNpk . '_ke' . $contract->contract_ke . '_' . time() . '.' . $ext;
+
+            $path = $file->storeAs('contracts', $filename, 'public');
+
+            // Hapus berkas lama jika sebelumnya sudah ada
+            if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
+                Storage::disk('public')->delete($contract->file_contract);
+            }
+
+            $contract->update(['file_contract' => $path]);
+
+            return response()->json([
+                'success'           => true,
+                'message'           => 'Dokumen kontrak berhasil diunggah.',
+                'file_contract'     => $path,
+                'file_contract_url' => asset('storage/' . $path),
+                'file_name'         => basename($path),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengunggah dokumen: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * POST — Hapus berkas dokumen kontrak karyawan.
+     */
+    public function deleteDocument(string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+
+        if (!$this->canModifyContract($contract)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk menghapus dokumen kontrak ini.',
+            ], 403);
+        }
+
+        try {
+            if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
+                Storage::disk('public')->delete($contract->file_contract);
+            }
+
+            $contract->update(['file_contract' => null]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dokumen kontrak berhasil dihapus.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus dokumen: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * GET — Tampilkan berkas dokumen kontrak karyawan secara aman.
+     */
+    public function viewDocument(string $id)
+    {
+        $contract = EmployeesContract::findOrFail($id);
+
+        $user = Auth::user();
+        $roleAdmin = $user ? $user->hasRole('Admin') : false;
+        $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
+        $roleStaff = $user ? $user->hasRole('Payroll_STAFF') : false;
+        $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
+        $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
+        $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
+        $roleHRD = $user ? $user->hasRole('HRD') : false;
+
+        if (!$roleAdmin && !$rolePayrollAll && !$roleHRD) {
+            $biodata = DB::table('BIODATA as b')
+                ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
+                ->select('b.IS_STAFF', 'd.IS_SEWING')
+                ->where('b.NPK', $contract->npk)
+                ->first();
+
+            $hasAccess = false;
+            if ($biodata) {
+                $isStaff  = (int) ($biodata->IS_STAFF ?? 0);
+                $isSewing = (int) ($biodata->IS_SEWING ?? 0);
+                if ($roleStaff && $isStaff === 1) $hasAccess = true;
+                if ($roleNonStaff && $isStaff === 0) $hasAccess = true;
+                if ($roleSewing && $isSewing === 0 && $isStaff === 0) $hasAccess = true;
+                if ($roleNonSewing && $isSewing === 1 && $isStaff === 0) $hasAccess = true;
+            }
+
+            if (!$hasAccess) {
+                abort(403, 'Anda tidak memiliki hak akses untuk melihat dokumen kontrak ini.');
+            }
+        }
+
+        if (empty($contract->file_contract) || !Storage::disk('public')->exists($contract->file_contract)) {
+            abort(404, 'Berkas dokumen kontrak tidak ditemukan.');
+        }
+
+        return Storage::disk('public')->response($contract->file_contract);
+    }
+
+    /**
+     * Memeriksa apakah user memiliki hak akses modifikasi untuk data kontrak ini.
+     * Role yang berhak:
+     * - Admin & Management Payroll: Seluruh data karyawan
+     * - Payroll_STAFF: Karyawan Staff (b.IS_STAFF == 1)
+     * - Payroll_NONSTAFF: Karyawan Non-Staff (b.IS_STAFF == 0)
+     * - Payroll_SEWING: Karyawan Non-Staff Sewing (d.IS_SEWING == 0 && b.IS_STAFF == 0)
+     * - Payroll_NONSEWING: Karyawan Non-Staff Non-Sewing (d.IS_SEWING == 1 && b.IS_STAFF == 0)
+     */
+    private function canModifyContract($contract, ?User $user = null): bool
+    {
+        $user = $user ?: Auth::user();
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole('Admin') || $user->hasRole('Management Payroll')) {
+            return true;
+        }
+
+        $npk = is_object($contract) ? ($contract->npk ?? null) : null;
+        if (!$npk) {
+            return false;
+        }
+
+        $biodata = DB::table('BIODATA as b')
+            ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
+            ->select('b.IS_STAFF', 'd.IS_SEWING')
+            ->where('b.NPK', $npk)
+            ->first();
+
+        if (!$biodata) {
+            return false;
+        }
+
+        $isStaff  = (int) ($biodata->IS_STAFF ?? 0);
+        $isSewing = (int) ($biodata->IS_SEWING ?? 0);
+
+        if ($user->hasRole('Payroll_STAFF') && $isStaff === 1) {
+            return true;
+        }
+        if ($user->hasRole('Payroll_NONSTAFF') && $isStaff === 0) {
+            return true;
+        }
+        if ($user->hasRole('Payroll_SEWING') && $isSewing === 0 && $isStaff === 0) {
+            return true;
+        }
+        if ($user->hasRole('Payroll_NONSEWING') && $isSewing === 1 && $isStaff === 0) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -636,135 +878,4 @@ class EmployeesContractController extends Controller
         );
     }
 
-
-    /**
-     * POST — Unggah atau perbarui dokumen berkas kontrak karyawan.
-     */
-    public function uploadDocument(Request $request, string $id)
-    {
-        $contract = EmployeesContract::findOrFail($id);
-
-        // if (!$this->canModifyContract($contract)) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'Anda tidak memiliki hak akses untuk mengunggah dokumen kontrak ini.',
-        //     ], 403);
-        // }
-
-        $request->validate([
-            'file_contract' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
-        ], [
-            'file_contract.required' => 'Berkas kontrak wajib dipilih.',
-            'file_contract.file'     => 'Berkas yang dipilih tidak valid.',
-            'file_contract.mimes'    => 'Format berkas harus PDF, JPG, PNG, DOC, atau DOCX.',
-            'file_contract.max'      => 'Ukuran berkas maksimal 10 MB.',
-        ]);
-
-        try {
-            $file = $request->file('file_contract');
-            $ext = $file->getClientOriginalExtension();
-            $cleanNpk = preg_replace('/[^a-zA-Z0-9_-]/', '_', $contract->npk);
-            $filename = 'contract_' . $cleanNpk . '_ke' . $contract->contract_ke . '_' . time() . '.' . $ext;
-
-            $path = $file->storeAs('contracts', $filename, 'public');
-
-            // Hapus berkas lama jika sebelumnya sudah ada
-            if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
-                Storage::disk('public')->delete($contract->file_contract);
-            }
-
-            $contract->update(['file_contract' => $path]);
-
-            return response()->json([
-                'success'           => true,
-                'message'           => 'Dokumen kontrak berhasil diunggah.',
-                'file_contract'     => $path,
-                'file_contract_url' => asset('storage/' . $path),
-                'file_name'         => basename($path),
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal mengunggah dokumen: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * POST — Hapus berkas dokumen kontrak karyawan.
-     */
-    public function deleteDocument(string $id)
-    {
-        $contract = EmployeesContract::findOrFail($id);
-
-        // if (!$this->canModifyContract($contract)) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'Anda tidak memiliki hak akses untuk menghapus dokumen kontrak ini.',
-        //     ], 403);
-        // }
-
-        try {
-            if ($contract->file_contract && Storage::disk('public')->exists($contract->file_contract)) {
-                Storage::disk('public')->delete($contract->file_contract);
-            }
-
-            $contract->update(['file_contract' => null]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Dokumen kontrak berhasil dihapus.',
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menghapus dokumen: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * GET — Tampilkan berkas dokumen kontrak karyawan secara aman.
-     */
-    public function viewDocument(string $id)
-    {
-        $contract = EmployeesContract::findOrFail($id);
-
-        $user = Auth::user();
-        $roleAdmin = $user ? $user->hasRole('Admin') : false;
-        $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
-        $roleStaff = $user ? $user->hasRole('Payroll_STAFF') : false;
-        $roleNonStaff = $user ? $user->hasRole('Payroll_NONSTAFF') : false;
-        $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
-        $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
-        $roleHRD = $user ? $user->hasRole('HRD') : false;
-
-        if (!$roleAdmin && !$rolePayrollAll) {
-            $biodata = DB::table('BIODATA as b')
-                ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
-                ->select('b.IS_STAFF', 'd.IS_SEWING')
-                ->where('b.NPK', $contract->npk)
-                ->first();
-
-            $hasAccess = false;
-            if ($biodata) {
-                $isStaff  = (int) ($biodata->IS_STAFF ?? 0);
-                $isSewing = (int) ($biodata->IS_SEWING ?? 0);
-                if ($roleStaff && $isStaff === 1) $hasAccess = true;
-                if ($roleNonStaff && $isStaff === 0) $hasAccess = true;
-                if ($roleSewing && $isSewing === 0 && $isStaff === 0) $hasAccess = true;
-                if ($roleNonSewing && $isSewing === 1 && $isStaff === 0) $hasAccess = true;
-            }
-
-            if (!$hasAccess) {
-                abort(403, 'Anda tidak memiliki hak akses untuk melihat dokumen kontrak ini.');
-            }
-        }
-
-        if (empty($contract->file_contract) || !Storage::disk('public')->exists($contract->file_contract)) {
-            abort(404, 'Berkas dokumen kontrak tidak ditemukan.');
-        }
-
-        return Storage::disk('public')->response($contract->file_contract);
-    }
 }
