@@ -4,6 +4,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | AI boleh dipanggil?
+    |--------------------------------------------------------------------------
+    | Set false untuk mode OCR-only / hemat kuota. Ekstraksi dokumen yang
+    | didukung OCR (KTP, KK, ijazah) tetap jalan; CV/surat lamaran hanya
+    | diisi sebagian dan ditandai perlu dicek.
+    */
+    'ai_enabled' => (bool) env('RECRUITMENT_AI_ENABLED', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Provider AI untuk ekstraksi dokumen (vision)
     |--------------------------------------------------------------------------
     | Daftar provider DIURUTKAN. Ekstraktor mencoba satu per satu sampai
@@ -105,18 +115,28 @@ return [
     | RapidOCR — pre-processing teks dari gambar
     |--------------------------------------------------------------------------
     | Server OCR lokal (RapidOCR) dipakai untuk membaca teks mentah dari
-    | gambar SEBELUM dikirim ke model AI. Teks ini ditambahkan ke prompt
-    | sebagai konteks tambahan sehingga model vision bisa mencocokkan
-    | apa yang terlihat di gambar dengan teks OCR — meningkatkan akurasi
-    | terutama untuk scan yang blur / resolusi rendah.
+    | gambar. Untuk dokumen cetak (KTP/KK/ijazah/SKCK), hasil OCR diurai
+    | parser deterministik — bila cukup, AI TIDAK dipanggil sama sekali.
+    | Teks OCR juga tetap dikirim sebagai konteks tambahan saat mode
+    | "context" (perilaku lama).
     |
-    | Kalau server OCR mati / unreachable, alur tetap jalan tanpanya
-    | (graceful degradation).
+    | Kalau server OCR mati / unreachable, mode "first" jatuh ke AI;
+    | mode "only" berhenti cepat tanpa menunggu model.
     */
     'rapidocr' => [
         'enabled'  => (bool) env('RAPIDOCR_ENABLED', true),
         'base_url' => env('RAPIDOCR_URL', 'http://192.168.0.68:9003'),
+        'json_path' => env('RAPIDOCR_JSON_PATH', '/ocr/json'),
+        'multipart_path' => env('RAPIDOCR_MULTIPART_PATH', '/ocr'),
+        'multipart_field' => env('RAPIDOCR_MULTIPART_FIELD', 'image_file'),
+        'format' => env('RAPIDOCR_FORMAT', 'auto'), // json | multipart | auto
+        'health_path' => env('RAPIDOCR_HEALTH_PATH', '/health'),
         'timeout'  => (int) env('RAPIDOCR_TIMEOUT', 30),
+
+        // context = OCR hanya jadi konteks prompt AI (perilaku lama)
+        // first   = coba OCR + parser, AI hanya bila OCR kurang
+        // only    = jangan panggil AI sama sekali
+        'mode'     => env('RAPIDOCR_MODE', 'first'),
     ],
 
 ];

@@ -519,10 +519,10 @@
 
         row.classList.add('is-busy');
         status.className = 'rf-doc-sub';
-        status.textContent = 'AI sedang membaca…';
+        status.textContent = 'Membaca dokumen…';
 
         const pText = document.getElementById('rf-progress-text');
-        if (pText) pText.textContent = 'AI sedang membaca dokumen…';
+        if (pText) pText.textContent = 'Sedang membaca dokumen…';
 
         return fetch(RF.extractUrl, {
             method: 'POST',
@@ -582,7 +582,7 @@
             const status = row.querySelector('[data-doc-status]');
             if (status) {
                 status.className = 'rf-doc-sub';
-                status.textContent = 'Menunggu AI…';
+                status.textContent = 'Membaca…';
             }
         });
 
@@ -591,7 +591,7 @@
         if (label) label.textContent = `Membaca ${rows.length} dokumen…`;
 
         const pText = document.getElementById('rf-progress-text');
-        if (pText) pText.textContent = 'AI sedang membaca semua dokumen…';
+        if (pText) pText.textContent = 'Sedang membaca semua dokumen…';
 
         return fetch(RF.extractUrl, {
             method: 'POST',

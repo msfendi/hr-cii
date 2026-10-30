@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\RecruitmentAi;
 
 use App\Http\Controllers\Controller;
 use App\Models\RecruitmentPosition;
@@ -60,7 +60,7 @@ class RecruitmentAiController extends Controller
             ->groupBy('dept');
 
         $positionMap = $positions->map(
-            fn($rows) => $rows->pluck('position')->unique()->sort()->values()->all()
+            fn ($rows) => $rows->pluck('position')->unique()->sort()->values()->all()
         );
 
         $sections['pribadi']['fields']['department']['options'] = $positionMap->keys()->all();

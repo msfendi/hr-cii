@@ -1268,11 +1268,11 @@
                             <a class="btn btn-info btn-sm btn-kontrak" data-npk="${row.NPK}" data-nama="${row.NAMA_KARYAWAN}"><i class="fas fa-file-contract mr-1"></i>Kontrak</a>
                             <div class="dropdown d-inline-block">
                                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle doc-fold-btn"
-                                        type="button" data-toggle="dropdown" data-npk="${row.NPK}">
+                                        type="button" data-toggle="dropdown" data-boundary="window" data-npk="${row.NPK}">
                                     <i class="fas fa-folder-open text-warning"></i>
                                     <span class="badge badge-primary doc-count" style="font-size:9px;">…</span>
                                 </button>
-                                <div class="dropdown-menu dropdown-menu-right shadow-sm doc-menu" style="min-width:180px;">
+                                <div class="dropdown-menu dropdown-menu-right shadow-sm doc-menu" style="min-width:210px; max-height:280px; overflow-y:auto;">
                                     <span class="dropdown-item text-muted small">Loading...</span>
                                 </div>
                             </div>
@@ -1323,6 +1323,7 @@
                         }
 
                         $menu.html(html);
+                        if ($btn.dropdown) { $btn.dropdown('update'); }
                     }).fail(function () {
                         var html = '<a class="dropdown-item d-flex align-items-center font-weight-bold text-danger" style="font-size:12.5px; gap:8px;" href="/biodata/generate-pdf/' + npk + '" target="_blank"><i class="fas fa-file-pdf text-danger"></i> Biodata Diri (PDF)</a>';
                         if ({{ !empty($canExportAllDocs) ? 'true' : 'false' }}) {
@@ -1330,6 +1331,7 @@
                             html += '<a class="dropdown-item d-flex align-items-center font-weight-bold" style="font-size:12.5px; gap:8px; color:#28a745;" href="/biodata/export-all-docs/' + npk + '" target="_blank"><i class="fas fa-file-download" style="color:#28a745;"></i> Download Semua Dokumen (PDF)</a>';
                         }
                         $menu.html(html);
+                        if ($btn.dropdown) { $btn.dropdown('update'); }
                     });
                 });
             }

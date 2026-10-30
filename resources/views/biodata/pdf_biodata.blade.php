@@ -509,12 +509,12 @@
                 <p class="company-sub">Formulir Biodata Karyawan / Data bersifat rahasia — Dokumen Resmi Internal HRD
                 </p>
             </td>
-            <td width="190" valign="middle">
+            <td width="210" valign="middle">
                 <div class="meta-box">
                     <div><span class="meta-label">No</span>: CII.FM.HR.01.04</div>
                     <div><span class="meta-label">Active Date</span>: 13 Mei 2025</div>
                     <div><span class="meta-label">Rev</span>: 00</div>
-                    <div><span class="meta-label">Rev Date</span>: 9 Juli 2025</div>
+                    <div><span class="meta-label">Rev Date</span>: 9 Juli 2026</div>
                 </div>
             </td>
         </tr>

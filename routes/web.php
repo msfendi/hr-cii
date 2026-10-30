@@ -5,6 +5,7 @@ use App\Events\TestEvent;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
+use App\Http\Controllers\FaceAttendanceController;
 use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginController;
@@ -117,7 +118,6 @@ use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
-use App\Http\Controllers\RecruitmentAiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -1373,9 +1373,6 @@ Route::get('/test-reverb', function () {
     return 'Notification Event Sent!';
 })->name('test-reverb');
 
-
-// ============== RECRUITMENT FORM V1 ================
-
 Route::prefix('recruitments')->name('recruitments.')->group(function () {
     Route::get('/', fn() => redirect()->route('recruitments.step', ['step' => 1]))
         ->name('index');
@@ -1387,19 +1384,6 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
         ->where('step', '[1-8]');
     Route::get('/success', fn() => view('recruitments_form.success'))
         ->name('success');
-});
-
-
-// ============== RECRUITMENT FORM V2 ================
-
-Route::prefix('recruitment-ai')->name('recruitment-ai.')->group(function () {
-    Route::get('/', [RecruitmentAiController::class, 'show'])->name('form');
-    Route::post('/upload', [RecruitmentAiController::class, 'upload'])->name('upload');
-    Route::post('/upload/delete', [RecruitmentAiController::class, 'deleteDocument'])->name('upload.delete');
-    Route::post('/extract', [RecruitmentAiController::class, 'extract'])->name('extract');
-    Route::post('/reset-fields', [RecruitmentAiController::class, 'resetFields'])->name('reset-fields');
-    Route::post('/submit', [RecruitmentAiController::class, 'submit'])->name('submit');
-    Route::get('/success', [RecruitmentAiController::class, 'success'])->name('success');
 });
 
 
@@ -1482,3 +1466,28 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::post('/portal-approval/reject/{id}', [LeaveApprovalController::class, 'portalReject'])->name('pengajuan-cuti.portal-approval.reject');
     Route::post('/portal-approval/update/{id}', [LeaveApprovalController::class, 'portalUpdateDecision'])->name('pengajuan-cuti.portal-approval.update');
 });
+
+
+// ========================================
+// ABSENSI WAJAH GPS (FITUR BARU - tidak menyentuh coding lama)
+// ========================================
+Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
+    // Login via session face recognition (hanya karyawan yang sudah login face)
+    Route::get('/login', [FaceAttendanceController::class, 'login'])->name('login');
+    Route::post('/login', [FaceAttendanceController::class, 'doLogin'])->name('doLogin');
+    Route::get('/logout', [FaceAttendanceController::class, 'logout'])->name('logout');
+
+    // Halaman utama absensi (hanya untuk sesi face recognition)
+    Route::get('/', [FaceAttendanceController::class, 'index'])->name('index')->middleware('face.attendance.auth');
+    Route::post('/absensi', [FaceAttendanceController::class, 'store'])->name('store')->middleware('face.attendance.auth');
+
+    // Rekap absensi 1 bulan
+    Route::get('/rekap', [FaceAttendanceController::class, 'recap'])->name('recap')->middleware('face.attendance.auth');
+
+    // HRD: Peta lokasi kerja (Leaflet + draw)
+    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map')->middleware(['auth', 'permission']);
+    Route::post('/location', [FaceAttendanceController::class, 'saveLocation'])->name('location.store')->middleware(['auth', 'permission']);
+    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations')->middleware(['auth', 'permission']);
+    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.delete')->middleware(['auth', 'permission']);
+});
+

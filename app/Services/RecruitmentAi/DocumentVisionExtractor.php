@@ -38,9 +38,16 @@ class DocumentVisionExtractor
     /** Klien RapidOCR (pre-processing teks dari gambar) */
     private RapidOcrClient $rapidOcr;
 
-    public function __construct(?RapidOcrClient $rapidOcr = null)
+    /** Penyesuai orientasi gambar dokumen */
+    private DocumentImageOrienter $imageOrienter;
+
+    /** Cache OCR per file (satu request bisa memproses beberapa dokumen). */
+    private array $ocrCache = [];
+
+    public function __construct(?RapidOcrClient $rapidOcr = null, ?DocumentImageOrienter $imageOrienter = null)
     {
-        $this->rapidOcr = $rapidOcr ?? new RapidOcrClient();
+        $this->rapidOcr      = $rapidOcr ?? new RapidOcrClient();
+        $this->imageOrienter = $imageOrienter ?? new DocumentImageOrienter();
     }
 
     /**
@@ -60,6 +67,74 @@ class DocumentVisionExtractor
             return ['fields' => [], 'note' => null];
         }
 
+        $mode       = (string) config('recruitment_ai.rapidocr.mode', 'first');
+        $ocrFields  = [];
+        $ocrNote    = null;
+
+        // 1. Ekstraksi teks lokal (PDF layer pdftotext atau RapidOCR image)
+        $isPdf   = $this->detectMime($absolutePath, $originalName) === 'application/pdf';
+        // Untuk PDF: ambil teks layer (lebih reliable dari OCR).
+        // Untuk gambar: gunakan RapidOCR (lokal, offline, data tidak keluar server).
+        $lines   = $isPdf ? [] : $this->ocrLines($absolutePath, $document);
+        $docText = $isPdf ? $this->extractPdfText($absolutePath) : $this->ocrText($absolutePath, $document);
+
+        /*
+         * OCR-first: dokumen cetak (KTP/KK/ijazah/SKCK/Akta) dibaca secara lokal lalu
+         * diurai parser deterministik. Kalau hasilnya cukup (confidence tinggi), AI TIDAK DIPANGGIL
+         * sama sekali — data KTP/KK tidak pernah keluar server, proses instan (<0.5s),
+         * dan tidak terpengaruh kuota / timeout provider AI.
+         */
+        if (! empty($lines)) {
+            try {
+                $parsed = (new OcrDocumentParser())->parse($document, $lines);
+
+                if (is_array($parsed) && ! empty($parsed['fields'])) {
+                    $ocrFields = $this->normalizeFields($parsed['fields'], $fields);
+                    $ocrNote   = (string) ($parsed['note'] ?? 'OCR lokal');
+
+                    if (in_array($mode, ['first', 'only'], true) && $this->isOcrSufficient($document, $ocrFields)) {
+                        $this->lastError = '';
+
+                        return [
+                            'fields' => $ocrFields,
+                            'note'   => $ocrNote . ' (sukses deterministik)',
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('[RecruitmentAi] Parser OCR gagal: ' . $e->getMessage());
+
+                $ocrFields = [];
+                $ocrNote   = null;
+            }
+        }
+
+        $aiEnabled = (bool) config('recruitment_ai.ai_enabled', true);
+
+        // Mode OCR-only / AI dimatikan: jangan pernah menunggu provider AI.
+        if (! $aiEnabled || $mode === 'only') {
+            if (! empty($ocrFields)) {
+                return [
+                    'fields' => $this->markAsCheckNeeded($ocrFields),
+                    'note'   => trim(($ocrNote ?? 'OCR') . ' (AI nonaktif · perlu dicek)'),
+                ];
+            }
+
+            $reason = $this->rapidOcr->isEnabled()
+                ? ($this->rapidOcr->getLastError() ?: 'teks tidak terbaca / dokumen belum didukung parser OCR')
+                : 'RapidOCR tidak aktif';
+
+            return [
+                'fields' => [],
+                'note'   => 'Dokumen belum terbaca tanpa AI: ' . $reason . '. Silakan isi data secara manual.',
+            ];
+        }
+
+        // 2. AI Optional: Jika OCR belum sufficient atau dokumen unstructured (CV/surat lamaran).
+        // Untuk CV/surat lamaran atau dokumen yang sudah memiliki teks layer/OCR: panggil AI secara TEXT-ONLY!
+        // Ini 10x lebih hemat token, bebas timeout vision base64, dan sangat cepat.
+        $isTextDoc = in_array($document, ['cv', 'surat_lamaran'], true) || ($docText !== '' && strlen($docText) > 40);
+
         $errors = [];
 
         foreach (config('recruitment_ai.providers', []) as $name => $config) {
@@ -68,7 +143,15 @@ class DocumentVisionExtractor
             }
 
             try {
-                return $this->extractWithProvider($name, $config, $document, $absolutePath, $originalName, $fields);
+                return $this->extractWithProvider(
+                    $name,
+                    $config,
+                    $document,
+                    $absolutePath,
+                    $originalName,
+                    $fields,
+                    $isTextDoc ? $docText : null
+                );
             } catch (\Throwable $e) {
                 $errors[$name] = $e->getMessage();
 
@@ -76,15 +159,149 @@ class DocumentVisionExtractor
             }
         }
 
-        $this->lastError = $errors
-            ? 'AI gagal membaca dokumen. ' . implode(' | ', array_map(fn ($m) => substr($m, 0, 160), $errors))
-            : 'Belum ada provider AI yang dikonfigurasi (GEMINI_API_KEY / DEEPSEEK_API_KEY).';
+        // 3. Fallback jika provider AI down / model off / kuota habis:
+        // Field deterministik OCR yang terbaca tetap dikembalikan dengan badge "perlu dicek",
+        // JANGAN melempar exception fatal yang membuat form error / menggantung!
+        if (! empty($ocrFields)) {
+            $this->lastError = '';
 
-        throw new RuntimeException($this->lastError);
+            return [
+                'fields' => $this->markAsCheckNeeded($ocrFields),
+                'note'   => trim(($ocrNote ?? 'OCR') . ' (AI offline · periksa data)'),
+            ];
+        }
+
+        $this->lastError = $errors
+            ? 'AI tidak tersedia atau gagal: ' . implode(' | ', array_map(fn ($m) => substr($m, 0, 120), $errors))
+            : 'Belum ada provider AI yang dikonfigurasi.';
+
+        return [
+            'fields' => [],
+            'note'   => $this->lastError . '. Silakan isi manual.',
+        ];
     }
 
     /**
-     * Ekstrak memakai satu provider.
+     * Turunkan confidence field agar diberi badge "perlu dicek" (< low_confidence).
+     */
+    private function markAsCheckNeeded(array $fields): array
+    {
+        $lowConfThreshold = (float) config('recruitment_ai.low_confidence', 0.75);
+        $targetConf = min(0.70, $lowConfThreshold - 0.05);
+
+        foreach ($fields as $k => $f) {
+            if (isset($f['confidence'])) {
+                $fields[$k]['confidence'] = min((float) $f['confidence'], $targetConf);
+            }
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Apakah hasil parser OCR sudah cukup untuk mengisi form tanpa AI?
+     */
+    private function isOcrSufficient(string $document, array $fields): bool
+    {
+        return match ($document) {
+            'scan_ktp' => isset($fields['nik']['value'], $fields['nama_lengkap']['value'])
+                && strlen((string) $fields['nik']['value']) === 16,
+
+            'scan_kk' => $this->isKkOcrSufficient($fields),
+
+            'ijazah' => ! empty($fields['education']['value']),
+
+            'scan_skck' => isset($fields['nik']['value'], $fields['nama_lengkap']['value']),
+
+            'scan_akta_kelahiran' => isset($fields['nama_lengkap']['value'])
+                && (isset($fields['tanggal_lahir']['value']) || isset($fields['ayah']['value']['nama']) || isset($fields['ibu']['value']['nama'])),
+
+            default => false,
+        };
+    }
+
+    /**
+     * KK hanya dipakai bila struktur keluarga terbaca utuh. Tabel KK sering
+     * miring / terpotong; kalau nama tergabung atau hubungan tidak lengkap,
+     * lebih aman fallback ke AI (atau tampilkan sebagian untuk dicek).
+     */
+    private function isKkOcrSufficient(array $fields): bool
+    {
+        $members = (array) ($fields['kk_members']['value'] ?? []);
+
+        if (count($members) < 2) {
+            return false;
+        }
+
+        $hasHead  = false;
+        $hasOther = false;
+
+        foreach ($members as $member) {
+            if (! is_array($member)) {
+                return false;
+            }
+
+            $nik = preg_replace('/\D/u', '', (string) ($member['nik'] ?? '')) ?? '';
+
+            if (strlen($nik) !== 16) {
+                return false;
+            }
+
+            $nama = trim((string) ($member['nama'] ?? ''));
+
+            if ($nama === '') {
+                return false;
+            }
+
+            $upperNama = strtoupper($nama);
+
+            if (str_contains($upperNama, 'TANDA TANGAN') || str_contains($upperNama, 'NIP')) {
+                return false;
+            }
+
+            // Nama yang tergabung tanpa spasi (KHARISMAAYUPURWANTI) adalah
+            // tanda OCR gagal memisahkan sel.
+            if (! str_contains($nama, ' ') && strlen($nama) > 14) {
+                return false;
+            }
+
+            $relation = strtoupper((string) ($member['hubungan'] ?? ''));
+
+            if (str_contains($relation, 'KEPALA')) {
+                $hasHead = true;
+            }
+
+            if (str_contains($relation, 'ISTRI') || str_contains($relation, 'SUAMI') || str_contains($relation, 'ANAK')) {
+                $hasOther = true;
+            }
+        }
+
+        if (! $hasHead || ! $hasOther) {
+            return false;
+        }
+
+        $alamat = trim((string) ($fields['alamat_sekarang']['value'] ?? ''));
+
+        return $alamat === '' || ! $this->isMessyOcrAddress($alamat);
+    }
+
+    private function isMessyOcrAddress(string $value): bool
+    {
+        $upper = strtoupper($value);
+
+        if (preg_match('/\b(AIAMAT|ALAMAL|GOLONGAN|JENIS\s+PEKERJAAN)\b/u', $upper) === 1) {
+            return true;
+        }
+
+        if (preg_match('/\b(KECAMATAN|KABUPATEN\s*\/\s*KOTA)\s+(KABUPATEN|KOTA|PROVINSI|GOLONGAN|RT\/RW|DESA|KELURAHAN|$)/u', $upper) === 1) {
+            return true;
+        }
+
+        return substr_count($upper, 'ALAMAT') > 1;
+    }
+
+    /**
+     * Ekstrak memakai satu provider (mendukung Vision atau Text-Only).
      */
     private function extractWithProvider(
         string $name,
@@ -92,12 +309,22 @@ class DocumentVisionExtractor
         string $document,
         string $absolutePath,
         string $originalName,
-        array $fields
+        array $fields,
+        ?string $documentText = null
     ): array {
         $type = $config['type'] ?? 'gemini';
 
-        $parts = $this->buildParts($config, $absolutePath, $originalName);
-        $parts[] = ['text' => $this->buildPrompt($document, $fields, (bool) ($config['supports_schema'] ?? false))];
+        // Bila teks dokumen sudah tersedia dari OCR atau PDF layer (misal CV / surat lamaran),
+        // gunakan mode Text-Only: 10x lebih hemat token, tidak memerlukan endpoint vision,
+        // bebas kendala upload gambar base64 besar, dan proses jauh lebih cepat.
+        if ($documentText !== null && trim($documentText) !== '') {
+            $prompt = $this->buildPrompt($document, $fields, (bool) ($config['supports_schema'] ?? false));
+            $textMessage = "Berikut teks hasil pembacaan dokumen '{$originalName}':\n\n```\n" . substr($documentText, 0, 16000) . "\n```\n\n" . $prompt;
+            $parts = [['text' => $textMessage]];
+        } else {
+            $parts = $this->buildParts($config, $absolutePath, $originalName, $document);
+            $parts[] = ['text' => $this->buildPrompt($document, $fields, (bool) ($config['supports_schema'] ?? false))];
+        }
 
         $rawText = $type === 'openai'
             ? $this->callOpenAiCompatible($config, $parts)
@@ -111,9 +338,14 @@ class DocumentVisionExtractor
             throw new RuntimeException('Format jawaban AI tidak dapat dibaca.');
         }
 
+        $note = $decoded['note'] ?? null;
+        if ($documentText !== null) {
+            $note = ($note ? $note . ' · ' : '') . 'AI text-only (' . $name . ')';
+        }
+
         return [
             'fields' => $this->normalizeFields($decoded['fields'] ?? [], $fields),
-            'note'   => $decoded['note'] ?? null,
+            'note'   => $note,
         ];
     }
 
@@ -133,7 +365,7 @@ class DocumentVisionExtractor
 
         $attempts = max(1, (int) env('RECRUITMENT_AI_RETRY_TIMES', 2));
         $sleepMs  = max(0, (int) env('RECRUITMENT_AI_RETRY_SLEEP_MS', 2500));
-        $timeout  = (int) ($config['timeout'] ?? 150);
+        $timeout  = (int) ($config['timeout'] ?? 45);
 
         $lastError = 'AI tidak dapat dihubungi.';
 
@@ -161,7 +393,7 @@ class DocumentVisionExtractor
                     'x-goog-api-key' => $config['api_key'],
                 ])
                     ->timeout($timeout)
-                    ->connectTimeout(15)
+                    ->connectTimeout(5)
                     ->post($url, $payload);
 
                 if ($response->successful()) {
@@ -200,17 +432,28 @@ class DocumentVisionExtractor
      */
     private function callOpenAiCompatible(array $config, array $parts): string
     {
-        $content = [];
-
+        $hasImage = false;
         foreach ($parts as $part) {
-            if (isset($part['text'])) {
-                $content[] = ['type' => 'text', 'text' => $part['text']];
-            } elseif (isset($part['inline_data'])) {
-                $mime = $part['inline_data']['mime_type'] ?? 'image/png';
-                $content[] = [
-                    'type'      => 'image_url',
-                    'image_url' => ['url' => 'data:' . $mime . ';base64,' . $part['inline_data']['data']],
-                ];
+            if (isset($part['inline_data'])) {
+                $hasImage = true;
+                break;
+            }
+        }
+
+        if (! $hasImage && count($parts) === 1 && isset($parts[0]['text'])) {
+            $content = $parts[0]['text'];
+        } else {
+            $content = [];
+            foreach ($parts as $part) {
+                if (isset($part['text'])) {
+                    $content[] = ['type' => 'text', 'text' => $part['text']];
+                } elseif (isset($part['inline_data'])) {
+                    $mime = $part['inline_data']['mime_type'] ?? 'image/png';
+                    $content[] = [
+                        'type'      => 'image_url',
+                        'image_url' => ['url' => 'data:' . $mime . ';base64,' . $part['inline_data']['data']],
+                    ];
+                }
             }
         }
 
@@ -231,8 +474,8 @@ class DocumentVisionExtractor
             'Content-Type' => 'application/json',
             'Authorization' => 'Bearer ' . ($config['api_key'] ?? ''),
         ])
-            ->timeout((int) ($config['timeout'] ?? 150))
-            ->connectTimeout(15)
+            ->timeout((int) ($config['timeout'] ?? 45))
+            ->connectTimeout(5)
             ->post(rtrim($config['base_url'], '/') . '/chat/completions', $payload);
 
         if ($response->failed()) {
@@ -261,7 +504,7 @@ class DocumentVisionExtractor
     /**
      * Susun parts multimodal: dokumen + (bila PDF) teks layer.
      */
-    private function buildParts(array $config, string $absolutePath, string $originalName): array
+    private function buildParts(array $config, string $absolutePath, string $originalName, ?string $document = null): array
     {
         $parts    = [];
         $mimeType = $this->detectMime($absolutePath, $originalName);
@@ -308,7 +551,7 @@ class DocumentVisionExtractor
         // sebagai konteks agar model AI bisa mencocokkan apa yang terlihat
         // di gambar dengan teks mentah — meningkatkan akurasi terutama
         // pada scan yang blur / resolusi rendah.
-        $ocrText = $this->extractOcrText($absolutePath);
+        $ocrText = $this->ocrText($absolutePath, $document);
 
         if ($ocrText !== '') {
             $parts[] = ['text' => "Teks yang terbaca oleh OCR dari dokumen ini (bisa jadi tidak lengkap/tidak urut, gunakan gambar sebagai acuan utama):\n\n" . $ocrText];
@@ -723,7 +966,7 @@ class DocumentVisionExtractor
             return sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]);
         }
 
-        if (preg_match('#^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$#', $value, $m)) {
+        if (preg_match('#^(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{4})$#', $value, $m)) {
             return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
         }
 
@@ -833,20 +1076,67 @@ class DocumentVisionExtractor
      |---------------------------------------------------------------------*/
 
     /**
-     * Ambil teks dari gambar lewat server RapidOCR (pre-processing).
+     * Ambil baris OCR untuk satu file, dengan cache per path.
      *
-     * Hasilnya BUKAN pengganti AI vision — hanya konteks tambahan.
-     * Kalau RapidOCR mati / error, alur tetap jalan tanpanya.
+     * Satu instance extractor dipakai untuk beberapa dokumen dalam satu
+     * request; cache mencegah file yang sama dipanggil OCR berkali-kali
+     * (mis. saat provider AI fallback).
      */
-    private function extractOcrText(string $absolutePath): string
+    private function ocrLines(string $absolutePath, ?string $document = null): array
     {
-        try {
-            return $this->rapidOcr->extractText($absolutePath);
-        } catch (\Throwable $e) {
-            Log::info('[RecruitmentAi] RapidOCR pre-processing dilewati: ' . $e->getMessage());
-
-            return '';
+        // 1. Langsung sesuaikan orientasi gambar (EXIF & rasio KTP/KK) sebelum OCR
+        if ($document !== null) {
+            try {
+                $this->imageOrienter->orientImageForDocument($absolutePath, $document);
+            } catch (\Throwable $e) {
+                Log::warning('[RecruitmentAi] Gagal menyesuaikan orientasi gambar: ' . $e->getMessage());
+            }
         }
+
+        $key = md5($absolutePath . '|' . (@filemtime($absolutePath) ?: 0));
+
+        if (array_key_exists($key, $this->ocrCache)) {
+            return $this->ocrCache[$key];
+        }
+
+        try {
+            $lines = $this->rapidOcr->extractLines($absolutePath);
+        } catch (\Throwable $e) {
+            Log::info('[RecruitmentAi] RapidOCR dilewati: ' . $e->getMessage());
+            $lines = [];
+        }
+
+        // 2. Pemulihan sudut 180° jika orientasi terbalik (misal KTP terbalik atas-bawah)
+        if ($document !== null && $this->rapidOcr->isEnabled()) {
+            $meaningful = $this->imageOrienter->hasMeaningfulText($document, $lines);
+            if (! $meaningful) {
+                try {
+                    if ($this->imageOrienter->rotateDegrees($absolutePath, 180)) {
+                        $retryLines = $this->rapidOcr->extractLines($absolutePath);
+                        if ($this->imageOrienter->hasMeaningfulText($document, $retryLines)) {
+                            Log::info("[RecruitmentAi] Orientasi dokumen '{$document}' berhasil dipulihkan dengan rotasi 180°.");
+                            $lines = $retryLines;
+                            $key   = md5($absolutePath . '|' . (@filemtime($absolutePath) ?: 0));
+                        } else {
+                            // Kembalikan ke rotasi semula bila tetap tidak bermakna
+                            $this->imageOrienter->rotateDegrees($absolutePath, 180);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('[RecruitmentAi] Fallback rotasi 180° gagal: ' . $e->getMessage());
+                }
+            }
+        }
+
+        return $this->ocrCache[$key] = $lines;
+    }
+
+    /**
+     * Teks gabungan OCR untuk konteks prompt AI.
+     */
+    private function ocrText(string $absolutePath, ?string $document = null): string
+    {
+        return $this->rapidOcr->linesToText($this->ocrLines($absolutePath, $document));
     }
 
     /* ---------------------------------------------------------------------
