@@ -31,6 +31,11 @@
     }
 
     .container-center{
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        transform: none !important;
+        margin: 0 auto !important;
         min-height:100vh;
         display:flex;
         flex-direction:column;
