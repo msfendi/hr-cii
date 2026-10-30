@@ -1,3 +1,9 @@
+@php
+    // Karyawan yang masuk lewat sesi absensi wajah (tanpa akun di tabel users)
+    $faceMode    = !auth()->check() && session('face_recognition_auth');
+    $displayName = $faceMode ? session('face_name') : (auth()->user()->name ?? '-');
+    $logoutUrl   = $faceMode ? route('face.attendance.logout') : route('logout');
+@endphp
 <!-- Topbar -->
 <style>
     .ai-assistant-btn {
@@ -124,6 +130,7 @@
             </div>
         </li>
 
+        @unless ($faceMode)
         <li class="nav-item dropdown no-arrow mx-1">
             <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
             data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -154,13 +161,15 @@
             </div>
         </li>
 
+        @endunless
+
         <div class="topbar-divider d-none d-sm-block"></div>
 
         <!-- Nav Item - User Information -->
         <li class="nav-item dropdown no-arrow">
             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ auth()->user()->name }}</span>
+                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ $displayName }}</span>
                 <img class="img-profile rounded-circle"
                     src="{{asset('img/undraw_profile.svg')}}">
             </a>
@@ -171,7 +180,7 @@
                     <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
                     Profile
                 </a> -->
-                <a class="dropdown-item" href="{{ route('logout') }}">
+                <a class="dropdown-item" href="{{ $logoutUrl }}">
                     <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
                     Logout
                 </a>

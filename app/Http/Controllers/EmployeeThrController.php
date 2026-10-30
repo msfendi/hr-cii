@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\FaceRecognitionService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,9 +23,9 @@ class EmployeeThrController extends Controller
             ->get();
 
         return view('thr.employee_thr', [
-            'npk'        => $request->npk,
-            'periods'    => $periods,
-            'qrEnabled'  => FaceRecognitionService::isQrEnabled(),
+            'npk'       => $request->npk,
+            'periods'   => $periods,
+            'qrEnabled' => FaceRecognitionService::isQrThrEnabled(),
         ]);
     }
 
@@ -76,9 +77,8 @@ class EmployeeThrController extends Controller
 
     public function qrLogin(Request $request)
     {
-        if (!\App\Services\FaceRecognitionService::isQrEnabled()) {
-            \Alert::error('Akses Ditolak', 'Fitur QR Login sedang dinonaktifkan oleh admin.');
-            return back();
+        if (!FaceRecognitionService::isQrThrEnabled()) {
+            return redirect()->back()->with('error', 'Login QR Code untuk THR sedang dinonaktifkan.');
         }
 
         $npk = $request->npk;

@@ -3,25 +3,42 @@
 @include('layout.header')
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <style>
-    #faceVideo {
+    .camera-box-sm {
+        width: 100%;
+        max-width: 380px;
+        height: 280px;
+        margin: 0 auto;
+        background: #000;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+    }
+    .camera-box-sm video {
         width: 100%;
         height: 100%;
         object-fit: cover;
     }
-
-    /* Kamera pada halaman login dibuat persegi (1:1), bukan persegi panjang */
-    .camera-box-sm {
+    #faceVideo {
         width: 100%;
-        max-width: 360px;
-        height: auto;
-        aspect-ratio: 1 / 1;
-        margin: 0 auto;
-        background: #fff;
-        border-radius: 20px;
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        height: 100%;
+        object-fit: cover;
+        transform: scaleX(-1);
+    }
+    .scanner-guide-face {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 160px;
+        height: 200px;
+        border: 2px dashed rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        pointer-events: none;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+    }
+    .scanner-guide-face.success {
+        border-color: #1cc88a;
+        box-shadow: 0 0 20px #1cc88a, 0 0 0 9999px rgba(0, 0, 0, 0.2);
     }
 </style>
 <body class="bg-gradient-primary">
@@ -129,18 +146,35 @@
                     <div class="col-lg-6">
                         <div class="p-5">
                             <div class="text-center">
-                                <h1 class="h4 text-gray-900 mb-4">Sign In with ID Card</h1>
+                                <h1 class="h4 text-gray-900 mb-4">
+                                    @if(!($qrEnabled ?? true) && ($faceEnabled ?? false))
+                                        Sign In with Face Recognition
+                                    @elseif(($qrEnabled ?? true) && !($faceEnabled ?? false))
+                                        Sign In with ID Card
+                                    @elseif(($qrEnabled ?? true) && ($faceEnabled ?? false))
+                                        Sign In with ID Card / Wajah
+                                    @else
+                                        Sign In Portal
+                                    @endif
+                                </h1>
                             </div>
 
-                            @if ($faceEnabled ?? false)
+                            @php
+                                $showQr   = $qrEnabled ?? true;
+                                $showFace = $faceEnabled ?? false;
+                                // Tab yang aktif secara default
+                                $defaultTab = $showQr ? 'idcard' : ($showFace ? 'face' : 'none');
+                            @endphp
+
+                            @if ($showQr && $showFace)
                             <ul class="nav nav-pills nav-fill mb-3" id="loginMethodTabs">
                                 <li class="nav-item">
-                                    <a class="nav-link active" data-toggle="tab" href="#idcardPane" id="idcardTabLink">
-                                        <i class="fas fa-id-card mr-1"></i> ID Card
+                                    <a class="nav-link active font-weight-bold" data-toggle="tab" href="#idcardPane" id="idcardTabLink">
+                                        <i class="fas fa-id-card mr-1"></i> ID Card (QR)
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" data-toggle="tab" href="#facePane" id="faceTabLink">
+                                    <a class="nav-link font-weight-bold" data-toggle="tab" href="#facePane" id="faceTabLink">
                                         <i class="fas fa-camera mr-1"></i> Face Recognition
                                     </a>
                                 </li>
@@ -148,39 +182,45 @@
                             @endif
 
                             <div class="tab-content">
-                                <div class="tab-pane fade show active" id="idcardPane">
-                                    @if($qrEnabled ?? true)
-                                    <div class="camera-box-sm">
+                                {{-- TAB QR CODE ID CARD --}}
+                                @if ($showQr)
+                                <div class="tab-pane fade {{ $defaultTab === 'idcard' ? 'show active' : '' }}" id="idcardPane">
+                                    <div class="camera-box-sm shadow-sm">
                                         <video id="video"></video>
                                     </div>
-                                    @if ($faceEnabled ?? false)
                                     <p class="text-center text-muted small mt-2 mb-0">
                                         Arahkan QR Code ID Card ke kamera
                                     </p>
-                                    @endif
-                                    @else
-                                    <div class="alert alert-warning text-center mt-2">
-                                        <i class="fas fa-ban mr-1"></i>
-                                        <strong>QR Login dinonaktifkan.</strong><br>
-                                        <small>Fitur ini sedang dinonaktifkan oleh admin.<br>Silakan gunakan login Email atau Face Recognition.</small>
-                                    </div>
-                                    @endif
                                 </div>
+                                @endif
 
-                                @if ($faceEnabled ?? false)
-                                <div class="tab-pane fade" id="facePane">
-                                    <div class="camera-box-sm">
+                                {{-- TAB FACE RECOGNITION --}}
+                                @if ($showFace)
+                                <div class="tab-pane fade {{ $defaultTab === 'face' ? 'show active' : '' }}" id="facePane">
+                                    <div id="faceLoginStatus" class="alert alert-info py-2 px-3 mb-3 small font-weight-bold">
+                                        <i class="fas fa-info-circle mr-1"></i> Klik "Mulai Scan Wajah" untuk mulai.
+                                    </div>
+                                    <div class="camera-box-sm shadow-sm mb-3">
                                         <video id="faceVideo" autoplay muted playsinline></video>
+                                        <div id="faceLoginGuide" class="scanner-guide-face"></div>
                                     </div>
-                                    <div id="faceLoginStatus" class="text-center small text-muted mt-2">
-                                        Kamera akan aktif otomatis saat tab ini dibuka.
+                                    <div class="d-flex justify-content-center">
+                                        <button type="button" id="faceLoginStart" class="btn btn-success btn-sm rounded-pill px-4 shadow-sm">
+                                            <i class="fas fa-camera mr-1"></i> Mulai Scan Wajah
+                                        </button>
+                                        <button type="button" id="faceLoginStop" class="btn btn-outline-danger btn-sm rounded-pill px-3 ml-2 d-none">
+                                            <i class="fas fa-stop mr-1"></i> Berhenti
+                                        </button>
                                     </div>
-                                    <button type="button" id="faceLoginStart" class="btn btn-success btn-block mt-3 d-none">
-                                        <i class="fas fa-camera mr-1"></i> Coba Scan Lagi
-                                    </button>
-                                    <button type="button" id="faceLoginStop" class="btn btn-outline-secondary btn-block mt-2 d-none">
-                                        Berhenti
-                                    </button>
+                                </div>
+                                @endif
+
+                                {{-- JIKA KEDUA METODE KAMERA DINONAKTIFKAN --}}
+                                @if (!$showQr && !$showFace)
+                                <div class="text-center py-4">
+                                    <div class="alert alert-secondary py-3 px-3 small font-weight-bold">
+                                        <i class="fas fa-info-circle mr-1"></i> Login via QR Code dan Face Recognition sedang dinonaktifkan oleh Administrator. Silakan gunakan form login Email &amp; Password.
+                                    </div>
                                 </div>
                                 @endif
                             </div>
@@ -324,8 +364,11 @@ function stopQr() {
     }
 }
 
-@if($qrEnabled ?? true)
-startQr();
+@if ($showQr ?? true)
+// Hanya jalankan kamera QR jika tab ID Card yang aktif
+if (document.getElementById('idcardPane') && document.getElementById('idcardPane').classList.contains('active')) {
+    startQr();
+}
 @endif
 
 @if ($faceEnabled ?? false)
@@ -344,11 +387,20 @@ startQr();
     let failedAttempts = 0;
     let timer = null;
 
+    const faceGuide = document.getElementById('faceLoginGuide');
+
     function setStatus(message, type) {
-        statusEl.textContent = message;
-        statusEl.className = 'text-center small mt-2 ' + (type === 'error'
-            ? 'text-danger'
-            : (type === 'success' ? 'text-success' : 'text-muted'));
+        statusEl.className = 'alert py-2 px-3 mb-3 small font-weight-bold alert-' + (type === 'error'
+            ? 'danger'
+            : (type === 'success' ? 'success' : 'info'));
+        statusEl.innerHTML = '<i class="fas fa-' + (type === 'error' ? 'exclamation-circle' : (type === 'success' ? 'check-circle' : 'info-circle')) + ' mr-1"></i> ' + message;
+        if (faceGuide) {
+            if (type === 'success') {
+                faceGuide.classList.add('success');
+            } else {
+                faceGuide.classList.remove('success');
+            }
+        }
     }
 
     function resetButtons(running) {
@@ -393,7 +445,7 @@ startQr();
                         });
 
                         setTimeout(() => {
-                            window.location = data.redirect;
+                            window.location = data.redirect || '{{ url("/welcome") }}';
                         }, 1200);
 
                         return;
@@ -486,6 +538,12 @@ startQr();
     startBtn.addEventListener('click', startFace);
     stopBtn.addEventListener('click', stopFace);
 
+    // Jalankan kamera Face Recognition saat load HANYA jika tab Face Recognition yang aktif
+    const facePaneEl = document.getElementById('facePane');
+    if (facePaneEl && facePaneEl.classList.contains('active')) {
+        startFace();
+    }
+
     // Hentikan kamera saat halaman ditinggalkan.
     window.addEventListener('beforeunload', function () {
         active = false;
@@ -493,32 +551,22 @@ startQr();
     });
 
     // Saat pindah tab: ID Card <-> Face Recognition.
-    // Camera face recognition OTOMATIS menyala (tanpa klik tombol).
-    function autoStartFace() {
-        if (active) {
-            return;
-        }
-
-        startFace();
-    }
-
     if (window.jQuery) {
         jQuery('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
             const target = jQuery(e.target).attr('href');
 
             if (target === '#facePane') {
-                stopQr();
-                autoStartFace();
+                if (typeof stopQr === 'function') {
+                    stopQr();
+                }
+                startFace();
             } else if (target === '#idcardPane') {
                 stopFace();
-                startQr();
+                if (typeof startQr === 'function') {
+                    startQr();
+                }
             }
         });
-    }
-
-    // Jika tab Face Recognition sedang aktif saat halaman dimuat, langsung jalankan.
-    if (document.getElementById('facePane').classList.contains('active')) {
-        autoStartFace();
     }
 })();
 @endif

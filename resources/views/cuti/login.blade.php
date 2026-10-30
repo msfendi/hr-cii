@@ -1,114 +1,174 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 @include('layout.header')
+
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<style>
+    .camera-box {
+        width: 100%;
+        max-width: 450px;
+        height: 320px;
+        margin: 0 auto;
+        background: #000;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+    }
+    .camera-box video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .scanner-guide-face {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 180px;
+        height: 220px;
+        border: 2px dashed rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        pointer-events: none;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+    }
+    .scanner-guide-face.success {
+        border-color: #1cc88a;
+        box-shadow: 0 0 20px #1cc88a, 0 0 0 9999px rgba(0, 0, 0, 0.2);
+    }
+</style>
 
 <body class="bg-gradient-primary">
 @include('sweetalert::alert')
 
-<style>
-    .camera-square {
-        width: 100%; max-width: 320px; margin: 0 auto;
-        aspect-ratio: 1 / 1; background: #0b1220; border-radius: 12px;
-        overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;
-    }
-    .camera-square video { width: 100%; height: 100%; object-fit: cover; }
-</style>
-
-<div class="container container-center">
-    <div class="text-center mt-5">
-        <img src="{{ asset('img/chutex.svg') }}" style="width:150px;">
-        <h1 class="h4 text-white"><b>PT. Chutex International Indonesia</b></h1>
-        <h1 class="h1 text-white mb-4"><b>Pengajuan Cuti Online</b></h1>
+<div class="container container-center py-4">
+    <div class="text-center mt-3 mb-4">
+        <img src="{{ asset('img/chutex.svg') }}" style="width:130px;" class="mb-2">
+        <h5 class="text-white font-weight-bold mb-1">PT. Chutex International Indonesia</h5>
+        <h2 class="text-white font-weight-bold">Pengajuan Cuti Online</h2>
     </div>
 
-    <div class="card shadow-lg my-5">
-        <div class="card-body">
+    <div class="row justify-content-center">
+        <div class="col-md-7 col-lg-6">
+            <div class="card shadow-lg border-0 rounded-lg">
+                <div class="card-body p-4">
 
-            <ul class="nav nav-tabs" id="loginTab">
-                <li class="nav-item">
-                    <a class="nav-link active" data-toggle="tab" href="#manual">
-                        Manual Login
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-toggle="tab" href="#qrlogin">
-                        QR Code Login
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-toggle="tab" href="#facelogin">
-                        Face Recognition
-                    </a>
-                </li>
-            </ul>
+                    @php
+                        $showQr   = $qrEnabled ?? true;
+                        $showFace = $faceEnabled ?? true;
+                    @endphp
 
-            <div class="tab-content mt-4">
-
-                <!-- TAB 1 : MANUAL -->
-                <div class="tab-pane fade show active" id="manual">
-                    <form method="POST" action="{{ route('pengajuan-cuti.verify-manual') }}">
-                        @csrf
-                        <div class="form-group">
-                            <label>NPK</label>
-                            <input type="text" class="form-control" name="npk" required placeholder="Masukkan NPK Anda">
-                        </div>
-
-                        <div class="form-group">
-                            <label>Password</label>
-                            <input type="password" class="form-control" name="password" required placeholder="Masukkan Password Anda">
-                        </div>
-
-                        <button class="btn btn-primary btn-block">
-                            Masuk Pengajuan Cuti
-                        </button>
-                    </form>
-                </div>
-
-                <!-- TAB 2 : QR CODE -->
-                <div class="tab-pane fade" id="qrlogin">
-                    <div>
-                        @if(!($qrEnabled ?? true))
-                        <div class="alert alert-warning text-center">
-                            <i class="fas fa-ban mr-1"></i><strong>QR Login dinonaktifkan.</strong><br>
-                            <small>Fitur QR Login sedang dinonaktifkan oleh admin.</small>
-                        </div>
-                        @else
-                        <div class="camera-square">
-                            <video id="video"></video>
-                        </div>
-                        <p class="text-center text-muted mt-2">Arahkan QR Code ID Card Anda ke kamera utama.</p>
+                    <ul class="nav nav-pills nav-justified mb-4" id="loginTab">
+                        <li class="nav-item">
+                            <a class="nav-link active font-weight-bold" data-toggle="tab" href="#manual">
+                                <i class="fas fa-keyboard mr-1"></i> Manual
+                            </a>
+                        </li>
+                        @if($showFace)
+                        <li class="nav-item">
+                            <a class="nav-link font-weight-bold" data-toggle="tab" href="#facelogin">
+                                <i class="fas fa-user-circle mr-1"></i> Scan Wajah
+                            </a>
+                        </li>
                         @endif
-                    </div>
-                </div>
+                        @if($showQr)
+                        <li class="nav-item">
+                            <a class="nav-link font-weight-bold" data-toggle="tab" href="#qrlogin">
+                                <i class="fas fa-qrcode mr-1"></i> QR Code
+                            </a>
+                        </li>
+                        @endif
+                    </ul>
 
-                <!-- TAB 3 : FACE RECOGNITION -->
-                <div class="tab-pane fade" id="facelogin">
-                    <div>
-                        <div class="camera-square">
-                            <video id="faceVideo" autoplay muted playsinline></video>
+                    <div class="tab-content">
+
+                        <!-- TAB 1: MANUAL LOGIN -->
+                        <div class="tab-pane fade show active" id="manual">
+                            <form method="POST" action="{{ route('pengajuan-cuti.verify-manual') }}">
+                                @csrf
+                                <div class="form-group">
+                                    <label class="font-weight-bold text-gray-700">NPK Karyawan</label>
+                                    <input type="text" class="form-control rounded-pill" name="npk" required placeholder="Masukkan NPK Anda">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold text-gray-700">Password (Format: YYMMDD Tgl Lahir)</label>
+                                    <input type="password" class="form-control rounded-pill" name="password" required placeholder="Contoh: 980512">
+                                </div>
+
+                                <button class="btn btn-primary btn-block rounded-pill font-weight-bold shadow-sm mt-4">
+                                    <i class="fas fa-sign-in-alt mr-1"></i> Masuk Pengajuan Cuti
+                                </button>
+                            </form>
                         </div>
-                        <p class="text-center small mt-2 text-muted" id="faceStatus">Hadapkan wajah ke kamera untuk login pengajuan cuti.</p>
+
+                        <!-- TAB 2: FACE RECOGNITION LOGIN -->
+                        @if($showFace)
+                        <div class="tab-pane fade" id="facelogin">
+                            <div class="text-center">
+                                <div id="faceStatusAlert" class="alert alert-info py-2 px-3 mb-3 small font-weight-bold">
+                                    <i class="fas fa-info-circle mr-1"></i> Klik "Mulai Kamera Wajah" untuk login dengan wajah terdaftar.
+                                </div>
+
+                                <div class="camera-box shadow-sm mb-3">
+                                    <video id="faceVideo" autoplay playsinline muted></video>
+                                    <div id="faceGuide" class="scanner-guide-face"></div>
+                                </div>
+
+                                <div class="d-flex justify-content-center">
+                                    <button id="btnStartFace" type="button" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm" onclick="startFaceLogin()">
+                                        <i class="fas fa-camera mr-1"></i> Mulai Kamera Wajah
+                                    </button>
+                                    <button id="btnStopFace" type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3 ml-2 d-none" onclick="stopFaceLogin()">
+                                        <i class="fas fa-stop mr-1"></i> Matikan Kamera
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
+
+                        <!-- TAB 3: QR CODE LOGIN -->
+                        @if($showQr)
+                        <div class="tab-pane fade" id="qrlogin">
+                            <div id="step2" class="text-center">
+                                <div class="camera-box shadow-sm mb-3">
+                                    <video id="video"></video>
+                                </div>
+                                <p class="text-muted small mb-0">Arahkan QR Code pada ID Card Anda ke kamera.</p>
+                            </div>
+                        </div>
+                        @endif
+
                     </div>
+
                 </div>
-
             </div>
-
+            
+            <div class="text-center mt-3">
+                <a href="{{ url('/') }}" class="text-white small">
+                    <i class="fas fa-arrow-left mr-1"></i> Kembali ke Menu Utama HRIS
+                </a>
+            </div>
         </div>
     </div>
 </div>
 
 @include('layout.footerscript')
 <script src="https://unpkg.com/@zxing/library@latest"></script>
-<script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
+<script src="{{ asset('js/face-recognition.js') }}"></script>
 
 <script>
-// ==================== QR SCANNER ====================
+/* ==================== QR SCANNER ==================== */
 let scanned = false;
 let codeReader = new ZXing.BrowserQRCodeReader();
 
-function startScanner() {
+function startQrScanner() {
     scanned = false;
+    const videoElem = document.getElementById('video');
+    if (!videoElem) return;
+
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
         if (result && !scanned) {
             scanned = true;
@@ -119,7 +179,7 @@ function startScanner() {
 
             Swal.fire({
                 icon: 'success',
-                title: 'QR Code Berhasil Dibaca',
+                title: 'QR Code Dikenali',
                 text: 'Sedang memproses login cuti...',
                 showConfirmButton: false,
                 timer: 1500,
@@ -127,143 +187,140 @@ function startScanner() {
             });
 
             setTimeout(function(){
-                window.location.href = "{{ route('pengajuan-cuti.qr-login') }}?npk=" + npk;
+                window.location.href = "{{ route('pengajuan-cuti.qr-login') }}?npk=" + encodeURIComponent(npk);
             }, 1000);
         }
     });
 }
 
-function stopScanner() {
-    try { codeReader.reset(); } catch(e) {}
+function stopQrScanner() {
+    try {
+        codeReader.reset();
+    } catch(e) {}
 }
 
-// ==================== FACE RECOGNITION ====================
+/* ==================== FACE RECOGNITION LOGIN ==================== */
+const modelUrl = "{{ asset('vendor-face-api/model') }}";
+const faceVideo = document.getElementById('faceVideo');
+const faceStatusAlert = document.getElementById('faceStatusAlert');
+const btnStartFace = document.getElementById('btnStartFace');
+const btnStopFace = document.getElementById('btnStopFace');
+const faceGuide = document.getElementById('faceGuide');
+
 let faceActive = false;
-let faceBusy   = false;
-let faceStream = null;
-let faceModelsLoaded = false;
+let faceBusy = false;
+let faceTimer = null;
 
-const MODEL_URL = "{{ asset('vendor-face-api/model') }}";
-const FACE_LOGIN_URL = "{{ route('pengajuan-cuti.face-login') }}";
-const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
-
-function setFaceStatus(msg, isError) {
-    const el = document.getElementById('faceStatus');
-    if (!el) return;
-    el.textContent = msg;
-    el.className = 'text-center small mt-2 ' + (isError ? 'text-danger' : 'text-muted');
+function setFaceStatus(msg, type = 'info') {
+    if (!faceStatusAlert) return;
+    faceStatusAlert.className = 'alert py-2 px-3 mb-3 small font-weight-bold alert-' + type;
+    faceStatusAlert.innerHTML = msg;
 }
 
-async function loadFaceModels() {
-    if (faceModelsLoaded) return;
-    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-    faceModelsLoaded = true;
-}
-
-async function startFaceScanner() {
+async function startFaceLogin() {
     if (faceActive) return;
 
-    setFaceStatus('Memuat model face recognition...');
-    try {
-        await loadFaceModels();
-    } catch(e) {
-        setFaceStatus('Gagal memuat model face recognition.', true);
-        return;
-    }
+    btnStartFace.disabled = true;
+    setFaceStatus('<i class="fas fa-spinner fa-spin mr-1"></i> Memuat model face recognition...', 'warning');
 
-    setFaceStatus('Mengakses kamera...');
-    const video = document.getElementById('faceVideo');
     try {
-        faceStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 640 }, audio: false });
-        video.srcObject = faceStream;
-    } catch(e) {
-        setFaceStatus('Tidak dapat mengakses kamera: ' + e.message, true);
-        return;
-    }
+        await FaceRecognition.loadModels(modelUrl);
+        setFaceStatus('<i class="fas fa-spinner fa-spin mr-1"></i> Menyalakan kamera...', 'warning');
+        await FaceRecognition.startCamera(faceVideo);
 
-    faceActive = true;
-    faceBusy   = false;
-    setFaceStatus('Hadapkan wajah ke kamera...');
-    faceLoop();
+        faceActive = true;
+        faceBusy = false;
+        btnStartFace.classList.add('d-none');
+        btnStopFace.classList.remove('d-none');
+        btnStartFace.disabled = false;
+        setFaceStatus('<i class="fas fa-camera mr-1"></i> Posisikan wajah Anda di dalam lingkaran...', 'info');
+
+        loopFaceDetection();
+    } catch (err) {
+        console.error('Error startFaceLogin:', err);
+        btnStartFace.disabled = false;
+        setFaceStatus('<i class="fas fa-exclamation-circle mr-1"></i> ' + (err.message || 'Gagal memuat kamera atau model.'), 'danger');
+    }
 }
 
-function stopFaceScanner() {
+function stopFaceLogin() {
     faceActive = false;
-    faceBusy   = false;
-    if (faceStream) {
-        faceStream.getTracks().forEach(t => t.stop());
-        faceStream = null;
+    faceBusy = false;
+    if (faceTimer) {
+        clearTimeout(faceTimer);
+        faceTimer = null;
     }
+    FaceRecognition.stopCamera(faceVideo);
+    if (faceGuide) faceGuide.classList.remove('success');
+    btnStartFace.classList.remove('d-none');
+    btnStopFace.classList.add('d-none');
+    btnStartFace.disabled = false;
+    setFaceStatus('<i class="fas fa-info-circle mr-1"></i> Kamera dimatikan. Klik "Mulai Kamera Wajah" jika ingin login.', 'secondary');
 }
 
-async function faceLoop() {
+async function loopFaceDetection() {
     if (!faceActive) return;
 
-    const video = document.getElementById('faceVideo');
-    if (!faceBusy && video && video.readyState >= 2) {
+    if (!faceBusy) {
         faceBusy = true;
         try {
-            const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-                .withFaceLandmarks().withFaceDescriptor();
+            const detected = await FaceRecognition.detect(faceVideo);
+            if (detected && detected.descriptor) {
+                setFaceStatus('<i class="fas fa-spinner fa-spin mr-1"></i> Wajah terdeteksi! Memverifikasi identitas...', 'warning');
+                if (faceGuide) faceGuide.classList.add('success');
 
-            if (det) {
-                faceActive = false;
-                setFaceStatus('Wajah terdeteksi, memverifikasi...');
+                const data = await FaceRecognition.postJson("{{ route('pengajuan-cuti.face-login') }}", {
+                    descriptor: detected.descriptor
+                });
 
-                const res = await fetch(FACE_LOGIN_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
-                    body: JSON.stringify({ descriptor: Array.from(det.descriptor) })
-                }).then(r => r.json()).catch(() => ({ status: false, message: 'Gagal terhubung ke server.' }));
-
-                if (res.status) {
-                    setFaceStatus('Wajah dikenali! Mengalihkan...', false);
-                    stopFaceScanner();
-
+                if (data.success) {
+                    faceActive = false;
+                    FaceRecognition.stopCamera(faceVideo);
+                    setFaceStatus('<i class="fas fa-check-circle mr-1"></i> ' + data.message, 'success');
+                    
                     Swal.fire({
                         icon: 'success',
                         title: 'Login Berhasil',
-                        text: 'Selamat datang, ' + (res.name || res.npk),
-                        timer: 1200,
+                        text: data.message,
+                        timer: 1500,
                         showConfirmButton: false
+                    }).then(() => {
+                        window.location.href = data.redirect_url;
                     });
-
-                    setTimeout(() => { window.location.href = res.redirect; }, 1000);
                     return;
+                } else {
+                    setFaceStatus('<i class="fas fa-times-circle mr-1"></i> ' + (data.message || 'Wajah tidak dikenali.'), 'danger');
+                    if (faceGuide) faceGuide.classList.remove('success');
+                    await new Promise(r => setTimeout(r, 1800));
                 }
-
-                setFaceStatus(res.message || 'Wajah tidak cocok. Coba lagi...', true);
-                await new Promise(r => setTimeout(r, 2000));
-                faceActive = true;
             } else {
-                setFaceStatus('Hadapkan wajah Anda ke kamera...');
+                if (faceGuide) faceGuide.classList.remove('success');
             }
-        } catch(e) {
-            setFaceStatus('Gagal scan: ' + e.message, true);
+        } catch (err) {
+            console.error('Error saat deteksi:', err);
+        } finally {
+            faceBusy = false;
         }
-        faceBusy = false;
     }
 
     if (faceActive) {
-        setTimeout(faceLoop, 700);
+        faceTimer = setTimeout(loopFaceDetection, 250);
     }
 }
 
-// ==================== TAB SWITCHING ====================
+/* ==================== TAB SWITCH HANDLING ==================== */
 $(document).ready(function() {
     $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
         const target = e.target.hash;
         if (target === '#qrlogin') {
-            stopFaceScanner();
-            startScanner();
+            stopFaceLogin();
+            startQrScanner();
         } else if (target === '#facelogin') {
-            stopScanner();
-            startFaceScanner();
+            stopQrScanner();
+            startFaceLogin();
         } else {
-            stopScanner();
-            stopFaceScanner();
+            stopQrScanner();
+            stopFaceLogin();
         }
     });
 });

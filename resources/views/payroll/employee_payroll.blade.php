@@ -2,181 +2,218 @@
 <html lang="en">
    @include('layout.header')
    <style>
-      #faceVideo {
+      .camera-box {
+         width: 100%;
+         max-width: 450px;
+         height: 320px;
+         margin: 0 auto;
+         background: #000;
+         border-radius: 12px;
+         overflow: hidden;
+         position: relative;
+      }
+      .camera-box video {
          width: 100%;
          height: 100%;
          object-fit: cover;
       }
-
-      /* Kamera pada halaman slip dibuat persegi (1:1), bukan persegi panjang */
-      .camera-box {
+      #faceVideo {
          width: 100%;
-         max-width: 360px;
-         height: auto;
-         aspect-ratio: 1 / 1;
-         margin: 0 auto;
-         background: #fff;
-         border-radius: 20px;
-         overflow: hidden;
-         display: flex;
-         align-items: center;
-         justify-content: center;
+         height: 100%;
+         object-fit: cover;
+         transform: scaleX(-1);
+      }
+      .scanner-guide-face {
+         position: absolute;
+         top: 50%;
+         left: 50%;
+         transform: translate(-50%, -50%);
+         width: 180px;
+         height: 220px;
+         border: 2px dashed rgba(255, 255, 255, 0.7);
+         border-radius: 50%;
+         pointer-events: none;
+         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+      }
+      .scanner-guide-face.success {
+         border-color: #1cc88a;
+         box-shadow: 0 0 20px #1cc88a, 0 0 0 9999px rgba(0, 0, 0, 0.2);
       }
    </style>
    <body class="bg-gradient-primary">
       @include('sweetalert::alert')
-      <div class="container container-center">
-         <div class="text-center">
-            <img src="{{ asset('img/chutex.svg') }}" style="width:150px;">
-            <h1 class="h4 text-white"><b>PT. Chutex International Indonesia</b></h1>
-            <h1 class="h1 text-white mb-4"><b>HRIS</b></h1>
+      <div class="container container-center py-4">
+         <div class="text-center mt-3 mb-4">
+            <img src="{{ asset('img/chutex.svg') }}" style="width:130px;" class="mb-2">
+            <h5 class="text-white font-weight-bold mb-1">PT. Chutex International Indonesia</h5>
+            <h2 class="text-white font-weight-bold">HRIS - Slip Gaji Karyawan</h2>
          </div>
-         <div class="card shadow-lg my-5">
-            <div class="card-body">
-               <ul class="nav nav-tabs">
-                  <li class="nav-item">
-                     <a class="nav-link active {{ !($qrEnabled ?? true) ? 'disabled text-muted' : '' }}" data-toggle="tab" href="#qrlogin">
-                     <i class="fas fa-qrcode mr-1"></i> QR Code Login {{ !($qrEnabled ?? true) ? '(Nonaktif)' : '' }}
-                     </a>
-                  </li>
-                  @if($faceEnabled ?? false)
-                  <li class="nav-item">
-                     <a class="nav-link" data-toggle="tab" href="#facelogin">
-                     Face Recognition Login
-                     </a>
-                  </li>
-                  @endif
-                  <!-- <li class="nav-item">
-                     <a class="nav-link" data-toggle="tab" href="#manual">
-                     Manual Login
-                     </a>
-                  </li> -->
-               </ul>
-               <div class="tab-content mt-4">
-                  {{-- ================= MANUAL LOGIN ================= --}}
-                  <div class="tab-pane fade" id="manual">
-                     <form id="manualLoginForm">
-                        @csrf
-                        <div class="form-group">
-                           <label>NPK</label>
-                           <input type="text" class="form-control" name="npk" required>
+         <div class="row justify-content-center">
+            <div class="col-md-7 col-lg-6">
+               <div class="card shadow-lg border-0 rounded-lg">
+                  <div class="card-body p-4">
+                     @php
+                        $showQr   = $qrEnabled ?? true;
+                        $showFace = $faceEnabled ?? false;
+                        $defaultTab = $showQr ? 'qrlogin' : ($showFace ? 'facelogin' : 'manual');
+                     @endphp
+                     <ul class="nav nav-pills nav-justified mb-4" id="loginTab">
+                        @if($showQr)
+                        <li class="nav-item">
+                           <a class="nav-link {{ $defaultTab === 'qrlogin' ? 'active' : '' }} font-weight-bold" data-toggle="tab" href="#qrlogin">
+                              <i class="fas fa-qrcode mr-1"></i> QR Code
+                           </a>
+                        </li>
+                        @endif
+                        @if($showFace)
+                        <li class="nav-item">
+                           <a class="nav-link {{ $defaultTab === 'facelogin' ? 'active' : '' }} font-weight-bold" data-toggle="tab" href="#facelogin">
+                              <i class="fas fa-user-circle mr-1"></i> Scan Wajah
+                           </a>
+                        </li>
+                        @endif
+                        <li class="nav-item">
+                           <a class="nav-link {{ $defaultTab === 'manual' ? 'active' : '' }} font-weight-bold" data-toggle="tab" href="#manual">
+                              <i class="fas fa-keyboard mr-1"></i> Manual
+                           </a>
+                        </li>
+                     </ul>
+                     <div class="tab-content">
+                        {{-- ================= MANUAL LOGIN ================= --}}
+                        <div class="tab-pane fade {{ $defaultTab === 'manual' ? 'show active' : '' }}" id="manual">
+                           <form id="manualLoginForm">
+                              @csrf
+                              <div class="form-group">
+                                 <label class="font-weight-bold text-gray-700">NPK</label>
+                                 <input type="text" class="form-control rounded-pill" name="npk" required placeholder="Masukkan NPK Anda">
+                              </div>
+                              <div class="form-group">
+                                 <label class="font-weight-bold text-gray-700">Password (Tanggal Lahir)</label>
+                                 <input type="password" class="form-control rounded-pill" name="password" placeholder="Contoh : 250513 (YYMMDD)" required>
+                              </div>
+                              <div class="form-group">
+                                 <label class="font-weight-bold text-gray-700">Payroll Period</label>
+                                 <select class="form-control rounded-pill" name="run_id" id="run_id_manual">
+                                    <option disabled selected>-- Pilih Periode --</option>
+                                    @foreach($periods as $period)
+                                    <option value="{{$period->id}}">
+                                       {{ date('F Y',strtotime($period->start_date)) }}
+                                    </option>
+                                    @endforeach
+                                 </select>
+                              </div>
+                              <button type="submit" class="btn btn-primary btn-block rounded-pill font-weight-bold shadow-sm mt-4">
+                                 <i class="fas fa-file-invoice mr-1"></i> Show Payroll Slip
+                              </button>
+                           </form>
                         </div>
-                        <div class="form-group">
-                           <label>Password (Tanggal Lahir)</label>
-                           <input type="password" class="form-control" name="password" placeholder="Contoh : 250513 (YYMMDD)" required>
-                        </div>
-                        <div class="form-group">
-                           <label>Payroll Period</label>
-                           <select class="form-control" name="run_id" id="run_id_manual">
-                              <option disabled selected>-- Pilih Periode --</option>
-                              @foreach($periods as $period)
-                              <option value="{{$period->id}}">
-                                 {{ date('F Y',strtotime($period->start_date)) }}
-                              </option>
-                              @endforeach
-                           </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">
-                        Show Payroll Slip
-                        </button>
-                     </form>
-                  </div>
-                  {{-- ================= QR LOGIN ================= --}}
-                  <div class="tab-pane fade show active" id="qrlogin">
-                     @if(!($qrEnabled ?? true))
-                     <div class="alert alert-warning text-center m-3">
-                        <i class="fas fa-ban mr-1"></i><strong>QR Login dinonaktifkan.</strong><br>
-                        <small>Fitur QR Login sedang dinonaktifkan oleh admin.</small>
-                     </div>
-                     @endif
-                     <div id="step1">
-                        <div class="form-group">
-                           <label>Pilih Periode</label>
-                           <select class="form-control" id="run_id_qr">
-                              <option disabled selected>-- Pilih Periode --</option>
-                              @foreach($periods as $period)
-                              <option value="{{$period->id}}">
-                                 {{ date('F Y',strtotime($period->start_date)) }}
-                              </option>
-                              @endforeach
-                           </select>
-                        </div>
-                        <button class="btn btn-success btn-block"
-                           onclick="nextQR()">Next</button>
-                     </div>
-                     <div id="step2" style="display:none">
-                        <div class="camera-box text-center">
-                           <video id="video" style="width:100%"></video>
-                        </div>
-                     </div>
-                     <div id="step3" style="display:none">
-                        <form id="qrPasswordForm">
-                           <div class="form-group">
-                              <label>Password (Tanggal Lahir)</label>
-                              <input type="password" id="qr_password"
-                                 class="form-control" placeholder="Contoh : 250513 (YYMMDD)" required>
+                        {{-- ================= QR LOGIN ================= --}}
+                        @if($showQr)
+                        <div class="tab-pane fade {{ $defaultTab === 'qrlogin' ? 'show active' : '' }}" id="qrlogin">
+                           <div id="step1">
+                              <div class="form-group">
+                                 <label class="font-weight-bold text-gray-700">Pilih Periode</label>
+                                 <select class="form-control rounded-pill" id="run_id_qr">
+                                    <option disabled selected>-- Pilih Periode --</option>
+                                    @foreach($periods as $period)
+                                    <option value="{{$period->id}}">
+                                       {{ date('F Y',strtotime($period->start_date)) }}
+                                    </option>
+                                    @endforeach
+                                 </select>
+                              </div>
+                              <button class="btn btn-primary btn-block rounded-pill font-weight-bold shadow-sm mt-3"
+                                 onclick="nextQR()">
+                                 <i class="fas fa-arrow-right mr-1"></i> Lanjut Scan QR
+                              </button>
                            </div>
-                           <button class="btn btn-primary btn-block">
-                           Login Payroll
-                           </button>
-                        </form>
-                     </div>
-                  </div>
+                           <div id="step2" style="display:none" class="text-center">
+                              <div class="camera-box shadow-sm mb-3">
+                                 <video id="video"></video>
+                              </div>
+                              <p class="text-muted small mb-0">Arahkan QR Code pada ID Card Anda ke kamera.</p>
+                           </div>
+                           <div id="step3" style="display:none">
+                              <form id="qrPasswordForm">
+                                 <div class="form-group">
+                                    <label class="font-weight-bold text-gray-700">Password (Tanggal Lahir)</label>
+                                    <input type="password" id="qr_password"
+                                       class="form-control rounded-pill" placeholder="Contoh : 250513 (YYMMDD)" required>
+                                 </div>
+                                 <button class="btn btn-primary btn-block rounded-pill font-weight-bold shadow-sm mt-3">
+                                    <i class="fas fa-sign-in-alt mr-1"></i> Login Payroll
+                                 </button>
+                              </form>
+                           </div>
+                        </div>
+                        @endif
 
-                  {{-- ================= FACE RECOGNITION LOGIN ================= --}}
-                  @if($faceEnabled ?? false)
-                  <div class="tab-pane fade" id="facelogin">
-                     <div id="faceStep1">
-                        <div class="form-group">
-                           <label>Pilih Periode</label>
-                           <select class="form-control" id="run_id_face">
-                              <option disabled selected>-- Pilih Periode --</option>
-                              @foreach($periods as $period)
-                              <option value="{{$period->id}}">
-                                 {{ date('F Y',strtotime($period->start_date)) }}
-                              </option>
-                              @endforeach
-                           </select>
-                        </div>
-                        <button class="btn btn-success btn-block"
-                           onclick="nextFace()">Next</button>
-                     </div>
-                     <div id="faceStep2" style="display:none">
-                        <div class="camera-box text-center">
-                           <video id="faceVideo" autoplay muted playsinline></video>
-                        </div>
-                        <div id="facePayrollStatus" class="text-center small text-muted mt-2">
-                           Kamera akan aktif otomatis. Posisikan wajah di dalam frame.
-                        </div>
-                        <button type="button" id="facePayrollStart" class="btn btn-success btn-block mt-3 d-none">
-                           <i class="fas fa-camera mr-1"></i> Coba Scan Lagi
-                        </button>
-                        <button type="button" id="facePayrollStop" class="btn btn-outline-secondary btn-block mt-2 d-none">
-                           Berhenti
-                        </button>
-                     </div>
-                     <div id="faceStep3" style="display:none">
-                        <form id="facePasswordForm">
-                           <div class="form-group">
-                              <label>NPK</label>
-                              <input type="text" id="face_npk" class="form-control" readonly>
+                        {{-- ================= FACE RECOGNITION LOGIN ================= --}}
+                        @if($faceEnabled ?? false)
+                        <div class="tab-pane fade" id="facelogin">
+                           <div id="faceStep1">
+                              <div class="form-group">
+                                 <label class="font-weight-bold text-gray-700">Pilih Periode</label>
+                                 <select class="form-control rounded-pill" id="run_id_face">
+                                    <option disabled selected>-- Pilih Periode --</option>
+                                    @foreach($periods as $period)
+                                    <option value="{{$period->id}}">
+                                       {{ date('F Y',strtotime($period->start_date)) }}
+                                    </option>
+                                    @endforeach
+                                 </select>
+                              </div>
+                              <button class="btn btn-primary btn-block rounded-pill font-weight-bold shadow-sm mt-3"
+                                 onclick="nextFace()">
+                                 <i class="fas fa-arrow-right mr-1"></i> Lanjut Scan Wajah
+                              </button>
                            </div>
-                           <div class="form-group">
-                              <label>Nama</label>
-                              <input type="text" id="face_name" class="form-control" readonly>
+                           <div id="faceStep2" style="display:none" class="text-center">
+                              <div id="facePayrollStatus" class="alert alert-info py-2 px-3 mb-3 small font-weight-bold">
+                                 <i class="fas fa-info-circle mr-1"></i> Klik "Mulai Kamera Wajah" untuk login dengan wajah terdaftar.
+                              </div>
+                              <div class="camera-box shadow-sm mb-3">
+                                 <video id="faceVideo" autoplay muted playsinline></video>
+                                 <div id="faceGuide" class="scanner-guide-face"></div>
+                              </div>
+                              <div class="d-flex justify-content-center">
+                                 <button type="button" id="facePayrollStart" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm">
+                                    <i class="fas fa-camera mr-1"></i> Mulai Kamera Wajah
+                                 </button>
+                                 <button type="button" id="facePayrollStop" class="btn btn-outline-danger btn-sm rounded-pill px-3 ml-2 d-none">
+                                    <i class="fas fa-stop mr-1"></i> Matikan Kamera
+                                 </button>
+                              </div>
                            </div>
-                           <div class="form-group">
-                              <label>Password (Tanggal Lahir)</label>
-                              <input type="password" id="face_password"
-                                 class="form-control" placeholder="Contoh : 250513 (YYMMDD)" required>
+                           <div id="faceStep3" style="display:none">
+                              <form id="facePasswordForm">
+                                 <div class="form-group">
+                                    <label class="font-weight-bold text-gray-700">NPK</label>
+                                    <input type="text" id="face_npk" class="form-control rounded-pill" readonly>
+                                 </div>
+                                 <div class="form-group">
+                                    <label class="font-weight-bold text-gray-700">Nama</label>
+                                    <input type="text" id="face_name" class="form-control rounded-pill" readonly>
+                                 </div>
+                                 <div class="form-group">
+                                    <label class="font-weight-bold text-gray-700">Password (Tanggal Lahir)</label>
+                                    <input type="password" id="face_password"
+                                       class="form-control rounded-pill" placeholder="Contoh : 250513 (YYMMDD)" required>
+                                 </div>
+                                 <button class="btn btn-primary btn-block rounded-pill font-weight-bold shadow-sm mt-3">
+                                    <i class="fas fa-sign-in-alt mr-1"></i> Login Payroll
+                                 </button>
+                              </form>
                            </div>
-                           <button class="btn btn-primary btn-block">
-                           Login Payroll
-                           </button>
-                        </form>
+                        </div>
+                        @endif
                      </div>
                   </div>
-                  @endif
+               </div>
+               <div class="text-center mt-3">
+                  <a href="{{ url('/') }}" class="text-white small">
+                     <i class="fas fa-arrow-left mr-1"></i> Kembali ke Menu Utama HRIS
+                  </a>
                </div>
             </div>
          </div>
@@ -355,11 +392,20 @@
             let failedAttempts = 0;
             let identifiedNpk = null;
 
+            const faceGuide = document.getElementById('faceGuide');
+
             function setStatus(message, type) {
-               statusEl.textContent = message;
-               statusEl.className = 'text-center small mt-2 ' + (type === 'error'
-                  ? 'text-danger'
-                  : (type === 'success' ? 'text-success' : 'text-muted'));
+               statusEl.className = 'alert py-2 px-3 mb-3 small font-weight-bold alert-' + (type === 'error'
+                  ? 'danger'
+                  : (type === 'success' ? 'success' : 'info'));
+               statusEl.innerHTML = '<i class="fas fa-' + (type === 'error' ? 'exclamation-circle' : (type === 'success' ? 'check-circle' : 'info-circle')) + ' mr-1"></i> ' + message;
+               if (faceGuide) {
+                  if (type === 'success') {
+                     faceGuide.classList.add('success');
+                  } else {
+                     faceGuide.classList.remove('success');
+                  }
+               }
             }
 
             function resetButtons(running) {
@@ -523,12 +569,7 @@
                jQuery('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
                   const target = jQuery(e.target).attr('href');
 
-                  if (target === '#facelogin') {
-                     // Kamera TIDAK dijalankan otomatis saat tab dibuka.
-                     // Sesuai flow QR: user wajib memilih periode lebih dulu
-                     // lalu menekan Next; nextFace() yang akan start kamera.
-                     setStatus('Pilih periode terlebih dahulu, lalu klik Next.');
-                  } else {
+                  if (target !== '#facelogin') {
                      stopFace();
                   }
                });

@@ -18,22 +18,20 @@ class FaceRecognitionController extends Controller
         $settings = FaceRecognitionService::settings();
 
         $faces = EmployeeFace::query()
-            ->with('registeredBy')
+            ->with(['registeredBy'])
             ->latest('updated_at')
             ->get();
 
         $users = User::query()
-            ->select('id', 'npk', 'name')
+            ->select('id', 'npk', 'name', 'disabled')
             ->orderBy('name')
             ->get();
 
-        // Daftar NPK yang punya akun di tabel users (key = NPK uppercase).
-        // Dipakai blade untuk badge "User aktif" / "Tanpa akun user".
-        $userNpks = $users->pluck('npk')
-            ->map(fn($n) => strtoupper(trim((string) $n)))
-            ->flip();
+        $usersByNpk = $users->whereNotNull('npk')->keyBy(function ($u) {
+            return strtoupper(trim($u->npk));
+        });
 
-        return view('face_recognition.index', compact('settings', 'faces', 'users', 'userNpks'));
+        return view('face_recognition.index', compact('settings', 'faces', 'users', 'usersByNpk'));
     }
 
     /**
@@ -79,27 +77,52 @@ class FaceRecognitionController extends Controller
             ]
         );
 
+        // Jika karyawan memiliki akun di tabel users, pastikan hak login aktif (disabled = 0)
+        $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [$npk])->first();
+        if ($user && (int) $user->disabled === 1) {
+            $user->disabled = 0;
+            $user->save();
+        }
+
         Alert::success('Berhasil', 'Wajah karyawan ' . $npk . ' berhasil disimpan.');
         return back();
     }
 
     /**
-     * On/off face recognition secara global + atur threshold.
+     * On/off face recognition dan QR login per menu + atur threshold.
      */
     public function updateSettings(Request $request)
     {
         $validated = $request->validate([
-            'is_enabled'      => ['required', 'boolean'],
-            'match_threshold' => ['required', 'numeric', 'between:0.3,0.7'],
+            'is_enabled'            => ['required', 'boolean'],
+            'match_threshold'       => ['required', 'numeric', 'between:0.3,0.7'],
+            'is_qr_login_enabled'   => ['nullable', 'boolean'],
+            'is_qr_payroll_enabled' => ['nullable', 'boolean'],
+            'is_qr_thr_enabled'     => ['nullable', 'boolean'],
+            'is_qr_cuti_enabled'    => ['nullable', 'boolean'],
         ]);
 
         $settings = FaceRecognitionService::settings();
-        $settings->update([
+
+        $updateData = [
             'is_enabled'      => (bool) $validated['is_enabled'],
             'match_threshold' => (float) $validated['match_threshold'],
-        ]);
+        ];
 
-        Alert::success('Berhasil', 'Pengaturan face recognition diperbarui.');
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('face_recognition_settings', 'is_qr_login_enabled')) {
+                $updateData['is_qr_login_enabled']   = (bool) ($validated['is_qr_login_enabled'] ?? true);
+                $updateData['is_qr_payroll_enabled'] = (bool) ($validated['is_qr_payroll_enabled'] ?? true);
+                $updateData['is_qr_thr_enabled']     = (bool) ($validated['is_qr_thr_enabled'] ?? true);
+                $updateData['is_qr_cuti_enabled']    = (bool) ($validated['is_qr_cuti_enabled'] ?? true);
+            }
+        } catch (\Throwable $e) {
+            // Abaikan jika pengecekan skema gagal / belum dimigrasi
+        }
+
+        $settings->update($updateData);
+
+        Alert::success('Berhasil', 'Pengaturan face recognition & QR login diperbarui.');
         return back();
     }
 
@@ -122,6 +145,46 @@ class FaceRecognitionController extends Controller
         Alert::success('Berhasil', 'Data wajah ' . $npk . ' berhasil dihapus.');
         return back();
     }
+
+    /**
+     * Cek atau perbarui izin login akun untuk data wajah.
+     */
+     public function canLogin(Request $request, ?EmployeeFace $employeeFace = null)
+     {
+         if ($employeeFace) {
+             $newVal = $employeeFace->can_login ? 0 : 1;
+             $employeeFace->can_login = $newVal;
+             $employeeFace->save();
+
+             $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($employeeFace->npk))])->first();
+             if ($user && $newVal === 1 && (int)$user->disabled === 1) {
+                 $user->disabled = 0;
+                 $user->save();
+             }
+
+             $statusLabel = $newVal ? 'BISA LOGIN' : 'TIDAK BISA LOGIN';
+
+             if ($request->ajax() || $request->wantsJson()) {
+                 return response()->json([
+                     'success'   => true,
+                     'can_login' => (bool)$newVal,
+                     'message'   => 'Status izin login untuk NPK ' . $employeeFace->npk . ' berhasil diubah menjadi: ' . $statusLabel . '.'
+                 ]);
+             }
+
+             \RealRashid\SweetAlert\Facades\Alert::success('Berhasil', 'Status izin login NPK ' . $employeeFace->npk . ' diubah menjadi: ' . $statusLabel . '.');
+             return redirect()->back();
+         }
+
+         $npk  = $request->input('npk');
+         $face = EmployeeFace::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($npk))])->first();
+         $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($npk))])->first();
+         $can  = $face ? (bool)$face->can_login : ($user && (int)$user->disabled === 0);
+
+         return response()->json([
+             'can_login' => $can
+         ]);
+     }
 
     /**
      * Test face recognition dari halaman admin.
@@ -202,273 +265,6 @@ class FaceRecognitionController extends Controller
         ]);
     }
 
-    // =====================================================================
-    // SELF REGISTER FACE RECOGNITION (publik, tanpa login)
-    // =====================================================================
-
-    /**
-     * Halaman wizard self register wajah.
-     */
-    public function selfRegisterPage()
-    {
-        if (!FaceRecognitionService::isEnabled()) {
-            Alert::error('Nonaktif', 'Fitur face recognition sedang dinonaktifkan oleh admin.');
-            return redirect('/');
-        }
-
-        return view('face_recognition.self_register');
-    }
-
-    /**
-     * Step 1-2: cocokkan NPK + No KTP + TGLLAHIR(YYMMDD) di tabel PKWT.
-     * Mengembalikan data verifikasi (semua field read only di sisi klien).
-     */
-    public function selfRegisterVerify(Request $request)
-    {
-        $validated = $request->validate([
-            'npk'       => ['required', 'string', 'max:20'],
-            'ktp'       => ['required', 'string', 'max:30'],
-            'tgl_lahir' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
-        ]);
-
-        $npk = strtoupper(trim($validated['npk']));
-        $ktp = preg_replace('/\s+/', '', $validated['ktp']);
-        $birthInput = $validated['tgl_lahir']; // YYMMDD
-
-        // Ambil kandidat terbaru utk NPK tsb (PKWT bisa punya beberapa baris TMK)
-        $employee = DB::connection('cii')->table('PKWT')
-            ->where('NPK', $npk)
-            ->orderByDesc('TMK')
-            ->first(['NPK', 'NAMA', 'KTP', 'TGLLAHIR', 'JK', 'BAGIAN', 'STATUS', 'TMK', 'TKK']);
-
-        if (!$employee) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Data tidak ditemukan. Periksa kembali NPK Anda.',
-            ], 422);
-        }
-
-        // Normalisasi tanggal lahir PKWT ke YYMMDD untuk dibandingkan.
-        $dbBirth = null;
-        if (!empty($employee->TGLLAHIR)) {
-            $ts = strtotime((string) $employee->TGLLAHIR);
-            if ($ts !== false) {
-                $dbBirth = date('ymd', $ts);
-            }
-        }
-
-        $dbKtp = strtoupper(preg_replace('/\s+/', '', (string) $employee->KTP));
-
-        if ($dbBirth === null || $dbBirth !== $birthInput) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Data tidak cocok dengan berkas karyawan. Silakan hubungi HRD.',
-            ], 422);
-        }
-
-        if ($dbKtp === '' || $dbKtp !== strtoupper(preg_replace('/\s+/', '', $ktp))) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Nomor KTP tidak cocok dengan berkas karyawan. Silakan hubungi HRD.',
-            ], 422);
-        }
-
-        // Cek apakah wajah sudah terdaftar -> minta konfirmasi overwrite
-        $existing = EmployeeFace::query()->where('npk', $npk)->first(['id', 'name', 'updated_at']);
-
-        return response()->json([
-            'status'   => true,
-            'token'    => $this->issueSelfRegisterToken($npk),
-            'employee' => [
-                'npk'      => $employee->NPK,
-                'nama'     => $employee->NAMA,
-                'ktp'      => $this->maskKtp((string) $employee->KTP),
-                'jk'       => $employee->JK,
-                'bagian'   => $employee->BAGIAN,
-                'status'   => $employee->STATUS,
-                'tmk'      => $employee->TMK,
-                'tkk'      => $employee->TKK,
-            ],
-            'already_registered' => (bool) $existing,
-            'registered_at'      => $existing?->updated_at?->toDateTimeString(),
-        ]);
-    }
-
-    /**
-     * Step 4: simpan wajah hasil rekaman dari self register.
-     * Token sekali-pakai membuktikan user sudah lolos verifikasi identitas.
-     */
-    public function selfRegisterStore(Request $request)
-    {
-        $validated = $request->validate([
-            'token'      => ['required', 'string'],
-            'face_img'   => ['required', 'string', 'max:2000000'],
-            'descriptor' => ['required'],
-        ]);
-
-        $npk = $this->consumeSelfRegisterToken($validated['token']);
-
-        if ($npk === null) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Sesi verifikasi kedaluwarsa. Ulangi dari awal.',
-            ], 419);
-        }
-
-        $descriptor = FaceRecognitionService::normalizeDescriptor($validated['descriptor']);
-
-        if ($descriptor === null) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Descriptor wajah tidak valid (harus 128 nilai).',
-            ], 422);
-        }
-
-        if (!preg_match('/^data:image\/(png|jpe?g|webp);base64,/i', $validated['face_img'])) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Format foto wajah tidak valid.',
-            ], 422);
-        }
-
-        $name = $this->resolveEmployeeName($npk) ?? $npk;
-
-        // Self register: wajah TIDAK otomatis berhak login sistem (can_login=false).
-        // Admin menyalakannya lewat toggle di Manage Face Recognition.
-        EmployeeFace::updateOrCreate(
-            ['npk' => $npk],
-            [
-                'name'             => $name,
-                'face_img'         => $validated['face_img'],
-                'descriptor'       => $descriptor,
-                'is_active'        => true,
-                'can_login'        => false,
-                'registered_by'    => null,
-                'last_verified_at' => null,
-            ]
-        );
-
-        return response()->json([
-            'status'  => true,
-            'npk'     => $npk,
-            'name'    => $name,
-            'message' => 'Wajah berhasil disimpan. Lakukan verifikasi akhir.',
-        ]);
-    }
-
-    /**
-     * Step 5: verifikasi wajah yang baru tersimpan terhadap tangkapan kamera live.
-     * Mencocokkan descriptor live vs descriptor tersimpan utk NPK tsb saja.
-     */
-    public function selfRegisterConfirm(Request $request)
-    {
-        $validated = $request->validate([
-            'npk'        => ['required', 'string', 'max:20'],
-            'descriptor' => ['required'],
-        ]);
-
-        $npk = strtoupper(trim($validated['npk']));
-        $live = FaceRecognitionService::normalizeDescriptor($validated['descriptor']);
-
-        if ($live === null) {
-            return response()->json(['status' => false, 'matched' => false, 'message' => 'Descriptor tidak valid.'], 422);
-        }
-
-        $face = EmployeeFace::query()->where('npk', $npk)->whereNotNull('descriptor')->first();
-
-        if (!$face) {
-            return response()->json(['status' => false, 'matched' => false, 'message' => 'Data wajah belum tersimpan.'], 404);
-        }
-
-        $stored = FaceRecognitionService::normalizeDescriptor($face->descriptor);
-
-        if ($stored === null) {
-            return response()->json(['status' => false, 'matched' => false, 'message' => 'Data wajah tersimpan rusak. Ulangi registrasi.'], 422);
-        }
-
-        $distance  = FaceRecognitionService::euclidean($live, $stored);
-        $threshold = FaceRecognitionService::threshold();
-        $matched   = $distance <= $threshold;
-
-        if ($matched) {
-            $face->update(['last_verified_at' => now()]);
-        }
-
-        return response()->json([
-            'status'    => true,
-            'matched'   => $matched,
-            'distance'  => round($distance, 4),
-            'threshold' => $threshold,
-            'message'   => $matched
-                ? 'Verifikasi berhasil. Registrasi wajah selesai.'
-                : 'Wajah belum cocok dengan yang tersimpan. Ulangi pengambilan foto.',
-        ]);
-    }
-
-    /**
-     * Toggle can_login per wajah (dari halaman Manage).
-     */
-    public function toggleCanLogin(EmployeeFace $employeeFace)
-    {
-        $employeeFace->update(['can_login' => !$employeeFace->can_login]);
-
-        Alert::success('Berhasil', 'Hak login wajah ' . $employeeFace->npk . ' diperbarui.');
-        return back();
-    }
-
-    /**
-     * Token sementara bukti lolos step 1-2 self register (tanpa session login).
-     */
-    private function issueSelfRegisterToken(string $npk): string
-    {
-        $payload = json_encode(['npk' => $npk, 'exp' => time() + 900]);
-        $b64 = rtrim(strtr(base64_encode((string) $payload), '+/', '-_'), '=');
-        $sig = rtrim(strtr(base64_encode(hash_hmac('sha256', (string) $payload, config('app.key'), true)), '+/', '-_'), '=');
-
-        return $b64 . '.' . $sig;
-    }
-
-    private function consumeSelfRegisterToken(string $token): ?string
-    {
-        try {
-            $raw = base64_decode(strtr($token, '-_', '+/'));
-            // npk belum diketahui -> pakai key app utk dekripsi generik via payload npk lookup
-            // Sederhana: iterasi kandidat tidak feasible; kita sandi dgn app.key + nonce npk.
-            // Untuk itu token dibuat memakai hash(npk) sbg IV; di sini kita coba decode dgn setiap
-            // kemungkinan IV tidak realistis. Maka desain ulang: token = base64(json) + HMAC(app.key).
-            $parts = explode('.', $token);
-            if (count($parts) !== 2) {
-                return null;
-            }
-            [$b64, $sig] = $parts;
-            $json = base64_decode(strtr($b64, '-_', '+/'));
-            $expect = rtrim(strtr(base64_encode(hash_hmac('sha256', (string) $json, config('app.key'), true)), '+/', '-_'), '=');
-
-            if (!hash_equals($expect, $sig)) {
-                return null;
-            }
-
-            $data = json_decode((string) $json, true);
-
-            if (!is_array($data) || empty($data['npk']) || empty($data['exp']) || $data['exp'] < time()) {
-                return null;
-            }
-
-            return strtoupper(trim((string) $data['npk']));
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    private function maskKtp(string $ktp): string
-    {
-        if (strlen($ktp) <= 4) {
-            return $ktp;
-        }
-
-        return str_repeat('*', strlen($ktp) - 4) . substr($ktp, -4);
-    }
-
     private function resolveEmployeeName(string $npk): ?string
     {
         try {
@@ -494,5 +290,291 @@ class FaceRecognitionController extends Controller
         }
 
         return User::query()->where('npk', $npk)->value('name');
+    }
+
+    /**
+     * Halaman wizard self register wajah.
+     */
+    public function selfRegisterPage()
+    {
+        if (!FaceRecognitionService::isEnabled()) {
+            Alert::error('Nonaktif', 'Fitur face recognition sedang dinonaktifkan oleh admin.');
+            return redirect('/');
+        }
+
+        return view('face_recognition.self_register');
+    }
+
+    /**
+     * Step 1: cocokkan NPK + TGLLAHIR (YYMMDD) di tabel PKWT (tanpa NIK/KTP).
+     */
+    public function selfRegisterVerify(Request $request)
+    {
+        $validated = $request->validate([
+            'npk'       => ['required', 'string', 'max:20'],
+            'tgl_lahir' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
+        ]);
+
+        $npk = strtoupper(trim($validated['npk']));
+        $birthInput = $validated['tgl_lahir']; // YYMMDD
+
+        $employee = DB::connection('cii')->table('PKWT')
+            ->where('NPK', $npk)
+            ->orderByDesc('TMK')
+            ->first(['NPK', 'NAMA', 'TGLLAHIR', 'JK', 'BAGIAN', 'STATUS', 'TMK', 'TKK']);
+
+        if (!$employee) {
+            // Coba fallback ke tabel BIODATA jika ada
+            try {
+                $biodata = DB::connection('cii')->table('BIODATA')->where('NPK', $npk)->first();
+                if ($biodata) {
+                    $employee = (object) [
+                        'NPK'      => $biodata->NPK,
+                        'NAMA'     => $biodata->NAMA_KARYAWAN ?? $biodata->NAMA ?? $npk,
+                        'TGLLAHIR' => $biodata->TGL_LAHIR ?? null,
+                        'JK'       => $biodata->JENIS_KELAMIN ?? '-',
+                        'BAGIAN'   => $biodata->BAGIAN ?? '-',
+                        'STATUS'   => 'AKTIF',
+                    ];
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        if (!$employee) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Data tidak ditemukan. Periksa kembali NPK Anda.',
+            ], 422);
+        }
+
+        $dbBirth = null;
+        if (!empty($employee->TGLLAHIR)) {
+            $ts = strtotime((string) $employee->TGLLAHIR);
+            if ($ts !== false) {
+                $dbBirth = date('ymd', $ts);
+            }
+        }
+
+        if ($dbBirth === null || $dbBirth !== $birthInput) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Tanggal lahir tidak cocok. Format harus YYMMDD (contoh: 980512).',
+            ], 422);
+        }
+
+        $existing = EmployeeFace::query()
+            ->where('npk', $npk)
+            ->whereNotNull('descriptor')
+            ->first(['id', 'name', 'updated_at']);
+
+        if ($existing) {
+            return response()->json([
+                'status'             => false,
+                'already_registered' => true,
+                'message'            => 'Wajah Anda sudah terdaftar di sistem. Harap hubungi HRD jika ada kesalahan data atau ingin memperbarui wajah.',
+            ], 422);
+        }
+
+        return response()->json([
+            'status'   => true,
+            'token'    => $this->issueSelfRegisterToken($npk),
+            'employee' => [
+                'npk'      => $employee->NPK,
+                'nama'     => $employee->NAMA,
+                'jk'       => $employee->JK ?? '-',
+                'bagian'   => $employee->BAGIAN ?? '-',
+                'status'   => $employee->STATUS ?? '-',
+            ],
+        ]);
+    }
+
+    /**
+     * Step 2: Simpan foto & descriptor wajah.
+     */
+    public function selfRegisterStore(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'token'      => ['required', 'string'],
+                'face_img'   => ['required', 'string', 'max:2000000'],
+                'descriptor' => ['required'],
+            ]);
+
+            $npk = $this->consumeSelfRegisterToken($validated['token']);
+
+            if ($npk === null) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Sesi verifikasi kedaluwarsa. Ulangi dari awal.',
+                ], 419);
+            }
+
+            $descriptor = FaceRecognitionService::normalizeDescriptor($validated['descriptor']);
+
+            if ($descriptor === null) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Descriptor wajah tidak valid (harus 128 nilai).',
+                ], 422);
+            }
+
+            if (!preg_match('/^data:image\/(png|jpe?g|webp);base64,/i', $validated['face_img'])) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Format foto wajah tidak valid.',
+                ], 422);
+            }
+
+            $name = $this->resolveEmployeeName($npk) ?? $npk;
+
+            $facePayload = [
+                'name'             => $name,
+                'face_img'         => $validated['face_img'],
+                'descriptor'       => $descriptor,
+                'is_active'        => true,
+                'registered_by'    => null,
+                'last_verified_at' => null,
+            ];
+
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasColumn('employee_faces', 'can_login')) {
+                    $facePayload['can_login'] = 1;
+                }
+            } catch (\Throwable $e) {}
+
+            EmployeeFace::updateOrCreate(
+                ['npk' => $npk],
+                $facePayload
+            );
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Foto wajah berhasil disimpan. Lanjut verifikasi wajah.',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('selfRegisterStore error: ' . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'Terjadi kesalahan sistem saat menyimpan foto wajah: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Step 3: Verifikasi konfirmasi wajah real-time.
+     */
+    public function selfRegisterConfirm(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'npk'        => ['required', 'string', 'max:20'],
+                'descriptor' => ['required'],
+            ]);
+
+            $npk = strtoupper(trim($validated['npk']));
+            $live = FaceRecognitionService::normalizeDescriptor($validated['descriptor']);
+
+            if ($live === null) {
+                return response()->json(['status' => false, 'matched' => false, 'message' => 'Descriptor tidak valid.'], 422);
+            }
+
+            $face = EmployeeFace::query()->where('npk', $npk)->whereNotNull('descriptor')->first();
+
+            if (!$face) {
+                return response()->json(['status' => false, 'matched' => false, 'message' => 'Data wajah belum tersimpan.'], 404);
+            }
+
+            $stored = FaceRecognitionService::normalizeDescriptor($face->descriptor);
+
+            if ($stored === null) {
+                return response()->json(['status' => false, 'matched' => false, 'message' => 'Data wajah tersimpan rusak. Ulangi registrasi.'], 422);
+            }
+
+            $distance = FaceRecognitionService::euclidean($live, $stored);
+
+            $threshold = 0.55;
+            try {
+                $threshold = FaceRecognitionService::threshold();
+                if ($threshold < 0.50) {
+                    $threshold = 0.55;
+                }
+            } catch (\Throwable $e) {
+                $threshold = 0.55;
+            }
+
+            $matched = $distance <= $threshold;
+
+            if ($matched) {
+                $updateData = ['last_verified_at' => now()];
+                try {
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('employee_faces', 'can_login')) {
+                        $updateData['can_login'] = 1;
+                    }
+                } catch (\Throwable $e) {}
+
+                $face->update($updateData);
+
+                // Jika NPK karyawan ada di tabel users, secara default langsung beri hak login (disabled = 0)
+                try {
+                    $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [$npk])->first();
+                    if ($user && (int) $user->disabled === 1) {
+                        $user->disabled = 0;
+                        $user->save();
+                    }
+                } catch (\Throwable $e) {}
+            }
+
+            return response()->json([
+                'status'    => true,
+                'matched'   => $matched,
+                'distance'  => round($distance, 4),
+                'threshold' => $threshold,
+                'message'   => $matched
+                    ? 'Verifikasi berhasil. Registrasi wajah selesai.'
+                    : 'Wajah belum cocok dengan yang tersimpan. Hadapkan wajah ke kamera lebih jelas.',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('selfRegisterConfirm error: ' . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'matched' => false,
+                'message' => 'Terjadi kesalahan sistem saat konfirmasi: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Token sementara verifikasi identitas (900 detik).
+     */
+    private function issueSelfRegisterToken(string $npk): string
+    {
+        $payload = json_encode(['npk' => $npk, 'exp' => time() + 900]);
+        $b64 = rtrim(strtr(base64_encode((string) $payload), '+/', '-_'), '=');
+        $sig = rtrim(strtr(base64_encode(hash_hmac('sha256', (string) $payload, config('app.key'), true)), '+/', '-_'), '=');
+
+        return $b64 . '.' . $sig;
+    }
+
+    private function consumeSelfRegisterToken(string $token): ?string
+    {
+        try {
+            $parts = explode('.', $token);
+            if (count($parts) !== 2) return null;
+
+            [$b64, $sig] = $parts;
+            $raw = base64_decode(strtr($b64, '-_', '+/'));
+            $expectedSig = rtrim(strtr(base64_encode(hash_hmac('sha256', (string) $raw, config('app.key'), true)), '+/', '-_'), '=');
+
+            if (!hash_equals($expectedSig, $sig)) return null;
+
+            $data = json_decode($raw, true);
+            if (!$data || !isset($data['npk'], $data['exp']) || time() > $data['exp']) {
+                return null;
+            }
+
+            return $data['npk'];
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }

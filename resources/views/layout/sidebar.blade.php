@@ -1,8 +1,36 @@
 @php
     use App\Models\Menu;
+    use App\Models\Role;
+    use App\Models\User;
+    use Illuminate\Support\Facades\Auth;
+    use Illuminate\Support\Facades\Session;
 
-    $role = $roleusers[0]->rolename;
-    $currentRole = \App\Models\Role::where('name', $role)->first();
+    if (!isset($roleusers) || empty($roleusers) || (is_countable($roleusers) && count($roleusers) === 0)) {
+        $userId = Auth::id();
+        if (!$userId && Session::has('face_attendance_npk')) {
+            $sessNpk = Session::get('face_attendance_npk');
+            $u = User::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($sessNpk))])->first();
+            if ($u) {
+                $userId = $u->id;
+            }
+        }
+
+        if ($userId) {
+            $roleusers = User::select('users.name', 'users.email', 'users.id', 'model_has_roles.*', 'roles.name as rolename')
+                ->leftJoin('model_has_roles', 'model_has_roles.model_id', '=', 'users.id')
+                ->leftJoin('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                ->where('users.id', '=', $userId)
+                ->get();
+        } else {
+            $roleusers = collect();
+        }
+    }
+
+    $role = (isset($roleusers) && count($roleusers) > 0 && isset($roleusers[0]->rolename))
+        ? $roleusers[0]->rolename
+        : 'User';
+
+    $currentRole = Role::where('name', $role)->first();
     $sidebarMenus = $currentRole ? Menu::buildSidebarFor($currentRole) : collect();
 @endphp
 

@@ -3,35 +3,34 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmployeeFace extends Model
 {
-    protected $table = 'employee_faces';
-
     protected $fillable = [
         'npk',
         'name',
         'face_img',
         'descriptor',
         'is_active',
-        'can_login',
         'registered_by',
         'last_verified_at',
+        'can_login',
     ];
 
     protected $casts = [
-        'descriptor'       => 'array',
         'is_active'        => 'boolean',
-        'can_login'        => 'boolean',
+        'descriptor'       => 'array',
         'last_verified_at' => 'datetime',
+        'can_login'        => 'boolean',
     ];
 
-    /**
-     * User yang mendaftarkan wajah ini (FK → users.id).
-     */
-    public function registeredBy(): BelongsTo
+    public function registeredBy()
     {
-        return $this->belongsTo(\App\Models\User::class, 'registered_by');
+        return $this->belongsTo(User::class, 'registered_by');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'npk', 'npk');
     }
 }

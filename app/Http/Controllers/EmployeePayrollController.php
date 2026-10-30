@@ -31,10 +31,10 @@ class EmployeePayrollController extends Controller
             ->get();
 
         return view('payroll.employee_payroll', [
-            'npk' => $request->npk,
-            'periods' => $periods,
+            'npk'         => $request->npk,
+            'periods'     => $periods,
             'faceEnabled' => FaceRecognitionService::isEnabled(),
-            'qrEnabled'   => FaceRecognitionService::isQrEnabled(),
+            'qrEnabled'   => FaceRecognitionService::isQrPayrollEnabled(),
         ]);
     }
 
@@ -99,10 +99,10 @@ class EmployeePayrollController extends Controller
 
     public function qrLogin(Request $request)
     {
-        if (!\App\Services\FaceRecognitionService::isQrEnabled()) {
-            \Alert::error('Akses Ditolak', 'Fitur QR Login sedang dinonaktifkan oleh admin.');
-            return back();
+        if (!FaceRecognitionService::isQrPayrollEnabled()) {
+            return redirect()->back()->with('error', 'Login QR Code untuk Slip Gaji sedang dinonaktifkan.');
         }
+
         $npk = $request->npk;
         $runId = $request->run_id;
 

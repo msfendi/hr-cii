@@ -275,6 +275,7 @@
                                     <th>Absence</th>
                                     <th>Late Deduction</th>
                                     <th>Work Leave Deduction</th>
+                                    <th>Pinalty Deduction</th>
                                     <th>Total Salary</th>
                                     <th>% Difference</th>
                                     <th>Status</th>
@@ -291,6 +292,7 @@
                                         color:#003366;
                                     ">
                                     <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -1103,7 +1105,7 @@ buttons: [
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
                 11,12,13,14,15,16,17,18,
-                19,20,21,22,23,24,25,26,27,28,29,30
+                19,20,21,22,23,24,25,26,27,28,29,30,31
             ],
 
             format: {
@@ -1555,6 +1557,19 @@ buttons: [
             },
 
             {
+                data:'components.pinalty_deduction.amount',
+                defaultContent:0,
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMaskColored(data ?? 0, row.components?.pinalty_deduction?.type);
+                }
+            },
+
+            {
                 data:'total_salary',
                 defaultContent:0,
                 render:function(data,type){
@@ -1815,7 +1830,8 @@ buttons: [
         {index:25, field:'pph_21_deduction'},
         {index:26, field:'absence_deduction'},
         {index:27, field:'late_deduction'},
-        {index:28, field:'work_leave_deduction'}
+        {index:28, field:'work_leave_deduction'},
+        {index:29, field:'pinalty_deduction'}
     ];
 
     currencyFields.forEach(function(cfg){
@@ -1852,12 +1868,12 @@ buttons: [
 
     });
 
-    // TOTAL SALARY (kolom 29) tetap net, tanpa dibalik tandanya
+    // TOTAL SALARY (kolom 30) tetap net, tanpa dibalik tandanya
     let totalSalarySum = rowsData.reduce(function(sum, rowData){
         return sum + Number(rowData.total_salary || 0);
     }, 0);
 
-    $(api.column(29).footer())
+    $(api.column(30).footer())
         .html(formatRupiah(totalSalarySum));
 
 }

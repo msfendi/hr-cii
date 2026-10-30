@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\FaceRecognitionService;
-
 use App\Models\ApprovalDept;
 use App\Models\ApprovalRule;
 use App\Models\Biodata;
@@ -11,6 +9,7 @@ use App\Models\Holiday;
 use App\Models\LeaveBalances;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
+use App\Services\FaceRecognitionService;
 use App\Services\LeaveDayService;
 use App\Services\LeaveRuleService;
 use Carbon\Carbon;
@@ -25,8 +24,8 @@ class PengajuanCutiController extends Controller
     public function login()
     {
         return view('cuti.login', [
-            'qrEnabled'   => FaceRecognitionService::isQrEnabled(),
-            'faceEnabled' => \App\Services\FaceRecognitionService::isEnabled(),
+            'qrEnabled'   => FaceRecognitionService::isQrCutiEnabled(),
+            'faceEnabled' => FaceRecognitionService::isEnabled(),
         ]);
     }
 
@@ -71,66 +70,13 @@ class PengajuanCutiController extends Controller
         return redirect()->route('pengajuan-cuti.form');
     }
 
-    public function faceLogin(Request $request)
-    {
-        if (!FaceRecognitionService::isEnabled()) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Face recognition sedang dinonaktifkan oleh admin.',
-            ], 403);
-        }
-
-        $descriptor = FaceRecognitionService::normalizeDescriptor($request->input('descriptor'));
-
-        if ($descriptor === null) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Data wajah tidak valid. Silakan coba lagi.',
-            ], 422);
-        }
-
-        $result = FaceRecognitionService::match($descriptor);
-
-        if (!FaceRecognitionService::isConfidentMatch($result)) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Wajah tidak dikenali. Pastikan wajah Anda sudah terdaftar.',
-            ], 401);
-        }
-
-        $face = $result['face'];
-
-        // Cek keberadaan karyawan di tabel PKWT
-        $employee = DB::connection('cii')->table('PKWT')->where('NPK', $face->npk)->first();
-
-        if (!$employee) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'Wajah dikenali (' . $face->npk . '), namun data karyawan tidak ditemukan.',
-            ], 404);
-        }
-
-        $face->update(['last_verified_at' => now()]);
-
-        // Login ke session pengajuan cuti
-        session(['cuti_employee_npk' => $employee->NPK]);
-
-        Alert::success('Berhasil', 'Login Face Recognition berhasil.');
-
-        return response()->json([
-            'status'   => true,
-            'npk'      => $employee->NPK,
-            'name'     => $face->name ?? $employee->NAMA,
-            'redirect' => route('pengajuan-cuti.form'),
-        ]);
-    }
-
     public function qrLogin(Request $request)
     {
-        if (!\App\Services\FaceRecognitionService::isQrEnabled()) {
-            \Alert::error('Akses Ditolak', 'Fitur QR Login sedang dinonaktifkan oleh admin.');
-            return back();
+        if (!FaceRecognitionService::isQrCutiEnabled()) {
+            Alert::error('Error', 'Login QR Code untuk Pengajuan Cuti sedang dinonaktifkan.');
+            return redirect()->route('pengajuan-cuti.login');
         }
+
         $npk = $request->npk;
         
         $employee = DB::connection('cii')->table('PKWT')->where('NPK', $npk)->first();
@@ -143,6 +89,43 @@ class PengajuanCutiController extends Controller
         session(['cuti_employee_npk' => $employee->NPK]);
         Alert::success('Berhasil', 'Login dengan QR Code berhasil');
         return redirect()->route('pengajuan-cuti.form');
+    }
+
+    public function faceLogin(Request $request)
+    {
+        $descriptor = $request->input('descriptor');
+        if (!$descriptor) {
+            return response()->json(['success' => false, 'message' => 'Data wajah tidak terdeteksi. Silakan coba kembali.']);
+        }
+
+        $descriptor = \App\Services\FaceRecognitionService::normalizeDescriptor($descriptor);
+        if (!$descriptor) {
+            return response()->json(['success' => false, 'message' => 'Descriptor wajah tidak valid.']);
+        }
+
+        $matchResult = \App\Services\FaceRecognitionService::match($descriptor);
+        if (!\App\Services\FaceRecognitionService::isConfidentMatch($matchResult)) {
+            return response()->json(['success' => false, 'message' => 'Wajah tidak dikenali atau belum terdaftar pada sistem.']);
+        }
+
+        $employeeFace = $matchResult['face'] ?? null;
+        if (!$employeeFace || !$employeeFace->npk) {
+            return response()->json(['success' => false, 'message' => 'Data NPK karyawan tidak ditemukan dari rekaman wajah.']);
+        }
+
+        $npk = $employeeFace->npk;
+        $employee = DB::connection('cii')->table('PKWT')->where('NPK', $npk)->first();
+        if (!$employee) {
+            return response()->json(['success' => false, 'message' => 'Karyawan dengan NPK ' . $npk . ' tidak ditemukan di database.']);
+        }
+
+        session(['cuti_employee_npk' => $employee->NPK]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login Berhasil! Selamat datang, ' . ($employeeFace->name ?? $employee->NAMA ?? $employee->NPK),
+            'redirect_url' => route('pengajuan-cuti.form')
+        ]);
     }
 
     public function form(Request $request, LeaveRuleService $leaveRuleService)

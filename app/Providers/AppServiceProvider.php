@@ -70,6 +70,8 @@ class AppServiceProvider extends ServiceProvider
                     ->get();
 
                 View::share(['roleusers' => $roleusers]);
+            } else {
+                View::share(['roleusers' => collect()]);
             }
         });
     }

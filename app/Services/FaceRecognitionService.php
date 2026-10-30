@@ -34,11 +34,6 @@ class FaceRecognitionService
         return (bool) static::settings()->is_enabled;
     }
 
-    public static function isQrEnabled(): bool
-    {
-        return (bool) static::settings()->is_qr_enabled;
-    }
-
     public static function threshold(): float
     {
         $value = static::settings()->match_threshold;
@@ -48,6 +43,46 @@ class FaceRecognitionService
         }
 
         return (float) $value;
+    }
+
+    public static function isQrLoginEnabled(): bool
+    {
+        try {
+            $settings = static::settings();
+            return isset($settings->is_qr_login_enabled) ? (bool) $settings->is_qr_login_enabled : true;
+        } catch (\Throwable $e) {
+            return true;
+        }
+    }
+
+    public static function isQrPayrollEnabled(): bool
+    {
+        try {
+            $settings = static::settings();
+            return isset($settings->is_qr_payroll_enabled) ? (bool) $settings->is_qr_payroll_enabled : true;
+        } catch (\Throwable $e) {
+            return true;
+        }
+    }
+
+    public static function isQrThrEnabled(): bool
+    {
+        try {
+            $settings = static::settings();
+            return isset($settings->is_qr_thr_enabled) ? (bool) $settings->is_qr_thr_enabled : true;
+        } catch (\Throwable $e) {
+            return true;
+        }
+    }
+
+    public static function isQrCutiEnabled(): bool
+    {
+        try {
+            $settings = static::settings();
+            return isset($settings->is_qr_cuti_enabled) ? (bool) $settings->is_qr_cuti_enabled : true;
+        } catch (\Throwable $e) {
+            return true;
+        }
     }
 
     /**

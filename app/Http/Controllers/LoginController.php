@@ -17,7 +17,7 @@ class LoginController extends Controller
     {
         return view('auth.login', [
             'faceEnabled' => FaceRecognitionService::isEnabled(),
-            'qrEnabled'   => FaceRecognitionService::isQrEnabled(),
+            'qrEnabled'   => FaceRecognitionService::isQrLoginEnabled(),
         ]);
     }
 
@@ -132,10 +132,10 @@ class LoginController extends Controller
 
     public function qrauth(Request $request)
     {
-        if (!FaceRecognitionService::isQrEnabled()) {
+        if (!FaceRecognitionService::isQrLoginEnabled()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Fitur QR Login sedang dinonaktifkan oleh admin.',
+                'message' => 'Login QR Code sedang dinonaktifkan oleh administrator.',
             ], 403);
         }
 
@@ -260,11 +260,10 @@ class LoginController extends Controller
 
         $face = $result['face'];
 
-        if (!(bool) ($face->can_login ?? false)) {
-            // Wajah terdaftar tapi TIDAK diberi hak login sistem.
+        if (isset($face->can_login) && (int) $face->can_login === 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Wajah Anda terdaftar namun belum diizinkan untuk login sistem. Hubungi admin HRIS.',
+                'message' => 'Izin login menggunakan wajah dinonaktifkan untuk akun Anda. Harap hubungi admin.',
             ], 403);
         }
 

@@ -11,21 +11,26 @@
          </div>
          <div class="card shadow-lg my-5">
             <div class="card-body">
+               @php
+                  $showQr = $qrEnabled ?? true;
+               @endphp
                <ul class="nav nav-tabs">
+                  @if($showQr)
                   <li class="nav-item">
                      <a class="nav-link active" data-toggle="tab" href="#qrlogin">
-                     QR Code Login
+                        <i class="fas fa-qrcode mr-1"></i> QR Code Login
                      </a>
                   </li>
+                  @endif
                   <li class="nav-item">
-                     <a class="nav-link" data-toggle="tab" href="#manual">
-                     Manual Login
+                     <a class="nav-link {{ !$showQr ? 'active' : '' }}" data-toggle="tab" href="#manual">
+                        <i class="fas fa-keyboard mr-1"></i> Manual Login
                      </a>
                   </li>
                </ul>
                <div class="tab-content mt-4">
                   {{-- ================= MANUAL LOGIN ================= --}}
-                  <div class="tab-pane fade" id="manual">
+                  <div class="tab-pane fade {{ !$showQr ? 'show active' : '' }}" id="manual">
                      <form id="manualLoginForm">
                         @csrf
                         <div class="form-group">
@@ -53,13 +58,8 @@
                      </form>
                   </div>
                   {{-- ================= QR LOGIN ================= --}}
+                  @if($showQr)
                   <div class="tab-pane fade show active" id="qrlogin">
-                     @if(!($qrEnabled ?? true))
-                     <div class="alert alert-warning text-center m-3">
-                        <i class="fas fa-ban mr-1"></i><strong>QR Login dinonaktifkan.</strong><br>
-                        <small>Fitur QR Login sedang dinonaktifkan oleh admin.</small>
-                     </div>
-                     @endif
                      <div id="step1">
                         <div class="form-group">
                            <label>Pilih Periode</label>
@@ -93,6 +93,7 @@
                         </form>
                      </div>
                   </div>
+                  @endif
                </div>
             </div>
          </div>

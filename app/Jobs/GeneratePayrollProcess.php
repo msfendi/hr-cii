@@ -223,7 +223,10 @@ class GeneratePayrollProcess implements ShouldQueue
                 'ec1.allowance',
                 'ec1.pph21',
                 'ec1.type',
-                'ec1.daily_salary'
+                'ec1.daily_salary',
+                'ec1.contract_ke',
+                'ec1.start_date',
+                'ec1.end_date'
             )
             ->where('ec1.npk', '!=', 'C-00017')
             // ->where('ec1.npk', '=', 'C-04477')
@@ -1009,6 +1012,8 @@ END AS special_overtime_hours
                 'ec.pph21',
                 'ec.type',
                 'ec.daily_salary',
+                'ec.start_date as contract_start_date',
+                'ec.end_date as contract_end_date',
                 'be.percentkes',
                 'be.percentket',
                 'be.is_excepkes',
@@ -1416,6 +1421,31 @@ END AS special_overtime_hours
             // tambahan: khusus untuk cek TKK apakah jatuh di periode berjalan
             $isTkkInPeriod = ($tkk && $tkk->between($periodStart, $periodEnd)) ? 1 : 0;
 
+            /*
+            |--------------------------------------------------------------------------
+            | PINALTY DEDUCTION (KARYAWAN KELUAR DENGAN SPD)
+            |--------------------------------------------------------------------------
+            | Berlaku jika PKWT.KETERANGAN = 'SPD' dan TKK jatuh di periode
+            | payroll berjalan. Kontrak yang dipakai = kontrak aktif di periode
+            | ($latestContract: contract_ke terbesar, start_date terbaru).
+            | Rumus (ada di payroll_components.formula):
+            |   (salary * sisa_bulan) + (salary * sisa_hari / 30)
+            |--------------------------------------------------------------------------
+            */
+            $isSpd = strtoupper(trim((string) $employee->KETERANGAN)) === 'SPD';
+            $contractEnd = !empty($employee->contract_end_date)
+                ? Carbon::parse($employee->contract_end_date)
+                : null;
+
+            $pinaltyMonths = 0;
+            $pinaltyDays   = 0;
+
+            if ($isSpd && $isTkkInPeriod && $tkk && $contractEnd) {
+                [$pinaltyMonths, $pinaltyDays] = $this->calculateContractRemaining($tkk, $contractEnd);
+            }
+
+            $isSpdPinalty = ($isSpd && $isTkkInPeriod && $contractEnd) ? 1 : 0;
+
             // meal_days: hanya karyawan expat (komponen "Meal Allowance Expat")
             $mealDays = $employee->IS_EXPAT == '1'
                 ? (float) max(0, $mealTotalDays - count($mealAbsenceByNpk[$employee->NPK] ?? []))
@@ -1472,6 +1502,11 @@ END AS special_overtime_hours
                 'tkk_in_period' => $isTkkInPeriod,
                 'tkk_day'        => $tkk ? (float) $tkk->day : 0,
                 'has_tkk'        => $tkk ? 1 : 0,
+                // BARU — dipakai formula pinalty_deduction (karyawan SPD)
+                'is_spd'         => $isSpdPinalty,
+                'pinalty_salary' => (float) $employee->salary,
+                'pinalty_months' => (float) $pinaltyMonths,
+                'pinalty_days'   => (float) $pinaltyDays,
             ];
 
             /*
@@ -2802,6 +2837,11 @@ END AS special_overtime_hours
                     'tkk_in_period' => $isTkkInPeriod,
                     'tkk_day'        => $tkk ? (float) $tkk->day : 0,
                     'has_tkk'        => $tkk ? 1 : 0,
+                    // BARU — dipakai formula pinalty_deduction (karyawan SPD)
+                    'is_spd'         => $isSpdPinalty,
+                    'pinalty_salary' => (float) $employee->salary,
+                    'pinalty_months' => (float) $pinaltyMonths,
+                    'pinalty_days'   => (float) $pinaltyDays,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'tanggungan' => $employee->TANGGUNGAN,
@@ -2912,6 +2952,56 @@ END AS special_overtime_hours
         if ($isCheck) {
             return $payrollResults;
         }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PINALTY SPD — SISA KONTRAK
+    |--------------------------------------------------------------------------
+    | Menghitung sisa kontrak dari TKK sampai end_date kontrak aktif.
+    |
+    | - Bulan "genap" (cut off) jatuh setiap tanggal end_date kontrak, dihitung
+    |   MUNDUR dari end_date. Contoh end_date 2027-05-07 => cut off tiap
+    |   tanggal 7 (07 Mei, 07 Apr, 07 Mar, dst).
+    | - sisa_bulan = jumlah cut off penuh antara TKK dan end_date.
+    | - sisa_hari  = selisih hari kalender (weekend & libur ikut dihitung)
+    |                dari TKK ke cut off terdekat setelah TKK.
+    | - TKK dianggap hari pertama tidak bekerja (konsisten dengan hitungan OUT).
+    |
+    | Contoh: TKK 2026-10-20, end_date 2027-05-07
+    |   cut off: 07 Nov, 07 Des, 07 Jan, 07 Feb, 07 Mar, 07 Apr, 07 Mei = 6 bulan
+    |   sisa hari: 20 Okt -> 07 Nov = 18 hari
+    |
+    | @return array [sisa_bulan, sisa_hari]
+    */
+    private function calculateContractRemaining(Carbon $tkk, Carbon $contractEnd): array
+    {
+        $tkk = $tkk->copy()->startOfDay();
+        $end = $contractEnd->copy()->startOfDay();
+
+        if ($tkk->gte($end)) {
+            return [0, 0];
+        }
+
+        $months = 0;
+        $anchor = $end->copy();
+
+        while (true) {
+            // subMonthsNoOverflow dari end_date (bukan iteratif) supaya hari
+            // cut off tetap konsisten, mis. end_date tgl 31 -> 28/29 Feb.
+            $prev = $end->copy()->subMonthsNoOverflow($months + 1);
+
+            if ($prev->lt($tkk)) {
+                break;
+            }
+
+            $months++;
+            $anchor = $prev;
+        }
+
+        $days = (int) floor(abs($tkk->diffInDays($anchor)));
+
+        return [$months, $days];
     }
 
     private function evaluateFormula($formula, $results, $inputVariables)
