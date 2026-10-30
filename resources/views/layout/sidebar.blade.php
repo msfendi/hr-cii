@@ -9,10 +9,12 @@
         $userId = Auth::id();
         if (!$userId && Session::has('face_attendance_npk')) {
             $sessNpk = Session::get('face_attendance_npk');
-            $u = User::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($sessNpk))])->first();
-            if ($u) {
-                $userId = $u->id;
-            }
+            try {
+                $u = User::whereRaw("UPPER(LTRIM(RTRIM(npk))) = ?", [strtoupper(trim($sessNpk))])->first();
+                if ($u) {
+                    $userId = $u->id;
+                }
+            } catch (\Throwable $e) {}
         }
 
         if ($userId) {

@@ -78,11 +78,13 @@ class FaceRecognitionController extends Controller
         );
 
         // Jika karyawan memiliki akun di tabel users, pastikan hak login aktif (disabled = 0)
-        $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [$npk])->first();
-        if ($user && (int) $user->disabled === 1) {
-            $user->disabled = 0;
-            $user->save();
-        }
+        try {
+            $user = User::whereRaw("UPPER(LTRIM(RTRIM(npk))) = ?", [$npk])->first();
+            if ($user && (int) $user->disabled === 1) {
+                $user->disabled = 0;
+                $user->save();
+            }
+        } catch (\Throwable $e) {}
 
         Alert::success('Berhasil', 'Wajah karyawan ' . $npk . ' berhasil disimpan.');
         return back();
@@ -156,11 +158,14 @@ class FaceRecognitionController extends Controller
              $employeeFace->can_login = $newVal;
              $employeeFace->save();
 
-             $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($employeeFace->npk))])->first();
-             if ($user && $newVal === 1 && (int)$user->disabled === 1) {
-                 $user->disabled = 0;
-                 $user->save();
-             }
+             $user = null;
+             try {
+                 $user = User::whereRaw("UPPER(LTRIM(RTRIM(npk))) = ?", [strtoupper(trim($employeeFace->npk))])->first();
+                 if ($user && $newVal === 1 && (int)$user->disabled === 1) {
+                     $user->disabled = 0;
+                     $user->save();
+                 }
+             } catch (\Throwable $e) {}
 
              $statusLabel = $newVal ? 'BISA LOGIN' : 'TIDAK BISA LOGIN';
 
@@ -174,12 +179,16 @@ class FaceRecognitionController extends Controller
 
              \RealRashid\SweetAlert\Facades\Alert::success('Berhasil', 'Status izin login NPK ' . $employeeFace->npk . ' diubah menjadi: ' . $statusLabel . '.');
              return redirect()->back();
-         }
+             }
 
-         $npk  = $request->input('npk');
-         $face = EmployeeFace::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($npk))])->first();
-         $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [strtoupper(trim($npk))])->first();
-         $can  = $face ? (bool)$face->can_login : ($user && (int)$user->disabled === 0);
+             $npk  = $request->input('npk');
+             $face = null;
+             $user = null;
+             try {
+             $face = EmployeeFace::whereRaw("UPPER(LTRIM(RTRIM(npk))) = ?", [strtoupper(trim($npk))])->first();
+             $user = User::whereRaw("UPPER(LTRIM(RTRIM(npk))) = ?", [strtoupper(trim($npk))])->first();
+             } catch (\Throwable $e) {}
+             $can  = $face ? (bool)$face->can_login : ($user && (int)$user->disabled === 0);
 
          return response()->json([
              'can_login' => $can
@@ -520,7 +529,7 @@ class FaceRecognitionController extends Controller
 
                 // Jika NPK karyawan ada di tabel users, secara default langsung beri hak login (disabled = 0)
                 try {
-                    $user = User::whereRaw("UPPER(TRIM(npk)) = ?", [$npk])->first();
+                    $user = User::whereRaw("UPPER(LTRIM(RTRIM(npk))) = ?", [$npk])->first();
                     if ($user && (int) $user->disabled === 1) {
                         $user->disabled = 0;
                         $user->save();
