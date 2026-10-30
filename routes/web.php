@@ -118,6 +118,7 @@ use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
+use App\Http\Controllers\RecruitmentAi\RecruitmentAiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -1387,6 +1388,17 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
 });
 
 
+Route::prefix('recruitment-ai')->name('recruitment-ai.')->group(function () {
+    Route::get('/', [RecruitmentAiController::class, 'show'])->name('form');
+    Route::post('/upload', [RecruitmentAiController::class, 'upload'])->name('upload');
+    Route::post('/upload/delete', [RecruitmentAiController::class, 'deleteDocument'])->name('upload.delete');
+    Route::post('/extract', [RecruitmentAiController::class, 'extract'])->name('extract');
+    Route::post('/reset-fields', [RecruitmentAiController::class, 'resetFields'])->name('reset-fields');
+    Route::post('/submit', [RecruitmentAiController::class, 'submit'])->name('submit');
+    Route::get('/success', [RecruitmentAiController::class, 'success'])->name('success');
+});
+
+
 Route::get('/portal-recruitment-status', [PortalRecruitmentStatusController::class, 'index'])->name('portal.recruitment-status.index');
 Route::post('/portal-recruitment-status/check', [PortalRecruitmentStatusController::class, 'check'])->name('portal.recruitment-status.check');
 Route::get('/lowongan', [JobVacancyController::class, 'publicIndex'])->name('job-vacancy.public');
@@ -1488,6 +1500,6 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map')->middleware(['auth', 'permission']);
     Route::post('/location', [FaceAttendanceController::class, 'saveLocation'])->name('location.store')->middleware(['auth', 'permission']);
     Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations')->middleware(['auth', 'permission']);
-    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.delete')->middleware(['auth', 'permission']);
+    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy')->middleware(['auth', 'permission']);
 });
 

@@ -74,23 +74,40 @@
 
         .meta-box {
             margin-left: auto;
-            width: 178px;
+            width: 195px;
             border: 1px solid #cbd5e1;
             background: #f8fafc;
-            border-radius: 8px;
-            padding: 5px 7px;
-            font-size: 8.1pt;
+            border-radius: 6px;
+            padding: 4px 6px;
+        }
+
+        .meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 7.7pt;
             color: #334155;
         }
 
-        .meta-box div {
-            margin: 1px 0;
+        .meta-table td {
+            padding: 1px 0;
+            vertical-align: middle;
+            white-space: nowrap;
         }
 
         .meta-label {
-            display: inline-block;
-            width: 54px;
+            width: 64px;
             color: #64748b;
+        }
+
+        .meta-sep {
+            width: 8px;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .meta-val {
+            color: #0f172a;
+            font-weight: 600;
         }
 
         .badge {
@@ -509,12 +526,30 @@
                 <p class="company-sub">Formulir Biodata Karyawan / Data bersifat rahasia — Dokumen Resmi Internal HRD
                 </p>
             </td>
-            <td width="210" valign="middle">
+            <td width="210" valign="middle" align="right">
                 <div class="meta-box">
-                    <div><span class="meta-label">No</span>: CII.FM.HR.01.04</div>
-                    <div><span class="meta-label">Active Date</span>: 13 Mei 2025</div>
-                    <div><span class="meta-label">Rev</span>: 00</div>
-                    <div><span class="meta-label">Rev Date</span>: 9 Juli 2026</div>
+                    <table class="meta-table">
+                        <tr>
+                            <td class="meta-label">No</td>
+                            <td class="meta-sep">:</td>
+                            <td class="meta-val">CII.FM.HR.01.04</td>
+                        </tr>
+                        <tr>
+                            <td class="meta-label">Active Date</td>
+                            <td class="meta-sep">:</td>
+                            <td class="meta-val">13 Mei 2025</td>
+                        </tr>
+                        <tr>
+                            <td class="meta-label">Rev</td>
+                            <td class="meta-sep">:</td>
+                            <td class="meta-val">00</td>
+                        </tr>
+                        <tr>
+                            <td class="meta-label">Rev Date</td>
+                            <td class="meta-sep">:</td>
+                            <td class="meta-val">9 Juli 2026</td>
+                        </tr>
+                    </table>
                 </div>
             </td>
         </tr>
