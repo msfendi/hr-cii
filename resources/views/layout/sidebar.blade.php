@@ -75,7 +75,6 @@
    </li> -->
 
    {{-- MENU DINAMIS DARI DATABASE --}}
-   {{-- MENU DINAMIS DARI DATABASE --}}
 @foreach ($sidebarMenus as $menu)
 
     {{-- Hide jika parent kosong (tidak punya route dan tidak punya child) --}}

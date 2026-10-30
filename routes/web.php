@@ -121,10 +121,6 @@ use App\Http\Controllers\MonitoringRekonLockController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
 
 
-// Route::get('/', function () {
-//     return view('welcome');
-// });
-
 Route::get('/', [HomeController::class, 'index'])->name('/');
 Route::get('/welcome', [HomeController::class, 'welcome'])->name('welcome');
 
