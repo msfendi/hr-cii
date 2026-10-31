@@ -77,82 +77,79 @@
 
 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
 
-    <!-- Sidebar Toggle (Topbar) -->
-    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
-        <i class="fa fa-bars"></i>
+    <!-- Sidebar Toggle (Topbar) - Mobile Burger Button -->
+    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+        <i class="fa fa-bars fa-lg"></i>
     </button>
     
+    <!-- Sidebar Toggle (Desktop) -->
     <div class="text-center d-none d-md-inline">
-        <!-- Counter - Alerts -->
-        <button class="border-0" id="sidebarToggle" style="background-color: transparent;">
+        <button class="border-0 d-flex align-items-center justify-content-center" id="sidebarToggle" style="background-color: transparent; width: 38px; height: 38px; border-radius: 0.35rem;">
             <i class="fas fa-bars fa-fw"></i>
         </button>
     </div>
 
     <!-- Topbar Navbar -->
-    <ul class="navbar-nav ml-auto">
+    <ul class="navbar-nav ml-auto d-flex align-items-center">
 
-        <!-- Nav Item - AI Assistant -->
-        <!-- <li class="nav-item d-flex align-items-center mr-2">
-            <a href="{{ route('chatbot.index') }}" class="ai-assistant-btn">
-                <i class="fas fa-robot"></i>
-                <span class="ai-btn-text">AI Assistant</span>
-            </a>
-        </li> -->
-
-        <!-- Nav Item - Search Dropdown (Visible Only XS) -->
+        <!-- Nav Item - Search Menu Mobile (Dropdown) -->
         <li class="nav-item dropdown no-arrow d-sm-none">
-            <a class="nav-link dropdown-toggle" href="#" id="searchDropdown" role="button"
-                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            <a class="nav-link dropdown-toggle d-flex align-items-center justify-content-center" href="#" id="searchDropdown" role="button"
+                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 38px; height: 38px;">
                 <i class="fas fa-search fa-fw"></i>
             </a>
-            <!-- Dropdown - Messages -->
             <div class="dropdown-menu dropdown-menu-right p-3 shadow animated--grow-in"
                 aria-labelledby="searchDropdown">
-                <form class="form-inline mr-auto w-100 navbar-search">
-                    <div class="input-group">
-                        <input type="text" class="form-control bg-light border-0 small"
-                            placeholder="Search for..." aria-label="Search"
-                            aria-describedby="basic-addon2">
-                        <div class="input-group-append">
-                            <button class="btn btn-primary" type="button">
-                                <i class="fas fa-search fa-sm"></i>
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </li>
-
-        <li class="nav-item dropdown no-arrow mx-1">
-            <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
-            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <i class="fas fa-bell fa-fw"></i>
-                <!-- Counter - Notifications -->
-                <span class="badge badge-danger badge-counter" id="unreadBadge" style="display: none;">
-                    <span id="unreadCount">0</span>
-                </span>
-            </a>
-            <!-- Dropdown - Alerts (Quick Preview) -->
-            <div class="dropdown-list dropdown-menu dropdown-menu-right shadow animated--grow-in"
-                aria-labelledby="alertsDropdown">
-                <h6 class="dropdown-header fw-bold">
-                    Notification Center
-                </h6>
-                <div id="quickNotificationPanel">
-                    <a class="dropdown-item d-flex align-items-center" href="#">
-                        <div class="me-3">
-                            <div class="bg-light rounded-circle p-3">
-                                <i class="fas fa-spinner fa-spin text-primary"></i>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="small text-gray-500">Loading...</div>
-                        </div>
-                    </a>
+                <div class="position-relative d-flex align-items-center">
+                    <input type="text" id="navbarMenuSearchMobile" class="form-control form-control-sm"
+                        placeholder="Cari menu..." autocomplete="off" style="height: 36px;">
+                    <i class="fas fa-search" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;pointer-events:none;"></i>
+                </div>
+                <div id="navbarSearchEmptyMobile" class="text-center small text-muted mt-2 d-none">
+                    Menu tidak ditemukan
                 </div>
             </div>
         </li>
+
+        <!-- Nav Item - Search Menu Desktop (Inline) -->
+        <li class="nav-item d-none d-sm-block mr-2 d-flex align-items-center">
+            <div class="position-relative d-flex align-items-center">
+                <input type="text" id="navbarMenuSearch" class="form-control form-control-sm"
+                    placeholder="Cari menu..." autocomplete="off"
+                    style="border-radius:20px;padding-left:32px;padding-right:12px;font-size:13px;width:220px;height:36px;">
+                <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;pointer-events:none;"></i>
+            </div>
+        </li>
+
+    <li class="nav-item dropdown no-arrow mx-1">
+        <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
+        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            <i class="fas fa-bell fa-fw"></i>
+            <!-- Counter - Notifications -->
+            <span class="badge badge-danger badge-counter" id="unreadBadge" style="display: none;">
+                <span id="unreadCount">0</span>
+            </span>
+        </a>
+        <!-- Dropdown - Alerts (Quick Preview) -->
+        <div class="dropdown-list dropdown-menu dropdown-menu-right shadow animated--grow-in"
+            aria-labelledby="alertsDropdown">
+            <h6 class="dropdown-header fw-bold">
+                Notification Center
+            </h6>
+            <div id="quickNotificationPanel">
+                <a class="dropdown-item d-flex align-items-center" href="#">
+                    <div class="me-3">
+                        <div class="bg-light rounded-circle p-3">
+                            <i class="fas fa-spinner fa-spin text-primary"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="small text-gray-500">Loading...</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </li>
 
         <div class="topbar-divider d-none d-sm-block"></div>
 
@@ -208,30 +205,11 @@
 </nav>
 <!-- End of Topbar -->
 
-{{-- Fail-safe handler untuk Sidebar Toggle dan Profile/Alerts Dropdown --}}
+{{-- Handler untuk Profile/Alerts Dropdown & Search Menu (Navbar) --}}
 <script>
 (function() {
     function initNavbarHandlers() {
-        // 1. Sidebar Toggle (Desktop & Mobile)
-        const toggleButtons = document.querySelectorAll('#sidebarToggle, #sidebarToggleTop');
-        toggleButtons.forEach(function(btn) {
-            if (btn.__sidebarToggleBound) return;
-            btn.__sidebarToggleBound = true;
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                document.body.classList.toggle('sidebar-toggled');
-                const sidebar = document.querySelector('.sidebar');
-                if (sidebar) {
-                    sidebar.classList.toggle('toggled');
-                    if (sidebar.classList.contains('toggled')) {
-                        const collapses = sidebar.querySelectorAll('.collapse');
-                        collapses.forEach(c => c.classList.remove('show'));
-                    }
-                }
-            });
-        });
-
-        // 2. User Profile Dropdown Toggle
+        // 1. User Profile Dropdown Toggle
         const userDropdown = document.getElementById('userDropdown');
         if (userDropdown && !userDropdown.__dropdownBound) {
             userDropdown.__dropdownBound = true;
@@ -250,7 +228,7 @@
             });
         }
 
-        // 3. Alerts / Notification Dropdown Toggle
+        // 2. Alerts / Notification Dropdown Toggle
         const alertsDropdown = document.getElementById('alertsDropdown');
         if (alertsDropdown && !alertsDropdown.__dropdownBound) {
             alertsDropdown.__dropdownBound = true;
@@ -265,6 +243,81 @@
                     if (!isOpen) {
                         menu.classList.add('show');
                     }
+                }
+            });
+        }
+
+        // 3. Search Menu (navbar)
+        const searchInput = document.getElementById('navbarMenuSearch');
+        const searchInputMobile = document.getElementById('navbarMenuSearchMobile');
+        const emptyState = document.getElementById('navbarSearchEmptyMobile');
+
+        if (searchInput && !searchInput.__searchBound) {
+            searchInput.__searchBound = true;
+            const originallyOpen = new Set();
+            document.querySelectorAll('#accordionSidebar .collapse.show').forEach(el => originallyOpen.add(el.id));
+
+            const normalize = (str) => (str || '').toLowerCase().trim();
+
+            function resetSidebar() {
+                document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => li.classList.remove('d-none'));
+                document.querySelectorAll('#accordionSidebar [data-menu-child]').forEach(child => child.classList.remove('d-none'));
+                document.querySelectorAll('#accordionSidebar .collapse').forEach(el => {
+                    if (originallyOpen.has(el.id)) el.classList.add('show');
+                    else el.classList.remove('show');
+                });
+            }
+
+            function filterSidebar(query) {
+                const q = normalize(query);
+                if (!q) {
+                    resetSidebar();
+                    return;
+                }
+                let anyVisible = false;
+                document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => {
+                    const parentName = normalize(li.getAttribute('data-menu-name'));
+                    const parentMatch = parentName.includes(q);
+                    const childLinks = li.querySelectorAll('[data-menu-child]');
+                    const collapseEl = li.querySelector('.collapse');
+
+                    if (childLinks.length === 0) {
+                        li.classList.toggle('d-none', !parentMatch);
+                        if (parentMatch) anyVisible = true;
+                        return;
+                    }
+
+                    let anyChildMatch = false;
+                    childLinks.forEach(child => {
+                        const childName = normalize(child.getAttribute('data-menu-name'));
+                        const childMatch = parentMatch || childName.includes(q);
+                        child.classList.toggle('d-none', !childMatch);
+                        if (childMatch) anyChildMatch = true;
+                    });
+
+                    const showParent = parentMatch || anyChildMatch;
+                    li.classList.toggle('d-none', !showParent);
+                    if (collapseEl) collapseEl.classList.toggle('show', showParent);
+                    if (showParent) anyVisible = true;
+                });
+
+                if (emptyState) emptyState.classList.toggle('d-none', anyVisible);
+            }
+
+            let debounceTimer;
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(debounceTimer);
+                const value = e.target.value;
+                debounceTimer = setTimeout(() => filterSidebar(value), 150);
+            });
+        }
+
+        if (searchInputMobile && !searchInputMobile.__searchBound) {
+            searchInputMobile.__searchBound = true;
+            searchInputMobile.addEventListener('input', function(e) {
+                if (searchInput) {
+                    searchInput.value = e.target.value;
+                    searchInput.dispatchEvent(new Event('input'));
                 }
             });
         }
@@ -285,5 +338,8 @@
     } else {
         initNavbarHandlers();
     }
+
+    // Re-init on AJAX/navigation if needed
+    document.addEventListener('ajaxComplete', initNavbarHandlers);
 })();
 </script>

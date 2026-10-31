@@ -342,9 +342,20 @@
         const ph = document.getElementById('cameraPlaceholder');
         const phTitle = document.getElementById('placeholderTitle');
         const phDesc = document.getElementById('placeholderDesc');
-        if (ph) ph.classList.remove('d-none');
+        if (ph) {
+            ph.classList.remove('d-none');
+            ph.style.setProperty('display', 'flex', 'important');
+        }
         if (phTitle) phTitle.innerText = title;
         if (phDesc) phDesc.innerText = desc;
+
+        // Matikan stream kamera jika aktif
+        const video = document.getElementById('webcam');
+        if (video && video.srcObject) {
+            let tracks = video.srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+        }
     }
 
     async function startCamera() {
@@ -527,7 +538,6 @@
         initMiniMap();
         loadModels();
         checkGPS();
-        startCamera();
     });
 </script>
 

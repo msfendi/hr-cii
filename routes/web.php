@@ -5,6 +5,7 @@ use App\Events\TestEvent;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
+use App\Http\Controllers\
 use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\FaceAttendanceController;
 use App\Http\Controllers\HomeController;
@@ -1484,6 +1485,11 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
     Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
     Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
+
+    // Pengaturan Window Presensi & Izin Akses Karyawan
+    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index');
+    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
+    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
 });
 
 // Alias nama rute format hyphen (face-attendance.*) untuk kecocokan menu database
