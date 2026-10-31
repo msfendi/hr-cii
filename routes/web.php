@@ -5,7 +5,7 @@ use App\Events\TestEvent;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
-use App\Http\Controllers\
+use App\Http\Controllers\FaceAttendanceSettingController;
 use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\FaceAttendanceController;
 use App\Http\Controllers\HomeController;
