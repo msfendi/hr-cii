@@ -1480,16 +1480,16 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::post('/logout-session', [FaceAttendanceController::class, 'logoutSession'])->name('logout-session');
 
     // Manage Geo Map & Lokasi Kerja (HRD/Admin)
-    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map');
-    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store');
-    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
-    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
-    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
+    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map')->middleware(['auth', 'permission']);
+    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store')->middleware(['auth', 'permission']);
+    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show')->middleware(['auth', 'permission']);
+    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations')->middleware(['auth', 'permission']);
+    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy')->middleware(['auth', 'permission']);
 
     // Pengaturan Window Presensi & Izin Akses Karyawan
-    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index');
-    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
-    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
+    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index')->middleware(['auth', 'permission']);
+    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window')->middleware(['auth', 'permission']);
+    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee')->middleware(['auth', 'permission']);
 });
 
 // Alias nama rute format hyphen (face-attendance.*) untuk kecocokan menu database
