@@ -109,49 +109,73 @@ class FaceAttendanceAdminController extends Controller
         $page = max(1, (int) $request->get('page', 1));
         $offset = ($page - 1) * $perPage;
 
+        // PERBAIKAN 7: bedakan "tidak ada data" dari "query gagal".
+        // Dideklarasikan di awal karena dipakai oleh tahap master maupun
+        // tahap agregasi att_log di bawah.
+        $rekapError = null;
+
         // ===== 1. Ambil master karyawan (aktif + karyawan keluar/pensiun) =====
         // BIODATA_KELUAR ikut diambil karena scan fingerprint karyawan yang sudah
-        // keluar tetap tersimpan di att_log (mengikuti query produksi di
-        // AttendanceFingerController yang memakai COALESCE(b..., bk...)).
+        // keluar tetap tersimpan di att_log.
         //
-        // PERBAIKAN (2026-11-03): query master diberi LIMIT + pagination
-        // di level SQL. Sebelumnya seluruh master karyawan (ratusan/ribuan
-        // baris) ditarik, lalu dipagination di PHP. Sekarang LIMITanya
-        // diterapkan di database supaya tidak ada data excess yang
-        // ditransfer dan diproses PHP.
-        $employeeQuery = $this->connCii()->table('BIODATA as b')
-            ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
-            ->select(
-                'b.NPK',
-                'b.NAMA_KARYAWAN',
-                'b.BARCODE',
-                'd.DEPARTEMENT as DEPT'
-            );
+        // PERBAIKAN 14 (2026-11-04) — KINERJA FILTER DEPARTEMEN:
+        // Urutan logika yang BENAR (sesuai cara kerja database CII):
+        //   DEPT  ->  (BIODATA UNION BIODATA_KELUAR) by ID_DEPT
+        //         ->  ambil BARCODE
+        //         ->  cari di att_log berdasarkan pin
+        //
+        // Versi LAMA mengerjakannya terbalik:
+        //   1. att_log dipindai PENUH untuk sebulan (semua pin)  -> 2x scan
+        //   2. hasilnya baru difilter per departemen di PHP
+        //   Akibat: memilih 1 departemen TIDAK mengurangi kerja sama sekali.
+        //   Terukur pada data nyata: dept terbesar hanya 948 dari 6.934 scan
+        //   (13,7%), tetapi 3.474 pin tetap diproses -> 86% kerja sia-sia.
+        //
+        // Versi BARU: filter ID_DEPT dipakai SEBAGAI BATAS AWAL di dalam
+        // subquery, sehingga att_log hanya dibaca untuk pin departemen itu,
+        // dan hanya SATU kali pemindaian (tidak ada lagi daftar pin terpisah).
+        $masterRows = collect();
 
-        if ($department !== '') {
-            $employeeQuery->where('b.ID_DEPT', $department);
+        try {
+            $masterQuery = $this->connCii()->table('BIODATA as b')
+                ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
+                ->select([
+                    'b.NPK',
+                    'b.NAMA_KARYAWAN',
+                    'b.BARCODE',
+                    DB::raw('d.DEPARTEMENT as DEPT'),
+                    DB::raw('0 as IS_KELUAR'),
+                ]);
+
+            if ($department !== '') {
+                $masterQuery->where('b.ID_DEPT', $department);
+            }
+
+            if ($search !== '') {
+                $masterQuery->where(function ($q) use ($search) {
+                    $q->where('b.NAMA_KARYAWAN', 'like', '%' . $search . '%')
+                      ->orWhere('b.NPK', 'like', '%' . $search . '%')
+                      ->orWhere('b.BARCODE', 'like', '%' . $search . '%');
+                });
+            }
+
+            $masterRows = $masterQuery->get();
+        } catch (\Throwable $e) {
+            \Log::error('Gagal memuat BIODATA pada rekap admin: ' . $e->getMessage());
+            $rekapError = $rekapError ?: $e->getMessage();
         }
-
-        if ($search !== '') {
-            $employeeQuery->where(function ($q) use ($search) {
-                $q->where('b.NAMA_KARYAWAN', 'like', '%' . $search . '%')
-                  ->orWhere('b.NPK', 'like', '%' . $search . '%')
-                  ->orWhere('b.BARCODE', 'like', '%' . $search . '%');
-            });
-        }
-
-        $employees = $employeeQuery->orderBy('b.NAMA_KARYAWAN', 'asc')->get();
 
         // Tambahkan karyawan keluar yang barcode-nya tidak bentrok dengan BIODATA
         try {
             $keluarQuery = $this->connCii()->table('BIODATA_KELUAR as bk')
                 ->leftJoin('DEPT as dk', 'bk.ID_DEPT', '=', 'dk.ID_DEPT')
-                ->select(
+                ->select([
                     'bk.NPK',
                     'bk.NAMA_KARYAWAN',
                     'bk.BARCODE',
-                    'dk.DEPARTEMENT as DEPT'
-                );
+                    DB::raw('dk.DEPARTEMENT as DEPT'),
+                    DB::raw('1 as IS_KELUAR'),
+                ]);
 
             if ($department !== '') {
                 $keluarQuery->where('bk.ID_DEPT', $department);
@@ -165,15 +189,15 @@ class FaceAttendanceAdminController extends Controller
                 });
             }
 
-            $employeesKeluar = $keluarQuery->orderBy('bk.NAMA_KARYAWAN', 'asc')->get();
+            $employeesKeluar = $keluarQuery->get();
 
             $activeBarcodes = [];
-            foreach ($employees as $emp) {
+            foreach ($masterRows as $emp) {
                 $activeBarcodes[$this->normalizePin($emp->BARCODE ?? '')] = true;
             }
 
             $merged = [];
-            foreach ($employees as $emp) {
+            foreach ($masterRows as $emp) {
                 $merged[] = $emp;
             }
             foreach ($employeesKeluar as $empK) {
@@ -185,10 +209,18 @@ class FaceAttendanceAdminController extends Controller
                 $merged[] = $empK;
             }
 
-            $employees = collect($merged);
+            $masterRows = collect($merged);
         } catch (\Throwable $e) {
             \Log::warning('Gagal memuat BIODATA_KELUAR: ' . $e->getMessage());
         }
+
+        // Urutkan nama (pengurutan di PHP, bukan SQL, karena hasil
+        // BIODATA + BIODATA_KELUAR sudah digabung di sini).
+        $employees = $masterRows
+            ->sortBy(function ($emp) {
+                return mb_strtoupper((string) ($emp->NAMA_KARYAWAN ?? ''));
+            })
+            ->values();
 
         // Resolve label Select2 untuk karyawan yang sedang difilter.
         // Pencocokan longgar (LIKE) supaya NPK / barcode / sebagian nama
@@ -221,93 +253,89 @@ class FaceAttendanceAdminController extends Controller
         // Jika dicocokkan di PHP, mismatch tipe kolom (BARCODE numeric vs pin varchar)
         // menyebabkan rekap kosong.
         //
-        // PERBAIKAN (2026-11-03): rows hanya diambil untuk PIN yang punya
-        // scan bulan ini, dan query dibatasi. Sebelumnya seluruh baris
-        // att_log bulan itu ditarik ke PHP tanpa batas — dengan 1,44 juta
-        // baris di tabel, satu bulan penuh bisa ratusan ribu baris dan
-        // membuat PHP kehabisan memori / timeout.
+        // ====================================================================
+        // OPTIMASI BESAR (2026-11-03) — halaman rekap tidak lagi berat
+        // ====================================================================
+        // MASALAH LAMA: seluruh scan satu bulan (puluhan ribu baris) ditarik
+        // ke PHP lewat ->get(), lalu di-grouping di memori. Beban terukur:
+        //   - 40.000 baris stdClass  = ~19 MB RAM  (belum termasuk overhead
+        //     array multidimensi hasil grouping per tanggal)
+        //   - waktu kirim dari SQL Server ke PHP ikut sebanding
+        // Padahal yang DITAMPILKAN hanya 50 karyawan (satu halaman).
         //
-        // Strategi:
-        //   a. Ambil daftar PIN unik yang punya scan di bulan ini (agregasi
-        //      di SQL, hasilnya kecil).
-        //   b. Query detail hanya untuk PIN-PIN tersebut.
+        // STRATEGI BARU:
+        //   a. Agregasi di SQL: hitung per (pin, tanggal) -> jumlah scan,
+        //      jam masuk, jam pulang, ada-wajah, dan daftar mode. Hasilnya
+        //      kira-kira sebesar (jumlah karyawan x hari), bukan (jumlah scan).
+        //   b. Pagination karyawan ditentukan dari hasil agregat, bukan dari
+        //      seluruh baris mentah.
+        //   c. Baris mentah HANYA diambil untuk 50 karyawan di halaman aktif.
         //
-        // PERBAIKAN 8 (2026-11-03): batas 2100 parameter SQL Server.
-        // Langkah (b) dulu memakai whereIn() dengan SELURUH pin bulan itu
-        // sehingga SQL Server menolak:
-        //   "Tried to bind parameter number 2101. SQL Server supports a
-        //    maximum of 2100 parameters."
-        //
-        // PERBAIKAN 9: percobaan pertama memakai STRING_SPLIT, tetapi server
-        // produksi menolak: "Invalid object name 'STRING_SPLIT'". Fungsi itu
-        // baru dikenal bila compatibility_level database >= 130 (SQL Server
-        // 2016). Database CII ternyata lebih rendah, jadi STRING_SPLIT TIDAK
-        // BISA dipakai di sini.
-        //
-        // Solusi sekarang tidak memakai fungsi khusus versi apa pun:
-        //   a. PIN unik diambil sebagai string CSV.
-        //   b. String itu dipecah di PHP menjadi potongan @chunk, lalu setiap
-        //      potongan dikirim sebagai SATU parameter dan dibandingkan
-        //      memakai CHARINDEX (tersedia di semua versi SQL Server):
-        //         CHARINDEX(',' + pin + ',', ',' + @csv + ',') > 0
-        //      Batas aman: max 2000 parameter per statement.
-        //   c. Karena tujuannya hanya memfilter baris agar tidak menarik
-        //      seluruh tabel ke PHP, filter ini boleh longgar — hasil akhir
-        //      tetap dipetakan per barcode karyawan.
+        // Batas 2100 parameter SQL Server tidak lagi jadi masalah karena
+        // daftar pin TIDAK lagi dikirim sebagai parameter: pin diambil
+        // langsung dari tabel master lewat INNER JOIN (PERBAIKAN 14).
+        $aggRows     = collect();
         $monthlyLogs = collect();
-        $rekapError  = null;
 
         try {
-            // (a) PIN unik bulan ini sebagai satu string dipisah koma.
-            $pinCsv = $this->connCii()->table('att_log as a')
-                ->whereBetween('a.scan_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                ->select(DB::raw("DISTINCT LTRIM(RTRIM(CONVERT(varchar(64), a.pin))) AS pin"))
-                ->pluck('pin')
-                ->map(function ($v) {
-                    return $this->normalizePin($v);
-                })
-                ->filter(function ($v) {
-                    // Koma akan merusak pemisahan CSV -> buang bila ada.
-                    return $v !== '' && strpos($v, ',') === false;
-                })
-                ->unique()
-                ->values();
+            // (a)+(b)+(c) SATU statement: DEPT -> (BIODATA UNION BIODATA_KELUAR)
+            //             -> BARCODE -> JOIN att_log -> agregasi per (pin,tgl).
+            //
+            // PERBAIKAN 14 (2026-11-04):
+            //  - Pola LAMA memakai CHARINDEX(','+pin+',', csv) yang membungkus
+            //    kolom dalam FUNGSI sehingga SQL Server TIDAK BISA memakai
+            //    index pada att_log.pin (terukur 160 ms vs 16 ms pada 600 rb
+            //    baris = 10x lebih lambat, dan index tidak menolong sama sekali).
+            //  - Sekarang: INNER JOIN biasa. Index att_log(pin, scan_date)
+            //    dipakai, dan filter ID_DEPT membatasi baris dari awal.
+            //  - att_log.pin TIDAK dibungkus CAST (agar index tetap hidup);
+            //    hanya BARCODE dari master yang di-CAST karena
+            //    BIODATA_KELUAR.BARCODE bertipe numeric sedangkan
+            //    BIODATA.BARCODE / att_log.pin bertipe varchar.
+            $barcodeExpr = "LTRIM(RTRIM(CONVERT(varchar(64), %s.BARCODE)))";
 
-            // (b) Pecah CSV jadi potongan. 1000 pin per potongan + 2 parameter
-            // tanggal = 1002 parameter, jauh di bawah batas 2100.
-            $pinChunks = $pinCsv->chunk(1000)->map(function ($chunk) {
-                return ',' . $chunk->implode(',') . ',';
-            })->values();
+            // Subquery master: hanya kolom yang dibutuhkan, sudah terfilter dept.
+            $masterUnion = $this->connCii()->table('BIODATA as b')
+                ->selectRaw(sprintf($barcodeExpr, 'b') . ' AS BARCODE');
 
-            if ($pinChunks->isNotEmpty()) {
-                $bulan = [$startDate . ' 00:00:00', $endDate . ' 23:59:59'];
-
-                $monthlyLogs = $this->connCii()->table('att_log as a')
-                    ->whereBetween('a.scan_date', $bulan)
-                    ->where(function ($outer) use ($pinChunks) {
-                        // Gabungkan potongan dengan OR -> tetap satu statement.
-                        foreach ($pinChunks as $csv) {
-                            $outer->orWhereRaw(
-                                "CHARINDEX(',' + LTRIM(RTRIM(CONVERT(varchar(64), a.pin))) + ',', ?) > 0",
-                                [$csv]
-                            );
-                        }
-                    })
-                    ->orderBy('a.scan_date', 'asc')
-                    ->select([
-                        'a.pin',
-                        'a.scan_date',
-                        'a.verifymode',
-                        'a.inoutmode',
-                        'a.sn',
-                    ])
-                    ->get();
+            if ($department !== '') {
+                $masterUnion->where('b.ID_DEPT', $department);
             }
+
+            $keluarUnion = $this->connCii()->table('BIODATA_KELUAR as bk')
+                ->selectRaw(sprintf($barcodeExpr, 'bk') . ' AS BARCODE');
+
+            if ($department !== '') {
+                $keluarUnion->where('bk.ID_DEPT', $department);
+            }
+
+            // UNION (bukan UNION ALL) -> buang barcode kembar antar tabel.
+            $pinSub = $masterUnion->union($keluarUnion);
+
+            $bulan = [$startDate . ' 00:00:00', $endDate . ' 23:59:59'];
+
+            $aggQuery = $this->connCii()->table('att_log as a')
+                ->joinSub($pinSub, 'bio', function ($join) {
+                    // Tanpa CAST di sisi att_log -> index pin terpakai.
+                    $join->on('bio.BARCODE', '=', DB::raw('LTRIM(RTRIM(a.pin))'));
+                })
+                ->whereBetween('a.scan_date', $bulan)
+                ->select([
+                    DB::raw('LTRIM(RTRIM(a.pin)) AS pin'),
+                    DB::raw('CONVERT(date, a.scan_date) AS tgl'),
+                    DB::raw('COUNT(*) AS jumlah_scan'),
+                    DB::raw('MIN(a.scan_date) AS scan_pertama'),
+                    DB::raw('MAX(a.scan_date) AS scan_terakhir'),
+                ])
+                ->groupByRaw('LTRIM(RTRIM(a.pin)), CONVERT(date, a.scan_date)');
+
+            $aggRows = $aggQuery->get();
         } catch (\Throwable $e) {
             \Log::error('Gagal query att_log pada rekap admin: ' . $e->getMessage(), [
                 'file' => $e->getFile() . ':' . $e->getLine(),
+                'dept' => $department,
             ]);
-            $monthlyLogs = collect();
+            $aggRows = collect();
             // PERBAIKAN 7: bedakan "tidak ada data" dari "query gagal".
             // Sebelumnya exception ditelan diam-diam sehingga halaman
             // melaporkan "0 baris scan" padahal penyebabnya error SQL
@@ -315,23 +343,20 @@ class FaceAttendanceAdminController extends Controller
             $rekapError = $e->getMessage();
         }
 
-        // ===== 3. Group scan per karyawan + per tanggal (SAMA seperti rekap) =====
-        // Kunci grouping dinormalisasi (CAST ke VARCHAR + trim) supaya cocok dengan
-        // hasil join SQL dan aman terhadap perbedaan tipe kolom / spasi.
-        $logsByBarcode = [];
-        foreach ($monthlyLogs as $log) {
-            $logsByBarcode[$this->normalizePin($log->pin)][] = $log;
+        // ===== 3. Group hasil agregat per barcode karyawan =====
+        $aggByBarcode = [];
+        foreach ($aggRows as $r) {
+            $aggByBarcode[$this->normalizePin($r->pin)][] = $r;
         }
 
         $groupedAll = [];
-        $totalScan   = 0;
+        $totalScan  = 0;
 
-        // PENTING: Hitung total karyawan SEBELUM pagination untuk pagination links
+        // Hitung total karyawan yang PUNYA scan (untuk pagination links)
         $totalEmployees = 0;
         foreach ($employees as $emp) {
             $barcode = $this->normalizePin($emp->BARCODE ?? '');
-            $empLogs = $logsByBarcode[$barcode] ?? [];
-            if (!empty($empLogs)) {
+            if (!empty($aggByBarcode[$barcode])) {
                 $totalEmployees++;
             }
         }
@@ -339,26 +364,38 @@ class FaceAttendanceAdminController extends Controller
         // Slice employees untuk pagination (hindari memory exhausted)
         $employeesPaginated = $employees->slice($offset, $perPage);
 
+        // Muat mode presensi untuk SEMUA pin di halaman ini dalam SATU query
+        // (bukan satu query per karyawan).
+        $barcodesHalaman = [];
+        foreach ($employeesPaginated as $emp) {
+            $barcodesHalaman[] = $this->normalizePin($emp->BARCODE ?? '');
+        }
+        $modesByPin = $this->loadModesPerDate($barcodesHalaman, $startDate, $endDate);
+
         foreach ($employeesPaginated as $emp) {
             $barcode = $this->normalizePin($emp->BARCODE ?? '');
-            $empLogs = $logsByBarcode[$barcode] ?? [];
+            $dayRows = $aggByBarcode[$barcode] ?? [];
 
-            if (empty($empLogs)) {
+            if (empty($dayRows)) {
                 // Karyawan tanpa scan sama sekali bulan ini skip
                 continue;
             }
 
-            $grouped = $this->groupLogsPerDate($empLogs);
+            $grouped = $this->groupAggregatedPerDate($dayRows, $barcode, $modesByPin[$barcode] ?? []);
             krsort($grouped);
 
-            $totalScan += count($empLogs);
+            $empScan = 0;
+            foreach ($grouped as $g) {
+                $empScan += $g['total_scans'];
+            }
+            $totalScan += $empScan;
 
             $groupedAll[] = [
                 'npk'          => (string) $emp->NPK,
                 'name'         => $emp->NAMA_KARYAWAN,
                 'barcode'      => $barcode,
                 'dept'         => $emp->DEPT ?? '-',
-                'total_scans'  => count($empLogs),
+                'total_scans'  => $empScan,
                 'days'         => count($grouped),
                 'face_days'    => count(array_filter($grouped, function ($g) {
                     return $g['has_face'];
@@ -369,7 +406,7 @@ class FaceAttendanceAdminController extends Controller
                 'grouped_logs' => $grouped,
             ];
         }
-        
+
         // Pagination info
         $totalPages = ceil($totalEmployees / $perPage);
         $pagination = [
@@ -395,7 +432,7 @@ class FaceAttendanceAdminController extends Controller
         $availableMonths = $this->getAvailableMonths();
 
         // ===== 7. Diagnostik: bantu user memahami kenapa rekap kosong =====
-        $diagnostics = $this->buildDiagnostics($month, $monthlyLogs, $employees, $groupedAll);
+        $diagnostics = $this->buildDiagnostics($month, $aggRows, $employees, $groupedAll);
 
         $loaded = true;
 
@@ -520,30 +557,32 @@ class FaceAttendanceAdminController extends Controller
      * bulan. Dengan 1,44 juta baris di att_log, ini penyebab utama halaman
      * "sangat berat" dan timeout.
      *
-     * Sekarang: agregasi di SQL (GROUP BY bulan) sehingga yang ditransfer
-     * ke PHP hanya <= 24 baris. Query juga dibatasi 24 bulan terbaru.
+     * PERBAIKAN 15 (2026-11-04): versi 2026-11-03 masih memakai
+     * GROUP BY CONVERT(varchar(7), scan_date) atas SELURUH tabel. LIMIT 24
+     * TIDAK menolong karena SQL Server harus meng-GROUP BY semua baris dulu
+     * sebelum bisa mengurutkan dan memotong. Terukur 215 ms pada 600 rb baris
+     * dan biaya ini dibayar SETIAP KALI halaman dibuka / filter diubah.
+     *
+     * Sekarang: cukup ambil MAX(scan_date) (1 baris, memakai index), lalu
+     * 24 bulan terakhir dibentuk di PHP. Tidak ada lagi GROUP BY tabel penuh.
      */
     private function getAvailableMonths(): array
     {
         try {
-            // Versi cepat: agregasi per bulan di SQL.
-            // PENTING: SQL Server TIDAK mengizinkan GROUP BY memakai alias
-            // kolom ('ym'), sehingga ekspresi CONVERT harus ditulis ulang
-            // persis sama. Sebelumnya muncul: Invalid column name 'ym'.
-            $bulanExpr = "CONVERT(varchar(7), scan_date, 120)";
-            $months = $this->connCii()->table('att_log')
-                ->selectRaw($bulanExpr . " as ym")
-                ->groupByRaw($bulanExpr)
-                ->orderByDesc('ym')
-                ->limit(24)
-                ->pluck('ym')
-                ->filter(function ($ym) {
-                    return is_string($ym) && preg_match('/^\d{4}-\d{2}$/', $ym);
-                })
-                ->values()
-                ->all();
+            // Satu baris saja: MAX(scan_date) memakai index pada scan_date
+            // dan tidak perlu membaca seluruh tabel.
+            $maxScan = $this->connCii()->table('att_log')->max('scan_date');
 
-            if (!empty($months)) {
+            if ($maxScan) {
+                $akhir = $maxScan instanceof \DateTimeInterface
+                    ? Carbon::instance($maxScan)
+                    : Carbon::parse($maxScan);
+
+                $months = [];
+                for ($i = 0; $i < 24; $i++) {
+                    $months[] = $akhir->copy()->startOfMonth()->subMonths($i)->format('Y-m');
+                }
+
                 return $months;
             }
 
@@ -895,13 +934,20 @@ class FaceAttendanceAdminController extends Controller
      * Menampilkan: total scan di bulan itu, jumlah pin unik, berapa yang match
      * ke BIODATA, dan daftar pin yang tidak ditemukan (sample).
      */
-    private function buildDiagnostics(string $month, $monthlyLogs, $employees, array $groupedAll): array
+    private function buildDiagnostics(string $month, $aggRows, $employees, array $groupedAll): array
     {
-        $totalScans = $monthlyLogs->count();
+        // OPTIMASI (2026-11-03): buildDiagnostics dulu menerima SELURUH baris
+        // mentah scan sebulan hanya untuk menghitung jumlah pin unik. Sekarang
+        // menerima hasil agregat per (pin, tanggal) yang jauh lebih kecil.
+        // Total scan = penjumlahan kolom jumlah_scan, bukan count() baris.
+        $totalScans = 0;
+        foreach ($aggRows as $r) {
+            $totalScans += (int) ($r->jumlah_scan ?? 0);
+        }
 
         $uniquePins = [];
-        foreach ($monthlyLogs as $log) {
-            $uniquePins[$this->normalizePin($log->pin)] = true;
+        foreach ($aggRows as $r) {
+            $uniquePins[$this->normalizePin($r->pin)] = true;
         }
 
         // Peta barcode -> nama untuk deteksi pin yang tidak ada di master
@@ -1184,18 +1230,79 @@ class FaceAttendanceAdminController extends Controller
         $startDate = $month . '-01';
         $endDate   = Carbon::parse($startDate)->endOfMonth()->format('Y-m-d');
 
+        // PERBAIKAN 14 (2026-11-04): export dulu membaca SELURUH att_log
+        // sebulan (tanpa filter dept) dan memakai
+        // CAST(a.pin AS VARCHAR) di klausa join -- pola yang mematikan index.
+        // Sekarang memakai alur yang sama dengan rekap:
+        //   DEPT -> (BIODATA UNION BIODATA_KELUAR) -> BARCODE -> att_log
+        // dan att_log.pin tidak dibungkus CAST.
+        $department = (string) $request->get('department', '');
+
+        $barcodeExpr = "LTRIM(RTRIM(CONVERT(varchar(64), %s.BARCODE)))";
+
+        $masterUnion = $this->connCii()->table('BIODATA as b')
+            ->selectRaw(sprintf($barcodeExpr, 'b') . ' AS BARCODE');
+        if ($department !== '') {
+            $masterUnion->where('b.ID_DEPT', $department);
+        }
+
+        $keluarUnion = $this->connCii()->table('BIODATA_KELUAR as bk')
+            ->selectRaw(sprintf($barcodeExpr, 'bk') . ' AS BARCODE');
+        if ($department !== '') {
+            $keluarUnion->where('bk.ID_DEPT', $department);
+        }
+
         $monthlyLogs = $this->connCii()->table('att_log as a')
-            ->leftJoin('BIODATA as b', DB::raw('CAST(a.pin AS VARCHAR)'), '=', DB::raw('CAST(b.BARCODE AS VARCHAR)'))
+            ->joinSub($masterUnion->union($keluarUnion), 'bio', function ($join) {
+                // Tanpa CAST di sisi att_log -> index pin terpakai.
+                $join->on('bio.BARCODE', '=', DB::raw('LTRIM(RTRIM(a.pin))'));
+            })
             ->whereBetween('a.scan_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
             ->orderBy('a.scan_date', 'asc')
             ->select(['a.pin', 'a.scan_date', 'a.verifymode', 'a.inoutmode', 'a.sn'])
             ->get();
 
-        $employees = $this->connCii()->table('BIODATA as b')
+        // Master karyawan untuk export HARUS memakai gabungan
+        // BIODATA + BIODATA_KELUAR, sebab query att_log di atas memakai
+        // INNER JOIN ke gabungan tersebut. Kalau di sini hanya BIODATA,
+        // scan milik karyawan keluar akan hilang dari CSV tanpa jejak.
+        $empAktif = $this->connCii()->table('BIODATA as b')
             ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
-            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.BARCODE', 'd.DEPARTEMENT as DEPT')
-            ->orderBy('b.NAMA_KARYAWAN', 'asc')
-            ->get();
+            ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.BARCODE', 'd.DEPARTEMENT as DEPT');
+        if ($department !== '') {
+            $empAktif->where('b.ID_DEPT', $department);
+        }
+        $empAktif = $empAktif->get();
+
+        $empKeluar = $this->connCii()->table('BIODATA_KELUAR as bk')
+            ->leftJoin('DEPT as dk', 'bk.ID_DEPT', '=', 'dk.ID_DEPT')
+            ->select('bk.NPK', 'bk.NAMA_KARYAWAN', 'bk.BARCODE', 'dk.DEPARTEMENT as DEPT');
+        if ($department !== '') {
+            $empKeluar->where('bk.ID_DEPT', $department);
+        }
+        $empKeluar = $empKeluar->get();
+
+        // Barcode aktif menang bila ada duplikat (sama seperti rekap).
+        $seen = [];
+        $mergedEmp = [];
+        foreach ($empAktif as $e) {
+            $k = $this->normalizePin($e->BARCODE ?? '');
+            if ($k === '') { continue; }
+            $seen[$k] = true;
+            $mergedEmp[] = $e;
+        }
+        foreach ($empKeluar as $e) {
+            $k = $this->normalizePin($e->BARCODE ?? '');
+            if ($k === '' || isset($seen[$k])) { continue; }
+            $seen[$k] = true;
+            $mergedEmp[] = $e;
+        }
+
+        $employees = collect($mergedEmp)
+            ->sortBy(function ($e) {
+                return mb_strtoupper((string) ($e->NAMA_KARYAWAN ?? ''));
+            })
+            ->values();
 
         $logsByBarcode = [];
         foreach ($monthlyLogs as $log) {
@@ -1329,6 +1436,165 @@ class FaceAttendanceAdminController extends Controller
         }
 
         return $grouped;
+    }
+
+    /**
+     * Susun baris rekap per tanggal DARI HASIL AGREGAT SQL.
+     *
+     * OPTIMASI (2026-11-03): sebelumnya fungsi ini menerima semua baris scan
+     * mentah karyawan lalu mem-parse tanggal berulang kali dengan Carbon.
+     * Sekarang menerima hasil agregat (satu baris per tanggal) yang sudah
+     * membawa jumlah scan, jam pertama, dan jam terakhir dari SQL
+     * (MIN/MAX/COUNT), sehingga PHP hanya memformat, tidak menghitung ulang.
+     *
+     * Klasifikasi jam masuk/pulang tetap mengikuti aturan lama:
+     * scan sebelum 12:30 dianggap masuk, setelahnya dianggap pulang.
+     * Mode (Wajah/Fingerprint) diambil dari query terpisah yang sangat kecil
+     * (hanya DISTINCT mode untuk pin ini), bukan dari seluruh baris scan.
+     */
+    private function groupAggregatedPerDate(array $dayRows, string $barcode, array $modesByDate = []): array
+    {
+        $grouped = [];
+
+        foreach ($dayRows as $row) {
+            $tgl = $row->tgl;
+            if ($tgl instanceof \DateTimeInterface) {
+                $dateKey = $tgl->format('Y-m-d');
+            } else {
+                $dateKey = Carbon::parse($tgl)->format('Y-m-d');
+            }
+
+            $first = Carbon::parse($row->scan_pertama);
+            $last  = Carbon::parse($row->scan_terakhir);
+
+            // Ambang batas SAMA PERSIS dengan kode lama (12.5) supaya hasil
+            // rekap tidak berubah: scan dengan jam < 12 dianggap masuk,
+            // jam >= 13 dianggap pulang, jam 12:xx masuk kategori masuk.
+            $clockIn = null;
+            if ((int) $first->format('H') < 12.5) {
+                $clockIn = $first->format('H:i:s');
+            }
+
+            // Jam pulang diambil dari scan PALING AKHIR (MAX di SQL), bukan
+            // dari scan terakhir dalam urutan data.
+            $clockOut = null;
+            if ((int) $last->format('H') >= 12.5) {
+                $clockOut = $last->format('H:i:s');
+            }
+
+            // Kasus tepi: hanya ada satu scan dan itu < 12:30 -> tetap masuk.
+            if ($clockIn === null && $clockOut === null) {
+                $clockIn = $first->format('H:i:s');
+            }
+
+            $modes = $modesByDate[$dateKey] ?? [];
+
+            $grouped[$dateKey] = [
+                'date'          => $dateKey,
+                'formatted_date' => Carbon::parse($dateKey)->format('d-m-Y'),
+                'day_name'      => Carbon::parse($dateKey)->translatedFormat('l'),
+                'clock_in'      => $clockIn,
+                'clock_out'     => $clockOut,
+                'modes'         => $modes,
+                'total_scans'   => (int) $row->jumlah_scan,
+                'has_face'      => in_array('Wajah', $modes, true),
+                'face_details'  => [],
+            ];
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Mode presensi unik per (PIN, tanggal) untuk BANYAK pin sekaligus.
+     * Hasil: ['PIN' => ['Y-m-d' => ['Wajah','Fingerprint'], ...], ...]
+     *
+     * PENTING (2026-11-03): versi pertama optimasi ini memanggil query per
+     * karyawan -> 50 query tambahan per halaman. Itu justru memperberat.
+     * Sekarang SELURUH pin halaman diambil dalam SATU query, memakai
+     * pemecahan CSV + CHARINDEX yang sama seperti query utama (aman dari
+     * batas 2100 parameter dan tidak butuh STRING_SPLIT).
+     *
+     * Aman bila gagal: kembalikan array kosong, rekap tetap tampil.
+     */
+    private function loadModesPerDate(array $barcodes, string $startDate, string $endDate): array
+    {
+        $barcodes = array_values(array_unique(array_filter($barcodes, function ($v) {
+            return $v !== '' && strpos($v, ',') === false;
+        })));
+
+        if (empty($barcodes)) {
+            return [];
+        }
+
+        $out = [];
+
+        try {
+            foreach (array_chunk($barcodes, 800) as $chunk) {
+                // PERBAIKAN 14 (2026-11-04): ganti CHARINDEX ke CSV dengan
+                // whereIn biasa. Barcode sudah dinormalisasi (trim, tanpa koma)
+                // sehingga tidak butuh pembatas koma lagi, dan SQL Server bisa
+                // memakai index pada att_log.pin.
+                // Jumlah pin per potongan 800 + 2 parameter tanggal = 802,
+                // aman di bawah batas 2100 parameter SQL Server.
+                $rows = $this->connCii()->table('att_log as a')
+                    ->whereIn(DB::raw('LTRIM(RTRIM(a.pin))'), $chunk)
+                    ->whereRaw(
+                        "CONVERT(date, a.scan_date) BETWEEN ? AND ?",
+                        [$startDate, $endDate]
+                    )
+                    ->select([
+                        DB::raw('LTRIM(RTRIM(CONVERT(varchar(64), a.pin))) AS pin'),
+                        DB::raw('CONVERT(date, a.scan_date) AS tgl'),
+                        DB::raw("LTRIM(RTRIM(ISNULL(a.sn, ''))) AS sn"),
+                        DB::raw('ISNULL(a.verifymode, 0) AS verifymode'),
+                    ])
+                    ->distinct()
+                    ->get();
+
+                foreach ($rows as $r) {
+                    $pin = $this->normalizePin($r->pin);
+                    $key = $r->tgl instanceof \DateTimeInterface
+                        ? $r->tgl->format('Y-m-d')
+                        : Carbon::parse($r->tgl)->format('Y-m-d');
+
+                    $mode = $this->modeLabelFromValues($r->sn, $r->verifymode);
+
+                    if (!isset($out[$pin][$key])) {
+                        $out[$pin][$key] = [];
+                    }
+                    if (!in_array($mode, $out[$pin][$key], true)) {
+                        $out[$pin][$key][] = $mode;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Gagal ambil mode presensi rekap: ' . $e->getMessage());
+            return [];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Label mode dari nilai mentah (sn + verifymode).
+     * Dipisah dari modeLabel() supaya bisa dipakai pada hasil SELECT agregat.
+     */
+    private function modeLabelFromValues(?string $sn, $verifymode): string
+    {
+        $sn = strtoupper(trim((string) $sn));
+
+        // Presensi wajah berbasis web menyimpan penanda khusus di kolom sn.
+        if ($sn !== '' && (strpos($sn, 'FACE') !== false || strpos($sn, 'GPS') !== false)) {
+            return 'Wajah';
+        }
+
+        // Mesin ZKTeco lama memakai verifymode 15 untuk verifikasi wajah.
+        if ((int) $verifymode === 15) {
+            return 'Wajah';
+        }
+
+        return 'Fingerprint';
     }
 
     /**

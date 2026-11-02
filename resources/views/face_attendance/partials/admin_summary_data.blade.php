@@ -75,25 +75,11 @@
                                 <strong>Absensi Finger</strong> &rarr; <strong>Sync</strong>.
                             </p>
                         </div>
-                    @elseif($diagnostics['unmatched_total'] > 0)
-                        <div class="alert alert-info alert-dismissible fade show shadow-sm" role="alert">
-                            <h6 class="alert-heading">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Sebagian scan tidak memiliki data karyawan
-                            </h6>
-                            <p class="mb-1">
-                                Scan bulan ini: <strong>{{ number_format($diagnostics['total_scans']) }}</strong> baris,
-                                <strong>{{ number_format($diagnostics['unique_pins']) }}</strong> pin unik.
-                                Match ke master <code>BIODATA</code>: <strong>{{ number_format($diagnostics['matched_pins']) }}</strong>,
-                                tidak match: <strong>{{ number_format($diagnostics['unmatched_total']) }}</strong>.
-                            </p>
-                            <p class="mb-0 small">
-                                Contoh pin tidak match:
-                                @foreach($diagnostics['unmatched_pins'] as $pin)
-                                    <code class="mr-1">{{ $pin }}</code>
-                                @endforeach
-                            </p>
-                        </div>
+                    {{-- Diminta user (2026-11-03): panel "pin unik / tidak match"
+                         DIHAPUS. Informasi ini hanya noise diagnostik untuk
+                         pengembang dan membingungkan admin, karena mayoritas
+                         pin di att_log memang milik mesin tanpa master BIODATA.
+                         Rekap tetap menampilkan data karyawan yang cocok saja. --}}
                     @endif
                 @endif
 

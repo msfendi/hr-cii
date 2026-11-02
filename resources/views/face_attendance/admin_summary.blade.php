@@ -201,7 +201,14 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-4 mb-3 mb-md-0">
+                            {{-- PERBAIKAN 17 (2026-11-04): tombol Filter DIHAPUS.
+                                 Ketiga kontrol (bulan, departemen, karyawan) sudah
+                                 memicu loadData() otomatis lewat bindFilterAutoReload().
+                                 Tombol hanya menambah satu kolom kosong di kanan,
+                                 jadi ruangnya dialihkan ke kolom pencarian agar
+                                 input lebih lega dan baris filter seimbang
+                                 (3 + 3 + 6 = 12 kolom). --}}
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 <label class="font-weight-bold text-gray-700 small d-block mb-2" for="filterSearch">Cari (Nama / NPK / Barcode):</label>
                                 {{-- PERBAIKAN (2026-11-03): input teks biasa -> Select2.
                                      Data diambil dari API /face-attendance/admin/employees
@@ -219,21 +226,18 @@
                                     @endif
                                 </select>
                             </div>
-                            <div class="col-md-2 mb-3 mb-md-0">
-                                <label class="small d-block mb-2" style="visibility:hidden;">Filter</label>
-                                <button type="submit" class="btn btn-sm btn-primary rounded-pill btn-block" style="height: 31px;">
-                                    <i class="fas fa-filter mr-1"></i> Filter
-                                </button>
-                            </div>
                         </form>
-                        <div id="rekapLoadingBanner" class="alert alert-info border-left-info shadow-sm mt-3 mb-0" role="status">
+                        {{-- Banner ini HANYA tampil ketika data belum siap. Pada kunjungan
+                             pertama (belum ada @include data) banner muncul lalu hilang
+                             setelah AJAX selesai. Kalau data sudah dikirim server,
+                             banner tidak perlu tampil sama sekali. --}}
+                        <div id="rekapLoadingBanner" class="alert alert-info border-left-info shadow-sm mt-3 mb-0 {{ !empty($loaded) ? 'd-none' : '' }}" role="status" aria-live="polite">
                             <div class="d-flex align-items-center">
                                 <span class="spinner-border spinner-border-sm text-info mr-2" role="status" aria-hidden="true"></span>
                                 <span>
-                                    <strong>Memuat data rekap...</strong>
+                                    <strong>Memuat data presensi...</strong>
                                     <span class="d-block small text-gray-700">
-                                        Halaman ditampilkan lebih dulu, data presensi diambil di belakang.
-                                        Filter bulan / departemen / pencarian akan langsung memuat ulang data.
+                                        Data sedang diambil. Mohon tunggu sebentar.
                                     </span>
                                 </span>
                             </div>
@@ -242,10 +246,17 @@
                     </div>
                 </div>
 
-                {{-- Kontainer data rekap: diisi via AJAX (lazy load) --}}
-                <div id="rekapDataContainer">
-
-                @include('face_attendance.partials.admin_summary_data')
+                {{-- Kontainer data rekap: DIISI VIA AJAX (lazy load).
+                     JANGAN @include di sini. Dulu partial ini di-include sehingga
+                     server tetap menjalankan seluruh query rekap sebelum halaman
+                     dikirim -> halaman pertama berat dan banner loading hanya
+                     hiasan (data sudah selesai sebelum banner sempat terlihat).
+                     Sekarang halaman dikirim ringan, data menyusul lewat fetch. --}}
+                <div id="rekapDataContainer" aria-live="polite" aria-busy="true">
+                    <div class="text-center text-muted py-5" id="rekapPlaceholder">
+                        <span class="spinner-border text-primary mb-3" role="status" aria-hidden="true"></span>
+                        <div class="small">Menyiapkan data presensi...</div>
+                    </div>
                 </div>{{-- /#rekapDataContainer --}}
             </div>
         </div>
@@ -1063,7 +1074,13 @@
     function loadData() {
         showLoading();
         hideError();
-        container.style.opacity = '0.45';
+        container.setAttribute('aria-busy', 'true');
+
+        // Hanya redupkan bila sudah ada isi (muat ulang). Pada kunjungan
+        // pertama cukup placeholder spinner yang tampil.
+        if (!document.getElementById('rekapPlaceholder')) {
+            container.style.opacity = '0.45';
+        }
 
         if (inflight && inflight.abort) inflight.abort();
         inflight = new AbortController();
@@ -1080,6 +1097,7 @@
         .then(function (html) {
             container.innerHTML = html;
             container.style.opacity = '1';
+            container.setAttribute('aria-busy', 'false');
             hideLoading();
             initRekapTable();
             document.dispatchEvent(new CustomEvent('rekap:loaded'));
@@ -1087,8 +1105,13 @@
         .catch(function (e) {
             if (e.name === 'AbortError') return;
             container.style.opacity = '1';
+            container.setAttribute('aria-busy', 'false');
             hideLoading();
-            showError('Gagal memuat data rekap: ' + e.message + '. Periksa koneksi database lalu tekan Filter untuk mencoba lagi.');
+            // Jangan biarkan spinner berputar selamanya saat gagal.
+            if (document.getElementById('rekapPlaceholder')) {
+                container.innerHTML = '';
+            }
+            showError('Gagal memuat data rekap: ' + e.message + '. Periksa koneksi database, data akan dimuat ulang otomatis saat filter diubah.');
         });
     }
 

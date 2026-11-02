@@ -28,122 +28,77 @@
     <script src="{{ asset('js/sb-admin-2.min.js') }}"></script>
 @endif
 
+{{-- ============================================================
+     TOGGLE SIDEBAR — SATU handler saja (PERBAIKAN 2026-11-03)
+     ============================================================
+     MASALAH: tombol burger (#sidebarToggleTop) tidak bisa show/hide sidebar.
+     Awalnya ada TIGA sumber yang saling bertabrakan:
+       1. sb-admin-2.min.js  -> jQuery: body.toggleClass + .sidebar.toggleClass
+       2. blok inline #1     -> toggleSidebar() + localStorage
+       3. blok inline #2     -> bindSidebarToggle() (idempoten via dataset)
+     Handler #1 dan #3 sama-sama menempel pada tombol yang sama, sehingga
+     satu klik = dua kali toggle (buka lalu tutup lagi seketika) -> sidebar
+     terlihat "tidak bereaksi". Kombinasi ini yang membuat burger mati.
+
+     SOLUSI: satu implementasi, didaftarkan lewat event delegation di
+     document (tahan terhadap navigasi dinamis / konten yang di-render
+     ulang), dan tiap klik hanya mengubah state SATU kali. Tidak ada lagi
+     handler ganda karena sb-admin-2 dimatikan untuk tombol ini di bawah.
+     ============================================================ --}}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const toggleIds = ['#sidebarToggle', '#sidebarToggleTop'];
-        const sidebar = document.querySelector('.sidebar');
-        const body = document.body;
+(function () {
+    'use strict';
 
-        function setSidebarState(expanded) {
-            if (expanded) {
-                body.classList.add('sidebar-toggled');
-                if (sidebar) sidebar.classList.add('toggled');
-            } else {
-                body.classList.remove('sidebar-toggled');
-                if (sidebar) sidebar.classList.remove('toggled');
-            }
-            // Update aria-expanded on all toggle buttons
-            toggleIds.forEach(selector => {
-                const btn = document.querySelector(selector);
-                if (btn) btn.setAttribute('aria-expanded', expanded);
-            });
-            // Persist to localStorage
-            localStorage.setItem('sidebarToggled', expanded);
-        }
+    var KEY = 'sidebarToggled';
 
-        function toggleSidebar() {
-            const currentlyExpanded = body.classList.contains('sidebar-toggled');
-            setSidebarState(!currentlyExpanded);
-        }
+    function sidebarEl() { return document.querySelector('.sidebar'); }
+    function isToggled()  { return document.body.classList.contains('sidebar-toggled'); }
 
-        // Initialize from localStorage (or default to expanded)
-        const savedState = localStorage.getItem('sidebarToggled');
-        if (savedState !== null) {
-            setSidebarState(savedState === 'true');
-        } else {
-            // Default: sidebar expanded (not toggled)
-            setSidebarState(false);
-        }
+    function apply(toggled, persist) {
+        var sb = sidebarEl();
+        document.body.classList.toggle('sidebar-toggled', toggled);
+        if (sb) { sb.classList.toggle('toggled', toggled); }
 
-        // Bind click handlers
-        toggleIds.forEach(selector => {
-            const btn = document.querySelector(selector);
-            if (btn && !btn.dataset.sidebarToggleBound) {
-                btn.dataset.sidebarToggleBound = 'true';
-                btn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleSidebar();
-                });
-            }
+        // Sinkronkan aria-expanded: true = sidebar terlihat (tidak toggled)
+        ['#sidebarToggle', '#sidebarToggleTop'].forEach(function (sel) {
+            var b = document.querySelector(sel);
+            if (b) { b.setAttribute('aria-expanded', toggled ? 'false' : 'true'); }
         });
 
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(e) {
-            if (window.innerWidth < 768) {
-                const sidebar = document.querySelector('.sidebar');
-                const isClickInsideSidebar = sidebar && sidebar.contains(e.target);
-                const isClickOnToggle = toggleIds.some(sel => {
-                    const btn = document.querySelector(sel);
-                    return btn && btn.contains(e.target);
-                });
-                if (body.classList.contains('sidebar-toggled') && !isClickInsideSidebar && !isClickOnToggle) {
-                    setSidebarState(false);
-                }
-            }
-        });
-    });
-</script>
-
-<!-- Re-init sidebar toggle on dynamic navigation (pjax, turbolinks, livewire, etc.) -->
-<script>
-(function() {
-    function bindSidebarToggle() {
-        const toggleIds = ['#sidebarToggle', '#sidebarToggleTop'];
-        const sidebar = document.querySelector('.sidebar');
-        const body = document.body;
-
-        function setSidebarState(expanded) {
-            if (expanded) {
-                body.classList.add('sidebar-toggled');
-                if (sidebar) sidebar.classList.add('toggled');
-            } else {
-                body.classList.remove('sidebar-toggled');
-                if (sidebar) sidebar.classList.remove('toggled');
-            }
-            toggleIds.forEach(selector => {
-                const btn = document.querySelector(selector);
-                if (btn) btn.setAttribute('aria-expanded', expanded);
-            });
+        if (persist) {
+            try { localStorage.setItem(KEY, toggled ? '1' : '0'); } catch (e) {}
         }
-
-        function toggleSidebar() {
-            const currentlyExpanded = body.classList.contains('sidebar-toggled');
-            setSidebarState(!currentlyExpanded);
-            localStorage.setItem('sidebarToggled', !currentlyExpanded);
-        }
-
-        toggleIds.forEach(selector => {
-            const btn = document.querySelector(selector);
-            if (btn && !btn.dataset.sidebarToggleBound) {
-                btn.dataset.sidebarToggleBound = 'true';
-                btn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleSidebar();
-                });
-            }
-        });
     }
 
-    // Initial bind
-    bindSidebarToggle();
+    // Delegation: satu listener untuk semua tombol, aman walau tombol
+    // di-render ulang (AJAX / pjax). Tidak mungkin terjadi double-bind.
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('#sidebarToggle, #sidebarToggleTop') : null;
+        if (!btn) { return; }
 
-    // Re-bind on common dynamic navigation events
-    document.addEventListener('pjax:complete', bindSidebarToggle);
-    document.addEventListener('turbolinks:load', bindSidebarToggle);
-    document.addEventListener('livewire:load', bindSidebarToggle);
-    document.addEventListener('DOMContentLoaded', bindSidebarToggle);
+        e.preventDefault();
+        e.stopPropagation();
+        // PENTING: jangan biarkan handler jQuery sb-admin-2 ikut jalan,
+        // karena itu akan melakukan toggle kedua kalinya.
+        if (e.stopImmediatePropagation) { e.stopImmediatePropagation(); }
+
+        apply(!isToggled(), true);
+    }, true); // capture: menang sebelum handler jQuery (bubble) dieksekusi
+
+    // Pulihkan state terakhir
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    apply(saved === '1', false);
+
+    // Tutup otomatis di layar kecil saat klik di luar sidebar
+    document.addEventListener('click', function (e) {
+        if (window.innerWidth >= 768 || !isToggled()) { return; }
+        var sb = sidebarEl();
+        var btn = e.target.closest ? e.target.closest('#sidebarToggle, #sidebarToggleTop') : null;
+        if (sb && sb.contains(e.target)) { return; }
+        if (btn) { return; }
+        apply(false, true);
+    });
 })();
 </script>
 
