@@ -19,7 +19,11 @@ class FaceAttendanceController extends Controller
     public function login()
     {
         $locations = AttendanceWorkLocation::where('is_active', 1)->get();
-        return view('face_attendance.login', compact('locations'));
+
+        // PERBAIKAN 25: halaman login wajah harus menghormati toggle liveness.
+        $livenessEnabled = \App\Services\FaceRecognitionService::isLivenessEnabled('login');
+
+        return view('face_attendance.login', compact('locations', 'livenessEnabled'));
     }
 
     /**
@@ -234,7 +238,11 @@ class FaceAttendanceController extends Controller
         // terdaftar, sehingga view memakai inisial huruf.
         $employeeFaceImg = $this->resolveEmployeeFaceImg($biodata->NPK ?? $npk);
 
+        // PERBAIKAN 25: halaman presensi menghormati toggle liveness.
+        $livenessEnabled = \App\Services\FaceRecognitionService::isLivenessEnabled('presensi');
+
         return view('face_attendance.index', compact(
+            'livenessEnabled',
             'biodata',
             'employeeFaceImg',
             'shift',

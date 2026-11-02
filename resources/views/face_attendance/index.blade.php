@@ -446,6 +446,20 @@
     let cameraActive = false;
 
     // ==================================================================
+    // PERBAIKAN 25 (2026-11-05): TOGGLE LIVENESS CHECK DARI ADMIN
+    // ==================================================================
+    // Dibaca dari menu Manage Face Recognition -> Pengaturan Liveness Check.
+    // OFF = cocokkan wajah langsung tanpa kedip/geleng, foto tetap diambil.
+    // Default true (fail-safe): variabel tidak terkirim -> liveness tetap ON.
+    const LIVENESS_REQUIRED = Boolean(@json((bool) ($livenessEnabled ?? true)));
+
+    // Saat OFF, tantangan dianggap selesai agar alur kirim presensi yang
+    // sudah ada berjalan tanpa perubahan lain.
+    if (!LIVENESS_REQUIRED) {
+        livenessVerified = true;
+    }
+
+    // ==================================================================
     // STATE MESIN KAMERA — REBUILD TOTAL (2026-11-03)
     // ==================================================================
     // DESKRIPSI MASALAH:
@@ -1411,7 +1425,8 @@
         // terverifikasi). Lei juga state liveness harus dibersihkan supaya
         // liveness palsu tidak ikut terkirim.
         isScanning = false;
-        livenessVerified = false;
+        // PERBAIKAN 25: bila liveness OFF, jangan minta ulang kedip/geleng.
+        livenessVerified = !LIVENESS_REQUIRED;
 
         if (camBadge) {
             camBadge.className = 'badge badge-light text-dark font-weight-bold';
@@ -1847,7 +1862,8 @@
         if (detection) {
             const landmarks = detection.landmarks;
 
-            if (!livenessVerified) {
+            // PERBAIKAN 25: blok tantangan hanya berjalan bila liveness ON.
+            if (LIVENESS_REQUIRED && !livenessVerified) {
                 const isBlink = checkEyeBlink(landmarks);
                 const isTurn = checkHeadTurn(landmarks);
 
@@ -1878,7 +1894,11 @@
                     if (guideBox) guideBox.classList.add('liveness-ok');
 
                     if (alertBox) alertBox.className = 'alert alert-success py-3 px-3 mb-3 text-center shadow-sm font-weight-bold';
-                    if (alertText) alertText.innerHTML = '<i class="fas fa-check-circle mr-1"></i> LIVENESS TERVERIFIKASI! (' + (blinkDetected ? 'Kedipan Mata' : 'Geleng Kepala') + ' Terdeteksi) - Mengirim Presensi...';
+                    // PERBAIKAN 25: jangan menulis "LIVENESS TERVERIFIKASI" saat
+                    // liveness dimatikan admin -- itu informasi palsu.
+                    if (alertText) alertText.innerHTML = !LIVENESS_REQUIRED
+                        ? '<i class="fas fa-check-circle mr-1"></i> Wajah Dikenali - Mengirim Presensi...'
+                        : '<i class="fas fa-check-circle mr-1"></i> LIVENESS TERVERIFIKASI! (' + (blinkDetected ? 'Kedipan Mata' : 'Geleng Kepala') + ' Terdeteksi) - Mengirim Presensi...';
                     if (overlayText) overlayText.innerHTML = '<i class="fas fa-check-circle text-success mr-1"></i> Wajah Terverifikasi';
 
                     const descriptorArray = Array.from(detection.descriptor);
@@ -1952,7 +1972,7 @@
                             // Reset LOKAL (bukan confiar ke timer apa pun) lalu
                             // jadwalkan ulang loop supaya user bisa mencoba lagi.
                             isScanning = false;
-                            livenessVerified = false;
+                            livenessVerified = !LIVENESS_REQUIRED;
                             blinkDetected = false;
                             headTurnDetected = false;
                             blinkCount = 0;
@@ -1973,7 +1993,7 @@
                             text: (err && err.message) ? err.message : 'Kesalahan jaringan. Silakan coba lagi.'
                         });
                         isScanning = false;
-                        livenessVerified = false;
+                        livenessVerified = !LIVENESS_REQUIRED;
                         blinkDetected = false;
                         headTurnDetected = false;
                         blinkCount = 0;
@@ -1991,7 +2011,11 @@
 
             setTimeout(detectFaceLoop, 150);
         } else {
-            if (overlayText) overlayText.innerHTML = '<i class="fas fa-user-clock text-warning mr-1"></i> Posisikan Wajah';
+            // PERBAIKAN 25: saat liveness OFF jangan menjanjikan kedip/geleng,
+            // cukup minta arahkan wajah -- itu memang yang dibutuhkan.
+            if (overlayText) overlayText.innerHTML = LIVENESS_REQUIRED
+                ? '<i class="fas fa-user-clock text-warning mr-1"></i> Posisikan Wajah'
+                : '<i class="fas fa-user-clock text-warning mr-1"></i> Arahkan Wajah ke Kamera';
             initialNoseRatio = null;
             setTimeout(detectFaceLoop, 300);
         }

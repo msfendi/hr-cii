@@ -14,6 +14,12 @@ class FaceRecognitionSetting extends Model
         'is_qr_payroll_enabled',
         'is_qr_thr_enabled',
         'is_qr_cuti_enabled',
+        // PERBAIKAN 25: toggle liveness check
+        'is_liveness_enabled',
+        'liveness_presensi_enabled',
+        'liveness_login_enabled',
+        'liveness_slip_enabled',
+        'liveness_cuti_enabled',
     ];
 
     protected $casts = [
@@ -23,6 +29,12 @@ class FaceRecognitionSetting extends Model
         'is_qr_payroll_enabled' => 'boolean',
         'is_qr_thr_enabled'     => 'boolean',
         'is_qr_cuti_enabled'    => 'boolean',
+        // PERBAIKAN 25
+        'is_liveness_enabled'       => 'boolean',
+        'liveness_presensi_enabled' => 'boolean',
+        'liveness_login_enabled'    => 'boolean',
+        'liveness_slip_enabled'     => 'boolean',
+        'liveness_cuti_enabled'     => 'boolean',
     ];
 
     /**
@@ -48,9 +60,27 @@ class FaceRecognitionSetting extends Model
                     // Skip jika kolom belum termigrasi
                 }
                 try {
+                    if (Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled')) {
+                        $setting->is_liveness_enabled       = true;
+                        $setting->liveness_presensi_enabled = true;
+                        $setting->liveness_login_enabled    = true;
+                        $setting->liveness_slip_enabled     = true;
+                        $setting->liveness_cuti_enabled     = true;
+                    }
+                } catch (\Throwable $e) {
+                    // Skip jika kolom belum termigrasi
+                }
+                try {
                     $setting->save();
                 } catch (\Throwable $e) {
-                    // Abaikan jika tidak bisa disimpan (misal read-only DB)
+                    // PERBAIKAN 25 (2026-11-05): DULU error ditelan diam-diam,
+                    // sehingga objek TIDAK tersimpan (exists=false) dikembalikan
+                    // dan updateSettings() melakukan update pada objek hantu ->
+                    // toggle liveness tampak "berhasil" tapi TIDAK tersimpan.
+                    // Sekarang dicatat supaya kelihatan di log.
+                    \Illuminate\Support\Facades\Log::warning(
+                        'FaceRecognitionSetting::current() gagal membuat baris default: ' . $e->getMessage()
+                    );
                 }
             }
 
@@ -63,6 +93,11 @@ class FaceRecognitionSetting extends Model
             $fallback->is_qr_payroll_enabled = true;
             $fallback->is_qr_thr_enabled     = true;
             $fallback->is_qr_cuti_enabled    = true;
+            $fallback->is_liveness_enabled       = true;
+            $fallback->liveness_presensi_enabled = true;
+            $fallback->liveness_login_enabled    = true;
+            $fallback->liveness_slip_enabled     = true;
+            $fallback->liveness_cuti_enabled     = true;
             return $fallback;
         }
     }
@@ -83,6 +118,40 @@ class FaceRecognitionSetting extends Model
     }
 
     public function getIsQrCutiEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PERBAIKAN 25 -- Accessor Liveness Check
+    |--------------------------------------------------------------------------
+    | Semua accessor null-safe (default TRUE). Jadi kalau migrasi belum jalan,
+    | sistem TETAP berperilaku seperti sekarang (liveness aktif), tidak
+    | tiba-tiba mematikan keamanan presensi.
+    */
+
+    public function getIsLivenessEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getLivenessPresensiEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getLivenessLoginEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getLivenessSlipEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getLivenessCutiEnabledAttribute($value)
     {
         return $value !== null ? (bool) $value : true;
     }

@@ -64,6 +64,62 @@ class FaceRecognitionService
         }
     }
 
+    /**
+     * PERBAIKAN 25 -- Toggle Liveness Check.
+     *
+     * Titik tunggal yang dibaca SEMUA halaman face recognition supaya tidak
+     * ada halaman yang lupa menghormati setting admin.
+     *
+     * Aturan:
+     *   - Master OFF  -> semua halaman OFF, apa pun setting per menunya.
+     *   - Master ON   -> ikut switch per menu ($menu).
+     *   - $menu null  -> hanya master yang menentukan.
+     *
+     * Jika kolom belum dimigrasi / DB error, default TRUE (liveness tetap
+     * aktif). Sengaja begitu supaya kegagalan migrasi tidak diam-diam
+     * MELEMAHKAN keamanan presensi.
+     *
+     * @param string|null $menu  presensi|login|slip|cuti
+     */
+    public static function isLivenessEnabled(?string $menu = null): bool
+    {
+        try {
+            $settings = static::settings();
+
+            if (!$settings->is_liveness_enabled) {
+                return false;
+            }
+
+            if ($menu === null) {
+                return true;
+            }
+
+            $column = 'liveness_' . strtolower(trim($menu)) . '_enabled';
+
+            $value = $settings->{$column};
+
+            return $value !== null ? (bool) $value : true;
+        } catch (\Throwable $e) {
+            return true;
+        }
+    }
+
+    /**
+     * Peta liveness untuk semua menu, siap dikirim ke view sebagai JSON.
+     *
+     * @return array<string,bool>
+     */
+    public static function livenessMap(): array
+    {
+        $map = [];
+
+        foreach (['presensi', 'login', 'slip', 'cuti'] as $menu) {
+            $map[$menu] = static::isLivenessEnabled($menu);
+        }
+
+        return $map;
+    }
+
     public static function isQrLoginEnabled(): bool
     {
         try {

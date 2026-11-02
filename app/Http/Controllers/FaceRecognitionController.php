@@ -102,6 +102,12 @@ class FaceRecognitionController extends Controller
             'is_qr_payroll_enabled' => ['nullable', 'boolean'],
             'is_qr_thr_enabled'     => ['nullable', 'boolean'],
             'is_qr_cuti_enabled'    => ['nullable', 'boolean'],
+            // PERBAIKAN 25: toggle liveness check
+            'is_liveness_enabled'       => ['nullable', 'boolean'],
+            'liveness_presensi_enabled' => ['nullable', 'boolean'],
+            'liveness_login_enabled'    => ['nullable', 'boolean'],
+            'liveness_slip_enabled'     => ['nullable', 'boolean'],
+            'liveness_cuti_enabled'     => ['nullable', 'boolean'],
         ]);
 
         $settings = FaceRecognitionService::settings();
@@ -122,7 +128,33 @@ class FaceRecognitionController extends Controller
             // Abaikan jika pengecekan skema gagal / belum dimigrasi
         }
 
-        $settings->update($updateData);
+        /*
+        | PERBAIKAN 25 -- simpan toggle liveness.
+        | Dijaga hasColumn supaya kalau migrasi belum dijalankan, form tetap
+        | bisa disimpan untuk field lain tanpa error SQL.
+        */
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled')) {
+                $updateData['is_liveness_enabled'] = (bool) ($validated['is_liveness_enabled'] ?? false);
+
+                foreach (['presensi', 'login', 'slip', 'cuti'] as $menu) {
+                    $column = 'liveness_' . $menu . '_enabled';
+
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('face_recognition_settings', $column)) {
+                        // Checkbox tidak terkirim sama sekali = tidak dicentang.
+                        $updateData[$column] = (bool) ($validated[$column] ?? false);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Abaikan jika pengecekan skema gagal / belum dimigrasi
+        }
+
+        // PERBAIKAN 25: pakai updateOrCreate supaya kalau baris settings belum
+        // ada (tabel kosong), nilai toggle benar-benar TERSIMPAN, bukan
+        // di-update pada objek hantu yang tidak punya id.
+        $target = $settings->exists ? $settings : new \App\Models\FaceRecognitionSetting();
+        $target->fill($updateData)->save();
 
         Alert::success('Berhasil', 'Pengaturan face recognition & QR login diperbarui.');
         return back();
