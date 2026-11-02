@@ -16,7 +16,6 @@ use App\Http\Controllers\PelamarController;
 use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
-use App\Http\Controllers\RecruitmentAiController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
@@ -75,6 +74,7 @@ use App\Http\Controllers\PayrollMasterController;
 use App\Http\Controllers\PayrollPeriodController;
 use App\Http\Controllers\PayrollProcessController;
 use App\Http\Controllers\PayrollSettingController;
+use App\Http\Controllers\RecruitmentAiController;
 use App\Http\Controllers\RecruitmentController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ThrApproveController;
@@ -1396,6 +1396,26 @@ Route::prefix('recruitments')->name('recruitments.')->group(function () {
         ->name('success');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Recruitment AI — Form lamaran dengan ekstraksi dokumen otomatis
+|--------------------------------------------------------------------------
+|
+| Alur: unggah dokumen (KTP/KK/ijazah/dst) -> ekstraksi AI -> cross-check
+| oleh pelamar -> kirim. Sengaja terpisah dari alur `recruitments` di atas
+| supaya formulir rekrutmen yang sudah ada tidak tersentuh.
+|
+*/
+Route::prefix('recruitment-ai')->name('recruitment-ai.')->group(function () {
+    Route::get('/', [RecruitmentAiController::class, 'show'])->name('form');
+    Route::post('/upload', [RecruitmentAiController::class, 'upload'])->name('upload');
+    Route::post('/upload/delete', [RecruitmentAiController::class, 'deleteDocument'])->name('upload.delete');
+    Route::post('/extract', [RecruitmentAiController::class, 'extract'])->name('extract');
+    Route::post('/reset-fields', [RecruitmentAiController::class, 'resetFields'])->name('reset-fields');
+    Route::post('/submit', [RecruitmentAiController::class, 'submit'])->name('submit');
+    Route::get('/success', [RecruitmentAiController::class, 'success'])->name('success');
+});
+
 
 Route::get('/portal-recruitment-status', [PortalRecruitmentStatusController::class, 'index'])->name('portal.recruitment-status.index');
 Route::post('/portal-recruitment-status/check', [PortalRecruitmentStatusController::class, 'check'])->name('portal.recruitment-status.check');
@@ -1510,8 +1530,11 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
 //     GET  /pengaturan/card-menu-hris
 //     POST /pengaturan/card-menu-hris
 //
-// Route lama (/face-attendance/admin/card-menu) TETAP ADA sebagai redirect
-// agar bookmark/link lama tidak rusak.
+// Route lama (/face-attendance/admin/card-menu) SUDAH DIHAPUS TOTAL,
+// tanpa redirect, sesuai permintaan user. Semua pemanggil memakai
+// card-menu-hris.index / card-menu-hris.update. Baris menu & permission
+// di database diperbarui oleh migration
+// 2026_11_03_000002_rename_card_menu_routes_to_hris.php.
 Route::middleware(['auth', 'permission'])->group(function () {
     Route::get('/pengaturan/card-menu-hris', [FaceAttendanceAdminController::class, 'cardMenuSettings'])
         ->name('card-menu-hris.index');
@@ -1531,14 +1554,24 @@ Route::prefix('face-attendance/admin')
         Route::get('/export', [FaceAttendanceAdminController::class, 'export'])->name('export');
         Route::get('/detail/{npk}/{date}', [FaceAttendanceAdminController::class, 'employeeDetail'])->name('detail');
 
+        // API untuk Select2 di halaman rekap admin summary.
+        // - employees : union BIODATA + BIODATA_KELUAR (cari by Nama/NPK/Barcode)
+        // - departments: daftar DEPT untuk Select2 Departemen
+        Route::get('/employees', [FaceAttendanceAdminController::class, 'employeeSearch'])->name('employees');
+        Route::get('/departments', [FaceAttendanceAdminController::class, 'departmentSearch'])->name('departments');
+
+        // Diagnostik pencarian karyawan (sementara, untuk melacak penyebab
+        // "Cari (Nama / NPK / Barcode)" kosong). Menampilkan error asli
+        // dari SQL Server, bukan array kosong.
+        Route::get('/employees-diagnostic', [FaceAttendanceAdminController::class, 'employeeSearchDiagnostic'])
+            ->name('employees.diagnostic');
+
         // Pengaturan card menu HRIS (show/hide)
         // PERBAIKAN 2026-11-03: URL utama sudah dipindah ke
-        // /pengaturan/card-menu-hris (lihat route di atas). Route di bawah ini
-        // hanya REDIRECT agar link lama tetap jalan.
-        Route::get('/card-menu', function () {
-            return redirect()->route('card-menu-hris.index');
-        })->name('card-menu');
-        Route::post('/card-menu', [FaceAttendanceAdminController::class, 'updateCardMenu'])->name('card-menu.update');
+        // /pengaturan/card-menu-hris (lihat route di atas).
+        // Route lama (/face-attendance/admin/card-menu) DIHAPUS TOTAL,
+        // tidak ada redirect. Semua pemanggil harus memakai
+        // card-menu-hris.index / card-menu-hris.update.
     });
 
 // Alias nama rute format hyphen (face-attendance.*) untuk kecocokan menu database
@@ -1547,14 +1580,4 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/sign-in', [FaceAttendanceController::class, 'login'])->name('login');
     Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
-});
-
-Route::prefix('recruitment-ai')->name('recruitment-ai.')->group(function () {
-    Route::get('/', [RecruitmentAiController::class, 'show'])->name('form');
-    Route::post('/upload', [RecruitmentAiController::class, 'upload'])->name('upload');
-    Route::post('/upload/delete', [RecruitmentAiController::class, 'deleteDocument'])->name('upload.delete');
-    Route::post('/extract', [RecruitmentAiController::class, 'extract'])->name('extract');
-    Route::post('/reset-fields', [RecruitmentAiController::class, 'resetFields'])->name('reset-fields');
-    Route::post('/submit', [RecruitmentAiController::class, 'submit'])->name('submit');
-    Route::get('/success', [RecruitmentAiController::class, 'success'])->name('success');
 });

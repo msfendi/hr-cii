@@ -44,20 +44,74 @@
             soundEnabled: true
         },
 
+        // true = notifikasi dimatikan (halaman publik tanpa session login).
+        disabled: false,
+        refreshTimer: null,
+
         init() {
             // console.log('NotificationManager initialized');
+
+            // PERBAIKAN: Halaman publik (mis. /face-attendance, /employee-payroll)
+            // tidak punya session login. Endpoint /api/notifications berada di
+            // middleware 'auth' -> selalu balas 401, dan /broadcasting/auth -> 403.
+            // Error berulang tiap 30 detik hanya menghasilkan polling sia-sia.
+            // Deteksi sekali di awal, lalu matikan polling.
+            if (this.isUnauthenticated()) {
+                this.disabled = true;
+                // console.warn('Notifications disabled: session tidak terautentikasi.');
+                return;
+            }
+
             this.loadNotifications();
             this.setupEchoListener();
 
-            // Auto refresh setiap 30 detik
-            setInterval(() => this.loadNotifications(), this.config.refreshInterval);
+            // Auto refresh setiap 30 detik.
+            // Guard `this.disabled` dipakai agar polling berhenti sendiri
+            // begitu server membalas 401/403 (halaman tanpa session login).
+            this.refreshTimer = setInterval(() => {
+                if (this.disabled) {
+                    clearInterval(this.refreshTimer);
+                    return;
+                }
+                this.loadNotifications();
+            }, this.config.refreshInterval);
+        },
+
+        // Cek apakah halaman ini dibuka tanpa login (halaman publik / popup).
+        // Halaman admin selalu punya meta csrf-token + Echo instance.
+        isUnauthenticated() {
+            try {
+                const csrf = document.querySelector('meta[name="csrf-token"]');
+                if (!csrf || !csrf.content) return true;
+
+                // Echo private channel butuh auth; tanpa session dia 403.
+                if (!window.Echo) return true;
+
+                // Kalau halaman memang untuk user login, sanity check endpoint.
+                return false;
+            } catch (e) {
+                return true;
+            }
         },
 
         setupEchoListener() {
             // console.log('Checking window.Echo:', window.Echo);
+
+            // Di halaman publik window.Echo = null (sengaja, biar tidak 403).
+            // Jangan setTimeout polling tanpa batas.
+            if (window.Echo === null) {
+                return;
+            }
+
             if (!window.Echo) {
                 // console.warn('Waiting for Laravel Echo to initialize...');
                 setTimeout(() => this.setupEchoListener(), 500);
+                return;
+            }
+
+            // Halaman publik: private channel butuh session auth -> /broadcasting/auth
+            // membalas 403. Jangan daftarkan channel kalau tidak terautentikasi.
+            if (this.isUnauthenticated()) {
                 return;
             }
 
@@ -85,6 +139,8 @@
         },
 
         loadNotifications() {
+            if (this.disabled) return;
+
             fetch(`${this.config.apiBaseUrl}?per_page=50`, {
                 headers: {
                     'Accept': 'application/json',
@@ -92,10 +148,20 @@
                 }
             })
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) {
+                    // 401/403 = session tidak terautentikasi (halaman publik).
+                    // Matikan polling supaya tidak spam error tiap 30 detik.
+                    if (response.status === 401 || response.status === 403) {
+                        this.disabled = true;
+                        // console.warn('Notifications disabled after HTTP ' + response.status);
+                        return null;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 return response.json();
             })
             .then(data => {
+                if (!data) return;
                 if (data.success) {
                     this.updateBadge(data.data);
                     this.renderQuickPreview(data.data);
@@ -276,10 +342,14 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         NotificationManager.init();
-    });
 
-    // Request browser notification permission
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-    }
+        // Request browser notification permission.
+        // Hanya untuk halaman yang memang terautentikasi — di halaman publik
+        // (presensi wajah / payroll popup) prompt ini cuma bikin repot user.
+        if ('Notification' in window
+            && Notification.permission === 'default'
+            && !NotificationManager.disabled) {
+            Notification.requestPermission();
+        }
+    });
 </script>

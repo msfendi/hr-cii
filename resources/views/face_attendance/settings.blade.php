@@ -9,9 +9,17 @@
                 Atur window jam presensi, hari kerja, dan izin akses per karyawan.
             </p>
         </div>
-        <a href="{{ route('face-recognition.index') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="fas fa-arrow-left mr-1"></i> Kembali ke Daftar Wajah
-        </a>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ route('face.attendance.admin.index') }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-users-cog mr-1"></i> Rekap Semua Karyawan
+            </a>
+            <a href="{{ route('card-menu-hris.index') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-th-large mr-1"></i> Pengaturan Card Menu
+            </a>
+            <a href="{{ route('face-recognition.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left mr-1"></i> Kembali ke Daftar Wajah
+            </a>
+        </div>
     </div>
 
     @if(session('success'))

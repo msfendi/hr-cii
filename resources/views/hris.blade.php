@@ -233,20 +233,26 @@
     <div class="menu-wrapper">
         <div class="row gx-4 gy-5 justify-content-center">
 
-            <!-- Login -->
+            @php
+                // Card menu dikontrol dari DB (card_menu_settings) agar admin bisa show/hide
+                // lewat halaman Pengaturan Card Menu HRIS.
+                $hrisCards = \App\Models\CardMenuSetting::visibleCards();
+            @endphp
+
+            @forelse($hrisCards as $card)
             <div class="col-lg-3 col-md-4 col-6">
 
-                <a href="/login" class="text-decoration-none">
+                <a href="{{ $card['route'] ?: '#' }}" class="text-decoration-none">
 
-                    <div class="card menu-card shadow">
+                    <div class="card menu-card shadow @if($card['color'] !== 'primary') border-bottom-{{ $card['color'] }} @endif">
 
                         <div class="card-body text-center">
 
                             <div class="menu-icon-wrapper">
-                                <i class="fas fa-users text-primary"></i>
+                                <i class="{{ $card['icon'] ?: 'fas fa-circle' }} text-{{ $card['color'] ?: 'primary' }}"></i>
                             </div>
 
-                            <h5>Login</h5>
+                            <h5>{{ $card['name'] }}</h5>
 
                         </div>
 
@@ -255,166 +261,11 @@
                 </a>
 
             </div>
-
-            <!-- Slip -->
-            <div class="col-lg-3 col-md-4 col-6">
-
-                <a href="/employee-payroll" class="text-decoration-none">
-
-                    <div class="card menu-card shadow">
-
-                        <div class="card-body text-center">
-
-                            <div class="menu-icon-wrapper">
-                                <i class="fas fa-file-invoice-dollar text-primary"></i>
-                            </div>
-
-                            <h5>Lihat Slip</h5>
-
-                        </div>
-
-                    </div>
-
-                </a>
-
+            @empty
+            <div class="col-12 text-center text-white">
+                <p class="mb-0"><i class="fas fa-info-circle mr-1"></i> Belum ada menu yang ditampilkan.</p>
             </div>
-
-            <!-- Career -->
-            <div class="col-lg-3 col-md-4 col-6">
-
-                <a href="/lowongan" class="text-decoration-none">
-
-                    <div class="card menu-card shadow">
-
-                        <div class="card-body text-center">
-
-                            <div class="menu-icon-wrapper">
-                                <i class="fas fa-briefcase text-success"></i>
-                            </div>
-
-                            <h5>Career</h5>
-
-                        </div>
-
-                    </div>
-
-                </a>
-
-            </div>
-            <!-- Recruitment Announcement -->
-            <div class="col-lg-3 col-md-4 col-6">
-
-                <a href="/portal-recruitment-status" class="text-decoration-none">
-
-                    <div class="card menu-card shadow">
-
-                        <div class="card-body text-center">
-
-                            <div class="menu-icon-wrapper">
-                                <i class="fa fa-bullhorn text-success"></i>
-                            </div>
-
-                            <h5>Recruitment Announcement</h5>
-
-                        </div>
-
-                    </div>
-
-                </a>
-
-            </div>
-
-            <!-- Food Orders -->
-            <!-- <div class="col-lg-3 col-md-4 col-6">
-
-                <a href="/food-orders/scan" class="text-decoration-none">
-
-                    <div class="card menu-card shadow">
-
-                        <div class="card-body text-center">
-
-                            <div class="menu-icon-wrapper">
-                                <i class="fas fa-utensils text-primary"></i>
-                            </div>
-
-                            <h5>Food Orders</h5>
-
-                        </div>
-
-                    </div>
-
-                </a>
-
-            </div> -->
-
-            <!-- Pengajuan Cuti -->
-            <div class="col-lg-3 col-md-4 col-6">
-
-                <a href="/pengajuan-cuti/login" class="text-decoration-none">
-
-                    <div class="card menu-card shadow">
-
-                        <div class="card-body text-center">
-
-                            <div class="menu-icon-wrapper">
-                                <i class="fas fa-calendar text-warning"></i>
-                            </div>
-
-                            <h5>Pengajuan Cuti</h5>
-
-                        </div>
-
-                    </div>
-
-                </a>
-
-            </div>
-
-            <!-- Face Attendance (Presensi Wajah) -->
-            <div class="col-lg-3 col-md-4 col-6">
-
-                <a href="/face-attendance/login" class="text-decoration-none">
-
-                    <div class="card menu-card shadow border-bottom-primary">
-
-                        <div class="card-body text-center">
-
-                            <div class="menu-icon-wrapper">
-                                <i class="fas fa-camera text-primary"></i>
-                            </div>
-
-                            <h5>Presensi Wajah</h5>
-
-                        </div>
-
-                    </div>
-
-                </a>
-
-            </div>
-
-            <!-- Self Register Face Recognition -->
-            <div class="col-lg-3 col-md-4 col-6">
-
-                <a href="/self-register-face" class="text-decoration-none">
-
-                    <div class="card menu-card shadow border-bottom-info">
-
-                        <div class="card-body text-center">
-
-                            <div class="menu-icon-wrapper">
-                                <i class="fas fa-id-badge text-info"></i>
-                            </div>
-
-                            <h5>Self Register Wajah</h5>
-
-                        </div>
-
-                    </div>
-
-                </a>
-
-            </div>
+            @endforelse
 
         </div>
 

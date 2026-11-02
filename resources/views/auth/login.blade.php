@@ -167,14 +167,21 @@
                             @endphp
 
                             @if ($showQr && $showFace)
-                            <ul class="nav nav-pills nav-fill mb-3" id="loginMethodTabs">
+                            {{-- Tab switching ditangani manual (tab.js) supaya TIDAK bergantung
+                                 pada plugin Bootstrap JS. Sebelumnya plugin tidak ter-load,
+                                 sehingga tab tidak bisa diklik. --}}
+                            <ul class="nav nav-pills nav-fill mb-3" id="loginMethodTabs" role="tablist">
                                 <li class="nav-item">
-                                    <a class="nav-link active font-weight-bold" data-toggle="tab" href="#idcardPane" id="idcardTabLink">
+                                    <a class="nav-link active font-weight-bold" data-toggle="tab" data-target="#idcardPane"
+                                        href="#idcardPane" role="tab" aria-controls="idcardPane" aria-selected="true"
+                                        id="idcardTabLink">
                                         <i class="fas fa-id-card mr-1"></i> ID Card (QR)
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link font-weight-bold" data-toggle="tab" href="#facePane" id="faceTabLink">
+                                    <a class="nav-link font-weight-bold" data-toggle="tab" data-target="#facePane"
+                                        href="#facePane" role="tab" aria-controls="facePane" aria-selected="false"
+                                        id="faceTabLink">
                                         <i class="fas fa-camera mr-1"></i> Face Recognition
                                     </a>
                                 </li>
@@ -184,9 +191,9 @@
                             <div class="tab-content">
                                 {{-- TAB QR CODE ID CARD --}}
                                 @if ($showQr)
-                                <div class="tab-pane fade {{ $defaultTab === 'idcard' ? 'show active' : '' }}" id="idcardPane">
+                                <div class="tab-pane fade {{ $defaultTab === 'idcard' ? 'show active' : '' }}" id="idcardPane" role="tabpanel" aria-labelledby="idcardTabLink">
                                     <div class="camera-box-sm shadow-sm">
-                                        <video id="video"></video>
+                                        <video id="video" muted playsinline></video>
                                     </div>
                                     <p class="text-center text-muted small mt-2 mb-0">
                                         Arahkan QR Code ID Card ke kamera
@@ -196,7 +203,7 @@
 
                                 {{-- TAB FACE RECOGNITION --}}
                                 @if ($showFace)
-                                <div class="tab-pane fade {{ $defaultTab === 'face' ? 'show active' : '' }}" id="facePane">
+                                <div class="tab-pane fade {{ $defaultTab === 'face' ? 'show active' : '' }}" id="facePane" role="tabpanel" aria-labelledby="faceTabLink">
                                     <div id="faceLoginStatus" class="alert alert-info py-2 px-3 mb-3 small font-weight-bold">
                                         <i class="fas fa-info-circle mr-1"></i> Klik "Mulai Scan Wajah" untuk mulai.
                                     </div>
@@ -364,14 +371,47 @@ function stopQr() {
     }
 }
 
-@if ($showQr ?? true)
-// Hanya jalankan kamera QR jika tab ID Card yang aktif
-if (document.getElementById('idcardPane') && document.getElementById('idcardPane').classList.contains('active')) {
+// Expose ke global supaya handler tab (di blok global di bawah) bisa memanggil.
+// startQr dipanggil ulang dengan aman: ada guard qrActive & __qrStartedOnce.
+// Catatan: __qrStartedOnce dideklarasikan SETELAH blok ini (var-hoisted ke
+// window), jadi di sini cukup direferensikan lewat window.
+window.startQrLogin = function () {
+    if (!document.getElementById('idcardPane')) {
+        return;
+    }
+
+    // Library / elemen belum siap: coba lagi sekali setelah dimuat.
+    if (typeof ZXing === 'undefined' || !codeReader || !document.getElementById('video')) {
+        if (!window.__qrRetryDone) {
+            window.__qrRetryDone = true;
+            setTimeout(function () {
+                if (typeof window.startQrLogin === 'function') {
+                    window.startQrLogin();
+                }
+            }, 300);
+        }
+        return;
+    }
+
+    if (qrActive || window.__qrStartedOnce) {
+        return;
+    }
+
+    window.__qrStartedOnce = true;
     startQr();
-}
-@endif
+};
+window.stopQrLogin = stopQr;
+
+// Track apakah kamera sudah pernah benar-benar aktif, supaya tidak
+// meminta izin kamera 2x setiap kali tombol tab diklik.
+window.__qrStartedOnce = false;
+window.__faceScreenOn = false;
 
 @if ($faceEnabled ?? false)
+// Catatan: IIFE ini HARUS dijalankan segera (bukan di dalam DOMContentLoaded),
+// agar startFace/stopFace sudah terdefinisi saat tab diklik.
+window.startFaceLogin = function () { return null; };
+window.stopFaceLogin  = function () {};
 (function () {
     const faceVideo = document.getElementById('faceVideo');
     const statusEl   = document.getElementById('faceLoginStatus');
@@ -538,9 +578,15 @@ if (document.getElementById('idcardPane') && document.getElementById('idcardPane
     startBtn.addEventListener('click', startFace);
     stopBtn.addEventListener('click', stopFace);
 
-    // Jalankan kamera Face Recognition saat load HANYA jika tab Face Recognition yang aktif
-    const facePaneEl = document.getElementById('facePane');
-    if (facePaneEl && facePaneEl.classList.contains('active')) {
+    // Expose ke scope global agar tab handler bisa memanggilnya.
+    window.startFaceLogin = startFace;
+    window.stopFaceLogin  = stopFace;
+
+    // Auto start hanya jika tab Face Recognition yang aktif saat load.
+    // isActiveTab() dideklarasikan di blok script berikutnya (function
+    // declaration -> sudah ter-hoist ke global), jadi aman dipanggil di sini.
+    if (typeof isActiveTab === 'function' && isActiveTab('facePane')) {
+        window.__faceScreenOn = true;
         startFace();
     }
 
@@ -550,26 +596,120 @@ if (document.getElementById('idcardPane') && document.getElementById('idcardPane
         FaceRecognition.stopCamera(faceVideo);
     });
 
-    // Saat pindah tab: ID Card <-> Face Recognition.
-    if (window.jQuery) {
-        jQuery('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
-            const target = jQuery(e.target).attr('href');
-
-            if (target === '#facePane') {
-                if (typeof stopQr === 'function') {
-                    stopQr();
-                }
-                startFace();
-            } else if (target === '#idcardPane') {
-                stopFace();
-                if (typeof startQr === 'function') {
-                    startQr();
-                }
-            }
-        });
-    }
+    // (Tab switching ditangani di blok global di bawah, bukan di sini.)
 })();
 @endif
+
+// ============================================================================
+// TAB SWITCHING (ID Card / QR  <->  Face Recognition)
+// ----------------------------------------------------------------------------
+// Sebelumnya memakai plugin Bootstrap "tab" (data-toggle="tab"). Plugin itu
+// tidak selalu ter-load (bundle JS tidak mendaftarkan window.jQuery/bootstrap),
+// sehingga klik tab tidak berpindah dan #facePane / #idcardPane tidak pernah
+// diaktifkan. Di sini tab ditangani manual: tidak butuh jQuery, tidak butuh
+// plugin Bootstrap, dan tetap memakai class yang sama (active/show).
+// ============================================================================
+function isActiveTab(paneId) {
+    const el = document.getElementById(paneId);
+    return !!(el && el.classList.contains('active'));
+}
+
+function activateLoginTab(paneId) {
+    const tabContent = document.querySelector('#loginMethodTabs');
+    const panes = document.querySelectorAll('.tab-content > .tab-pane');
+
+    // 1) Pindahkan penanda aktif pada tombol tab
+    if (tabContent) {
+        tabContent.querySelectorAll('a[data-toggle="tab"]').forEach(function (link) {
+            const target = link.getAttribute('data-target') || link.getAttribute('href') || '';
+            const isTarget = target === '#' + paneId;
+            link.classList.toggle('active', isTarget);
+            link.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+        });
+    }
+
+    // 2) Tampilkan pane tujuan, sembunyikan lainnya
+    panes.forEach(function (pane) {
+        const isTarget = pane.id === paneId;
+        pane.classList.toggle('active', isTarget);
+        pane.classList.toggle('show', isTarget);
+    });
+
+    // 3) Sinkronkan kamera dengan tab yang aktif
+    if (paneId === 'facePane') {
+        if (typeof window.stopQrLogin === 'function') {
+            window.stopQrLogin();
+        }
+        if (typeof window.startFaceLogin === 'function') {
+            window.__faceScreenOn = true;
+            window.startFaceLogin();
+        }
+    } else if (paneId === 'idcardPane') {
+        if (typeof window.stopFaceLogin === 'function') {
+            window.stopFaceLogin();
+        }
+        if (typeof window.startQrLogin === 'function') {
+            window.startQrLogin();
+        }
+    }
+
+    // 4) Simpan pilihan tab agar bertahan setelah refresh (#facePane di URL)
+    try {
+        if (history.replaceState) {
+            history.replaceState(null, '', '#' + paneId);
+        }
+    } catch (e) {
+        // abaikan
+    }
+}
+
+function initLoginTabs() {
+    const nav = document.getElementById('loginMethodTabs');
+    if (!nav) {
+        return;
+    }
+
+    nav.querySelectorAll('a[data-toggle="tab"]').forEach(function (link) {
+        if (link.dataset.tabBound === '1') {
+            return;
+        }
+        link.dataset.tabBound = '1';
+
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const target = (link.getAttribute('data-target') || link.getAttribute('href') || '').replace('#', '');
+            if (target) {
+                activateLoginTab(target);
+            }
+        });
+    });
+
+    // Dukungan URL hash, mis. /login#facePane (dipakai juga oleh redirect back)
+    const hash = (window.location.hash || '').replace('#', '');
+    if (hash && document.getElementById(hash) && document.getElementById(hash).classList.contains('tab-pane')) {
+        if (!isActiveTab(hash)) {
+            activateLoginTab(hash);
+        } else if (hash === 'facePane' && typeof window.startFaceLogin === 'function' && !window.__faceScreenOn) {
+            window.__faceScreenOn = true;
+            window.startFaceLogin();
+        }
+        return;
+    }
+
+    // Jalankan kamera sesuai tab yang aktif saat halaman dibuka
+    if (isActiveTab('idcardPane') && typeof window.startQrLogin === 'function') {
+        window.startQrLogin();
+    } else if (isActiveTab('facePane') && typeof window.startFaceLogin === 'function') {
+        window.__faceScreenOn = true;
+        window.startFaceLogin();
+    }
+}
+
+// Script ini berada di akhir body, jadi DOM sudah siap — tidak perlu menunggu
+// DOMContentLoaded (yang bisa saja sudah lewat dan membuat handler tidak jalan).
+initLoginTabs();
 </script>
 <script>
 function refreshCaptcha() {

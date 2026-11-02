@@ -21,10 +21,93 @@
     <!-- Custom styles for this page -->
     <link href="{{asset('vendor/datatables/dataTables.bootstrap4.min.css')}}" rel="stylesheet"> 
     
-    @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @php
+        // Vite: WAJIB pakai hasil build statis (public/build/manifest.json).
+        //
+        // PERBAIKAN: sebelumnya kalau file "public/hot" ada (mis. sempat
+        // menjalankan `npm run dev` di server), header mengarahkan browser ke
+        // dev server :5173. Di production dev server tidak jalan / ditolak
+        // firewall -> browser dapat "403 Forbidden" untuk /@vite/client dan
+        // /resources/js/app.js. Akibatnya SEMUA JS (jQuery, tab, dropdown)
+        // mati => error "$ is not defined" dan tab tidak bisa diklik.
+        //
+        // Solusi: dev server hanya dipakai bila ENV VITE_DEV_SERVER=1
+        // (untuk development lokal). Defaultnya SELALU build statis.
+        $viteManifest = public_path('build/manifest.json');
+        $viteForceDev = env('VITE_DEV_SERVER', false) === true
+            || env('VITE_DEV_SERVER', '') === '1'
+            || env('VITE_DEV_SERVER', '') === 'true';
+
+        $viteHot = public_path('hot');
+        $viteHasHot = file_exists($viteHot);
+        $viteDevUrl = $viteHasHot ? trim((string) @file_get_contents($viteHot)) : '';
+
+        $viteDevPort = 5173;
+        $viteDevScheme = 'http';
+        $viteDevHost = null;
+        if ($viteDevUrl !== '') {
+            $viteParts = parse_url($viteDevUrl);
+            if (isset($viteParts['port'])) {
+                $viteDevPort = (int) $viteParts['port'];
+            }
+            if (isset($viteParts['scheme'])) {
+                $viteDevScheme = $viteParts['scheme'];
+            }
+            // Host dari request saat ini (mengikuti domain yang dibuka browser).
+            $viteDevHost = request()->getHost();
+        }
+        // Dev server hanya aktif jika dipaksa lewat ENV DAN manifest build
+        // tidak tersedia (dev memang belum pernah build).
+        $viteUseDev = $viteForceDev
+            && $viteHasHot
+            && $viteDevUrl !== ''
+            && $viteDevHost !== null
+            && !file_exists($viteManifest);
+
+        // Path client HMR. Sengaja dirangkai dari variabel: string "@vite"
+        // literal di dalam Blade akan dibaca sebagai directive @vite oleh
+        // Blade compiler dan menghasilkan error "Too few arguments to Vite::__invoke()".
+        $viteClientPath = '@' . 'vite/client';
+        $viteAppPath = 'resources/js/app.js';
+    @endphp
+
+    @if ($viteUseDev)
+        {{-- Dev server aktif: bangun URL sendiri agar memakai domain request. --}}
+        <script type="module" src="{{ $viteDevScheme }}://{{ $viteDevHost }}:{{ $viteDevPort }}/{{ $viteClientPath }}"></script>
+        <script type="module" src="{{ $viteDevScheme }}://{{ $viteDevHost }}:{{ $viteDevPort }}/{{ $viteAppPath }}"></script>
+    @elseif (file_exists($viteManifest))
+        {{-- Build statis: jangan bergantung pada dev server sama sekali. --}}
+        @php
+            $viteManifestData = [];
+            try {
+                $viteManifestData = json_decode(@file_get_contents($viteManifest), true) ?: [];
+            } catch (\Throwable $e) {
+                $viteManifestData = [];
+            }
+        @endphp
+        @foreach (['resources/css/app.css' => 'css', 'resources/js/app.js' => 'js'] as $viteEntry => $viteType)
+            @php
+                $viteChunk = $viteManifestData[$viteEntry] ?? null;
+                $viteFile = $viteChunk['file'] ?? null;
+                // Hanya emit stylesheet bila file benar-benar .css (hindari
+                // manifest rusak yg menunjuk stub .js).
+                $viteIsCss = $viteType === 'css'
+                    && $viteFile
+                    && str_ends_with(strtolower($viteFile), '.css')
+                    && file_exists(public_path('build/' . $viteFile));
+                $viteIsJs = $viteType === 'js'
+                    && $viteFile
+                    && str_ends_with(strtolower($viteFile), '.js')
+                    && file_exists(public_path('build/' . $viteFile));
+            @endphp
+            @if ($viteIsCss)
+                <link rel="stylesheet" href="{{ asset('build/' . $viteFile) }}">
+            @elseif ($viteIsJs)
+                <script type="module" src="{{ asset('build/' . $viteFile) }}"></script>
+            @endif
+        @endforeach
     @endif
-    
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/index.js"></script>

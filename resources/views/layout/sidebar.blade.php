@@ -158,23 +158,41 @@
         const EchoClass = window.Echo.default ?? window.Echo;
         const wsHost = window.location.hostname;
 
-        window.Echo = new EchoClass({
-            broadcaster: 'pusher',
+        // Halaman publik (mis. /face-attendance saat pakai session presensi wajah,
+        // /employee-payroll popup) tidak punya login Laravel. Endpoint
+        // /broadcasting/auth berada di middleware 'auth' -> membalas 403.
+        // Kalau Echo tetap diinisialisasi di sini, browser spam error 403.
+        @php
+            // Sinyal server-side yang reliable: user benar-benar login Laravel.
+            $hasLaravelSession = auth()->check();
+        @endphp
+        const hasLaravelSession = @json($hasLaravelSession);
 
-            key: window.reverbKey,
+        if (hasLaravelSession) {
+            window.Echo = new EchoClass({
+                broadcaster: 'pusher',
 
-            wsHost: wsHost,
-            wsPort: 8800,
-            wssPort: 443,
+                key: window.reverbKey,
 
-            cluster: 'mt1',
+                wsHost: wsHost,
+                wsPort: 8800,
+                wssPort: 443,
 
-            forceTLS: window.location.protocol === 'https:',
-            disableStats: true,
-            enabledTransports: ['ws','wss'],
-        });
+                cluster: 'mt1',
+
+                forceTLS: window.location.protocol === 'https:',
+                disableStats: true,
+                enabledTransports: ['ws','wss'],
+            });
+        } else {
+            // Tanpa session: jangan set window.Echo sama sekali, sehingga
+            // NotificationManager.setupEchoListener() tidak tried subscribe
+            // private channel yang pasti 403.
+            window.Echo = null;
+        }
     </script>
     <script>
+if (window.Echo) {
 window.Echo.channel('notification-channel')
 .listen('NotificationEvent', (e) => {
 
@@ -293,4 +311,5 @@ window.Echo.channel('notification-channel')
     },4000);
 
 });
+}
 </script>

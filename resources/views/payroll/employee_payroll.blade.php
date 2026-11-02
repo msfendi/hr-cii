@@ -150,7 +150,9 @@
 
                         {{-- ================= FACE RECOGNITION LOGIN ================= --}}
                         @if($faceEnabled ?? false)
-                        <div class="tab-pane fade" id="facelogin">
+                        {{-- Pane wajib punya 'show active' ketika tab Scan Wajah adalah default.
+                             Tanpa ini panelnya tetap hidden sampai user klik tab lain dulu. --}}
+                        <div class="tab-pane fade {{ $defaultTab === 'facelogin' ? 'show active' : '' }}" id="facelogin">
                            <div id="faceStep1">
                               <div class="form-group">
                                  <label class="font-weight-bold text-gray-700">Pilih Periode</label>

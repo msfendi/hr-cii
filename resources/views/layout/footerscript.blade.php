@@ -5,6 +5,29 @@
     {{-- <script>console.log('Debugbar loaded');</script> --}}
 @endif
 
+{{-- Core vendor JS (jQuery, Bootstrap, Select2, dsb-admin).
+     Halaman popup/login (employee-payroll, cuti/login) TIDAK meng-include
+     'layout.footer' — hanya 'layout.footerscript' — sehingga jQuery tidak
+     pernah termuat dan muncul error "$ is not defined", tab/jQuery tidak
+     bisa diklik.
+
+     CATATAN: script dimuat secara SINKRON (plain <script src>) agar $ tersedia
+     SEBELUM inline script di bawah berjalan. Jangan pakai document.createElement
+     + appendChild karena itu async dan $ masih undefined saat inline script jalan.
+
+     Halaman yang juga include 'layout.footer' tidak suffers double-load karena
+     script di footer.blade.php dimuat SESUDAH file ini (jQuery sudah ada). --}}
+
+@if (!file_exists(public_path('vendor/jquery/jquery.min.js')))
+    {{-- vendor jquery tidak ada, jangan emit tag rusak --}}
+@else
+    <script src="{{ asset('vendor/jquery/jquery.min.js') }}"></script>
+    <script src="{{ asset('vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ asset('vendor/jquery/select2.min.js') }}"></script>
+    <script src="{{ asset('vendor/jquery-easing/jquery.easing.min.js') }}"></script>
+    <script src="{{ asset('js/sb-admin-2.min.js') }}"></script>
+@endif
+
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const toggleIds = ['#sidebarToggle', '#sidebarToggleTop'];
