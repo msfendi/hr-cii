@@ -2,6 +2,17 @@
 <html lang="id">
 @include('layout.header')
 
+{{-- PERBAIKAN (2026-11-03): SweetAlert2 dimuat di HEAD, sebelum blok
+     script mana pun di halaman ini. Sebelumnya saveNext() memanggil
+     Swal.fire(...) tetapi library-nya belum tentu tersedia, sehingga
+     muncul:
+         Uncaught ReferenceError: Swal is not defined
+             at saveNext (card-menu-hris)
+     Halaman ini memakai layout.header + @include('sweetalert::alert'),
+     dan sweetalert::alert() hanya merender script notifikasi, BUKAN
+     library Swal. Karena itu CDN dimuat eksplisit di sini. --}}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <style>
     .toggle-switch {
         position: relative;
@@ -404,6 +415,36 @@
             $badge.removeClass('badge-success').addClass('badge-secondary')
                   .html('<i class="fas fa-eye-slash mr-1"></i> Sembunyi');
         }
+    }
+</script>
+
+{{-- Catatan: SweetAlert2 sudah dimuat di bagian HEAD halaman ini. --}}
+
+<script>
+    // Jaring pengaman: kalau CDN diblokir/gagal dimuat (offline, proxy,
+    // atau CSP), sediakan implementasi cadangan supaya tombol Simpan
+    // tidak pernah gagal diam-diam karena "Swal is not defined".
+    if (typeof window.Swal === 'undefined') {
+        window.Swal = {
+            fire: function (opts) {
+                opts = opts || {};
+                var judul = opts.title || '';
+                var pesan = opts.text || '';
+                if (!pesan && opts.html) {
+                    pesan = String(opts.html).replace(/<br\s*\/?>/gi, '\n')
+                                              .replace(/<\/(strong|b|div|p)>/gi, '')
+                                              .replace(/<[^>]+>/g, '');
+                }
+                var isError = opts.icon === 'error';
+                if (isError) {
+                    window.alert((judul ? judul + '\n\n' : '') + pesan);
+                } else {
+                    // Notifikasi sukses singkat: tidak perlu dialog.
+                    console.log('[Simpan] ' + judul + (pesan ? ' - ' + pesan : ''));
+                }
+                return { then: function (cb) { if (typeof cb === 'function') cb(); return this; } };
+            }
+        };
     }
 </script>
 

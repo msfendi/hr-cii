@@ -20,10 +20,92 @@
         border: none;
     }
     #miniMapDetail {
-        height: 320px;
+        /* PERBAIKAN (2026-11-03): tinggi 320px -> 260px supaya modal
+           lebih compact. Peta kini berdampingan dengan foto wajah,
+           jadi tingginya TIDAK perlu setinggi sebelumnya.
+           min-height tetap diset sama supaya Leaflet tidak kolaps
+           0 px saat modal baru dibuka. */
+        height: 260px;
+        min-height: 260px;
         width: 100%;
+        /* PERBAIKAN (2026-11-03): min-height + z-index lebih rendah.
+           z-index 500 lebih tinggi dari elemen modal Bootstrap lain
+           (modal-content memakai 1050, tapi tile Leaflet ikut memakai
+           z-index internal 200-800) sehingga peta bisa MENIMPA header,
+           tombol Tutup, dan teks di sekitarnya -> tampilan berantakan. */
         border-radius: 8px;
-        z-index: 500;
+        z-index: 1;
+        background: #eef1f7;
+        overflow: hidden;
+    }
+    #miniMapDetail .leaflet-container {
+        border-radius: 8px;
+        font-family: inherit;
+    }
+    /* PERBAIKAN (2026-11-03): kotak foto wajah dibuat SAMA TINGGI
+       dengan peta (260px) supaya keduanya sejajar rapi dan tidak
+       menyisakan ruang kosong menganggur. Foto di-scale ke dalam
+       kotak (object-fit: contain) agar tidak terpotong. */
+    .face-detail-box {
+        height: 260px;
+        min-height: 260px;
+        width: 100%;
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        background: #f8f9fc;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+    }
+    .face-detail-box img {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: 6px;
+        border: 2px solid #e3e6f0;
+        box-shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+    /* Foto utama: mengisi tinggi kotak tanpa melebihi batas. */
+    .face-detail-box .face-detail-main {
+        max-height: 200px;
+        max-width: 100%;
+        object-fit: contain;
+    }
+    /* Deretan thumbnail untuk scan tambahan. */
+    .face-detail-strip {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 4px;
+        justify-content: center;
+        overflow-x: auto;
+        max-width: 100%;
+    }
+    .face-detail-box .face-detail-thumb {
+        width: 44px;
+        height: 44px;
+        object-fit: cover;
+        border: 1px solid #e3e6f0;
+        border-radius: 4px;
+        box-shadow: none;
+        cursor: pointer;
+        flex: 0 0 auto;
+    }
+    .face-detail-box {
+        /* Isi kotak disusun vertikal: foto utama + strip thumbnail. */
+        flex-direction: column;
+    }
+    /* Di layar kecil, peta & wajah menumpuk kembali dan tingginya
+       dikurangi supaya modal tidak terlalu panjang. */
+    @media (max-width: 767.98px) {
+        #miniMapDetail,
+        .face-detail-box {
+            height: 220px;
+            min-height: 220px;
+        }
     }
     .face-capture-preview {
         max-width: 100%;
@@ -32,25 +114,29 @@
         box-shadow: 0 4px 14px rgba(0,0,0,.12);
     }
     .modal-xl .modal-body {
-        max-height: 78vh;
+        /* Modal dipadatkan: padding vertikal dikurangi supaya tidak
+           banyak ruang kosong di atas/bawah isi. */
+        max-height: 82vh;
         overflow-y: auto;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
     }
-    .emp-row-detail {
-        background-color: #f8f9fc;
+    #modalFaceDetail .modal-header,
+    #modalFaceDetail .modal-footer {
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
     }
-    .emp-row-detail table {
-        margin-bottom: 0;
+    #modalFaceDetail .card-body {
+        padding-top: 0.65rem;
+        padding-bottom: 0.65rem;
     }
-    .emp-row-detail table th {
-        background-color: #e3e6f0 !important;
-        color: #4a4a68 !important;
-    }
-    .table-toggle-icon {
-        transition: transform .2s ease;
-    }
-    .table-toggle-icon.rotated {
-        transform: rotate(90deg);
-    }
+    /* PERBAIKAN (2026-11-03): CSS baris detail expand (.emp-row-detail,
+       .table-toggle-icon) DIHAPUS. Penyebab tabel "Log Presensi Wajah"
+       berantakan: aturan `.emp-row-detail table th` memakai !important
+       pada background/color dan tabel bersarang berada di dalam <td>
+       sempit (lebar kolom "#" = 4%), sehingga setiap <th> tertekan dan
+       seluruh header (#, Tanggal & Hari, Jam Masuk, ...) menumpuk di
+       kolom pertama. Rincian harian kini dirender di dalam modal. */
     .stat-card {
         border-left: 4px solid;
     }
@@ -166,7 +252,7 @@
     </div>
 </div>
 
-<!-- Modal Detail Presensi (Wajah + Fingerprint + Lokasi) -->
+<!-- Modal Detail Presensi Wajah + Lokasi -->
 <div class="modal fade" id="modalFaceDetail" tabindex="-1" role="dialog" aria-labelledby="modalFaceDetailLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -209,36 +295,88 @@
                     </div>
                 </div>
 
+                {{-- PERBAIKAN (2026-11-03): tata letak modal dibuat COMPACT.
+                     Sebelumnya: kolom kiri sempit (kolom 5/12) menumpuk
+                     peta DI ATAS foto wajah, kolom kanan tabel riwayat.
+                     Hasilnya peta dan wajah kecil-kecil, foto wajah
+                     memanjang ke bawah, dan menyisakan banyak ruang
+                     kosong di kanan-bawah.
+
+                     Sekarang:
+                       Baris 1 -> Minimap (kiri)  |  Wajah (kanan)
+                       Baris 2 -> Riwayat scan (lebar penuh)
+
+                     Peta dan wajah jadi BERDAMPINGAN, tinggi keduanya
+                     disamakan (260px) sehingga tidak ada ruang kosong
+                     menganggur, dan tabel riwayat mendapat lebar penuh
+                     sehingga kolomnya tidak berdesakan. --}}
                 <div class="row">
-                    <!-- Kolom kiri: Mini Map + Wajah -->
-                    <div class="col-lg-5 mb-4 mb-lg-0">
+                    <!-- Kiri: Minimap -->
+                    <div class="col-md-6 mb-3 mb-md-0">
                         <h6 class="font-weight-bold text-gray-800 mb-2">
                             <i class="fas fa-map text-primary mr-1"></i> Minimap Lokasi Absensi
                         </h6>
                         <div id="miniMapDetail"></div>
-                        {{-- PERBAIKAN (2026-11-03): kolom koordinat di bawah
-                             peta DIHAPUS atas permintaan user. Peta sudah
-                             menunjukkan posisi secara visual.
-                             Elemen #detailCoords sengaja dibiarkan
-                             (disembunyikan) supaya script yang mengisi
+                        {{-- Kolom koordinat di bawah peta dihapus atas
+                             permintaan user. Elemen #detailCoords tetap
+                             ada (disembunyikan) supaya script pengisi
                              nilainya tidak error. --}}
                         <span id="detailCoords" class="d-none" aria-hidden="true">-</span>
+                    </div>
 
-                        <h6 class="font-weight-bold text-gray-800 mb-2 mt-3">
+                    <!-- Kanan: Wajah (berdampingan dengan peta) -->
+                    <div class="col-md-6">
+                        <h6 class="font-weight-bold text-gray-800 mb-2">
                             <i class="fas fa-user-check text-primary mr-1"></i> Wajah Tercapture
                         </h6>
-                        <div id="faceImageContainer" class="text-center mb-3">
+                        <div id="faceImageContainer" class="face-detail-box text-center">
                             <div id="faceImageEmpty" class="text-muted small py-4">
                                 <i class="fas fa-image fa-2x mb-2 d-block text-secondary"></i>
                                 Tidak ada gambar wajah tersimpan.
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Kolom kanan: tabel riwayat scan -->
-                    <div class="col-lg-7">
+                <!-- PERBAIKAN (2026-11-03): rincian harian dipindah ke sini.
+                     Sebelumnya tabel ini adalah baris expand di dalam tabel utama
+                     dan tampil berantakan (semua header menumpuk di kolom pertama).
+                     Sekarang tampil rapi di dalam modal. -->
+                <div class="row mt-1" id="wrapRekapHarian">
+                    <div class="col-12">
                         <h6 class="font-weight-bold text-gray-800 mb-2">
-                            <i class="fas fa-list-ul text-primary mr-1"></i> Riwayat Scan (Wajah + Fingerprint)
+                            <i class="fas fa-calendar-alt text-primary mr-1"></i> Rekap Harian
+                            <span class="badge badge-primary ml-1" id="rekapHarianCount">0 hari</span>
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0" id="tableRekapHarian" style="background:#fff;">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th width="5%" class="text-center">#</th>
+                                        <th width="22%">Tanggal &amp; Hari</th>
+                                        <th width="18%" class="text-center">Jam Masuk</th>
+                                        <th width="18%" class="text-center">Jam Pulang</th>
+                                        <th width="15%" class="text-center">Mode</th>
+                                        <th width="22%" class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rekapHarianBody">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-3">
+                                            Belum ada data harian.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Riwayat scan: lebar penuh di bawah peta + wajah -->
+                <div class="row mt-1">
+                    <div class="col-12">
+                        <h6 class="font-weight-bold text-gray-800 mb-2">
+                            <i class="fas fa-list-ul text-primary mr-1"></i> Riwayat Scan Hari Ini
                         </h6>
                         <div id="faceDetailList" class="small"></div>
                     </div>
@@ -282,18 +420,11 @@
     // Pemanggilan awal dipindah ke blok kedua, tepat setelah fungsinya
     // dideklarasikan. Lihat "Inisialisasi awal setelah fungsi didefinisikan".
 
-    // ===== Toggle baris detail per karyawan =====
-    $(document).on('click', '.btn-toggle-emp', function() {
-        const $btn = $(this);
-        const target = $btn.data('target');
-        const $row = $(target);
-        const $icon = $btn.find('.table-toggle-icon');
+    // PERBAIKAN (2026-11-03): handler toggle baris detail (.btn-toggle-emp)
+    // DIHAPUS karena baris expand sudah tidak ada — rincian harian kini
+    // tampil di dalam modal. Handler lama hanya menyisakan dead code.
 
-        $row.toggleClass('d-none');
-        $icon.toggleClass('rotated');
-    });
-
-    // ===== Detail Lokasi & Wajah Presensi (Face + Fingerprint) =====
+    // ===== Detail Lokasi & Wajah Presensi =====
     (function() {
         let detailMap = null;
         let detailMarker = null;
@@ -326,18 +457,46 @@
                     '<i class="fas fa-image fa-2x mb-2 d-block text-secondary"></i>' +
                     'Tidak ada gambar wajah tersimpan.</div>';
             } else {
-                withImage.forEach(function(d, idx) {
-                    const wrap = document.createElement('div');
-                    wrap.className = 'mb-3';
-                    const src = d.face_image.indexOf('data:') === 0
-                        ? d.face_image
-                        : 'data:image/jpeg;base64,' + d.face_image;
-                    wrap.innerHTML =
-                        '<img src="' + src + '" alt="Wajah ' + (idx + 1) + '" class="face-capture-preview" style="max-width:260px;">' +
-                        '<div class="small text-muted mt-1"><i class="fas fa-clock mr-1"></i>' +
-                        (d.action_type || 'Absensi') + ' - ' + (d.scan_time || '-') + '</div>';
-                    container.appendChild(wrap);
-                });
+                // PERBAIKAN (2026-11-03): foto dibungkus figure yang
+                // mengisi kotak .face-detail-box (260px). Sebelumnya
+                // setiap foto berada di div .mb-3 dengan max-width 260px,
+                // sehingga kalau ada lebih dari satu foto, kotaknya
+                // memanjang ke bawah dan menyisakan ruang kosong.
+                // Sekarang hanya foto PERTAMA yang ditampilkan besar
+                // (paling relevan = scan terakhir), sisanya jadi
+                // thumbnail kecil berjajar di bawahnya.
+                const first = withImage[0];
+                const srcFirst = first.face_image.indexOf('data:') === 0
+                    ? first.face_image
+                    : 'data:image/jpeg;base64,' + first.face_image;
+
+                const wrap = document.createElement('div');
+                wrap.className = 'face-detail-wrap w-100 d-flex flex-column align-items-center justify-content-center';
+                wrap.innerHTML =
+                    '<img src="' + srcFirst + '" alt="Wajah terakhir" class="face-detail-main">' +
+                    '<div class="small text-muted mt-1 text-center">' +
+                        '<i class="fas fa-clock mr-1"></i>' +
+                        (first.action_type || 'Absensi') + ' - ' + (first.scan_time || '-') +
+                    '</div>';
+                container.appendChild(wrap);
+
+                // Thumbnail tambahan bila ada lebih dari satu foto.
+                if (withImage.length > 1) {
+                    const strip = document.createElement('div');
+                    strip.className = 'face-detail-strip mt-1';
+                    withImage.slice(1).forEach(function (d, idx) {
+                        const s = d.face_image.indexOf('data:') === 0
+                            ? d.face_image
+                            : 'data:image/jpeg;base64,' + d.face_image;
+                        const th = document.createElement('img');
+                        th.src = s;
+                        th.className = 'face-detail-thumb';
+                        th.alt = 'Wajah ' + (idx + 2);
+                        th.title = (d.action_type || 'Absensi') + ' - ' + (d.scan_time || '-');
+                        strip.appendChild(th);
+                    });
+                    container.appendChild(strip);
+                }
             }
 
             // Daftar seluruh scan (wajah + fingerprint) -> tabel rapi.
@@ -376,9 +535,14 @@
                 var acc = (d.accuracy !== null && d.accuracy !== undefined && d.accuracy !== '')
                     ? Math.round(parseFloat(d.accuracy)) + ' m'
                     : '-';
+                // PERBAIKAN (2026-11-03): modul ini KHUSUS presensi wajah.
+                // Sebelumnya cabang "else" memberi label "Fingerprint",
+                // sehingga data wajah yang tidak punya penanda mode
+                // tampil seolah-olah sidik jari. Kini cabang else hanya
+                // dipakai bila record benar-benar bukan wajah.
                 var modeBadge = isFace
                     ? '<span class="badge badge-primary"><i class="fas fa-user-check mr-1"></i>Wajah</span>'
-                    : '<span class="badge badge-info"><i class="fas fa-fingerprint mr-1"></i>Fingerprint</span>';
+                    : '<span class="badge badge-secondary"><i class="fas fa-question-circle mr-1"></i>Lainnya</span>';
                 var accBadge = (acc === '-')
                     ? '<span class="text-muted">-</span>'
                     : '<span class="badge badge-light border text-dark">' + acc + '</span>';
@@ -500,6 +664,81 @@
             }, 200);
         }
 
+        // ===== Render Rekap Harian di dalam modal =====
+        // PERBAIKAN (2026-11-03): rincian harian sebelumnya adalah baris
+        // expand di tabel utama dan tampil berantakan (seluruh header
+        // menumpuk di kolom pertama karena dibatasi lebar kolom "#").
+        // Kini dirender di dalam modal dari atribut data-hari (JSON).
+        function renderRekapHarian(hari) {
+            const body = document.getElementById('rekapHarianBody');
+            const countEl = document.getElementById('rekapHarianCount');
+            if (!body) return;
+
+            const list = Array.isArray(hari) ? hari : [];
+            if (countEl) countEl.textContent = list.length + ' hari';
+
+            if (!list.length) {
+                body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">'
+                    + 'Belum ada data harian.</td></tr>';
+                return;
+            }
+
+            function esc(s) {
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            let html = '';
+            list.forEach(function(h, i) {
+                // Jam masuk
+                const masuk = h.masuk
+                    ? '<span class="badge badge-success px-2 py-1"><i class="fas fa-sign-in-alt mr-1"></i>'
+                      + esc(h.masuk) + '</span>'
+                    : '<span class="badge badge-light border text-muted px-2 py-1">Belum Scan</span>';
+
+                // Jam pulang
+                const pulang = h.pulang
+                    ? '<span class="badge badge-warning text-dark px-2 py-1"><i class="fas fa-sign-out-alt mr-1"></i>'
+                      + esc(h.pulang) + '</span>'
+                    : '<span class="badge badge-light border text-muted px-2 py-1">Belum Scan</span>';
+
+                // Mode presensi
+                let mode = '';
+                (h.modes || []).forEach(function(m) {
+                    const ikon = (m === 'Wajah') ? 'fa-user-check' : 'fa-fingerprint';
+                    const warna = (m === 'Wajah') ? 'primary' : 'info';
+                    mode += '<span class="badge badge-' + warna + ' px-2 py-1 mr-1">'
+                          + '<i class="fas ' + ikon + ' mr-1"></i>' + esc(m) + '</span>';
+                });
+                if (!mode) mode = '<span class="text-muted small">-</span>';
+
+                // Status
+                let status;
+                if (h.lengkap) {
+                    status = '<span class="badge badge-success px-2 py-1">'
+                           + '<i class="fas fa-check-double mr-1"></i> Lengkap</span>';
+                } else if (h.ada_masuk) {
+                    status = '<span class="badge badge-info px-2 py-1">'
+                           + '<i class="fas fa-sign-in-alt mr-1"></i> Clock In Saja</span>';
+                } else {
+                    status = '<span class="badge badge-warning px-2 py-1">'
+                           + '<i class="fas fa-sign-out-alt mr-1"></i> Clock Out Saja</span>';
+                }
+
+                html += '<tr>'
+                      + '<td class="text-center font-weight-bold">' + (i + 1) + '</td>'
+                      + '<td><span class="font-weight-bold text-gray-900 d-block">' + esc(h.tanggal) + '</span>'
+                      + '<small class="text-muted">' + esc(h.hari) + '</small></td>'
+                      + '<td class="text-center">' + masuk + '</td>'
+                      + '<td class="text-center">' + pulang + '</td>'
+                      + '<td class="text-center">' + mode + '</td>'
+                      + '<td class="text-center">' + status + '</td>'
+                      + '</tr>';
+            });
+            body.innerHTML = html;
+        }
+
         $(document).on('click', '[data-npk]', function() {
             const $btn = $(this);
             const npk = $btn.attr('data-npk');
@@ -508,12 +747,24 @@
             // response API (employee.name) yang dipakai di applyData(),
             // karena atribut bisa kosong / ter-escape.
             const empName = $btn.attr('data-emp-name') || '-';
+            const empDept = $btn.attr('data-emp-dept') || '';
             const date = $btn.attr('data-date') || '';
             const dateLabel = $btn.attr('data-date-label') || '-';
 
+            // Rekap harian: baca JSON dari atribut data-hari.
+            // jQuery .data() otomatis mem-parse JSON, tetapi bila atribut
+            // belum ada (tombol lama) nilainya undefined -> array kosong.
+            let hari = $btn.attr('data-hari');
+            try {
+                hari = hari ? JSON.parse(hari) : [];
+            } catch (e) {
+                hari = [];
+            }
+            renderRekapHarian(hari);
+
             document.getElementById('detailEmployeeName').textContent = empName;
             document.getElementById('detailEmployeeNpk').textContent = npk || '-';
-            document.getElementById('detailEmployeeDept').textContent = '-';
+            document.getElementById('detailEmployeeDept').textContent = empDept || '-';
             document.getElementById('detailDateLabel').textContent = dateLabel;
             document.getElementById('detailLocationName').textContent = '-';
             document.getElementById('detailLocationSub').textContent = '-';
@@ -652,6 +903,33 @@
         // Bersihkan peta saat modal ditutup
         $('#modalFaceDetail').on('hidden.bs.modal', function() {
             destroyMap();
+        });
+
+        // PERBAIKAN (2026-11-03): Leaflet mengukur container saat peta
+        // dibuat. Karena peta dibuat sebelum modal sepenuhnya tampil,
+        // ukurannya bisa terbaca 0x0 sehingga tile & POLYGON lokasi kerja
+        // tidak digambar (keluhan "polygon GPS tidak ada").
+        $('#modalFaceDetail').on('shown.bs.modal', function() {
+            if (detailMap) {
+                detailMap.invalidateSize();
+                try {
+                    const layers = [];
+                    if (detailPolyGroup) {
+                        detailPolyGroup.eachLayer(function(l) {
+                            if (typeof l.getBounds === 'function') layers.push(l);
+                        });
+                    }
+                    if (detailMarker) layers.push(detailMarker);
+                    if (layers.length > 1) {
+                        detailMap.fitBounds(L.featureGroup(layers).getBounds().pad(0.25));
+                    }
+                } catch (e) {
+                    // Diamkan: peta tetap tampil walau fit bounds gagal.
+                }
+            }
+            setTimeout(function() {
+                if (detailMap) detailMap.invalidateSize();
+            }, 350);
         });
     })();
 </script>
@@ -952,7 +1230,34 @@
     }
 
     function boot() {
-        initSelect2();
+        // PERBAIKAN (2026-11-03): initSelect2() bisa dipanggil sebelum
+        // library Select2 selesai dimuat (footerscript di-include SETELAH
+        // blok script ini). Tanpa penjagaan, dropdown kembali menjadi
+        // <select> biasa dan daftar karyawan tampak kosong.
+        // Solusi: coba berkali-kali dengan jeda singkat sampai
+        // jQuery + select2 benar-benar tersedia (maks ~5 detik).
+        var attempts = 0;
+        function ensureSelect2() {
+            attempts++;
+            var siap = (typeof window.jQuery !== 'undefined')
+                && window.jQuery.fn && window.jQuery.fn.select2;
+
+            if (siap) {
+                initSelect2();
+                return;
+            }
+            if (attempts < 50) {
+                setTimeout(ensureSelect2, 100);
+            } else {
+                // Menyerah: biarkan <select> biasa tetap berfungsi.
+                if (window.console && console.warn) {
+                    console.warn('[presensi-wajah] Select2 tidak tersedia; '
+                        + 'dropdown memakai <select> biasa.');
+                }
+            }
+        }
+
+        ensureSelect2();
         bindFilterAutoReload();
         loadData();
     }
@@ -964,6 +1269,27 @@
     }
 })();
 </script>
+
+{{-- PERBAIKAN (2026-11-03): halaman ini sebelumnya HANYA meng-include
+     layout.header + layout.navbar, tanpa layout.footerscript. Akibatnya:
+
+     1. Library Select2 TIDAK PERNAH DIMUAT.
+        initSelect2() sudah benar, tetapi langsung berhenti di
+        `if (typeof window.jQuery === 'undefined' || !jQuery.fn.select2) return;`
+        sehingga "Departemen" dan "Cari (Nama / NPK / Barcode)" tampil
+        sebagai <select> biasa dan AJAX-nya tidak pernah berjalan
+        (inilah sebab daftar karyawan tampak kosong).
+
+     2. Tombol burger di navbar TIDAK BERFUNGSI.
+        Handler #sidebarToggleTop ditulis di layout.footerscript.
+        Karena include-nya tidak ada, tombol hanya hiasan.
+        Inilah sebabnya masalah ini HANYA terjadi di halaman ini.
+
+     footerscript memuat: jquery, bootstrap.bundle, select2, easing,
+     sb-admin-2, serta handler sidebar toggle.
+     Catatan: jQuery sudah dimuat di atas; footerscript memuat ulang di
+     posisi yang sama seperti layout lain sehingga aman. --}}
+@include('layout.footerscript')
 
 </body>
 </html>

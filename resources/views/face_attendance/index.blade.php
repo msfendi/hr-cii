@@ -110,9 +110,23 @@
                             </div>
                             <div class="card-body">
                                 <div class="text-center mb-3">
-                                    <div class="avatar-circle mx-auto mb-2 bg-gradient-primary text-white d-flex align-items-center justify-content-center rounded-circle" style="width: 70px; height: 70px; font-size: 1.8rem; font-weight: bold;">
-                                        {{ strtoupper(substr($biodata->NAMA_KARYAWAN ?? 'U', 0, 1)) }}
-                                    </div>
+                                    {{-- Foto karyawan diambil dari PKWT.file_pas_foto.
+                                         Bila tidak ada / file hilang, tampilkan inisial huruf. --}}
+                                    @if(!empty($employeeFaceImg))
+                                        <img src="{{ $employeeFaceImg }}"
+                                             alt="Foto {{ $biodata->NAMA_KARYAWAN }}"
+                                             class="mx-auto mb-2 rounded-circle shadow-sm d-block"
+                                             style="width: 70px; height: 70px; object-fit: cover; object-position: center; border: 2px solid #e3e6f0; background:#f8f9fc;"
+                                             onerror="this.style.display='none'; var i=this.nextElementSibling; if(i){i.style.display='flex';}">
+                                        <div class="avatar-circle mx-auto mb-2 bg-gradient-primary text-white align-items-center justify-content-center rounded-circle"
+                                             style="width: 70px; height: 70px; font-size: 1.8rem; font-weight: bold; display: none;">
+                                            {{ strtoupper(substr($biodata->NAMA_KARYAWAN ?? 'U', 0, 1)) }}
+                                        </div>
+                                    @else
+                                        <div class="avatar-circle mx-auto mb-2 bg-gradient-primary text-white d-flex align-items-center justify-content-center rounded-circle" style="width: 70px; height: 70px; font-size: 1.8rem; font-weight: bold;">
+                                            {{ strtoupper(substr($biodata->NAMA_KARYAWAN ?? 'U', 0, 1)) }}
+                                        </div>
+                                    @endif
                                     <h5 class="font-weight-bold text-gray-900 mb-0">{{ $biodata->NAMA_KARYAWAN }}</h5>
                                     <span class="badge badge-light border text-muted">NPK: {{ $biodata->NPK }}</span>
                                 </div>

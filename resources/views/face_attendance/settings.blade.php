@@ -13,9 +13,10 @@
             <a href="{{ route('face.attendance.admin.index') }}" class="btn btn-primary btn-sm">
                 <i class="fas fa-users-cog mr-1"></i> Rekap Semua Karyawan
             </a>
-            <a href="{{ route('card-menu-hris.index') }}" class="btn btn-outline-primary btn-sm">
-                <i class="fas fa-th-large mr-1"></i> Pengaturan Card Menu
-            </a>
+            {{-- PERBAIKAN (2026-11-03): tombol "Pengaturan Card Menu"
+                 dihapus dari halaman ini sesuai permintaan. Pengaturan
+                 card menu HRIS kini diakses dari menunya sendiri, bukan
+                 dari Pengaturan Presensi Wajah. --}}
             <a href="{{ route('face-recognition.index') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left mr-1"></i> Kembali ke Daftar Wajah
             </a>

@@ -20,10 +20,78 @@
         border: none;
     }
     #miniMapDetail {
-        height: 320px;
+        /* PERBAIKAN (2026-11-03): tinggi 320px -> 260px supaya modal
+           lebih compact karena peta kini berdampingan dengan foto
+           wajah, bukan ditumpuk. */
+        height: 260px;
+        /* PERBAIKAN (2026-11-03): min-height mencegah peta kolaps menjadi
+           0 px saat modal dibuka di dalam modal-scrollable. Peta 0 px
+           membuat tata letak "berantakan" (kolom kiri menyusut, tabel
+           kanan meluber). */
+        min-height: 260px;
         width: 100%;
         border-radius: 8px;
-        z-index: 500;
+        /* PERBAIKAN (2026-11-03): z-index diturunkan dari 500 ke 1.
+           Nilai 500 membuat tile Leaflet (z-index internal 200-800)
+           MENIMPA header modal, badge, dan tombol Tutup sehingga
+           tata letak terlihat berantakan. */
+        z-index: 1;
+        background: #eef1f7;
+        overflow: hidden;
+    }
+    /* PERBAIKAN (2026-11-03): kotak foto wajah dibuat SAMA TINGGI
+       dengan peta supaya keduanya sejajar dan tidak ada ruang kosong. */
+    .face-detail-box {
+        height: 260px;
+        min-height: 260px;
+        width: 100%;
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        background: #f8f9fc;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+    }
+    .face-detail-box .face-detail-main {
+        max-height: 200px;
+        max-width: 100%;
+        object-fit: contain;
+        border-radius: 6px;
+        border: 2px solid #e3e6f0;
+        box-shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+    .face-detail-strip {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 4px;
+        justify-content: center;
+        overflow-x: auto;
+        max-width: 100%;
+    }
+    .face-detail-box .face-detail-thumb {
+        width: 44px;
+        height: 44px;
+        object-fit: cover;
+        border: 1px solid #e3e6f0;
+        border-radius: 4px;
+        cursor: pointer;
+        flex: 0 0 auto;
+    }
+    @media (max-width: 767.98px) {
+        #miniMapDetail,
+        .face-detail-box {
+            height: 220px;
+            min-height: 220px;
+        }
+    }
+    /* PERBAIKAN (2026-11-03): pastikan isi peta Leaflet tidak menimpa
+       tombol Tutup dan tidak keluar dari kartu pada layar kecil. */
+    #miniMapDetail .leaflet-container {
+        border-radius: 8px;
+        font-family: inherit;
     }
     .face-capture-preview {
         max-width: 100%;
@@ -34,6 +102,36 @@
     .modal-xl .modal-body {
         max-height: 78vh;
         overflow-y: auto;
+    }
+    /* PERBAIKAN (2026-11-03): kartu ringkasan dibuat rapi dan tidak
+       meluber. Sebelumnya teks panjang (nama PT / departemen) memaksa
+       kolom melebar sehingga tampilan terlihat berantakan. */
+    #modalFaceDetail .card-body .h6 {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+    /* Riwayat scan: tampilkan sebagai kartu, bukan tabel mentah. */
+    #faceDetailList .scan-item {
+        display: flex;
+        align-items: flex-start;
+        gap: .65rem;
+        padding: .6rem .75rem;
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        background: #fff;
+        margin-bottom: .5rem;
+    }
+    #faceDetailList .scan-item .scan-time {
+        font-weight: 700;
+        color: #4e73df;
+        min-width: 62px;
+    }
+    #faceDetailList .scan-item .scan-meta {
+        color: #858796;
+        font-size: .8rem;
+    }
+    @media (max-width: 575.98px) {
+        #miniMapDetail { height: 240px; min-height: 240px; }
     }
 </style>
 
@@ -196,6 +294,9 @@
                                                         data-toggle="modal" data-target="#modalFaceDetail"
                                                         data-face-details="{{ json_encode($log['face_details'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
                                                         data-date="{{ $log['date'] }}"
+                                                        data-emp-name="{{ $log['employee_name'] ?? '' }}"
+                                                        data-emp-npk="{{ $log['employee_npk'] ?? '' }}"
+                                                        data-emp-dept="{{ $log['employee_dept'] ?? '' }}"
                                                         data-date-label="{{ $log['formatted_date'] }} ({{ $log['day_name'] }})">
                                                     <i class="fas fa-map-marker-alt mr-1"></i> Lihat
                                                 </button>
@@ -260,6 +361,9 @@
                                                 data-toggle="modal" data-target="#modalFaceDetail"
                                                 data-face-details="{{ json_encode($log['face_details'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
                                                 data-date="{{ $log['date'] }}"
+                                                data-emp-name="{{ $log['employee_name'] ?? '' }}"
+                                                data-emp-npk="{{ $log['employee_npk'] ?? '' }}"
+                                                data-emp-dept="{{ $log['employee_dept'] ?? '' }}"
                                                 data-date-label="{{ $log['formatted_date'] }} ({{ $log['day_name'] }})">
                                             <i class="fas fa-map-marker-alt mr-1"></i> Lihat Lokasi & Wajah
                                         </button>
@@ -325,37 +429,45 @@
                     </div>
                 </div>
 
+                {{-- PERBAIKAN (2026-11-03): tata letak COMPACT, sama seperti
+                     di admin_summary. Peta dan foto wajah dibuat
+                     BERDAMPINGAN (kiri-kanan) dengan tinggi sama,
+                     tabel riwayat dipindah ke bawah selebar penuh.
+                     Sebelumnya peta menumpuk di atas wajah dalam kolom
+                     sempit (kolom 5/12) sehingga banyak ruang kosong. --}}
                 <div class="row">
-                    <!-- Kolom kiri: Mini Map + Wajah -->
-                    <div class="col-lg-5 mb-4 mb-lg-0">
+                    <!-- Kiri: Minimap -->
+                    <div class="col-md-6 mb-3 mb-md-0">
                         <h6 class="font-weight-bold text-gray-800 mb-2">
                             <i class="fas fa-map text-primary mr-1"></i> Minimap Lokasi Absensi
                         </h6>
                         <div id="miniMapDetail"></div>
-                        {{-- PERBAIKAN (2026-11-03): baris "Koordinat: lat, lng"
-                             di bawah peta DIHAPUS atas permintaan user. Peta
-                             sudah menunjukkan posisi secara visual, jadi
-                             angka koordinat tidak perlu ditampilkan lagi.
-                             Elemen #detailCoords sengaja dibiarkan ada
-                             ( disembunyikan ) supaya script yang mengisi
-                             nilainya tidak error. --}}
+                        {{-- Baris "Koordinat: lat, lng" di bawah peta
+                             dihapus atas permintaan user. Elemen
+                             #detailCoords tetap ada (disembunyikan)
+                             supaya script pengisi nilainya tidak error. --}}
                         <div class="d-none" aria-hidden="true">
                             <span id="detailCoords" class="d-none" aria-hidden="true">-</span>
                         </div>
+                    </div>
 
-                        <h6 class="font-weight-bold text-gray-800 mb-2 mt-3">
+                    <!-- Kanan: Wajah (berdampingan dengan peta) -->
+                    <div class="col-md-6">
+                        <h6 class="font-weight-bold text-gray-800 mb-2">
                             <i class="fas fa-user-check text-primary mr-1"></i> Wajah Tercapture
                         </h6>
-                        <div id="faceImageContainer" class="text-center mb-3">
+                        <div id="faceImageContainer" class="face-detail-box text-center">
                             <div id="faceImageEmpty" class="text-muted small py-4">
                                 <i class="fas fa-image fa-2x mb-2 d-block text-secondary"></i>
                                 Tidak ada gambar wajah tersimpan.
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Kolom kanan: tabel riwayat scan -->
-                    <div class="col-lg-7">
+                <!-- Riwayat scan: lebar penuh di bawah peta + wajah -->
+                <div class="row mt-1">
+                    <div class="col-12">
                         <h6 class="font-weight-bold text-gray-800 mb-2">
                             <i class="fas fa-list-ul text-primary mr-1"></i> Riwayat Scan Hari Ini
                         </h6>
@@ -443,18 +555,41 @@
                     '<i class="fas fa-image fa-2x mb-2 d-block text-secondary"></i>' +
                     'Tidak ada gambar wajah tersimpan.</div>';
             } else {
-                withImage.forEach(function(d, idx) {
-                    const wrap = document.createElement('div');
-                    wrap.className = idx === 0 ? 'mb-3' : 'mb-3';
-                    const src = d.face_image.indexOf('data:') === 0
-                        ? d.face_image
-                        : 'data:image/jpeg;base64,' + d.face_image;
-                    wrap.innerHTML =
-                        '<img src="' + src + '" alt="Wajah ' + (idx + 1) + '" class="face-capture-preview" style="max-width:260px;">' +
-                        '<div class="small text-muted mt-1"><i class="fas fa-clock mr-1"></i>' +
-                        (d.action_type || 'Absensi') + ' - ' + (d.scan_time || '-') + '</div>';
-                    container.appendChild(wrap);
-                });
+                // PERBAIKAN (2026-11-03): foto utama mengisi kotak
+                // .face-detail-box (260px, sama tinggi dengan peta).
+                // Foto tambahan ditampilkan sebagai thumbnail kecil
+                // supaya kotak tidak memanjang dan menyisakan ruang kosong.
+                const first = withImage[0];
+                const srcFirst = first.face_image.indexOf('data:') === 0
+                    ? first.face_image
+                    : 'data:image/jpeg;base64,' + first.face_image;
+
+                const wrap = document.createElement('div');
+                wrap.className = 'face-detail-wrap w-100 d-flex flex-column align-items-center justify-content-center';
+                wrap.innerHTML =
+                    '<img src="' + srcFirst + '" alt="Wajah terakhir" class="face-detail-main">' +
+                    '<div class="small text-muted mt-1 text-center">' +
+                        '<i class="fas fa-clock mr-1"></i>' +
+                        (first.action_type || 'Absensi') + ' - ' + (first.scan_time || '-') +
+                    '</div>';
+                container.appendChild(wrap);
+
+                if (withImage.length > 1) {
+                    const strip = document.createElement('div');
+                    strip.className = 'face-detail-strip mt-1';
+                    withImage.slice(1).forEach(function (d, idx) {
+                        const s = d.face_image.indexOf('data:') === 0
+                            ? d.face_image
+                            : 'data:image/jpeg;base64,' + d.face_image;
+                        const th = document.createElement('img');
+                        th.src = s;
+                        th.className = 'face-detail-thumb';
+                        th.alt = 'Wajah ' + (idx + 2);
+                        th.title = (d.action_type || 'Absensi') + ' - ' + (d.scan_time || '-');
+                        strip.appendChild(th);
+                    });
+                    container.appendChild(strip);
+                }
             }
 
             // Daftar seluruh scan -> disusun sebagai tabel rapi & mudah dibaca.
@@ -471,7 +606,13 @@
 
             var rowsHtml = '';
             details.forEach(function(d, i) {
-                var isFace = d.mode_label === 'Wajah';
+                // PERBAIKAN (2026-11-03): data dari atribut tombol
+                // (data-face-details) bisa TIDAK punya field mode_label,
+                // dan dulu itu membuat semuanya berlabel "Fingerprint".
+                // Data di modal ini selalu berasal dari presensi wajah,
+                // jadi default-nya 'Wajah' kecuali server menyatakan lain
+                // secara eksplisit.
+                var isFace = (d.mode_label ? d.mode_label === 'Wajah' : true);
 
                 // PERBAIKAN (2026-11-03): kolom Lokasi menampilkan nama area
                 // kerja, bukan koordinat mentah.
@@ -624,6 +765,17 @@
 
             document.getElementById('detailDateLabel').textContent = dateLabel;
 
+            // PERBAIKAN (2026-11-03): isi identitas karyawan dari atribut
+            // tombol. Sebelumnya #detailEmployeeName / #detailEmployeeNpk /
+            // #detailEmployeeDept tidak pernah diisi siapa pun sehingga modal
+            // selalu menampilkan "-" (nama & NPK & departemen tidak ada).
+            const empName = $btn.attr('data-emp-name') || '';
+            const empNpk  = $btn.attr('data-emp-npk') || '';
+            const empDept = $btn.attr('data-emp-dept') || '';
+            document.getElementById('detailEmployeeName').textContent = empName || '-';
+            document.getElementById('detailEmployeeNpk').textContent  = empNpk || '-';
+            document.getElementById('detailEmployeeDept').textContent = empDept || '-';
+
             // Refresh dari server (penting agar gambar/coordinat terbaru & tidak reliant cache HTML)
             if (date) {
                 fetch("{{ url('/face-attendance/detail') }}/" + encodeURIComponent(date), {
@@ -724,6 +876,40 @@
         // Bersihkan peta saat modal ditutup
         $('#modalFaceDetail').on('hidden.bs.modal', function() {
             destroyMap();
+        });
+
+        // PERBAIKAN (2026-11-03): Leaflet menghitung ukuran container saat
+        // peta dibuat. Karena peta dibuat ketika modal belum sepenuhnya
+        // tampil, ukurannya bisa terbaca 0x0 sehingga tile dan POLYGON
+        // tidak pernah tergambar (keluhan "polygon GPS tidak ada").
+        // invalidateSize() setelah modal benar-benar tampil memaksa Leaflet
+        // menghitung ulang dan menggambar seluruh layer.
+        $('#modalFaceDetail').on('shown.bs.modal', function() {
+            if (detailMap) {
+                detailMap.invalidateSize();
+                // Fit ulang ke seluruh polygon + marker yang sudah digambar,
+                // supaya polygon tidak berada di luar area pandang.
+                try {
+                    const layers = [];
+                    if (detailPolyGroup) {
+                        detailPolyGroup.eachLayer(function(l) {
+                            if (typeof l.getBounds === 'function') layers.push(l);
+                        });
+                    }
+                    if (detailMarker) layers.push(detailMarker);
+
+                    if (layers.length > 1) {
+                        const group = L.featureGroup(layers);
+                        detailMap.fitBounds(group.getBounds().pad(0.25));
+                    }
+                } catch (e) {
+                    // Diamkan: peta tetap tampil walau fit bounds gagal.
+                }
+            }
+            // Ulangi sekali lagi setelah transisi CSS selesai.
+            setTimeout(function() {
+                if (detailMap) detailMap.invalidateSize();
+            }, 350);
         });
     })();
 </script>

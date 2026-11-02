@@ -302,6 +302,44 @@ class FaceRecognitionController extends Controller
     }
 
     /**
+     * Menentukan nilai default kolom employee_faces.can_login.
+     *
+     * Aturan (permintaan 2026-11-03):
+     *   - default 0  -> karyawan biasa tidak otomatis boleh login lewat wajah
+     *   - menjadi 1  -> HANYA bila npk tersebut terdaftar di tabel users
+     *
+     * Sebelumnya selfRegisterStore() dan selfRegisterConfirm() menulis
+     * can_login = 1 untuk siapa pun, sehingga hak login wajah diberikan
+     * tanpa melihat apakah orang itu punya akun di tabel users.
+     *
+     * Pencocokan npk dibuat toleran: UPPER + TRIM di kedua sisi, karena
+     * data users kadang menyimpan npk dengan spasi atau huruf kecil.
+     * Bila tabel users tidak bisa dibaca, kembalikan 0 (aman: tolak).
+     */
+    protected function resolveDefaultCanLogin(string $npk): int
+    {
+        $npk = strtoupper(trim($npk));
+        if ($npk === '') {
+            return 0;
+        }
+
+        try {
+            $ada = User::query()
+                ->whereRaw("UPPER(LTRIM(RTRIM(npk))) = ?", [$npk])
+                ->exists();
+
+            return $ada ? 1 : 0;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning(
+                'Gagal mengecek npk di tabel users untuk can_login: ' . $e->getMessage(),
+                ['npk' => $npk]
+            );
+
+            return 0;
+        }
+    }
+
+    /**
      * Halaman wizard self register wajah.
      */
     public function selfRegisterPage()
@@ -450,8 +488,18 @@ class FaceRecognitionController extends Controller
             ];
 
             try {
+                // PERBAIKAN (2026-11-03): can_login TIDAK LAGI selalu 1.
+                //
+                // Aturan yang diminta:
+                //   - default can_login = 0
+                //   - KECUALI npk tersebut ada di tabel users -> 1
+                //
+                // Sebelumnya kode ini menulis can_login = 1 untuk semua
+                // orang, sehingga karyawan yang tidak punya akun login
+                // tetap diberi hak login lewat wajah. Bandingkan dengan
+                // LoginController yang menolak login bila can_login = 0.
                 if (\Illuminate\Support\Facades\Schema::hasColumn('employee_faces', 'can_login')) {
-                    $facePayload['can_login'] = 1;
+                    $facePayload['can_login'] = $this->resolveDefaultCanLogin($npk);
                 }
             } catch (\Throwable $e) {}
 
@@ -520,8 +568,11 @@ class FaceRecognitionController extends Controller
             if ($matched) {
                 $updateData = ['last_verified_at' => now()];
                 try {
+                    // PERBAIKAN (2026-11-03): sama seperti selfRegisterStore,
+                    // can_login mengikuti keberadaan npk di tabel users.
+                    // Default 0, menjadi 1 hanya bila user login-nya ada.
                     if (\Illuminate\Support\Facades\Schema::hasColumn('employee_faces', 'can_login')) {
-                        $updateData['can_login'] = 1;
+                        $updateData['can_login'] = $this->resolveDefaultCanLogin($npk);
                     }
                 } catch (\Throwable $e) {}
 

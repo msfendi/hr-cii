@@ -68,7 +68,7 @@ class FaceAttendanceAdminController extends Controller
         // Daftar departemen selalu dibutuhkan (query kecil, tanpa join att_log).
         // Dibungkus try/catch: kalau DB tidak terjangkau, halaman tetap tampil.
         try {
-            $departments = DB::table('DEPT')
+            $departments = $this->connCii()->table('DEPT')
                 ->select('ID_DEPT', 'DEPARTEMENT')
                 ->orderBy('DEPARTEMENT', 'asc')
                 ->get();
@@ -119,7 +119,7 @@ class FaceAttendanceAdminController extends Controller
         // baris) ditarik, lalu dipagination di PHP. Sekarang LIMITanya
         // diterapkan di database supaya tidak ada data excess yang
         // ditransfer dan diproses PHP.
-        $employeeQuery = DB::table('BIODATA as b')
+        $employeeQuery = $this->connCii()->table('BIODATA as b')
             ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
             ->select(
                 'b.NPK',
@@ -144,7 +144,7 @@ class FaceAttendanceAdminController extends Controller
 
         // Tambahkan karyawan keluar yang barcode-nya tidak bentrok dengan BIODATA
         try {
-            $keluarQuery = DB::table('BIODATA_KELUAR as bk')
+            $keluarQuery = $this->connCii()->table('BIODATA_KELUAR as bk')
                 ->leftJoin('DEPT as dk', 'bk.ID_DEPT', '=', 'dk.ID_DEPT')
                 ->select(
                     'bk.NPK',
@@ -231,39 +231,75 @@ class FaceAttendanceAdminController extends Controller
         //   a. Ambil daftar PIN unik yang punya scan di bulan ini (agregasi
         //      di SQL, hasilnya kecil).
         //   b. Query detail hanya untuk PIN-PIN tersebut.
+        //
+        // PERBAIKAN 8 (2026-11-03): batas 2100 parameter SQL Server.
+        // Langkah (b) dulu memakai whereIn() dengan SELURUH pin bulan itu
+        // sehingga SQL Server menolak:
+        //   "Tried to bind parameter number 2101. SQL Server supports a
+        //    maximum of 2100 parameters."
+        //
+        // PERBAIKAN 9: percobaan pertama memakai STRING_SPLIT, tetapi server
+        // produksi menolak: "Invalid object name 'STRING_SPLIT'". Fungsi itu
+        // baru dikenal bila compatibility_level database >= 130 (SQL Server
+        // 2016). Database CII ternyata lebih rendah, jadi STRING_SPLIT TIDAK
+        // BISA dipakai di sini.
+        //
+        // Solusi sekarang tidak memakai fungsi khusus versi apa pun:
+        //   a. PIN unik diambil sebagai string CSV.
+        //   b. String itu dipecah di PHP menjadi potongan @chunk, lalu setiap
+        //      potongan dikirim sebagai SATU parameter dan dibandingkan
+        //      memakai CHARINDEX (tersedia di semua versi SQL Server):
+        //         CHARINDEX(',' + pin + ',', ',' + @csv + ',') > 0
+        //      Batas aman: max 2000 parameter per statement.
+        //   c. Karena tujuannya hanya memfilter baris agar tidak menarik
+        //      seluruh tabel ke PHP, filter ini boleh longgar — hasil akhir
+        //      tetap dipetakan per barcode karyawan.
         $monthlyLogs = collect();
+        $rekapError  = null;
 
         try {
-            // (a) PIN unik yang punya scan bulan ini.
-            // PENTING: alias tabel harus 'a' karena kolom diseleksi sebagai
-            // 'a.pin'. Sebelumnya tabel tidak diberi alias sehingga SQL Server
-            // melempar: The multi-part identifier "a.pin" could not be bound.
-            $pinsInMonth = DB::table('att_log as a')
+            // (a) PIN unik bulan ini sebagai satu string dipisah koma.
+            $pinCsv = $this->connCii()->table('att_log as a')
                 ->whereBetween('a.scan_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                ->select('a.pin')
-                ->distinct()
-                ->limit(20000)
+                ->select(DB::raw("DISTINCT LTRIM(RTRIM(CONVERT(varchar(64), a.pin))) AS pin"))
                 ->pluck('pin')
                 ->map(function ($v) {
                     return $this->normalizePin($v);
                 })
                 ->filter(function ($v) {
-                    return $v !== '';
+                    // Koma akan merusak pemisahan CSV -> buang bila ada.
+                    return $v !== '' && strpos($v, ',') === false;
                 })
                 ->unique()
                 ->values();
 
-            // (b) Detail scan hanya untuk PIN di atas.
-            if ($pinsInMonth->isNotEmpty()) {
-                $monthlyLogs = DB::table('att_log as a')
-                    ->whereBetween('a.scan_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                    ->whereIn(DB::raw('CAST(a.pin AS VARCHAR)'), $pinsInMonth->all())
+            // (b) Pecah CSV jadi potongan. 1000 pin per potongan + 2 parameter
+            // tanggal = 1002 parameter, jauh di bawah batas 2100.
+            $pinChunks = $pinCsv->chunk(1000)->map(function ($chunk) {
+                return ',' . $chunk->implode(',') . ',';
+            })->values();
+
+            if ($pinChunks->isNotEmpty()) {
+                $bulan = [$startDate . ' 00:00:00', $endDate . ' 23:59:59'];
+
+                $monthlyLogs = $this->connCii()->table('att_log as a')
+                    ->whereBetween('a.scan_date', $bulan)
+                    ->where(function ($outer) use ($pinChunks) {
+                        // Gabungkan potongan dengan OR -> tetap satu statement.
+                        foreach ($pinChunks as $csv) {
+                            $outer->orWhereRaw(
+                                "CHARINDEX(',' + LTRIM(RTRIM(CONVERT(varchar(64), a.pin))) + ',', ?) > 0",
+                                [$csv]
+                            );
+                        }
+                    })
                     ->orderBy('a.scan_date', 'asc')
                     ->select([
                         'a.pin',
                         'a.scan_date',
                         'a.verifymode',
                         'a.inoutmode',
+                        'a.sn',
                     ])
                     ->get();
             }
@@ -272,6 +308,11 @@ class FaceAttendanceAdminController extends Controller
                 'file' => $e->getFile() . ':' . $e->getLine(),
             ]);
             $monthlyLogs = collect();
+            // PERBAIKAN 7: bedakan "tidak ada data" dari "query gagal".
+            // Sebelumnya exception ditelan diam-diam sehingga halaman
+            // melaporkan "0 baris scan" padahal penyebabnya error SQL
+            // (mis. tabel att_log tidak ada di database yang terhubung).
+            $rekapError = $e->getMessage();
         }
 
         // ===== 3. Group scan per karyawan + per tanggal (SAMA seperti rekap) =====
@@ -372,7 +413,8 @@ class FaceAttendanceAdminController extends Controller
             'diagnostics',
             'availableMonths',
             'pagination',
-            'loaded'
+            'loaded',
+            'rekapError'
         ) + ['workLocationsForMap' => $this->workLocationsForMap()]);
     }
 
@@ -489,7 +531,7 @@ class FaceAttendanceAdminController extends Controller
             // kolom ('ym'), sehingga ekspresi CONVERT harus ditulis ulang
             // persis sama. Sebelumnya muncul: Invalid column name 'ym'.
             $bulanExpr = "CONVERT(varchar(7), scan_date, 120)";
-            $months = DB::table('att_log')
+            $months = $this->connCii()->table('att_log')
                 ->selectRaw($bulanExpr . " as ym")
                 ->groupByRaw($bulanExpr)
                 ->orderByDesc('ym')
@@ -525,7 +567,7 @@ class FaceAttendanceAdminController extends Controller
         $q = trim((string) $request->get('q', ''));
 
         try {
-            $rows = DB::table('DEPT')
+            $rows = $this->connCii()->table('DEPT')
                 ->select('ID_DEPT', 'DEPARTEMENT')
                 ->when($q !== '', function ($query) use ($q) {
                     $query->where('DEPARTEMENT', 'like', '%' . $q . '%');
@@ -686,7 +728,7 @@ class FaceAttendanceAdminController extends Controller
 
         // 1) Info koneksi
         try {
-            $row = DB::selectOne('SELECT DB_NAME() AS db');
+            $row = $this->connCii()->selectOne('SELECT DB_NAME() AS db');
             $hasil['database'] = $row->db ?? null;
         } catch (\Throwable $e) {
             $hasil['error'][] = 'Koneksi database gagal: ' . $e->getMessage();
@@ -696,7 +738,7 @@ class FaceAttendanceAdminController extends Controller
         // 2) Cek keberadaan & kolom tiap tabel sumber
         foreach (['BIODATA', 'BIODATA_KELUAR'] as $tabel) {
             try {
-                $kolom = DB::select(
+                $kolom = $this->connCii()->select(
                     "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
                      WHERE TABLE_NAME = ? AND COLUMN_NAME IN ('NPK','NAMA_KARYAWAN','BARCODE')
                      ORDER BY COLUMN_NAME",
@@ -730,7 +772,7 @@ class FaceAttendanceAdminController extends Controller
             $hasil['sql'] = preg_replace('/\s+/', ' ', trim($sql));
 
             $like = '%' . $q . '%';
-            $rows = DB::select($sql, [$like, $like, $like, $like, $like, $like]);
+            $rows = $this->connCii()->select($sql, [$like, $like, $like, $like, $like, $like]);
 
             foreach ($rows as $r) {
                 $hasil['data'][] = [
@@ -779,7 +821,7 @@ class FaceAttendanceAdminController extends Controller
 
         foreach ($sources as [$table, $sumber]) {
             try {
-                $rows = DB::table($table)
+                $rows = $this->connCii()->table($table)
                     ->select(['NPK', 'NAMA_KARYAWAN', 'BARCODE'])
                     ->where(function ($w) use ($like) {
                         $w->where('NAMA_KARYAWAN', 'like', $like)
@@ -824,6 +866,28 @@ class FaceAttendanceAdminController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Koneksi database CII (SQL Server) — sumber tabel att_log, BIODATA,
+     * BIODATA_KELUAR, DEPT, dan card_menu_settings.
+     *
+     * PENTING (PERBAIKAN 7):
+     * Sebelumnya SELURUH query di controller ini memakai DB::table() tanpa
+     * menyebut koneksi. Akibatnya query diarahkan ke koneksi DEFAULT, yaitu
+     * DB_CONNECTION=sqlsrv dengan DB_DATABASE=audit — BUKAN database CII.
+     * Tabel att_log tidak ada di 'audit', sehingga query melempar exception,
+     * ditangkap catch, lalu dikembalikan sebagai koleksi kosong. Itulah sebab
+     * rekap selalu menampilkan "0 baris scan ditemukan" padahal att_log
+     * berisi ratusan ribu baris.
+     *
+     * Semua controller lain yang bekerja dengan att_log (lihat
+     * AttendanceFingerController) memakai DB::connection('cii')->table('att_log').
+     * Helper ini menyamakan perilaku tersebut.
+     */
+    private function connCii()
+    {
+        return DB::connection('cii');
     }
 
     /**
@@ -878,9 +942,12 @@ class FaceAttendanceAdminController extends Controller
     public function employeeDetail(Request $request, string $npk, string $date)
     {
         try {
-            $biodata = DB::table('BIODATA as b')
+            $biodata = $this->connCii()->table('BIODATA as b')
                 ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
-                ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.BARCODE', 'd.DEPARTEMENT as DEPT')
+                // PERBAIKAN (2026-11-03): ID_DEPT ikut dipilih supaya
+                // resolveDept() bisa query ulang ke DEPT bila join gagal
+                // menghasilkan nama departemen (data lama / ID tidak cocok).
+                ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.BARCODE', 'b.ID_DEPT', 'd.DEPARTEMENT as DEPT')
                 ->where('b.NPK', (string) $npk)
                 ->first();
 
@@ -893,7 +960,7 @@ class FaceAttendanceAdminController extends Controller
             // Gunakan CAST pada kedua sisi agar aman dari perbedaan tipe kolom
             // (pin varchar vs BARCODE numeric). LTRIM/RTRIM karena SQL Server lama
             // tidak mendukung TRIM().
-            $logs = DB::table('att_log')
+            $logs = $this->connCii()->table('att_log')
                 ->whereRaw('CAST(pin AS VARCHAR) = CAST(? AS VARCHAR)', [$barcode])
                 ->whereDate('scan_date', $date)
                 ->orderBy('scan_date', 'asc')
@@ -936,18 +1003,27 @@ class FaceAttendanceAdminController extends Controller
                 return [
                     'scan_time'   => Carbon::parse($log->scan_date)->format('H:i:s'),
                     'verifymode'  => (int) $log->verifymode,
-                    'mode_label'  => ((int) $log->verifymode === 15) ? 'Wajah' : 'Fingerprint',
+                    'mode_label'  => $this->modeLabel($log),
                     'inoutmode'   => (int) $log->inoutmode,
                     'action_type' => ((int) $log->inoutmode === 0) ? 'Clock In' : 'Clock Out',
                 ];
             })->all();
+
+            // PERBAIKAN (2026-11-03 #3): face_details diberi `mode_label`
+            // eksplisit. Sebelumnya field ini tidak dikirim, sehingga
+            // frontend (isFace = d.mode_label === 'Wajah') selalu false dan
+            // SEMUA baris berlabel "Fingerprint" walau metode aslinya wajah.
+            $faceDetails = array_map(function (array $row) {
+                $row['mode_label'] = 'Wajah';
+                return $row;
+            }, $faceDetails);
 
             return response()->json([
                 'success'    => true,
                 'employee'   => [
                     'npk'     => (string) $biodata->NPK,
                     'name'    => $biodata->NAMA_KARYAWAN,
-                    'dept'    => $biodata->DEPT ?? '-',
+                    'dept'    => $this->resolveDept($biodata),
                     'barcode' => $barcode,
                 ],
                 'date'       => $date,
@@ -962,6 +1038,79 @@ class FaceAttendanceAdminController extends Controller
                 'message' => 'Gagal memuat detail: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Tentukan label metode presensi dengan benar.
+     *
+     * PERBAIKAN (2026-11-03): modul presensi wajah web menulis baris ke
+     * `att_log` dengan `sn = 'FACE_GPS_WEB'` dan `verifymode = 15`.
+     * Nilai 15 itu warisan ZKTeco, jadi verifymode SAJA tidak cukup untuk
+     * membedakan wajah vs fingerprint. Baris yang berasal dari tabel
+     * `face_attendance_logs` (yang selalu berarti presensi wajah) harus
+     * dilabeli "Wajah" tanpa melihat verifymode-nya.
+     *
+     * @param object $log Baris att_log (punya kolom sn/verifymode).
+     * @return string 'Wajah' atau 'Fingerprint'
+     */
+    private function modeLabel($log): string
+    {
+        $sn = strtoupper(trim((string) ($log->sn ?? '')));
+        if ($sn === 'FACE_GPS_WEB' || $sn === 'FACE_GPS' || strpos($sn, 'FACE') === 0) {
+            return 'Wajah';
+        }
+
+        // Fingerprint ZKTeco memakai verifymode 1 (FP) / 2 (FP+PIN).
+        // Nilai 15 (FP+PIN ZKTeco lama) TIDAK boleh otomatis dianggap wajah.
+        $mode = (int) ($log->verifymode ?? -1);
+        return in_array($mode, [15, 16, 20], true) ? 'Wajah' : 'Fingerprint';
+    }
+
+    /**
+     * Ambil nama departemen karyawan dengan fallback.
+     *
+     * PERBAIKAN (2026-11-03): modal menampilkan departemen "-" karena
+     * `BIODATA.ID_DEPT` sering tidak cocok dengan `DEPT.ID_DEPT` pada data
+     * lama, sehingga hasil LEFT JOIN bernilai NULL. Kalau nama departemen
+     * kosong, coba ambil dari kolom teks di BIODATA sendiri sebelum
+     * menyerah dan mengirim '-'.
+     *
+     * @param object $biodata Baris hasil join BIODATA + DEPT.
+     * @return string Nama departemen, atau '-' bila benar-benar tidak ada.
+     */
+    private function resolveDept($biodata): string
+    {
+        $dept = trim((string) ($biodata->DEPT ?? ''));
+        if ($dept !== '' && $dept !== '-') {
+            return $dept;
+        }
+
+        // Fallback 1: kolom teks departemen di BIODATA (kalau ada).
+        foreach (['DEPARTEMENT', 'DEPARTMENT', 'BAGIAN', 'DIVISI'] as $col) {
+            $val = trim((string) ($biodata->{$col} ?? ''));
+            if ($val !== '' && $val !== '-') {
+                return $val;
+            }
+        }
+
+        // Fallback 2: query langsung ke DEPT memakai ID_DEPT dari BIODATA.
+        // Dijalankan terpisah supaya join yang gagal tidak menutupi data.
+        $idDept = $biodata->ID_DEPT ?? null;
+        if ($idDept !== null && $idDept !== '') {
+            try {
+                $found = $this->connCii()->table('DEPT')
+                    ->where('ID_DEPT', $idDept)
+                    ->value('DEPARTEMENT');
+                $found = trim((string) $found);
+                if ($found !== '') {
+                    return $found;
+                }
+            } catch (\Throwable $e) {
+                // Diamkan: departemen bersifat informasi, bukan penentu.
+            }
+        }
+
+        return '-';
     }
 
     /**
@@ -1035,14 +1184,14 @@ class FaceAttendanceAdminController extends Controller
         $startDate = $month . '-01';
         $endDate   = Carbon::parse($startDate)->endOfMonth()->format('Y-m-d');
 
-        $monthlyLogs = DB::table('att_log as a')
+        $monthlyLogs = $this->connCii()->table('att_log as a')
             ->leftJoin('BIODATA as b', DB::raw('CAST(a.pin AS VARCHAR)'), '=', DB::raw('CAST(b.BARCODE AS VARCHAR)'))
             ->whereBetween('a.scan_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
             ->orderBy('a.scan_date', 'asc')
-            ->select(['a.pin', 'a.scan_date', 'a.verifymode', 'a.inoutmode'])
+            ->select(['a.pin', 'a.scan_date', 'a.verifymode', 'a.inoutmode', 'a.sn'])
             ->get();
 
-        $employees = DB::table('BIODATA as b')
+        $employees = $this->connCii()->table('BIODATA as b')
             ->leftJoin('DEPT as d', 'b.ID_DEPT', '=', 'd.ID_DEPT')
             ->select('b.NPK', 'b.NAMA_KARYAWAN', 'b.BARCODE', 'd.DEPARTEMENT as DEPT')
             ->orderBy('b.NAMA_KARYAWAN', 'asc')
@@ -1153,7 +1302,14 @@ class FaceAttendanceAdminController extends Controller
 
             $grouped[$dateKey]['total_scans']++;
 
-            $modeName = ((int) $log->verifymode === 15) ? 'Wajah' : 'Fingerprint';
+            // PERBAIKAN (2026-11-03): klasifikasi mode memakai modeLabel()
+            // yang membaca kolom `sn`. Sebelumnya di sini hardcode
+            // `verifymode === 15 ? 'Wajah' : 'Fingerprint'`, sehingga
+            // presensi wajah web (sn='FACE_GPS_WEB') yang tidak memakai
+            // verifymode 15 salah dilabeli "Fingerprint", dan scan
+            // fingerprint ZKTeco lama (verifymode 15) salah dilabeli
+            // "Wajah". Itu sebabnya rekap hanya terlihat berisi data wajah.
+            $modeName = $this->modeLabel($log);
             if (!in_array($modeName, $grouped[$dateKey]['modes'])) {
                 $grouped[$dateKey]['modes'][] = $modeName;
             }
@@ -1188,10 +1344,21 @@ class FaceAttendanceAdminController extends Controller
         $result = [];
 
         try {
-            $logs = FaceAttendanceLog::whereIn('npk', $npks)
-                ->inMonth($month)
-                ->orderBy('scan_date', 'asc')
-                ->get();
+            // PERBAIKAN 8: SQL Server membatasi 2100 parameter per statement.
+            // whereIn() dengan ribuan NPK akan pecah, jadi query dipecah per
+            // 1000 NPK. Saat ini pemanggil hanya mengirim 50 NPK (satu
+            // halaman), tetapi pengaman ini menjaga bila batas halaman
+            // berubah di kemudian hari.
+            $logs = collect();
+            foreach (array_chunk(array_values(array_unique($npks)), 1000) as $chunkNpk) {
+                $logs = $logs->merge(
+                    FaceAttendanceLog::whereIn('npk', $chunkNpk)
+                        ->inMonth($month)
+                        ->orderBy('scan_date', 'asc')
+                        ->get()
+                );
+            }
+            $logs = $logs->sortBy('scan_date')->values();
 
             foreach ($logs as $faceLog) {
                 $dateKey = Carbon::parse($faceLog->scan_date)->format('Y-m-d');

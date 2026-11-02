@@ -31,6 +31,73 @@ class FaceAttendanceController extends Controller
     }
 
     /**
+     * Ambil foto karyawan dari tabel employee_faces (kolom face_img) untuk
+     * ditampilkan di kartu "Data Karyawan" pada halaman Presensi Wajah & GPS.
+     *
+     * PERBAIKAN (2026-11-03): kartu ini sebelumnya SELALU menampilkan inisial
+     * huruf (mis. "D") karena tidak pernah membaca foto sama sekali.
+     *
+     * Sumber foto: employee_faces.face_img, yaitu foto wajah yang direkam
+     * saat pendaftaran wajah dan disimpan sebagai data URI base64
+     * ("data:image/jpeg;base64,..."). Karena gambarnya sudah berupa data URI,
+     * TIDAK perlu file di disk, tidak perlu symlink storage, dan tidak ada
+     * risiko 404. Bila karyawan belum punya baris di employee_faces, atau
+     * isinya kosong/bukan gambar valid, kembalikan null sehingga view
+     * memakai inisial huruf seperti biasa.
+     *
+     * @return string|null Data URI siap pakai untuk <img src>, atau null.
+     */
+    private function resolveEmployeeFaceImg(?string $npk): ?string
+    {
+        $npk = trim((string) $npk);
+        if ($npk === '') {
+            return null;
+        }
+
+        try {
+            $face = EmployeeFace::where('npk', $npk)
+                ->orderByDesc('is_active')
+                ->orderByDesc('id')
+                ->first(['id', 'npk', 'face_img']);
+        } catch (\Throwable $e) {
+            // Tabel belum ada / koneksi bermasalah -> jangan matikan halaman.
+            \Log::warning('Gagal membaca employee_faces untuk NPK ' . $npk . ': ' . $e->getMessage());
+            return null;
+        }
+
+        $img = trim((string) ($face->face_img ?? ''));
+        if ($img === '') {
+            return null;
+        }
+
+        // Sudah berupa data URI base64 -> pakai apa adanya (hanya terima
+        // prefix gambar, tolak skema lain seperti javascript:).
+        if (preg_match('#^data:image/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=\r\n]+$#i', $img)) {
+            return $img;
+        }
+
+        // Sebagian data lama mungkin tersimpan tanpa prefix data:.
+        // Tambahkan hanya jika isinya benar-benar base64 gambar.
+        if (preg_match('#^[A-Za-z0-9+/=\r\n]+$#', $img) && strlen($img) > 256) {
+            $raw = base64_decode(preg_replace('/\s+/', '', $img), true);
+            if ($raw !== false && $raw !== '') {
+                // Deteksi tipe gambar dari magic bytes.
+                $mime = 'image/jpeg';
+                if (str_starts_with($raw, "\x89PNG")) {
+                    $mime = 'image/png';
+                } elseif (str_starts_with($raw, 'RIFF') && substr($raw, 8, 4) === 'WEBP') {
+                    $mime = 'image/webp';
+                } elseif (str_starts_with($raw, 'GIF8')) {
+                    $mime = 'image/gif';
+                }
+                return 'data:' . $mime . ';base64,' . base64_encode($raw);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Halaman Utama Presensi Wajah (Kamera & Deteksi GPS)
      */
     public function index()
@@ -163,8 +230,13 @@ class FaceAttendanceController extends Controller
         // Ambil area lokasi kerja aktif
         $locations = AttendanceWorkLocation::active()->get();
 
+        // Foto wajah dari employee_faces (data URI base64). Null bila belum
+        // terdaftar, sehingga view memakai inisial huruf.
+        $employeeFaceImg = $this->resolveEmployeeFaceImg($biodata->NPK ?? $npk);
+
         return view('face_attendance.index', compact(
             'biodata',
+            'employeeFaceImg',
             'shift',
             'workStart',
             'workEnd',
@@ -848,6 +920,18 @@ class FaceAttendanceController extends Controller
             $time = Carbon::parse($log->scan_date)->format('H:i:s');
             
             if (!isset($groupedLogs[$dateKey])) {
+                // PERBAIKAN (2026-11-03): identitas karyawan dikirim per baris
+                // supaya modal "Detail Presensi Wajah" bisa menampilkan NAMA,
+                // NPK, dan DEPARTEMEN. Sebelumnya view hanya punya tanggal,
+                // sehingga modal selalu menampilkan "-" untuk ketiga isian.
+                $deptName = trim((string) ($biodata->DEPT ?? ''));
+                if ($deptName === '') {
+                    foreach (['DEPARTEMENT', 'DEPARTMENT', 'BAGIAN', 'DIVISI'] as $col) {
+                        $val = trim((string) ($biodata->{$col} ?? ''));
+                        if ($val !== '') { $deptName = $val; break; }
+                    }
+                }
+
                 $groupedLogs[$dateKey] = [
                     'date' => $dateKey,
                     'formatted_date' => Carbon::parse($dateKey)->format('d-m-Y'),
@@ -858,6 +942,10 @@ class FaceAttendanceController extends Controller
                     'total_scans' => 0,
                     'has_face' => false,
                     'face_details' => [],
+                    // Identitas karyawan (untuk modal detail).
+                    'employee_npk'  => (string) ($biodata->NPK ?? $npk),
+                    'employee_name' => (string) ($biodata->NAMA_KARYAWAN ?? ''),
+                    'employee_dept' => $deptName !== '' ? $deptName : '-',
                     // Jadwal shift per tanggal (diisi di bawah).
                     'shift_name' => 'Normal',
                     'shift_work_start' => '08:00:00',
@@ -868,7 +956,16 @@ class FaceAttendanceController extends Controller
 
             $groupedLogs[$dateKey]['total_scans']++;
             
-            $modeName = ($log->verifymode == 15) ? 'Wajah' : 'Fingerprint';
+            // PERBAIKAN (2026-11-03): baris yang ditulis modul wajah web
+            // selalu memakai sn 'FACE_GPS_WEB'. verifymode 15 adalah kode
+            // ZKTeco (FP+PIN), jadi tidak boleh dipakai sebagai satu-satunya
+            // penentu. Cek sn lebih dulu, baru verifymode.
+            $snUp = strtoupper(trim((string) ($log->sn ?? '')));
+            if ($snUp !== '' && strpos($snUp, 'FACE') === 0) {
+                $modeName = 'Wajah';
+            } else {
+                $modeName = in_array((int) $log->verifymode, [15, 16, 20], true) ? 'Wajah' : 'Fingerprint';
+            }
             if (!in_array($modeName, $groupedLogs[$dateKey]['modes'])) {
                 $groupedLogs[$dateKey]['modes'][] = $modeName;
             }
@@ -964,6 +1061,12 @@ class FaceAttendanceController extends Controller
                         $faceLog->longitude !== null ? (float) $faceLog->longitude : null
                     ),
                     'face_image' => $faceLog->face_image,
+                    // PERBAIKAN (2026-11-03): label metode eksplisit.
+                    // Baris ini berasal dari face_attendance_logs, yang
+                    // SELALU presensi wajah. Sebelumnya field ini tidak
+                    // dikirim sehingga frontend (isFace = mode_label ===
+                    // 'Wajah') jatuh ke label "Fingerprint".
+                    'mode_label' => 'Wajah',
                 ];
             }
         } catch (\Throwable $e) {
@@ -973,7 +1076,32 @@ class FaceAttendanceController extends Controller
         // Urutkan tanggal dari terbaru ke terlama
         krsort($groupedLogs);
 
-        return view('face_attendance.rekap', compact('biodata', 'groupedLogs', 'month'));
+        // PERBAIKAN (2026-11-03): $workLocationsForMap WAJIB dikirim ke view.
+        // Sebelumnya baris ini hanya compact('biodata','groupedLogs','month'),
+        // sehingga `const workLocations = @json($workLocationsForMap ?? [])`
+        // di rekap.blade.php SELALU bernilai [] dan Leaflet tidak pernah
+        // menggambar satu polygon pun. Inilah penyebab keluhan
+        // "polygon GPS tidak ada" pada modal Detail Presensi Wajah.
+        $workLocationsForMap = [];
+        try {
+            $workLocationsForMap = AttendanceWorkLocation::orderBy('id', 'asc')
+                ->get()
+                ->map(function ($loc) {
+                    return [
+                        'id'          => $loc->id,
+                        'name'        => $loc->name,
+                        'description' => $loc->description,
+                        'is_active'   => (bool) $loc->is_active,
+                        'coordinates' => $loc->coordinates,
+                    ];
+                })
+                ->values()
+                ->all();
+        } catch (\Throwable $e) {
+            \Log::warning('Gagal memuat attendance_work_locations untuk rekap: ' . $e->getMessage());
+        }
+
+        return view('face_attendance.rekap', compact('biodata', 'groupedLogs', 'month', 'workLocationsForMap'));
     }
 
     /**
@@ -1057,6 +1185,12 @@ class FaceAttendanceController extends Controller
                         // Tanpa ini, UI menampilkan koordinat mentah.
                         'location_resolved' => $this->resolveWorkLocationName($lat, $lng),
                         'face_image' => $log->face_image_url,
+                        // PERBAIKAN (2026-11-03): label metode eksplisit.
+                        // Endpoint ini hanya membaca face_attendance_logs,
+                        // yang SELALU presensi wajah. Tanpa field ini,
+                        // frontend (isFace = mode_label === 'Wajah') selalu
+                        // menampilkan badge "Fingerprint".
+                        'mode_label' => 'Wajah',
                     ];
                 });
 

@@ -39,8 +39,22 @@
                 </div>
 
                 <!-- Diagnostik rekap kosong /-ringkasan sumber data -->
+                @if(!empty($rekapError))
+                    {{-- PERBAIKAN 7: query gagal JANGAN dilaporkan sebagai "tidak ada data". --}}
+                    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-plug mr-1"></i>
+                            Gagal membaca tabel <code>att_log</code>
+                        </h6>
+                        <p class="mb-1">
+                            Sumber data: tabel <code>att_log</code> pada koneksi SQL Server <code>cii</code>.
+                            Query tidak dapat dijalankan, jadi rekap tidak bisa ditampilkan.
+                        </p>
+                        <p class="mb-0 small text-monospace">{{ $rekapError }}</p>
+                    </div>
+                @endif
                 @if(isset($diagnostics))
-                    @if(!$diagnostics['has_data'])
+                    @if(!$diagnostics['has_data'] && empty($rekapError))
                         <div class="alert alert-warning alert-dismissible fade show shadow-sm" role="alert">
                             <h6 class="alert-heading">
                                 <i class="fas fa-exclamation-triangle mr-1"></i>
@@ -52,7 +66,8 @@
                             </p>
                             <p class="mb-0">
                                 @if(!empty($availableMonths))
-                                    Pilih salah satu <strong>bulan tersedia</strong> di atas (data sudah ada di <code>att_log</code>).
+                                    Bulan yang ada datanya: <strong>{{ implode(', ', array_slice($availableMonths, 0, 6)) }}</strong>.
+                                    Silakan pilih salah satu pada filter bulan di atas.
                                 @else
                                     Silakan pilih bulan lain pada filter di atas.
                                 @endif
@@ -86,7 +101,7 @@
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 bg-white d-flex align-items-center justify-content-between">
                         <h6 class="m-0 font-weight-bold text-primary">
-                            <i class="fas fa-calendar-alt mr-1"></i> Log Presensi (Wajah + Fingerprint)
+                            <i class="fas fa-calendar-alt mr-1"></i> Log Presensi Wajah
                         </h6>
                         <span class="badge badge-primary px-3 py-1 font-weight-bold">
                             {{ count($groupedAll) }} Karyawan
@@ -113,6 +128,36 @@
                                 <tbody>
                                     @php $no = 1; @endphp
                                     @forelse($groupedAll as $emp)
+                                    <!-- PERBAIKAN (2026-11-03): baris detail expand (nested table)
+                                         DIHAPUS. Penyebabnya: baris detail harus punya 9 node <td>
+                                         agar DataTables tidak protes, jadi tabel riwayat harian
+                                         ditaruh di <td> PERTAMA dengan lebar 6% (kolom "#").
+                                         Akibatnya seluruh header (Tanggal & Hari, Jam Masuk,
+                                         Jam Pulang, Mode, Status, Detail) terhimpit menumpuk
+                                         di kolom pertama - persis keluhan "berantakan".
+
+                                         Solusi: rincian harian tidak lagi ditampilkan sebagai baris
+                                         expand, melainkan dikirim sebagai JSON ke modal
+                                         #modalFaceDetail lalu dirender sebagai tabel rapi.
+                                         Baris utama cukup 9 <td> normal, tidak ada lagi
+                                         "Incorrect column count" dan tidak ada tabel bersarang. -->
+                                    @php
+                                        // Rincian harian disiapkan untuk modal (dipakai bersama
+                                        // oleh tombol "Lihat" di kolom Detail).
+                                        $hariJson = [];
+                                        foreach ($emp['grouped_logs'] as $lg) {
+                                            $hariJson[] = [
+                                                'date'      => $lg['date'] ?? '',
+                                                'tanggal'   => $lg['formatted_date'] ?? '',
+                                                'hari'      => $lg['day_name'] ?? '',
+                                                'masuk'     => $lg['clock_in'] ?? '',
+                                                'pulang'    => $lg['clock_out'] ?? '',
+                                                'modes'     => array_values($lg['modes'] ?? []),
+                                                'lengkap'   => (!empty($lg['clock_in']) && !empty($lg['clock_out'])),
+                                                'ada_masuk' => !empty($lg['clock_in']),
+                                            ];
+                                        }
+                                    @endphp
                                     <tr>
                                         <td class="text-center font-weight-bold">{{ $no++ }}</td>
                                         <td>
@@ -143,120 +188,32 @@
                                             <span class="badge badge-secondary px-2 py-1">{{ $emp['total_scans'] }}</span>
                                         </td>
                                         <td class="text-center">
-                                            @if(!empty($emp['face_details']))
-                                                <button type="button" class="btn btn-sm btn-primary rounded-pill shadow-sm px-3"
+                                            @if(!empty($emp['face_details']) || !empty($hariJson))
+                                                <button type="button" class="btn btn-sm btn-primary rounded-pill shadow-sm px-3 btn-detail-emp"
                                                         data-toggle="modal" data-target="#modalFaceDetail"
                                                         data-npk="{{ $emp['npk'] }}"
                                                         data-emp-name="{{ $emp['name'] }}"
+                                                        data-emp-dept="{{ $emp['dept'] }}"
+                                                        data-emp-barcode="{{ $emp['barcode'] }}"
+                                                        data-hari='@json($hariJson)'
                                                         data-date="{{ $emp['grouped_logs'][array_key_first($emp['grouped_logs'])]['date'] ?? '' }}"
                                                         data-date-label="{{ $emp['grouped_logs'][array_key_first($emp['grouped_logs'])]['formatted_date'] ?? '' }}">
-                                                    <i class="fas fa-map-marker-alt mr-1"></i> Lihat
+                                                    <i class="fas fa-list-ul mr-1"></i> Lihat
                                                 </button>
                                             @else
                                                 <span class="text-muted small">-</span>
                                             @endif
                                         </td>
                                         <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-info rounded-pill shadow-sm px-2 btn-toggle-emp"
-                                                    data-target="#detail-emp-{{ $loop->index }}"
-                                                    title="Tampilkan rekap harian">
-                                                <i class="fas fa-chevron-right table-toggle-icon"></i>
-                                            </button>
+                                            {{-- Kolom "Aksi" kini hanya penanda status: rincian harian
+                                                 sudah dipindah ke dalam modal (tombol "Lihat" di
+                                                 kolom Detail), jadi tidak ada lagi tombol expand. --}}
+                                            @if($emp['days'] > 0)
+                                                <i class="fas fa-check-circle text-success" title="Data presensi tersedia"></i>
+                                            @else
+                                                <i class="fas fa-minus-circle text-muted" title="Belum ada data"></i>
+                                            @endif
                                         </td>
-                                    </tr>
-                                    <!-- Baris detail per karyawan (SAMA struktur dengan /face-attendance/summary) -->
-                                    <tr class="emp-row-detail d-none" id="detail-emp-{{ $loop->index }}">
-                                        {{-- CATATAN DataTables 1.13:
-                                             Baris detail WAJIB punya 9 node <td> asli (bukan 1 sel colspan="9").
-                                             DataTables menghitung sel per baris lewat _fnGetRowElements (td.nextSibling)
-                                             lalu _fnCreateTr; sel yang kurang dari jumlah kolom memicu warning
-                                             "Incorrect column count" (warning #18).
-                                             Karena itu sel pertama berisi tabel detail, dan 8 sel berikutnya
-                                             dibuat collapsed (tanpa padding/border) supaya tampilan tetap
-                                             selebar 9 kolom. --}}
-                                        <td style="padding:0;border:0;width:100%;">
-                                            <div class="table-responsive pt-2 pb-2">
-                                                <table class="table table-sm table-bordered table-rekap" style="background:#fff;">
-                                                    <thead>
-                                                        <tr>
-                                                            <th width="5%" class="text-center">#</th>
-                                                            <th width="18%">Tanggal & Hari</th>
-                                                            <th width="16%" class="text-center">Jam Masuk (Clock In)</th>
-                                                            <th width="16%" class="text-center">Jam Pulang (Clock Out)</th>
-                                                            <th width="16%" class="text-center">Mode Presensi</th>
-                                                            <th width="13%" class="text-center">Status</th>
-                                                            <th width="16%" class="text-center">Detail</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @php $dno = 1; @endphp
-                                                        @foreach($emp['grouped_logs'] as $log)
-                                                        <tr>
-                                                            <td class="text-center font-weight-bold">{{ $dno++ }}</td>
-                                                            <td>
-                                                                <span class="font-weight-bold text-gray-900 d-block">{{ $log['formatted_date'] }}</span>
-                                                                <small class="text-muted">{{ $log['day_name'] }}</small>
-                                                            </td>
-                                                            <td class="text-center">
-                                                                @if($log['clock_in'])
-                                                                    <span class="badge badge-success px-3 py-2 font-weight-bold" style="font-size: 0.85rem;">
-                                                                        <i class="fas fa-sign-in-alt mr-1"></i> {{ $log['clock_in'] }}
-                                                                    </span>
-                                                                @else
-                                                                    <span class="badge badge-light border text-muted px-2 py-1">Belum Melakukan Scan</span>
-                                                                @endif
-                                                            </td>
-                                                            <td class="text-center">
-                                                                @if($log['clock_out'])
-                                                                    <span class="badge badge-warning px-3 py-2 font-weight-bold text-dark" style="font-size: 0.85rem;">
-                                                                        <i class="fas fa-sign-out-alt mr-1"></i> {{ $log['clock_out'] }}
-                                                                    </span>
-                                                                @else
-                                                                    <span class="badge badge-light border text-muted px-2 py-1">Belum Melakukan Scan</span>
-                                                                @endif
-                                                            </td>
-                                                            <td class="text-center">
-                                                                @foreach($log['modes'] as $mode)
-                                                                    <span class="badge badge-{{ $mode == 'Wajah' ? 'primary' : 'info' }} px-2 py-1 mr-1">
-                                                                        <i class="fas {{ $mode == 'Wajah' ? 'fa-user-check' : 'fa-fingerprint' }} mr-1"></i> {{ $mode }}
-                                                                    </span>
-                                                                @endforeach
-                                                            </td>
-                                                            <td class="text-center">
-                                                                @if($log['clock_in'] && $log['clock_out'])
-                                                                    <span class="badge badge-success px-2 py-1"><i class="fas fa-check-double mr-1"></i> Lengkap</span>
-                                                                @elseif($log['clock_in'])
-                                                                    <span class="badge badge-info px-2 py-1"><i class="fas fa-sign-in-alt mr-1"></i> Clock In Saja</span>
-                                                                @else
-                                                                    <span class="badge badge-warning px-2 py-1"><i class="fas fa-sign-out-alt mr-1"></i> Clock Out Saja</span>
-                                                                @endif
-                                                            </td>
-                                                            <td class="text-center">
-                                                                @if(!empty($emp['face_details']))
-                                                                    <button type="button" class="btn btn-sm btn-primary rounded-pill shadow-sm px-3"
-                                                                            data-toggle="modal" data-target="#modalFaceDetail"
-                                                                            data-npk="{{ $emp['npk'] }}"
-                                                                            data-emp-name="{{ $emp['name'] }}"
-                                                                            data-date="{{ $log['date'] }}"
-                                                                            data-date-label="{{ $log['formatted_date'] }} ({{ $log['day_name'] }})">
-                                                                        <i class="fas fa-map-marker-alt mr-1"></i> Lihat
-                                                                    </button>
-                                                                @else
-                                                                    <span class="text-muted small">-</span>
-                                                                @endif
-                                                            </td>
-                                                        </tr>
-                                                        @endforeach
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </td>
-                                        {{-- 8 sel collapsed: menjaga jumlah node <td> = 9 kolom
-                                             agar DataTables tidak memunculkan warning
-                                             "Incorrect column count". --}}
-                                        @for($c = 1; $c < 9; $c++)
-                                        <td style="padding:0;border:0;"></td>
-                                        @endfor
                                     </tr>
                                     @empty
                                     {{-- DataTables 1.13 menghitung sel per baris lewat td.nextSibling,
