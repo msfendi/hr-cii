@@ -1227,9 +1227,6 @@
             </div>{{-- /container-fluid --}}
         </div>{{-- /content --}}
 
-        <!-- SweetAlert2 harus dimuat SEBELUM footer (jQuery) agar Swal tersedia di $(function(){}) -->
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
         @include('layout.footer')
     </div>{{-- /content-wrapper --}}
 </div>{{-- /wrapper --}}
@@ -1268,6 +1265,9 @@
 .card { transition: box-shadow 0.2s; }
 .btn-xs { padding: 2px 7px; font-size: 11px; }
 </style>
+
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
 $(function () {

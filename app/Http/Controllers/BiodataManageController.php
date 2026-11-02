@@ -131,29 +131,59 @@ class BiodataManageController extends Controller
             ->get();
         $activeContract = $contracts->firstWhere('status_contract', 'AKTIF');
 
-        // Soft files
+        // Soft files — key = short name (tanpa prefix 'file_'), field = nama kolom PKWT
+        $fileMap = [
+            'surat_lamaran'  => 'file_surat_lamaran',
+            'cv'             => 'file_cv',
+            'ktp'            => 'file_ktp',
+            'kk'             => 'file_kk',
+            'ijazah'         => 'file_ijazah',
+            'akta_kelahiran' => 'file_akta_kelahiran',
+            'skck'           => 'file_skck',
+            'surat_sehat'    => 'file_surat_sehat',
+            'pas_foto'       => 'file_pas_foto',
+        ];
+
         $fileLabels = [
-            'file_surat_lamaran'  => 'Surat Lamaran',
-            'file_cv'             => 'Curriculum Vitae (CV)',
-            'file_ktp'            => 'KTP / Identitas',
-            'file_kk'             => 'Kartu Keluarga (KK)',
-            'file_ijazah'         => 'Ijazah Terakhir',
-            'file_akta_kelahiran' => 'Akta Kelahiran',
-            'file_skck'           => 'SKCK Kepolisian',
-            'file_surat_sehat'    => 'Surat Keterangan Sehat',
-            'file_pas_foto'       => 'Pas Foto Berkas',
+            'surat_lamaran'  => 'Surat Lamaran',
+            'cv'             => 'Curriculum Vitae (CV)',
+            'ktp'            => 'KTP / Identitas',
+            'kk'             => 'Kartu Keluarga (KK)',
+            'ijazah'         => 'Ijazah Terakhir',
+            'akta_kelahiran' => 'Akta Kelahiran',
+            'skck'           => 'SKCK Kepolisian',
+            'surat_sehat'    => 'Surat Keterangan Sehat',
+            'pas_foto'       => 'Pas Foto Berkas',
         ];
 
         $softFiles = [];
-        foreach ($fileLabels as $field => $label) {
-            $path = $pkwt->$field ?? null;
-            $hasFile = !empty($path) && Storage::disk('public')->exists($path);
-            $softFiles[$field] = [
+        foreach ($fileMap as $shortKey => $field) {
+            $path    = $pkwt->$field ?? null;
+            $path    = $path ? trim($path) : null;
+            // Cek file: jika path berisi 'employees/' kemungkinan tersimpan di disk public
+            // Jika path diawali 'public/' (legacy) strip dulu
+            $storagePath = $path;
+            if ($path && str_starts_with($path, 'public/')) {
+                $storagePath = substr($path, 7); // strip 'public/'
+            }
+            $hasFile = !empty($storagePath) && Storage::disk('public')->exists($storagePath);
+            // Fallback: cek physical file di storage/app/public
+            if (!$hasFile && !empty($storagePath)) {
+                $hasFile = file_exists(storage_path('app/public/' . $storagePath));
+            }
+            $url = null;
+            if ($hasFile) {
+                $url = asset('storage/' . $storagePath);
+            } elseif (!empty($path)) {
+                // Path ada tapi file tidak ketemu — tetap tampilkan link apa adanya
+                $url = asset('storage/' . ltrim($path, '/'));
+            }
+            $softFiles[$shortKey] = [
                 'field'   => $field,
-                'label'   => $label,
+                'label'   => $fileLabels[$shortKey],
                 'path'    => $path,
-                'hasFile' => $hasFile,
-                'url'     => $hasFile ? asset('storage/' . $path) : null,
+                'hasFile' => $hasFile || (!empty($path)), // ada path = anggap ada file
+                'url'     => $url,
                 'ext'     => $path ? strtolower(pathinfo($path, PATHINFO_EXTENSION)) : '',
             ];
         }
