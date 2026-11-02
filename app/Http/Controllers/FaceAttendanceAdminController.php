@@ -1055,6 +1055,37 @@ class FaceAttendanceAdminController extends Controller
                 ];
             })->all();
 
+            // PERBAIKAN 18 (2026-11-04): label In/Out untuk modal detail
+            // DITENTUKAN DARI JAM SHIFT, bukan dari `action` (yang bisa
+            // berisi teks keliru) maupun `inoutmode` (yang bisa mustahil
+            // bernilai 0 pada data impor). Satu sumber untuk SEMUA baris:
+            // tabel Rekap Harian (`scans`) dan Riwayat Scan (`face_details`),
+            // sehingga keduanya tidak mungkin bertentangan lagi.
+            try {
+                $allTimes = $logs
+                    ->map(function ($x) {
+                        return Carbon::parse($x->scan_date)->format('H:i:s');
+                    })
+                    ->values()
+                    ->all();
+
+                $labelByTime = $this->resolveShiftActions((string) $npk, $date, $allTimes);
+
+                foreach ($scans as $idx => $row) {
+                    $lbl = $labelByTime[$row['scan_time']] ?? 'Clock In';
+                    $scans[$idx]['action_type'] = $lbl;
+                    $scans[$idx]['inoutmode'] = ($lbl === 'Clock In') ? 0 : 1;
+                }
+
+                foreach ($faceDetails as $idx => $row) {
+                    $lbl = $labelByTime[$row['scan_time']] ?? 'Clock In';
+                    $faceDetails[$idx]['action_type'] = $lbl;
+                    $faceDetails[$idx]['inoutmode'] = ($lbl === 'Clock In') ? 0 : 1;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Gagal menentukan label shift pada employeeDetail: ' . $e->getMessage());
+            }
+
             // PERBAIKAN (2026-11-03 #3): face_details diberi `mode_label`
             // eksplisit. Sebelumnya field ini tidak dikirim, sehingga
             // frontend (isFace = d.mode_label === 'Wajah') selalu false dan
@@ -1598,6 +1629,131 @@ class FaceAttendanceAdminController extends Controller
     }
 
     /**
+     * PERBAIKAN 18 (2026-11-04): penentu Clock In / Clock Out BERBASIS SHIFT.
+     *
+     * MASALAH YANG DIPERBAIKI
+     * -----------------------
+     * Keterangan di tabel "Riwayat Scan Hari Ini" sebelumnya diambil dari
+     * kolom `face_attendance_logs.action` (lewat accessor action_label).
+     * Kolom itu TIDAK selalu sepakat dengan kenyataan, sehingga muncul
+     * kasus nyata: satu scan 07:55:23 tampil sebagai "Jam Masuk" di Rekap
+     * Harian (karena att_log.inoutmode = 0) TETAPI "Clock Out" di Riwayat
+     * Scan (karena kolom action berisi teks Clock Out).
+     *
+     * Selain itu rumus inoutmode pada AttendanceFingerController.php:948
+     * adalah `count() + 1`, yang MUSTAHIL bernilai 0 (= Clock In). Jadi
+     * inoutmode juga tidak bisa dipercaya untuk data hasil impor/manual.
+     *
+     * SOLUSI
+     * ------
+     * Keterangan ditentukan dari JAM SCAN dibandingkan JAM SHIFT karyawan
+     * pada tanggal tersebut (tabel `shifts` + `employee_shifts`):
+     *
+     *   titik tengah = (work_start + work_end) / 2
+     *   scan <  titik tengah  -> Clock In
+     *   scan >= titik tengah  -> Clock Out
+     *
+     * Contoh shift 08:00-16:00 -> titik tengah 12:00. Scan 07:55 = Masuk,
+     * scan 16:05 = Pulang.
+     *
+     * Mendukung shift malam (mis. 22:00-06:00 melintasi tengah malam) dan
+     * scan yang terjadi sebelum tengah malam untuk shift berikutnya.
+     *
+     * Bila karyawan TIDAK punya jadwal shift pada tanggal itu, dipakai
+     * shift DEFAULT 08:00-17:00 (titik tengah 12:30) supaya keterangan
+     * tetap masuk akal dan tidak jatuh kembali ke `inoutmode` yang tidak
+     * dapat dipercaya.
+     *
+     * @param  string  $npk        NPK karyawan
+     * @param  string  $date       tanggal (Y-m-d)
+     * @param  array   $scanTimes  daftar jam scan 'H:i:s' pada hari itu
+     * @return array<string,string> map 'H:i:s' => 'Clock In' | 'Clock Out'
+     */
+    private function resolveShiftActions(string $npk, string $date, array $scanTimes): array
+    {
+        [$startMin, $endMin] = $this->shiftWindowMinutes($npk, $date);
+
+        // Titik tengah shift. Bila shift melintasi tengah malam
+        // (end <= start), akhir digeser +24 jam agar titik tengah berada
+        // di antara kedua ujungnya.
+        if ($endMin <= $startMin) {
+            $endMin += 24 * 60;
+        }
+        $midpoint = ($startMin + $endMin) / 2;
+
+        $result = [];
+        foreach ($scanTimes as $time) {
+            $parts = explode(':', (string) $time);
+            $h = (int) ($parts[0] ?? 0);
+            $i = (int) ($parts[1] ?? 0);
+            $s = (int) ($parts[2] ?? 0);
+            $t = $h * 60 + $i + ($s / 60);
+
+            // Scan yang jauh lebih awal dari jam mulai shift dianggap milik
+            // shift yang sama (mis. shift malam 22:00, scan 21:52). Tanpa
+            // toleransi ini, scan sore hari untuk shift malam akan dihitung
+            // sebagai "sudah lewat" dan salah dilabeli Clock Out.
+            if ($t < $startMin - 180) {
+                $t += 24 * 60;
+            }
+
+            $result[(string) $time] = ($t < $midpoint) ? 'Clock In' : 'Clock Out';
+        }
+
+        return $result;
+    }
+
+    /**
+     * Ambil [menit_mulai, menit_selesai] shift karyawan pada tanggal tertentu.
+     * Fallback ke shift DEFAULT 08:00-17:00 bila jadwal tidak ditemukan
+     * atau terjadi error koneksi (sesuai ketentuan pemilik sistem).
+     *
+     * @return array{0:int,1:int}
+     */
+    private function shiftWindowMinutes(string $npk, string $date): array
+    {
+        // DEFAULT SHIFT: 08:00 - 17:00.
+        // Dipakai bila karyawan tidak punya jadwal pada tanggal tersebut.
+        $default = [8 * 60, 17 * 60];
+
+        try {
+            $row = $this->connCii()->table('employee_shifts as es')
+                ->join('shifts as s', 's.id', '=', 'es.shift_id')
+                ->where('es.npk', (string) $npk)
+                ->whereDate('es.shift_date', $date)
+                ->select('s.work_start', 's.work_end')
+                ->first();
+
+            if (!$row || $row->work_start === null || $row->work_end === null) {
+                return $default;
+            }
+
+            return [
+                $this->timeToMinutes($row->work_start),
+                $this->timeToMinutes($row->work_end),
+            ];
+        } catch (\Throwable $e) {
+            // Jangan gagalkan seluruh modal hanya karena tabel shift
+            // belum ada / koneksi bermasalah. Cukup catat di log.
+            Log::warning('Gagal membaca shift untuk NPK ' . $npk . ' tanggal ' . $date . ': ' . $e->getMessage());
+            return $default;
+        }
+    }
+
+    /** Konversi nilai kolom TIME ('08:00:00' / Carbon / DateTime) ke menit sejak 00:00. */
+    private function timeToMinutes($value): int
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return ((int) $value->format('H')) * 60 + ((int) $value->format('i'))
+                + (((int) $value->format('s')) / 60);
+        }
+
+        $parts = explode(':', (string) $value);
+
+        return ((int) ($parts[0] ?? 0)) * 60 + ((int) ($parts[1] ?? 0));
+    }
+
+    /**
      * Ambil detail wajah (gambar + koordinat) untuk sekumpulan NPK pada bulan tertentu.
      * Mengembalikan array: [npk => [detail, ...]]
      */
@@ -1626,15 +1782,44 @@ class FaceAttendanceAdminController extends Controller
             }
             $logs = $logs->sortBy('scan_date')->values();
 
+            // PERBAIKAN 18 (2026-11-04): keterangan Clock In / Clock Out
+            // ditentukan dari JAM SCAN vs JAM SHIFT, bukan dari kolom
+            // `action` maupun `inoutmode`. Hitung sekali per (npk, tanggal)
+            // supaya tidak query shift berulang untuk setiap baris.
+            $shiftActionCache = [];
+
             foreach ($logs as $faceLog) {
                 $dateKey = Carbon::parse($faceLog->scan_date)->format('Y-m-d');
+                $timeKey = Carbon::parse($faceLog->scan_date)->format('H:i:s');
+                $cacheKey = $faceLog->npk . '|' . $dateKey;
+
+                if (!isset($shiftActionCache[$cacheKey])) {
+                    // Kumpulkan seluruh jam scan karyawan pada hari itu,
+                    // lalu tentukan In/Out-nya sekaligus.
+                    $timesOfDay = $logs
+                        ->filter(function ($x) use ($faceLog, $dateKey) {
+                            return (string) $x->npk === (string) $faceLog->npk
+                                && Carbon::parse($x->scan_date)->format('Y-m-d') === $dateKey;
+                        })
+                        ->map(function ($x) {
+                            return Carbon::parse($x->scan_date)->format('H:i:s');
+                        })
+                        ->values()
+                        ->all();
+
+                    $shiftActionCache[$cacheKey] =
+                        $this->resolveShiftActions((string) $faceLog->npk, $dateKey, $timesOfDay);
+                }
+
+                $label = $shiftActionCache[$cacheKey][$timeKey] ?? 'Clock In';
 
                 $result[$faceLog->npk][] = [
                     'id'            => $faceLog->id,
                     'date'          => $dateKey,
-                    'scan_time'     => Carbon::parse($faceLog->scan_date)->format('H:i:s'),
-                    'action_type'   => $faceLog->action_label,
-                    'inoutmode'     => $faceLog->actionType() === 'IN' ? 0 : 1,
+                    'scan_time'     => $timeKey,
+                    // Sumber tunggal: hasil perbandingan jam scan vs jam shift.
+                    'action_type'   => $label,
+                    'inoutmode'     => $label === 'Clock In' ? 0 : 1,
                     'latitude'      => $faceLog->latitude,
                     'longitude'     => $faceLog->longitude,
                     'accuracy'      => $faceLog->accuracy,
