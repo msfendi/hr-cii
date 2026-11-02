@@ -16,6 +16,7 @@ use App\Http\Controllers\PelamarController;
 use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\RecruitmentAiController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
@@ -1546,4 +1547,14 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/sign-in', [FaceAttendanceController::class, 'login'])->name('login');
     Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
+});
+
+Route::prefix('recruitment-ai')->name('recruitment-ai.')->group(function () {
+    Route::get('/', [RecruitmentAiController::class, 'show'])->name('form');
+    Route::post('/upload', [RecruitmentAiController::class, 'upload'])->name('upload');
+    Route::post('/upload/delete', [RecruitmentAiController::class, 'deleteDocument'])->name('upload.delete');
+    Route::post('/extract', [RecruitmentAiController::class, 'extract'])->name('extract');
+    Route::post('/reset-fields', [RecruitmentAiController::class, 'resetFields'])->name('reset-fields');
+    Route::post('/submit', [RecruitmentAiController::class, 'submit'])->name('submit');
+    Route::get('/success', [RecruitmentAiController::class, 'success'])->name('success');
 });
