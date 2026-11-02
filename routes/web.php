@@ -5,9 +5,10 @@ use App\Events\TestEvent;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
-use App\Http\Controllers\FaceAttendanceSettingController;
 use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\FaceAttendanceController;
+use App\Http\Controllers\FaceAttendanceAdminController;
+use App\Http\Controllers\FaceAttendanceSettingController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\PelamarController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
+use App\Http\Controllers\BiodataManageController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\DeptController;
@@ -1477,20 +1479,38 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::get('/', [FaceAttendanceController::class, 'index'])->name('index');
     Route::post('/store', [FaceAttendanceController::class, 'storeAttendance'])->name('store');
     Route::get('/rekap', [FaceAttendanceController::class, 'rekap'])->name('rekap');
+    Route::get('/detail/{date}', [FaceAttendanceController::class, 'detailByDate'])->name('detail');
     Route::post('/logout-session', [FaceAttendanceController::class, 'logoutSession'])->name('logout-session');
 
     // Manage Geo Map & Lokasi Kerja (HRD/Admin)
-    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map')->middleware(['auth', 'permission']);
-    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store')->middleware(['auth', 'permission']);
-    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show')->middleware(['auth', 'permission']);
-    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations')->middleware(['auth', 'permission']);
-    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy')->middleware(['auth', 'permission']);
+    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map');
+    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store');
+    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
+    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
+    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
 
     // Pengaturan Window Presensi & Izin Akses Karyawan
-    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index')->middleware(['auth', 'permission']);
-    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window')->middleware(['auth', 'permission']);
-    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee')->middleware(['auth', 'permission']);
+    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index');
+    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
+    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
 });
+
+// ========================================
+// FACE ATTENDANCE - ADMIN (rekap semua karyawan)
+// ========================================
+Route::prefix('face-attendance/admin')
+    ->name('face.attendance.admin.')
+    ->middleware(['auth', 'permission'])
+    ->group(function () {
+        // Rekap presensi WAJAH + FINGERPRINT semua karyawan
+        Route::get('/summary', [FaceAttendanceAdminController::class, 'index'])->name('index');
+        Route::get('/export', [FaceAttendanceAdminController::class, 'export'])->name('export');
+        Route::get('/detail/{npk}/{date}', [FaceAttendanceAdminController::class, 'employeeDetail'])->name('detail');
+
+        // Pengaturan card menu HRIS (show/hide)
+        Route::get('/card-menu', [FaceAttendanceAdminController::class, 'cardMenuSettings'])->name('card-menu');
+        Route::post('/card-menu', [FaceAttendanceAdminController::class, 'updateCardMenu'])->name('card-menu.update');
+    });
 
 // Alias nama rute format hyphen (face-attendance.*) untuk kecocokan menu database
 Route::name('face-attendance.')->group(function () {
@@ -1499,3 +1519,9 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
 });
+
+// BIODATA MANAGE (Halaman Terpadu Show, Update, dan Exit)
+    Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
+    Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
+    Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
+    Route::get('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
