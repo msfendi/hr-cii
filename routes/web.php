@@ -200,7 +200,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
     Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
     Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
-    Route::get('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
+    Route::post('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
 
 
 
@@ -1502,6 +1502,23 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
 });
 
 // ========================================
+// PENGATURAN CARD MENU HRIS (di luar prefix face-attendance)
+// ========================================
+// Permintaan user 2026-11-03: Pengaturan Card Menu HRIS dikeluarkan dari
+// prefix route `face-attendance`. URL baru:
+//     GET  /pengaturan/card-menu-hris
+//     POST /pengaturan/card-menu-hris
+//
+// Route lama (/face-attendance/admin/card-menu) TETAP ADA sebagai redirect
+// agar bookmark/link lama tidak rusak.
+Route::middleware(['auth', 'permission'])->group(function () {
+    Route::get('/pengaturan/card-menu-hris', [FaceAttendanceAdminController::class, 'cardMenuSettings'])
+        ->name('card-menu-hris.index');
+    Route::post('/pengaturan/card-menu-hris', [FaceAttendanceAdminController::class, 'updateCardMenu'])
+        ->name('card-menu-hris.update');
+});
+
+// ========================================
 // FACE ATTENDANCE - ADMIN (rekap semua karyawan)
 // ========================================
 Route::prefix('face-attendance/admin')
@@ -1514,7 +1531,12 @@ Route::prefix('face-attendance/admin')
         Route::get('/detail/{npk}/{date}', [FaceAttendanceAdminController::class, 'employeeDetail'])->name('detail');
 
         // Pengaturan card menu HRIS (show/hide)
-        Route::get('/card-menu', [FaceAttendanceAdminController::class, 'cardMenuSettings'])->name('card-menu');
+        // PERBAIKAN 2026-11-03: URL utama sudah dipindah ke
+        // /pengaturan/card-menu-hris (lihat route di atas). Route di bawah ini
+        // hanya REDIRECT agar link lama tetap jalan.
+        Route::get('/card-menu', function () {
+            return redirect()->route('card-menu-hris.index');
+        })->name('card-menu');
         Route::post('/card-menu', [FaceAttendanceAdminController::class, 'updateCardMenu'])->name('card-menu.update');
     });
 
@@ -1525,10 +1547,3 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
 });
-
-
-// BIODATA MANAGE (Halaman Terpadu Show, Update, dan Exit)
-Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
-Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
-Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
-Route::post('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
