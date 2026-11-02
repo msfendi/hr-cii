@@ -1160,10 +1160,9 @@
                                             <label class="small font-weight-bold">Status Keluar <span class="text-danger">*</span></label>
                                             <select class="form-control" id="exitStatus">
                                                 <option value="">-- Pilih Status Keluar --</option>
-                                                <option value="HABIS">HABIS KONTRAK</option>
-                                                <option value="PENGUNDURAN DIRI">PENGUNDURAN DIRI</option>
-                                                <option value="DIPUTUS">DIPUTUS</option>
-                                                <option value="MENINGGAL">MENINGGAL</option>
+                                                <option value="SPD">RESIGN</option>
+                                                <option value="HK">HABIS KONTRAK</option>
+                                                <option value="MA">MANGKIR</option>
                                             </select>
                                         </div>
                                         <div class="mb-4">
