@@ -53,7 +53,7 @@
                                            title="Ganti Foto Profil">
                                         <i class="fas fa-camera" style="font-size: 11px;"></i>
                                     </label>
-                                    <form id="photoUploadForm" action="/biodata/manage/update-photo/{{ $pkwt->NPK }}" method="POST" enctype="multipart/form-data" class="d-none">
+                                    <form id="photoUploadForm" action="/biodata/manage/update-photo/{{ trim($pkwt->NPK) }}" method="POST" enctype="multipart/form-data" class="d-none">
                                         @csrf
                                         <input type="file" id="heroPhotoInput" name="foto_profil" accept="image/*">
                                     </form>
@@ -533,7 +533,7 @@
                                 </h6>
                             </div>
                             <div class="card-body">
-                                <form id="manageEditForm" action="/biodata/manage/update/{{ $pkwt->NPK }}" method="POST" enctype="multipart/form-data">
+                                <form id="manageEditForm" action="/biodata/manage/update/{{ trim($pkwt->NPK) }}" method="POST" enctype="multipart/form-data">
                                     @csrf
                                     <input type="hidden" name="from_manage" value="1">
 
@@ -1040,7 +1040,7 @@
                                     <hr class="mt-4">
                                     <div class="d-flex justify-content-end" style="gap:8px;">
                                         <a href="/biodata/index" class="btn btn-outline-secondary">Batal</a>
-                                        <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                                        <button type="submit" id="btnManageSave" class="btn btn-primary px-4 shadow-sm">
                                             <i class="fas fa-save mr-1"></i> Simpan Perubahan
                                         </button>
                                     </div>
@@ -1160,16 +1160,57 @@
                                             <label class="small font-weight-bold">Status Keluar <span class="text-danger">*</span></label>
                                             <select class="form-control" id="exitStatus">
                                                 <option value="">-- Pilih Status Keluar --</option>
-                                                <option value="SPD">RESIGN</option>
-                                                <option value="HK">HABIS KONTRAK</option>
-                                                <option value="MA">MANGKIR</option>
+                                                <option value="SPD">Resign</option>
+                                                <option value="HK">Habis Kontrak</option>
+                                                <option value="MA">Mangkir</option>
                                             </select>
                                         </div>
                                         <div class="mb-4">
                                             <label class="small font-weight-bold">Alasan / Catatan Keluar</label>
                                             <textarea class="form-control" id="exitAlasan" rows="3" placeholder="Keterangan tambahan alasan karyawan keluar..."></textarea>
                                         </div>
-                                        <div class="d-flex justify-content-end" style="gap:8px;">
+
+                                        {{-- ── Resign-only section ────────────────────────── --}}
+                                        <div id="resignSection" class="d-none">
+                                            <hr class="my-3">
+                                            <div class="alert border-0 d-flex align-items-start mb-3" style="background:#fff0f0;border-left:4px solid #e74a3b !important;border-radius:8px;">
+                                                <i class="fas fa-file-contract text-danger mt-1 mr-2" style="font-size:16px;"></i>
+                                                <div>
+                                                    <div class="font-weight-bold text-danger" style="font-size:12.5px;">Dokumen Resign</div>
+                                                    <div class="text-muted" style="font-size:12px;">Upload penalty letter dan konfirmasi penandatanganan agreement hanya muncul untuk status <strong>Resign</strong>.</div>
+                                                </div>
+                                            </div>
+
+                                            {{-- Upload Penalty Letter --}}
+                                            <div class="mb-3">
+                                                <label class="small font-weight-bold">
+                                                    <i class="fas fa-file-pdf text-danger mr-1"></i>
+                                                    Penalty Letter <span class="text-muted font-weight-normal">(opsional)</span>
+                                                </label>
+                                                <div class="custom-file">
+                                                    <input type="file" class="custom-file-input" id="exitPenaltyLetter" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                                                    <label class="custom-file-label" for="exitPenaltyLetter" id="exitPenaltyLabelText">Pilih file penalty letter...</label>
+                                                </div>
+                                                <small class="text-muted">Format: PDF, Word, atau gambar. Maks. 5 MB.</small>
+                                            </div>
+
+                                            {{-- Toggle Agreement Signed --}}
+                                            <div class="mb-3">
+                                                <label class="small font-weight-bold d-block">
+                                                    <i class="fas fa-handshake mr-1 text-secondary"></i>
+                                                    Penandatanganan Agreement
+                                                </label>
+                                                <div class="custom-control custom-switch mt-1">
+                                                    <input type="checkbox" class="custom-control-input" id="exitAgreementSigned">
+                                                    <label class="custom-control-label" for="exitAgreementSigned">
+                                                        Karyawan telah menandatangani <strong>resignation agreement</strong>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {{-- /resign section --}}
+
+                                        <div class="d-flex justify-content-end mt-3" style="gap:8px;">
                                             <a href="/biodata/index" class="btn btn-outline-secondary">Batal</a>
                                             <button type="button" id="btnExitSubmit" class="btn btn-danger px-4 shadow-sm">
                                                 <i class="fas fa-sign-out-alt mr-1"></i> Proses Exit
@@ -1185,6 +1226,9 @@
 
             </div>{{-- /container-fluid --}}
         </div>{{-- /content --}}
+
+        <!-- SweetAlert2 harus dimuat SEBELUM footer (jQuery) agar Swal tersedia di $(function(){}) -->
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
         @include('layout.footer')
     </div>{{-- /content-wrapper --}}
@@ -1377,56 +1421,142 @@ $(function () {
         $('#anakTbody').append(row);
     });
 
+    // ── Form Update Submit Feedback ───────────────────────────
+    $('#manageEditForm').on('submit', function () {
+        var $btn = $('#btnManageSave');
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...');
+    });
+
     // ── Exit Karyawan Submission ────────────────────────────────
+
+    // Toggle resign section berdasarkan pilihan status
+    $('#exitStatus').on('change', function () {
+        if ($(this).val() === 'SPD') {
+            $('#resignSection').removeClass('d-none').hide().slideDown(250);
+        } else {
+            $('#resignSection').slideUp(200, function () { $(this).addClass('d-none'); });
+            // Reset fields resign saat ganti status
+            $('#exitPenaltyLetter').val('');
+            $('#exitPenaltyLabelText').text('Pilih file penalty letter...');
+            $('#exitAgreementSigned').prop('checked', false);
+        }
+    });
+
+    // Update label custom-file saat file dipilih
+    $('#exitPenaltyLetter').on('change', function () {
+        var fn = this.files && this.files.length ? this.files[0].name : 'Pilih file penalty letter...';
+        $('#exitPenaltyLabelText').text(fn);
+    });
+
     $('#btnExitSubmit').on('click', function () {
         var tkk    = $('#exitTkk').val();
         var status = $('#exitStatus').val();
         var alasan = $('#exitAlasan').val();
 
         if (!tkk) {
-            Swal.fire({ icon: 'warning', title: 'Perhatian', text: 'Tanggal keluar (TKK) wajib diisi!' });
+            if (window.Swal) {
+                Swal.fire({ icon: 'warning', title: 'Perhatian', text: 'Tanggal keluar (TKK) wajib diisi!' });
+            } else {
+                alert('Perhatian: Tanggal keluar (TKK) wajib diisi!');
+            }
             return;
         }
         if (!status) {
-            Swal.fire({ icon: 'warning', title: 'Perhatian', text: 'Status keluar wajib dipilih!' });
+            if (window.Swal) {
+                Swal.fire({ icon: 'warning', title: 'Perhatian', text: 'Status keluar wajib dipilih!' });
+            } else {
+                alert('Perhatian: Status keluar wajib dipilih!');
+            }
             return;
         }
 
-        Swal.fire({
-            title: 'Konfirmasi Exit Karyawan',
-            html: `Apakah Anda yakin memproses exit untuk <strong>{{ $pkwt->NAMA }}</strong> (NPK: {{ $pkwt->NPK }})?<br><small class="text-muted">Tindakan ini akan menonaktifkan karyawan.</small>`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#e74a3b',
-            cancelButtonColor: '#858796',
-            confirmButtonText: 'Ya, Proses Exit',
-            cancelButtonText: 'Batal'
-        }).then(function (result) {
-            if (!result.isConfirmed) return;
+        var doSubmit = function () {
+            var $btn = $('#btnExitSubmit');
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Memproses...');
 
-            $('#btnExitSubmit').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Memproses...');
+            var npk = encodeURIComponent('{{ trim($pkwt->NPK) }}');
+
+            // Pakai FormData agar bisa upload file penalty letter
+            var fd = new FormData();
+            fd.append('_token', $('meta[name="csrf-token"]').attr('content'));
+            fd.append('tkk', tkk);
+            fd.append('status_keluar', status);
+            fd.append('leave_reasons', alasan);
+
+            // Resign-only fields
+            if (status === 'SPD') {
+                var penaltyFile = $('#exitPenaltyLetter')[0].files;
+                if (penaltyFile && penaltyFile.length) {
+                    fd.append('file_penalty_letter', penaltyFile[0]);
+                }
+                fd.append('is_agreement_signed', $('#exitAgreementSigned').is(':checked') ? '1' : '0');
+            }
 
             $.ajax({
-                url: '/biodata/manage/exit/{{ $pkwt->NPK }}',
-                method: 'GET',
-                data: { tkk: tkk, status_keluar: status, leave_reasons: alasan },
+                url: '/biodata/manage/exit/' + npk,
+                method: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false,
                 success: function (res) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Berhasil!',
-                        text: 'Karyawan telah berhasil di-exit.',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(function () {
-                        window.location.href = '/biodata/index';
-                    });
+                    var isSuccess = (res && res.status === 'success') || (res && res.original && res.original.status === 'success');
+                    if (isSuccess) {
+                        if (window.Swal) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Berhasil!',
+                                text: res.message || 'Karyawan telah berhasil di-exit.',
+                                timer: 1800,
+                                showConfirmButton: false
+                            }).then(function () {
+                                window.location.href = '/biodata/index';
+                            });
+                        } else {
+                            alert('Karyawan telah berhasil di-exit.');
+                            window.location.href = '/biodata/index';
+                        }
+                    } else {
+                        var errMsg = (res && res.message) ? res.message : 'Terjadi kesalahan.';
+                        if (window.Swal) {
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: errMsg });
+                        } else {
+                            alert('Gagal: ' + errMsg);
+                        }
+                        $btn.prop('disabled', false).html('<i class="fas fa-sign-out-alt mr-1"></i> Proses Exit');
+                    }
                 },
                 error: function (xhr) {
-                    $('#btnExitSubmit').prop('disabled', false).html('<i class="fas fa-sign-out-alt mr-1"></i> Proses Exit');
-                    Swal.fire({ icon: 'error', title: 'Gagal', text: xhr.responseJSON?.message || 'Terjadi kesalahan saat memproses exit.' });
+                    $btn.prop('disabled', false).html('<i class="fas fa-sign-out-alt mr-1"></i> Proses Exit');
+                    var errMsg = xhr.responseJSON?.message || 'Terjadi kesalahan saat memproses exit.';
+                    if (window.Swal) {
+                        Swal.fire({ icon: 'error', title: 'Gagal', text: errMsg });
+                    } else {
+                        alert('Gagal: ' + errMsg);
+                    }
                 }
             });
-        });
+        };
+
+        if (window.Swal) {
+            Swal.fire({
+                title: 'Konfirmasi Exit Karyawan',
+                html: `Apakah Anda yakin memproses exit untuk <strong>{{ $pkwt->NAMA }}</strong> (NPK: {{ $pkwt->NPK }})?<br><small class="text-muted">Tindakan ini akan menonaktifkan status karyawan.</small>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e74a3b',
+                cancelButtonColor: '#858796',
+                confirmButtonText: 'Ya, Proses Exit',
+                cancelButtonText: 'Batal'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    doSubmit();
+                }
+            });
+        } else {
+            if (confirm('Apakah Anda yakin memproses exit untuk {{ $pkwt->NAMA }} (NPK: {{ $pkwt->NPK }})?')) {
+                doSubmit();
+            }
+        }
     });
 
     // ── Deep-link query param ?tab=edit|exit|dokumen ────────────

@@ -235,17 +235,39 @@ class BiodataManageController extends Controller
     {
         try {
             DB::connection('cii')->beginTransaction();
+            $NPK = trim($NPK);
 
             $dept = DB::connection('cii')->table('DEPT')->where('ID_DEPT', $request->id_dept)->first();
             $oldIdDept = DB::connection('cii')->table('BIODATA')->select('ID_DEPT')->where('NPK', $NPK)->first();
+            $oldDeptName = null;
+            if ($oldIdDept && !empty($oldIdDept->ID_DEPT)) {
+                $oldDeptName = DB::connection('cii')->table('DEPT')->where('ID_DEPT', $oldIdDept->ID_DEPT)->value('DEPARTEMENT');
+            }
+            $oldDeptName = trim($oldDeptName ?? '');
+            $newDeptName = trim($dept->DEPARTEMENT ?? '');
 
             // Pindahkan folder foto profil jika departemen berubah
-            $oldDept = trim($dept->DEPARTEMENT ?? '');
-            $oldPath = 'public/img/profile/' . $oldDept . '/' . $NPK . '_' . strtoupper($request->nama) . '.jpg';
-            $newPath = 'public/img/profile/' . trim($dept->DEPARTEMENT ?? '') . '/' . $NPK . '_' . strtoupper($request->nama) . '.jpg';
+            if ($oldDeptName && $newDeptName && $oldDeptName !== $newDeptName) {
+                $oldPath = 'public/img/profile/' . $oldDeptName . '/' . $NPK . '_' . strtoupper($request->nama) . '.jpg';
+                $newPath = 'public/img/profile/' . $newDeptName . '/' . $NPK . '_' . strtoupper($request->nama) . '.jpg';
+                if (Storage::exists($oldPath)) {
+                    Storage::move($oldPath, $newPath);
+                }
+            }
 
-            if (Storage::exists($oldPath) && $oldPath !== $newPath) {
-                Storage::move($oldPath, $newPath);
+            // Upload foto profil jika disertakan dalam formulir
+            if ($request->hasFile('foto_profil')) {
+                $photoFile = $request->file('foto_profil');
+                $targetDept = $newDeptName ?: 'DEFAULT';
+                $photoName = $NPK . '_' . trim($request->nama) . '.jpg';
+                $photoDir = 'public/img/profile/' . $targetDept;
+                if (!Storage::exists($photoDir)) {
+                    Storage::makeDirectory($photoDir);
+                }
+                if (Storage::exists($photoDir . '/' . $photoName)) {
+                    Storage::delete($photoDir . '/' . $photoName);
+                }
+                $photoFile->storeAs($photoDir, $photoName);
             }
 
             // 1. Update BIODATA
@@ -257,32 +279,43 @@ class BiodataManageController extends Controller
                 'SECTION'       => strtoupper($request->section),
             ]);
 
-            // Hitung umur
-            $tgl_lahir = Carbon::parse($request->tgl_lahir);
-            $diff = $tgl_lahir->diff($request->tmk);
-            $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
+            // Hitung umur secara aman (tidak crash jika tgl_lahir atau tmk kosong)
+            $umur_string = null;
+            if (!empty($request->tgl_lahir)) {
+                try {
+                    $tgl_lahir = Carbon::parse($request->tgl_lahir);
+                    $referenceDate = !empty($request->tmk) ? Carbon::parse($request->tmk) : now();
+                    $diff = $tgl_lahir->diff($referenceDate);
+                    $umur_string = $diff->y . ' Tahun ' . $diff->m . ' Bulan ' . $diff->d . ' Hari';
+                } catch (\Exception $e) {
+                    $umur_string = null;
+                }
+            }
 
             // 2. Update PKWT (nama_sekolah dihapus sesuai permintaan)
             $pkwtUpdateData = [
                 'NAMA'       => strtoupper($request->nama),
                 'JK'         => strtoupper($request->jk),
-                'TGLLAHIR'   => $request->tgl_lahir,
-                'TMPTLAHIR'  => strtoupper($request->tempat_lahir),
-                'PDDK'       => strtoupper($request->pendidikan),
-                'AGAMA'      => strtoupper($request->agama),
-                'TMK'        => $request->tmk,
-                'USIA'       => $umur_string,
-                'BAGIAN'     => strtoupper($dept->DEPARTEMENT ?? ''),
-                'ALAMAT'     => strtoupper($request->alamat),
-                'KABUPATEN'  => strtoupper($request->kabupaten),
+                'TGLLAHIR'   => $request->tgl_lahir ?: null,
+                'TMPTLAHIR'  => strtoupper($request->tempat_lahir ?? ''),
+                'PDDK'       => strtoupper($request->pendidikan ?? ''),
+                'AGAMA'      => strtoupper($request->agama ?? ''),
+                'TMK'        => $request->tmk ?: null,
+                'BAGIAN'     => strtoupper($newDeptName),
+                'ALAMAT'     => strtoupper($request->alamat ?? ''),
+                'KABUPATEN'  => strtoupper($request->kabupaten ?? ''),
                 'KTP'        => $request->nik,
                 'NO_KK'      => $request->nkk,
-                'IBU'        => strtoupper($request->ibu),
+                'IBU'        => strtoupper($request->ibu ?? ''),
                 'HP'         => $request->hp,
                 'STATUS'     => $request->status,
                 'TANGGUNGAN' => $request->tanggungan,
-                'JURUSAN'    => strtoupper($request->jurusan),
+                'JURUSAN'    => strtoupper($request->jurusan ?? ''),
             ];
+
+            if ($umur_string) {
+                $pkwtUpdateData['USIA'] = $umur_string;
+            }
 
             // Upload Berkas Dokumen
             $fileFieldMap = [
@@ -460,37 +493,53 @@ class BiodataManageController extends Controller
     {
         try {
             DB::connection('cii')->beginTransaction();
+            $NPK = trim($NPK);
             $biodata = DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->first();
             $pkwt = DB::connection('cii')->table('PKWT')->where('NPK', $NPK)->first();
 
-            if (!$biodata) {
+            if (!$biodata && !$pkwt) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Data Biodata tidak ditemukan'
+                    'message' => 'Data Biodata / PKWT tidak ditemukan untuk NPK ' . $NPK
                 ], 404);
             }
 
-            DB::connection('cii')->table('BIODATA_KELUAR')->insert([
-                'NPK'           => $biodata->NPK,
-                'NAMA_KARYAWAN' => $biodata->NAMA_KARYAWAN,
-                'ID_DEPT'       => $biodata->ID_DEPT,
-                'JENIS_KEL'     => $biodata->JENIS_KEL,
-                'BARCODE'       => $biodata->BARCODE,
-                'SECTION'       => $biodata->SECTION,
-                'STATUS'        => $biodata->STATUS,
-                'IS_STAFF'      => $biodata->IS_STAFF,
-            ]);
+            if ($biodata) {
+                DB::connection('cii')->table('BIODATA_KELUAR')->insert([
+                    'NPK'           => $biodata->NPK,
+                    'NAMA_KARYAWAN' => $biodata->NAMA_KARYAWAN,
+                    'ID_DEPT'       => $biodata->ID_DEPT,
+                    'JENIS_KEL'     => $biodata->JENIS_KEL,
+                    'BARCODE'       => $biodata->BARCODE,
+                    'SECTION'       => $biodata->SECTION,
+                    'STATUS'        => $biodata->STATUS,
+                    'IS_STAFF'      => $biodata->IS_STAFF,
+                ]);
 
-            DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();
+                DB::connection('cii')->table('BIODATA')->where('NPK', $NPK)->delete();
+            }
 
             if ($pkwt) {
+                $pkwtUpdate = [
+                    'TKK'           => $request->tkk,
+                    'KETERANGAN'    => $request->status_keluar,
+                    'leave_reasons' => $request->leave_reasons,
+                ];
+
+                // Resign-only: penalty letter & agreement flag
+                if ($request->status_keluar === 'SPD') {
+                    if ($request->hasFile('file_penalty_letter')) {
+                        $penaltyFile = $request->file('file_penalty_letter');
+                        $penaltyName = $NPK . '_PENALTY_LETTER_' . now()->format('Ymd') . '.' . $penaltyFile->getClientOriginalExtension();
+                        $penaltyFile->storeAs('employees/penalty_letters', $penaltyName, 'public');
+                        $pkwtUpdate['file_penalty_letter'] = 'employees/penalty_letters/' . $penaltyName;
+                    }
+                    $pkwtUpdate['is_agreement_signed'] = $request->is_agreement_signed ? 1 : 0;
+                }
+
                 DB::connection('cii')->table('PKWT')
                     ->where('NPK', $NPK)
-                    ->update([
-                        'TKK'           => $request->tkk,
-                        'KETERANGAN'    => $request->status_keluar,
-                        'leave_reasons' => $request->leave_reasons,
-                    ]);
+                    ->update($pkwtUpdate);
             }
 
             // Update employees_contract status berdasarkan TKK vs end_date
@@ -503,8 +552,8 @@ class BiodataManageController extends Controller
                     ->first();
 
                 if ($activeContract) {
-                    $endDate = \Carbon\Carbon::parse($activeContract->end_date)->toDateString();
-                    $newStatus = ($tkkDate >= $endDate) ? 'HABIS' : 'DIAKHIRI';
+                    $endDate = !empty($activeContract->end_date) ? \Carbon\Carbon::parse($activeContract->end_date)->toDateString() : null;
+                    $newStatus = ($endDate && $tkkDate >= $endDate) ? 'HABIS' : 'DIAKHIRI';
 
                     DB::connection('cii')->table('employees_contract')
                         ->where('id', $activeContract->id)
@@ -516,13 +565,13 @@ class BiodataManageController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Data berhasil dihapus'
+                'message' => 'Data karyawan berhasil di-exit.'
             ]);
         } catch (\Exception $e) {
             DB::connection('cii')->rollBack();
             return response()->json([
                 'status'  => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal memproses exit: ' . $e->getMessage()
             ], 500);
         }
     }
