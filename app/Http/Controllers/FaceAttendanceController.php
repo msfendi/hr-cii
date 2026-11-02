@@ -1253,17 +1253,132 @@ class FaceAttendanceController extends Controller
                 $face->update(['last_verified_at' => Carbon::now()]);
             } catch (\Throwable $e) {}
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Selamat datang, ' . $name . '!',
-                'redirect_url' => route('face.attendance.index')
-            ]);
+            // ===============================================================
+            // PERBAIKAN 21 (2026-11-04) - PRESENSI LANGSUNG SAAT LOGIN
+            // ===============================================================
+            // Permintaan user: "saat login langsung simpan data attendance
+            // saja, jadi tidak 2x proses; logic simpan attendance sama
+            // seperti di route face attendance index".
+            //
+            // Yang dipakai di sini adalah METHOD YANG SAMA PERSIS dengan
+            // route presensi index (face.attendance.store ->
+            // storeAttendance -> storeAttendanceProcess). Tidak ada satu
+            // baris logika presensi pun yang disalin/diduplikasi, sehingga:
+            //   - window Clock In / Clock Out,
+            //   - validasi geofencing polygon,
+            //   - penentuan inoutmode,
+            //   - pembangkitan att_id,
+            //   - dual-write att_log + face_attendance_logs,
+            // semuanya otomatis identik dengan presensi biasa. Kalau nanti
+            // aturan presensi diubah, login ikut berubah tanpa edit di sini.
+            //
+            // storeAttendanceProcess() membaca NPK dari
+            // Session::get('face_attendance_npk') yang sudah di-set tepat di
+            // atas, jadi cukup dipanggil langsung.
+            //
+            // Presensi TIDAK boleh menggagalkan login: bila waktu sekarang di
+            // luar window presensi, atau GPS di luar polygon, atau DB error,
+            // user tetap berhasil login dan tetap bisa mencatat presensi
+            // manual di halaman presensi (tidak ada yang hilang).
+            // ===============================================================
+            $attendance = $this->recordAttendanceOnLogin($request);
+
+            $response = [
+                'success'      => true,
+                'message'      => 'Selamat datang, ' . $name . '!',
+                'redirect_url' => route('face.attendance.index'),
+            ];
+
+            // Kabarkan hasil presensi ke frontend supaya user tahu apakah
+            // kehadirannya sudah tercatat atau perlu melakukan presensi
+            // manual di halaman berikutnya.
+            if (!empty($attendance)) {
+                $response['attendance'] = $attendance;
+
+                if (!empty($attendance['success'])) {
+                    $response['attendance_message'] = $attendance['message'] ?? null;
+                } else {
+                    $response['attendance_message'] = $attendance['message'] ?? 'Presensi tidak tercatat otomatis.';
+                }
+            }
+
+            return response()->json($response);
         } catch (\Throwable $e) {
             \Log::error('Face attendance loginAuth error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan sistem: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * PERBAIKAN 21 (2026-11-04)
+     * Catat presensi pada saat LOGIN dengan menjalankan logic presensi yang
+     * SAMA PERSIS dengan route presensi index.
+     *
+     * Method ini TIDAK menyalin satu baris pun logika presensi. Ia hanya:
+     *   1. Memanggil `storeAttendanceProcess($request)` - method yang juga
+     *      dipanggil oleh route `face.attendance.store` (halaman index).
+     *   2. Membaca JsonResponse hasilnya menjadi array sederhana.
+     *   3. Menelan seluruh error supaya kegagalan presensi TIDAK pernah
+     *      menggagalkan login.
+     *
+     * Kenapa memanggil langsung (bukan HTTP request ke route store):
+     *   - Tidak ada overhead jaringan/HTTP di dalam request yang sama.
+     *   - Tidak ada masalah CSRF/session ganda.
+     *   - Yang dieksekusi tetap method aslinya, jadi perilakunya identik.
+     *
+     * @return array{success:bool,message:?string,data:array} Hasil presensi.
+     */
+    private function recordAttendanceOnLogin(Request $request): array
+    {
+        // Login hanya wajib punya `descriptor`. Presensi membutuhkan
+        // latitude/longitude. Kalau GPS gagal dibaca di browser (izin
+        // ditolak / timeout), JANGAN panggil presensi sama sekali -
+        // biarkan user presensi manual di halaman presensi.
+        if ($request->input('latitude') === null || $request->input('longitude') === null) {
+            return [
+                'success' => false,
+                'message' => 'Login berhasil. Presensi tidak dicatat otomatis karena data GPS tidak terbaca - silakan presensi di halaman presensi.',
+                'data'    => [],
+            ];
+        }
+
+        try {
+            $result = $this->storeAttendanceProcess($request);
+
+            // storeAttendanceProcess() mengembalikan JsonResponse. Ambil
+            // payload-nya supaya loginAuth bisa menyusun satu respons JSON.
+            if ($result instanceof \Illuminate\Http\JsonResponse) {
+                $payload = $result->getData(true);
+                $payload = is_array($payload) ? $payload : [];
+
+                return [
+                    'success' => !empty($payload['success']),
+                    'message' => $payload['message'] ?? null,
+                    'data'    => $payload,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'message' => 'Presensi tidak mengembalikan hasil yang dikenali.',
+                'data'    => [],
+            ];
+        } catch (\Throwable $e) {
+            // Presensi gagal TIDAK menggagalkan login. Penyebab dicatat
+            // lengkap supaya bisa ditelusuri di laravel.log.
+            \Log::error('Presensi saat login gagal: ' . $e->getMessage(), [
+                'npk'  => Session::get('face_attendance_npk'),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Login berhasil, tetapi presensi gagal dicatat: ' . $e->getMessage(),
+                'data'    => [],
+            ];
         }
     }
 

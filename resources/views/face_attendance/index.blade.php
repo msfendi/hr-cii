@@ -321,6 +321,41 @@
                                         </a>
                                     </div>
                                 @else
+                                    {{-- ============================================================
+                                         PERBAIKAN 22 (2026-11-04): BANNER WINDOW ABSENSI.
+
+                                         Ketentuan user: bila waktu sekarang BELUM masuk
+                                         window Clock In maupun Clock Out, statusnya adalah
+                                         "menunggu window", dan pada kondisi itu KAMERA HARUS
+                                         OFF + muncul banner pemberitahuan.
+
+                                         Banner ini elemen TERPISAH dari placeholder kamera.
+                                         Alasan: placeholder menutupi <video> dan hilang
+                                         begitu kamera nyala, sedangkan banner harus tetap
+                                         terlihat jelas di atas area kamera sebagai
+                                         pemberitahuan status. Banner disembunyikan
+                                         (d-none) oleh JS begitu masuk window.
+                                         ============================================================ --}}
+                                    <div id="windowWaitBanner" class="alert alert-warning border-warning shadow-sm text-left d-none" role="status" aria-live="polite">
+                                        <div class="d-flex align-items-start">
+                                            <i class="fas fa-hourglass-half fa-2x text-warning mr-3 mt-1"></i>
+                                            <div class="flex-grow-1">
+                                                <h6 class="font-weight-bold text-gray-900 mb-1" id="windowWaitTitle">
+                                                    Menunggu Window Presensi
+                                                </h6>
+                                                <div class="small text-gray-800 mb-1" id="windowWaitDesc">
+                                                    Waktu sekarang belum masuk window Clock In maupun Clock Out.
+                                                    Kamera dimatikan otomatis sampai window dibuka.
+                                                </div>
+                                                <div class="small font-weight-bold text-gray-900" id="windowWaitRange">
+                                                    Window: Clock In {{ $clockInStart->format('H:i') }}-{{ $clockInEnd->format('H:i') }}
+                                                    &middot; Clock Out {{ $clockOutStart->format('H:i') }}-{{ $clockOutEnd->format('H:i') }} WIB
+                                                </div>
+                                                <div class="small text-muted mt-1" id="windowWaitCountdown"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div id="livenessAlertBox" class="alert alert-warning py-3 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box">
                                         <i class="fas fa-eye text-primary mr-2 fa-lg"></i>
                                         <span id="livenessInstructionText" class="font-weight-bold">
@@ -384,8 +419,11 @@
     const activeLocations = @json($locations);
     const npk = "{{ $biodata->NPK }}";
     const nextAction = "{{ $nextAction }}";
-    const hasClockIn = {{ $hasClockIn ? 'true' : 'false' }};
-    const hasClockOut = {{ $hasClockOut ? 'true' : 'false' }};
+    // PERBAIKAN 23 (2026-11-02): pakai `let`, bukan `const`, supaya bisa
+    // diperbarui segera setelah presensi tersimpan (syncPresensiFlag())
+    // tanpa perlu reload halaman. Nilai awal tetap dari server.
+    let hasClockIn = {{ $hasClockIn ? 'true' : 'false' }};
+    let hasClockOut = {{ $hasClockOut ? 'true' : 'false' }};
 
     // Timestamp window absensi (milidetik)
     const clockInStartMs = {{ $clockInStart->timestamp * 1000 }};
@@ -834,6 +872,141 @@
         }
     }
 
+    /**
+     * ============================================================
+     * PERBAIKAN 22 (2026-11-04): BANNER "MENUNGGU WINDOW".
+     * ============================================================
+     * Ketentuan user: bila belum masuk window Clock In maupun Clock Out,
+     * status = "menunggu window", kamera OFF, dan tampilkan banner.
+     *
+     * Fungsi ini hanya mengurus BANNER. Penegakan "kamera off" tetap
+     * dipegang evaluateCameraGate() (yang memanggil stopCamera()), jadi
+     * tidak ada dua tempat berbeda yang memutuskan soal kamera.
+     *
+     * Dipanggil:
+     *   - dari evaluateCameraGate() setiap tick (1 detik),
+     *   - sekali saat DOM siap (lewat evaluateCameraGate() awal).
+     *
+     * @param {boolean} inClockIn  sekarang di window clock in
+     * @param {boolean} inClockOut sekarang di window clock out
+     */
+    function updateWindowWaitBanner(inClockIn, inClockOut, masihAdaKerjaan) {
+        const banner = document.getElementById('windowWaitBanner');
+        if (!banner) return;      // halaman "Presensi Selesai" tidak punya banner
+
+        // PERBAIKAN 23 (2026-11-02): banner tampil juga saat berada DI DALAM
+        // window tetapi aksi untuk window itu sudah selesai (mis. sudah
+        // clock in di window Clock In). Dulu banner hanya muncul di luar
+        // window, sehingga user yang sudah clock in melihat kamera nyala
+        // tanpa penjelasan apa pun.
+
+        // Kamera boleh nyala -> sembunyikan banner, selesai.
+        if (masihAdaKerjaan) {
+            banner.classList.add('d-none');
+            return;
+        }
+
+        // ---- Tampilkan banner ----
+        banner.classList.remove('d-none');
+
+        const title = document.getElementById('windowWaitTitle');
+        const desc  = document.getElementById('windowWaitDesc');
+        const cd    = document.getElementById('windowWaitCountdown');
+        const nowMs = Date.now();
+
+        let judul, keterangan;
+
+        // Kasus 1: sudah clock in, window Clock In masih berjalan.
+        // (user tidak perlu memindai lagi sampai window Clock Out)
+        if (inClockIn && hasClockIn && !hasClockOut) {
+            judul = 'Clock In Sudah Tercatat — Menunggu Window Clock Out';
+            keterangan = 'Anda sudah Clock In hari ini. Kamera dimatikan karena '
+                + 'tidak ada yang perlu dipindai. Window Clock Out dibuka pukul '
+                + clockOutStartStr + ' WIB.';
+        }
+        // Kasus 2: sudah clock out (di window Clock Out maupun setelahnya).
+        else if (inClockOut && hasClockOut) {
+            judul = 'Clock Out Sudah Tercatat — Presensi Selesai';
+            keterangan = 'Presensi hari ini sudah lengkap. Kamera dimatikan otomatis. '
+                + 'Presensi berikutnya menunggu window Clock In berikutnya.';
+        }
+        // Kasus 3: terlalu pagi (sebelum window Clock In dibuka).
+        else if (nowMs < clockInStartMs) {
+            judul = 'Menunggu Window Clock In';
+            keterangan = 'Window Clock In dibuka pukul ' + clockInStartStr
+                + ' WIB. Kamera dimatikan otomatis dan akan menyala sendiri '
+                + 'begitu window dibuka.';
+        }
+        // Kasus 4: di antara dua window.
+        else if (nowMs > clockInEndMs && nowMs < clockOutStartMs) {
+            judul = 'Menunggu Window Clock Out';
+            keterangan = 'Window Clock In sudah ditutup pukul ' + clockInEndStr
+                + ' WIB. Window Clock Out dibuka pukul ' + clockOutStartStr
+                + ' WIB. Kamera dimatikan otomatis sampai window dibuka.';
+        }
+        // Kasus 5: sudah lewat semua window hari ini.
+        else {
+            judul = 'Window Presensi Hari Ini Sudah Berakhir';
+            keterangan = 'Window Clock In (' + clockInStartStr + '-' + clockInEndStr
+                + ') dan Clock Out (' + clockOutStartStr + '-' + clockOutEndStr
+                + ') WIB sudah lewat. Presensi tidak dapat dilakukan sampai '
+                + 'window berikutnya.';
+        }
+
+        // Tulis hanya bila berubah -> mencegah kedipan teks tiap detik.
+        if (title && title.innerText !== judul) title.innerText = judul;
+        if (desc && desc.innerText !== keterangan) desc.innerText = keterangan;
+
+        // Hitung mundur ke batas window berikutnya (informasi bantu, bukan syarat).
+        if (cd) {
+            let targetMs = null;
+            if (nowMs < clockInStartMs)      targetMs = clockInStartMs;
+            else if (nowMs < clockOutStartMs) targetMs = clockOutStartMs;
+
+            if (targetMs === null) {
+                cd.innerText = '';
+            } else {
+                let sisa = Math.max(0, Math.floor((targetMs - nowMs) / 1000));
+                const j = Math.floor(sisa / 3600);
+                const m = Math.floor((sisa % 3600) / 60);
+                const d = sisa % 60;
+                const bagian = [];
+                if (j > 0) bagian.push(j + ' jam');
+                if (m > 0) bagian.push(m + ' menit');
+                bagian.push(d + ' detik');
+                cd.innerText = 'Window berikutnya dalam ' + bagian.join(' ') + '.';
+            }
+        }
+    }
+
+    /**
+     * PERBAIKAN 23 (2026-11-02): tandai bahwa presensi baru saja tersimpan,
+     * lalu jalankan gate supaya kamera langsung mati tanpa menunggu reload.
+     *
+     * @param {string} actionType 'clock_in' | 'clock_out' | kosong
+     */
+    function syncPresensiFlag(actionType) {
+        if (actionType === 'clock_in') {
+            hasClockIn = true;
+        } else if (actionType === 'clock_out') {
+            hasClockOut = true;
+            // Clock out dianggap menutup siklus: user boleh langsung clock in
+            // lagi bila memang masih di window Clock In (kasus shift malam).
+            // Namun bila belum clock in sama sekali, jangan diubah.
+        } else {
+            // action_type tidak dikirim server: pakai nextAction sebagai petunjuk.
+            if (nextAction === 'clock_in') hasClockIn = true;
+            else if (nextAction === 'clock_out') hasClockOut = true;
+        }
+
+        // Jalankan gate seketika: matikan kamera bila sudah tidak ada kerjaan.
+        try {
+            evaluateCameraGate();
+        } catch (e) {
+            console.warn('[PERBAIKAN 23] gate setelah simpan gagal:', e);
+        }
+    }
+
     function evaluateCameraGate() {
         const now = new Date();
 
@@ -843,11 +1016,41 @@
         const inClockOutWindow = (t >= clockOutStartMs && t <= clockOutEndMs);
         inWindow = inClockInWindow || inClockOutWindow;
 
+        // -----------------------------------------------------------------
+        // PERBAIKAN 23 (2026-11-02): kamera hanya menyala bila masih ADA
+        // yang perlu dipindai di window yang sedang berjalan.
+        // -----------------------------------------------------------------
+        // Masalah yang dilaporkan user: shift malam (23:00-08:00), window
+        // Clock In 19:00-23:00. User sudah clock in 19:22, tapi kamera
+        // tetap nyala sampai jam 23:00. Penyebabnya: gate lama hanya
+        // memeriksa `inWindow` (berada di window), TIDAK memeriksa apakah
+        // aksi untuk window itu sudah dilakukan.
+        //
+        // Aturan baru:
+        //   - Di window Clock In  + belum clock in -> kamera BOLEH nyala
+        //   - Di window Clock In  + SUDAH clock in -> kamera OFF + banner
+        //   - Di window Clock Out + belum clock out -> kamera BOLEH nyala
+        //   - Di window Clock Out + SUDAH clock out -> kamera OFF + banner
+        //
+        // `hasClockIn`/`hasClockOut` dikirim server saat halaman dimuat.
+        // Bila presensi baru saja tersimpan, storeAttendance() memanggil
+        // syncPresensiFlag() supaya gate langsung bereaksi tanpa refresh.
+        // -----------------------------------------------------------------
+        const butuhClockIn  = inClockInWindow  && !hasClockIn;
+        const butuhClockOut = inClockOutWindow && !hasClockOut;
+        const masihAdaKerjaan = butuhClockIn || butuhClockOut;
+
+        // Banner "menunggu window" hanya untuk kondisi DI LUAR window ATAU
+        // sudah selesai di window ini. Di dalam window tapi aksi sudah
+        // beres -> banner "sudah selesai", bukan "menunggu window".
+        updateWindowWaitBanner(inClockInWindow, inClockOutWindow, masihAdaKerjaan);
+
         const phBtn = document.getElementById('placeholderBtnContainer');
 
         // ---- Tentukan apakah kamera BOLEH aktif ----
         const areaOk = gpsVerified;          // syarat 1: di dalam area kerja
-        const timeOk = inWindow;             // syarat 2: di dalam window
+        const timeOk = masihAdaKerjaan;      // syarat 2: di window DAN belum selesai
+
         const mayOpenCamera = areaOk && timeOk;
 
         // Kalau syarat tidak terpenuhi tapi kamera sedang nyala -> MATIKAN.
@@ -1705,6 +1908,12 @@
                     })).then(data => ({ ok: res.ok, data })))
                     .then(({ ok, data }) => {
                         if (data && data.success) {
+                            // PERBAIKAN 23 (2026-11-02): presensi tersimpan ->
+                            // tandai flag lokal & matikan kamera SEKARANG, jangan
+                            // tunggu reload. Tanpa ini kamera tetap menyala
+                            // selama jeda antara "berhasil" dan reload, persis
+                            // seperti yang dilaporkan user.
+                            syncPresensiFlag(data.action_type);
                             // PERBAIKAN (2026-11-03): kalau presensi utama tersimpan
                             // tapi detail wajah gagal, server mengirim `warning`.
                             // Tampilkan sebagai peringatan (bukan error), supaya

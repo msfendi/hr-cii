@@ -104,6 +104,12 @@
                         </div>
                     </div>
 
+                    <!-- Canvas tersembunyi untuk menangkap gambar wajah saat
+                         liveness berhasil. Dipakai untuk disimpan sebagai
+                         face_image pada presensi yang dicatat SAAT LOGIN.
+                         (PERBAIKAN 21 - 2026-11-04) -->
+                    <canvas id="faceCaptureCanvas" width="320" height="320" style="display: none;"></canvas>
+
                     <!-- Mini Map GPS & Area Kerja -->
                     <div class="mb-3 text-left">
                         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -133,6 +139,10 @@
 
     let currentLat = null;
     let currentLng = null;
+    // PERBAIKAN 21 (2026-11-04): akurasi GPS perlu disimpan supaya presensi
+    // yang dicatat saat LOGIN membawa data yang sama dengan halaman presensi
+    // (index), yaitu latitude + longitude + accuracy.
+    let currentAccuracy = null;
     let isGpsValid = false;
     let isModelLoaded = false;
     let isScanning = false;
@@ -300,6 +310,8 @@
                 currentLat = pos.coords.latitude;
                 currentLng = pos.coords.longitude;
                 let accuracy = Math.round(pos.coords.accuracy);
+                // PERBAIKAN 21: simpan akurasi agar ikut dikirim saat login.
+                currentAccuracy = accuracy;
 
                 let inside = false;
                 if (activeLocations && activeLocations.length > 0) {
@@ -436,6 +448,42 @@
         return false;
     }
 
+    /**
+     * PERBAIKAN 21 (2026-11-04)
+     * Tangkap gambar wajah dari video ke canvas (crop tengah 1:1, JPEG 0.8).
+     * Fungsi ini SAMA dengan yang dipakai di halaman presensi
+     * (face_attendance/index.blade.php) supaya hasil capture yang disimpan
+     * saat LOGIN identik formatnya dengan presensi biasa.
+     *
+     * @returns {string|null} data-URI JPEG, atau null bila video belum siap
+     */
+    function captureFaceImage() {
+        try {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('faceCaptureCanvas');
+            if (!video || !canvas || !video.videoWidth || !video.videoHeight) return null;
+
+            const ctx = canvas.getContext('2d');
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+
+            // Crop sisi tengah (rasio 1:1) area video
+            const side = Math.min(vw, vh);
+            const sx = (vw - side) / 2;
+            const sy = (vh - side) / 2;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, sx, sy, side, side, 0, 0, canvas.width, canvas.height);
+
+            // Kualitas 0.8 -> base64 sekitar 30-80KB
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            return dataUrl;
+        } catch (err) {
+            console.warn('Gagal capture wajah:', err);
+            return null;
+        }
+    }
+
     async function detectFaceLoop() {
         const video = document.getElementById('webcam');
         const alertBox = document.getElementById('livenessAlertBox');
@@ -480,6 +528,14 @@
 
                 const descriptorArray = Array.from(detection.descriptor);
 
+                // PERBAIKAN 21 (2026-11-04):
+                // Ambil gambar wajah SEKALI di sini, lalu kirim bersama
+                // descriptor. Server akan memakai data inilah untuk mencatat
+                // presensi (att_log + face_attendance_logs) SEKALIGUS saat
+                // login, sehingga tidak ada proses presensi kedua kalinya
+                // setelah user masuk ke halaman presensi.
+                const faceImage = captureFaceImage();
+
                 fetch("{{ route('face.attendance.login-auth') }}", {
                     method: "POST",
                     headers: {
@@ -487,18 +543,59 @@
                         "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').content
                     },
                     body: JSON.stringify({
-                        descriptor: descriptorArray
+                        descriptor: descriptorArray,
+                        // Data presensi - sama seperti yang dikirim
+                        // face_attendance/index.blade.php ke
+                        // route('face.attendance.store').
+                        latitude: currentLat,
+                        longitude: currentLng,
+                        accuracy: currentAccuracy,
+                        face_image: faceImage
                     })
                 })
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
+                        // PERBAIKAN 21 (2026-11-04):
+                        // Login sekarang SEKALIGUS mencatat presensi, jadi
+                        // user harus tahu hasilnya (Clock In / Clock Out
+                        // tercatat, atau tidak tercatat karena di luar window
+                        // / GPS di luar area). Timer hanya dipakai saat
+                        // presensi sukses supaya user sempat membaca.
+                        const att = data.attendance || null;
+                        const attOk = att && att.success;
+                        const attMsg = data.attendance_message || '';
+
+                        let icon = 'success';
+                        let title = 'Login Berhasil!';
+                        let html = '<div>' + (data.message || '') + '</div>';
+
+                        if (attOk) {
+                            html += '<div class="mt-2 text-success font-weight-bold">'
+                                  + '<i class="fas fa-check-circle mr-1"></i>'
+                                  + 'Presensi tercatat otomatis.</div>';
+                            if (attMsg) {
+                                html += '<div class="small text-muted mt-1">' + attMsg + '</div>';
+                            }
+                        } else if (att) {
+                            icon = 'warning';
+                            title = 'Login Berhasil';
+                            html += '<div class="mt-2 text-warning font-weight-bold">'
+                                  + '<i class="fas fa-exclamation-triangle mr-1"></i>'
+                                  + 'Presensi belum tercatat otomatis.</div>';
+                            if (attMsg) {
+                                html += '<div class="small text-muted mt-1">' + attMsg + '</div>';
+                            }
+                            html += '<div class="small mt-2">Silakan catat presensi di halaman presensi.</div>';
+                        }
+
                         Swal.fire({
-                            icon: 'success',
-                            title: 'Login Berhasil!',
-                            text: data.message,
-                            timer: 1500,
-                            showConfirmButton: false
+                            icon: icon,
+                            title: title,
+                            html: html,
+                            timer: attOk ? 1800 : undefined,
+                            showConfirmButton: !attOk,
+                            confirmButtonText: 'Lanjut'
                         }).then(() => {
                             window.location.href = data.redirect_url;
                         });
