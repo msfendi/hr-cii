@@ -356,12 +356,19 @@
                                         </div>
                                     </div>
 
+                                    {{-- PERBAIKAN 26 (2026-11-02): banner liveness HANYA dirender
+                                         bila toggle liveness ON. Saat OFF, banner tidak ada
+                                         sama sekali di HTML (bukan disembunyikan CSS), supaya
+                                         user tidak melihat instruksi kedip/geleng yang tidak
+                                         berlaku. --}}
+                                    @if($livenessEnabled ?? true)
                                     <div id="livenessAlertBox" class="alert alert-warning py-3 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box">
                                         <i class="fas fa-eye text-primary mr-2 fa-lg"></i>
                                         <span id="livenessInstructionText" class="font-weight-bold">
                                             LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan
                                         </span>
                                     </div>
+                                    @endif
 
                                     <div class="position-relative d-inline-block rounded overflow-hidden shadow-sm" style="max-width: 640px; width: 100%; height: 420px; background: #1a1c23;">
                                         <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
@@ -1444,10 +1451,14 @@
         // Banner liveness -> kembalikan ke instruksi normal
         const alertBox = document.getElementById('livenessAlertBox');
         const alertText = document.getElementById('livenessInstructionText');
+        // PERBAIKAN 26: saat liveness OFF, elemen banner memang tidak dirender
+        // (lihat blok kondisional di markup atas), jadi alertBox/alertText bernilai null dan blok
+        // ini otomatis tidak berbuat apa-apa. Tidak ada teks liveness yang
+        // muncul kembali lewat jalur reset.
         if (alertBox) {
             alertBox.className = 'alert alert-warning py-3 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box';
         }
-        if (alertText) {
+        if (alertText && LIVENESS_REQUIRED) {
             alertText.innerHTML = 'LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan';
         }
 

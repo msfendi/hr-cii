@@ -73,12 +73,16 @@
                 <div class="card-body p-4 text-center">
 
                     <!-- Alert Liveness Banner -->
+                    {{-- PERBAIKAN 26 (2026-11-02): banner liveness HANYA dirender bila
+                         toggle liveness ON. Saat OFF, banner tidak ada di HTML. --}}
+                    @if($livenessEnabled ?? true)
                     <div id="livenessAlertBox" class="alert alert-warning py-2 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box">
                         <i class="fas fa-eye text-primary mr-1"></i>
                         <span id="livenessInstructionText" class="font-weight-bold">
                             LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan
                         </span>
                     </div>
+                    @endif
 
                     <!-- Kamera Box -->
                     <div class="position-relative d-inline-block rounded overflow-hidden shadow-sm mb-3" style="max-width: 100%; width: 100%; height: 380px; background: #1a1c23;">
@@ -366,8 +370,12 @@
 
                 if (inside || !activeLocations || activeLocations.length === 0) {
                     isGpsValid = true;
+                    // PERBAIKAN 26: saat liveness OFF, banner tidak dirender
+                    // (blok kondisional di markup atas) sehingga alertBox/alertText === null dan
+                    // baris di bawah tidak berbuat apa-apa. Saat ON, perilaku
+                    // lama dipertahankan 100%.
                     if (alertBox) alertBox.className = 'alert alert-warning py-2 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box';
-                    if (alertText) alertText.innerHTML = 'LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan';
+                    if (alertText && LIVENESS_REQUIRED) alertText.innerHTML = 'LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan';
                     startCamera();
                 } else {
                     isGpsValid = false;
