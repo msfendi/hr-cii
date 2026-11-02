@@ -6,6 +6,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendanceFingerController;
 use App\Http\Controllers\BiodataController;
+use App\Http\Controllers\BiodataManageController;
 use App\Http\Controllers\FaceAttendanceController;
 use App\Http\Controllers\FaceAttendanceAdminController;
 use App\Http\Controllers\FaceAttendanceSettingController;
@@ -16,7 +17,6 @@ use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TemplateController;
-use App\Http\Controllers\BiodataManageController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\DeptController;
@@ -195,6 +195,12 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
     Route::get('/biodata/generate-pdf/{npk}', [BiodataController::class, 'generatePdf'])->name('biodata.generate-pdf')->middleware(['auth', 'permission']);
     Route::get('/biodata/export-all-docs/{npk}', [BiodataController::class, 'exportAllDocs'])->name('biodata.export-all-docs')->middleware(['auth', 'permission']);
+
+    // BIODATA MANAGE (Halaman Terpadu Show, Update, dan Exit)
+    Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
+    Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
+    Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
+    Route::get('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
 
 
 
@@ -1520,8 +1526,9 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
 });
 
+
 // BIODATA MANAGE (Halaman Terpadu Show, Update, dan Exit)
-    Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
-    Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
-    Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
-    Route::get('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
+Route::get('/biodata/manage/{NPK}', [BiodataManageController::class, 'index'])->name('biodata.manage')->middleware(['auth', 'permission']);
+Route::post('/biodata/manage/update/{NPK}', [BiodataManageController::class, 'update'])->name('biodata.manage.update')->middleware(['auth', 'permission']);
+Route::post('/biodata/manage/update-photo/{NPK}', [BiodataManageController::class, 'updatePhoto'])->name('biodata.manage.update-photo')->middleware(['auth', 'permission']);
+Route::post('/biodata/manage/exit/{NPK}', [BiodataManageController::class, 'exit'])->name('biodata.manage.exit')->middleware(['auth', 'permission']);
