@@ -11,6 +11,7 @@ class FaceAttendanceSetting extends Model
 
     protected $fillable = [
         'clock_in_before_minutes',
+        'clock_in_allowance_minutes',
         'clock_out_after_minutes',
         'is_saturday_enabled',
         'is_sunday_enabled',
@@ -19,11 +20,53 @@ class FaceAttendanceSetting extends Model
 
     protected $casts = [
         'clock_in_before_minutes'  => 'integer',
+        'clock_in_allowance_minutes' => 'integer',
         'clock_out_after_minutes'  => 'integer',
         'is_saturday_enabled'      => 'boolean',
         'is_sunday_enabled'        => 'boolean',
         'is_holiday_enabled'       => 'boolean',
     ];
+
+    /**
+     * PERBAIKAN V31.2: apakah kolom clock_in_allowance_minutes sudah ada.
+     *
+     * Dipakai supaya halaman tetap jalan walau `php artisan migrate` belum
+     * dijalankan. Di SQL Server, mengakses kolom yang belum ada akan
+     * melempar error dan membuat seluruh halaman presensi gagal.
+     *
+     * @var bool|null
+     */
+    protected static $punyaKolomAllowance = null;
+
+    public static function hasAllowanceColumn(): bool
+    {
+        if (static::$punyaKolomAllowance !== null) {
+            return static::$punyaKolomAllowance;
+        }
+
+        try {
+            static::$punyaKolomAllowance = Schema::hasColumn(
+                'face_attendance_settings',
+                'clock_in_allowance_minutes'
+            );
+        } catch (\Throwable $e) {
+            static::$punyaKolomAllowance = false;
+        }
+
+        return static::$punyaKolomAllowance;
+    }
+
+    /**
+     * Nilai allowance clock in dalam menit. 0 bila kolom belum ada.
+     */
+    public function allowanceMinutes(): int
+    {
+        if (!static::hasAllowanceColumn()) {
+            return 0;
+        }
+
+        return max(0, (int) ($this->clock_in_allowance_minutes ?? 0));
+    }
 
     /**
      * Setting window presensi bersifat singleton (1 baris).

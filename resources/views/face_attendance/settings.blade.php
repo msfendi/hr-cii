@@ -72,6 +72,27 @@
 
                             <div class="col-md-6">
                                 <div class="form-group">
+                                    <label for="clock_in_allowance_minutes" class="font-weight-bold small">
+                                        Allowance window Clock In
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="clock_in_allowance_minutes"
+                                            name="clock_in_allowance_minutes" min="0" max="120" step="1"
+                                            value="{{ old('clock_in_allowance_minutes', $setting->allowanceMinutes()) }}" required>
+                                        <div class="input-group-append">
+                                            <span class="input-group-text">menit</span>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        Kelonggaran SETELAH jam kerja mulai. Contoh: window normal 07:45 - 08:00,
+                                        dengan allowance 5 menit menjadi <strong>07:45 - 08:05</strong>.
+                                        Isi 0 bila tidak ingin ada kelonggaran.
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-group">
                                     <label for="clock_out_after_minutes" class="font-weight-bold small">
                                         Menit setelah jam kerja selesai (Clock Out)
                                     </label>
@@ -182,6 +203,125 @@
                             <p class="mb-0">Data hari libur tidak ditemukan atau tabel <code>holidays</code> belum tersedia.</p>
                         </div>
                     @endif
+                </div>
+            </div>
+        </div>
+
+        <!-- Pengaturan Liveness Check (dipindah dari menu Face Recognition) -->
+        <div class="col-xl-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-fingerprint mr-1"></i> Pengaturan Liveness Check (Anti Titip Absen)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Liveness Check memastikan yang di depan kamera benar-benar manusia hidup,
+                        bukan foto atau layar HP. Karyawan diminta <strong>berkedip</strong> dan
+                        <strong>menoleh (geleng)</strong> sebelum wajah dicocokkan.
+                        Bila <strong>Master OFF</strong>, semua halaman mencocokkan wajah tanpa
+                        kedip/geleng.
+                    </p>
+
+                    <div class="alert alert-warning py-2 px-3 small mb-3">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        <strong>Catatan keamanan:</strong> mematikan liveness membuat sistem lebih
+                        mudah ditipu dengan foto wajah karyawan.
+                    </div>
+
+                    @if(!$livenessTersedia)
+                        <div class="alert alert-danger py-2 px-3 small mb-3">
+                            <i class="fas fa-database mr-1"></i>
+                            Tabel/kolom pengaturan liveness belum tersedia di database.
+                            Jalankan <code>php artisan migrate</code> lalu muat ulang halaman ini.
+                        </div>
+                    @endif
+
+                    <form method="POST" action="{{ route('face.attendance.settings.update-liveness') }}">
+                        @csrf
+
+                        <div class="border rounded p-3 mb-3 bg-white">
+                            <div class="custom-control custom-switch">
+                                <input type="hidden" name="is_liveness_enabled" value="0">
+                                <input type="checkbox" class="custom-control-input" id="is_liveness_enabled"
+                                    name="is_liveness_enabled" value="1"
+                                    {{ ($liveness->is_liveness_enabled ?? true) ? 'checked' : '' }}>
+                                <label class="custom-control-label font-weight-bold text-gray-800" for="is_liveness_enabled">
+                                    Aktifkan Liveness Check (Global)
+                                </label>
+                            </div>
+                            <small class="text-muted d-block ml-4">
+                                Switch utama. Jika OFF, semua switch per menu di bawah tidak berlaku.
+                            </small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="liveness_presensi_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="liveness_presensi_enabled"
+                                            name="liveness_presensi_enabled" value="1"
+                                            {{ ($liveness->liveness_presensi_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="liveness_presensi_enabled">
+                                            Presensi Wajah
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/face-attendance</small>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="liveness_login_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="liveness_login_enabled"
+                                            name="liveness_login_enabled" value="1"
+                                            {{ ($liveness->liveness_login_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="liveness_login_enabled">
+                                            Login Presensi Wajah
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/face-attendance/login</small>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="liveness_slip_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="liveness_slip_enabled"
+                                            name="liveness_slip_enabled" value="1"
+                                            {{ ($liveness->liveness_slip_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="liveness_slip_enabled">
+                                            Slip Gaji
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/employee-payroll</small>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="liveness_cuti_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="liveness_cuti_enabled"
+                                            name="liveness_cuti_enabled" value="1"
+                                            {{ ($liveness->liveness_cuti_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="liveness_cuti_enabled">
+                                            Pengajuan Cuti
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/pengajuan-cuti</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-sm mt-2">
+                            <i class="fas fa-save mr-1"></i> Simpan Pengaturan Liveness
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

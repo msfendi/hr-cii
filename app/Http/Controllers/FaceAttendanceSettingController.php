@@ -35,11 +35,27 @@ class FaceAttendanceSettingController extends Controller
         // Rekapemployee face + pengaturan akses per karyawan
         $employeeFaces = EmployeeFace::orderBy('name')->get();
 
+        // PERBAIKAN V31.2: pengaturan liveness dipindah ke halaman ini.
+        // Dibungkus try/catch supaya halaman tetap tampil walau tabel
+        // face_recognition_settings belum ada / belum dimigrasi.
+        $liveness = new \App\Models\FaceRecognitionSetting();
+        $livenessTersedia = false;
+        try {
+            if (Schema::hasTable('face_recognition_settings')) {
+                $liveness = \App\Models\FaceRecognitionSetting::current();
+                $livenessTersedia = Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled');
+            }
+        } catch (\Throwable $e) {
+            $livenessTersedia = false;
+        }
+
         return view('face_attendance.settings', compact(
             'setting',
             'locations',
             'holidays',
-            'employeeFaces'
+            'employeeFaces',
+            'liveness',
+            'livenessTersedia'
         ));
     }
 
@@ -50,6 +66,7 @@ class FaceAttendanceSettingController extends Controller
     {
         $request->validate([
             'clock_in_before_minutes' => 'required|integer|min:0|max:240',
+            'clock_in_allowance_minutes' => 'nullable|integer|min:0|max:120',
             'clock_out_after_minutes' => 'required|integer|min:0|max:240',
         ]);
 
@@ -60,11 +77,82 @@ class FaceAttendanceSettingController extends Controller
         $setting->is_saturday_enabled = $request->boolean('is_saturday_enabled');
         $setting->is_sunday_enabled = $request->boolean('is_sunday_enabled');
         $setting->is_holiday_enabled = $request->boolean('is_holiday_enabled');
+
+        // PERBAIKAN V31.2: simpan allowance hanya bila kolomnya sudah ada.
+        // Tanpa penjagaan ini, SQL Server akan melempar error dan setting
+        // lain ikut gagal tersimpan.
+        if (FaceAttendanceSetting::hasAllowanceColumn()) {
+            $setting->clock_in_allowance_minutes = (int) $request->input('clock_in_allowance_minutes', 0);
+        }
+
         $setting->save();
+
+        $pesan = 'Pengaturan window presensi wajah berhasil disimpan.';
+        if (!FaceAttendanceSetting::hasAllowanceColumn()) {
+            $pesan .= ' CATATAN: kolom allowance belum ada di database, nilai allowance BELUM tersimpan. '
+                    . 'Jalankan "php artisan migrate" lalu simpan ulang.';
+        }
 
         return redirect()
             ->route('face.attendance.settings.index')
-            ->with('success', 'Pengaturan window presensi wajah berhasil disimpan.');
+            ->with('success', $pesan);
+    }
+
+    /**
+     * PERBAIKAN V31.2: simpan pengaturan liveness check.
+     *
+     * Sebelumnya pengaturan ini hanya ada di menu Face Recognition.
+     * Sekarang bisa diatur dari halaman Pengaturan Presensi Wajah.
+     * Form di halaman Face Recognition TETAP berfungsi (tidak dihapus
+     * dari sisi simpan) agar tidak ada fitur yang hilang.
+     */
+    public function updateLiveness(Request $request)
+    {
+        $request->validate([
+            'is_liveness_enabled'       => 'nullable|boolean',
+            'liveness_presensi_enabled' => 'nullable|boolean',
+            'liveness_login_enabled'    => 'nullable|boolean',
+            'liveness_slip_enabled'     => 'nullable|boolean',
+            'liveness_cuti_enabled'     => 'nullable|boolean',
+        ]);
+
+        try {
+            if (!Schema::hasTable('face_recognition_settings')) {
+                return redirect()
+                    ->route('face.attendance.settings.index')
+                    ->with('error', 'Tabel face_recognition_settings belum ada. Jalankan "php artisan migrate".');
+            }
+
+            $setting = \App\Models\FaceRecognitionSetting::current();
+
+            if (Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled')) {
+                $setting->is_liveness_enabled = $request->boolean('is_liveness_enabled');
+            }
+            if (Schema::hasColumn('face_recognition_settings', 'liveness_presensi_enabled')) {
+                $setting->liveness_presensi_enabled = $request->boolean('liveness_presensi_enabled');
+            }
+            if (Schema::hasColumn('face_recognition_settings', 'liveness_login_enabled')) {
+                $setting->liveness_login_enabled = $request->boolean('liveness_login_enabled');
+            }
+            if (Schema::hasColumn('face_recognition_settings', 'liveness_slip_enabled')) {
+                $setting->liveness_slip_enabled = $request->boolean('liveness_slip_enabled');
+            }
+            if (Schema::hasColumn('face_recognition_settings', 'liveness_cuti_enabled')) {
+                $setting->liveness_cuti_enabled = $request->boolean('liveness_cuti_enabled');
+            }
+
+            $setting->save();
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('success', 'Pengaturan Liveness Check berhasil disimpan.');
+        } catch (\Throwable $e) {
+            \Log::error('Gagal simpan liveness dari Pengaturan Presensi Wajah: ' . $e->getMessage());
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('error', 'Gagal menyimpan pengaturan liveness: ' . $e->getMessage());
+        }
     }
 
     /**

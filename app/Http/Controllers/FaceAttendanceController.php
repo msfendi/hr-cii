@@ -155,9 +155,13 @@ class FaceAttendanceController extends Controller
         }
         $clockInBeforeMinutes = $setting->clock_in_before_minutes ?? 15;
         $clockOutAfterMinutes = $setting->clock_out_after_minutes ?? 15;
+        // PERBAIKAN V31.2: allowance memperpanjang BATAS AKHIR window Clock In.
+        // Contoh: shift 08:00, before 15, allowance 5 -> 07:45 sampai 08:05.
+        // Nilai 0 (default) membuat perilaku sama seperti sebelumnya.
+        $clockInAllowanceMinutes = $setting->allowanceMinutes();
 
         // Hitung window absensi:
-        // Clock In: [work_start - X menit] sampai [work_start]
+        // Clock In: [work_start - X menit] sampai [work_start + allowance]
         // Clock Out: [work_end] sampai [work_end + Y menit]
         $startCarbon = Carbon::parse($today . ' ' . $workStart);
         $endCarbon = Carbon::parse($today . ' ' . $workEnd);
@@ -165,7 +169,7 @@ class FaceAttendanceController extends Controller
             $endCarbon->addDay();
         }
         $clockInStart = $startCarbon->copy()->subMinutes($clockInBeforeMinutes);
-        $clockInEnd = $startCarbon->copy();
+        $clockInEnd = $startCarbon->copy()->addMinutes($clockInAllowanceMinutes);
 
         $clockOutStart = $endCarbon->copy();
         $clockOutEnd = $endCarbon->copy()->addMinutes($clockOutAfterMinutes);
@@ -185,9 +189,37 @@ class FaceAttendanceController extends Controller
 
         $midpoint = $startCarbon->copy()->addSeconds($endCarbon->diffInSeconds($startCarbon) / 2);
 
+        // PERBAIKAN V31.2: tentukan jenis log dengan urutan yang benar.
+        //
+        // Cara lama HANYA memakai $midpoint (titik tengah jam kerja). Untuk
+        // shift malam (mis. 23:00-08:00) titik tengah jatuh di 03:30, sehingga
+        // clock-in pukul 19:22 dinilai "out". Akibatnya $hasClockIn tetap
+        // false walau karyawan sudah clock in -> halaman mengira masih perlu
+        // clock in -> KAMERA MENYALA padahal tidak ada yang perlu dipindai.
+        //
+        // Urutan sekarang:
+        //   1. Pakai kolom inoutmode dari mesin absen bila tersedia (paling akurat).
+        //   2. Bila tidak ada, bandingkan dengan window clock in/out yang nyata.
+        //   3. Baru terakhir pakai $midpoint (cadangan lama).
         foreach ($todayLogsRaw as $log) {
             $scanCarbon = Carbon::parse($log->scan_date);
-            $type = $scanCarbon->lessThan($midpoint) ? 'in' : 'out';
+
+            $inoutmode = isset($log->inoutmode) ? (int) $log->inoutmode : null;
+            if ($inoutmode === 0) {
+                // 0 = masuk/IN menurut mesin absen
+                $type = 'in';
+            } elseif ($inoutmode === 1) {
+                // 1 = pulang/OUT menurut mesin absen
+                $type = 'out';
+            } elseif ($scanCarbon->between($clockInStart, $clockInEnd)) {
+                $type = 'in';
+            } elseif ($scanCarbon->between($clockOutStart, $clockOutEnd)) {
+                $type = 'out';
+            } elseif ($scanCarbon->lessThan($midpoint)) {
+                $type = 'in';
+            } else {
+                $type = 'out';
+            }
 
             if ($type === 'in') {
                 $hasClockIn = true;
@@ -440,12 +472,14 @@ class FaceAttendanceController extends Controller
         }
         $clockInBeforeMinutes = $setting->clock_in_before_minutes ?? 15;
         $clockOutAfterMinutes = $setting->clock_out_after_minutes ?? 15;
+        // PERBAIKAN V31.2: allowance memperpanjang batas akhir window Clock In.
+        $clockInAllowanceMinutes = $setting->allowanceMinutes();
 
         // Window:
-        // Clock In: [work_start - X menit] s/d [work_start]
+        // Clock In: [work_start - X menit] s/d [work_start + allowance]
         // Clock Out: [work_end] s/d [work_end + Y menit]
         $clockInStart = $startCarbon->copy()->subMinutes($clockInBeforeMinutes);
-        $clockInEnd = $startCarbon->copy();
+        $clockInEnd = $startCarbon->copy()->addMinutes($clockInAllowanceMinutes);
 
         $clockOutStart = $endCarbon->copy();
         $clockOutEnd = $endCarbon->copy()->addMinutes($clockOutAfterMinutes);
@@ -471,7 +505,24 @@ class FaceAttendanceController extends Controller
         $hasClockOut = false;
         foreach ($existingLogs as $el) {
             $elCarbon = Carbon::parse($el->scan_date);
-            if ($elCarbon->lessThan($midpoint)) {
+            // PERBAIKAN V31.2: urutan penentuan jenis log disamakan dengan
+            // halaman index. Memakai $midpoint saja salah untuk shift malam.
+            $elMode = isset($el->inoutmode) ? (int) $el->inoutmode : null;
+            if ($elMode === 0) {
+                $elType = 'in';
+            } elseif ($elMode === 1) {
+                $elType = 'out';
+            } elseif ($elCarbon->between($clockInStart, $clockInEnd)) {
+                $elType = 'in';
+            } elseif ($elCarbon->between($clockOutStart, $clockOutEnd)) {
+                $elType = 'out';
+            } elseif ($elCarbon->lessThan($midpoint)) {
+                $elType = 'in';
+            } else {
+                $elType = 'out';
+            }
+
+            if ($elType === 'in') {
                 $hasClockIn = true;
             } else {
                 $hasClockOut = true;

@@ -1519,6 +1519,7 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     // Pengaturan Window Presensi & Izin Akses Karyawan
     Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index');
     Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
+    Route::post('/settings/liveness', [FaceAttendanceSettingController::class, 'updateLiveness'])->name('settings.update-liveness');
     Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
 });
 

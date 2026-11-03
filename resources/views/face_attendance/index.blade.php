@@ -1042,18 +1042,28 @@
      * PERBAIKAN 23 (2026-11-02): tandai bahwa presensi baru saja tersimpan,
      * lalu jalankan gate supaya kamera langsung mati tanpa menunggu reload.
      *
-     * @param {string} actionType 'clock_in' | 'clock_out' | kosong
+     * @param {string} actionType label dari server, mis. 'Clock In (Masuk)'
+     *                            atau 'Clock Out (Pulang)'. Boleh juga kode
+     *                            pendek 'clock_in' / 'clock_out'.
      */
     function syncPresensiFlag(actionType) {
-        if (actionType === 'clock_in') {
+        // PERBAIKAN V31.2: server mengirim LABEL ('Clock In (Masuk)'),
+        // bukan kode ('clock_in'). Perbandingan lama tidak pernah cocok,
+        // sehingga status selalu diambil dari `nextAction` yang BASI
+        // (nilai saat halaman dimuat). Akibatnya status internal bisa
+        // terbalik dan kamera menyala/mati di waktu yang salah.
+        // Sekarang kedua bentuk diterima.
+        const aksi = String(actionType || '').toLowerCase();
+        const isClockIn  = aksi.indexOf('clock in') !== -1  || aksi === 'clock_in';
+        const isClockOut = aksi.indexOf('clock out') !== -1 || aksi === 'clock_out';
+
+        if (isClockIn) {
             hasClockIn = true;
-        } else if (actionType === 'clock_out') {
+        } else if (isClockOut) {
             hasClockOut = true;
-            // Clock out dianggap menutup siklus: user boleh langsung clock in
-            // lagi bila memang masih di window Clock In (kasus shift malam).
-            // Namun bila belum clock in sama sekali, jangan diubah.
         } else {
-            // action_type tidak dikirim server: pakai nextAction sebagai petunjuk.
+            // Server tidak mengirim info aksi: pakai nextAction sebagai
+            // petunjuk TERAKHIR. Ini hanya cadangan, bukan jalur utama.
             if (nextAction === 'clock_in') hasClockIn = true;
             else if (nextAction === 'clock_out') hasClockOut = true;
         }
