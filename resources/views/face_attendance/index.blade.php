@@ -460,6 +460,45 @@
     // Default true (fail-safe): variabel tidak terkirim -> liveness tetap ON.
     const LIVENESS_REQUIRED = Boolean(@json((bool) ($livenessEnabled ?? true)));
 
+    // ==================================================================
+    // PERBAIKAN V30 (2026-11-04): NONCE ANTI-FAKE-GPS
+    // ==================================================================
+    // Server menerbitkan BEBERAPA token sekali pakai setiap halaman ini
+    // dibuka (V31: 5 token, berlaku 30 menit). Token dikirim balik saat
+    // submit presensi dan divalidasi server.
+    // Kenapa lebih dari satu: satu halaman dipakai clock-in DAN clock-out,
+    // ditambah retry kalau submit gagal. Dengan satu token, clock-out selalu
+    // ditandai is_suspicious padahal karyawan tidak berbuat salah.
+    // Kalau kosong, presensi tetap jalan tetapi akan DITANDAI server.
+    // PERBAIKAN V31.1 (2026-11-05): terima DUA bentuk sekaligus.
+    // Controller V31 mengirim ARRAY 5 token. Versi lama mengirim string.
+    // Membungkus dengan [(string) $attendanceNonce] saat nilainya array
+    // memicu "Array to string conversion", jadi bentuknya diperiksa dulu.
+    window.__attNonces = (function (sumber) {
+        var hasil = [];
+        if (Array.isArray(sumber)) {
+            sumber.forEach(function (t) {
+                if (typeof t === 'string' && t.length > 0) { hasil.push(t); }
+            });
+        } else if (typeof sumber === 'string' && sumber.length > 0) {
+            hasil.push(sumber);
+        }
+        return hasil;
+    })(@json($attendanceNonce ?? []));
+
+    // PERBAIKAN V31 (2026-11-05): isi ulang token setelah presensi berhasil.
+    // Tanpa ini, clock-in menghabiskan token dan clock-out berikutnya jatuh
+    // ke token sisa. Kalau sisa habis (mis. banyak retry), presensi tetap
+    // tersimpan tetapi tidak perlu sampai kehilangan token sama sekali.
+    window.__attNonceRefill = function (daftar) {
+        if (!Array.isArray(daftar)) { return; }
+        daftar.forEach(function (t) {
+            if (typeof t === 'string' && t.length > 0 && window.__attNonces.indexOf(t) === -1) {
+                window.__attNonces.push(t);
+            }
+        });
+    };
+
     // Saat OFF, tantangan dianggap selesai agar alur kirim presensi yang
     // sudah ada berjalan tanpa perubahan lain.
     if (!LIVENESS_REQUIRED) {
@@ -534,7 +573,6 @@
     // inWindow dihitung ulang setiap detik oleh evaluateCameraGate().
     let inWindow = false;
 
-    let initialNoseRatio = null;
     let blinkDetected = false;
     let headTurnDetected = false;
 
@@ -1731,30 +1769,71 @@
     }
 
     // -------------------------------------------------------------------------
-    // LIVENESS: deteksi kedip & geleng kepala
+    // LIVENESS OPSI 1 (2026-11-04) — kedip yang lebih toleran & geleng yang stabil
     //
-    // PERBAIKAN KRITIS (2026-11-03):
-    // Dulu checkEyeBlink() memakai ambang EAR TETAP (< 0.21). Ambang tetap
-    // itu salah: orang berkacamata /looking down / wajah kecil di frame bisa
-    // punya EAR < 0.21 TANPA berkedip. Akibatnya liveness terverifikasi
-    // palsu -> sistem langsung mengirim presensi. Itu menjelaskan screenshot
-    // user: "LIVENESS TERVERIFIKASI!" padahal kamera belum tampil.
+    // MASALAH YANG DIPERBAIKI
+    //  1. Kedip sering "tidak terbaca". Kedip manusia hanya 100-400 ms. Kode
+    //     lama butuh satu frame TEPAT saat mata menutup. Kalau frame itu
+    //     terlewat (kamera 15 fps, wajah agak jauh), kedip hilang walaupun
+    //     user sudah berkedip.
+    //  2. Ambang `Math.min(baseline*0.55, 0.21)` terlalu tajam untuk mata
+    //     sipit, dan tidak memperhitungkan jarak wajah ke kamera.
+    //  3. Geleng tidak konsisten karena ambangnya PIKSEl MENTAH (`jawWidth<40`)
+    //     dan rasio tetap (0.36/0.64). Wajah jauh -> tidak pernah terbaca.
     //
-    // FIX: pakai BASELINE. Kita rekam EAR saat mata terbuka (baseline),
-    // lalu blink baru dianggap sah kalau EAR turun DRASTIS dari baseline
-    // (menutup >= 55% dari jarak baseline) DAN kemudian kembali naik.
-    // Dengan begitu, kedip harus benar-benar terjadi.
+    // PENDEKATAN BARU
+    //  A. Semua ukuran dibuat RELATIF terhadap lebar wajah (jarak mata luar
+    //     kiri-ke-kanan), bukan piksel mentah. Jadi kamera jauh/dekat sama saja.
+    //  B. Kedip dihitung dengan STATE MACHINE + toleransi beberapa frame,
+    //     bukan satu frame. Kedip lambat (sampai ~600 ms) tetap terbaca.
+    //  C. Geleng memakai sudut yaw relatif terhadap posisi netral yang
+    //     diukur sendiri, dengan zona mati dan histeresis. Tidak ada lagi
+    //     `jawWidth<40` yang membuang wajah kecil diam-diam.
+    //
+    // Yang TIDAK diubah: liveness tetap hanya diperiksa bila LIVENESS_REQUIRED
+    // (toggle ON), dan tetap satu tantangan saja (kedip ATAU geleng).
     // -------------------------------------------------------------------------
-    let eyeBaseline = null;       // EAR saat mata terbuka
-    let eyeClosedSeen = false;    // sudah pernah terdeteksi menutup
+    let eyeBaseline = null;       // rasio tinggi/lebar mata saat terbuka
+    let eyeClosedFrames = 0;      // berapa frame mata terlihat menutup
     let blinkCount = 0;           // jumlah kedip valid
     const BLINK_REQUIRED = 1;     // minimal 1 kedip valid
 
-    function getEAR(eye) {
+    // Toleransi: minimal 1 frame menutup, maksimal 30 frame (~2 detik).
+    // Kalau lebih dari itu, dianggap bukan kedip (mata memang terpejam/ngantuk)
+    // dan state di-reset supaya tidak "terbaca" saat mata akhirnya dibuka.
+    const BLINK_MIN_CLOSED_FRAMES = 1;
+    const BLINK_MAX_CLOSED_FRAMES = 30;
+
+    // Mata dianggap menutup bila rasio tinggi/lebar turun di bawah 62% dari
+    // baseline (turun >=38%). Dulu 55% (turun 45%) — terlalu tajam.
+    const BLINK_CLOSE_RATIO = 0.62;
+    // Pagar bawah absolut yang LONGGAR; hanya untuk mencegah rasio mustahil.
+    const BLINK_ABS_FLOOR = 0.10;
+
+    // Lebar wajah untuk normalisasi (dalam piksel, dihitung tiap frame)
+    function getFaceWidth(landmarks) {
+        try {
+            const p = landmarks.positions;
+            // 0 = sudut rahang kiri, 16 = sudut rahang kanan
+            return Math.abs(p[16].x - p[0].x);
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Rasio bukaan mata: tinggi kelopak / lebar mata.
+     * Sengaja TIDAK memakai lebar wajah, karena rasio ini sudah bebas skala
+     * (pembilang dan penyebut sama-sama piksel pada objek yang sama).
+     */
+    function getEyeOpenRatio(eye) {
         const d1 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
         const d2 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
         const d3 = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
-        return (d1 + d2) / (2.0 * d3);
+        if (!isFinite(d3) || d3 <= 0) return null;
+        const r = (d1 + d2) / (2.0 * d3);
+        if (!isFinite(r) || r <= 0) return null;
+        return r;
     }
 
     function checkEyeBlink(landmarks) {
@@ -1767,62 +1846,123 @@
         }
         if (!leftEye || !rightEye || leftEye.length < 6 || rightEye.length < 6) return false;
 
-        const ear = (getEAR(leftEye) + getEAR(rightEye)) / 2.0;
-        if (!isFinite(ear) || ear <= 0) return false;
+        const lr = getEyeOpenRatio(leftEye);
+        const rr = getEyeOpenRatio(rightEye);
+        if (lr === null || rr === null) return false;
+
+        // Ambil rasio TERBESAR dari dua mata. Kalau satu mata tertutup/tertutup
+        // rambut, mata yang lain masih bisa membuktikan kedipan.
+        const ratio = Math.max(lr, rr);
 
         // -- Baseline belum ada: rekam posisi "mata terbuka" sekarang --
         if (eyeBaseline === null) {
-            eyeBaseline = ear;
-            eyeClosedSeen = false;
+            eyeBaseline = ratio;
+            eyeClosedFrames = 0;
             return false;
         }
 
-        // -- Mata menutup: HARUS turun jauh dari baseline --
-        // Turun minimal 45% dari baseline (dan absolut < 0.21 sebagai pagar
-        // bawah tambahan). 45% dipilih supaya variasi kecil tidak dihitung.
-        const closedThreshold = Math.min(eyeBaseline * 0.55, 0.21);
-        if (ear < closedThreshold) {
-            eyeClosedSeen = true;
-            return false;   // belum sah, tunggu mata membuka kembali
+        // -- Fase 1: mata menutup --
+        const closedThreshold = Math.max(eyeBaseline * BLINK_CLOSE_RATIO, BLINK_ABS_FLOOR);
+        if (ratio < closedThreshold) {
+            // Hitung frame menutup. Ini yang membuat kedip lambat tetap
+            // terbaca: kita tidak butuh satu frame "sempurna", cukup
+            // beberapa frame berturut-turut di bawah ambang.
+            eyeClosedFrames++;
+            return false;
         }
 
-        // -- Mata kembali terbuka SETELAH sempat menutup -> itu kedip valid --
-        if (eyeClosedSeen) {
-            // Bangun kembali baseline ke posisi mata terbuka sekarang.
-            eyeBaseline = eyeBaseline * 0.4 + ear * 0.6;
-            eyeClosedSeen = false;
+        // -- Fase 2: mata sudah membuka kembali --
+        if (eyeClosedFrames >= BLINK_MIN_CLOSED_FRAMES && eyeClosedFrames <= BLINK_MAX_CLOSED_FRAMES) {
+            // Kedip sah. Baseline diperbarui pelan ke posisi terbuka sekarang
+            // supaya perubahan cahaya tidak membuat ambang melenceng.
+            eyeBaseline = eyeBaseline * 0.6 + ratio * 0.4;
+            eyeClosedFrames = 0;
             blinkCount++;
             return blinkCount >= BLINK_REQUIRED;
         }
 
-        // -- Mata tetap terbuka:/+ refres baseline pelan --
-        eyeBaseline = eyeBaseline * 0.9 + ear * 0.1;
+        // Terlalu lama menutup (kemungkinan mata memang terpejam) -> reset
+        // tanpa dihitung, dan bangun ulang baseline ke kondisi sekarang.
+        eyeClosedFrames = 0;
+        eyeBaseline = eyeBaseline * 0.7 + ratio * 0.3;
         return false;
+    }
+
+    // ---- Geleng kepala: pakai yaw relatif, bukan rasio tetap ----
+    let yawNeutral = null;          // yaw saat wajah dianggap netral
+    let yawNeutralSamples = 0;      // berapa sampel dipakai membentuk netral
+    let yawExceededFrames = 0;      // frame berturut-turut melewati ambang
+    let headTurnDone = false;       // latch: sudah pernah lolos (tidak bolak-balik)
+
+    // Sudut yaw kasar dari geometri wajah, bebas skala:
+    //   rasio = posisi hidung di antara dua sudut rahang (0..1)
+    //   yaw   = (rasio - 0.5) * 2   -> negatif = menoleh ke kiri, positif = ke kanan
+    function getYawRatio(landmarks) {
+        try {
+            const p = landmarks.positions;
+            const leftJaw = p[0], rightJaw = p[16], noseTip = p[30];
+            const jawWidth = Math.abs(rightJaw.x - leftJaw.x);
+            if (!isFinite(jawWidth) || jawWidth <= 0) return null;
+            const ratio = (noseTip.x - leftJaw.x) / jawWidth;
+            if (!isFinite(ratio)) return null;
+            return (ratio - 0.5) * 2;
+        } catch (e) {
+            return null;
+        }
     }
 
     function checkHeadTurn(landmarks) {
-        const positions = landmarks.positions;
-        const leftJaw = positions[0];
-        const rightJaw = positions[16];
-        const noseTip = positions[30];
+        if (headTurnDone) return true;
 
-        const jawWidth = Math.abs(rightJaw.x - leftJaw.x);
-        if (jawWidth < 40) return false;
+        const yaw = getYawRatio(landmarks);
+        if (yaw === null) return false;
 
-        const currentRatio = (noseTip.x - leftJaw.x) / jawWidth;
-
-        if (initialNoseRatio === null) {
-            initialNoseRatio = currentRatio;
+        // -- Bentuk posisi netral dari beberapa sampel awal --
+        // Pakai rata-rata berjalan supaya satu frame goyang tidak menggeser
+        // acuan. Setelah 10 sampel, netral dikunci (tidak drift lagi).
+        if (yawNeutralSamples < 10) {
+            yawNeutral = yawNeutral === null ? yaw : (yawNeutral * 0.8 + yaw * 0.2);
+            yawNeutralSamples++;
             return false;
         }
 
-        if (currentRatio < 0.36 || currentRatio > 0.64 || Math.abs(currentRatio - initialNoseRatio) > 0.16) {
-            return true;
+        const delta = yaw - yawNeutral;
+
+        // Zona mati 0.16 (~9 derajat) supaya gerakan mikro tidak dihitung.
+        // Ambang lulus 0.26 (~15 derajat) dengan histeresis: harus melewati
+        // 0.26 selama 2 frame berturut-turut agar tidak terpicu oleh noise.
+        const DEAD_ZONE = 0.16;
+        const PASS_THRESHOLD = 0.26;
+        const PASS_FRAMES = 2;
+
+        if (Math.abs(delta) >= PASS_THRESHOLD) {
+            yawExceededFrames++;
+            if (yawExceededFrames >= PASS_FRAMES) {
+                headTurnDone = true;
+                return true;
+            }
+            return false;
         }
 
+        // Masuk zona mati / gerakan kecil -> reset hitungan frame
+        if (Math.abs(delta) < DEAD_ZONE) {
+            yawExceededFrames = 0;
+        }
         return false;
     }
 
+    /** Reset state liveness (dipakai saat ganti karyawan / kamera diulang). */
+    function resetLivenessState() {
+        eyeBaseline = null;
+        eyeClosedFrames = 0;
+        blinkCount = 0;
+        yawNeutral = null;
+        yawNeutralSamples = 0;
+        yawExceededFrames = 0;
+        headTurnDone = false;
+        blinkDetected = false;
+        headTurnDetected = false;
+    }
     /**
      * Capture wajah dari video ke canvas, lalu return base64 JPEG (tanpa prefix data:).
      * Crop area tengah video agar fokus ke wajah.
@@ -1885,7 +2025,16 @@
                     headTurnDetected = true;
                     livenessVerified = true;
                 } else {
-                    if (overlayText) overlayText.innerHTML = '<i class="fas fa-eye text-warning mr-1"></i> Silakan Kedip / Geleng';
+                    // PERBAIKAN OPSI 1: beri umpan balik yang jelas & bergerak,
+                    // supaya user tahu sistem masih bekerja. Dulu teksnya
+                    // statis "Silakan Kedip / Geleng" sehingga saat kedip
+                    // pelan user mengira tidak terbaca sama sekali.
+                    if (overlayText) {
+                        const petunjuk = (blinkCount === 0 && yawExceededFrames === 0)
+                            ? 'Silakan Berkedip atau Menoleh Sedikit'
+                            : 'Tahan sebentar...';
+                        overlayText.innerHTML = '<i class="fas fa-eye text-warning mr-1"></i> ' + petunjuk;
+                    }
                 }
             }
 
@@ -1929,7 +2078,14 @@
                             latitude: currentLat,
                             longitude: currentLng,
                             accuracy: currentAccuracy,
-                            face_image: faceImage
+                            face_image: faceImage,
+                            // PERBAIKAN V30/V31: token sekali pakai dari
+                            // server. Presensi TIDAK PERNAH ditolak karena
+                            // token; hanya request TANPA token sama sekali
+                            // yang ditandai is_suspicious.
+                            nonce: Array.isArray(window.__attNonces) && window.__attNonces.length
+                                ? window.__attNonces.shift()   // pakai & buang
+                                : null
                         })
                     })
                     .then(res => res.json().catch(() => ({
@@ -1944,6 +2100,12 @@
                             // tunggu reload. Tanpa ini kamera tetap menyala
                             // selama jeda antara "berhasil" dan reload, persis
                             // seperti yang dilaporkan user.
+                            // PERBAIKAN V31: server mengirim token baru setiap
+                            // presensi berhasil, supaya aksi berikutnya di
+                            // halaman yang sama tetap punya token sah.
+                            if (typeof window.__attNonceRefill === 'function') {
+                                window.__attNonceRefill(data.nonce_baru);
+                            }
                             syncPresensiFlag(data.action_type);
                             // PERBAIKAN (2026-11-03): kalau presensi utama tersimpan
                             // tapi detail wajah gagal, server mengirim `warning`.
@@ -1984,12 +2146,9 @@
                             // jadwalkan ulang loop supaya user bisa mencoba lagi.
                             isScanning = false;
                             livenessVerified = !LIVENESS_REQUIRED;
-                            blinkDetected = false;
-                            headTurnDetected = false;
-                            blinkCount = 0;
-                            eyeBaseline = null;
-                            eyeClosedSeen = false;
-                            initialNoseRatio = null;
+                            // PERBAIKAN OPSI 1: satu titik reset untuk semua
+                            // state liveness (kedip + geleng + netral yaw).
+                            resetLivenessState();
                             if (guideBox) guideBox.classList.remove('liveness-ok');
                             setTimeout(detectFaceLoop, 1500);
                         }
@@ -2005,12 +2164,7 @@
                         });
                         isScanning = false;
                         livenessVerified = !LIVENESS_REQUIRED;
-                        blinkDetected = false;
-                        headTurnDetected = false;
-                        blinkCount = 0;
-                        eyeBaseline = null;
-                        eyeClosedSeen = false;
-                        initialNoseRatio = null;
+                        resetLivenessState();
                         if (guideBox) guideBox.classList.remove('liveness-ok');
                         setTimeout(detectFaceLoop, 1500);
                     });
@@ -2027,7 +2181,10 @@
             if (overlayText) overlayText.innerHTML = LIVENESS_REQUIRED
                 ? '<i class="fas fa-user-clock text-warning mr-1"></i> Posisikan Wajah'
                 : '<i class="fas fa-user-clock text-warning mr-1"></i> Arahkan Wajah ke Kamera';
-            initialNoseRatio = null;
+            // PERBAIKAN OPSI 1: state liveness TIDAK di-reset saat wajah
+            // sesaat hilang dari frame. Dulu acuan netral dihapus di sini,
+            // sehingga setiap wajah bergerak keluar-masuk frame user harus
+            // mengulang dari awal -> geleng terasa "tidak pernah terbaca".
             setTimeout(detectFaceLoop, 300);
         }
     }

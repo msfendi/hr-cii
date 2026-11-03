@@ -9,6 +9,7 @@ use App\Models\AttendanceWorkLocation;
 use App\Models\EmployeeFace;
 use App\Models\FaceAttendanceLog;
 use App\Services\FaceRecognitionService;
+use App\Services\AttendanceNonceService;
 use Carbon\Carbon;
 
 class FaceAttendanceController extends Controller
@@ -241,6 +242,14 @@ class FaceAttendanceController extends Controller
         // PERBAIKAN 25: halaman presensi menghormati toggle liveness.
         $livenessEnabled = \App\Services\FaceRecognitionService::isLivenessEnabled('presensi');
 
+        // PERBAIKAN V30 (2026-11-04), DISEMPURNAKAN V31 (2026-11-05):
+        // terbitkan BEBERAPA nonce sekali pakai untuk halaman ini, bukan
+        // satu. Satu halaman bisa dipakai clock-in DAN clock-out, ditambah
+        // retry kalau submit gagal. Dengan satu token, clock-out selalu
+        // ditandai is_suspicious padahal karyawan tidak berbuat salah.
+        $attendanceNonce = app(AttendanceNonceService::class)
+            ->issueBatch((string) $npk, 'attendance');
+
         return view('face_attendance.index', compact(
             'livenessEnabled',
             'biodata',
@@ -261,7 +270,8 @@ class FaceAttendanceController extends Controller
             'clockOutTime',
             'nextAction',
             'statusText',
-            'locations'
+            'locations',
+            'attendanceNonce'
         ));
     }
 
@@ -279,6 +289,22 @@ class FaceAttendanceController extends Controller
         // Wrapper: setiap error tak terduga dikembalikan sebagai JSON 200/422
         // dengan pesan yang bisa dibaca user, BUKAN halaman 500 kosong.
         // Penyebab 500 tetap dicatat lengkap ke storage/logs/laravel.log.
+        // PERBAIKAN V30 (2026-11-04): VALIDASI NONCE.
+        // Nonce diterbitkan saat halaman presensi dibuka dan hanya bisa
+        // dipakai SEKALI dalam 90 detik. Kalau tidak sah, presensi TETAP
+        // DIPROSES (tidak diblokir) tetapi DITANDAI is_suspicious supaya
+        // bisa diaudit. Keputusan ini diambil karena memblokir berisiko
+        // menghukum karyawan sah hanya karena cache/sesi bermasalah.
+        $npkNonce = (string) (Session::get('face_attendance_npk') ?? '');
+        try {
+            $nonceHasil = app(AttendanceNonceService::class)
+                ->consume($request->input('nonce'), $npkNonce, 'attendance');
+        } catch (\Throwable $e) {
+            \Log::warning('Validasi nonce gagal dijalankan: ' . $e->getMessage());
+            $nonceHasil = ['valid' => false, 'alasan' => 'nonce_error_internal'];
+        }
+        $request->attributes->set('nonce_hasil', $nonceHasil);
+
         try {
             return $this->storeAttendanceProcess($request);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -621,6 +647,12 @@ class FaceAttendanceController extends Controller
                 // ID presensi (kunci JOIN dengan face_attendance_logs) dan
                 // melakukan pelacakan saat perlu pengecekan.
                 'att_id'   => $attId,
+                // PERBAIKAN V31 (2026-11-05): kirim token baru setelah
+                // presensi berhasil. Satu halaman dipakai clock-in DAN
+                // clock-out; tanpa token baru, aksi kedua kehabisan token
+                // dan (pada v30) ikut ditandai is_suspicious.
+                'nonce_baru' => app(AttendanceNonceService::class)
+                    ->issueBatch((string) $npk, 'attendance'),
             ];
 
             if (!empty($detailWarning)) {
@@ -692,6 +724,18 @@ class FaceAttendanceController extends Controller
         ?AttendanceWorkLocation $matchedLocation = null,
         ?string $attId = null
     ): ?string {
+        // PERBAIKAN V30: ambil hasil validasi nonce yang sudah dihitung di
+        // storeAttendance().
+        // PERBAIKAN V31 (2026-11-05): yang dianggap mencurigakan HANYA
+        // request yang datang tanpa token sama sekali. Kedaluwarsa, token
+        // sudah terpakai, atau cache dibersihkan TIDAK menandai baris --
+        // semuanya bisa menimpa karyawan jujur. Alasan tetap dicatat supaya
+        // tetap bisa diaudit.
+        $nonceHasil        = $request->attributes->get('nonce_hasil');
+        $nonceValid        = is_array($nonceHasil) && !empty($nonceHasil['valid']);
+        $nonceMencurigakan = is_array($nonceHasil) && !empty($nonceHasil['mencurigakan']);
+        $nonceReason       = is_array($nonceHasil) ? ($nonceHasil['alasan'] ?? 'tanpa_nonce') : 'tanpa_nonce';
+
         try {
             // Ambil gambar wajah base64 dari client (opsional)
             $faceImage = $request->input('face_image');
@@ -772,6 +816,15 @@ class FaceAttendanceController extends Controller
                 // sehingga informasi browser terpotong tanpa alasan.
                 'user_agent'       => mb_substr((string) $request->userAgent(), 0, 2000),
                 'face_image'       => $faceImage,
+                // PERBAIKAN V30 (2026-11-04): penanda kecurigaan.
+                // nonce_verified = 1 bila token sekali pakai dari halaman
+                // presensi sah. Bila 0, presensi tetap disimpan tapi
+                // ditandai supaya bisa diaudit (indikasi Fake GPS / replay /
+                // request yang dibuat di luar alur halaman normal).
+                'nonce_verified'    => $nonceValid ? 1 : 0,
+                // PERBAIKAN V31: hanya 'tanpa token' yang menandai.
+                'is_suspicious'     => $nonceMencurigakan ? 1 : 0,
+                'suspicious_reason' => $nonceValid ? null : mb_substr((string) $nonceReason, 0, 100),
                 // Kolom datetime (bukan timestamp) -> kirim string eksplisit
                 // supaya tidak ada konversi implisit dari Carbon.
                 'created_at'       => $now->format('Y-m-d H:i:s'),
