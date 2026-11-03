@@ -571,14 +571,11 @@ class PadInsentifMasterController extends Controller
     | LOAD OVERTIME (ONLY ONCE)
     |--------------------------------------------------------------------------
     */
+        // Ambil overtime semua NPK agar validasi operator pembanding akurat.
         $overtimes = DB::table('overtimes')
-            ->where('NPK', $employee->NPK)
-            ->whereBetween('OVERTIME_DATE', [
-                $period->start_date,
-                $period->end_date
-            ])
+            ->whereBetween('OVERTIME_DATE', [$period->start_date, $period->end_date])
             ->get()
-            ->keyBy(fn($o) => $o->OVERTIME_DATE);
+            ->groupBy(fn($o) => Carbon::parse($o->OVERTIME_DATE)->format('Y-m-d'));
 
 
         /*
@@ -586,27 +583,17 @@ class PadInsentifMasterController extends Controller
     | VALIDATE OVERTIME
     |--------------------------------------------------------------------------
     */
-        $isValidOvertime = function ($date) use ($overtimes) {
+        $isValidOvertime = function ($npk, $date) use ($overtimes) {
+            $dateKey = Carbon::parse($date)->format('Y-m-d');
+            $record = $overtimes->get($dateKey, collect())
+                ->first(fn($row) => (string) $row->NPK === (string) $npk);
 
-            // tidak ada record → tetap dihitung
-            if (!isset($overtimes[$date])) {
+            if (!$record) {
                 return true;
             }
 
-            $lembur = $overtimes[$date]->JUMLAH_JAM_LEMBUR;
-
-            // NULL / kosong → tetap dihitung
-            if ($lembur === null || $lembur === '') {
-                return true;
-            }
-
-            // angka → tetap dihitung
-            if (is_numeric($lembur)) {
-                return true;
-            }
-
-            // MA / CT / BR / S1 dll → skip
-            return false;
+            $lembur = $record->JUMLAH_JAM_LEMBUR;
+            return $lembur === null || $lembur === '' || is_numeric($lembur);
         };
 
         /*
@@ -660,103 +647,89 @@ class PadInsentifMasterController extends Controller
 
                 $amount += $rate * $assignment->piece;
             }
-        }
+        } else {
+            // Mengikuti sheet INSENTIF PER PERSON:
+            // supervisor/admin = rata-rata total operator sebulan;
+            // inkmaking/helper = rata-rata tanggal 1-7 semua tim ditambah
+            // rata-rata tanggal 8-akhir untuk tim terkait.
+            $employeeAssignments = $assignments->sortBy('date')->values();
+            $firstAssignmentDate = $employeeAssignments->first()
+                ? Carbon::parse($employeeAssignments->first()->date)->format('Y-m-d')
+                : null;
 
-        /*
-        |--------------------------------------------------------------------------
-        | NON OPERATOR (SPV / LEADER / HELPER)
-        |--------------------------------------------------------------------------
-        | Operator pembanding diambil PER TANGGAL, mengikuti kolom "tim" milik
-        | employee (non operator) itu sendiri pada tanggal tsb:
-        |   - tim = 1  -> hanya operator dengan tim = 1
-        |   - tim = 2  -> hanya operator dengan tim = 2
-        |   - tim null -> semua operator (tanpa filter tim)
-        |--------------------------------------------------------------------------
-        */ else {
-            // Assignment milik employee (non operator) ini sendiri, dikelompokkan per tanggal
-            $employeeAssignmentsByDate = $assignments->groupBy('date');
-            // dd($employeeAssignmentsByDate);
-
-            /*
-            |--------------------------------------------------------------------------
-            | HITUNG PER SEGMEN TIM (SAMA SEPERTI HEAT / EXCEL)
-            |--------------------------------------------------------------------------
-            | Tiap nilai "tim" (1 / 2 / null) adalah 1 segmen yang punya
-            | numerator & denominator sendiri:
-            |   rata-rata segmen = total insentif operator segmen / operator unik segmen
-            | Hasil tiap segmen dijumlahkan, baru dikali faktor role.
-            | (Sebelumnya semua tanggal digabung jadi 1 numerator & 1 denominator,
-            | sehingga operator dari segmen tim lain ikut membagi.)
-            |--------------------------------------------------------------------------
-            */
-            $segments = []; // key: tim (atau 'null') => ['total' => x, 'npks' => []]
-
-            foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
-
-                // CHECK RESIGN
-                if ($tkkDate && $date >= $tkkDate) {
-                    continue;
-                }
-
-                // TIM EMPLOYEE UNTUK TANGGAL INI
-                $tim = $rowsForDate
-                    ->pluck('tim')
-                    ->filter(fn($t) => $t !== null && $t !== '')
-                    ->first();
-
-                $segKey = is_null($tim) ? 'null' : (string) $tim;
-
-                if (!isset($segments[$segKey])) {
-                    $segments[$segKey] = ['total' => 0, 'npks' => []];
-                }
-
-                // OPERATOR PEMBANDING (TIM SAMA JIKA ADA)
-                $operatorQuery = DB::table('pad_efficiencies')
+            $averageForWindow = function ($startDate, $endDate, $team = null) use (
+                $period,
+                $formula,
+                $isValidOvertime,
+                $tkkDate
+            ) {
+                $operatorRows = DB::table('pad_efficiencies')
                     ->where('period_id', $period->id)
-                    ->where('role', '=', 'operator')
-                    ->where('date', $date);
+                    ->where('role', 'operator')
+                    ->whereBetween('date', [$startDate, $endDate])
+                    ->when($team !== null, fn($q) => $q->where('tim', $team))
+                    ->get();
 
-                if (!is_null($tim)) {
-                    $operatorQuery->where('tim', $tim);
-                }
-
-                $operatorsForDate = $operatorQuery->get();
-
-                foreach ($operatorsForDate as $operator) {
-                    // FILTER HANYA NUMERATOR
-                    if (!$isValidOvertime($operator->npk, $operator->date)) {
+                $perOperator = [];
+                foreach ($operatorRows as $operator) {
+                    $date = Carbon::parse($operator->date)->format('Y-m-d');
+                    if (($tkkDate && $date >= $tkkDate) ||
+                        !$isValidOvertime($operator->npk, $date)
+                    ) {
                         continue;
                     }
 
-                    $rate = $this->getInsentifByEfficiency(
-                        $operator->efficiency,
-                        $formula
-                    );
+                    $rate = $this->getInsentifByEfficiency($operator->efficiency, $formula);
+                    $perOperator[$operator->npk] = ($perOperator[$operator->npk] ?? 0)
+                        + ($rate * (float) $operator->piece);
+                }
 
-                    $segments[$segKey]['total'] += $rate * $operator->piece;
-                    $segments[$segKey]['npks'][] = $operator->npk;
+                return count($perOperator) ? array_sum($perOperator) / count($perOperator) : 0;
+            };
+
+            if (in_array($role, ['supervisor', 'admin'], true)) {
+                $amount = $averageForWindow($period->start_date, $period->end_date);
+            } else {
+                $team = $employeeAssignments->pluck('tim')
+                    ->first(fn($value) => $value !== null && $value !== '');
+
+                $periodStart = Carbon::parse($period->start_date);
+                $periodEnd = Carbon::parse($period->end_date);
+                $firstWeekEnd = $periodStart->copy()->day(7);
+                if ($firstWeekEnd->gt($periodEnd)) {
+                    $firstWeekEnd = $periodEnd->copy();
+                }
+
+                // Helper yang baru mulai tanggal 16 mengikuti rumus khusus Excel
+                // (hanya rata-rata periode 16-akhir).
+                $lateOnly = $role === 'helper'
+                    && $firstAssignmentDate !== null
+                    && Carbon::parse($firstAssignmentDate)->day >= 16;
+
+                if (!$lateOnly && $periodStart->lte($firstWeekEnd)) {
+                    $amount += $averageForWindow(
+                        $periodStart->format('Y-m-d'),
+                        $firstWeekEnd->format('Y-m-d')
+                    );
+                }
+
+                $secondStart = $periodStart->copy()->day($lateOnly ? 16 : 8);
+                if ($secondStart->lt($periodStart)) {
+                    $secondStart = $periodStart->copy();
+                }
+
+                if ($secondStart->lte($periodEnd)) {
+                    $amount += $averageForWindow(
+                        $secondStart->format('Y-m-d'),
+                        $periodEnd->format('Y-m-d'),
+                        $team
+                    );
                 }
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | JUMLAHKAN HASIL TIAP SEGMEN
-            |--------------------------------------------------------------------------
-            | calculateRolePadInsentif() linear terhadap (total / jumlahOperator),
-            | jadi dipanggil per segmen lalu dijumlahkan.
-            */
-            foreach ($segments as $segment) {
-                $jumlahOperator = collect($segment['npks'])->unique()->count();
-
-                $amount += $this->calculateRolePadInsentif(
-                    $role,
-                    'pad',
-                    $segment['total'],
-                    $jumlahOperator
-                );
-            }
+            // Formula DB tetap menjadi sumber faktor role, misalnya Helper 0.75.
+            $amount = $this->calculateRolePadInsentif($role, 'pad', $amount, 1);
         }
-
 
         return $amount;
     }
