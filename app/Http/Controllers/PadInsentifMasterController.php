@@ -424,12 +424,9 @@ class PadInsentifMasterController extends Controller
                 $employee->role,
             );
 
-            // 🔹 PERBAIKAN: bulatkan hasil insentif supaya tidak selisih
-            // dengan job (GeneratePayrollProcess/V2 membulatkan tiap
-            // komponen sebelum dijumlahkan ke grandTotal).
-            $pad = round((float) $pad, 0);
-
-            if ($pad <= 0) continue;
+            // Pertahankan presisi desimal sesuai sheet INSENTIF PER PERSON.
+            // Jangan membulatkan per role sebelum hasil lintas role digabung.
+            $pad = (float) $pad;
 
             $results[] = [
                 'npk' => $employee->NPK,
@@ -524,11 +521,27 @@ class PadInsentifMasterController extends Controller
 
     private function getInsentifByEfficiency($efficiency, $rules)
     {
-        krsort($rules);
+        if (!is_array($rules) || empty($rules)) {
+            return 0;
+        }
+
+        // pad_efficiencies menyimpan efficiency dalam persen (contoh 81.33),
+        // sedangkan MASTER PIECE Excel menggunakan desimal (0.85).
+        // Normalisasi dilakukan hanya bila threshold formula menggunakan desimal.
+        $thresholds = array_map('floatval', array_keys($rules));
+        $maxThreshold = max($thresholds);
+        $normalizedEfficiency = (float) $efficiency;
+        if ($maxThreshold <= 1) {
+            $normalizedEfficiency = $normalizedEfficiency > 1
+                ? $normalizedEfficiency / 100
+                : $normalizedEfficiency;
+        }
+
+        uksort($rules, static fn($a, $b) => (float) $b <=> (float) $a);
 
         foreach ($rules as $threshold => $value) {
-            if ($efficiency >= $threshold) {
-                return $value;
+            if ($normalizedEfficiency >= (float) $threshold) {
+                return (float) $value;
             }
         }
 
@@ -648,21 +661,48 @@ class PadInsentifMasterController extends Controller
                 $amount += $rate * $assignment->piece;
             }
         } else {
-            // Mengikuti sheet INSENTIF PER PERSON:
-            // supervisor/admin = rata-rata total operator sebulan;
-            // inkmaking/helper = rata-rata tanggal 1-7 semua tim ditambah
-            // rata-rata tanggal 8-akhir untuk tim terkait.
+            // Mengikuti formula workbook Oktober secara literal:
+            // SPV/ADM = AVERAGE seluruh 22 operator (termasuk operator bernilai 0).
+            // Ink Making/Helper = AVG 1-7 semua operator + AVG 8-31 tim terkait.
+            // Helper khusus yang mulai di paruh kedua = AVG formula Excel baris 45
+            // (range tanggal aktual 15-31 karena rumus workbook SUM baris 25:42).
             $employeeAssignments = $assignments->sortBy('date')->values();
             $firstAssignmentDate = $employeeAssignments->first()
                 ? Carbon::parse($employeeAssignments->first()->date)->format('Y-m-d')
                 : null;
 
+            // Roster operator adalah denominator tetap seperti kolom B:W di Excel.
+            // Roster ini mencakup operator tanpa hasil (nilai 0), bukan hanya yang
+            // mempunyai piece/insentif positif pada rentang yang sedang dihitung.
+            $operatorRoster = DB::table('pad_efficiencies')
+                ->where('period_id', $period->id)
+                ->where('role', 'operator')
+                ->select('npk')
+                ->selectRaw('MAX(tim) as team')
+                ->groupBy('npk')
+                ->get();
+
             $averageForWindow = function ($startDate, $endDate, $team = null) use (
                 $period,
                 $formula,
                 $isValidOvertime,
-                $tkkDate
+                $operatorRoster
             ) {
+                $roster = $operatorRoster->filter(function ($operator) use ($team) {
+                    return $team === null || (string) $operator->team === (string) $team;
+                });
+
+                $denominator = $roster->count();
+                if ($denominator === 0) {
+                    return 0;
+                }
+
+                // Inisialisasi semua NPK roster dengan 0 agar sama dengan
+                // AVERAGE(Bxx:Wxx), AVERAGE(Bxx:Mxx), dan AVERAGE(Nxx:Wxx).
+                $perOperator = $roster->mapWithKeys(fn($operator) => [
+                    (string) $operator->npk => 0.0,
+                ])->all();
+
                 $operatorRows = DB::table('pad_efficiencies')
                     ->where('period_id', $period->id)
                     ->where('role', 'operator')
@@ -670,26 +710,37 @@ class PadInsentifMasterController extends Controller
                     ->when($team !== null, fn($q) => $q->where('tim', $team))
                     ->get();
 
-                $perOperator = [];
                 foreach ($operatorRows as $operator) {
-                    $date = Carbon::parse($operator->date)->format('Y-m-d');
-                    if (($tkkDate && $date >= $tkkDate) ||
-                        !$isValidOvertime($operator->npk, $date)
-                    ) {
+                    if (!array_key_exists((string) $operator->npk, $perOperator)) {
                         continue;
                     }
 
-                    $rate = $this->getInsentifByEfficiency($operator->efficiency, $formula);
-                    $perOperator[$operator->npk] = ($perOperator[$operator->npk] ?? 0)
-                        + ($rate * (float) $operator->piece);
+                    if (!$isValidOvertime($operator->npk, $operator->date)) {
+                        continue;
+                    }
+
+                    $rate = $this->getInsentifByEfficiency(
+                        $operator->efficiency,
+                        $formula
+                    );
+
+                    $perOperator[(string) $operator->npk] +=
+                        $rate * (float) ($operator->piece ?? 0);
                 }
 
-                return count($perOperator) ? array_sum($perOperator) / count($perOperator) : 0;
+                return array_sum($perOperator) / $denominator;
             };
 
             if (in_array($role, ['supervisor', 'admin'], true)) {
-                $amount = $averageForWindow($period->start_date, $period->end_date);
+                // Excel B50 = AVERAGE(B46:W46), termasuk nilai nol.
+                $amount = $averageForWindow(
+                    $period->start_date,
+                    $period->end_date
+                );
             } else {
+                // Tentukan tim dari assignment employee pada periode 8-akhir.
+                // Untuk role yang memiliki assignment beberapa tim, gunakan tim
+                // pertama yang terisi; data Oktober menunjukkan satu tim per role.
                 $team = $employeeAssignments->pluck('tim')
                     ->first(fn($value) => $value !== null && $value !== '');
 
@@ -700,20 +751,22 @@ class PadInsentifMasterController extends Controller
                     $firstWeekEnd = $periodEnd->copy();
                 }
 
-                // Helper yang baru mulai tanggal 16 mengikuti rumus khusus Excel
-                // (hanya rata-rata periode 16-akhir).
                 $lateOnly = $role === 'helper'
                     && $firstAssignmentDate !== null
                     && Carbon::parse($firstAssignmentDate)->day >= 16;
 
                 if (!$lateOnly && $periodStart->lte($firstWeekEnd)) {
+                    // Excel B47 = AVERAGE(B43:W43), 22 operator.
                     $amount += $averageForWindow(
                         $periodStart->format('Y-m-d'),
                         $firstWeekEnd->format('Y-m-d')
                     );
                 }
 
-                $secondStart = $periodStart->copy()->day($lateOnly ? 16 : 8);
+                // Excel B48/N48 memakai tanggal 8-31.
+                // Excel B49/N49 memakai SUM baris 25:42, yang pada workbook
+                // Oktober mencakup tanggal 15-31 (meskipun remark menyebut 16-31).
+                $secondStart = $periodStart->copy()->day($lateOnly ? 15 : 8);
                 if ($secondStart->lt($periodStart)) {
                     $secondStart = $periodStart->copy();
                 }
@@ -727,7 +780,7 @@ class PadInsentifMasterController extends Controller
                 }
             }
 
-            // Formula DB tetap menjadi sumber faktor role, misalnya Helper 0.75.
+            // Formula role tetap dari insentif_role_formulas (contoh Helper/ADM 0.75).
             $amount = $this->calculateRolePadInsentif($role, 'pad', $amount, 1);
         }
 
