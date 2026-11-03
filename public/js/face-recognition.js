@@ -219,6 +219,23 @@
                     descriptor: Array.from(result.descriptor),
                     score: result.detection.score,
                     box: result.detection.box,
+                    // ============================================================
+                    // PERBAIKAN V31.3c (2026-11-04) — INI AKAR MASALAH LIVENESS
+                    // ============================================================
+                    // Dulu fungsi ini HANYA mengembalikan descriptor, sehingga
+                    // landmarks (68 titik wajah) dibuang. Padahal deteksi
+                    // liveness butuh posisi mata (untuk kedipan) dan posisi
+                    // hidung+rahang (untuk menoleh).
+                    //
+                    // Akibatnya: halaman /login, /pengajuan-cuti/login, dan
+                    // /employee-payroll TIDAK MUNGKIN memasang liveness, karena
+                    // datanya sudah dibuang sebelum sampai ke pemanggil.
+                    //
+                    // Objek landmarks asli dari face-api punya method
+                    // getLeftEye()/getRightEye()/positions. Kita kirim apa
+                    // adanya supaya pemanggil bisa memakai API yang sama
+                    // dengan halaman presensi.
+                    landmarks: result.landmarks || null,
                 };
             });
     }

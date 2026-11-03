@@ -28,13 +28,25 @@
     .liveness-alert-box {
         font-size: 1.05rem;
         letter-spacing: 0.3px;
-        animation: pulseWarning 1.8s infinite;
+        /* PERBAIKAN V31.3: zoom teks dihapus. Animasi dipindah ke wajah SVG
+           di bawah supaya user melihat GERAKAN yang harus ditiru, bukan
+           teks yang membesar-mengecil. */
     }
-    @keyframes pulseWarning {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.02); }
-        100% { transform: scale(1); }
-    }
+
+    /* ==========================================================
+       PERBAIKAN V31.3b (2026-11-04) — CSS WAJAH DIPINDAH KE PARTIAL
+       ----------------------------------------------------------
+       Blok CSS wajah animasi (dulu .liveness-face-*, .liveness-eye-lid,
+       .liveness-hint-bergantian) DIHAPUS dari file ini dan diganti
+       partial face_attendance._liveness_face.
+
+       Dua alasan:
+       1. BUG TUMPUKAN KATA — .liveness-hint-bergantian menumpuk dua
+          <span> di satu grid-area sehingga teks saling menimpa dan
+          tidak terbaca (dilaporkan lewat screenshot).
+       2. Halaman login tidak punya animasi sama sekali, jadi harus
+          ada satu sumber agar tidak pernah berbeda lagi.
+       ========================================================== */
 </style>
 
 <body id="page-top">
@@ -362,10 +374,20 @@
                                          user tidak melihat instruksi kedip/geleng yang tidak
                                          berlaku. --}}
                                     @if($livenessEnabled ?? true)
-                                    <div id="livenessAlertBox" class="alert alert-warning py-3 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box">
-                                        <i class="fas fa-eye text-primary mr-2 fa-lg"></i>
-                                        <span id="livenessInstructionText" class="font-weight-bold">
-                                            LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan
+                                    {{-- PERBAIKAN V31.3 (2026-11-04): banner sekarang memuat
+                                         ANIMASI WAJAH (mata berkedip + kepala menoleh),
+                                         bukan teks yang zoom-in/zoom-out. Wajah digambar
+                                         dengan SVG inline supaya tidak perlu file gambar
+                                         dan tidak menambah request jaringan.
+                                         SVG memakai atribut aria-hidden karena murni
+                                         hiasan; maknanya sudah ada di teks di sebelahnya. --}}
+                                    <div id="livenessAlertBox" class="alert alert-warning py-2 px-3 mb-3 shadow-sm border-warning liveness-alert-box d-flex align-items-center justify-content-center">
+                                        {{-- PERBAIKAN V31.3b: wajah animasi dipindah ke partial
+                                             agar halaman login memakai animasi yang SAMA PERSIS.
+                                             Lihat resources/views/face_attendance/_liveness_face.blade.php --}}
+                                        @include('face_attendance._liveness_face', ['ukuran' => 56])
+                                        <span id="livenessInstructionText" class="font-weight-bold ml-2">
+                                            LIVENESS CHECK: Silakan <u>BERKEDIP</u> atau <u>MENOLEH</u> sedikit ke kiri / kanan
                                         </span>
                                     </div>
                                     @endif
@@ -396,10 +418,18 @@
                                     <!-- Canvas tersembunyi untuk capture wajah saat liveness berhasil -->
                                     <canvas id="faceCaptureCanvas" width="320" height="320" style="display: none;"></canvas>
 
+                                    {{-- PERBAIKAN V31.3 (2026-11-04): kalimat bantuan ini DULU
+                                         tampil walau liveness OFF, karena ikut blok
+                                         @if($nextAction == 'completed') yang membungkus
+                                         seluruh area kamera. Akibatnya user tetap diberi
+                                         tahu soal "kedipan / menoleh" padahal sistem tidak
+                                         memintanya. Sekarang dibungkus toggle liveness. --}}
+                                    @if($livenessEnabled ?? true)
                                     <div class="mt-3 text-muted small">
                                         <i class="fas fa-info-circle mr-1 text-primary"></i>
-                                        Sistem secara otomatis mendeteksi gerakan wajah asli (kedipan mata atau geleng kepala) untuk verifikasi kehadiran.
+                                        Sistem secara otomatis mendeteksi gerakan wajah asli (kedipan mata atau menoleh) untuk verifikasi kehadiran.
                                     </div>
+                                    @endif
                                 @endif
                             </div>
                         </div>
@@ -1186,6 +1216,19 @@
         // -----------------------------------------------------------------
         const nowMs = Date.now();
         if (cameraFailed && nowMs < cameraRetryAfter) {
+            // PERBAIKAN V31.2: phTitle/phDesc DULU TIDAK ADA di fungsi ini.
+            // Keduanya hanya dideklarasikan lokal di applyGateNotice() dan
+            // startCamera(), sehingga baris di bawah melempar
+            // "ReferenceError: phTitle is not defined".
+            //
+            // Akibat nyata: setiap kali kamera gagal (mis. izin kamera belum
+            // diberikan / user menutup prompt izin), evaluateCameraGate()
+            // CRASH di titik ini. Karena tick berjalan tiap detik, gate tidak
+            // pernah menyelesaikan sisanya, dan UI tidak pernah memberi tahu
+            // user bahwa sistem sedang menunggu izin kamera.
+            const phTitle = document.getElementById('placeholderTitle');
+            const phDesc  = document.getElementById('placeholderDesc');
+
             // Masih dalam masa jeda. Tampilkan countdown supaya user tahu
             // sistem sedang menunggu, bukan macet.
             const sisaDetik = Math.ceil((cameraRetryAfter - nowMs) / 1000);
@@ -1285,6 +1328,26 @@
     const GPS_FALLBACK_TIMEOUT_MS = 15000;
     let gpsFallbackTimer = null;
 
+    // ==================================================================
+    // PERBAIKAN V31.6 (2026-11-05): TOLAK KOORDINAT JARINGAN/IP
+    // ==================================================================
+    // Aplikasi ini hanya memakai navigator.geolocation. Tetapi ketika GPS
+    // GNSS tidak fix, browser tetap mengembalikan koordinat estimasi dari
+    // jaringan (Wi-Fi / seluler / IP) dengan accuracy besar. Estimasi itu
+    // BUKAN lokasi device sebenarnya dan tidak boleh dipakai untuk
+    // geofence presensi.
+    //
+    // ==================================================================
+    // PERBAIKAN V31.6 DIBATALKAN (2026-11-05): GPS dikembalikan ke
+    // perilaku semula. Koordinat dari browser dipakai apa adanya,
+    // termasuk estimasi jaringan bila GNSS belum fix.
+    // ==================================================================
+
+    function gpsAccuracyLabel(accuracy) {
+        if (accuracy === null || accuracy === undefined) return '-';
+        return Math.round(accuracy);
+    }
+
     function scheduleGpsFallback() {
         if (gpsFallbackTimer) return;
         gpsFallbackTimer = setTimeout(function () {
@@ -1357,10 +1420,11 @@
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 cancelGpsFallback();
-                // PERBAIKAN: seluruh body callback dibungkus try/catch.
+                // PERBAIKAN V31.6: seluruh body callback dibungkus try/catch.
                 // Jika ada satu baris saja yang error (mis. elemen tidak ada / polygon rusak),
                 // exception tidak boleh mematikan sisa callback sebelum startCamera().
                 try {
+                const rawAccuracy = pos.coords.accuracy;
                 currentLat = pos.coords.latitude;
                 currentLng = pos.coords.longitude;
                 currentAccuracy = pos.coords.accuracy;
@@ -1504,10 +1568,26 @@
         // ini otomatis tidak berbuat apa-apa. Tidak ada teks liveness yang
         // muncul kembali lewat jalur reset.
         if (alertBox) {
-            alertBox.className = 'alert alert-warning py-3 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box';
+            // PERBAIKAN V31.3b (2026-11-04): JANGAN tulis ulang className penuh.
+            // Kode lama menetapkan ulang seluruh daftar kelas tanpa "d-flex",
+            // sehingga wajah SVG (inline-block) dan teks jatuh ke bawah dan
+            // menyusun diri sebagai blok -> terlihat seperti teks bertumpuk
+            // dan wajah pindah baris. Sekarang hanya kelas warna yang diubah.
+            alertBox.classList.remove('alert-success', 'alert-danger');
+            alertBox.classList.add('alert-warning', 'border-warning');
+            alertBox.classList.add('d-flex', 'align-items-center', 'justify-content-center');
+            alertBox.classList.remove('text-center');
         }
         if (alertText && LIVENESS_REQUIRED) {
-            alertText.innerHTML = 'LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan';
+            // PERBAIKAN V31.3 (2026-11-04): "GELENGKAN KEPALA" DIHAPUS.
+            // Detektor yang benar-benar dipakai adalah YAW (putaran horizontal
+            // kepala) — lihat checkHeadTurn(). Geleng adalah gerakan BOLAK-BALIK,
+            // bukan menoleh satu arah, sehingga instruksinya menyesatkan.
+            //
+            // PERBAIKAN V31.3b: isi #livenessInstructionText HANYA teks (tidak
+            // lagi memuat <span> yang ditumpuk). Menulis innerHTML di sini aman
+            // karena tidak ada wajah SVG di dalamnya — wajah ada di luar span ini.
+            alertText.innerHTML = 'LIVENESS CHECK: Silakan <u>BERKEDIP</u> atau <u>MENOLEH</u> sedikit ke kiri / kanan';
         }
 
         // PERBAIKAN (2026-11-03): reset TEKS placeholder juga.
@@ -1938,11 +2018,15 @@
 
         const delta = yaw - yawNeutral;
 
-        // Zona mati 0.16 (~9 derajat) supaya gerakan mikro tidak dihitung.
-        // Ambang lulus 0.26 (~15 derajat) dengan histeresis: harus melewati
-        // 0.26 selama 2 frame berturut-turut agar tidak terpicu oleh noise.
-        const DEAD_ZONE = 0.16;
-        const PASS_THRESHOLD = 0.26;
+        // Zona mati 0.11 (~6 derajat) supaya gerakan mikro tidak dihitung.
+        // PERBAIKAN V31.3 (2026-11-04): ambang lulus DITURUNKAN dari 0.26 (~15
+        // derajat) ke 0.17 (~10 derajat). Dengan 0.26 user harus memutar leher
+        // cukup jauh, dan banyak yang gagal berulang lalu mengira sistem rusak.
+        // 0.17 masih di atas zona mati 0.11 dan masih jauh di luar gerakan
+        // mikro posisi duduk, jadi tidak longgar berlebihan.
+        // Tetap butuh 2 frame berturut-turut (histeresis) agar noise tidak lolos.
+        const DEAD_ZONE = 0.11;
+        const PASS_THRESHOLD = 0.17;
         const PASS_FRAMES = 2;
 
         if (Math.abs(delta) >= PASS_THRESHOLD) {
@@ -2063,12 +2147,18 @@
                     isScanning = true;
                     if (guideBox) guideBox.classList.add('liveness-ok');
 
-                    if (alertBox) alertBox.className = 'alert alert-success py-3 px-3 mb-3 text-center shadow-sm font-weight-bold';
+                    if (alertBox) {
+                        // PERBAIKAN V31.3b: jangan timpa className penuh — lihat
+                        // catatan di fungsi reset banner. Hanya ubah warna.
+                        alertBox.classList.remove('alert-warning', 'alert-danger', 'border-warning');
+                        alertBox.classList.add('alert-success', 'font-weight-bold');
+                        alertBox.classList.add('d-flex', 'align-items-center', 'justify-content-center');
+                    }
                     // PERBAIKAN 25: jangan menulis "LIVENESS TERVERIFIKASI" saat
                     // liveness dimatikan admin -- itu informasi palsu.
                     if (alertText) alertText.innerHTML = !LIVENESS_REQUIRED
                         ? '<i class="fas fa-check-circle mr-1"></i> Wajah Dikenali - Mengirim Presensi...'
-                        : '<i class="fas fa-check-circle mr-1"></i> LIVENESS TERVERIFIKASI! (' + (blinkDetected ? 'Kedipan Mata' : 'Geleng Kepala') + ' Terdeteksi) - Mengirim Presensi...';
+                        : '<i class="fas fa-check-circle mr-1"></i> LIVENESS TERVERIFIKASI! (' + (blinkDetected ? 'Kedipan Mata' : 'Menoleh') + ' Terdeteksi) - Mengirim Presensi...';
                     if (overlayText) overlayText.innerHTML = '<i class="fas fa-check-circle text-success mr-1"></i> Wajah Terverifikasi';
 
                     const descriptorArray = Array.from(detection.descriptor);

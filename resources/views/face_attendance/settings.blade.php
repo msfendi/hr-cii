@@ -109,6 +109,29 @@
                                     </small>
                                 </div>
                             </div>
+
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="clock_out_allowance_minutes" class="font-weight-bold small">
+                                        Allowance window Clock Out
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="clock_out_allowance_minutes"
+                                            name="clock_out_allowance_minutes" min="0" max="120" step="1"
+                                            value="{{ old('clock_out_allowance_minutes', $setting->allowanceOutMinutes()) }}" required>
+                                        <div class="input-group-append">
+                                            <span class="input-group-text">menit</span>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        Kelonggaran TAMBAHAN setelah batas Clock Out.
+                                        Contoh: after 15 + allowance 10 &rarr; window Clock Out
+                                        <strong>17:00 - 17:25</strong>. Dihitung setelah
+                                        &ldquo;menit setelah jam kerja selesai&rdquo;.
+                                        Isi 0 bila tidak ingin ada kelonggaran.
+                                    </small>
+                                </div>
+                            </div>
                         </div>
 
                         <hr class="my-3">
@@ -314,6 +337,26 @@
                                         </label>
                                     </div>
                                     <small class="text-muted d-block mt-1">/pengajuan-cuti</small>
+                                </div>
+                            </div>
+
+                            {{-- PERBAIKAN V31.3d (2026-11-04): sakelar untuk
+                                 registrasi mandiri (/self-register-face).
+                                 Dipisah karena risikonya berbeda: di sini
+                                 liveness mencegah orang mendaftarkan wajah
+                                 ORANG LAIN, bukan mencegah titip absen. --}}
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="liveness_registrasi_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="liveness_registrasi_enabled"
+                                            name="liveness_registrasi_enabled" value="1"
+                                            {{ ($liveness->liveness_registrasi_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="liveness_registrasi_enabled">
+                                            Registrasi Wajah Mandiri
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/self-register-face (Langkah 4)</small>
                                 </div>
                             </div>
                         </div>

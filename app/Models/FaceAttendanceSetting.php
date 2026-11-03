@@ -13,6 +13,7 @@ class FaceAttendanceSetting extends Model
         'clock_in_before_minutes',
         'clock_in_allowance_minutes',
         'clock_out_after_minutes',
+        'clock_out_allowance_minutes',
         'is_saturday_enabled',
         'is_sunday_enabled',
         'is_holiday_enabled',
@@ -22,38 +23,39 @@ class FaceAttendanceSetting extends Model
         'clock_in_before_minutes'  => 'integer',
         'clock_in_allowance_minutes' => 'integer',
         'clock_out_after_minutes'  => 'integer',
+        'clock_out_allowance_minutes' => 'integer',
         'is_saturday_enabled'      => 'boolean',
         'is_sunday_enabled'        => 'boolean',
         'is_holiday_enabled'       => 'boolean',
     ];
 
     /**
-     * PERBAIKAN V31.2: apakah kolom clock_in_allowance_minutes sudah ada.
+     * PERBAIKAN V31.2: apakah kolom allowance sudah ada di database.
      *
      * Dipakai supaya halaman tetap jalan walau `php artisan migrate` belum
      * dijalankan. Di SQL Server, mengakses kolom yang belum ada akan
      * melempar error dan membuat seluruh halaman presensi gagal.
      *
-     * @var bool|null
+     * @var array<string,bool>
      */
-    protected static $punyaKolomAllowance = null;
+    protected static $punyaKolomAllowance = [];
 
-    public static function hasAllowanceColumn(): bool
+    public static function hasAllowanceColumn(string $kolom = 'clock_in_allowance_minutes'): bool
     {
-        if (static::$punyaKolomAllowance !== null) {
-            return static::$punyaKolomAllowance;
+        if (array_key_exists($kolom, static::$punyaKolomAllowance)) {
+            return static::$punyaKolomAllowance[$kolom];
         }
 
         try {
-            static::$punyaKolomAllowance = Schema::hasColumn(
+            static::$punyaKolomAllowance[$kolom] = Schema::hasColumn(
                 'face_attendance_settings',
-                'clock_in_allowance_minutes'
+                $kolom
             );
         } catch (\Throwable $e) {
-            static::$punyaKolomAllowance = false;
+            static::$punyaKolomAllowance[$kolom] = false;
         }
 
-        return static::$punyaKolomAllowance;
+        return static::$punyaKolomAllowance[$kolom];
     }
 
     /**
@@ -66,6 +68,25 @@ class FaceAttendanceSetting extends Model
         }
 
         return max(0, (int) ($this->clock_in_allowance_minutes ?? 0));
+    }
+
+    /**
+     * PERBAIKAN V31.2: allowance window Clock Out, dalam menit.
+     *
+     * Memperpanjang BATAS AKHIR window Clock Out.
+     * Contoh: shift pulang 17:00, after 15, allowance 10 -> 17:00 sampai 17:25.
+     * Nilai 0 (default) = perilaku sama seperti sebelumnya.
+     *
+     * Mengembalikan 0 bila kolomnya belum ada (migrasi belum dijalankan),
+     * supaya halaman tidak error.
+     */
+    public function allowanceOutMinutes(): int
+    {
+        if (!static::hasAllowanceColumn('clock_out_allowance_minutes')) {
+            return 0;
+        }
+
+        return max(0, (int) ($this->clock_out_allowance_minutes ?? 0));
     }
 
     /**

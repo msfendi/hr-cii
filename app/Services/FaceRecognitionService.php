@@ -65,6 +65,15 @@ class FaceRecognitionService
     }
 
     /**
+     * Daftar menu yang punya sakelar liveness sendiri.
+     * PERBAIKAN V31.3d: 'registrasi' ikut, supaya halaman
+     * /self-register-face bisa diatur terpisah dari presensi.
+     *
+     * @var array<int,string>
+     */
+    public const MENU_LIVENESS = ['presensi', 'login', 'slip', 'cuti', 'registrasi'];
+
+    /**
      * PERBAIKAN 25 -- Toggle Liveness Check.
      *
      * Titik tunggal yang dibaca SEMUA halaman face recognition supaya tidak
@@ -79,7 +88,7 @@ class FaceRecognitionService
      * aktif). Sengaja begitu supaya kegagalan migrasi tidak diam-diam
      * MELEMAHKAN keamanan presensi.
      *
-     * @param string|null $menu  presensi|login|slip|cuti
+     * @param string|null $menu  presensi|login|slip|cuti|registrasi
      */
     public static function isLivenessEnabled(?string $menu = null): bool
     {
@@ -113,7 +122,10 @@ class FaceRecognitionService
     {
         $map = [];
 
-        foreach (['presensi', 'login', 'slip', 'cuti'] as $menu) {
+        // PERBAIKAN V31.3d: pakai konstanta MENU_LIVENESS supaya daftar menu
+        // hanya ada di SATU tempat. Dulu array ini ditulis ulang di sini,
+        // jadi menambah menu baru mudah terlewat.
+        foreach (static::MENU_LIVENESS as $menu) {
             $map[$menu] = static::isLivenessEnabled($menu);
         }
 

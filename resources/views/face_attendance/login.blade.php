@@ -76,10 +76,15 @@
                     {{-- PERBAIKAN 26 (2026-11-02): banner liveness HANYA dirender bila
                          toggle liveness ON. Saat OFF, banner tidak ada di HTML. --}}
                     @if($livenessEnabled ?? true)
-                    <div id="livenessAlertBox" class="alert alert-warning py-2 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box">
-                        <i class="fas fa-eye text-primary mr-1"></i>
-                        <span id="livenessInstructionText" class="font-weight-bold">
-                            LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan
+                    {{-- PERBAIKAN V31.3b (2026-11-04): halaman login DULU hanya berisi
+                         ikon mata statis + teks. Sekarang memakai partial wajah yang
+                         SAMA dengan halaman /face-attendance, sehingga animasi
+                         menoleh + berkedip tampil di kedua halaman dan tidak mungkin
+                         berbeda lagi kalau salah satu diubah. --}}
+                    <div id="livenessAlertBox" class="alert alert-warning py-2 px-3 mb-3 shadow-sm border-warning liveness-alert-box d-flex align-items-center justify-content-center">
+                        @include('face_attendance._liveness_face', ['ukuran' => 56])
+                        <span id="livenessInstructionText" class="font-weight-bold ml-2">
+                            LIVENESS CHECK: Silakan <u>BERKEDIP</u> atau <u>MENOLEH</u> sedikit ke kiri / kanan
                         </span>
                     </div>
                     @endif
@@ -151,6 +156,40 @@
     let isModelLoaded = false;
     let isScanning = false;
     let livenessVerified = false;
+
+    // ==================================================================
+    // PERBAIKAN V31.6 (2026-11-05): TOLAK KOORDINAT BERBASIS IP/JARINGAN
+    // ==================================================================
+    // complaints: "gps membaca location dari ip, seharusnya location real
+    // dari device".
+    //
+    // fakta TEKNIS: aplikasi ini memang HANYA memanggil
+    // navigator.geolocation (bukan API ip-api/ipinfo). Tapi browser/
+    // sistem operasi, ketika GPS GNSS tidak berhasil fix, TETAP
+    // mengembalikan koordinat-butiran yang diestimasi dari jaringan
+    // (Wi-Fi / seluler / IP). Koordinat itu BERBEDA dari lokasi device
+    // sebenarnya dan biasanya datang dengan accuracy besar
+    // (ratusan sampai ribuan meter).
+    //
+    // akibatnya user bisa lolos geofence padahal posisinya salah.
+    //
+    // Solusi (standar industri, bukan tebakan):
+    //   - minta koordinat dengan enableHighAccuracy (sudah ada),
+    //   - TOLAK koordinat yang accuracy-nya terlalu besar,
+    //   -retry dengan watchPosition agar GPS GNSS sempat fix,
+    //   - kalau tetap tidak fix, tampilkan pesan jelas dan JANGAN
+    //     menganggap koordinat jaringan sebagai lokasi asli.
+    //
+    // ==================================================================
+    // PERBAIKAN V31.6 DIBATALKAN (2026-11-05): GPS dikembalikan ke
+    // perilaku semula. Koordinat dari browser dipakai apa adanya,
+    // termasuk estimasi jaringan bila GNSS belum fix.
+    // ==================================================================
+
+    function gpsAccuracyLabel(accuracy) {
+        if (accuracy === null || accuracy === undefined) return '-';
+        return Math.round(accuracy);
+    }
 
     // ==================================================================
     // PERBAIKAN 25 (2026-11-05): TOGGLE LIVENESS CHECK DARI ADMIN
@@ -346,9 +385,11 @@
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                const rawAccuracy = pos.coords.accuracy;
+                let accuracy = gpsAccuracyLabel(rawAccuracy);
+
                 currentLat = pos.coords.latitude;
                 currentLng = pos.coords.longitude;
-                let accuracy = Math.round(pos.coords.accuracy);
                 // PERBAIKAN 21: simpan akurasi agar ikut dikirim saat login.
                 currentAccuracy = accuracy;
 
@@ -374,18 +415,37 @@
                     // (blok kondisional di markup atas) sehingga alertBox/alertText === null dan
                     // baris di bawah tidak berbuat apa-apa. Saat ON, perilaku
                     // lama dipertahankan 100%.
-                    if (alertBox) alertBox.className = 'alert alert-warning py-2 px-3 mb-3 text-center shadow-sm border-warning liveness-alert-box';
-                    if (alertText && LIVENESS_REQUIRED) alertText.innerHTML = 'LIVENESS CHECK: Silakan <u>KEDIPKAN MATA</u> atau <u>GELENGKAN KEPALA</u> ke kiri / kanan';
+                    if (alertBox) {
+                        // PERBAIKAN V31.3b (2026-11-04): jangan timpa className penuh.
+                        // Dulu kelas "d-flex" ikut terhapus sehingga wajah animasi
+                        // jatuh ke baris bawah dan teks tampak bertumpuk.
+                        // Sekarang hanya kelas warna yang diubah.
+                        alertBox.classList.remove('alert-danger', 'alert-success');
+                        alertBox.classList.add('alert-warning', 'border-warning');
+                        alertBox.classList.add('d-flex', 'align-items-center', 'justify-content-center');
+                        alertBox.classList.remove('text-center');
+                    }
+                    if (alertText && LIVENESS_REQUIRED) alertText.innerHTML = 'LIVENESS CHECK: Silakan <u>BERKEDIP</u> atau <u>MENOLEH</u> sedikit ke kiri / kanan';
                     startCamera();
                 } else {
                     isGpsValid = false;
-                    if (alertBox) alertBox.className = 'alert alert-danger py-2 px-3 mb-3 text-center shadow-sm';
+                    if (alertBox) {
+                        alertBox.classList.remove('alert-warning', 'alert-success', 'border-warning');
+                        alertBox.classList.add('alert-danger');
+                        alertBox.classList.add('d-flex', 'align-items-center', 'justify-content-center');
+                        alertBox.classList.remove('text-center');
+                    }
                     if (alertText) alertText.innerHTML = 'Posisi Anda terdeteksi di luar area polygon lokasi presensi.';
                     showGpsWarning();
                 }
             },
             (err) => {
-                if (alertBox) alertBox.className = 'alert alert-danger py-2 px-3 mb-3 text-center shadow-sm';
+                if (alertBox) {
+                        alertBox.classList.remove('alert-warning', 'alert-success', 'border-warning');
+                        alertBox.classList.add('alert-danger');
+                        alertBox.classList.add('d-flex', 'align-items-center', 'justify-content-center');
+                        alertBox.classList.remove('text-center');
+                    }
                 if (alertText) alertText.innerHTML = 'Gagal mengakses GPS. Mohon aktifkan lokasi pada perangkat Anda.';
                 showGpsWarning('Izin GPS Ditolak', 'Harap berikan izin akses lokasi pada browser Anda.');
             },
@@ -566,11 +626,12 @@
         const delta = currentRatio - initialNoseRatio;
         const absDelta = Math.abs(delta);
 
-        // Geleng sah bila:
+        // Menoleh sah bila (PERBAIKAN V31.3: istilah "geleng" diganti "menoleh"
+        // karena detektor ini mengukur YAW = putaran horizontal, bukan bolak-balik):
         //   a. hidung jelas bergeser menjauh dari tengah (di luar 0.40-0.60), ATAU
-        //   b. deviasi terhadap baseline melewati ambang yang lebih ramah (0.10)
+        //   b. deviasi terhadap baseline melewati ambang 0.12 (~7 derajat)
         const jauhDariTengah = (currentRatio < 0.40 || currentRatio > 0.60);
-        const deviasiCukup = absDelta > 0.10;
+        const deviasiCukup = absDelta > 0.12;
 
         if (jauhDariTengah || deviasiCukup) {
             headTurnStreak += 1;
@@ -660,7 +721,7 @@
                     headTurnDetected = true;
                     livenessVerified = true;
                 } else {
-                    if (overlayText) overlayText.innerHTML = '<i class="fas fa-eye text-warning mr-1"></i> Silakan Kedip / Geleng';
+                    if (overlayText) overlayText.innerHTML = '<i class="fas fa-eye text-warning mr-1"></i> Silakan Berkedip atau Menoleh Sedikit';
                 }
             }
 
@@ -668,7 +729,12 @@
                 isScanning = true;
                 if (guideBox) guideBox.classList.add('liveness-ok');
 
-                if (alertBox) alertBox.className = 'alert alert-success py-2 px-3 mb-3 text-center shadow-sm font-weight-bold';
+                if (alertBox) {
+                    alertBox.classList.remove('alert-warning', 'alert-danger', 'border-warning');
+                    alertBox.classList.add('alert-success', 'font-weight-bold');
+                    alertBox.classList.add('d-flex', 'align-items-center', 'justify-content-center');
+                    alertBox.classList.remove('text-center');
+                }
                 // PERBAIKAN 25: saat liveness OFF, jangan klaim liveness terverifikasi.
                 if (alertText) alertText.innerHTML = !LIVENESS_REQUIRED
                     ? '<i class="fas fa-check-circle mr-1"></i> Wajah Dikenali - Mengirim Data Login...'
@@ -802,7 +868,7 @@
                 }
             } else if (headTurnStreak > 0 && LIVENESS_REQUIRED) {
                 // Sedang di tengah geleng -> tahan instruksi, jangan reset.
-                if (overlayText) overlayText.innerHTML = '<i class="fas fa-eye text-warning mr-1"></i> Silakan Kedip / Geleng';
+                if (overlayText) overlayText.innerHTML = '<i class="fas fa-eye text-warning mr-1"></i> Silakan Berkedip atau Menoleh Sedikit';
             }
 
             setTimeout(detectFaceLoop, 300);

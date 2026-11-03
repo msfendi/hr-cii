@@ -159,10 +159,16 @@ class FaceAttendanceController extends Controller
         // Contoh: shift 08:00, before 15, allowance 5 -> 07:45 sampai 08:05.
         // Nilai 0 (default) membuat perilaku sama seperti sebelumnya.
         $clockInAllowanceMinutes = $setting->allowanceMinutes();
+        // PERBAIKAN V31.2: allowance clock out memperpanjang BATAS AKHIR
+        // window Clock Out. Contoh: pulang 17:00, after 15, allowance 10
+        // -> 17:00 sampai 17:25. Nilai 0 = perilaku lama.
+        $clockOutAllowanceMinutes = method_exists($setting, 'allowanceOutMinutes')
+            ? $setting->allowanceOutMinutes()
+            : 0;
 
         // Hitung window absensi:
-        // Clock In: [work_start - X menit] sampai [work_start + allowance]
-        // Clock Out: [work_end] sampai [work_end + Y menit]
+        // Clock In: [work_start - X menit] sampai [work_start + allowance in]
+        // Clock Out: [work_end] sampai [work_end + after + allowance out]
         $startCarbon = Carbon::parse($today . ' ' . $workStart);
         $endCarbon = Carbon::parse($today . ' ' . $workEnd);
         if ($endCarbon->lessThanOrEqualTo($startCarbon)) {
@@ -172,14 +178,14 @@ class FaceAttendanceController extends Controller
         $clockInEnd = $startCarbon->copy()->addMinutes($clockInAllowanceMinutes);
 
         $clockOutStart = $endCarbon->copy();
-        $clockOutEnd = $endCarbon->copy()->addMinutes($clockOutAfterMinutes);
+        $clockOutEnd = $endCarbon->copy()
+            ->addMinutes($clockOutAfterMinutes)
+            ->addMinutes($clockOutAllowanceMinutes);
 
         // Ambil log presensi hari ini
-        $todayLogsRaw = DB::table('att_log')
-            ->where('pin', $barcode)
-            ->whereDate('scan_date', $today)
-            ->orderBy('scan_date', 'asc')
-            ->get();
+        // PERBAIKAN V31.7: pakai normalisasi pin (LTRIM/RTRIM) supaya log
+        // yang pin-nya punya spasi tetap ditemukan.
+        $todayLogsRaw = $this->queryAttendanceLogsFor($barcode, $today);
 
         $todayLogs = [];
         $hasClockIn = false;
@@ -189,37 +195,68 @@ class FaceAttendanceController extends Controller
 
         $midpoint = $startCarbon->copy()->addSeconds($endCarbon->diffInSeconds($startCarbon) / 2);
 
-        // PERBAIKAN V31.2: tentukan jenis log dengan urutan yang benar.
+        // PERBAIKAN V31.7 (2026-11-04): klasifikasi In/Out TIDAK lagi
+        // bersandar pada kolom `att_log.inoutmode` sebagai satu-satunya
+        // penentu.
         //
-        // Cara lama HANYA memakai $midpoint (titik tengah jam kerja). Untuk
-        // shift malam (mis. 23:00-08:00) titik tengah jatuh di 03:30, sehingga
-        // clock-in pukul 19:22 dinilai "out". Akibatnya $hasClockIn tetap
-        // false walau karyawan sudah clock in -> halaman mengira masih perlu
-        // clock in -> KAMERA MENYALA padahal tidak ada yang perlu dipindai.
+        // MASALAH:
+        // Kolom inoutmode tidak bisa dipercaya untuk semua sumber data.
+        //   - AttendanceFingerController.php:948 menulis inoutmode =
+        //     COUNT(scan hari itu) + 1. Untuk scan pertama COUNT = 0 ->
+        //     inoutmode = 1 (= Clock Out). Jadi data import/sync manual
+        //     SELALU ditandai Clock Out walau sebenarnya scan pertama.
+        //   - Proyek sudah punya catatan: "inoutmode juga tidak bisa
+        //     dipercaya untuk data hasil impor/manual".
+        //   - FaceAttendanceAdminController::resolveShiftActions() sudah
+        //     memilih JAM SCAN vs titik tengah SHIFT sebagai satu-satunya
+        //     sumber label, dengan alasan yang sama.
         //
-        // Urutan sekarang:
-        //   1. Pakai kolom inoutmode dari mesin absen bila tersedia (paling akurat).
-        //   2. Bila tidak ada, bandingkan dengan window clock in/out yang nyata.
-        //   3. Baru terakhir pakai $midpoint (cadangan lama).
-        foreach ($todayLogsRaw as $log) {
-            $scanCarbon = Carbon::parse($log->scan_date);
+        // DAMPAK DI LAPANGAN:
+        // Karyawan yang scan pertama kali jam pagi dengan inoutmode = 1
+        // terbaca $hasClockIn = false dan $hasClockOut = true, sehingga
+        // halaman menampilkan "Sudah Clock Out (...), bisa Clock In" padahal
+        // dia baru scan dan belum clock out sama sekali.
+        //
+        // PERBAIKAN:
+        //   1. Urutkan log scan hari ini berdasarkan waktu.
+        //   2. Tentukan In/Out dari JAM SCAN dibandingkan titik tengah shift
+        //      (acuan sama dengan resolveShiftActions).
+        //   3. inoutmode dari mesin absen tetap dipakai sebagai SINYAL
+        //      TAMBAHAN: bila ada log dengan inoutmode yang bertentangan
+        //      dengan jam scan, log itu diabaikan (bukan dipakai memaksa),
+        //      sehingga label tetap konsisten dengan shift.
+        //
+        // Shift malam (mis. 23:00-07:00) ditangani: $endCarbon sudah
+        // digeser +1 hari bila <= $startCarbon, dan scan sebelum tengah
+        // malam untuk shift berikutnya digeser +24 jam.
+        $todayLogs = [];
+        $hasClockIn = false;
+        $hasClockOut = false;
+        $clockInTime = null;
+        $clockOutTime = null;
 
-            $inoutmode = isset($log->inoutmode) ? (int) $log->inoutmode : null;
-            if ($inoutmode === 0) {
-                // 0 = masuk/IN menurut mesin absen
-                $type = 'in';
-            } elseif ($inoutmode === 1) {
-                // 1 = pulang/OUT menurut mesin absen
-                $type = 'out';
-            } elseif ($scanCarbon->between($clockInStart, $clockInEnd)) {
-                $type = 'in';
-            } elseif ($scanCarbon->between($clockOutStart, $clockOutEnd)) {
-                $type = 'out';
-            } elseif ($scanCarbon->lessThan($midpoint)) {
-                $type = 'in';
-            } else {
-                $type = 'out';
+        $shiftStartMin = ((int) $startCarbon->format('H')) * 60 + (int) $startCarbon->format('i');
+        $shiftEndMin   = ((int) $endCarbon->format('H')) * 60 + (int) $endCarbon->format('i');
+        if ($shiftEndMin <= $shiftStartMin) {
+            $shiftEndMin += 24 * 60;   // shift melewati tengah malam
+        }
+        $shiftMidMin = ($shiftStartMin + $shiftEndMin) / 2;
+
+        $sortedLogs = $todayLogsRaw->sortBy(function ($log) {
+            return Carbon::parse($log->scan_date)->getTimestamp();
+        })->values();
+
+        foreach ($sortedLogs as $log) {
+            $scanCarbon = Carbon::parse($log->scan_date);
+            $scanMin = ((int) $scanCarbon->format('H')) * 60 + (int) $scanCarbon->format('i');
+
+            // Scan yang jauh lebih awal dari jam mulai shift dianggap milik
+            // shift yang sama (mis. shift malam 22:00, scan 21:52).
+            if ($scanMin < $shiftStartMin - 180) {
+                $scanMin += 24 * 60;
             }
+
+            $type = ($scanMin < $shiftMidMin) ? 'in' : 'out';
 
             if ($type === 'in') {
                 $hasClockIn = true;
@@ -317,6 +354,85 @@ class FaceAttendanceController extends Controller
             'longitude' => 'required|numeric',
             'descriptor' => 'required',
         ]);
+
+        // PERBAIKAN V32 (2026-11-03): VERIFIKASI WAJAH VS SESI AKTIF.
+        //
+        // MASALAH SEBELUMNYA:
+        // `descriptor` divalidasi sebagai required, tapi TIDAK PERNAH dipakai.
+        // `storeAttendanceProcess()` langsung membaca sesi NPK tanpa
+        // mencocokkan apakah wajah yang discan memang milik NPK sesi tersebut.
+        //
+        // DAMPAK DI LAPANGAN:
+        // Karyawan B/C yang scan wajah di perangkat bersama (tablet presensi)
+        // setelah karyawan A clock out akan tertahan dengan pesan "sudah
+        // menyelesaikan presensi", padahal itu status A, bukan B/C.
+        //
+        // PENYEBAB:
+        // Halaman presensi tidak selalu lewat /face-attendance/login.
+        // Kalau B/C langsung scan di halaman yang sudah terbuka (sesi masih A),
+        // presensi diproses sebagai A → status A terbaca untuk B/C.
+        //
+        // SOLUSI:
+        // Cocokkan descriptor yang dikirim dengan semua wajah terdaftar
+        // (sama seperti yang dilakukan di loginAuth). Bila match ke NPK ≠ sesi,
+        // UPDATE sesi jadi NPK hasil match. Dengan ini B yang scan wajah
+        // berbeda akan dikenali sebagai B, sesi diubah jadi B, dan presensi
+        // dicatat sebagai B (bukan ditolak karena status A).
+        $descriptor = FaceRecognitionService::normalizeDescriptor($request->input('descriptor'));
+
+        if ($descriptor === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Format descriptor wajah tidak valid. Silakan posisikan wajah dengan jelas.',
+            ], 422);
+        }
+
+        $result = FaceRecognitionService::match($descriptor);
+
+        $face = $result['face'] ?? null;
+        $distance = $result['distance'] ?? null;
+        $threshold = FaceRecognitionService::threshold();
+
+        if (!$face || $distance === null || $distance > $threshold) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Wajah tidak dikenali atau belum terdaftar. Silakan daftar wajah terlebih dahulu.',
+            ], 401);
+        }
+
+        // Cek margin antar-kandidat (sama seperti loginAuth).
+        // Mencegah wajah mirip (mis. sekerabat) ter-match ke orang yang salah.
+        if (!FaceRecognitionService::isConfidentMatch($result)) {
+            \Log::warning('Presensi ditolak: margin antar-kandidat terlalu kecil', [
+                'distance'   => $distance,
+                'threshold'  => $threshold,
+                'npk'        => $face->npk ?? null,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Wajah tidak dapat dipastikan (terlalu mirip dengan karyawan lain). Silakan scan ulang dengan pencahayaan lebih baik.',
+            ], 401);
+        }
+
+        $matchedNpk = $face->npk;
+        $sessionNpk = Session::get('face_attendance_npk');
+
+        // Bila wajah yang discan ≠ sesi aktif, UPDATE sesi ke NPK hasil match.
+        // Ini menangani kasus: B scan di tablet yang sesi-nya masih A.
+        if ($sessionNpk !== $matchedNpk) {
+            \Log::info('Presensi: wajah tidak cocok sesi aktif, update sesi ke NPK hasil pengenalan wajah', [
+                'sesi_lama' => $sessionNpk,
+                'wajah_baru' => $matchedNpk,
+            ]);
+            Session::put('face_attendance_npk', (string)$matchedNpk);
+            Session::put('face_attendance_name', (string)($face->name ?? $matchedNpk));
+
+            // Update timestamp verifikasi terakhir
+            try {
+                $face->update(['last_verified_at' => \Carbon\Carbon::now()]);
+            } catch (\Throwable $e) {}
+        }
 
         // Wrapper: setiap error tak terduga dikembalikan sebagai JSON 200/422
         // dengan pesan yang bisa dibaca user, BUKAN halaman 500 kosong.
@@ -474,6 +590,15 @@ class FaceAttendanceController extends Controller
         $clockOutAfterMinutes = $setting->clock_out_after_minutes ?? 15;
         // PERBAIKAN V31.2: allowance memperpanjang batas akhir window Clock In.
         $clockInAllowanceMinutes = $setting->allowanceMinutes();
+        // PERBAIKAN V31.3d (2026-11-04): variabel ini DULU tidak pernah
+        // dideklarasikan di fungsi ini, padahal dipakai di bawah. Akibatnya
+        // PHP melempar "Undefined variable $clockOutAllowanceMinutes" dan
+        // SELURUH presensi saat login GAGAL dicatat (ditemukan lewat
+        // test_login_simpan_presensi.php yang sebelumnya saya kira gagal
+        // karena DB tidak terjangkau — ternyata bug kode).
+        $clockOutAllowanceMinutes = method_exists($setting, 'allowanceOutMinutes')
+            ? $setting->allowanceOutMinutes()
+            : 0;
 
         // Window:
         // Clock In: [work_start - X menit] s/d [work_start + allowance]
@@ -482,16 +607,19 @@ class FaceAttendanceController extends Controller
         $clockInEnd = $startCarbon->copy()->addMinutes($clockInAllowanceMinutes);
 
         $clockOutStart = $endCarbon->copy();
-        $clockOutEnd = $endCarbon->copy()->addMinutes($clockOutAfterMinutes);
+        $clockOutEnd = $endCarbon->copy()
+            ->addMinutes($clockOutAfterMinutes)
+            ->addMinutes($clockOutAllowanceMinutes);
 
         // Ambil log hari ini untuk cek apakah sudah clock in
         // PERBAIKAN: dibungkus try/catch → JSON 500 deskriptif.
         try {
             $midpoint = $startCarbon->copy()->addSeconds($endCarbon->diffInSeconds($startCarbon) / 2);
-            $existingLogs = DB::table('att_log')
-                ->where('pin', $barcode)
-                ->whereDate('scan_date', $today)
-                ->get();
+            // PERBAIKAN V31.7: normalisasi pin (LTRIM/RTRIM) supaya presensi
+            // yang SUDAH tercatat tetap ditemukan. Tanpa ini karyawan yang
+            // sudah clock in bisa dianggap belum absen, lalu ditulis
+            // Clock Out tanpa Clock In.
+            $existingLogs = $this->queryAttendanceLogsFor($barcode, $today);
         } catch (\Throwable $e) {
             \Log::error('Gagal query att_log pada presensi wajah: ' . $e->getMessage());
             return response()->json([
@@ -750,6 +878,64 @@ class FaceAttendanceController extends Controller
         $suffix = strtoupper(substr(hash('sha256', $unix . '|' . $barcode . '|' . uniqid('', true)), 0, 6));
 
         return $unix . '_FACE_' . $suffix;
+    }
+
+    /**
+     * Normalisasi PIN/barcode agar cocok dengan data di `att_log`.
+     *
+     * PERBAIKAN V31.7 (2026-11-04)
+     * ----------------------------
+     * `att_log.pin` bisa berisi spasi di awal/akhir (ditulis mesin absen
+     * atau proses sync), sedangkan `BIODATA.BARCODE` dibaca driver sebagai
+     * string bersih. Selain itu kolom numerik bisa terbaca sebagai
+     * "12345.0" oleh driver.
+     *
+     * Tanpa normalisasi, `where('pin', $barcode)` tidak match -> presensi
+     * yang SUDAH tercatat dianggap tidak ada -> karyawan yang sudah clock
+     * in terlihat seperti belum absen, dan bisa langsung ditulis Clock Out.
+     *
+     * Rekap admin (FaceAttendanceAdminController) sudah memakai
+     * LTRIM/RTRIM + CONVERT(varchar) untuk hal yang sama. Modul ini
+     * sebelumnya tidak, sehingga hasilnya berbeda antar-layar.
+     *
+     * @param mixed $value
+     */
+    private function normalizePin($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $pin = trim((string) $value);
+
+        // Kolom numerik dibaca driver sebagai "12345.0" -> buang ".0".
+        if ($pin !== '' && substr($pin, -2) === '.0' && ctype_digit(substr($pin, 0, -2))) {
+            $pin = substr($pin, 0, -2);
+        }
+
+        return $pin;
+    }
+
+    /**
+     * Query `att_log` untuk satu karyawan pada satu tanggal, dengan
+     * normalisasi pin (LTRIM/RTRIM + CAST) supaya selalu cocok dengan
+     * `BIODATA.BARCODE`.
+     *
+     * SQL Server versi lama di lingkungan ini tidak mendukung TRIM(),
+     * jadi dipakai LTRIM/RTRIM.
+     *
+     * @param string $barcode
+     * @param string $date    Y-m-d
+     */
+    private function queryAttendanceLogsFor(string $barcode, string $date)
+    {
+        $pin = $this->normalizePin($barcode);
+
+        return DB::table('att_log')
+            ->whereRaw('LTRIM(RTRIM(pin)) = ?', [$pin])
+            ->whereDate('scan_date', $date)
+            ->orderBy('scan_date', 'asc')
+            ->get();
     }
 
     /**
@@ -1019,8 +1205,10 @@ class FaceAttendanceController extends Controller
         $endDate = Carbon::parse($startDate)->endOfMonth()->format('Y-m-d');
 
         // Ambil seluruh logs untuk bulan ini
+        // PERBAIKAN V31.7: normalisasi pin (LTRIM/RTRIM) supaya log dengan
+        // pin berspasi tetap ikut, sama seperti rekap admin.
         $monthlyLogs = DB::table('att_log')
-            ->where('pin', $barcode)
+            ->whereRaw('LTRIM(RTRIM(pin)) = ?', [$this->normalizePin($barcode)])
             ->whereBetween('scan_date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
             ->orderBy('scan_date', 'asc')
             ->get();
@@ -1342,14 +1530,52 @@ class FaceAttendanceController extends Controller
             // Cari kecocokan wajah pada tabel employee_faces
             $result = FaceRecognitionService::match($descriptor);
 
-            // Cek apakah kecocokan valid (threshold 0.600 untuk login presensi yang lebih fleksibel)
+            // Cek apakah kecocokan valid.
+            // PERBAIKAN V31.3d (2026-11-04): DULU angkanya ditulis mati
+            // 0.600 di sini, sehingga halaman presensi memakai ambang
+            // BERBEDA dengan halaman lain dan dengan setelan admin.
+            // Sekarang ambang diambil dari satu sumber:
+            // face_recognition_settings.match_threshold.
             $face = $result['face'] ?? null;
             $distance = $result['distance'] ?? null;
 
-            if (!$face || $distance === null || $distance > 0.600) {
+            $threshold = FaceRecognitionService::threshold();
+
+            if (!$face || $distance === null || $distance > $threshold) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Wajah tidak dikenali atau belum terdaftar di tabel employee_faces.'
+                ], 401);
+            }
+
+            // PERBAIKAN V31.7 (2026-11-04): cek MARGIN antar-kandidat,
+            // sama seperti endpoint lain (LoginController,
+            // PengajuanCutiController, EmployeePayrollController,
+            // FaceRecognitionController).
+            //
+            // MASALAH:
+            // Yang dipakai di sini sebelumnya hanya `distance <= threshold`.
+            // FaceRecognitionService::match() mengembalikan kandidat
+            // TERDEKAT, sehingga dua karyawan dengan wajah mirip (mis.
+            // sekerabat) bisa membuat B yang sedang scan TER-MATCH ke
+            // descriptor A. Kalau A punya sesi aktif, NPK sesi ikut
+            // tertukar dan presensi tercatat untuk orang yang salah.
+            //
+            // SOLUSI:
+            // Pakai FaceRecognitionService::isConfidentMatch(), yang
+            // mensyaratkan distance di bawah ambang DAN selisih terhadap
+            // kandidat kedua minimal MIN_MARGIN. Kalau margin kecil,
+            // pengguna diminta scan ulang.
+            if (!FaceRecognitionService::isConfidentMatch($result)) {
+                \Log::warning('Face login ditolak: margin antar-kandidat terlalu kecil', [
+                    'distance'   => $distance,
+                    'threshold'  => $threshold,
+                    'npk'        => $face->npk ?? null,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Wajah tidak dapat dipastikan (terlalu mirip dengan karyawan lain). Silakan scan ulang dengan pencahayaan lebih baik.'
                 ], 401);
             }
 

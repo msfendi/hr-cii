@@ -132,19 +132,40 @@ class FaceRecognitionController extends Controller
         | PERBAIKAN 25 -- simpan toggle liveness.
         | Dijaga hasColumn supaya kalau migrasi belum dijalankan, form tetap
         | bisa disimpan untuk field lain tanpa error SQL.
+        |
+        | PERBAIKAN V31.2: form liveness SUDAH DIPINDAH ke halaman
+        | Pengaturan Presensi Wajah (/face-attendance/settings). Jadi di sini
+        | field liveness biasanya TIDAK terkirim lagi.
+        |
+        | Kalau tetap memakai "?? false", maka setiap kali admin menyimpan
+        | pengaturan lain di halaman ini (misal toggle QR), liveness akan ikut
+        | TERMATIKAN tanpa disadari. Karena itu sekarang hanya field yang
+        | BENAR-BENAR dikirim yang diubah (ada di $validated).
         */
         try {
-            if (\Illuminate\Support\Facades\Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled')) {
-                $updateData['is_liveness_enabled'] = (bool) ($validated['is_liveness_enabled'] ?? false);
+            $adaKolomLiveness = \Illuminate\Support\Facades\Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled');
 
+            if ($adaKolomLiveness) {
+                $kolomLiveness = ['is_liveness_enabled'];
                 foreach (['presensi', 'login', 'slip', 'cuti'] as $menu) {
-                    $column = 'liveness_' . $menu . '_enabled';
-
-                    if (\Illuminate\Support\Facades\Schema::hasColumn('face_recognition_settings', $column)) {
-                        // Checkbox tidak terkirim sama sekali = tidak dicentang.
-                        $updateData[$column] = (bool) ($validated[$column] ?? false);
-                    }
+                    $kolomLiveness[] = 'liveness_' . $menu . '_enabled';
                 }
+
+                $dikirim = false;
+                foreach ($kolomLiveness as $column) {
+                    // Hanya sentuh kalau field ini benar-benar ada di request.
+                    if (!array_key_exists($column, $validated)) {
+                        continue;
+                    }
+                    if (!\Illuminate\Support\Facades\Schema::hasColumn('face_recognition_settings', $column)) {
+                        continue;
+                    }
+                    $updateData[$column] = (bool) $validated[$column];
+                    $dikirim = true;
+                }
+
+                // Kalau tidak ada field liveness sama sekali, jangan ubah apa pun.
+                // (Tidak perlu aksi, $updateData tidak berisi kolom liveness.)
             }
         } catch (\Throwable $e) {
             // Abaikan jika pengecekan skema gagal / belum dimigrasi
@@ -385,6 +406,16 @@ class FaceRecognitionController extends Controller
 
         return view('face_recognition.self_register', [
             'isFaceEnabled' => $isEnabled,
+            // PERBAIKAN V31.3d (2026-11-04): kirim ambang resmi ke halaman
+            // registrasi mandiri. DULU halaman ini memakai angka keras 0.55
+            // di JavaScript, jadi bila admin mengubah match_threshold di
+            // Settings, registrasi tetap memakai 0.55 dan bisa menerima
+            // wajah orang lain sebagai "cocok".
+            'matchThreshold' => FaceRecognitionService::threshold(),
+            // PERBAIKAN V31.3d (2026-11-04): kirim status liveness menu
+            // "registrasi". Tanpa ini, gerbang liveness di step 4 tidak akan
+            // pernah aktif karena view tidak tahu setelan admin.
+            'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('registrasi'),
         ]);
     }
 
@@ -585,15 +616,16 @@ class FaceRecognitionController extends Controller
 
             $distance = FaceRecognitionService::euclidean($live, $stored);
 
-            $threshold = 0.55;
-            try {
-                $threshold = FaceRecognitionService::threshold();
-                if ($threshold < 0.50) {
-                    $threshold = 0.55;
-                }
-            } catch (\Throwable $e) {
-                $threshold = 0.55;
-            }
+            // PERBAIKAN V31.3d (2026-11-04): DULU di sini ada kode yang
+            // MENIMPA nilai dari tabel:
+            //     $threshold = 0.55;
+            //     $threshold = FaceRecognitionService::threshold();
+            //     if ($threshold < 0.50) $threshold = 0.55;   <-- penimpa
+            // Akibatnya setelan admin di face_recognition_settings
+            // .match_threshold DIABAIKAN bila nilainya di bawah 0,50
+            // (misalnya 0,40 untuk mode ketat) dan diam-diam diganti
+            // 0,55. Sekarang nilai tabel dipakai apa adanya.
+            $threshold = FaceRecognitionService::threshold();
 
             $matched = $distance <= $threshold;
 

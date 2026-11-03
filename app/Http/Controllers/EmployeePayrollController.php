@@ -35,6 +35,10 @@ class EmployeePayrollController extends Controller
             'periods'     => $periods,
             'faceEnabled' => FaceRecognitionService::isEnabled(),
             'qrEnabled'   => FaceRecognitionService::isQrPayrollEnabled(),
+            // PERBAIKAN V31.3c (2026-11-04): status liveness menu "slip"
+            // DULU tidak dikirim ke view. Toggle di Settings bisa ON,
+            // tapi halaman login payroll tidak pernah memeriksa apa pun.
+            'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('slip'),
         ]);
     }
 

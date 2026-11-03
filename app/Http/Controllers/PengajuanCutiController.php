@@ -26,6 +26,10 @@ class PengajuanCutiController extends Controller
         return view('cuti.login', [
             'qrEnabled'   => FaceRecognitionService::isQrCutiEnabled(),
             'faceEnabled' => FaceRecognitionService::isEnabled(),
+            // PERBAIKAN V31.3c (2026-11-04): status liveness menu "cuti"
+            // DULU tidak dikirim ke view. Toggle di Settings bisa ON,
+            // tapi halaman login cuti tidak pernah memeriksa apa pun.
+            'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('cuti'),
         ]);
     }
 

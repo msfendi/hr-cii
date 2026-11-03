@@ -68,6 +68,7 @@ class FaceAttendanceSettingController extends Controller
             'clock_in_before_minutes' => 'required|integer|min:0|max:240',
             'clock_in_allowance_minutes' => 'nullable|integer|min:0|max:120',
             'clock_out_after_minutes' => 'required|integer|min:0|max:240',
+            'clock_out_allowance_minutes' => 'nullable|integer|min:0|max:120',
         ]);
 
         $setting = FaceAttendanceSetting::current();
@@ -84,12 +85,19 @@ class FaceAttendanceSettingController extends Controller
         if (FaceAttendanceSetting::hasAllowanceColumn()) {
             $setting->clock_in_allowance_minutes = (int) $request->input('clock_in_allowance_minutes', 0);
         }
+        if (FaceAttendanceSetting::hasAllowanceColumn('clock_out_allowance_minutes')) {
+            $setting->clock_out_allowance_minutes = (int) $request->input('clock_out_allowance_minutes', 0);
+        }
 
         $setting->save();
 
         $pesan = 'Pengaturan window presensi wajah berhasil disimpan.';
         if (!FaceAttendanceSetting::hasAllowanceColumn()) {
-            $pesan .= ' CATATAN: kolom allowance belum ada di database, nilai allowance BELUM tersimpan. '
+            $pesan .= ' CATATAN: kolom allowance clock in belum ada di database, nilainya BELUM tersimpan. '
+                    . 'Jalankan "php artisan migrate" lalu simpan ulang.';
+        }
+        if (!FaceAttendanceSetting::hasAllowanceColumn('clock_out_allowance_minutes')) {
+            $pesan .= ' CATATAN: kolom allowance clock out belum ada di database, nilainya BELUM tersimpan. '
                     . 'Jalankan "php artisan migrate" lalu simpan ulang.';
         }
 
@@ -114,6 +122,8 @@ class FaceAttendanceSettingController extends Controller
             'liveness_login_enabled'    => 'nullable|boolean',
             'liveness_slip_enabled'     => 'nullable|boolean',
             'liveness_cuti_enabled'     => 'nullable|boolean',
+            // PERBAIKAN V31.3d (2026-11-04): menu registrasi mandiri.
+            'liveness_registrasi_enabled' => 'nullable|boolean',
         ]);
 
         try {
@@ -139,6 +149,11 @@ class FaceAttendanceSettingController extends Controller
             }
             if (Schema::hasColumn('face_recognition_settings', 'liveness_cuti_enabled')) {
                 $setting->liveness_cuti_enabled = $request->boolean('liveness_cuti_enabled');
+            }
+            // PERBAIKAN V31.3d: guard hasColumn tetap dipakai supaya halaman
+            // ini tidak error bila migrasi belum dijalankan di server.
+            if (Schema::hasColumn('face_recognition_settings', 'liveness_registrasi_enabled')) {
+                $setting->liveness_registrasi_enabled = $request->boolean('liveness_registrasi_enabled');
             }
 
             $setting->save();

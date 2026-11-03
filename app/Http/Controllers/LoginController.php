@@ -18,6 +18,11 @@ class LoginController extends Controller
         return view('auth.login', [
             'faceEnabled' => FaceRecognitionService::isEnabled(),
             'qrEnabled'   => FaceRecognitionService::isQrLoginEnabled(),
+            // PERBAIKAN V31.3c (2026-11-04): status liveness dari Settings
+            // untuk menu "login" DULU tidak pernah dikirim ke view, sehingga
+            // walau toggle di Settings ON, halaman /login tidak tahu apa-apa
+            // dan tidak pernah memeriksa liveness.
+            'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('login'),
         ]);
     }
 

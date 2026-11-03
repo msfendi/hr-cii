@@ -273,7 +273,19 @@
                     <i class="fas fa-shield-alt text-primary mr-1"></i> Langkah 4 &mdash; Verifikasi Wajah Langsung
                 </div>
                 <p class="small text-muted mb-2">Lihat langsung ke kamera untuk verifikasi instan menggunakan face-api.</p>
-                
+
+                {{-- PERBAIKAN V31.3d (2026-11-04): banner liveness di step 4.
+                     DULU halaman registrasi mandiri tidak punya pemeriksaan
+                     liveness sama sekali, walau Settings menu registrasi ON.
+                     Akibatnya orang bisa mendaftarkan wajah memakai foto/HP
+                     orang lain, lalu absennya diwakilkan. --}}
+                @if ($livenessEnabled ?? false)
+                <div id="livenessFaceBanner" class="liveness-face-banner d-flex align-items-center justify-content-center mb-2">
+                    @include('face_attendance._liveness_face')
+                    <span class="liveness-face-text font-weight-bold">LIVENESS CHECK: MENOLEH</span>
+                </div>
+                @endif
+
                 <div class="camera-square shadow-sm mb-2">
                     <video id="verVideo" autoplay muted playsinline></video>
                     <div class="scanner-guide-oval" id="verGuide"></div>
@@ -297,6 +309,12 @@
 
 <!-- SCRIPTS -->
 <script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
+{{-- PERBAIKAN V31.3d (2026-11-04): detektor liveness bersama.
+     Dipakai gerbang verifikasi step 4 supaya registrasi tidak bisa
+     diselesaikan memakai foto/video (anti daftar wajah orang lain). --}}
+@if ($livenessEnabled ?? false)
+<script src="{{ asset('js/liveness-check.js') }}"></script>
+@endif
 <script>
     if (typeof faceapi === 'undefined') {
         document.write('<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"><\/script>');
@@ -320,6 +338,12 @@
     let verTimer = null;
     let isCapturing = false;
     let isVerified = false;
+
+    // PERBAIKAN V31.3d (2026-11-04): status liveness untuk step 4.
+    // livenessWajib dibaca dari Settings (menu "registrasi"); bila OFF,
+    // gerbang dilewati sehingga perilaku lama tetap utuh.
+    const livenessWajib = {{ ($livenessEnabled ?? false) ? 'true' : 'false' }};
+    let livenessStep4 = null;
 
     function setProgress(n) {
         const bars = document.querySelectorAll('#srProgress span');
@@ -681,6 +705,10 @@
         st.innerHTML = '<span class="text-primary font-weight-bold"><i class="fas fa-eye mr-1"></i> Lihat ke kamera untuk verifikasi wajah...</span>';
 
         isVerified = false;
+        // PERBAIKAN V31.3d: mulai hitungan liveness dari nol tiap kali
+        // verifikasi dibuka ulang, supaya gerakan menoleh dari percobaan
+        // sebelumnya tidak dihitung sebagai bukti pada percobaan ini.
+        livenessStep4 = null;
         let isVerifying = false;
 
         // Munculkan tombol Ambil Ulang Foto jika setelah 8 detik belum cocok
@@ -713,6 +741,26 @@
 
                 const liveDesc = Array.from(det.descriptor);
 
+                // --- GERBANG LIVENESS (PERBAIKAN V31.3d) ---
+                // DULU baris berikutnya langsung menghitung jarak, jadi
+                // registrasi bisa diselesaikan dengan mengarahkan kamera ke
+                // FOTO orang lain. Sekarang pencocokan ditahan sampai
+                // liveness (menoleh) lolos. Status wajib/tidaknya datang
+                // dari Settings menu "registrasi", bukan ditulis di sini.
+                if (livenessWajib) {
+                    if (!livenessStep4) {
+                        livenessStep4 = new LivenessCheck({ required: true });
+                    }
+                    const hasilLiveness = livenessStep4.update(det.landmarks || null);
+                    if (!hasilLiveness.passed) {
+                        verGuide.classList.remove('success');
+                        st.innerHTML = '<span class="text-info font-weight-bold">'
+                            + '<i class="fas fa-arrows-alt-h mr-1"></i> ' + hasilLiveness.hint + '</span>';
+                        isVerifying = false;
+                        return;
+                    }
+                }
+
                 // Gunakan face-api Euclidean distance secara instan di browser
                 let dist = 1.0;
                 if (typeof faceapi !== 'undefined' && faceapi.euclideanDistance) {
@@ -726,8 +774,12 @@
                     dist = Math.sqrt(sum);
                 }
 
-                // Threshold toleransi face-api (0.55 stabil untuk model Tiny)
-                if (dist <= 0.55) {
+                // PERBAIKAN V31.3d (2026-11-04): ambang diambil dari
+                // face_recognition_settings.match_threshold (satu sumber
+                // untuk semua kamera wajah). DULU angka 0.55 ditulis mati
+                // di sini, sehingga setelan admin tidak berpengaruh.
+                const ambangCocok = {{ (float) ($matchThreshold ?? 0.5) }};
+                if (dist <= ambangCocok) {
                     isVerified = true;
                     clearInterval(verTimer);
                     verGuide.classList.add('success');
@@ -756,12 +808,19 @@
 
                     Swal.fire({
                         icon: 'success',
-                        title: 'Registrasi Wajah Berhasil!',
-                        text: 'Wajah Anda berhasil diverifikasi secara instan dengan face-api.',
-                        confirmButtonText: 'Selesai &amp; Menuju Login',
+                        title: 'Pendaftaran Berhasil!',
+                        text: 'Wajah Anda berhasil didaftarkan. Anda akan diarahkan ke halaman utama.',
+                        confirmButtonText: 'Selesai',
                         confirmButtonColor: '#1e3c72'
                     }).then(() => {
-                        window.location.href = "{{ route('login') }}";
+                        // PERBAIKAN V31.3e (2026-11-04): permintaan Anda --
+                        // JANGAN ke halaman login. Cukup SweetAlert sukses,
+                        // lalu ke route '/' (halaman utama HRIS).
+                        // Ditulis sebagai path relatif '/' , BUKAN url('/'),
+                        // karena url() menghasilkan host dari APP_URL yang
+                        // bisa berbeda dengan host yang dipakai browser
+                        // (terbukti: CLI menghasilkan http://hr-cii.test:8080).
+                        window.location.href = '/';
                     });
                     return;
                 } else {
@@ -795,7 +854,9 @@
     };
 
     document.getElementById('btnFinish').onclick = () => {
-        window.location.href = "{{ route('login') }}";
+        // PERBAIKAN V31.3e: tombol "Selesai" di langkah 4 juga ke '/' ,
+        // bukan ke halaman login. Path relatif, lihat alasan di atas.
+        window.location.href = '/';
     };
 </script>
 
