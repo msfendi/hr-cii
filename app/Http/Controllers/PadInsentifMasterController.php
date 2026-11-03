@@ -677,36 +677,40 @@ class PadInsentifMasterController extends Controller
             $employeeAssignmentsByDate = $assignments->groupBy('date');
             // dd($employeeAssignmentsByDate);
 
-            $totalDeptInsentif = 0;
-            $operatorNpks = [];
+            /*
+            |--------------------------------------------------------------------------
+            | HITUNG PER SEGMEN TIM (SAMA SEPERTI HEAT / EXCEL)
+            |--------------------------------------------------------------------------
+            | Tiap nilai "tim" (1 / 2 / null) adalah 1 segmen yang punya
+            | numerator & denominator sendiri:
+            |   rata-rata segmen = total insentif operator segmen / operator unik segmen
+            | Hasil tiap segmen dijumlahkan, baru dikali faktor role.
+            | (Sebelumnya semua tanggal digabung jadi 1 numerator & 1 denominator,
+            | sehingga operator dari segmen tim lain ikut membagi.)
+            |--------------------------------------------------------------------------
+            */
+            $segments = []; // key: tim (atau 'null') => ['total' => x, 'npks' => []]
 
             foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
 
-                /*
-                |--------------------------------------------------------------------------
-                | CHECK RESIGN (NEW)
-                |--------------------------------------------------------------------------
-                */
+                // CHECK RESIGN
                 if ($tkkDate && $date >= $tkkDate) {
                     continue;
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | AMBIL TIM EMPLOYEE UNTUK TANGGAL INI
-                |--------------------------------------------------------------------------
-                */
+                // TIM EMPLOYEE UNTUK TANGGAL INI
                 $tim = $rowsForDate
                     ->pluck('tim')
                     ->filter(fn($t) => $t !== null && $t !== '')
                     ->first();
 
-                /*
-                |----------------------------------
-                | TOTAL DEPT INSENTIF (NUMERATOR)
-                | ONLY VALID OPERATOR, TIM SAMA (JIKA ADA)
-                |----------------------------------
-                */
+                $segKey = is_null($tim) ? 'null' : (string) $tim;
+
+                if (!isset($segments[$segKey])) {
+                    $segments[$segKey] = ['total' => 0, 'npks' => []];
+                }
+
+                // OPERATOR PEMBANDING (TIM SAMA JIKA ADA)
                 $operatorQuery = DB::table('pad_efficiencies')
                     ->where('period_id', $period->id)
                     ->where('role', '=', 'operator')
@@ -717,8 +721,6 @@ class PadInsentifMasterController extends Controller
                 }
 
                 $operatorsForDate = $operatorQuery->get();
-
-                // dd($tim, $operatorsForDate);
 
                 foreach ($operatorsForDate as $operator) {
                     // FILTER HANYA NUMERATOR
@@ -731,28 +733,28 @@ class PadInsentifMasterController extends Controller
                         $formula
                     );
 
-                    $totalDeptInsentif += $rate * $operator->piece;
-                    $operatorNpks[] = $operator->npk;
-
-                    // dd($totalDeptInsentif);
+                    $segments[$segKey]['total'] += $rate * $operator->piece;
+                    $segments[$segKey]['npks'][] = $operator->npk;
                 }
             }
 
             /*
-                |----------------------------------
-                | DENOMINATOR (ALL OPERATOR, TIM SAMA PER TANGGAL)
-                |----------------------------------
-                */
-            $jumlahOperator = collect($operatorNpks)->unique()->count();
+            |--------------------------------------------------------------------------
+            | JUMLAHKAN HASIL TIAP SEGMEN
+            |--------------------------------------------------------------------------
+            | calculateRolePadInsentif() linear terhadap (total / jumlahOperator),
+            | jadi dipanggil per segmen lalu dijumlahkan.
+            */
+            foreach ($segments as $segment) {
+                $jumlahOperator = collect($segment['npks'])->unique()->count();
 
-            // dd($totalDeptInsentif, $jumlahOperator);
-
-            $amount += $this->calculateRolePadInsentif(
-                $role,
-                'pad',
-                $totalDeptInsentif,
-                $jumlahOperator
-            );
+                $amount += $this->calculateRolePadInsentif(
+                    $role,
+                    'pad',
+                    $segment['total'],
+                    $jumlahOperator
+                );
+            }
         }
 
 
