@@ -493,7 +493,7 @@ window.stopFaceLogin  = function () {};
     // Variabel status (initialNoseRatio, headTurnStreak, eyeBaseline, ...)
     // juga memakai nama dan perlakuan yang sama seperti halaman acuan.
     const DETECT_MISS_TOLERANCE = 8;       // toleransi 8 frame tanpa wajah (~2,4 dtk)
-    const HEAD_TURN_STREAK_REQUIRED = 3;   // butuh 3 frame berturut-turut
+    const HEAD_TURN_STREAK_REQUIRED = 2;   // butuh 2 frame berturut-turut (lebih cepat untuk laptop)
 
     let livenessVerified = false;
     let initialNoseRatio = null;
@@ -588,11 +588,17 @@ window.stopFaceLogin  = function () {};
 
         // Menoleh sah bila:
         //   a. hidung jelas bergeser dari tengah (di luar 0.32-0.68), ATAU
-        //   b. deviasi terhadap baseline melewati ambang 0.06
-        // V32.0: zona & deviasi diperluas sesuai catatan V31.9 supaya
-        // menoleh sedikit benar-benar lolos (angka lama terlalu ketat).
+        //   b. deviasi terhadap baseline melewati ambang 0.04
+        // V32.1: threshold diturunkan 0.06→0.04 dan streak 3→2 karena
+        // laptop webcam (angle rendah) menghasilkan deviasi lebih kecil
+        // dibanding HP front camera. HP tetap lolos karena threshold lebih rendah.
         const jauhDariTengah = (currentRatio < 0.32 || currentRatio > 0.68);
-        const deviasiCukup = absDelta > 0.06;
+        const deviasiCukup = absDelta > 0.04;
+        
+        // Debug log untuk troubleshoot (hapus setelah fix confirmed)
+        if (headTurnStreak > 0 || deviasiCukup) {
+            console.log('[LIVENESS]', 'ratio:', currentRatio.toFixed(3), 'delta:', absDelta.toFixed(3), 'streak:', headTurnStreak, 'pass:', deviasiCukup || jauhDariTengah);
+        }
 
         if (jauhDariTengah || deviasiCukup) {
             headTurnStreak += 1;
