@@ -1514,6 +1514,7 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store');
     Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
     Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
+    Route::patch('/location/{id}/toggle-status', [FaceAttendanceController::class, 'toggleLocationStatus'])->name('location.toggle-status');
     Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
 
     // Pengaturan Window Presensi & Izin Akses Karyawan

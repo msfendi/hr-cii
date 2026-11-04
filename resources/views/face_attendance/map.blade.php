@@ -94,6 +94,33 @@
                                 <span class="badge badge-light text-dark font-weight-normal small">Gunakan ikon polygon untuk gambar / ikon edit untuk ubah titik</span>
                             </div>
                             <div class="card-body p-0">
+                                <!-- Cari Titik Koordinat -->
+                                <div class="px-3 pt-3 pb-2 border-bottom bg-light">
+                                    <label class="font-weight-bold text-gray-700 small mb-1 d-block">
+                                        <i class="fas fa-crosshairs text-primary mr-1"></i>
+                                        Cari Titik Koordinat (Latitude, Longitude)
+                                    </label>
+                                    <div class="form-row align-items-end">
+                                        <div class="col-sm-5 mb-2 mb-sm-0">
+                                            <input type="text" id="searchLat" class="form-control form-control-sm shadow-sm" placeholder="Latitude, mis. -7.010300866192923">
+                                        </div>
+                                        <div class="col-sm-5 mb-2 mb-sm-0">
+                                            <input type="text" id="searchLng" class="form-control form-control-sm shadow-sm" placeholder="Longitude, mis. 107.74745258715632">
+                                        </div>
+                                        <div class="col-sm-2 mb-2 mb-sm-0">
+                                            <button type="button" id="btnSearchCoord" class="btn btn-sm btn-primary btn-block rounded-pill shadow-sm">
+                                                <i class="fas fa-search mr-1"></i> Cari
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="form-row mt-1">
+                                        <div class="col-12">
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                                Ambil koordinat dari Google Maps (klik kanan pada titik &rarr; salin koordinat), lalu tempel di atas. Peta akan langsung menuju titik tersebut, siap menggambar polygon.
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div id="map" style="height: 520px; width: 100%;"></div>
                             </div>
                         </div>
@@ -117,7 +144,7 @@
                                         <th class="py-3">Nama Lokasi</th>
                                         <th class="py-3">Keterangan</th>
                                         <th class="py-3">Status</th>
-                                        <th class="py-3 text-center" style="width: 180px;">Aksi</th>
+                                        <th class="py-3 text-center" style="width: 280px;">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -137,6 +164,15 @@
                                             <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 mr-1 shadow-sm" onclick="editLocation({{ $loc->id }})" title="Edit Lokasi & Polygon">
                                                 <i class="fas fa-edit mr-1"></i> Edit
                                             </button>
+                                            @if($loc->is_active)
+                                                <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 mr-1 shadow-sm" onclick="toggleLocationStatus({{ $loc->id }}, 0, @js($loc->name))" title="Non-Aktifkan Lokasi Ini">
+                                                    <i class="fas fa-toggle-on mr-1"></i> Disable
+                                                </button>
+                                            @else
+                                                <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 mr-1 shadow-sm" onclick="toggleLocationStatus({{ $loc->id }}, 1, @js($loc->name))" title="Aktifkan Lokasi Ini">
+                                                    <i class="fas fa-toggle-off mr-1"></i> Enable
+                                                </button>
+                                            @endif
                                             <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm" onclick="deleteLocation({{ $loc->id }})" title="Hapus Lokasi">
                                                 <i class="fas fa-trash-alt mr-1"></i> Hapus
                                             </button>
@@ -244,6 +280,96 @@
     }
 
     renderStaticLocations();
+
+    // ============================================================
+    // CARI TITIK KOORDINAT
+    // Admin mengambil lat/lng dari Google Maps, lalu peta langsung
+    // bergerak ke titik tersebut supaya polygon mudah digambar
+    // di area yang jauh dari titik awal.
+    // ============================================================
+    let searchMarker = null;
+
+    function parseCoord(value) {
+        if (value === null || value === undefined) return NaN;
+        // Terima format desimal biasa.
+        let v = String(value).trim().replace(/,/g, '.');
+        // Terima juga "lat, lng" yang ditempel di satu kolom.
+        if (v.indexOf(',') !== -1 || v.indexOf(' ') !== -1) {
+            let parts = v.split(/[,;\s]+/).filter(function (p) { return p !== ''; });
+            if (parts.length >= 2) {
+                return parseFloat(parts[0]);
+            }
+        }
+        return parseFloat(v);
+    }
+
+    function gotoCoordinate(lat, lng) {
+        if (!isFinite(lat) || !isFinite(lng)) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Koordinat tidak valid',
+                text: 'Latitude dan Longitude harus berupa angka.\nContoh: -7.010300866192923 dan 107.74745258715632',
+                confirmButtonColor: '#e74a3b'
+            });
+            return;
+        }
+
+        if (lat < -90 || lat > 90) {
+            Swal.fire({ icon: 'error', title: 'Latitude di luar rentang', text: 'Latitude harus antara -90 dan 90.', confirmButtonColor: '#e74a3b' });
+            return;
+        }
+        if (lng < -180 || lng > 180) {
+            Swal.fire({ icon: 'error', title: 'Longitude di luar rentang', text: 'Longitude harus antara -180 dan 180.', confirmButtonColor: '#e74a3b' });
+            return;
+        }
+
+        // Pindah ke titik koordinat dengan zoom dekat.
+        map.flyTo([lat, lng], 17, { duration: 1.2 });
+
+        // Tandai titik yang dicari agar admin jelas posisinya.
+        if (searchMarker) {
+            map.removeLayer(searchMarker);
+        }
+        searchMarker = L.marker([lat, lng], {
+            draggable: true,
+            icon: L.divIcon({
+                className: '',
+                html: '<div style="background:#e74a3b;color:#fff;border-radius:50%;width:18px;height:18px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>',
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
+            })
+        }).addTo(map);
+
+        searchMarker.bindPopup('<b>Titik koordinat</b><br>Lat: ' + lat + '<br>Lng: ' + lng).openPopup();
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: 'Peta dipindahkan',
+            text: 'Lat ' + lat + ' / Lng ' + lng + ' - siap menggambar polygon.',
+            showConfirmButton: false,
+            timer: 3500
+        });
+    }
+
+    function searchCoordinate() {
+        let lat = parseCoord(document.getElementById('searchLat').value);
+        let lng = parseCoord(document.getElementById('searchLng').value);
+        gotoCoordinate(lat, lng);
+    }
+
+    document.getElementById('btnSearchCoord').addEventListener('click', searchCoordinate);
+
+    // Enter pada kolom koordinat = klik tombol Cari.
+    ['searchLat', 'searchLng'].forEach(function (id) {
+        document.getElementById(id).addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchCoordinate();
+            }
+        });
+    });
 
     // Fungsi Edit Lokasi & Polygon
     function editLocation(id) {
@@ -361,6 +487,66 @@
             Swal.fire('Error', 'Terjadi kesalahan sistem saat menyimpan lokasi.', 'error');
         });
     });
+
+    // Ambil token CSRF dari form yang sudah ada di halaman.
+    // Lebih andal daripada menyalin token lewat Blade, karena token
+    // selalu sinkron dengan session yang sedang dipakai browser.
+    function getCsrfToken() {
+        let el = document.querySelector('input[name="_token"]');
+        if (el && el.value) {
+            return el.value;
+        }
+        let meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? (meta.getAttribute('content') || '') : '';
+    }
+
+    // ============================================================
+    // AKSI AKTIF / NON-AKTIF LOKASI (dari tabel)
+    // ============================================================
+    function toggleLocationStatus(id, newStatus, name) {
+        let isEnable = (newStatus === 1 || newStatus === '1' || newStatus === true);
+        let title = isEnable ? 'Aktifkan Lokasi?' : 'Non-Aktifkan Lokasi?';
+        let text = isEnable
+            ? 'Lokasi "' + name + '" akan diaktifkan dan dapat dipakai untuk presensi wajah.'
+            : 'Lokasi "' + name + '" akan dinonaktifkan dan tidak dapat dipakai untuk presensi wajah.';
+
+        Swal.fire({
+            title: title,
+            text: text,
+            icon: isEnable ? 'question' : 'warning',
+            showCancelButton: true,
+            confirmButtonColor: isEnable ? '#1cc88a' : '#e74a3b',
+            cancelButtonColor: '#858796',
+            confirmButtonText: isEnable ? 'Ya, Aktifkan' : 'Ya, Non-Aktifkan',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            fetch("{{ url('/face-attendance/location') }}/" + id + "/toggle-status", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN": getCsrfToken()
+                },
+                body: JSON.stringify({ is_active: isEnable ? 1 : 0 })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Berhasil', data.message, 'success').then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire('Gagal', data.message || 'Gagal mengubah status lokasi.', 'error');
+                }
+            })
+            .catch(err => {
+                Swal.fire('Error', 'Terjadi kesalahan sistem saat mengubah status lokasi.', 'error');
+            });
+        });
+    }
 
     function deleteLocation(id) {
         Swal.fire({

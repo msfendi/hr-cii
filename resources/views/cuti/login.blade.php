@@ -181,10 +181,10 @@
 @include('layout.footerscript')
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
-<script src="{{ asset('js/face-recognition.js') }}"></script>
+<script src="{{ asset('vendor-face-api/face-api.js') . '?v=325' }}"></script>
+<script src="{{ asset('js/face-recognition.js') . '?v=325' }}"></script>
 {{-- PERBAIKAN V31.3c (2026-11-04): detektor liveness bersama --}}
-<script src="{{ asset('js/liveness-check.js') }}"></script>
+<script src="{{ asset('js/liveness-check.js') . '?v=325' }}"></script>
 
 <script>
 /* ==================== QR SCANNER ==================== */
@@ -309,7 +309,7 @@ const livenessWajib = {{ ($livenessEnabled ?? true) ? 'true' : 'false' }};
 // wajah diam dengan goyangan kamera tetap tidak lolos (anti-foto).
 //   * toleransi hilang-deteksi 8 frame (DETECT_MISS_TOLERANCE)
 const DETECT_MISS_TOLERANCE = 8;       // toleransi 8 frame tanpa wajah
-const HEAD_TURN_STREAK_REQUIRED = 3;   // butuh 3 frame berturut-turut
+const HEAD_TURN_STREAK_REQUIRED = 2;   // butuh 2 frame berturut-turut
 
 let livenessVerified = false;
 let initialNoseRatio = null;
@@ -320,6 +320,17 @@ let lastGoodNoseRatio = null;
 let eyeBaseline = null;
 let eyeClosedSeen = false;
 let detectMissCount = 0;
+let livenessAdaptiveThreshold = 0.04;  // ambang deviasi, bisa turun adaptif
+let livenessSmallDeltaCount = 0;
+
+/**
+ * Log diagnostik liveness ke console browser.
+ */
+function DBG(msg) {
+    try {
+        console.log('[LIVENESS] ' + msg);
+    } catch (e) { /* noop */ }
+}
 
 /**
  * Deteksi kedipan mata (sama persis dengan halaman acuan).
@@ -379,38 +390,85 @@ function checkHeadTurn(landmarks) {
     if (!leftJaw || !rightJaw || !noseTip) return false;
 
     const jawWidth = Math.abs(rightJaw.x - leftJaw.x);
-    if (!isFinite(jawWidth) || jawWidth < 40) return false;
+    // Wajah terlalu kecil / jauh -> jangan ambil kesimpulan apa pun.
+    // V32.5: ambang 40px diturunkan ke 30px. Webcam laptop (720p/1080p,
+    // user duduk lebih jauh) menghasilkan landmark wajah lebih kecil ->
+    // iterasi berbasis landmark lama berhenti di guard ini, delta selalu 0
+    // dan streak tidak pernah naik.
+    if (!isFinite(jawWidth) || jawWidth < 30) {
+        DBG('STOP: jawWidth=' + jawWidth.toFixed(1) + ' (< 30, wajah terlalu kecil)');
+        return false;
+    }
 
     const currentRatio = (noseTip.x - leftJaw.x) / jawWidth;
     if (!isFinite(currentRatio)) return false;
 
+    // -- Baseline pertama: rekam, belum bisa dinilai --
     if (initialNoseRatio === null) {
         initialNoseRatio = currentRatio;
         lastGoodNoseRatio = currentRatio;
         headTurnStreak = 0;
+        livenessAdaptiveThreshold = 0.04;
+        livenessSmallDeltaCount = 0;
+        DBG('INIT ratio=' + currentRatio.toFixed(3) + ' jawWidth=' + jawWidth.toFixed(1));
         return false;
     }
 
+    // -- Hitung deviasi terhadap baseline --
     const delta = currentRatio - initialNoseRatio;
     const absDelta = Math.abs(delta);
 
-    // V32.0: zona & deviasi diperluas (0.32-0.68 / 0.06) supaya
-    // menoleh sedikit lolos; angka lama 0.40-0.60/0.12 terlalu ketat.
+    // Menoleh sah bila:
+    //   a. hidung jelas bergeser dari tengah (di luar 0.32-0.68), ATAU
+    //   b. deviasi terhadap baseline melewati ambang adaptif
     const jauhDariTengah = (currentRatio < 0.32 || currentRatio > 0.68);
-    const deviasiCukup = absDelta > 0.06;
+
+    // ============================================================
+    // AMBANG ADAPTIF (menyamakan halaman /login).
+    // Ambang diturunkan DINAMIS hanya ketika delta kecil terus-
+    // terus teramati, sehingga keamanan tidak diturunkan statis.
+    // ============================================================
+    const AMBANG_MIN = 0.03;
+    const AMBANG_STASIS = 0.04;
+
+    if (absDelta > 0.08) {
+        // Gerak tegas terdeteksi -> kembalikan ambang ke normal.
+        livenessAdaptiveThreshold = AMBANG_STASIS;
+        livenessSmallDeltaCount = 0;
+    } else if (absDelta < 0.02) {
+        livenessSmallDeltaCount += 1;
+        if (livenessSmallDeltaCount > 8) {
+            livenessAdaptiveThreshold = Math.max(AMBANG_MIN, livenessAdaptiveThreshold - 0.005);
+            livenessSmallDeltaCount = 0;
+        }
+    } else {
+        livenessSmallDeltaCount = 0;
+    }
+
+    const deviasiCukup = absDelta > livenessAdaptiveThreshold;
+
+    // Log UNCONDITIONAL: setiap frame yang lolos guard print
+    // ratio/delta/streak/ambang, sehingga ada jejak di console.
+    DBG('ratio=' + currentRatio.toFixed(3) +
+        ' delta=' + absDelta.toFixed(3) +
+        ' streak=' + headTurnStreak +
+        ' ambang=' + livenessAdaptiveThreshold.toFixed(3) +
+        ' netral=' + (!jauhDariTengah) +
+        ' blink=' + blinkDetected);
 
     if (jauhDariTengah || deviasiCukup) {
         headTurnStreak += 1;
     } else {
+        // Gerakan kecil / noise -> jangan reset baseline, cukup kurangi streak.
         headTurnStreak = Math.max(0, headTurnStreak - 1);
     }
 
-        // Baseline diperbarui pelan HANYA saat wajah kembali ke posisi netral,
-        // supaya perubahan postur jangka panjang (geser duduk, dsb.) terserap
-        // tanpa menghapus bukti geleng yang sedang berlangsung. (sama acuan)
-        if (!deviasiCukup) {
-            initialNoseRatio = initialNoseRatio * 0.85 + currentRatio * 0.15;
-        }
+    // Baseline diperbarui pelan HANYA saat wajah kembali ke posisi netral,
+    // supaya perubahan postur jangka panjang (geser duduk, dsb.) terserap
+    // tanpa menghapus bukti geleng yang sedang berlangsung. (sama acuan)
+    if (!deviasiCukup) {
+        initialNoseRatio = initialNoseRatio * 0.85 + currentRatio * 0.15;
+    }
 
     lastGoodNoseRatio = currentRatio;
 
@@ -442,6 +500,8 @@ async function loopFaceDetection() {
                     setFaceStatus('<i class="fas fa-user-clock text-warning mr-1"></i> Arahkan Wajah ke Kamera', 'warning');
                     initialNoseRatio = null;
                     headTurnStreak = 0;
+                    livenessAdaptiveThreshold = 0.04;
+                    livenessSmallDeltaCount = 0;
                     lastGoodNoseRatio = null;
                     eyeBaseline = null;
                     eyeClosedSeen = false;

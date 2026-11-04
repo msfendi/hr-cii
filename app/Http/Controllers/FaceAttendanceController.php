@@ -1817,6 +1817,41 @@ class FaceAttendanceController extends Controller
     }
 
     /**
+     * HRD: Aktifkan / Non-Aktifkan Lokasi Kerja (toggle status)
+     *
+     * Permintaan user 2026-11-04: aksi cepat enable/disable dari tabel
+     * "Daftar Area Lokasi Presensi Terdaftar" tanpa harus membuka form edit.
+     */
+    public function toggleLocationStatus(Request $request, $id)
+    {
+        $location = AttendanceWorkLocation::find($id);
+        if (!$location) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lokasi kerja tidak ditemukan.'
+            ], 404);
+        }
+
+        // Nilai baru boleh dikirim eksplisit, jika tidak dibalik dari kondisi sekarang.
+        if ($request->has('is_active')) {
+            $newStatus = filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN);
+        } else {
+            $newStatus = !((bool) $location->is_active);
+        }
+
+        $location->is_active = $newStatus;
+        $location->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lokasi kerja "' . $location->name . '" berhasil ' . ($newStatus ? 'diaktifkan' : 'dinonaktifkan') . '.',
+            'id' => $location->id,
+            'is_active' => (int) $newStatus,
+            'name' => $location->name,
+        ]);
+    }
+
+    /**
      * Ray-casting algorithm: Cek apakah koordinat (lat, lng) berada di dalam polygon
      * Format GeoJSON: polygon[i][0] = longitude, polygon[i][1] = latitude
      */
