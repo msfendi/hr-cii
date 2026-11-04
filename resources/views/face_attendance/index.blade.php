@@ -47,21 +47,45 @@
        2. Halaman login tidak punya animasi sama sekali, jadi harus
           ada satu sumber agar tidak pernah berbeda lagi.
        ========================================================== */
+    /* ==========================================================
+       PERBAIKAN 2026-11-04 - MOBILE FRIENDLY /face-attendance
+       ----------------------------------------------------------
+       Sidebar + navbar dihapus. CSS di bawah memastikan konten
+       memakai SELURUH lebar layar (tidak ada offset sidebar)
+       dan tidak ada ruang kosong sisa navbar di atas.
+       ========================================================== */
+    #wrapper {
+        display: block !important;
+        width: 100% !important;
+        min-height: 100vh !important;
+    }
+    #content-wrapper {
+        width: 100% !important;
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+    }
+    #content {
+        padding-top: 0 !important;
+        top: 0 !important;
+    }
+    @media (max-width: 575.98px) {
+        .container-fluid {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+    }
 </style>
 
 <body id="page-top">
 @include('sweetalert::alert')
 
 <div id="wrapper">
-    @if(Session::has('face_attendance_npk') || auth()->check())
-        @include('layout.sidebar')
-    @endif
+    {{-- PERBAIKAN 2026-11-04: sidebar dihapus agar halaman /face-attendance
+         menjadi mobile friendly (dulu FULL oleh navbar + sidebar). --}}
 
     <div id="content-wrapper" class="d-flex flex-column">
         <div id="content">
-            @if(Session::has('face_attendance_npk') || auth()->check())
-                @include('layout.navbar')
-            @endif
+            {{-- PERBAIKAN 2026-11-04: navbar dihapus demi tampilan mobile. --}}
 
             <div class="container-fluid py-3">
 
@@ -301,7 +325,14 @@
                     <!-- Kolom Kamera & Scanning Otomatis -->
                     <div class="col-lg-8 col-md-7 mb-4">
                         <div class="card shadow">
-                            <div class="card-header py-3 bg-gradient-primary text-white d-flex flex-row align-items-center justify-content-between">
+                            {{-- PERBAIKAN (2026-11-04): card Kamera Presensi bisa
+                                 DITUTUP (hidden) secara default. User mengklik header
+                                 untuk membuka/menutup. Body disembunyikan dengan
+                                 class "d-none" supaya tinggi card ikut mengecil.
+                                 JS: toggleCameraCard(). --}}
+                            <div class="card-header py-3 bg-gradient-primary text-white d-flex flex-row align-items-center justify-content-between"
+                                 style="cursor: pointer;" onclick="toggleCameraCard()" role="button"
+                                 aria-expanded="false" aria-controls="cameraCardBody" title="Klik untuk buka/tutup Kamera Presensi">
                                 <h6 class="m-0 font-weight-bold text-white">
                                     <i class="fas fa-video mr-1"></i>
                                     @if($nextAction == 'clock_in')
@@ -312,14 +343,17 @@
                                         Presensi Selesai
                                     @endif
                                 </h6>
-                                {{-- Badge status KAMERA (bukan GPS). GPS punya badge sendiri
-                                     di card Data Karyawan: miniMapProfileStatus. --}}
-                                <span id="cameraBadge" class="badge badge-light text-dark font-weight-bold">
-                                    <i class="fas fa-video text-muted mr-1"></i> Kamera Otomatis
+                                <span class="d-flex align-items-center">
+                                    {{-- Badge status KAMERA (bukan GPS). GPS punya badge sendiri
+                                         di card Data Karyawan: miniMapProfileStatus. --}}
+                                    <span id="cameraBadge" class="badge badge-light text-dark font-weight-bold">
+                                        <i class="fas fa-video text-muted mr-1"></i> Kamera Otomatis
+                                    </span>
+                                    <i id="cameraCardChevron" class="fas fa-chevron-up ml-2" aria-hidden="true"></i>
                                 </span>
                             </div>
 
-                            <div class="card-body p-4 text-center">
+                            <div id="cameraCardBody" class="card-body p-4 text-center d-none">
                                 @if($nextAction == 'completed')
                                     <div class="py-5">
                                         <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
@@ -612,6 +646,79 @@
     let userMarkerProfile = null;
     let polyGroupProfile = null;
 
+    // PERBAIKAN (2026-11-04): buka/tutup card Kamera Presensi.
+    // Default: TERTUTUP (body d-none). Klik header -> buka, klik lagi -> tutup.
+    // Catatan: status hidden di-refresh ke localStorage supaya pilihan user
+    // tidak hilang saat reload halaman (kamera tetap punya logically state).
+    function toggleCameraCard(forceState) {
+        const body = document.getElementById('cameraCardBody');
+        const header = body ? body.previousElementSibling : null;
+        const chevron = document.getElementById('cameraCardChevron');
+        if (!body) return;
+
+        const isHidden = body.classList.contains('d-none');
+        const willOpen = (typeof forceState === 'boolean') ? forceState : isHidden;
+
+        body.classList.toggle('d-none', !willOpen);
+        if (chevron) {
+            // Konvensi: TERTUTUP -> chevron ke ATAS (fa-chevron-up, klik untuk buka)
+            //            TERBUKA -> chevron ke BAWAH (fa-chevron-down, klik untuk tutup)
+            chevron.classList.toggle('fa-chevron-up', !willOpen);
+            chevron.classList.toggle('fa-chevron-down', willOpen);
+        }
+        if (header) {
+            header.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        }
+
+        try {
+            localStorage.setItem('fa_camera_card_open', willOpen ? '1' : '0');
+        } catch (e) {}
+
+        // Leaflet (Mini Map) ada di card lain, jadi invalidate peta aman.
+        // Kamera TIDAK dinyalakan/dimatikan oleh toggle ini.
+    }
+
+    // Pulihkan pilihan buka/tutup dari storage saat halaman dimuat.
+    function restoreCameraCardState() {
+        let saved = null;
+        try { saved = localStorage.getItem('fa_camera_card_open'); } catch (e) {}
+        // Default TERTUTUP. Nilai '1' hanya berlaku bila user pernah membukanya.
+        if (saved === '1') {
+            toggleCameraCard(true);
+        }
+    }
+
+    // PERBAIKAN V1.1: fokus peta ke titik GPS user.
+    // PERBAIKAN V1.2: zoom dihitung dari ukuran container ASLI + akurasi GPS,
+    // supaya tampilannya street-level (bukan skala kota/regional).
+    // Rumus lama salah: zoom dibatasi min 11 dan mengabaikan lebar container,
+    // sehingga mini map selalu menampilkan ~30 km (kota + kecamatan sekitar).
+    function focusOnUserProfile(mapInstance, lat, lng, accuracy) {
+        if (!mapInstance) return;
+        const acc = Math.max(Number(accuracy) || 0, 0);
+
+        // 1. Tentukan lebar viewport efektif (px) dari container asli.
+        const el = mapInstance.getContainer && mapInstance.getContainer();
+        const w = (el && el.clientWidth) ? el.clientWidth : 320;
+        const h = (el && el.clientHeight) ? el.clientHeight : 180;
+
+        // 2. Target cakupan tanah (meter) yang ditampilkan:
+        //    - cukup lebar untuk melihat area geofencing kecil di sekitar user
+        //    - tetap sempit supaya area geofencing yang jauh tidak ikut terlihat
+        //    Radius akurasi GPS dipakai sebagai baseline, minimal 250m, maksimal 900m.
+        //    (akurasi 66m -> 330m -> street-level, +/- sekitar 350-450m terlihat)
+        const targetMeters = Math.min(Math.max(acc * 5, 250), 900);
+
+        // 3. Konversi target meter -> level zoom Leaflet, memperhitungkan
+        //    ukuran viewport (lebar = tujuan agar area muat, tinggi ikut skala).
+        const mpp = 156543.03392 * Math.cos(lat * Math.PI / 180);
+        const zoom = Math.max(13, Math.min(18, Math.round(
+            Math.log2(mpp * w / targetMeters)
+        )));
+
+        mapInstance.setView([lat, lng], zoom, { animate: true, duration: 0.6 });
+    }
+
     function initMiniMapProfile() {
         if (miniMapProfile) return;
         const container = document.getElementById('miniMapProfile');
@@ -674,7 +781,12 @@
             });
             if (bounds.length > 0) {
                 let group = new L.featureGroup(bounds.map(b => L.rectangle(b)));
-                miniMapProfile.fitBounds(group.getBounds());
+                // PERBAIKAN: jangan fitBounds ke seluruh area geofencing di sini.
+                // Mini Map harus fokus ke titik GPS user, bukan ke seluruh area
+                // terdaftar (area yang jauh membuat bounds sangat lebar -> peta
+                // zoom-out ke skala regional/whole island).
+                // View awal dibiarkan pada koordinat user (di-set oleh updateMiniMapProfile).
+                void group;
             }
         }
     }
@@ -704,8 +816,12 @@
             weight: 2
         }).addTo(miniMapProfile).bindPopup('<b>Posisi Anda</b><br>' + (inside ? '<span class="text-success">Dalam Area Presensi</span>' : '<span class="text-danger">Di Luar Area</span>')).openPopup();
 
-        let allGroup = L.featureGroup([polyGroupProfile, userCircleProfile]);
-        miniMapProfile.fitBounds(allGroup.getBounds().pad(0.15));
+        // PERBAIKAN (inti): auto-zoom ke titik GPS user.
+        // Sebelumnya: fitBounds(area geofencing + user) -> kalau ada area yang
+        // jauh, peta ikut zoom-out sehingga lokasi user cuma titipan kecil.
+        // Sekarang: setView ke koordinat user dengan zoom yang dihitung dari
+        // akurasi GPS, dibatasi agar tidak pernah tampil terlalu jauh.
+        focusOnUserProfile(miniMapProfile, lat, lng, accuracy);
 
         const statusBadge = document.getElementById('miniMapProfileStatus');
         const accuracyText = document.getElementById('miniMapAccuracyText');
@@ -2290,6 +2406,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        // PERBAIKAN (2026-11-04): pulihkan status buka/tutup card Kamera Presensi.
+        // Default TERTUTUP; user yang pernah membukanya akan ingat.
+        restoreCameraCardState();
+
         // PERBAIKAN (2026-11-03): kamera TIDAK lagi dinyalakan langsung di
         // sini. evaluateCameraGate() yang memutuskan, dan dia hanya menyalakan
         // kamera kalau DUA syarat terpenuhi: GPS terverifikasi di dalam area

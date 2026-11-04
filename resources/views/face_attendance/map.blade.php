@@ -144,7 +144,7 @@
                                         <th class="py-3">Nama Lokasi</th>
                                         <th class="py-3">Keterangan</th>
                                         <th class="py-3">Status</th>
-                                        <th class="py-3 text-center" style="width: 280px;">Aksi</th>
+                                        <th class="py-3 text-center" style="width: 180px;">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -160,21 +160,24 @@
                                                 <span class="badge badge-secondary px-2 py-1">Non-Aktif</span>
                                             @endif
                                         </td>
-                                        <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 mr-1 shadow-sm" onclick="editLocation({{ $loc->id }})" title="Edit Lokasi & Polygon">
-                                                <i class="fas fa-edit mr-1"></i> Edit
+                                        <td class="text-center text-nowrap">
+                                            <button type="button" class="btn btn-sm btn-outline-info rounded-circle px-2 mr-1 shadow-sm" onclick="focusLocationOnMap({{ $loc->id }})" title="Tampilkan Lokasi Ini di Peta" aria-label="Tampilkan Lokasi Ini di Peta">
+                                                <i class="fas fa-map-marker-alt"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary rounded-circle px-2 mr-1 shadow-sm" onclick="editLocation({{ $loc->id }})" title="Edit Lokasi &amp; Polygon" aria-label="Edit Lokasi">
+                                                <i class="fas fa-edit"></i>
                                             </button>
                                             @if($loc->is_active)
-                                                <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 mr-1 shadow-sm" onclick="toggleLocationStatus({{ $loc->id }}, 0, @js($loc->name))" title="Non-Aktifkan Lokasi Ini">
-                                                    <i class="fas fa-toggle-on mr-1"></i> Disable
+                                                <button type="button" class="btn btn-sm btn-outline-warning rounded-circle px-2 mr-1 shadow-sm" onclick="toggleLocationStatus({{ $loc->id }}, 0, @js($loc->name))" title="Non-Aktifkan Lokasi Ini" aria-label="Non-Aktifkan Lokasi">
+                                                    <i class="fas fa-toggle-on"></i>
                                                 </button>
                                             @else
-                                                <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 mr-1 shadow-sm" onclick="toggleLocationStatus({{ $loc->id }}, 1, @js($loc->name))" title="Aktifkan Lokasi Ini">
-                                                    <i class="fas fa-toggle-off mr-1"></i> Enable
+                                                <button type="button" class="btn btn-sm btn-outline-success rounded-circle px-2 mr-1 shadow-sm" onclick="toggleLocationStatus({{ $loc->id }}, 1, @js($loc->name))" title="Aktifkan Lokasi Ini" aria-label="Aktifkan Lokasi">
+                                                    <i class="fas fa-toggle-off"></i>
                                                 </button>
                                             @endif
-                                            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm" onclick="deleteLocation({{ $loc->id }})" title="Hapus Lokasi">
-                                                <i class="fas fa-trash-alt mr-1"></i> Hapus
+                                            <button type="button" class="btn btn-sm btn-outline-danger rounded-circle px-2 shadow-sm" onclick="deleteLocation({{ $loc->id }})" title="Hapus Lokasi" aria-label="Hapus Lokasi">
+                                                <i class="fas fa-trash-alt"></i>
                                             </button>
                                         </td>
                                     </tr>
@@ -288,6 +291,7 @@
     // di area yang jauh dari titik awal.
     // ============================================================
     let searchMarker = null;
+    let focusedLocationLayer = null;
 
     function parseCoord(value) {
         if (value === null || value === undefined) return NaN;
@@ -370,6 +374,82 @@
             }
         });
     });
+
+    // ============================================================
+    // FOKUS PETA KE SATU LOKASI (tombol point / map-marker)
+    // Menampilkan polygon lokasi tersebut di tengah peta, seperti
+    // saat menekan tombol Edit, TAPI tanpa mengaktifkan mode edit.
+    // ============================================================
+    function focusLocationOnMap(id) {
+        let loc = existingLocations.find(l => l.id == id);
+        if (!loc) {
+            fetch("{{ url('/face-attendance/location') }}/" + id)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) focusLocationLayer(data.data);
+                })
+                .catch(() => {});
+            return;
+        }
+        focusLocationLayer(loc);
+    }
+
+    function focusLocationLayer(loc) {
+        if (!loc || !loc.polygon_geojson) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Polygon Tidak Tersedia',
+                text: 'Lokasi "' + (loc.name || '-') + '" belum memiliki polygon.'
+            });
+            return;
+        }
+
+        try {
+            let geo = JSON.parse(loc.polygon_geojson);
+            let focusLayer = L.geoJSON(geo);
+            let bounds = focusLayer.getBounds();
+
+            if (bounds && bounds.isValid()) {
+                // Samakan tampilan dengan tombol Edit: polygon terisi di tengah peta.
+                map.fitBounds(bounds, { padding: [40, 40] });
+            }
+
+            // Tandai polygon yang sedang difokuskan supaya mudah dikenali.
+            if (focusedLocationLayer) {
+                map.removeLayer(focusedLocationLayer);
+            }
+            focusedLocationLayer = L.geoJSON(geo, {
+                style: {
+                    color: '#e74a3b',
+                    weight: 3,
+                    fillOpacity: 0.35
+                }
+            }).addTo(map);
+
+            if (focusedLocationLayer.bindPopup) {
+                focusedLocationLayer.bindPopup(
+                    '<b>' + (loc.name || '-') + '</b>' +
+                    (loc.description ? '<br>' + loc.description : '') +
+                    '<br><span class="text-muted" style="font-size:11px">Lokasi yang sedang difokuskan</span>'
+                ).openPopup();
+            }
+
+            // Gulir halaman ke peta supaya hasilnya langsung terlihat.
+            let mapEl = document.getElementById('map');
+            if (mapEl && mapEl.scrollIntoView) {
+                mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            // invalidateSize supaya ukuran peta benar setelah scroll/animasinya.
+            setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 350);
+        } catch (e) {
+            console.error('Error focus location:', e);
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal Menampilkan Lokasi',
+                text: 'Polygon lokasi tidak dapat diproses.'
+            });
+        }
+    }
 
     // Fungsi Edit Lokasi & Polygon
     function editLocation(id) {

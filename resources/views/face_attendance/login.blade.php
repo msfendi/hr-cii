@@ -236,6 +236,37 @@
     let userMarker = null;
     let polyGroup = null;
 
+    // PERBAIKAN V1.1: fokus peta ke titik GPS user.
+    // PERBAIKAN V1.2: zoom dihitung dari ukuran container ASLI + akurasi GPS,
+    // supaya tampilannya street-level (bukan skala kota/regional).
+    // Rumus lama salah: zoom dibatasi min 11 dan mengabaikan lebar container,
+    // sehingga mini map selalu menampilkan ~30 km (kota + kecamatan sekitar).
+    function focusOnUser(mapInstance, lat, lng, accuracy) {
+        if (!mapInstance) return;
+        const acc = Math.max(Number(accuracy) || 0, 0);
+
+        // 1. Tentukan lebar viewport efektif (px) dari container asli.
+        const el = mapInstance.getContainer && mapInstance.getContainer();
+        const w = (el && el.clientWidth) ? el.clientWidth : 320;
+        const h = (el && el.clientHeight) ? el.clientHeight : 180;
+
+        // 2. Target cakupan tanah (meter) yang ditampilkan:
+        //    - cukup lebar untuk melihat area geofencing kecil di sekitar user
+        //    - tetap sempit supaya area geofencing yang jauh tidak ikut terlihat
+        //    Radius akurasi GPS dipakai sebagai baseline, minimal 250m, maksimal 900m.
+        //    (akurasi 66m -> 330m -> street-level, +/- sekitar 350-450m terlihat)
+        const targetMeters = Math.min(Math.max(acc * 5, 250), 900);
+
+        // 3. Konversi target meter -> level zoom Leaflet, memperhitungkan
+        //    ukuran viewport (lebar = tujuan agar area muat, tinggi ikut skala).
+        const mpp = 156543.03392 * Math.cos(lat * Math.PI / 180);
+        const zoom = Math.max(13, Math.min(18, Math.round(
+            Math.log2(mpp * w / targetMeters)
+        )));
+
+        mapInstance.setView([lat, lng], zoom, { animate: true, duration: 0.6 });
+    }
+
     function initMiniMap() {
         if (miniMap) return;
         const container = document.getElementById('miniMap');
@@ -273,7 +304,12 @@
             });
             if (bounds.length > 0) {
                 let group = new L.featureGroup(bounds.map(b => L.rectangle(b)));
-                miniMap.fitBounds(group.getBounds());
+                // PERBAIKAN: jangan fitBounds ke seluruh area geofencing di sini.
+                // Mini Map harus fokus ke titik GPS user, bukan ke seluruh area
+                // terdaftar (area yang jauh membuat bounds sangat lebar -> peta
+                // zoom-out ke skala regional/whole island).
+                // View awal dibiarkan pada koordinat user (di-set oleh updateMiniMap).
+                void group;
             }
         }
     }
@@ -303,8 +339,12 @@
             weight: 2
         }).addTo(miniMap).bindPopup('<b>Posisi Anda</b><br>' + (inside ? '<span class="text-success">Di Dalam Area</span>' : '<span class="text-danger">Di Luar Area</span>')).openPopup();
 
-        let allGroup = L.featureGroup([polyGroup, userCircle]);
-        miniMap.fitBounds(allGroup.getBounds().pad(0.15));
+        // PERBAIKAN (inti): auto-zoom ke titik GPS user.
+        // Sebelumnya: fitBounds(area geofencing + user) -> kalau ada area yang
+        // jauh, peta ikut zoom-out sehingga lokasi user cuma titipan kecil.
+        // Sekarang: setView ke koordinat user dengan zoom yang dihitung dari
+        // akurasi GPS, dibatasi agar tidak pernah tampil terlalu jauh.
+        focusOnUser(miniMap, lat, lng, accuracy);
 
         const statusBadge = document.getElementById('miniMapStatus');
         const accuracyText = document.getElementById('miniMapAccuracyText');
