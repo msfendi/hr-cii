@@ -482,7 +482,7 @@ window.stopFaceLogin  = function () {};
     // Sekarang logikanya diambil APA ADANYA dari halaman acuan:
     //   * checkEyeBlink()  -> EAR rata-rata, ambang min(baseline*0.55, 0.21)
     //   * checkHeadTurn()  -> rasio hidung absolut, zona netral 0.32-0.68,
-    //                         deviasi > 0.06, streak 3 frame
+    //                         deviasi adaptif (0.04 default, turun sampai 0.02 bila delta kecil), streak 2 frame
     //
     // Catatan V31.9: zona netral & deviasi sengaja DIPERLONGGAR dari acuan
     // (acuan: 0.40-0.60 / 0.12) karena dengan nilai acuan, menoleh 8-12
@@ -504,6 +504,13 @@ window.stopFaceLogin  = function () {};
     let eyeBaseline = null;
     let eyeClosedSeen = false;
     let detectMissCount = 0;
+
+    // V32.2 - state untuk adaptive threshold liveness.
+    // Ambang deviasi diturunkan bertahap HANYA bila delta kecil terus
+    // teramati (indikasi latency HTTPS membuat sinyal menoleh kecil).
+    // Segera dikembalikan ke AMBANG_STASIS saat delta besar terlihat.
+    let livenessAdaptiveThreshold = 0.04;
+    let livenessSmallDeltaCount = 0;
 
     /**
      * Deteksi kedipan mata (sama persis dengan halaman acuan).
@@ -569,7 +576,11 @@ window.stopFaceLogin  = function () {};
 
         const jawWidth = Math.abs(rightJaw.x - leftJaw.x);
         // Wajah terlalu kecil / jauh -> jangan ambil kesimpulan apa pun.
-        if (!isFinite(jawWidth) || jawWidth < 40) return false;
+        // V32.2: ambang 40px diturunkan ke 30px. Laptop webcam 720p/1080p membuat
+        // wajah ter-render lebih kecil (user duduk lebih jauh), sehingga jawWidth
+        // sering berada di rentang 30-40px dan iterasi berbasis landmark lama gagal
+        // mendeteksi sama sekali (delta selalu 0, streak tidak pernah naik).
+        if (!isFinite(jawWidth) || jawWidth < 30) return false;
 
         const currentRatio = (noseTip.x - leftJaw.x) / jawWidth;
         if (!isFinite(currentRatio)) return false;
@@ -588,22 +599,54 @@ window.stopFaceLogin  = function () {};
 
         // Menoleh sah bila:
         //   a. hidung jelas bergeser dari tengah (di luar 0.32-0.68), ATAU
-        //   b. deviasi terhadap baseline melewati ambang 0.04
-        // V32.1: threshold diturunkan 0.06→0.04 dan streak 3→2 karena
-        // laptop webcam (angle rendah) menghasilkan deviasi lebih kecil
-        // dibanding HP front camera. HP tetap lolos karena threshold lebih rendah.
+        //   b. deviasi terhadap baseline melewati ambang adaptif
+        //
+        // V32.2 - adaptive threshold:
+        // Local HTTP (laptop) menghasilkan delta besar (0.17-0.21) karena frame
+        // rate tinggi & latency ~0. Production HTTPS (laptop) suffered latency
+        // 50-200ms + loop 120ms sehingga delta yang terbaca jauh lebih kecil.
+        // Daripada menurunkan ambang secara statis (menurunkan keamanan),
+        // ambang diturunkan secara DINAMIS hanya ketika consistently delta
+        // kecil teramati -> laptop production tetap bisa lolos.
         const jauhDariTengah = (currentRatio < 0.32 || currentRatio > 0.68);
-        const deviasiCukup = absDelta > 0.04;
-        
+
+        // Baseline ambang statis minimum yang boleh dipakai (0.03).
+        // Jangan pernah di bawah ini - cukup untuk membedakan gerak nyata vs noise.
+        const AMBANG_MIN = 0.03;
+        const AMBANG_STASIS = 0.04;
+
+        // Pel Tracking: jika delta kecil terus-menerus, turunkan ambang bertahap.
+        // Reset ke AMBANG_STASIS begitu terlihat delta besar (user jelas menoleh).
+        if (absDelta > 0.08) {
+            // Gerak tegas terdeteksi -> kembalikan ambang ke normal
+            livenessAdaptiveThreshold = AMBANG_STASIS;
+            livenessSmallDeltaCount = 0;
+        } else if (absDelta < 0.02) {
+            livenessSmallDeltaCount += 1;
+            if (livenessSmallDeltaCount > 8) {
+                livenessAdaptiveThreshold = Math.max(AMBANG_MIN, livenessAdaptiveThreshold - 0.005);
+                livenessSmallDeltaCount = 0;
+            }
+        } else {
+            livenessSmallDeltaCount = 0;
+        }
+
+        const deviasiCukup = absDelta > livenessAdaptiveThreshold;
+
         // Debug log untuk troubleshoot (hapus setelah fix confirmed)
-        if (headTurnStreak > 0 || deviasiCukup) {
-            console.log('[LIVENESS]', 'ratio:', currentRatio.toFixed(3), 'delta:', absDelta.toFixed(3), 'streak:', headTurnStreak, 'pass:', deviasiCukup || jauhDariTengah);
+        if (headTurnStreak > 0 || deviasiCukup || livenessAdaptiveThreshold < AMBANG_STASIS) {
+            console.log('[LIVENESS]', 'ratio:', currentRatio.toFixed(3), 'delta:', absDelta.toFixed(3),
+                'streak:', headTurnStreak, 'ambang:', livenessAdaptiveThreshold.toFixed(3),
+                'pass:', deviasiCukup || jauhDariTengah);
         }
 
         if (jauhDariTengah || deviasiCukup) {
             headTurnStreak += 1;
         } else {
-            // Gerakan kecil / noise -> jangan reset baseline, cukup kurangi streak.
+            // V32.2: jangan reset streak ke 0 secara brutal. Pada production HTTPS
+            // latency tinggi membuat frame 'netral' ikut terbaca di tengah gerakan,
+            // sehingga reset ke 0 memutus rantai streak sebelum mencapai ambang.
+            // cukup decrement 1 -> toleran terhadap 1-2 frame interstitial.
             headTurnStreak = Math.max(0, headTurnStreak - 1);
         }
 
@@ -719,6 +762,8 @@ window.stopFaceLogin  = function () {};
                     livenessVerified = !livenessWajib;
                     initialNoseRatio = null;
                     headTurnStreak = 0;
+                    livenessAdaptiveThreshold = 0.04;
+                    livenessSmallDeltaCount = 0;
                     eyeBaseline = null;
                     eyeClosedSeen = false;
                     setStatus('Wajah belum cocok. Posisikan wajah dengan jelas...', 'error');
@@ -746,6 +791,8 @@ window.stopFaceLogin  = function () {};
                         initialNoseRatio = null;
                         headTurnStreak = 0;
                         lastGoodNoseRatio = null;
+                        livenessAdaptiveThreshold = 0.04;
+                        livenessSmallDeltaCount = 0;
                         eyeBaseline = null;
                         eyeClosedSeen = false;
                         if (!livenessWajib) {
