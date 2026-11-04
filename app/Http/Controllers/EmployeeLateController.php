@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\EmployeeLateExport;
 use App\Exports\EmployeeLateTemplateExport;
 use App\Imports\EmployeeLateImport;
 use App\Models\EmployeeLate;
@@ -145,6 +146,65 @@ class EmployeeLateController extends Controller
     public function template()
     {
         return Excel::download(new EmployeeLateTemplateExport(), 'template_employee_late.xlsx');
+    }
+
+    /**
+     * Export Excel data Employee Late, dengan mode Bulanan / Custom Range.
+     * Meniru pola IjinMeninggalkanPekerjaanController::export().
+     */
+    public function export(Request $request)
+    {
+        $request->validate([
+            'mode'       => 'required|in:monthly,custom',
+            'month'      => 'required_if:mode,monthly',
+            'start_date' => 'required_if:mode,custom|nullable|date',
+            'end_date'   => 'required_if:mode,custom|nullable|date|after_or_equal:start_date',
+        ]);
+
+        if ($request->mode === 'monthly') {
+            // month = "YYYY-MM"
+            $start_date = $request->month . '-01';
+            $end_date   = \Carbon\Carbon::parse($start_date)->endOfMonth()->toDateString();
+            $label      = \Carbon\Carbon::parse($start_date)->translatedFormat('F Y');
+        } else {
+            $start_date = $request->start_date;
+            $end_date   = $request->end_date;
+            $label      = $start_date . ' s/d ' . $end_date;
+        }
+
+        // ambil data dari database
+        $employee = DB::table('BIODATA')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT')
+            );
+
+        $data = DB::table('employee_lates')
+            ->leftJoinSub($employee, 'biodata', function ($join) {
+                $join->on('biodata.NPK', '=', 'employee_lates.npk');
+            })
+            ->leftJoin('DEPT', 'DEPT.ID_DEPT', '=', 'biodata.ID_DEPT')
+            ->select(
+                'employee_lates.*',
+                'biodata.NAMA_KARYAWAN',
+                'DEPT.DEPARTEMENT'
+            )
+            ->whereBetween('employee_lates.date', [$start_date, $end_date])
+            ->orderBy('employee_lates.date')
+            ->orderBy('employee_lates.npk')
+            ->get();
+
+        if ($data->isEmpty()) {
+            return response()->json(['error' => 'Tidak ada data untuk periode tersebut.'], 404);
+        }
+
+        $filename = 'Employee_Late_' . str_replace([' ', '/'], '_', $label) . '.xlsx';
+
+        return Excel::download(
+            new EmployeeLateExport($data, $label),
+            $filename
+        );
     }
 
     /**

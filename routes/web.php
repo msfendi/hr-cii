@@ -1583,3 +1583,5 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
 });
+
+Route::get('/employee-late/export/excel', [EmployeeLateController::class, 'export'])->name('employee-late.export')->middleware(['auth', 'permission']);

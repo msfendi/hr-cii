@@ -11,10 +11,19 @@
           <div class="container-fluid">
             <div class="d-sm-flex align-items-center justify-content-between mb-4">
               <h1 class="h3 mb-0 text-gray-800">Employee Late</h1>
-              @canRoute('employee-late.create')
-              <a href="{{ route('employee-late.create') }}" class="btn btn-sm btn-primary shadow-sm">
-                <i class="fas fa-plus fa-sm text-white-50"></i> Create Employee Late </a>
-              @endcanRoute
+
+              <div class="d-flex gap-2">
+                @canRoute('employee-late.export')
+                <button class="btn btn-success btn-sm" data-toggle="modal" data-target="#modalExportLate">
+                  <i class="fas fa-file-excel"></i> Export Excel
+                </button>
+                @endcanRoute
+
+                @canRoute('employee-late.create')
+                <a href="{{ route('employee-late.create') }}" class="btn btn-sm btn-primary shadow-sm">
+                  <i class="fas fa-plus fa-sm text-white-50"></i> Create Employee Late </a>
+                @endcanRoute
+              </div>
             </div>
             <div class="card shadow mb-4">
               <div class="card-header py-3">
@@ -139,6 +148,62 @@
     </div>
     @include('layout.footer')
   </body>
+
+  <!-- Modal Export Excel Employee Late -->
+  <div class="modal fade" id="modalExportLate" tabindex="-1" role="dialog" aria-labelledby="modalExportLateLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalExportLateLabel">
+            <i class="fas fa-file-excel text-success mr-1"></i> Export Employee Late
+          </h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Mode selector -->
+          <div class="form-group">
+            <label class="d-block font-weight-bold">Rentang Waktu</label>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="late_export_mode" id="lateModeMonthly" value="monthly" checked>
+              <label class="form-check-label" for="lateModeMonthly">Bulanan</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="late_export_mode" id="lateModeCustom" value="custom">
+              <label class="form-check-label" for="lateModeCustom">Custom Range</label>
+            </div>
+          </div>
+
+          <!-- Monthly picker -->
+          <div class="form-group" id="groupLateMonth">
+            <label for="lateMonth">Bulan</label>
+            <input type="month" class="form-control" id="lateMonth" value="{{ date('Y-m') }}">
+          </div>
+
+          <!-- Custom range picker -->
+          <div id="groupLateRange" style="display:none;">
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label for="lateStartDate">Dari Tanggal</label>
+                <input type="date" class="form-control" id="lateStartDate">
+              </div>
+              <div class="form-group col-md-6">
+                <label for="lateEndDate">Sampai Tanggal</label>
+                <input type="date" class="form-control" id="lateEndDate">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-success" id="btnDoExportLate">
+            <i class="fas fa-download mr-1"></i> Download
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
   <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
   <script src="{{asset('js/demo/datatables-demo.js')}}"></script>
@@ -218,6 +283,77 @@
             text: msg
           });
         }
+      });
+    });
+  </script>
+  <script>
+    // ── Export Employee Late Excel (Bulanan / Custom Range) ─────────────────
+    $(function () {
+      $('input[name="late_export_mode"]').on('change', function () {
+        if ($(this).val() === 'monthly') {
+          $('#groupLateMonth').show();
+          $('#groupLateRange').hide();
+        } else {
+          $('#groupLateMonth').hide();
+          $('#groupLateRange').show();
+        }
+      });
+
+      $('#btnDoExportLate').on('click', function () {
+        var mode = $('input[name="late_export_mode"]:checked').val();
+        var params = { mode: mode };
+
+        if (mode === 'monthly') {
+          var month = $('#lateMonth').val();
+          if (!month) {
+            alert('Pilih bulan terlebih dahulu.');
+            return;
+          }
+          params.month = month;
+        } else {
+          var start = $('#lateStartDate').val();
+          var end   = $('#lateEndDate').val();
+          if (!start || !end) {
+            alert('Pilih rentang tanggal terlebih dahulu.');
+            return;
+          }
+          if (end < start) {
+            alert('Tanggal akhir tidak boleh sebelum tanggal mulai.');
+            return;
+          }
+          params.start_date = start;
+          params.end_date   = end;
+        }
+
+        var url = '{{ route("employee-late.export") }}?' + $.param(params);
+
+        var $btn = $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Menyiapkan...');
+
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (response) {
+            if (!response.ok) {
+              return response.json().then(function (err) {
+                throw new Error(err.error || 'Gagal membuat file export.');
+              });
+            }
+            return response.blob();
+          })
+          .then(function (blob) {
+            var dlUrl = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = dlUrl;
+            a.download = 'Employee_Late.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            $('#modalExportLate').modal('hide');
+          })
+          .catch(function (err) {
+            alert(err.message);
+          })
+          .finally(function () {
+            $btn.prop('disabled', false).html('<i class="fas fa-download mr-1"></i> Download');
+          });
       });
     });
   </script>
