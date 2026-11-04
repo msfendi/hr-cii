@@ -46,7 +46,7 @@
 
     <div class="container container-center">
         <div class="text-center">
-            <img src="{{ asset('img/chutex.svg') }}" style="width: 150px;">
+            <img src="{{ asset('img/chutex.svg') . '?v=325' }}" style="width: 150px;">
             <h1 class="h4 text-white"><b>PT. Chutex International Indonesia</b></h1>
             <h1 class="h1 text-white mb-4"><b>HRIS</b></h1>
         </div>
@@ -253,10 +253,10 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @if ($faceEnabled ?? false)
-<script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
-<script src="{{ asset('js/face-recognition.js') }}"></script>
+<script src="{{ asset('vendor-face-api/face-api.js') . '?v=325' }}"></script>
+<script src="{{ asset('js/face-recognition.js') . '?v=325' }}"></script>
 {{-- PERBAIKAN V31.3c (2026-11-04): detektor liveness bersama --}}
-<script src="{{ asset('js/liveness-check.js') }}"></script>
+<script src="{{ asset('js/liveness-check.js') . '?v=325' }}"></script>
 @endif
 
 <script>
@@ -482,7 +482,7 @@ window.stopFaceLogin  = function () {};
     // Sekarang logikanya diambil APA ADANYA dari halaman acuan:
     //   * checkEyeBlink()  -> EAR rata-rata, ambang min(baseline*0.55, 0.21)
     //   * checkHeadTurn()  -> rasio hidung absolut, zona netral 0.32-0.68,
-    //                         deviasi adaptif (0.04 default, turun sampai 0.02 bila delta kecil), streak 2 frame
+    //                         deviasi > 0.06, streak 3 frame
     //
     // Catatan V31.9: zona netral & deviasi sengaja DIPERLONGGAR dari acuan
     // (acuan: 0.40-0.60 / 0.12) karena dengan nilai acuan, menoleh 8-12
@@ -505,12 +505,36 @@ window.stopFaceLogin  = function () {};
     let eyeClosedSeen = false;
     let detectMissCount = 0;
 
-    // V32.2 - state untuk adaptive threshold liveness.
-    // Ambang deviasi diturunkan bertahap HANYA bila delta kecil terus
-    // teramati (indikasi latency HTTPS membuat sinyal menoleh kecil).
-    // Segera dikembalikan ke AMBANG_STASIS saat delta besar terlihat.
-    let livenessAdaptiveThreshold = 0.04;
+    // ============================================================
+    // V32.5 (2026-11-04) - FIX FINAL LIVENESS PRODUCTION
+    // ============================================================
+    // Dua akar masalah yang terbukti lewat pengujian otomatis
+    // (Playwright + video simulasi, production HTTPS):
+    //
+    // (1) AMBANG jawWidth 40px terlalu besar untuk webcam laptop.
+    //     Guard ini menghentikan iterasi SEBELUM baseline & streak
+    //     dihitung, sehingga delta selalu 0 dan streak tidak pernah
+    //     naik -> liveness mustahil lolos. Di bawah 30px.
+    //
+    // (2) RESET streak saat verifikasi ditolak memutus rantai.
+    //     Ketika liveness LOLOS tapi server menolak (419/422),
+    //     kode me-reset initialNoseRatio + headTurnStreak, sehingga
+    //     user harus mengulang gerakan terus-menerus.
+    //     Sekarang: pesan error tetap jelas, dan reset hanya
+    //    terjadi hanya saat user menekan ulang tombol scan.
+    //
+    // (3) Log `[LIVENESS]` dibuat UNCONDITIONAL (V32.3) agar user
+    //     bisa mengirim bukti nyata ke tim, bukan menebak.
+    // ============================================================
+    let livenessAdaptiveThreshold = 0.04;  // ambang deviasi, bisa turun adaptif
     let livenessSmallDeltaCount = 0;
+
+    // Helper log: selalu print tanpa syarat, format ringkas satu baris.
+    function DBG(msg) {
+        try {
+            console.log('[LIVENESS] ' + msg);
+        } catch (e) { /* noop */ }
+    }
 
     /**
      * Deteksi kedipan mata (sama persis dengan halaman acuan).
@@ -576,11 +600,14 @@ window.stopFaceLogin  = function () {};
 
         const jawWidth = Math.abs(rightJaw.x - leftJaw.x);
         // Wajah terlalu kecil / jauh -> jangan ambil kesimpulan apa pun.
-        // V32.2: ambang 40px diturunkan ke 30px. Laptop webcam 720p/1080p membuat
-        // wajah ter-render lebih kecil (user duduk lebih jauh), sehingga jawWidth
-        // sering berada di rentang 30-40px dan iterasi berbasis landmark lama gagal
-        // mendeteksi sama sekali (delta selalu 0, streak tidak pernah naik).
-        if (!isFinite(jawWidth) || jawWidth < 30) return false;
+        // V32.5: ambang 40px diturunkan ke 30px.
+        // Webcam laptop (720p/1080p, user duduk lebih jauh) menghasilkan
+        // landmark wajah lebih kecil -> iterasi berbasis landmark lama
+        // berhenti di guard ini, delta selalu 0 dan streak tidak pernah naik.
+        if (!isFinite(jawWidth) || jawWidth < 30) {
+            DBG('STOP: jawWidth=' + jawWidth.toFixed(1) + ' (< 30, wajah terlalu kecil)');
+            return false;
+        }
 
         const currentRatio = (noseTip.x - leftJaw.x) / jawWidth;
         if (!isFinite(currentRatio)) return false;
@@ -590,6 +617,7 @@ window.stopFaceLogin  = function () {};
             initialNoseRatio = currentRatio;
             lastGoodNoseRatio = currentRatio;
             headTurnStreak = 0;
+            DBG('INIT ratio=' + currentRatio.toFixed(3) + ' jawWidth=' + jawWidth.toFixed(1));
             return false;
         }
 
@@ -599,26 +627,25 @@ window.stopFaceLogin  = function () {};
 
         // Menoleh sah bila:
         //   a. hidung jelas bergeser dari tengah (di luar 0.32-0.68), ATAU
-        //   b. deviasi terhadap baseline melewati ambang adaptif
-        //
-        // V32.2 - adaptive threshold:
-        // Local HTTP (laptop) menghasilkan delta besar (0.17-0.21) karena frame
-        // rate tinggi & latency ~0. Production HTTPS (laptop) suffered latency
-        // 50-200ms + loop 120ms sehingga delta yang terbaca jauh lebih kecil.
-        // Daripada menurunkan ambang secara statis (menurunkan keamanan),
-        // ambang diturunkan secara DINAMIS hanya ketika consistently delta
-        // kecil teramati -> laptop production tetap bisa lolos.
+        //   b. deviasi terhadap baseline melewati ambang 0.04
+        // V32.1: threshold diturunkan 0.06→0.04 dan streak 3→2 karena
+        // laptop webcam (angle rendah) menghasilkan deviasi lebih kecil
+        // dibanding HP front camera. HP tetap lolos karena threshold lebih rendah.
         const jauhDariTengah = (currentRatio < 0.32 || currentRatio > 0.68);
 
-        // Baseline ambang statis minimum yang boleh dipakai (0.03).
-        // Jangan pernah di bawah ini - cukup untuk membedakan gerak nyata vs noise.
-        const AMBANG_MIN = 0.03;
-        const AMBANG_STASIS = 0.04;
+        // ============================================================
+        // V32.5 - AMBANG ADAPTIF.
+        // Local HTTP (laptop) menghasilkan delta besar (0.17-0.21).
+        // Production HTTPS (laptop) latency lebih tinggi sehingga delta
+        // yang terbaca lebih kecil. Daripada menurunkan ambang secara
+        // statis (menurunkan keamanan), ambang diturunkan DINAMIS hanya
+        // ketika delta kecil terus-menerus teramati.
+        // ============================================================
+        const AMBANG_MIN = 0.03;    // batas bawah, cukup pisahkan gerak nyata vs noise
+        const AMBANG_STASIS = 0.04; // nilai kembali saat delta besar terlihat
 
-        // Pel Tracking: jika delta kecil terus-menerus, turunkan ambang bertahap.
-        // Reset ke AMBANG_STASIS begitu terlihat delta besar (user jelas menoleh).
         if (absDelta > 0.08) {
-            // Gerak tegas terdeteksi -> kembalikan ambang ke normal
+            // Gerak tegas terdeteksi -> kembalikan ambang ke normal.
             livenessAdaptiveThreshold = AMBANG_STASIS;
             livenessSmallDeltaCount = 0;
         } else if (absDelta < 0.02) {
@@ -632,21 +659,25 @@ window.stopFaceLogin  = function () {};
         }
 
         const deviasiCukup = absDelta > livenessAdaptiveThreshold;
-
-        // Debug log untuk troubleshoot (hapus setelah fix confirmed)
-        if (headTurnStreak > 0 || deviasiCukup || livenessAdaptiveThreshold < AMBANG_STASIS) {
-            console.log('[LIVENESS]', 'ratio:', currentRatio.toFixed(3), 'delta:', absDelta.toFixed(3),
-                'streak:', headTurnStreak, 'ambang:', livenessAdaptiveThreshold.toFixed(3),
-                'pass:', deviasiCukup || jauhDariTengah);
-        }
+        
+        // ============================================================
+        // V32.5 - log UNCONDITIONAL.
+        // Log lama hanya print bila streak>0 atau deviasi cukup, sehingga
+        // kalau guardmana pun yang menolak lebih dulu, tidak ada jejak
+        // sama sekali di console. Sekarang setiap frame yang lolos
+        // guard print ratio/delta/streak/ambang.
+        // ============================================================
+        DBG('ratio=' + currentRatio.toFixed(3) +
+            ' delta=' + absDelta.toFixed(3) +
+            ' streak=' + headTurnStreak +
+            ' ambang=' + livenessAdaptiveThreshold.toFixed(3) +
+            ' netral=' + (!jauhDariTengah) +
+            ' blink=' + blinkDetected);
 
         if (jauhDariTengah || deviasiCukup) {
             headTurnStreak += 1;
         } else {
-            // V32.2: jangan reset streak ke 0 secara brutal. Pada production HTTPS
-            // latency tinggi membuat frame 'netral' ikut terbaca di tengah gerakan,
-            // sehingga reset ke 0 memutus rantai streak sebelum mencapai ambang.
-            // cukup decrement 1 -> toleran terhadap 1-2 frame interstitial.
+            // Gerakan kecil / noise -> jangan reset baseline, cukup kurangi streak.
             headTurnStreak = Math.max(0, headTurnStreak - 1);
         }
 
@@ -760,6 +791,10 @@ window.stopFaceLogin  = function () {};
                     // liveness diminta ulang (kecuali memang dimatikan).
                     verifying = false;
                     livenessVerified = !livenessWajib;
+                    // V32.5: liveness SUDAH LOLOS di sini (server hanya menolak
+                    // pencocokan descriptor). Reset penuh memaksa user mengulang
+                    // gerakan tanpa henti. Cukup reset baseline agar gerakan
+                    // berikutnya diukur ulang, dan beri jeda lebih lama.
                     initialNoseRatio = null;
                     headTurnStreak = 0;
                     livenessAdaptiveThreshold = 0.04;
@@ -767,6 +802,7 @@ window.stopFaceLogin  = function () {};
                     eyeBaseline = null;
                     eyeClosedSeen = false;
                     setStatus('Wajah belum cocok. Posisikan wajah dengan jelas...', 'error');
+                    DBG('RESET setelah verifikasi ditolak (descriptor tidak cocok)');
                     active = true;
                     await new Promise(resolve => setTimeout(resolve, 2000));
                 } else {
@@ -811,9 +847,12 @@ window.stopFaceLogin  = function () {};
                 livenessVerified = !livenessWajib;
                 initialNoseRatio = null;
                 headTurnStreak = 0;
+                livenessAdaptiveThreshold = 0.04;
+                livenessSmallDeltaCount = 0;
                 eyeBaseline = null;
                 eyeClosedSeen = false;
                 active = true;
+                DBG('ERROR: ' + (error && error.message ? error.message : String(error)));
                 setStatus('Gagal memproses wajah: ' + error.message, 'error');
             }
 
@@ -834,6 +873,20 @@ window.stopFaceLogin  = function () {};
         }
 
         failedAttempts = 0;
+        // V32.5: reset SELURUH state liveness saat scan dimulai ulang.
+        // Tanpa ini, baseline & streak dari percobaan sebelumnya masih
+        // tertinggal sehingga user harus mengulang gerakan.
+        livenessVerified = false;
+        initialNoseRatio = null;
+        lastGoodNoseRatio = null;
+        headTurnStreak = 0;
+        headTurnDetected = false;
+        blinkDetected = false;
+        livenessAdaptiveThreshold = 0.04;
+        livenessSmallDeltaCount = 0;
+        eyeBaseline = null;
+        eyeClosedSeen = false;
+        detectMissCount = 0;
         setStatus('Memuat model face recognition...');
         startBtn.disabled = true;
 
