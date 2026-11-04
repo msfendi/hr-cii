@@ -92,7 +92,9 @@ class BiodataManageController extends Controller
                 ->first();
         }
 
-        if (!$pelamar && $pelamarDetail && !empty($pelamarDetail->id_pelamar)) {
+        // id_pelamar lama bisa saja berisi NPK (bukan angka) karena bug data
+        // sebelumnya. Jangan dipakai untuk query kolom ID yang bertipe int.
+        if (!$pelamar && $pelamarDetail && !empty($pelamarDetail->id_pelamar) && ctype_digit((string) $pelamarDetail->id_pelamar)) {
             $pelamar = DB::connection('cii')->table('PELAMAR')
                 ->where('ID', $pelamarDetail->id_pelamar)
                 ->orWhere('id', $pelamarDetail->id_pelamar)
@@ -447,24 +449,69 @@ class BiodataManageController extends Controller
                     ->update($detailData);
             } else {
                 $pelamarId = $pelamarRec->ID ?? ($pelamarRec->id ?? null);
+
                 if (!$pelamarId) {
+                    // Tabel PELAMAR punya banyak kolom NOT NULL tanpa default.
+                    // Semua kolom wajib harus diisi, kalau tidak insert gagal
+                    // dan id_pelamar akan berisi NPK (bukan angka) sehingga
+                    // query berikutnya error.
+                    $namaSekolah = '-';
+
+                    if (is_array($request->riwayat_pendidikan)) {
+                        foreach ($request->riwayat_pendidikan as $edu) {
+                            $institusi = trim((string) ($edu['institusi'] ?? ''));
+
+                            if ($institusi !== '') {
+                                $namaSekolah = strtoupper($institusi);
+                            }
+                        }
+                    }
+
+                    $ibuNama = is_array($ibuPayload)
+                        ? trim((string) ($ibuPayload['nama'] ?? ''))
+                        : trim((string) ($request->ibu ?? ''));
+
                     try {
                         $pelamarId = DB::connection('cii')->table('PELAMAR')->insertGetId([
-                            'NPK'            => $NPK,
-                            'NAMA'           => strtoupper($request->nama),
-                            'NIK'            => $request->nik,
-                            'NO_KK'          => $request->nkk,
-                            'HP'             => $request->hp,
-                            'ALAMAT_LENGKAP' => strtoupper($request->alamat),
-                            'JENIS_KELAMIN'  => strtoupper($request->jk),
-                            'IS_KONTRAK'     => 'TRUE',
+                            'NPK'               => $NPK,
+                            'NAMA'              => strtoupper(trim((string) $request->nama)) ?: '-',
+                            'NIK'               => $ktpVal !== '' ? $ktpVal : '-',
+                            'NO_KK'             => trim((string) $request->nkk) !== '' ? trim((string) $request->nkk) : '-',
+                            'JENIS_KELAMIN'     => strtoupper(trim((string) $request->jk)) ?: '-',
+                            'TMPT_LAHIR'        => strtoupper(trim((string) $request->tempat_lahir)) ?: '-',
+                            'TGL_LAHIR'         => $request->tgl_lahir ?: null,
+                            'UMUR'              => $umur_string ?: '-',
+                            'ALAMAT_LENGKAP'    => strtoupper(trim((string) $request->alamat)) ?: '-',
+                            'KABUPATEN'         => strtoupper(trim((string) $request->kabupaten)) ?: '-',
+                            'ALAMAT_DOMISILI'   => strtoupper(trim((string) $request->status_domisili)) ?: '-',
+                            'PENDIDIKAN'        => strtoupper(trim((string) $request->pendidikan)) ?: '-',
+                            'NAMA_SEKOLAH'      => $namaSekolah,
+                            'KABUPATEN_SEKOLAH' => '-',
+                            'JURUSAN'           => strtoupper(trim((string) $request->jurusan)) ?: '-',
+                            'TINGGI_BADAN'      => (int) ($request->tinggi_badan ?? 0),
+                            'BERAT_BADAN'       => (int) ($request->berat_badan ?? 0),
+                            'HP'                => trim((string) $request->hp) !== '' ? trim((string) $request->hp) : '-',
+                            'AGAMA'             => strtoupper(trim((string) $request->agama)) ?: '-',
+                            'IBU'               => strtoupper($ibuNama) ?: '-',
+                            'STATUS'            => trim((string) $request->status) !== '' ? trim((string) $request->status) : '-',
+                            'TANGGUNGAN'        => (int) ($request->tanggungan ?? 0),
+                            'IS_KONTRAK'        => 'TRUE',
                         ]);
-                    } catch (\Exception $e) {
-                        $pelamarId = $NPK;
+                    } catch (\Throwable $e) {
+                        throw new \RuntimeException(
+                            'Gagal membuat data pelamar baru untuk NPK ' . $NPK . ': ' . $e->getMessage(),
+                            0,
+                            $e
+                        );
+                    }
+
+                    if (!$pelamarId) {
+                        throw new \RuntimeException('Gagal membuat data pelamar baru untuk NPK ' . $NPK . '.');
                     }
                 }
 
                 $detailData['id_pelamar'] = (string) $pelamarId;
+                $detailData['status_apply'] = 'ONBOARDING';
                 $detailData['created_at'] = now();
                 DB::connection('cii')->table('pelamar_details')->insert($detailData);
             }
