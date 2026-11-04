@@ -10,14 +10,31 @@
 }
 </style>
 <style>
-.role-filter-modal {
+.modal-title-wrap {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    flex: 1 1 auto;
 }
 
-#filterRoleModal {
-    width: 250px !important;
-    min-width: 250px;
+.modal-title-wrap .modal-title {
+    margin-right: 1rem;
+}
+
+.modal-filter-wrap {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: .5rem;
+}
+
+.modal-filter-wrap .select2-container {
+    width: 180px !important;
+    min-width: 180px;
+    flex: 0 0 auto;
+    margin: 0;
 }
 
 .dataTables_filter {
@@ -221,9 +238,23 @@
          <div class="modal-dialog modal-xl">
             <div class="modal-content">
                <div class="modal-header">
-                  <h5 class="modal-title" id="detail-title">
-                     Insentif Detail
-                  </h5>
+                  <div class="modal-title-wrap">
+                     <h5 class="modal-title" id="detail-title">
+                        Insentif Detail
+                     </h5>
+
+                     <!-- ================= FILTER ROLE & LINE ================= -->
+                     <div class="modal-filter-wrap">
+                        <select id="filterRoleModal"
+                                class="form-control form-control-sm">
+                           <option value="">Role</option>
+                        </select>
+                        <select id="filterLineModal"
+                                class="form-control form-control-sm">
+                           <option value="">Line</option>
+                        </select>
+                     </div>
+                  </div>
                   <button type="button" class="close" data-dismiss="modal">
                   <span>&times;</span>
                   </button>
@@ -321,6 +352,14 @@
          let roleChartInstance = null;
          let amountChartInstance = null;
 
+         // cache data terakhir supaya chart bisa dirender ulang
+         // saat dropdown role / line berubah
+         let insentifValuesCache = [];
+         let insentifComponentCache = '';
+
+         // nilai khusus untuk opsi "Tanpa Line" di dropdown line
+         const NO_LINE = '__no_line__';
+
          // datalabels aktif secara global supaya nilai/percentage
          // langsung tampil di chart tanpa perlu hover
          if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
@@ -339,6 +378,11 @@
          
          }
 
+         // format ringkas untuk label range di chart nominal
+         function formatRibu(n){
+             return 'Rp ' + Number(n).toLocaleString('id-ID');
+         }
+
          // ambil nilai insentif dari row apapun jenis komponennya
          function getInsentifValue(row){
              return row.sewing_insentif ??
@@ -351,16 +395,24 @@
                  0;
          }
 
+         // ambil nama line dari row (kosong jika tidak ada)
+         function getLineValue(row){
+             return row.line_info || '';
+         }
+
          /*
          | ==============================================
          | RENDER SUMMARY + CHART (ROLE & NOMINAL)
          | ==============================================
          */
-         function renderInsentifCharts(data){
+         function renderInsentifCharts(data, component){
 
              let values = data.map(function(r){
                  return Object.assign({}, r, { value: Number(getInsentifValue(r)) });
              });
+
+             insentifValuesCache = values;
+             insentifComponentCache = component;
 
              if (values.length === 0) {
                  $('#summaryHighest, #summaryLowest, #summaryAverage').text('-');
@@ -377,15 +429,94 @@
 
              $('#summaryHighest').html(
                  formatRupiah(highest.value) +
-                 '<br><small class="text-gray-600">' + highest.npk + ' - ' + highest.name + '</small>'
+                 '<br><small class="text-gray-600">' + highest.npk + ' - ' + highest.name + '</small>' +
+                 '<br><small class="text-gray-600">Role: ' + (highest.role || '-') + ' | Line: ' + (highest.line_info || '-') + '</small>'
              );
              $('#summaryLowest').html(
                  formatRupiah(lowest.value) +
-                 '<br><small class="text-gray-600">' + lowest.npk + ' - ' + lowest.name + '</small>'
+                 '<br><small class="text-gray-600">' + lowest.npk + ' - ' + lowest.name + '</small>' +
+                 '<br><small class="text-gray-600">Role: ' + (lowest.role || '-') + ' | Line: ' + (lowest.line_info || '-') + '</small>'
              );
              $('#summaryAverage').html(formatRupiah(average));
 
-             // ============ CHART 1: PENGELOMPOKAN BERDASARKAN ROLE ============
+             // ============ CHART ROLE & NOMINAL ============
+             renderRoleAmountCharts(values, component);
+         }
+
+         /*
+         | ==============================================
+         | RENDER ULANG CHART SESUAI DROPDOWN ROLE & LINE
+         | (summary card tidak ikut berubah)
+         | ==============================================
+         */
+         function renderChartsByFilter(roleVal, lineVal){
+
+             let filtered = insentifValuesCache.filter(function(r){
+
+                 if (roleVal && (r.role || '') !== roleVal) {
+                     return false;
+                 }
+
+                 if (lineVal) {
+                     let line = getLineValue(r);
+                     if (lineVal === NO_LINE) {
+                         if (line !== '') return false;
+                     } else if (line !== lineVal) {
+                         return false;
+                     }
+                 }
+
+                 return true;
+             });
+
+             renderRoleAmountCharts(filtered, insentifComponentCache);
+         }
+
+         /*
+         | ==============================================
+         | TERAPKAN FILTER ROLE & LINE
+         | ke tabel detail + chart
+         | ==============================================
+         */
+         function applyInsentifFilters(){
+
+             let roleVal = $('#filterRoleModal').val() || '';
+             let lineVal = $('#filterLineModal').val() || '';
+             let esc = $.fn.dataTable.util.escapeRegex;
+
+             // chart role & nominal ikut terfilter
+             renderChartsByFilter(roleVal, lineVal);
+
+             // tabel: kolom 2 = Role, kolom 3 = Line
+             insentifTable
+                 .column(2)
+                 .search(roleVal ? '^' + esc(roleVal) + '$' : '', true, false);
+
+             if (!lineVal) {
+                 insentifTable.column(3).search('');
+             } else if (lineVal === NO_LINE) {
+                 insentifTable.column(3).search('^(-)?$', true, false);
+             } else {
+                 insentifTable.column(3).search('^' + esc(lineVal) + '$', true, false);
+             }
+
+             insentifTable.draw();
+         }
+
+         /*
+         | ==============================================
+         | CHART 1 (ROLE) + CHART 2 (NOMINAL)
+         | ==============================================
+         */
+         function renderRoleAmountCharts(values, component){
+
+             if (values.length === 0) {
+                 if (roleChartInstance) { roleChartInstance.destroy(); roleChartInstance = null; }
+                 if (amountChartInstance) { amountChartInstance.destroy(); amountChartInstance = null; }
+                 return;
+             }
+
+             // ============ CHART 1: DISTRIBUSI BERDASARKAN ROLE (BAR) ============
              let roleGroups = {};
              values.forEach(function(r){
                  let role = r.role || 'Tanpa Role';
@@ -394,16 +525,19 @@
                  roleGroups[role].total += r.value;
              });
 
-             let roleLabels = Object.keys(roleGroups);
+             // urutkan dari jumlah orang terbanyak
+             let roleLabels = Object.keys(roleGroups).sort((a, b) => roleGroups[b].count - roleGroups[a].count);
              let roleCounts = roleLabels.map(l => roleGroups[l].count);
              let roleColors = roleLabels.map((_, i) => `hsl(${(i * 57) % 360}, 65%, 55%)`);
+             let roleSum    = roleCounts.reduce((a, b) => a + b, 0);
 
              if (roleChartInstance) roleChartInstance.destroy();
              roleChartInstance = new Chart(document.getElementById('roleChart'), {
-                 type: 'doughnut',
+                 type: 'bar',
                  data: {
                      labels: roleLabels,
                      datasets: [{
+                         label: 'Jumlah Orang',
                          data: roleCounts,
                          backgroundColor: roleColors
                      }]
@@ -411,24 +545,35 @@
                  options: {
                      responsive: true,
                      maintainAspectRatio: true,
+                     layout: { padding: { top: 36 } },
+                     scales: {
+                         y: {
+                             beginAtZero: true,
+                             ticks: { precision: 0 },
+                             suggestedMax: Math.max(...roleCounts) * 1.1
+                         },
+                         x: { ticks: { autoSkip: false } }
+                     },
                      plugins: {
-                         legend: { position: 'bottom' },
+                         legend: { display: false },
                          datalabels: {
-                             color: '#fff',
+                             anchor: 'end',
+                             align: 'top',
+                             offset: 2,
+                             clip: false,
+                             color: '#2e2e2e',
                              font: { weight: 'bold', size: 11 },
-                             formatter: function(value, ctx){
-                                 let arr = ctx.chart.data.datasets[0].data;
-                                 let sum = arr.reduce((a, b) => a + b, 0);
-                                 let pct = sum ? ((value / sum) * 100).toFixed(1) : 0;
-                                 return value + ' orang\n(' + pct + '%)';
+                             textAlign: 'center',
+                             formatter: function(value){
+                                 let pct = roleSum ? ((value / roleSum) * 100).toFixed(1) : 0;
+                                 return [value + ' orang', '(' + pct + '%)'];
                              }
                          },
                          tooltip: {
                              callbacks: {
                                  label: function(ctx){
-                                     let role = ctx.label;
-                                     let total = roleGroups[role].total;
-                                     return ctx.parsed + ' orang - Total ' + formatRupiah(total);
+                                     let total = roleGroups[ctx.label].total;
+                                     return ctx.parsed.y + ' orang - Total ' + formatRupiah(total);
                                  }
                              }
                          }
@@ -436,16 +581,32 @@
                  }
              });
 
-             // ============ CHART 2: PENGELOMPOKAN BERDASARKAN NOMINAL ============
-             let amountGroups = {};
+             // ============ CHART 2: PENGELOMPOKAN NOMINAL PER RANGE ============
+             // sewing_insentif per 200.000, komponen lain per 100.000
+             const RANGE_STEP = (component === 'sewing_insentif') ? 200000 : 100000;
+
+             // index bucket: 0 => 0-STEP, 1 => (STEP+1)-(2*STEP), dst
+             function getBucketIndex(v){
+                 if (v <= 0) return 0;
+                 return Math.ceil(v / RANGE_STEP) - 1;
+             }
+
+             let bucketCounts = {};
              values.forEach(function(r){
-                 let key = r.value;
-                 amountGroups[key] = (amountGroups[key] || 0) + 1;
+                 let idx = getBucketIndex(r.value);
+                 bucketCounts[idx] = (bucketCounts[idx] || 0) + 1;
              });
 
-             let sortedAmounts = Object.keys(amountGroups).map(Number).sort((a, b) => a - b);
-             let amountLabels = sortedAmounts.map(v => formatRupiah(v));
-             let amountCounts = sortedAmounts.map(v => amountGroups[v]);
+             let maxIdx = Math.max(...Object.keys(bucketCounts).map(Number));
+
+             let amountLabels = [];
+             let amountCounts = [];
+             for (let i = 0; i <= maxIdx; i++){
+                 let start = i === 0 ? 0 : (i * RANGE_STEP) + 1;
+                 let end   = (i + 1) * RANGE_STEP;
+                 amountLabels.push(formatRibu(start) + ' - ' + formatRibu(end));
+                 amountCounts.push(bucketCounts[i] || 0);
+             }
 
              if (amountChartInstance) amountChartInstance.destroy();
              amountChartInstance = new Chart(document.getElementById('amountChart'), {
@@ -461,20 +622,20 @@
                  options: {
                      responsive: true,
                      maintainAspectRatio: true,
-                     layout: {
-                         padding: { top: 28 }
-                     },
+                     layout: { padding: { top: 28 } },
                      scales: {
                          y: {
                              beginAtZero: true,
                              ticks: { precision: 0 },
                              suggestedMax: Math.max(...amountCounts) + 1
                          },
-                         x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 } }
+                         x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 45, font: { size: 10 } } }
                      },
                      plugins: {
                          legend: { display: false },
                          datalabels: {
+                             // range yang kosong tidak diberi label
+                             display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
                              anchor: 'end',
                              align: 'top',
                              offset: 4,
@@ -497,6 +658,30 @@
          responsive:true,
          autoWidth:false
          });
+
+         // =========================
+         // SELECT2 FILTER ROLE & LINE (DI HEADER MODAL)
+         // =========================
+         $('#filterRoleModal').select2({
+             placeholder: 'Role',
+             allowClear: true,
+             width: '180px',
+             dropdownParent: $('#detailModal')
+         });
+
+         $('#filterLineModal').select2({
+             placeholder: 'Line',
+             allowClear: true,
+             width: '180px',
+             dropdownParent: $('#detailModal')
+         });
+
+         // =========================
+         // FILTER EVENT
+         // =========================
+         $('#filterRoleModal, #filterLineModal').on('change', function () {
+             applyInsentifFilters();
+         });
          
          
          insentifTable = $('#insentifTable').DataTable({
@@ -510,54 +695,12 @@
 
     dom:
     "<'row mb-2 align-items-center px-2'" +
-        "<'col-auto role-filter-modal'>" +
-        "<'col-auto ml-2'l>" +
+        "<'col-auto'l>" +
         "<'col text-end'f>" +
     ">" +
     "rtip",
 
     lengthMenu: [ [10, 25, 50, 100, -1], [10, 25, 50, 100, 'All'] ],
-
-    initComplete: function () {
-
-        // =========================
-        // CREATE SELECT ROLE
-        // =========================
-        let roleDropdownModal = `
-        <select id="filterRoleModal"
-                class="form-control form-control-sm"
-                style="width:250px">
-            <option value="">Role</option>
-        </select>
-    `;
-
-    $('.role-filter-modal').html(roleDropdownModal);
-
-    $('#filterRoleModal').select2({
-        placeholder: 'Role',
-        allowClear: true,
-        width: '250px',
-        dropdownParent: $('#detailModal')
-    });
-
-        // =========================
-        // FILTER EVENT
-        // =========================
-        $(document).on('change', '#filterRoleModal', function () {
-
-            let val = $(this).val();
-
-            if (!val) {
-                insentifTable.column(2).search('').draw();
-                return;
-            }
-
-            insentifTable
-                .column(2)
-                .search('^' + val + '$', true, false)
-                .draw();
-        });
-    },
 
     columns:[
         {data:'npk'},
@@ -680,6 +823,11 @@
              .val('')
              .trigger('change.select2');
 
+         $('#filterLineModal')
+             .html('<option value="">Line</option>')
+             .val('')
+             .trigger('change.select2');
+
          renderInsentifCharts([]); // reset summary tertinggi/terendah/rata-rata & hapus chart lama
          
          $('#detailModal').modal('show');
@@ -745,13 +893,45 @@
                 options += `<option value="${roleMap[display]}">${display}</option>`;
             });
 
+         // BUILD LINE OPTIONS
+         let lineSet = {};
+         let hasNoLine = false;
+
+            res.data.forEach(item => {
+                let line = getLineValue(item);
+                if (line === '') {
+                    hasNoLine = true;
+                } else {
+                    lineSet[line] = true;
+                }
+            });
+
+         let $lineSelect = $('#filterLineModal');
+         $lineSelect.empty().append($('<option>').val('').text('Line'));
+
+            Object.keys(lineSet).sort(function(a, b){
+                return a.localeCompare(b, undefined, { numeric: true });
+            }).forEach(line => {
+                $lineSelect.append($('<option>').val(line).text(line));
+            });
+
+            if (hasNoLine) {
+                $lineSelect.append($('<option>').val(NO_LINE).text('Tanpa Line'));
+            }
+
+         // BUILD SUMMARY + CHARTS
+         // (dirender dulu sebelum dropdown diisi, supaya event change
+         //  dropdown memakai cache data yang sudah terbaru)
+         renderInsentifCharts(res.data, component);
+
 $('#filterRoleModal')
     .html(options)
     .val('')
     .trigger('change.select2');
 
-         // BUILD SUMMARY + CHARTS
-         renderInsentifCharts(res.data);
+$lineSelect
+    .val('')
+    .trigger('change.select2');
          
          $('#insentifTable_processing').hide();
          
