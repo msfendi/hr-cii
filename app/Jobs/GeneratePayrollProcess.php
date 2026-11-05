@@ -1504,9 +1504,12 @@ END AS special_overtime_hours
                 'has_tkk'        => $tkk ? 1 : 0,
                 // BARU — dipakai formula pinalty_deduction (karyawan SPD)
                 'is_spd'         => $isSpdPinalty,
-                'pinalty_salary' => (float) $employee->salary,
-                'pinalty_months' => (float) $pinaltyMonths,
-                'pinalty_days'   => (float) $pinaltyDays,
+                // 'pinalty_salary' => (float) $employee->salary,
+                // 'pinalty_months' => (float) $pinaltyMonths,
+                // 'pinalty_days'   => (float) $pinaltyDays,
+                'pinalty_salary' => 0,
+                'pinalty_months' => 0,
+                'pinalty_days'   => 0,
             ];
 
             /*
@@ -2773,9 +2776,9 @@ END AS special_overtime_hours
                     'has_tkk'        => $tkk ? 1 : 0,
                     // BARU — dipakai formula pinalty_deduction (karyawan SPD)
                     'is_spd'         => $isSpdPinalty,
-                    'pinalty_salary' => (float) $employee->salary,
-                    'pinalty_months' => (float) $pinaltyMonths,
-                    'pinalty_days'   => (float) $pinaltyDays,
+                    // 'pinalty_salary' => (float) $employee->salary,
+                    // 'pinalty_months' => (float) $pinaltyMonths,
+                    // 'pinalty_days'   => (float) $pinaltyDays,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'tanggungan' => $employee->TANGGUNGAN,
