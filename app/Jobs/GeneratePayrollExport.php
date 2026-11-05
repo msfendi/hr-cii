@@ -73,6 +73,10 @@ class GeneratePayrollExport implements ShouldQueue
         |--------------------------------------------------------------------------
         | EMPLOYEE UNION (LOAD ONCE)
         |--------------------------------------------------------------------------
+        | IS_EXCLUDE dipakai hanya untuk CSV bank (generateBank).
+        | Jika BIODATA_KELUAR tidak punya kolom IS_EXCLUDE, ganti dengan
+        | DB::raw('0 as IS_EXCLUDE') pada select BIODATA_KELUAR.
+        |--------------------------------------------------------------------------
         */
         $export->update([
             'progress' => 15,
@@ -80,10 +84,10 @@ class GeneratePayrollExport implements ShouldQueue
         ]);
 
         $employeeUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'ID_DEPT', 'IS_STAFF')
+            ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'ID_DEPT', 'IS_STAFF', 'IS_EXCLUDE')
             ->unionAll(
                 DB::table('BIODATA_KELUAR')
-                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'ID_DEPT', 'IS_STAFF')
+                    ->select('NPK', 'NAMA_KARYAWAN', 'BAG', 'ID_DEPT', 'IS_STAFF', 'IS_EXCLUDE')
             );
 
         $employees = DB::query()
@@ -216,6 +220,7 @@ class GeneratePayrollExport implements ShouldQueue
                 'p.TMK',
                 'prd.employee_staff as IS_STAFF',
                 'prd.employee_expat as IS_EXPAT',
+                'emp.IS_EXCLUDE',
                 'd.IS_SEWING',
                 'p.KETERANGAN',
 
@@ -385,6 +390,8 @@ class GeneratePayrollExport implements ShouldQueue
         | SPLIT EMPLOYEE: ACTIVE / RESIGN / MANGKIR
         |--------------------------------------------------------------------------
         | Dipakai bersama oleh PDF dan CSV bank, supaya total keduanya selalu sama.
+        | Catatan: karyawan IS_EXCLUDE = 1 tetap ada di sini (ikut PDF & Excel);
+        | filter exclude hanya diterapkan di generateBank().
         |--------------------------------------------------------------------------
         */
 
@@ -697,7 +704,8 @@ class GeneratePayrollExport implements ShouldQueue
     | GENERATE BANK (dipindah dari PayrollApproveController)
     |--------------------------------------------------------------------------
     | Pengelompokan karyawan (active/resign/mangkir + STAFF/SEWING/dst) memakai
-    | hasil logic export di atas, jadi total CSV bank = total PDF/Excel.
+    | hasil logic export di atas, jadi total CSV bank = total PDF/Excel,
+    | KECUALI karyawan BIODATA.IS_EXCLUDE = 1 yang tidak diikutkan di CSV bank.
     | Format CSV (kolom Permata) tetap sama seperti di controller sebelumnya.
     |
     | File disimpan di payroll/{PERIODE}/ (gabungan) dan payroll/{PERIODE}/{ROLE}/.
@@ -722,6 +730,15 @@ class GeneratePayrollExport implements ShouldQueue
         if (!$approve || $approve->status !== 'finish') {
             return false;
         }
+
+        // Karyawan BIODATA.IS_EXCLUDE = 1 tidak ikut CSV bank
+        // (tetap ada di PDF & Excel karena filter hanya berlaku di sini).
+        // NULL dianggap tidak di-exclude.
+        $notExcluded = fn($r) => (int) ($r->IS_EXCLUDE ?? 0) !== 1;
+
+        $activeEmployees  = $activeEmployees->filter($notExcluded)->values();
+        $resignEmployees  = $resignEmployees->filter($notExcluded)->values();
+        $mangkirEmployees = $mangkirEmployees->filter($notExcluded)->values();
 
         if ($activeEmployees->isEmpty() && $resignEmployees->isEmpty() && $mangkirEmployees->isEmpty()) {
             return false;
