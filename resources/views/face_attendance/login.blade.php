@@ -74,6 +74,73 @@
 
                 <div class="card-body p-4 text-center">
 
+                    {{-- ============================================================
+                         PERBAIKAN V33 (2026-11-05) — STEP 1: INPUT NPK DULU
+                         ------------------------------------------------------------
+                         Permintaan user: "masukkan npk dulu baru keluar camera,
+                         jadi descriptor yang dicocokan sesuai dengan npk yang
+                         dimasukkan agar lebih akurat. jika tanpa npk maka ada
+                         kemungkinan salah mengambil wajah orang lain".
+
+                         Implementasi:
+                           - Section "npkStep" berisi form input NPK.
+                           - Setelah NPK lolos validasi (server), section ini
+                             disembunyikan dan section "cameraStep" ditampilkan.
+                           - NPK yang tervalidasi dikirim bersama descriptor
+                             ke route login-auth, sehingga pencocokan wajah
+                             HANYA dilakukan terhadap NPK tersebut.
+                           - Kalau setting admin mematikan "input NPK dulu",
+                             section npkStep TIDAK dirender sama sekali dan
+                             kamera langsung terbuka (flow lama).
+
+                         Keamanan: NPK yang dipakai untuk pencocokan diambil
+                         dari server (employee_faces), bukan dari input mentah
+                         user, sehingga user tidak bisa mengarang NPK.
+                         ============================================================ --}}
+                    @if($npkRequired ?? true)
+                    <div id="npkStep">
+                        <div class="mb-3">
+                            <h5 class="font-weight-bold text-gray-800 mb-1">Masukkan NPK Anda</h5>
+                            <p class="text-muted small mb-0">
+                                <i class="fas fa-info-circle mr-1 text-primary"></i>
+                                Wajah akan dicocokkan hanya dengan data wajah NPK yang Anda masukkan.
+                            </p>
+                        </div>
+
+                        <form id="npkForm" autocomplete="off" novalidate>
+                            @csrf
+                            <div class="form-group mb-2">
+                                <label for="npkInput" class="sr-only">NPK</label>
+                                <input type="text"
+                                       id="npkInput"
+                                       name="npk"
+                                       class="form-control form-control-lg text-center"
+                                       placeholder="Contoh: C-00827"
+                                       inputmode="text"
+                                       autocapitalize="characters"
+                                       maxlength="20"
+                                       required>
+                            </div>
+                            <button type="submit"
+                                    id="npkSubmitBtn"
+                                    class="btn btn-primary btn-lg rounded-pill px-5 w-100">
+                                <i class="fas fa-arrow-right mr-1"></i> Lanjut ke Kamera
+                            </button>
+                        </form>
+
+                        <div id="npkAlert" class="alert d-none mt-3 mb-0 text-left" role="alert"></div>
+                    </div>
+                    @endif
+
+                    {{-- STEP 2: area kamera. Hanya ditampilkan SETELAH NPK
+                         tervalidasi (kalau setting aktif). --}}
+                    <div id="cameraStep" class="@if($npkRequired ?? true) d-none @endif">
+                    {{-- PERBAIKAN V33 (2026-11-05): badge karyawan yang NPK-nya
+                         sudah tervalidasi. Muncul setelah step NPK lolos, supaya
+                         user yakin dia sedang login sebagai orang yang benar. --}}
+                    <div id="npkVerifiedBadge" class="alert alert-success py-2 px-3 mb-3 shadow-sm border-success font-weight-bold d-none">
+                    </div>
+
                     <!-- Alert Liveness Banner -->
                     {{-- PERBAIKAN 26 (2026-11-02): banner liveness HANYA dirender bila
                          toggle liveness ON. Saat OFF, banner tidak ada di HTML. --}}
@@ -135,6 +202,8 @@
 
                     <!-- Form Manual NPK (Opsi Cadangan) telah dihapus sesuai permintaan -->
 
+                    </div><!-- /#cameraStep -->
+
                 </div>
             </div>
         </div>
@@ -158,6 +227,114 @@
     let isModelLoaded = false;
     let isScanning = false;
     let livenessVerified = false;
+
+    // ==================================================================
+    // PERBAIKAN V33 (2026-11-05): STEP 1 — INPUT NPK DULU
+    // ==================================================================
+    // currentNpk menyimpan NPK yang SUDAH tervalidasi server.
+    // Nilai ini ikut dikirim ke route login-auth supaya pencocokan
+    // descriptor wajah hanya dilakukan terhadap NPK tersebut.
+    //
+    // Kalau setting admin "input NPK dulu" dimatikan, currentNpk tetap
+    // null dan server memakai flow lama (cari ke semua karyawan).
+    let currentNpk = null;
+    let npkStepActive = @json((bool) ($npkRequired ?? true));
+
+    // Tampilkan pesan error di box step NPK.
+    function showNpkAlert(message, type = 'danger') {
+        const box = document.getElementById('npkAlert');
+        if (!box) return;
+        box.classList.remove('d-none', 'alert-danger', 'alert-success', 'alert-warning');
+        box.classList.add('alert-' + type);
+        box.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> ' + message;
+    }
+
+    function clearNpkAlert() {
+        const box = document.getElementById('npkAlert');
+        if (!box) return;
+        box.classList.add('d-none');
+        box.innerHTML = '';
+    }
+
+    /**
+     * Kirim NPK ke server untuk divalidasi.
+     * Kalau valid: sembunyikan step NPK, tampilkan step kamera, mulai
+     *               pemuatan model wajah + kamera + GPS.
+     * Kalau tidak valid: tampilkan pesan, tetap di step NPK.
+     */
+    function submitNpk(event) {
+        if (event) event.preventDefault();
+
+        const input = document.getElementById('npkInput');
+        const btn = document.getElementById('npkSubmitBtn');
+        if (!input) return;
+
+        const npk = input.value.trim();
+        if (!npk) {
+            showNpkAlert('NPK wajib diisi.');
+            input.focus();
+            return;
+        }
+
+        clearNpkAlert();
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Memeriksa...';
+        }
+
+        fetch("{{ route('face.attendance.login.validate-npk') }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ npk: npk })
+        })
+        .then(res => res.json().catch(() => ({
+            success: false,
+            message: 'Respons server tidak valid (HTTP ' + res.status + ').'
+        })))
+        .then(data => {
+            if (data.success) {
+                currentNpk = data.npk || npk;
+
+                const npkStep = document.getElementById('npkStep');
+                const cameraStep = document.getElementById('cameraStep');
+                if (npkStep) npkStep.classList.add('d-none');
+                if (cameraStep) cameraStep.classList.remove('d-none');
+
+                // Info karyawan yang terverifikasi, ditampilkan di atas
+                // area kamera supaya user yakin dia tidak salah NPK.
+                const badge = document.getElementById('npkVerifiedBadge');
+                if (badge) {
+                    badge.innerHTML = '<i class="fas fa-user-check mr-1"></i> '
+                        + (data.name || currentNpk)
+                        + ' <span class="text-muted">(' + currentNpk + ')</span>';
+                    badge.classList.remove('d-none');
+                }
+
+                // Mulai alur yang selama ini berjalan otomatis.
+                initFaceLoginFlow();
+            } else {
+                showNpkAlert(data.message || 'NPK tidak valid.');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-arrow-right mr-1"></i> Lanjut ke Kamera';
+                }
+                input.focus();
+                input.select();
+            }
+        })
+        .catch(err => {
+            console.error('[FaceAttendance] validasi NPK gagal:', err);
+            showNpkAlert('Gagal terhubung ke server. Periksa koneksi lalu coba lagi.');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-arrow-right mr-1"></i> Lanjut ke Kamera';
+            }
+        });
+    }
 
     // ==================================================================
     // PERBAIKAN V31.6 (2026-11-05): TOLAK KOORDINAT BERBASIS IP/JARINGAN
@@ -807,7 +984,12 @@
                         latitude: currentLat,
                         longitude: currentLng,
                         accuracy: currentAccuracy,
-                        face_image: faceImage
+                        face_image: faceImage,
+                        // PERBAIKAN V33 (2026-11-05): NPK yang sudah
+                        // divalidasi di STEP 1 ikut dikirim, sehingga server
+                        // hanya mencocokkan descriptor wajah terhadap NPK
+                        // ini (bukan ke seluruh karyawan).
+                        npk: currentNpk
                     })
                 })
                 .then(res => res.json())
@@ -936,10 +1118,51 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    /**
+     * PERBAIKAN V33 (2026-11-05): alur inisialisasi login wajah.
+     *
+     * Dulu semua dipanggil otomatis saat DOMContentLoaded. Sekarang:
+     *   - Kalau setting "input NPK dulu" AKTIF, alur ini baru dijalankan
+     *     setelah NPK user lolos validasi server (lihat submitNpk()).
+     *   - Kalau setting OFF, alur ini tetap jalan otomatis seperti dulu.
+     *
+     * Flag `faceFlowStarted` mencegah dua kali pemicu (mis. user klik
+     * tombol Lanjut dua kali), supaya model wajah tidak dimuat ganda dan
+     * kamera tidak dibuka dua kali (NotReadableError).
+     */
+    let faceFlowStarted = false;
+
+    function initFaceLoginFlow() {
+        if (faceFlowStarted) return;
+        faceFlowStarted = true;
+
         initMiniMap();
         loadModels();
         checkGPS();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // PERBAIKAN V33 (2026-11-05): kalau NPK harus diinput dulu, alur
+        // login (peta, model wajah, kamera, GPS) TIDAK dijalankan sampai
+        // NPK user tervalidasi. Form NPK juga dikaitkan ke handler submit.
+        const npkForm = document.getElementById('npkForm');
+        if (npkForm) {
+            npkForm.addEventListener('submit', submitNpk);
+            const npkInput = document.getElementById('npkInput');
+            if (npkInput) {
+                npkInput.addEventListener('input', clearNpkAlert);
+                // Fokus otomatis ke input NPK supaya user bisa langsung ketik.
+                setTimeout(() => npkInput.focus(), 250);
+            }
+        }
+
+        if (npkStepActive) {
+            // Tunggu NPK tervalidasi -> submitNpk() memanggil initFaceLoginFlow().
+            return;
+        }
+
+        // Setting "input NPK dulu" dimatikan: flow lama, langsung jalan.
+        initFaceLoginFlow();
     });
 </script>
 

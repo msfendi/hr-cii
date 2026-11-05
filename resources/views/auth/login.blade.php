@@ -249,19 +249,43 @@
     </div>
 
 @include('layout.footerscript')
-</body>
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+
+{{-- PERBAIKAN V32.7 (2026-11-05): ZXing kini dimuat dari FILE LOKAL
+     (public/vendor/zxing/zxing.min.js, versi 0.21.3 dipin) dengan fallback
+     CDN. alasan:
+       1) script sebelumnya berada SETELAH </body> (urutan render tidak
+          dijamin -> ReferenceError "ZXing is not defined"),
+       2) CDN bisa diblokir / gagal di jaringan produksi -> ZXing undefined,
+       3) @latest bisa mengarahkan ke versi dengan API berbeda.
+     Fallback: jsDelivr -> unpkg -> guard typeof checks. --}}
+<script src="{{ asset('vendor/zxing/zxing.min.js') . '?v=327' }}"
+        onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';s.onerror=function(){var u=document.createElement('script');u.src='https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';document.head.appendChild(u);};document.head.appendChild(s);"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @if ($faceEnabled ?? false)
-<script src="{{ asset('vendor-face-api/face-api.js') . '?v=325' }}"></script>
-<script src="{{ asset('js/face-recognition.js') . '?v=325' }}"></script>
+<script src="{{ asset('vendor-face-api/face-api.js') . '?v=327' }}"></script>
+<script src="{{ asset('js/face-recognition.js') . '?v=327' }}"></script>
 {{-- PERBAIKAN V31.3c (2026-11-04): detektor liveness bersama --}}
-<script src="{{ asset('js/liveness-check.js') . '?v=325' }}"></script>
+<script src="{{ asset('js/liveness-check.js') . '?v=327' }}"></script>
 @endif
+</body>
 
 <script>
+{{-- PERBAIKAN V32.6: jangan crash halaman kalau ZXing gagal dimuat.
+     Script ini dijalankan top-level; tanpa guard, "new ZXing..." melempar
+     ReferenceError yang menghentikan SEMUA kode berikutnya (termasuk
+     liveness/face detection). --}}
 let scanned = false;
-const codeReader = new ZXing.BrowserQRCodeReader();
+let codeReader = null;
+if (typeof ZXing !== 'undefined' && ZXing.BrowserQRCodeReader) {
+    try {
+        codeReader = new ZXing.BrowserQRCodeReader();
+    } catch (e) {
+        console.warn('ZXing tidak bisa diinisialisasi:', e);
+        codeReader = null;
+    }
+} else {
+    console.warn('ZXing belum tersedia (CDN gagal dimuat?). Fitur QR nonaktif.');
+}
 
 // Ambil / generate identitas device (persisten di localStorage)
 function getDeviceInfo() {
@@ -353,6 +377,17 @@ let qrActive = false;
 
 function startQr() {
     if (qrActive) {
+        return;
+    }
+
+    // PERBAIKAN V32.6: jangan lempar error kalau ZXing tidak termuat.
+    if (!codeReader) {
+        qrActive = false;
+        Swal.fire({
+            icon: 'warning',
+            title: 'QR tidak tersedia',
+            text: 'Library pemindai QR gagal dimuat. Periksa koneksi internet atau muat ulang halaman.'
+        });
         return;
     }
 

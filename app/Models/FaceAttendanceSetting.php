@@ -17,6 +17,7 @@ class FaceAttendanceSetting extends Model
         'is_saturday_enabled',
         'is_sunday_enabled',
         'is_holiday_enabled',
+        'is_npk_required_enabled',
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class FaceAttendanceSetting extends Model
         'is_saturday_enabled'      => 'boolean',
         'is_sunday_enabled'        => 'boolean',
         'is_holiday_enabled'       => 'boolean',
+        'is_npk_required_enabled'  => 'boolean',
     ];
 
     /**
@@ -40,9 +42,61 @@ class FaceAttendanceSetting extends Model
      */
     protected static $punyaKolomAllowance = [];
 
+    /**
+     * PERBAIKAN V33 (2026-11-05): cache daftar kolom di Laravel cache.
+     *
+     * Kenapa perlu: Schema::hasColumn() issue query ke INFORMATION_SCHEMA
+     * tiap kali halaman dirender. Di SQL Server remote itu menambah
+     * latency beberapa detik per request kalau koneksi lambat, sehingga
+     * halaman login terasa hang.
+     *
+     * Cache disimpan 1 jam. Kalau admin baru menjalankan migrate, cache
+     * bisa dibersihkan dengan "php artisan cache:clear" atau otomatis
+     * kedaluwarsa dalam 1 jam.
+     */
+    public static function cachedColumns(): array
+    {
+        $cacheKey = 'face_attendance_settings_columns';
+
+        try {
+            $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        } catch (\Throwable $e) {
+            // Cache tidak tersedia -> lanjut ke query langsung.
+        }
+
+        $columns = [];
+
+        try {
+            $columns = \Illuminate\Support\Facades\Schema::getColumnListing('face_attendance_settings');
+        } catch (\Throwable $e) {
+            \Log::warning('Gagal membaca daftar kolom face_attendance_settings: ' . $e->getMessage());
+            return [];
+        }
+
+        try {
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $columns, now()->addHour());
+        } catch (\Throwable $e) {
+            // Abaikan kalau cache gagal ditulis.
+        }
+
+        return $columns;
+    }
+
     public static function hasAllowanceColumn(string $kolom = 'clock_in_allowance_minutes'): bool
     {
         if (array_key_exists($kolom, static::$punyaKolomAllowance)) {
+            return static::$punyaKolomAllowance[$kolom];
+        }
+
+        // PERBAIKAN V33 (2026-11-05): pakai daftar kolom yang di-cache
+        // lebih dulu. Kalau cache tidak tersedia, jatuh ke Schema::hasColumn
+        // seperti sebelumnya (supaya tetap benar).
+        $cached = static::cachedColumns();
+        if (!empty($cached)) {
+            static::$punyaKolomAllowance[$kolom] = in_array($kolom, $cached, true);
             return static::$punyaKolomAllowance[$kolom];
         }
 
@@ -90,6 +144,38 @@ class FaceAttendanceSetting extends Model
     }
 
     /**
+     * PERBAIKAN V33 (2026-11-05): apakah NPK wajib diinput lebih dulu
+     * di halaman /face-attendance/login.
+     *
+     * Kalau TRUE (default), user harus mengetik NPK sebelum kamera
+     * boleh dibuka, dan descriptor wajah hanya dicocokkan terhadap
+     * karyawan dengan NPK tersebut.
+     *
+     * Kalau FALSE, flow lama berlaku: kamera langsung terbuka dan
+     * pencocokan wajah dilakukan ke semua karyawan.
+     *
+     * Fail-safe: kalau kolom belum ada (migrasi belum dijalankan) atau
+     * DB error, nilai dikembalikan TRUE supaya tidak ada celah salah
+     * mengambil wajah orang lain.
+     */
+    public static function isNpkRequiredEnabled(): bool
+    {
+        try {
+            if (!static::hasAllowanceColumn('is_npk_required_enabled')) {
+                return true;
+            }
+
+            $setting = static::current();
+            $value = $setting->is_npk_required_enabled;
+
+            // Null = kolom ada tapi nilainya null -> default TRUE.
+            return $value === null ? true : (bool) $value;
+        } catch (\Throwable $e) {
+            return true;
+        }
+    }
+
+    /**
      * Setting window presensi bersifat singleton (1 baris).
      */
     public static function current(): self
@@ -104,6 +190,7 @@ class FaceAttendanceSetting extends Model
                 $setting->is_saturday_enabled = false;
                 $setting->is_sunday_enabled = false;
                 $setting->is_holiday_enabled = false;
+                $setting->is_npk_required_enabled = true;
 
                 try {
                     $setting->save();
@@ -120,6 +207,7 @@ class FaceAttendanceSetting extends Model
             $fallback->is_saturday_enabled = false;
             $fallback->is_sunday_enabled = false;
             $fallback->is_holiday_enabled = false;
+            $fallback->is_npk_required_enabled = true;
 
             return $fallback;
         }

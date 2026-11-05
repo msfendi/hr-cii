@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Session;
 use App\Models\AttendanceWorkLocation;
 use App\Models\EmployeeFace;
 use App\Models\FaceAttendanceLog;
+// PERBAIKAN V33 (2026-11-05): dipakai untuk toggle "input NPK dulu"
+// di halaman /face-attendance/login.
+use App\Models\FaceAttendanceSetting;
 use App\Services\FaceRecognitionService;
 use App\Services\AttendanceNonceService;
 use App\Services\EmployeeActiveStatusService;
@@ -25,7 +28,118 @@ class FaceAttendanceController extends Controller
         // PERBAIKAN 25: halaman login wajah harus menghormati toggle liveness.
         $livenessEnabled = \App\Services\FaceRecognitionService::isLivenessEnabled('login');
 
-        return view('face_attendance.login', compact('locations', 'livenessEnabled'));
+        // PERBAIKAN V33 (2026-11-05): apakah user WAJIB mengetik NPK dulu
+        // sebelum kamera boleh dibuka di halaman ini.
+        //
+        // Kalau TRUE: user input NPK -> server memvalidasi -> baru kamera
+        // dibuka, dan descriptor wajah HANYA dicocokkan ke NPK tersebut.
+        // Kalau FALSE: flow lama (kamera langsung, cari ke semua karyawan).
+        $npkRequired = FaceAttendanceSetting::isNpkRequiredEnabled();
+
+        return view('face_attendance.login', compact('locations', 'livenessEnabled', 'npkRequired'));
+    }
+
+    /**
+     * PERBAIKAN V33 (2026-11-05): validasi NPK sebelum kamera dibuka.
+     *
+     * Dipanggil dari halaman /face-attendance/login saat setting "input NPK
+     * dulu" aktif. Tujuannya:
+     *   1. Pastikan NPK ada di data karyawan (BIODATA).
+     *   2. Pastikan karyawan tersebut punya data wajah aktif di employee_faces,
+     *      supaya user tidak melewati step NPK lalu gagal di tengah scan.
+     *   3. Pastikan karyawan belum keluar (PKWT.TKK terisi).
+     *
+     * Response JSON: { success, name, has_face, message }
+     */
+    public function validateNpk(Request $request)
+    {
+        try {
+            $npk = trim((string) $request->input('npk', ''));
+
+            if ($npk === '') {
+                return response()->json([
+                    'success'  => false,
+                    'has_face' => false,
+                    'message'  => 'NPK wajib diisi.',
+                ], 422);
+            }
+
+            // 1. Cek karyawan ada di BIODATA (connection default aplikasi).
+            try {
+                $biodata = DB::table('BIODATA')
+                    ->where('NPK', $npk)
+                    ->select('NPK', 'NAMA_KARYAWAN')
+                    ->first();
+            } catch (\Throwable $e) {
+                \Log::warning('validateNpk gagal baca BIODATA: ' . $e->getMessage());
+
+                return response()->json([
+                    'success'  => false,
+                    'has_face' => false,
+                    'message'  => 'Gagal memuat data karyawan. Silakan coba lagi.',
+                ], 500);
+            }
+
+            if (!$biodata) {
+                return response()->json([
+                    'success'  => false,
+                    'has_face' => false,
+                    'message'  => 'NPK ' . $npk . ' tidak ditemukan.',
+                ], 404);
+            }
+
+            $name = (string) ($biodata->NAMA_KARYAWAN ?? $npk);
+
+            // 2. Cek karyawan belum keluar (PKWT.TKK terisi).
+            $activeStatus = EmployeeActiveStatusService::check($npk);
+            if ($activeStatus['found'] && !$activeStatus['active']) {
+                return response()->json([
+                    'success'           => false,
+                    'has_face'          => false,
+                    'inactive_employee' => true,
+                    'message'           => EmployeeActiveStatusService::inactiveMessage(
+                        $activeStatus['nama'],
+                        $activeStatus['tkk']
+                    ),
+                ], 403);
+            }
+
+            // 3. Cek punya data wajah aktif.
+            try {
+                $hasFace = EmployeeFace::query()
+                    ->where('npk', $npk)
+                    ->where('is_active', true)
+                    ->whereNotNull('descriptor')
+                    ->exists();
+            } catch (\Throwable $e) {
+                \Log::warning('validateNpk gagal baca employee_faces: ' . $e->getMessage());
+
+                $hasFace = false;
+            }
+
+            if (!$hasFace) {
+                return response()->json([
+                    'success'  => false,
+                    'has_face' => false,
+                    'message'  => 'Wajah untuk NPK ' . $npk . ' belum terdaftar. Silakan hubungi admin.',
+                ], 422);
+            }
+
+            return response()->json([
+                'success'  => true,
+                'has_face' => true,
+                'npk'      => $npk,
+                'name'     => $name,
+                'message'  => 'NPK valid. Silakan posisikan wajah di kamera.',
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('validateNpk error: ' . $e->getMessage());
+            return response()->json([
+                'success'  => false,
+                'has_face' => false,
+                'message'  => 'Terjadi kesalahan sistem. Silakan coba lagi.',
+            ], 500);
+        }
     }
 
     /**
@@ -188,6 +302,13 @@ class FaceAttendanceController extends Controller
         // yang pin-nya punya spasi tetap ditemukan.
         $todayLogsRaw = $this->queryAttendanceLogsFor($barcode, $today);
 
+        // PERBAIKAN V32.8 (2026-11-05): ambil detail wajah + koordinat GPS
+        // per scan dari tabel `face_attendance_logs`, di-JOIN via `att_id`
+        // (kunci yang sama dipakai saat INSERT). Tanpa ini, halaman hanya
+        // menampilkan foto profil karyawan (bukan foto yang TERCAPTURE saat
+        // scan) dan minimap hanya punya 1 marker.
+        $faceDetails = $this->queryFaceAttendanceDetails($barcode, $today);
+
         $todayLogs = [];
         $hasClockIn = false;
         $hasClockOut = false;
@@ -268,6 +389,22 @@ class FaceAttendanceController extends Controller
             }
 
             $log->calculated_type = $type;
+
+            // PERBAIKAN V32.8 (2026-11-05): lampirkan detail wajah + koordinat
+            // dari face_attendance_logs (face_image, latitude, longitude,
+            // accuracy, inside_polygon) ke baris log ini, supaya view bisa
+            // menampilkan foto yang TERCAPTURE + koordinat per scan.
+            $detail = null;
+            if (!empty($log->att_id) && isset($faceDetails[$log->att_id])) {
+                $detail = $faceDetails[$log->att_id];
+            }
+            $log->face_detail = $detail;
+            $log->face_image  = $detail->face_image ?? null;
+            $log->latitude    = $detail->latitude ?? null;
+            $log->longitude   = $detail->longitude ?? null;
+            $log->accuracy    = $detail->accuracy ?? null;
+            $log->inside_polygon = $detail->inside_polygon ?? null;
+
             $todayLogs[] = $log;
         }
 
@@ -291,8 +428,34 @@ class FaceAttendanceController extends Controller
                 $statusText = 'Belum Clock In Hari Ini';
             }
         } elseif ($hasClockIn && !$hasClockOut) {
-            $nextAction = 'clock_out';
-            $statusText = 'Sudah Clock In (' . $clockInTime . '), Menunggu Clock Out';
+            // PERBAIKAN V35 (2026-11-05): bedakan "masih menunggu window
+            // Clock Out" dari "window Clock Out SUDAH LEWAT".
+            //
+            // ROOT CAUSE (bug lama): cabang ini selalu assigns
+            // nextAction = 'clock_out' + statusText "Menunggu Clock Out",
+            // TANPA memeriksa waktu. Akibatnya user yang sudah Clock In
+            // jam 07:47 tetap melihat "Baru Clock In, Menunggu Window
+            // Clock Out" walaupun sekarang sudah jam 21:39 (window Clock
+            // Out 17:00-21:00 sudah lewat) -- padahal user sudah tidak
+            // bisa clock out sama sekali.
+            //
+            // Perbaikan: kalau sekarang DI LUAR window Clock Out (dan
+            // window Clock In juga sudah lewat), status menjadi
+            // "expired" + teks eksplisit bahwa presensi tidak bisa
+            // dilakukan. nextAction 'expired' dipakai view untuk
+            // mematikan kamera & menampilkan banner "sudah berakhir".
+            if ($inClockOutWindow) {
+                $nextAction = 'clock_out';
+                $statusText = 'Sudah Clock In (' . $clockInTime . '), Menunggu Clock Out';
+            } elseif ($now->gt($clockOutEnd)) {
+                // Window Clock Out sudah lewat -> tidak bisa presensi lagi.
+                $nextAction = 'expired';
+                $statusText = 'Window Clock Out Sudah Lewat, Anda Tidak Bisa Melakukan Presensi';
+            } else {
+                // Masih di antara window (menunggu Clock Out dibuka).
+                $nextAction = 'waiting';
+                $statusText = 'Sudah Clock In (' . $clockInTime . '), Menunggu Clock Out';
+            }
         } elseif (!$hasClockIn && $hasClockOut) {
             // Sudah clock out tapi belum clock in (edge case)
             $nextAction = 'clock_in';
@@ -334,6 +497,7 @@ class FaceAttendanceController extends Controller
             'clockInBeforeMinutes',
             'clockOutAfterMinutes',
             'todayLogs',
+            'faceDetails',
             'hasClockIn',
             'hasClockOut',
             'clockInTime',
@@ -701,24 +865,32 @@ class FaceAttendanceController extends Controller
         $hasClockOut = false;
         foreach ($existingLogs as $el) {
             $elCarbon = Carbon::parse($el->scan_date);
-            // PERBAIKAN V31.2: urutan penentuan jenis log disamakan dengan
-            // halaman index. Memakai $midpoint saja salah untuk shift malam.
-            $elMode = isset($el->inoutmode) ? (int) $el->inoutmode : null;
-            if ($elMode === 0) {
-                $elType = 'in';
-            } elseif ($elMode === 1) {
-                $elType = 'out';
-            } elseif ($elCarbon->between($clockInStart, $clockInEnd)) {
-                $elType = 'in';
-            } elseif ($elCarbon->between($clockOutStart, $clockOutEnd)) {
-                $elType = 'out';
-            } elseif ($elCarbon->lessThan($midpoint)) {
-                $elType = 'in';
-            } else {
-                $elType = 'out';
+
+            // PERBAIKAN V31.8: pengecekan Clock In/Out TIDAK lagi memakai
+            // inoutmode karena nilainya tidak bisa dipercaya untuk data
+            // hasil impor/finger (finger tulis inoutmode = COUNT+1, sehingga
+            // scan pertama pagi hari dapat inoutmode=1 yang sebenarnya "Out").
+            //
+            // LOGIKA: gunakan jam scan dibandingkan titik tengah shift,
+            // persis sama dengan yang dipakai di halaman index (V31.7).
+            //   - scanMin < shiftMidMin  → Clock In
+            //   - scanMin >= shiftMidMin → Clock Out
+            //
+            // Hitung shiftMidMin menggunakan window yang sudah ada di scope ini.
+            $elShiftStartMin = ((int) $startCarbon->format('H')) * 60 + (int) $startCarbon->format('i');
+            $elShiftEndMin   = ((int) $endCarbon->format('H')) * 60 + (int) $endCarbon->format('i');
+            if ($elShiftEndMin <= $elShiftStartMin) {
+                $elShiftEndMin += 24 * 60;
+            }
+            $elMidMin = ($elShiftStartMin + $elShiftEndMin) / 2;
+
+            $elScanMin = ((int) $elCarbon->format('H')) * 60 + (int) $elCarbon->format('i');
+            // Tangani scan jauh sebelum shift (shift malam edge-case)
+            if ($elScanMin < $elShiftStartMin - 180) {
+                $elScanMin += 24 * 60;
             }
 
-            if ($elType === 'in') {
+            if ($elScanMin < $elMidMin) {
                 $hasClockIn = true;
             } else {
                 $hasClockOut = true;
@@ -749,6 +921,20 @@ class FaceAttendanceController extends Controller
         } elseif ($hasClockIn && !$hasClockOut) {
             // Sudah clock-in, belum clock-out
             if (!$isInClockOutWindow) {
+                // PERBAIKAN V35 (2026-11-05): bedakan "belum waktunya" dari
+                // "window sudah lewat". DULU keduanya memakai pesan yang sama
+                // ("Belum memasuki waktu Clock Out"), sehingga user yang
+                // datang jam 21:39 (window Clock Out 17:00-21:00 sudah lewat)
+                // diberi tahu bahwa dia "belum memasuki" — menyesatkan.
+                if ($now->greaterThan($clockOutEnd)) {
+                    return response()->json([
+                        'success' => false,
+                        'error_code' => 'WINDOW_EXPIRED',
+                        'message' => 'Waktu Clock Out Sudah Lewat, Anda Tidak Bisa Melakukan Presensi. '
+                            . 'Window Clock Out (' . $clockOutStart->format('H:i') . ' - ' . $clockOutEnd->format('H:i')
+                            . ') WIB sudah lewat. Presensi tidak dapat dilakukan sampai window berikutnya.'
+                    ], 422);
+                }
                 return response()->json([
                     'success' => false,
                     'message' => 'Belum memasuki waktu Clock Out. Window Clock Out: ' . $clockOutStart->format('H:i') . ' - ' . $clockOutEnd->format('H:i') . ' WIB.'
@@ -1004,6 +1190,60 @@ class FaceAttendanceController extends Controller
             ->whereDate('scan_date', $date)
             ->orderBy('scan_date', 'asc')
             ->get();
+    }
+
+    /**
+     * Ambil detail presensi wajah (foto base64 + koordinat GPS) dari tabel
+     * `face_attendance_logs` untuk satu karyawan pada satu tanggal.
+     *
+     * PERBAIKAN V32.8 (2026-11-05): tabel ini menyimpan `face_image` (base64
+     * wajah yang TERCAPTURE saat scan), `latitude`, `longitude`, `accuracy`,
+     * `inside_polygon`. Semuanya di-JOIN ke `att_log` lewat `att_id`.
+     *
+     * Return: array dengan key = att_id, value = stdClass detail.
+     * Kalau tabel tidak ada / koneksi bermasalah, array kosong dikembalikan
+     * supaya halaman tetap bisa dirender (tidak fatal).
+     *
+     * @param string $barcode
+     * @param string $date    Y-m-d
+     */
+    private function queryFaceAttendanceDetails(string $barcode, string $date)
+    {
+        $pin = $this->normalizePin($barcode);
+
+        try {
+            $rows = DB::table('face_attendance_logs')
+                ->whereRaw('LTRIM(RTRIM(pin)) = ?', [$pin])
+                ->whereDate('scan_date', $date)
+                ->orderBy('scan_date', 'asc')
+                ->get([
+                    'att_id',
+                    'scan_date',
+                    'action',
+                    'face_image',
+                    'latitude',
+                    'longitude',
+                    'accuracy',
+                    'inside_polygon',
+                    'work_location_id',
+                    'face_match',
+                    'confidence',
+                    'status',
+                ]);
+        } catch (\Throwable $e) {
+            \Log::warning('Gagal membaca face_attendance_logs untuk ' . $barcode . ' pada ' . $date . ': ' . $e->getMessage());
+            return [];
+        }
+
+        $map = [];
+        foreach ($rows as $r) {
+            if (empty($r->att_id)) {
+                continue;
+            }
+            $map[(string) $r->att_id] = $r;
+        }
+
+        return $map;
     }
 
     /**
@@ -1595,8 +1835,39 @@ class FaceAttendanceController extends Controller
                 ], 422);
             }
 
-            // Cari kecocokan wajah pada tabel employee_faces
-            $result = FaceRecognitionService::match($descriptor);
+            // ===============================================================
+            // PERBAIKAN V33 (2026-11-05) — PENCOCOKAN WAJAH DIBATAS NPK
+            // ---------------------------------------------------------------
+            // Kalau setting "input NPK dulu" aktif, frontend mengirim NPK
+            // yang sudah divalidasi. Descriptor wajah HANYA dibandingkan
+            // dengan data wajah karyawan dengan NPK tersebut.
+            //
+            // Kenapa ini penting: tanpa NPK, FaceRecognitionService::match()
+            // mencari kandidat TERDEKAT dari SELURUH karyawan. Dua karyawan
+            // dengan wajah mirip bisa membuat orang yang salah terbaca.
+            // Dengan NPK, kandidat lain tidak pernah dipertimbangkan, jadi
+            // salah mengambil wajah orang lain mustahil terjadi.
+            //
+            // Fallback ke match() hanya kalau setting OFF (npk tidak dikirim),
+            // sehingga flow lama tetap utuh.
+            // ===============================================================
+            $npkRequired = FaceAttendanceSetting::isNpkRequiredEnabled();
+            $npkInput = trim((string) $request->input('npk', ''));
+
+            if ($npkRequired && $npkInput === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'NPK wajib diisi terlebih dahulu sebelum scan wajah.',
+                ], 422);
+            }
+
+            if ($npkInput !== '') {
+                // Cari kecocokan wajah pada tabel employee_faces
+                $result = FaceRecognitionService::matchByNpk($descriptor, $npkInput);
+            } else {
+                // Cari kecocokan wajah pada tabel employee_faces
+                $result = FaceRecognitionService::match($descriptor);
+            }
 
             // Cek apakah kecocokan valid.
             // PERBAIKAN V31.3d (2026-11-04): DULU angkanya ditulis mati
@@ -1612,7 +1883,9 @@ class FaceAttendanceController extends Controller
             if (!$face || $distance === null || $distance > $threshold) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Wajah tidak dikenali atau belum terdaftar di tabel employee_faces.'
+                    'message' => $npkInput !== ''
+                        ? 'Wajah tidak cocok dengan NPK ' . $npkInput . '. Silakan posisikan wajah lebih jelas.'
+                        : 'Wajah tidak dikenali atau belum terdaftar di tabel employee_faces.'
                 ], 401);
             }
 
@@ -1639,11 +1912,20 @@ class FaceAttendanceController extends Controller
                     'distance'   => $distance,
                     'threshold'  => $threshold,
                     'npk'        => $face->npk ?? null,
+                    'npk_input'  => $npkInput !== '' ? $npkInput : null,
                 ]);
+
+                // PERBAIKAN V33 (2026-11-05): pesan disesuaikan dengan mode.
+                // Kalau NPK diinput, kandidat lain memang tidak pernah
+                // dibandingkan, jadi penyebab penolakan pasti "jarak terlalu
+                // jauh" - bukan "terlalu mirip dengan karyawan lain".
+                $pesanTolak = $npkInput !== ''
+                    ? 'Wajah tidak cocok dengan NPK ' . $npkInput . '. Silakan posisikan wajah lebih jelas dan coba lagi.'
+                    : 'Wajah tidak dapat dipastikan (terlalu mirip dengan karyawan lain). Silakan scan ulang dengan pencahayaan lebih baik.';
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Wajah tidak dapat dipastikan (terlalu mirip dengan karyawan lain). Silakan scan ulang dengan pencahayaan lebih baik.'
+                    'message' => $pesanTolak
                 ], 401);
             }
 

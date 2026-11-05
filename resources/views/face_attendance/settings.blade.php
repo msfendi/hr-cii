@@ -174,6 +174,46 @@
                             dan tanggalnya diambil dari tabel <code>holidays</code> pada database CII.
                         </div>
 
+                        <hr class="my-3">
+
+                        {{-- ============================================================
+                             PERBAIKAN V33 (2026-11-05) — TOGGLE "INPUT NPK DULU"
+                             ------------------------------------------------------------
+                             Berlaku untuk route /face-attendance/login.
+
+                             ON  : user wajib mengetik NPK sebelum kamera dibuka,
+                                   dan descriptor wajahnya hanya dicocokkan ke
+                                   NPK tersebut. Cegah salah ambil wajah
+                                   orang lain.
+                             OFF : flow lama - kamera langsung terbuka, pencarian
+                                   wajah ke seluruh karyawan.
+
+                             Default ON (aman) kalau kolom belum tersedia.
+                             ============================================================ --}}
+                        <p class="font-weight-bold small text-gray-700 mb-2">
+                            Login Presensi Wajah
+                        </p>
+
+                        <div class="custom-control custom-switch mb-2">
+                            <input type="hidden" name="is_npk_required_enabled" value="0">
+                            <input class="custom-control-input" type="checkbox" id="is_npk_required_enabled"
+                                name="is_npk_required_enabled" value="1"
+                                {{ old('is_npk_required_enabled', $setting->is_npk_required_enabled ?? true) ? 'checked' : '' }}>
+                            <label class="custom-control-label" for="is_npk_required_enabled">
+                                Input NPK Dulu <span class="text-muted">(wajib isi NPK sebelum kamera)</span>
+                            </label>
+                        </div>
+
+                        <div class="alert alert-info py-2 px-3 small mb-3">
+                            <i class="fas fa-shield-alt mr-1"></i>
+                            <strong>ON</strong> = karyawan harus mengetik NPK di halaman
+                            <code>/face-attendance/login</code> sebelum kamera menyala.
+                            Wajah yang tertangkap hanya dibandingkan dengan data wajah
+                            NPK tersebut, sehingga tidak mungkin salah mengambil wajah
+                            orang lain. <strong>OFF</strong> = kamera langsung terbuka dan
+                            pencarian wajah dilakukan ke seluruh karyawan.
+                        </div>
+
                         <button type="submit" class="btn btn-primary btn-sm">
                             <i class="fas fa-save mr-1"></i> Simpan Pengaturan Window
                         </button>

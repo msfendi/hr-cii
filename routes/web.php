@@ -285,6 +285,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/user/delete/{id}', [UserController::class, 'delete'])->name('user.delete')->middleware(['auth', 'permission']);
     Route::get('/user/assign/{id}', [UserController::class, 'assign'])->name('user.assign')->middleware(['auth', 'permission']);
     Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'permission']);
+    Route::get('/user/signature/{id}',       [UserController::class, 'signatureShow'])->name('user.signature.show')->middleware(['auth', 'permission']);
+    Route::post('/user/signature/{id}',      [UserController::class, 'signatureStore'])->name('user.signature.store')->middleware(['auth', 'permission']);
+    Route::get('/user/signature-files',      [UserController::class, 'signatureFiles'])->name('user.signature.files')->middleware(['auth', 'permission']);
 
     // Payroll Component
     Route::get('/payroll-components/index', [PayrollComponentController::class, 'index'])->name('payroll-components.index')->middleware(['auth', 'permission']);
@@ -1503,6 +1506,10 @@ Route::prefix('pengajuan-cuti')->group(function () {
 Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::get('/login', [FaceAttendanceController::class, 'login'])->name('login');
     Route::post('/login-auth', [FaceAttendanceController::class, 'faceLoginAuthenticate'])->name('login-auth');
+    // PERBAIKAN V33 (2026-11-05): validasi NPK sebelum kamera dibuka.
+    // Dipakai halaman /face-attendance/login untuk memastikan NPK yang
+    // diinput user benar-benar ada dan punya data wajah terdaftar.
+    Route::post('/login/validate-npk', [FaceAttendanceController::class, 'validateNpk'])->name('login.validate-npk');
     Route::get('/', [FaceAttendanceController::class, 'index'])->name('index');
     Route::post('/store', [FaceAttendanceController::class, 'storeAttendance'])->name('store');
     Route::get('/rekap', [FaceAttendanceController::class, 'rekap'])->name('rekap');
@@ -1583,5 +1590,3 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
 });
-
-Route::get('/employee-late/export/excel', [EmployeeLateController::class, 'export'])->name('employee-late.export')->middleware(['auth', 'permission']);

@@ -42,22 +42,24 @@
         border-radius: 8px;
         font-family: inherit;
     }
-    /* PERBAIKAN (2026-11-03): kotak foto wajah dibuat SAMA TINGGI
-       dengan peta (260px) supaya keduanya sejajar rapi dan tidak
-       menyisakan ruang kosong menganggur. Foto di-scale ke dalam
-       kotak (object-fit: contain) agar tidak terpotong. */
+    /* PERBAIKAN V2 (2026-11-05): kotak foto wajah tidak lagi tinggi FIXED
+       260px. Grid multi-foto (clock in + clock out) butuh ruang vertikal
+       lebih, jadi tinggi dibuat auto dengan batas maksimal + scroll internal.
+       Peta tetap 260px sehingga kedua kolom tidak jauh berbeda tinggi. */
     .face-detail-box {
-        height: 260px;
         min-height: 260px;
+        max-height: 340px;
         width: 100%;
         border: 1px solid #e3e6f0;
         border-radius: 8px;
         background: #f8f9fc;
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
         display: flex;
+        flex-direction: column;
         align-items: center;
-        justify-content: center;
-        padding: 6px;
+        justify-content: flex-start;
+        padding: 8px;
     }
     .face-detail-box img {
         max-width: 100%;
@@ -94,17 +96,40 @@
         cursor: pointer;
         flex: 0 0 auto;
     }
-    .face-detail-box {
-        /* Isi kotak disusun vertikal: foto utama + strip thumbnail. */
-        flex-direction: column;
+    /* PERBAIKAN V2 (2026-11-05): grid multi-foto wajah. */
+    .face-detail-box .face-grid {
+        display: grid;
+        gap: 10px;
+        width: 100%;
+        align-items: start;
+    }
+    .face-detail-box .face-grid-item {
+        margin: 0;
+        text-align: center;
+    }
+    .face-detail-box .face-grid-item img {
+        width: 100%;
+        object-fit: contain;
+        background: #fff;
+        border: 2px solid #e3e6f0;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+    .face-detail-box .face-grid-item figcaption {
+        font-size: 11px;
+        line-height: 1.35;
+        margin-top: 4px;
     }
     /* Di layar kecil, peta & wajah menumpuk kembali dan tingginya
        dikurangi supaya modal tidak terlalu panjang. */
     @media (max-width: 767.98px) {
-        #miniMapDetail,
-        .face-detail-box {
+        #miniMapDetail {
             height: 220px;
             min-height: 220px;
+        }
+        .face-detail-box {
+            min-height: 220px;
+            max-height: 300px;
         }
     }
     .face-capture-preview {
@@ -168,9 +193,16 @@
                         <i class="fas fa-users-cog text-primary mr-2"></i> Rekap Presensi Semua Karyawan
                     </h1>
                     <div class="mt-2 mt-sm-0">
+                        {{-- PERBAIKAN 19 (2026-11-04): tombol export diubah dari
+                             CSV menjadi EXCEL (.xlsx berstyling) dan WAJIB ikut
+                             filter aktif. Sebelumnya hanya `month` yang dikirim,
+                             sehingga file berisi semua karyawan walau layar
+                             sedang difilter. href diisi JS di bawah. --}}
                         <a href="{{ route('face.attendance.admin.export', ['month' => $month]) }}"
+                           id="btnExportExcel"
+                           data-base="{{ route('face.attendance.admin.export') }}"
                            class="btn btn-sm btn-success shadow-sm rounded-pill px-3">
-                            <i class="fas fa-file-excel mr-1"></i> Export CSV
+                            <i class="fas fa-file-excel mr-1"></i> Export Excel
                         </a>
                         <a href="{{ route('face.attendance.settings.index') }}"
                            class="btn btn-sm btn-outline-primary shadow-sm rounded-pill px-3">
@@ -364,16 +396,19 @@
                                 <thead class="thead-light">
                                     <tr>
                                         <th width="5%" class="text-center">#</th>
-                                        <th width="22%">Tanggal &amp; Hari</th>
-                                        <th width="18%" class="text-center">Jam Masuk</th>
-                                        <th width="18%" class="text-center">Jam Pulang</th>
-                                        <th width="15%" class="text-center">Mode</th>
-                                        <th width="22%" class="text-center">Status</th>
+                                        <th width="20%">Tanggal &amp; Hari</th>
+                                        <th width="16%" class="text-center">Jam Masuk</th>
+                                        <th width="16%" class="text-center">Jam Pulang</th>
+                                        <th width="14%" class="text-center">Mode</th>
+                                        <th width="16%" class="text-center">Status</th>
+                                        {{-- PERBAIKAN 20 (2026-11-04): kolom aksi baru untuk
+                                             membuka minimap + foto capture per hari. --}}
+                                        <th width="13%" class="text-center">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rekapHarianBody">
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted py-3">
+                                        <td colspan="7" class="text-center text-muted py-3">
                                             Belum ada data harian.
                                         </td>
                                     </tr>
@@ -394,6 +429,84 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ====================================================================
+     PERBAIKAN 20 (2026-11-04): Modal "Peta & Foto Harian".
+     --------------------------------------------------------------------
+     Dibuka dari tombol aksi pada setiap baris tabel REKAP HARIAN di
+     dalam modal Detail Presensi. Isinya:
+       - minimap lokasi absensi hari itu (Leaflet + polygon area kerja)
+       - foto wajah hasil capture pada hari itu (bisa >1 scan: In/Out)
+     Peta SENGAJA tidak dibuat saat halaman dimuat, tetapi saat modal
+     dibuka, karena Leaflet salah menghitung ukuran container yang
+     masih tersembunyi (peta jadi abu-abu/terpotong).
+     ==================================================================== --}}
+<div class="modal fade" id="modalPetaFotoHarian" tabindex="-1" role="dialog"
+     aria-labelledby="modalPetaFotoHarianLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:14px;overflow:hidden;">
+
+            <div class="modal-header text-white border-0 py-3"
+                 style="background:linear-gradient(135deg,#4e73df,#224abe);">
+                <h6 class="modal-title mb-0 font-weight-bold" id="modalPetaFotoHarianLabel">
+                    <i class="fas fa-map-marked-alt mr-2"></i> Peta &amp; Foto Absensi
+                </h6>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Tutup">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+
+            <div class="modal-body p-3">
+                {{-- Identitas singkat: siapa & tanggal berapa --}}
+                <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 px-2">
+                    <div>
+                        <div class="font-weight-bold text-gray-900" id="pfKaryawan">-</div>
+                        <small class="text-muted" id="pfTanggal">-</small>
+                    </div>
+                    <div class="text-right">
+                        <small class="text-muted d-block">Jumlah scan wajah</small>
+                        <span class="badge badge-primary px-2 py-1" id="pfJumlah">0</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    {{-- KIRI: minimap --}}
+                    <div class="col-md-6 mb-3 mb-md-0">
+                        <div class="card border-0 shadow-sm h-100 mb-0">
+                            <div class="card-header bg-white py-2 border-bottom">
+                                <small class="font-weight-bold text-gray-900">
+                                    <i class="fas fa-map-pin text-danger mr-1"></i> Minimap Lokasi Absensi
+                                </small>
+                            </div>
+                            <div class="card-body p-2">
+                                <div id="petaFotoHarian" style="height:260px;width:100%;border-radius:8px;background:#eef2f7;"></div>
+                                <div class="mt-2 small text-muted" id="pfLokasiInfo"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- KANAN: foto capture --}}
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm h-100 mb-0">
+                            <div class="card-header bg-white py-2 border-bottom">
+                                <small class="font-weight-bold text-gray-900">
+                                    <i class="fas fa-camera text-primary mr-1"></i> Foto Tercapture
+                                </small>
+                            </div>
+                            <div class="card-body p-2">
+                                <div id="pfFotoWrap"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 bg-light">
                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-dismiss="modal">Tutup</button>
             </div>
         </div>
@@ -468,46 +581,47 @@
                     '<i class="fas fa-image fa-2x mb-2 d-block text-secondary"></i>' +
                     'Tidak ada gambar wajah tersimpan.</div>';
             } else {
-                // PERBAIKAN (2026-11-03): foto dibungkus figure yang
-                // mengisi kotak .face-detail-box (260px). Sebelumnya
-                // setiap foto berada di div .mb-3 dengan max-width 260px,
-                // sehingga kalau ada lebih dari satu foto, kotaknya
-                // memanjang ke bawah dan menyisakan ruang kosong.
-                // Sekarang hanya foto PERTAMA yang ditampilkan besar
-                // (paling relevan = scan terakhir), sisanya jadi
-                // thumbnail kecil berjajar di bawahnya.
-                const first = withImage[0];
-                const srcFirst = first.face_image.indexOf('data:') === 0
-                    ? first.face_image
-                    : 'data:image/jpeg;base64,' + first.face_image;
+                // PERBAIKAN V2 (2026-11-05): SEMUA foto wajah (clock in + clock out)
+                // ditampilkan dengan ukuran yang sama dalam grid.
+                // Sebelumnya hanya foto PERTAMA yang besar dan sisanya jadi
+                // thumbnail 44px di bawahnya, sehingga penggunaan face
+                // attendance kedua (clock out) nyaris tidak terlihat.
+                //
+                // GRID: 1 foto -> 1 kolom besar; 2 foto -> 2 kolom; 3+ -> 3 kolom.
+                const count = withImage.length;
+                const cols = count === 1 ? 1 : (count === 2 ? 2 : 3);
+                const maxH = count === 1 ? 190 : 130;
 
-                const wrap = document.createElement('div');
-                wrap.className = 'face-detail-wrap w-100 d-flex flex-column align-items-center justify-content-center';
-                wrap.innerHTML =
-                    '<img src="' + srcFirst + '" alt="Wajah terakhir" class="face-detail-main">' +
-                    '<div class="small text-muted mt-1 text-center">' +
+                const grid = document.createElement('div');
+                grid.className = 'face-grid';
+                grid.style.display = 'grid';
+                grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+                grid.style.gap = '10px';
+                grid.style.width = '100%';
+                grid.style.alignItems = 'start';
+
+                withImage.forEach(function (d, idx) {
+                    const s = d.face_image.indexOf('data:') === 0
+                        ? d.face_image
+                        : 'data:image/jpeg;base64,' + d.face_image;
+
+                    const cell = document.createElement('figure');
+                    cell.className = 'face-grid-item mb-0';
+                    cell.style.margin = '0';
+                    cell.style.textAlign = 'center';
+                    cell.innerHTML =
+                        '<img src="' + s + '" alt="Wajah ' + (idx + 1) + '" ' +
+                        'style="width:100%;max-height:' + maxH + 'px;object-fit:contain;background:#fff;' +
+                        'border:2px solid #e3e6f0;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.10);">' +
+                        '<figcaption class="small text-muted mt-1" style="font-size:11px;line-height:1.35;">' +
                         '<i class="fas fa-clock mr-1"></i>' +
-                        (first.action_type || 'Absensi') + ' - ' + (first.scan_time || '-') +
-                    '</div>';
-                container.appendChild(wrap);
+                        (d.action_type || 'Absensi') + '<br>' +
+                        '<span class="font-weight-bold text-dark">' + (d.scan_time || '-') + '</span>' +
+                        '</figcaption>';
+                    grid.appendChild(cell);
+                });
 
-                // Thumbnail tambahan bila ada lebih dari satu foto.
-                if (withImage.length > 1) {
-                    const strip = document.createElement('div');
-                    strip.className = 'face-detail-strip mt-1';
-                    withImage.slice(1).forEach(function (d, idx) {
-                        const s = d.face_image.indexOf('data:') === 0
-                            ? d.face_image
-                            : 'data:image/jpeg;base64,' + d.face_image;
-                        const th = document.createElement('img');
-                        th.src = s;
-                        th.className = 'face-detail-thumb';
-                        th.alt = 'Wajah ' + (idx + 2);
-                        th.title = (d.action_type || 'Absensi') + ' - ' + (d.scan_time || '-');
-                        strip.appendChild(th);
-                    });
-                    container.appendChild(strip);
-                }
+                container.appendChild(grid);
             }
 
             // Daftar seluruh scan (wajah + fingerprint) -> tabel rapi.
@@ -558,6 +672,20 @@
                     ? '<span class="text-muted">-</span>'
                     : '<span class="badge badge-light border text-dark">' + acc + '</span>';
 
+                // PERBAIKAN V2 (2026-11-05): kolom Koordinat Attendance.
+                // Menampilkan lat, lng mentah masing-masing scan (khususnya
+                // face attendance) supaya bisa dibandingkan antar-scan.
+                var coordText = '-';
+                if (d.latitude !== null && d.latitude !== undefined && d.latitude !== '' &&
+                    d.longitude !== null && d.longitude !== undefined && d.longitude !== '') {
+                    var clat = parseFloat(d.latitude);
+                    var clng = parseFloat(d.longitude);
+                    if (!isNaN(clat) && !isNaN(clng)) {
+                        coordText = '<span class="font-monospace small" style="font-size:11px;">' +
+                            clat.toFixed(6) + ', ' + clng.toFixed(6) + '</span>';
+                    }
+                }
+
                 rowsHtml +=
                     '<tr>' +
                     '<td class="text-center text-muted align-middle">' + (i + 1) + '</td>' +
@@ -566,6 +694,7 @@
                     '<td class="align-middle">' + modeBadge + '</td>' +
                     '<td class="align-middle">' + (d.action_type || '-') + '</td>' +
                     '<td class="align-middle">' + loc + '</td>' +
+                    '<td class="align-middle">' + coordText + '</td>' +
                     '<td class="text-center align-middle">' + accBadge + '</td>' +
                     '</tr>';
             });
@@ -580,6 +709,7 @@
                 '<th style="width:110px;">Metode</th>' +
                 '<th>Keterangan</th>' +
                 '<th>Lokasi</th>' +
+                '<th>Koordinat</th>' +
                 '<th class="text-center" style="width:85px;">Akurasi</th>' +
                 '</tr>' +
                 '</thead>' +
@@ -588,7 +718,7 @@
                 '</div>';
         }
 
-        function initMap(lat, lng, accuracy, locations) {
+        function initMap(lat, lng, accuracy, locations, allScans) {
             destroyMap();
 
             const el = document.getElementById('miniMapDetail');
@@ -602,12 +732,9 @@
                 attribution: '&copy; OpenStreetMap'
             }).addTo(detailMap);
 
-            // PERBAIKAN (2026-11-03): polygon lokasi kerja digambar untuk
-            // SEMUA lokasi (aktif & non-aktif). Sebelumnya hanya `is_active`
-            // yang dikirim server, sehingga kalau sebuah area sedang
-            // terkunci (CTPAT lock) polygon-nya hilang dari minimap.
-            // Warna dibedakan: aktif = biru, non-aktif = abu-abu.
-            // Polygon yang memuat titik absensi diberi warna hijau + label.
+            // PERBAIKAN V2 (2026-11-05): polygon lokasi kerja digambar untuk
+            // SEMUA lokasi (aktif & non-aktif), dengan warna berbeda.
+            // Polygon yang memuat titik absensi diberi warna hijau.
             const matchedLoc = findLocationByCoords(locations, lat, lng);
             if (locations && locations.length > 0) {
                 detailPolyGroup = L.layerGroup().addTo(detailMap);
@@ -640,26 +767,68 @@
                 });
             }
 
-            // Marker posisi absensi
-            const markerIcon = L.divIcon({
-                className: 'custom-face-marker',
-                html: '<div style="background:#e74a3b;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:14px;">&#128100;</div>',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14]
+            // PERBAIKAN V2 (2026-11-05): MINIMAP MENAMPILKAN SEMUA scan
+            // face attendance pada hari tersebut, bukan hanya scan pertama.
+            // Sebelumnya hanya 1 marker (dari faceDetails[0]) sehingga
+            // clock out tidak terlihat di peta.
+            //
+            // Setiap scan dengan koordinat valid digambar marker-nya sendiri
+            // dengan warna berbeda (hijau = Clock In, merah = Clock Out),
+            // plus garis penghubung (polyline) bila ada >1 scan supaya
+            // perpindahan posisi terlihat.
+            const scans = Array.isArray(allScans) ? allScans : [];
+            const scanPts = [];
+            let markerIdx = 0;
+
+            scans.forEach(function(s) {
+                if (s.latitude === null || s.latitude === undefined ||
+                    s.longitude === null || s.longitude === undefined) return;
+                const slat = parseFloat(s.latitude);
+                const slng = parseFloat(s.longitude);
+                if (isNaN(slat) || isNaN(slng)) return;
+
+                scanPts.push([slat, slng]);
+
+                const label = (s.action_type || 'Absensi');
+                const isIn = /clock\s*in|masuk/i.test(label);
+                const bg = isIn ? '#1cc88a' : '#e74a3b';
+                const sAcc = (s.accuracy !== null && s.accuracy !== undefined && s.accuracy !== '')
+                    ? Math.round(parseFloat(s.accuracy)) : null;
+                const accTxt = sAcc !== null && !isNaN(sAcc) ? ('Akurasi ±' + sAcc + ' m') : 'Akurasi tidak tersedia';
+                const locName = s.location_resolved || s.location_name || 'Posisi Absensi';
+
+                const icon = L.divIcon({
+                    className: 'custom-face-marker',
+                    html: '<div style="background:' + bg + ';color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:13px;border:2px solid #fff;">&#128100;</div>',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+
+                const mk = L.marker([slat, slng], { icon: icon }).addTo(detailMap);
+                mk.bindPopup(
+                    '<strong>' + label + '</strong> - ' + (s.scan_time || '-') + '<br>' +
+                    locName + '<br>' + accTxt
+                );
+                // Marker pertama tetap disimpan di detailMarker (dipakai
+                // oleh kode lama).
+                if (markerIdx === 0) {
+                    detailMarker = mk;
+                }
+                markerIdx++;
             });
 
-            detailMarker = L.marker([lat, lng], { icon: markerIcon }).addTo(detailMap);
-            // PERBAIKAN (2026-11-03): popup marker tidak lagi menampilkan
-            // koordinat mentah (lat, lng). Diganti nama lokasi + akurasi,
-            // sesuai permintaan user supaya tidak ada angka GPS mentah.
-            const popupName = (matchedLoc && matchedLoc.name) || 'Posisi Absensi';
-            const accText = (accuracy && accuracy > 0) ? 'Akurasi ±' + Math.round(accuracy) + ' m' : '';
-            detailMarker.bindPopup(
-                '<strong>' + popupName + '</strong><br>' +
-                (accText ? accText : 'Titik lokasi absensi')
-            );
+            // Garis penghubung antar scan (hanya bila ada >= 2 titik).
+            if (scanPts.length >= 2) {
+                L.polyline(scanPts, {
+                    color: '#4e73df',
+                    weight: 2,
+                    opacity: 0.55,
+                    dashArray: '6,6'
+                }).addTo(detailMap);
+            }
 
-            // Circle radius akurasi GPS
+            // Circle radius akurasi GPS untuk scan PERTAMA (yang jadi titik
+            // tengah / acuan) — sama seperti perilaku sebelumnya.
             if (accuracy && accuracy > 0) {
                 detailCircle = L.circle([lat, lng], {
                     radius: accuracy,
@@ -737,6 +906,31 @@
                            + '<i class="fas fa-sign-out-alt mr-1"></i> Clock Out Saja</span>';
                 }
 
+                // ============================================================
+                // PERBAIKAN 20 (2026-11-04): tombol aksi per hari.
+                // ------------------------------------------------------------
+                // Data foto & koordinat dikirim lewat atribut data-scan.
+                // Tombolnya HANYA aktif bila hari itu punya scan wajah;
+                // kalau tidak, ditampilkan sebagai tombol mati dengan
+                // keterangan, supaya tidak ada klik yang berujung modal
+                // kosong (mis. hari yang hanya berisi scan fingerprint).
+                // ============================================================
+                let aksi;
+                const scanHari = Array.isArray(h.scan) ? h.scan : [];
+                if (scanHari.length > 0) {
+                    aksi = '<button type="button" '
+                         + 'class="btn btn-sm btn-primary rounded-pill px-3 btn-peta-foto" '
+                         + 'data-scan="' + esc(JSON.stringify(scanHari)) + '" '
+                         + 'data-tanggal="' + esc(h.tanggal + (h.hari ? ' (' + h.hari + ')' : '')) + '">'
+                         + '<i class="fas fa-map-marked-alt mr-1"></i> Lihat'
+                         + '</button>';
+                } else {
+                    aksi = '<button type="button" class="btn btn-sm btn-light border rounded-pill px-3" disabled '
+                         + 'title="Tidak ada foto wajah pada hari ini">'
+                         + '<i class="fas fa-image mr-1 text-muted"></i> Tidak ada'
+                         + '</button>';
+                }
+
                 html += '<tr>'
                       + '<td class="text-center font-weight-bold">' + (i + 1) + '</td>'
                       + '<td><span class="font-weight-bold text-gray-900 d-block">' + esc(h.tanggal) + '</span>'
@@ -745,10 +939,252 @@
                       + '<td class="text-center">' + pulang + '</td>'
                       + '<td class="text-center">' + mode + '</td>'
                       + '<td class="text-center">' + status + '</td>'
+                      + '<td class="text-center">' + aksi + '</td>'
                       + '</tr>';
             });
             body.innerHTML = html;
         }
+
+        // ====================================================================
+        // PERBAIKAN 20 (2026-11-04): buka modal "Peta & Foto" per hari.
+        // --------------------------------------------------------------------
+        // Memakai event delegation pada document, karena tombol-tombol ini
+        // dibuat ulang setiap kali tabel Rekap Harian dirender. Tanpa
+        // delegation, tombol hasil render baru tidak akan bereaksi.
+        // ====================================================================
+        let petaHarian = null;      // instance Leaflet
+        let lapisanHarian = null;   // layer group (polygon + marker + circle)
+
+        function escHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function hancurkanPetaHarian() {
+            if (petaHarian) {
+                try { petaHarian.remove(); } catch (e) { /* sudah hilang */ }
+                petaHarian = null;
+            }
+            lapisanHarian = null;
+        }
+
+        function renderFotoHarian(list) {
+            const wrap = document.getElementById('pfFotoWrap');
+            if (!wrap) return;
+
+            if (!list.length) {
+                wrap.innerHTML = '<div class="text-center text-muted py-4">'
+                    + '<i class="fas fa-image fa-2x d-block mb-2 text-secondary"></i>'
+                    + 'Tidak ada foto pada hari ini.</div>';
+                return;
+            }
+
+            let html = '';
+            list.forEach(function(s, i) {
+                const jam = s.jam || '-';
+                const label = s.label || '';
+                const badgeWarna = /out/i.test(label) ? 'warning text-dark' : 'success';
+
+                // Foto disimpan sebagai data-URI base64 di database.
+                // Bila kosong (mis. scan gagal simpan gambar), tampilkan
+                // placeholder agar tata letak tidak rusak.
+                const img = s.foto
+                    ? '<img src="' + escHtml(s.foto) + '" alt="Foto absensi ' + escHtml(jam) + '" '
+                      + 'class="img-fluid rounded shadow-sm w-100" style="object-fit:cover;max-height:230px;">'
+                    : '<div class="d-flex align-items-center justify-content-center rounded bg-light border" '
+                      + 'style="height:150px;"><span class="text-muted small">'
+                      + '<i class="fas fa-user-slash mr-1"></i> Foto tidak tersedia</span></div>';
+
+                html += '<div class="mb-2' + (i > 0 ? ' mt-3 pt-3 border-top' : '') + '">'
+                      + img
+                      + '<div class="d-flex justify-content-between align-items-center mt-2 px-1">'
+                      + '<span class="badge badge-' + badgeWarna + ' px-2 py-1">'
+                      + '<i class="fas fa-clock mr-1"></i>' + escHtml(label ? label + ' - ' + jam : jam)
+                      + '</span>'
+                      + (s.akurasi ? '<small class="text-muted">Akurasi &plusmn;' + Math.round(parseFloat(s.akurasi)) + ' m</small>' : '')
+                      + '</div></div>';
+            });
+            wrap.innerHTML = html;
+        }
+
+        function gambarPetaHarian(lat, lng, akurasi, infoLokasi) {
+            const el = document.getElementById('petaFotoHarian');
+            if (!el) return;
+            if (!window.L) {
+                el.innerHTML = '<div class="text-center text-muted small py-5">'
+                    + 'Pustaka peta belum termuat.</div>';
+                return;
+            }
+
+            hancurkanPetaHarian();
+
+            petaHarian = L.map(el, { zoomControl: true, attributionControl: false })
+                .setView([lat, lng], 17);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(petaHarian);
+
+            lapisanHarian = L.layerGroup().addTo(petaHarian);
+
+            // Polygon area kerja: hijau untuk area yang memuat titik absensi,
+            // biru untuk area aktif lain, abu-abu untuk non-aktif.
+            let cocok = null;
+            try {
+                cocok = findLocationByCoords(workLocations, lat, lng);
+            } catch (e) {
+                cocok = null;
+            }
+
+            (workLocations || []).forEach(function(loc) {
+                if (!loc.coordinates || loc.coordinates.length < 3) return;
+                const latLngs = loc.coordinates.map(function(c) { return [c[1], c[0]]; });
+                const aktif = loc.is_active !== false;
+                const iniCocok = cocok && cocok.name === loc.name;
+                const warna = iniCocok ? '#1cc88a' : (aktif ? '#4e73df' : '#858796');
+
+                L.polygon(latLngs, {
+                    color: warna,
+                    weight: iniCocok ? 3 : 2,
+                    fillColor: warna,
+                    fillOpacity: iniCocok ? 0.25 : (aktif ? 0.15 : 0.08)
+                }).bindPopup('<strong>' + escHtml(loc.name || 'Lokasi Kerja') + '</strong>')
+                  .addTo(lapisanHarian);
+            });
+
+            const ikon = L.divIcon({
+                className: 'custom-face-marker',
+                html: '<div style="background:#e74a3b;color:#fff;border-radius:50%;width:28px;height:28px;'
+                    + 'display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35);'
+                    + 'font-size:14px;">&#128100;</div>',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+
+            L.marker([lat, lng], { icon: ikon })
+                .bindPopup('<strong>' + escHtml(cocok && cocok.name ? cocok.name : 'Posisi Absensi') + '</strong>')
+                .addTo(lapisanHarian);
+
+            if (akurasi && akurasi > 0) {
+                L.circle([lat, lng], {
+                    radius: akurasi,
+                    color: '#e74a3b',
+                    weight: 1,
+                    fillColor: '#e74a3b',
+                    fillOpacity: 0.12
+                }).addTo(lapisanHarian);
+            }
+
+            const info = document.getElementById('pfLokasiInfo');
+            if (info) {
+                const namaLokasi = (cocok && cocok.name) || infoLokasi || '';
+                info.innerHTML = (namaLokasi ? '<i class="fas fa-building mr-1"></i>' + escHtml(namaLokasi) : '')
+                    + (akurasi ? '<br><i class="fas fa-satellite-dish mr-1"></i>Akurasi GPS &plusmn;'
+                       + Math.round(parseFloat(akurasi)) + ' m' : '');
+            }
+
+            // Ukuran container baru pasti setelah modal tampil.
+            setTimeout(function() {
+                if (petaHarian) petaHarian.invalidateSize();
+            }, 250);
+        }
+
+        function tampilkanPetaFotoHarian(scan, tanggalLabel) {
+            const list = Array.isArray(scan) ? scan : [];
+
+            const elJumlah = document.getElementById('pfJumlah');
+            if (elJumlah) elJumlah.textContent = list.length;
+
+            const elTanggal = document.getElementById('pfTanggal');
+            if (elTanggal) {
+                // Nama karyawan diambil dari modal Detail Presensi yang
+                // sedang terbuka (id: detailEmployeeName), supaya modal
+                // peta/foto tetap berada dalam konteks orang yang sama.
+                const elSumber = document.getElementById('detailEmployeeName');
+                const elNama = document.getElementById('pfKaryawan');
+                if (elNama) {
+                    const nama = elSumber ? elSumber.textContent.trim() : '';
+                    elNama.textContent = nama || '-';
+                }
+                elTanggal.textContent = tanggalLabel || '-';
+            }
+
+            renderFotoHarian(list);
+
+            // Peta memakai scan PERTAMA yang punya koordinat. Kalau tidak
+            // ada koordinat sama sekali, container diberi keterangan.
+            let acuan = null;
+            for (let i = 0; i < list.length; i++) {
+                const s = list[i];
+                if (s && s.lat !== null && s.lat !== undefined && s.lat !== ''
+                       && s.lng !== null && s.lng !== undefined && s.lng !== '') {
+                    acuan = s;
+                    break;
+                }
+            }
+
+            const el = document.getElementById('petaFotoHarian');
+            if (!acuan) {
+                hancurkanPetaHarian();
+                if (el) {
+                    el.innerHTML = '<div class="text-center text-muted small py-5">'
+                        + '<i class="fas fa-map-marker-slash fa-2x d-block mb-2 text-secondary"></i>'
+                        + 'Koordinat lokasi tidak tersimpan pada scan ini.</div>';
+                }
+                const info = document.getElementById('pfLokasiInfo');
+                if (info) info.innerHTML = '';
+                return;
+            }
+
+            if (el) el.innerHTML = '';
+            gambarPetaHarian(
+                parseFloat(acuan.lat),
+                parseFloat(acuan.lng),
+                acuan.akurasi ? parseFloat(acuan.akurasi) : 0,
+                acuan.lokasi || ''
+            );
+        }
+
+        $(document).on('click', '.btn-peta-foto', function() {
+            const $b = $(this);
+            let scan = [];
+
+            // jQuery .data() sudah mem-parse JSON pada atribut data-scan.
+            const raw = $b.attr('data-scan');
+            if (raw) {
+                try { scan = JSON.parse(raw); } catch (e) { scan = []; }
+            }
+
+            tampilkanPetaFotoHarian(scan, $b.attr('data-tanggal') || '');
+
+            if (window.jQuery && jQuery.fn.modal) {
+                // Modal ini dibuka DI ATAS modal Detail Presensi. Bootstrap 4
+                // memberi z-index sama pada semua modal, sehingga modal kedua
+                // bisa tertimbun / overlay-nya menutupi isi. Naikkan z-index
+                // modal + backdrop-nya secara eksplisit.
+                jQuery('#modalPetaFotoHarian').css('z-index', 1080).modal('show');
+                setTimeout(function() {
+                    jQuery('.modal-backdrop').last().css('z-index', 1075);
+                    // Modal Detail Presensi di belakang tidak boleh ikut
+                    // menerima scroll saat modal peta aktif.
+                    jQuery('#modalFaceDetail').css('overflow', 'hidden');
+                }, 80);
+            }
+        });
+
+        // Kembalikan keadaan modal Detail Presensi setelah modal peta ditutup,
+        // lalu gambar ulang ukuran peta detailnya (Leaflet perlu ini).
+        $(document).on('hidden.bs.modal', '#modalPetaFotoHarian', function() {
+            hancurkanPetaHarian();
+            jQuery('#modalFaceDetail').css('overflow', '');
+            if (detailMap) {
+                setTimeout(function() {
+                    try { detailMap.invalidateSize(); } catch (e) { /* abaikan */ }
+                }, 150);
+            }
+        });
 
         $(document).on('click', '[data-npk]', function() {
             const $btn = $(this);
@@ -874,7 +1310,11 @@
                 // tidak error, tapi isinya cuma penanda. Koordinat tidak
                 // perlu disimpan di DOM karena peta sudah menunjuk lokasi.
                 document.getElementById('detailCoords').textContent = 'tersembunyi';
-                initMap(lat, lng, parseFloat(first.accuracy), workLocations);
+
+                // PERBAIKAN V2 (2026-11-05): kirim SELURUH scan (wajah +
+                // fingerprint) ke minimap supaya semua titik absensi hari itu
+                // tampil, bukan hanya scan pertama.
+                initMap(lat, lng, parseFloat(first.accuracy), workLocations, merged);
             } else {
                 document.getElementById('detailLocationName').textContent = '-';
                 document.getElementById('detailLocationSub').textContent = 'Tidak ada data lokasi pada scan ini';
@@ -1071,7 +1511,38 @@
 
     var inflight = null;
 
+    // ================================================================
+    // PERBAIKAN 19 (2026-11-04): sinkronkan href tombol Export Excel
+    // dengan filter yang SEDANG aktif.
+    // ----------------------------------------------------------------
+    // Dulu tombol export hanya membawa `month`, sehingga meski layar
+    // difilter per departemen / kata kunci, file yang diunduh tetap
+    // berisi semua karyawan. Sekarang href dibangun dari nilai filter
+    // yang benar-benar ada di form, memakai parameter yang sama dengan
+    // request rekap (`month`, `department_id`, `q`). Export hanya
+    // dipanggil saat diklik, jadi tidak menambah beban memuat halaman.
+    // ================================================================
+    function syncExportLink() {
+        var btn = document.getElementById('btnExportExcel');
+        if (!btn) return;
+
+        var base  = btn.getAttribute('data-base') || btn.getAttribute('href') || '';
+        var month = document.getElementById('filterMonth');
+        var dept  = document.getElementById('filterDepartment');
+        var q     = document.getElementById('filterSearch');
+
+        var qs = new URLSearchParams();
+        qs.set('month', (month && month.value) ? month.value : '');
+        qs.set('department_id', dept ? (dept.value || '') : '');
+        qs.set('q', q ? (q.value || '') : '');
+
+        btn.setAttribute('href', base + '?' + qs.toString());
+    }
+
     function loadData() {
+        // Selalu selaraskan tautan export sebelum memuat data.
+        syncExportLink();
+
         showLoading();
         hideError();
         container.setAttribute('aria-busy', 'true');

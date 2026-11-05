@@ -34,6 +34,131 @@
     }
 
     /* ==========================================================
+       PERBAIKAN V34 (2026-11-05) — CARD STATUS PRESENSI
+       ----------------------------------------------------------
+       Card status presensi (ganti 2 card lama) dipindah ke ATAS
+       card "Data Karyawan". Gaya mengikuti desain mint-green:
+         - latar card   : hijau muda/mint
+         - aksen kiri   : garis vertikal hijau
+         - ikon         : lingkaran hijau + ikon putih
+       Varian warna per status:
+         success (lengkap) / info (baru clock in) /
+         warning (hanya clock out) / secondary (belum clock in)
+       ========================================================== */
+    .fa-status-card {
+        border: 0;
+        border-left: 6px solid #1cc88a;
+        background-color: #e8f8f0;
+        overflow: hidden;
+    }
+    .fa-status-card .fa-status-icon {
+        width: 52px;
+        height: 52px;
+        flex: 0 0 52px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #1cc88a;
+        color: #ffffff;
+        font-size: 1.35rem;
+        box-shadow: 0 3px 10px rgba(28, 200, 138, 0.35);
+    }
+    .fa-status-card .fa-status-label {
+        color: #0f8f5f;
+        letter-spacing: 0.6px;
+    }
+    .fa-status-card .fa-status-title {
+        color: #14663f;
+    }
+    .fa-status-card .fa-status-desc {
+        color: #4a5a52;
+    }
+
+    /* Varian per status */
+    .fa-status-card.fa-status-info {
+        border-left-color: #36b9cc;
+        background-color: #e4f7fa;
+    }
+    .fa-status-card.fa-status-info .fa-status-icon {
+        background-color: #36b9cc;
+        box-shadow: 0 3px 10px rgba(54, 185, 204, 0.35);
+    }
+    .fa-status-card.fa-status-info .fa-status-label { color: #127a86; }
+    .fa-status-card.fa-status-info .fa-status-title { color: #0d5a63; }
+
+    .fa-status-card.fa-status-warning {
+        border-left-color: #f6c23e;
+        background-color: #fff6e0;
+    }
+    .fa-status-card.fa-status-warning .fa-status-icon {
+        background-color: #f6c23e;
+        color: #6b4b00;
+        box-shadow: 0 3px 10px rgba(246, 194, 62, 0.35);
+    }
+    .fa-status-card.fa-status-warning .fa-status-label { color: #a5791a; }
+    .fa-status-card.fa-status-warning .fa-status-title { color: #7a5600; }
+
+    .fa-status-card.fa-status-secondary {
+        border-left-color: #8a94a6;
+        background-color: #f1f3f7;
+    }
+    .fa-status-card.fa-status-secondary .fa-status-icon {
+        background-color: #8a94a6;
+        box-shadow: 0 3px 10px rgba(138, 148, 166, 0.35);
+    }
+    .fa-status-card.fa-status-secondary .fa-status-label { color: #5c6577; }
+    .fa-status-card.fa-status-secondary .fa-status-title { color: #3d4454; }
+
+    /* PERBAIKAN V35 (2026-11-05): varian "expired" (window Clock Out lewat) */
+    .fa-status-card.fa-status-danger {
+        border-left-color: #dc3545;
+        background-color: #fdecee;
+    }
+    .fa-status-card.fa-status-danger .fa-status-icon {
+        background-color: #dc3545;
+        box-shadow: 0 3px 10px rgba(220, 53, 69, 0.35);
+    }
+    .fa-status-card.fa-status-danger .fa-status-label { color: #a52331; }
+    .fa-status-card.fa-status-danger .fa-status-title { color: #721c24; }
+
+    @media (max-width: 575.98px) {
+        .fa-status-card .fa-status-icon {
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            font-size: 1.15rem;
+        }
+        .fa-status-card .fa-status-title {
+            font-size: 1.05rem;
+        }
+    }
+
+    /* ==========================================================
+       PERBAIKAN V34 (2026-11-05) — PANEL KAMERA TANPA CARD
+       ----------------------------------------------------------
+       Card kamera ("Kamera Presensi: ..." + badge "Kamera
+       Otomatis") dihapus. Isi kamera (video, banner window,
+       liveness) tetap dirender, hanya tanpa pembungkus card.
+       ========================================================== */
+    .fa-camera-panel {
+        position: relative;
+    }
+
+    /* ==========================================================
+       PERBAIKAN V35 (2026-11-05) — PANEL KAMERA DISEMBUNYIKAN
+       ----------------------------------------------------------
+       Saat window absensi sudah lewat ('expired') atau belum dibuka
+       ('waiting'), area kamera gelap tidak boleh tampil. Elemen DOM
+       di dalamnya tetap ada (display:none, bukan dihapus) supaya
+       seluruh JS (startCamera, detectFaceLoop, evaluateCameraGate,
+       captureFaceImage, liveness) tetap berjalan normal.
+       ========================================================== */
+    .fa-camera-hidden {
+        display: none !important;
+    }
+
+    /* ==========================================================
        PERBAIKAN V31.3b (2026-11-04) — CSS WAJAH DIPINDAH KE PARTIAL
        ----------------------------------------------------------
        Blok CSS wajah animasi (dulu .liveness-face-*, .liveness-eye-lid,
@@ -74,6 +199,91 @@
             padding-right: 0.75rem !important;
         }
     }
+
+    /* ==========================================================
+       PERBAIKAN V32.9 (2026-11-05) — REDESIGN MOBILE FRIENDLY
+       ----------------------------------------------------------
+       1. Card Kamera Presensi (kolom kanan / cameraCardBody) dihapus
+          dari tampilan -> kolom Data Karyawan jadi full width.
+       2. Mini map dibuat lebih tinggi di layar kecil supaya marker
+          (Clock In + Clock Out) tetap jelas terlihat.
+       3. Tabel Riwayat Scan dibungkus .table-responsive (sudah ada)
+          dan font mengecil di layar kecil agar tidak memaksa
+          scroll horizontal terlalu jauh.
+       4. Blok Wajah Tercapture memakai grid responsif.
+       ========================================================== */
+    @media (max-width: 767.98px) {
+        #miniMapProfile {
+            height: 240px !important;
+        }
+        .fa-scan-history-table {
+            font-size: 0.68rem !important;
+        }
+        .fa-scan-history-table th,
+        .fa-scan-history-table td {
+            padding: 0.3rem 0.25rem !important;
+        }
+        .fa-face-capture-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+            gap: 10px !important;
+        }
+        .fa-face-capture-grid > div {
+            width: auto !important;
+        }
+        .fa-face-capture-grid img {
+            width: 100% !important;
+            height: 130px !important;
+        }
+    }
+    @media (max-width: 575.98px) {
+        h1.h4 {
+            font-size: 1.15rem;
+        }
+        .fa-face-capture-grid img {
+            height: 112px !important;
+        }
+    }
+
+    /* ==========================================================
+       PERBAIKAN V33 (2026-11-05) — DESKTOP TERLALU LEBAR
+       ----------------------------------------------------------
+       Gejala: di mode desktop konten melebar sampai tepi layar
+       (100% viewport) sehingga tabel & kartu terasa "terjau" dan
+       sulit dibaca, sementara di mobile sudah pas (karena layar kecil).
+
+       Solusi: batasi lebar konten dengan max-width yang wajar dan
+       pusatkan (margin auto). Kolom yang SEMESTI penuh (tabel
+       Riwayat Scan, Wajah Tercapture) tetap memakai lebar penuh
+       di dalam container yang sudah dibatasi.
+
+       1320px ~= lebar laptop 1440px dikurangi margin nyaman.
+       Breakpoint 1199.98px = di bawah itu layar dianggap tablet/
+       mobile, widths dibiarkan 100% (tidak ada letterbox).
+       ========================================================== */
+    @media (min-width: 1200px) {
+        #content > .container-fluid {
+            max-width: 1320px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        /* Kartu utama: batasi tinggi/panjang isi agar tidak terlalu
+           renggang di monitor lebar. */
+        #content > .container-fluid > .row > div > .card .card-body {
+            max-width: 100%;
+        }
+    }
+    /* Cegah tabel & grid meluber melewati viewport di desktop sempit
+       (1024-1199px) yang biasanya jadi horizontally scroll. */
+    @media (max-width: 1199.98px) {
+        #content > .container-fluid {
+            overflow-x: hidden;
+        }
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    }
 </style>
 {{-- SweetAlert seragam untuk karyawan sudah resign (PKWT.TKK terisi) --}}
 @include('partials.sweetalert-resign')
@@ -93,53 +303,121 @@
 
                 <!-- Header -->
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                    <h1 class="h3 mb-0 text-gray-800 font-weight-bold">
+                    <h1 class="h4 h3-md mb-0 text-gray-800 font-weight-bold">
                         <i class="fas fa-camera text-primary mr-2"></i> Presensi Wajah & GPS
                     </h1>
-                    <div class="mt-2 mt-sm-0">
-                        <a href="{{ route('face.attendance.rekap') }}" class="btn btn-sm btn-info shadow-sm rounded-pill px-3 mr-2">
+                    <div class="mt-2 mt-sm-0 d-flex flex-wrap">
+                        <a href="{{ route('face.attendance.rekap') }}" class="btn btn-sm btn-info shadow-sm rounded-pill px-3 mr-2 mb-1">
                             <i class="fas fa-history fa-sm text-white-50 mr-1"></i> Rekap Presensi
                         </a>
                         <form action="{{ route('face.attendance.logout-session') }}" method="POST" class="d-inline">
                             @csrf
-                            <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm rounded-pill px-3">
-                                <i class="fas fa-sign-out-alt fa-sm mr-1"></i> Ganti Karyawan
+                            {{-- PERBAIKAN V32.9 (2026-11-05): label diubah dari
+                                 "Ganti Karyawan" menjadi "Keluar". --}}
+                            <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm rounded-pill px-3 mb-1">
+                                <i class="fas fa-sign-out-alt fa-sm mr-1"></i> Keluar
                             </button>
                         </form>
                     </div>
                 </div>
 
-                <!-- Alert Status Kehadiran Hari Ini -->
-                <div class="alert alert-{{ $hasClockIn && $hasClockOut ? 'success' : ($hasClockIn ? 'info' : ($hasClockOut ? 'warning' : 'secondary')) }} border-left-{{ $hasClockIn && $hasClockOut ? 'success' : ($hasClockIn ? 'info' : ($hasClockOut ? 'warning' : 'secondary')) }} shadow-sm mb-4">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <span class="font-weight-bold text-uppercase d-block small">Status Presensi Hari Ini</span>
-                            <h5 class="mb-0 font-weight-bold">
-                                @if($hasClockIn && $hasClockOut)
-                                    <i class="fas fa-check-double text-success mr-2"></i> Presensi Lengkap
-                                @elseif($hasClockIn)
-                                    <i class="fas fa-sign-in-alt text-info mr-2"></i> Sudah Clock In, Siap Clock Out
-                                @elseif($hasClockOut)
-                                    <i class="fas fa-sign-out-alt text-warning mr-2"></i> Sudah Clock Out
-                                @else
-                                    <i class="fas fa-clock text-secondary mr-2"></i> Belum Clock In
-                                @endif
-                                <span class="font-weight-normal text-muted small ml-1">({{ $statusText }})</span>
-                            </h5>
+                {{-- PERBAIKAN V34 (2026-11-05): Alert "STATUS PRESENSI HARI INI"
+                     (gambar ke-2 dari user) DIHAPUS dari sini. Informasi status
+                     tersebut kini ter-cover penuh oleh "Card Status Presensi"
+                     di bawah yang sudah dipindahkan ke ATAS card "Data Karyawan".
+                     --}}
+
+                {{-- ==========================================================
+                     CARD STATUS PRESENSI (V34 - 2026-11-05)
+                     ----------------------------------------------------------
+                     Dipindahkan ke ATAS card "Data Karyawan".
+                     Menggantikan 2 card lama:
+                       1. Alert "STATUS PRESENSI HARI INI"  -> dihapus
+                       2. Card "Presensi Hari Ini Selesai"  -> jadi card ini
+                     3 varian status:
+                       - Lengkap  : Clock In + Clock Out
+                       - Baru In  : baru Clock In, menunggu window Clock Out
+                       - Lainnya  : belum / hanya Clock Out / hanya Clock In
+                     ========================================================== --}}
+                @php
+                    $faLengkap   = ($hasClockIn && $hasClockOut);
+                    $faBaruIn    = ($hasClockIn && !$hasClockOut && $nextAction !== 'expired');
+                    $faHanyaOut  = (!$hasClockIn && $hasClockOut);
+                    $faExpired   = ($nextAction === 'expired');
+
+                    if ($faLengkap) {
+                        $faWarna = 'success';
+                        $faJudul = 'Presensi Hari Ini Selesai';
+                        $faIkon  = 'fa-check-double';
+                        $faPesan = 'Anda sudah melakukan Clock In dan Clock Out untuk hari ini. Terima kasih atas kerja keras Anda!';
+                        $faDetail = $statusText;
+                    } elseif ($faExpired) {
+                        // PERBAIKAN V35 (2026-11-05): window Clock Out sudah lewat
+                        // -> status harus eksplisit menyatakan tidak bisa presensi.
+                        $faWarna = 'danger';
+                        $faJudul = 'Waktu Clock Out Sudah Lewat, Anda Tidak Bisa Melakukan Presensi';
+                        $faIkon  = 'fa-ban';
+                        $faPesan = 'Window Clock Out (' . $clockOutStart->format('H:i') . '-' . $clockOutEnd->format('H:i') . ') WIB sudah lewat. '
+                            . 'Presensi tidak dapat dilakukan sampai window berikutnya. Silakan hubungi HR untuk keterlambatan.';
+                        $faDetail = $statusText;
+                    } elseif ($faBaruIn) {
+                        $faWarna = 'info';
+                        $faJudul = 'Baru Clock In, Menunggu Window Clock Out';
+                        $faIkon  = 'fa-sign-in-alt';
+                        $faPesan = 'Clock In Anda sudah tercatat. Silakan lakukan Clock Out saat jendela waktu Clock Out dibuka.';
+                        $faDetail = $statusText;
+                    } elseif ($faHanyaOut) {
+                        $faWarna = 'warning';
+                        $faJudul = 'Sudah Clock Out';
+                        $faIkon  = 'fa-sign-out-alt';
+                        $faPesan = 'Clock Out Anda sudah tercatat. Anda belum melakukan Clock In hari ini.';
+                        $faDetail = $statusText;
+                    } else {
+                        $faWarna = 'secondary';
+                        $faJudul = 'Belum Clock In';
+                        $faIkon  = 'fa-clock';
+                        $faPesan = 'Anda belum melakukan Clock In hari ini. Silakan scan wajah saat jendela waktu Clock In dibuka.';
+                        $faDetail = $statusText;
+                    }
+                @endphp
+
+                <div class="card shadow mb-4 fa-status-card fa-status-{{ $faWarna }}">
+                    <div class="card-body p-4">
+                        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between">
+                            {{-- Blok kiri: ikon + judul status --}}
+                            <div class="d-flex align-items-center mb-3 mb-sm-0">
+                                <div class="fa-status-icon mr-3">
+                                    <i class="fas {{ $faIkon }}"></i>
+                                </div>
+                                <div>
+                                    <span class="font-weight-bold text-uppercase d-block small fa-status-label">Status Presensi Hari Ini</span>
+                                    <h5 class="mb-0 font-weight-bold fa-status-title">{{ $faJudul }}</h5>
+                                    @if(!empty($faDetail))
+                                    <span class="font-weight-normal text-muted small ml-1">({{ $faDetail }})</span>
+                                    @endif
+                                </div>
+                            </div>
+
+                            {{-- Blok kanan: badge tanggal + tombol rekap --}}
+                            <div class="text-left text-sm-right d-flex flex-column flex-sm-row align-items-sm-center">
+                                <span class="badge badge-primary px-3 py-2 font-weight-bold mb-2 mb-sm-0 mr-sm-3" style="font-size: 0.9rem;">
+                                    {{ \Carbon\Carbon::now()->translatedFormat('l, d F Y') }}
+                                </span>
+                                <a href="{{ route('face.attendance.rekap') }}" class="btn btn-primary rounded-pill px-4">
+                                    <i class="fas fa-history mr-1"></i> Lihat Rekap Bulanan
+                                </a>
+                            </div>
                         </div>
-                        <div class="text-right d-none d-sm-block">
-                            {{-- Jam digital DIHAPUS (permintaan user 2026-11-03): mengganggu
-                                 dan tick per detiknya ikut memicu error. Tanggal tetap. --}}
-                            <span class="badge badge-primary px-3 py-2 font-weight-bold" style="font-size: 0.9rem;">
-                                {{ \Carbon\Carbon::now()->translatedFormat('l, d F Y') }}
-                            </span>
-                        </div>
+
+                        <p class="text-muted mb-0 mt-3 fa-status-desc">{{ $faPesan }}</p>
                     </div>
                 </div>
 
                 <div class="row">
                     <!-- Kolom Informasi Karyawan & Jadwal Shift -->
-                    <div class="col-lg-4 col-md-5 mb-4">
+                    {{-- PERBAIKAN V32.9 (2026-11-05): kolom kiri menjadi FULL
+                         WIDTH karena kolom kanan (card kamera) dihapus. --}}
+                    <div class="col-12 mb-4">
                         <div class="card shadow border-left-primary h-100">
                             <div class="card-header py-3 bg-white">
                                 <h6 class="m-0 font-weight-bold text-primary">
@@ -268,19 +546,27 @@
                                 <div class="mt-3">
                                     <small class="text-muted font-weight-bold text-uppercase d-block mb-2">Riwayat Scan Hari Ini</small>
                                     <div class="table-responsive">
-                                        <table class="table table-sm table-bordered mb-0" style="font-size: 0.8rem;">
+                                        <table class="table table-sm table-bordered mb-0 fa-scan-history-table" style="font-size: 0.8rem;">
                                             <thead class="thead-light">
                                                 <tr>
                                                     <th style="width:38px;" class="text-center">#</th>
                                                     <th style="width:80px;">Jam</th>
                                                     <th style="width:100px;" class="text-center">Metode</th>
                                                     <th class="text-center">Keterangan</th>
+                                                    {{-- PERBAIKAN V32.8 (2026-11-05): tampilkan koordinat
+                                                         attendance (lat/long + akurasi) dan wajah yang
+                                                         TERCAPTURE saat scan, bukan cuma foto profil. --}}
+                                                    <th style="width:110px;" class="text-center">Koordinat</th>
+                                                    <th style="width:90px;" class="text-center">Wajah Tercapture</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 @foreach($todayLogs as $i => $log)
                                                 @php
                                                     $logType = $log->calculated_type ?? ($log->inoutmode == 0 ? 'in' : 'out');
+                                                    $hasLat  = ($log->latitude !== null && $log->latitude !== '');
+                                                    $hasLng  = ($log->longitude !== null && $log->longitude !== '');
+                                                    $faceB64 = $log->face_image ?? null;
                                                 @endphp
                                                 <tr>
                                                     <td class="text-center text-muted align-middle">{{ $i + 1 }}</td>
@@ -300,6 +586,43 @@
                                                             {{ $logType == 'in' ? 'Clock In' : 'Clock Out' }}
                                                         </span>
                                                     </td>
+                                                    <td class="align-middle text-center">
+                                                        @if($hasLat && $hasLng)
+                                                            <div class="font-weight-bold" style="font-size:.72rem;line-height:1.25;">
+                                                                {{ number_format((float) $log->latitude, 6) }},<br>
+                                                                {{ number_format((float) $log->longitude, 6) }}
+                                                            </div>
+                                                            <div class="text-muted" style="font-size:.65rem;">
+                                                                <i class="fas fa-crosshairs mr-1"></i>±{{ $log->accuracy !== null ? round((float) $log->accuracy) : '-' }} m
+                                                            </div>
+                                                            @if($log->inside_polygon !== null)
+                                                                <span class="badge badge-{{ ((int) $log->inside_polygon) === 1 ? 'success' : 'danger' }} mt-1" style="font-size:.58rem;">
+                                                                    {{ ((int) $log->inside_polygon) === 1 ? 'Dalam Area' : 'Di Luar Area' }}
+                                                                </span>
+                                                            @endif
+                                                        @else
+                                                            <span class="text-muted" style="font-size:.7rem;">
+                                                                <i class="fas fa-minus mr-1"></i>Tidak ada
+                                                            </span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="align-middle text-center">
+                                                        @if(!empty($faceB64))
+                                                            <a href="javascript:void(0)" class="fa-scan-thumb"
+                                                               data-img="data:image/jpeg;base64,{{ $faceB64 }}"
+                                                               data-type="{{ $logType == 'in' ? 'Clock In' : 'Clock Out' }}"
+                                                               data-time="{{ \Carbon\Carbon::parse($log->scan_date)->format('H:i:s') }}"
+                                                               title="Lihat wajah {{ $logType == 'in' ? 'Clock In' : 'Clock Out' }}">
+                                                                <img src="data:image/jpeg;base64,{{ $faceB64 }}"
+                                                                     alt="Wajah {{ $logType == 'in' ? 'Clock In' : 'Clock Out' }}"
+                                                                     style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:2px solid {{ $logType == 'in' ? '#1cc88a' : '#f6c23e' }};cursor:pointer;">
+                                                            </a>
+                                                        @else
+                                                            <span class="text-muted" style="font-size:.7rem;">
+                                                                <i class="fas fa-user-slash mr-1"></i>Tidak ada
+                                                            </span>
+                                                        @endif
+                                                    </td>
                                                 </tr>
                                                 @endforeach
                                             </tbody>
@@ -308,168 +631,257 @@
                                 </div>
                                 @endif
 
+                                {{-- PERBAIKAN V32.8 (2026-11-05): tampilkan foto wajah yang
+                                     TERCAPTURE pada setiap scan (clock in & clock out),
+                                     masing-masing dengan jam + koordinat. Sebelumnya
+                                     hanya ada foto profil kecil di atas, sehingga
+                                     wajah hasil scan tidak pernah terlihat. --}}
+                                @php
+                                    $faceCaptures = [];
+                                    foreach ($todayLogs as $log) {
+                                        if (!empty($log->face_image)) {
+                                            $faceCaptures[] = [
+                                                'type' => ($log->calculated_type ?? 'in') === 'in' ? 'Clock In' : 'Clock Out',
+                                                'time' => \Carbon\Carbon::parse($log->scan_date)->format('H:i:s'),
+                                                'img'  => $log->face_image,
+                                                'lat'  => $log->latitude,
+                                                'lng'  => $log->longitude,
+                                                'acc'  => $log->accuracy,
+                                            ];
+                                        }
+                                    }
+                                @endphp
+                                @if(count($faceCaptures) > 0)
+                                <div class="mt-3 pt-3 border-top">
+                                    <small class="text-muted font-weight-bold text-uppercase d-block mb-2">
+                                        <i class="fas fa-camera text-primary mr-1"></i> Wajah Tercapture ({{ count($faceCaptures) }})
+                                    </small>
+                                    <div class="d-flex flex-wrap fa-face-capture-grid" style="gap:10px;">
+                                        @foreach($faceCaptures as $fc)
+                                        <div class="text-center" style="width:132px;">
+                                            <img src="data:image/jpeg;base64,{{ $fc['img'] }}"
+                                                 alt="Wajah {{ $fc['type'] }}"
+                                                 class="rounded shadow-sm"
+                                                 style="width:132px;height:165px;object-fit:cover;object-position:center top;border:2px solid {{ $fc['type'] === 'Clock In' ? '#1cc88a' : '#f6c23e' }};">
+                                            <div class="badge badge-{{ $fc['type'] === 'Clock In' ? 'success' : 'warning' }} mt-1" style="font-size:.62rem;">
+                                                <i class="fas {{ $fc['type'] === 'Clock In' ? 'fa-sign-in-alt' : 'fa-sign-out-alt' }} mr-1"></i>
+                                                {{ $fc['type'] }} {{ $fc['time'] }}
+                                            </div>
+                                            @if($fc['lat'] !== null && $fc['lng'] !== null)
+                                            <div class="text-muted" style="font-size:.6rem;line-height:1.2;">
+                                                {{ number_format((float) $fc['lat'], 5) }}, {{ number_format((float) $fc['lng'], 5) }}
+                                            </div>
+                                            @endif
+                                        </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                                @endif
+
                                 <!-- Mini Map Geofencing Lokasi Karyawan -->
+                                {{-- ============================================================
+                                     PERBAIKAN V34 (2026-11-05) — MINIMAP JADI "HASIL ATTENDANCE"
+                                     ----------------------------------------------------------
+                                     Permintaan user: "Mini Map Lokasi di Presensi Wajah & GPS
+                                     diubah menjadi minimap hasil dari attendance, seperti
+                                     minimap pada Detail Presensi Wajah di /face-attendance/rekap".
+
+                                     Perubahan:
+                                       - Judul: "Mini Map Lokasi" -> "Minimap Lokasi Absensi"
+                                       - Isi peta sekarang menampilkan HASIL ATTENDANCE
+                                         (marker Clock In / Clock Out + polygon lokasi
+                                         kerja), BUKAN marker posisi GPS live yang
+                                         mendominasi.
+                                       - Gaya marker & polygon DISAMAKAN dengan
+                                         halaman rekap (divIcon orang, hijau=In,
+                                         merah=Out, polyline putus-putus, polygon
+                                         hijau bila memuat titik absensi).
+                                     ============================================================ --}}
                                 <div class="mt-3 pt-2 border-top">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <small class="text-muted font-weight-bold text-uppercase">
-                                            <i class="fas fa-map-marked-alt text-primary mr-1"></i> Mini Map Lokasi
+                                            <i class="fas fa-map-marked-alt text-primary mr-1"></i> Minimap Lokasi Absensi
                                         </small>
-                                        <span id="miniMapProfileStatus" class="badge badge-light border small text-muted">Mencari GPS...</span>
+                                        <span id="miniMapProfileStatus" class="badge badge-light border small text-muted">Memuat Peta...</span>
                                     </div>
                                     <div id="miniMapProfile" class="rounded border shadow-sm" style="height: 180px; width: 100%; z-index: 1;"></div>
-                                    <small id="miniMapAccuracyText" class="text-muted d-block text-center mt-1" style="font-size: 0.75rem;">Akurasi GPS: - meter</small>
+                                    <small id="miniMapAccuracyText" class="text-muted d-block text-center mt-1" style="font-size: 0.75rem;">Belum ada data absensi hari ini</small>
+                                    {{-- PERBAIKAN V34 (2026-11-05): status GPS dipisah dari
+                                         badge minimap. Badge sekarang menampilkan
+                                         JUMLAH ABSENSI, sedangkan status GPS tampil
+                                         di baris kecil ini supaya keduanya tidak
+                                         saling menimpa. --}}
+                                    <small id="faGpsStatusText" class="text-muted d-block text-center" style="font-size: 0.72rem; margin-top: 2px;"></small>
+                                    {{-- PERBAIKAN V32.8 (2026-11-05): daftar koordinat tiap
+                                         scan (clock in / clock out) supaya minimap bisa
+                                         menampilkan SEJUMAH marker sesuai jumlah
+                                         pemakaian face attendance hari ini.
+                                         Array dihitung lebih dulu di blok PHP terpisah;
+                                         directive @json() hanya menerima SATU
+                                         ekspresi, sehingga closure multi-line
+                                         di dalamnya akan merusak parsing Blade. --}}
+                                    @php
+                                        $faScanPoints = collect($todayLogs)->map(function ($l) {
+                                            return [
+                                                'lat'  => $l->latitude !== null ? (float) $l->latitude : null,
+                                                'lng'  => $l->longitude !== null ? (float) $l->longitude : null,
+                                                'acc'  => $l->accuracy !== null ? (float) $l->accuracy : null,
+                                                'type' => (($l->calculated_type ?? 'in') === 'in') ? 'in' : 'out',
+                                                'time' => \Carbon\Carbon::parse($l->scan_date)->format('H:i:s'),
+                                            ];
+                                        })->values()->all();
+                                    @endphp
+                                    <script type="application/json" id="faScanPointsJson">@json($faScanPoints)</script>
                                 </div>
 
                             </div>
                         </div>
                     </div>
 
-                    <!-- Kolom Kamera & Scanning Otomatis -->
-                    <div class="col-lg-8 col-md-7 mb-4">
-                        <div class="card shadow">
-                            {{-- PERBAIKAN (2026-11-04): card Kamera Presensi bisa
-                                 DITUTUP (hidden) secara default. User mengklik header
-                                 untuk membuka/menutup. Body disembunyikan dengan
-                                 class "d-none" supaya tinggi card ikut mengecil.
-                                 JS: toggleCameraCard(). --}}
-                            <div class="card-header py-3 bg-gradient-primary text-white d-flex flex-row align-items-center justify-content-between"
-                                 style="cursor: pointer;" onclick="toggleCameraCard()" role="button"
-                                 aria-expanded="false" aria-controls="cameraCardBody" title="Klik untuk buka/tutup Kamera Presensi">
-                                <h6 class="m-0 font-weight-bold text-white">
-                                    <i class="fas fa-video mr-1"></i>
-                                    @if($nextAction == 'clock_in')
-                                        Kamera Presensi: Clock In (Masuk)
-                                    @elseif($nextAction == 'clock_out')
-                                        Kamera Presensi: Clock Out (Pulang)
-                                    @else
-                                        Presensi Selesai
-                                    @endif
-                                </h6>
-                                <span class="d-flex align-items-center">
-                                    {{-- Badge status KAMERA (bukan GPS). GPS punya badge sendiri
-                                         di card Data Karyawan: miniMapProfileStatus. --}}
-                                    <span id="cameraBadge" class="badge badge-light text-dark font-weight-bold">
-                                        <i class="fas fa-video text-muted mr-1"></i> Kamera Otomatis
-                                    </span>
-                                    <i id="cameraCardChevron" class="fas fa-chevron-up ml-2" aria-hidden="true"></i>
-                                </span>
-                            </div>
+                    {{-- ============================================================
+                         PERBAIKAN V33 (2026-11-05) — CARD cameraCardBody DIHAPUS
+                         ------------------------------------------------------------
+                         Permintaan user: "saya maunya cameraCardBody dihapus".
 
-                            <div id="cameraCardBody" class="card-body p-4 text-center d-none">
-                                @if($nextAction == 'completed')
-                                    <div class="py-5">
-                                        <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
-                                        <h4 class="font-weight-bold text-gray-800">Presensi Hari Ini Selesai</h4>
-                                        <p class="text-muted mb-4">
-                                            Anda sudah melakukan Clock In dan Clock Out untuk hari ini.<br>
-                                            Terima kasih atas kerja keras Anda!
+                         Sebelumnya (V32.9) kolom ini disembunyikan dengan
+                         class "d-none" supaya elemen DOM (video, canvas, tombol)
+                         tetap ada untuk JS auto-presensi. Sekarang:
+                           - wrapper kolom + <div id="cameraCardBody"> + header
+                             collapsible DIHAPUS TOTAL dari markup,
+                           - isi kamera (video, placeholder, banner window,
+                             liveness) dipindah ke card UTAMA "Data Karyawan"
+                             sebagai satu blok di dalam card-body,
+                           - <video id="webcam">, <canvas id="faceCaptureCanvas">,
+                             <div id="cameraPlaceholder">, <div id="scannerGuide">,
+                             <div id="camOverlayBadge">, <div id="overlayText">,
+                             <div id="windowWaitBanner">, <div id="livenessAlertBox">
+                             tetap ADA dengan ID yang sama supaya SELURUH JS
+                             (startCamera, detectFaceLoop, evaluateCameraGate,
+                             captureFaceImage, liveness) tidak perlu diubah
+                             satu baris pun dan auto-presensi tetap jalan.
+                           - Toggle buka/tutup kartu kamera (toggleCameraCard)
+                             tidak dipakai lagi; dilepas dari JS.
+                         ============================================================ --}}
+                    @if($nextAction != 'completed')
+                    {{-- ============================================================
+                         PERBAIKAN V35 (2026-11-05) — PANEL KAMERA DISEMBUNYIKAN
+                         SAAT TIDAK ADA YANG BISA DIPINDAI.
+                         ------------------------------------------------------------
+                         Permintaan user (gambar ke-1): "hapus semua elemen ini".
+                         Elemen yang ditunjuk termasuk card kamera gelap
+                         "Belum Memasuki Window Absensi" beserta video,
+                         placeholder gelap, ikon jam, dan badge "Posisikan
+                         Wajah".
+
+                         SOLUSI: wrapper .fa-camera-panel diberi class
+                         "fa-camera-hidden" yang applying `display:none`.
+                         Elemen DOM di dalamnya (video, canvas, placeholder,
+                         scannerGuide, camOverlayBadge, overlayText,
+                         windowWaitBanner, livenessAlertBox) TETAP ADA di
+                         DOM — jadi startCamera(), detectFaceLoop(),
+                         evaluateCameraGate(), captureFaceImage(), dan
+                         liveness tetap berjalan tanpa perubahan satu baris
+                         pun. Yang hilang hanya PERILAKAT VISUALNYA.
+
+                         Wrapper ini disembunyikan saat:
+                           - nextAction = 'expired'  (window sudah lewat)
+                           - nextAction = 'waiting'  (belum masuk window)
+                           - sudah Clock In tapi belum Clock Out
+                             (tidak ada yang perlu dipindai)
+                         yaitu ketika kamera memang tidak boleh menyala.
+
+                         Saat nextAction = 'clock_in' / 'clock_out' (kamera
+                         WAJIB aktif), panel tetap tampil normal.
+                         ============================================================ --}}
+                    <div class="col-12 mb-4">
+                        {{-- Panel kamera disembunyikan saat:
+                               - nextAction = 'expired'  (window sudah lewat)
+                               - nextAction = 'waiting'  (belum masuk window)
+                               - sudah Clock In tapi belum Clock Out
+                                 (tidak ada yang perlu dipindai)
+                             Saat 'clock_in' atau 'clock_out' (kamera WAJIB aktif),
+                             panel tetap tampil normal.
+                             'completed' tidak masuk sini karena seluruh blok
+                             kamera tidak dirender. --}}
+                        <div class="fa-camera-panel @if($nextAction === 'expired' || $nextAction === 'waiting' || ($hasClockIn && !$hasClockOut)) fa-camera-hidden @endif">
+                            <div class="card-body p-4 text-center">
+                                {{-- ============================================================
+                                     PERBAIKAN V35 (2026-11-05) — BANNER WINDOW + BANNER
+                                     LIVENESS + KALIMAT BANTUAN DIHAPUS DARI MARKUP.
+
+                                     Permintaan user (gambar ke-1): "hapus semua
+                                     elemen ini di /face-attendance" yang menunjuk:
+                                       1. Banner "Window Presensi Hari Ini Sudah
+                                          Berakhir" (+ Window: ... + countdown)
+                                       2. Banner "LIVENESS CHECK: Silakan BERKEDIP
+                                          atau MENOLEH ..."
+                                       3. Card kamera gelap "Belum Memasuki Window
+                                          Absensi" (+ ikon jam + deskripsi window)
+                                       4. Kalimat "Sistem secara otomatis mendeteksi
+                                          gerakan wajah asli ..."
+
+                                     Yang TETAP ADA (agar JS & auto-presensi tidak
+                                     rusak, karena element ini diakses lewat
+                                     getElementById):
+                                       - <video id="webcam">
+                                       - <canvas id="faceCaptureCanvas">
+                                       - <div id="scannerGuide">
+                                       - <div id="camOverlayBadge"> + #overlayText
+                                       - <div id="cameraPlaceholder"> + sub-elemennya
+                                       - <div id="windowWaitBanner"> (dibuat ulang
+                                         oleh JS bila perlu, default-nya kosong)
+                                       - <div id="livenessAlertBox"> (dibuat ulang
+                                         oleh JS bila perlu, default-nya kosong)
+
+                                     Banner window & banner liveness sekarang
+                                     TIDAK dirender sebagai HTML statis. JS tetap
+                                     bisa mengisinya bila perlu, tapi kondisi
+                                     default (di luar window / liveness belum aktif)
+                                     tidak menampilkan banner tersebut.
+                                     ============================================================ --}}
+                                <div id="windowWaitBanner" class="d-none" role="status" aria-live="polite"></div>
+
+                                <div class="position-relative mx-auto rounded overflow-hidden shadow-sm" style="max-width: 640px; width: 100%; height: 420px; background: #1a1c23;">
+                                    <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+
+                                    <div id="scannerGuide" class="scanner-guide-box"></div>
+
+                                    <div id="camOverlayBadge" class="position-absolute bg-dark text-white px-3 py-1 rounded-pill small font-weight-bold shadow" style="top: 15px; left: 15px; opacity: 0.9; z-index: 10;">
+                                        <span id="overlayText"><i class="fas fa-user-clock text-warning mr-1"></i> Posisikan Wajah</span>
+                                    </div>
+
+                                    <div id="cameraPlaceholder" class="position-absolute d-flex flex-column align-items-center justify-content-center text-white" style="top:0; left:0; width:100%; height:100%; background: #2e3340; z-index: 5;">
+                                        <i class="fas fa-clock fa-3x text-warning mb-3" id="placeholderIcon"></i>
+                                        <h5 class="font-weight-bold" id="placeholderTitle">Memeriksa Jadwal Presensi...</h5>
+                                        <p class="text-gray-400 small px-4 mb-3" id="placeholderDesc">
+                                            Menyiapkan sistem presensi...
                                         </p>
-                                        <a href="{{ route('face.attendance.rekap') }}" class="btn btn-primary rounded-pill px-4">
-                                            <i class="fas fa-history mr-1"></i> Lihat Rekap Bulanan
-                                        </a>
-                                    </div>
-                                @else
-                                    {{-- ============================================================
-                                         PERBAIKAN 22 (2026-11-04): BANNER WINDOW ABSENSI.
-
-                                         Ketentuan user: bila waktu sekarang BELUM masuk
-                                         window Clock In maupun Clock Out, statusnya adalah
-                                         "menunggu window", dan pada kondisi itu KAMERA HARUS
-                                         OFF + muncul banner pemberitahuan.
-
-                                         Banner ini elemen TERPISAH dari placeholder kamera.
-                                         Alasan: placeholder menutupi <video> dan hilang
-                                         begitu kamera nyala, sedangkan banner harus tetap
-                                         terlihat jelas di atas area kamera sebagai
-                                         pemberitahuan status. Banner disembunyikan
-                                         (d-none) oleh JS begitu masuk window.
-                                         ============================================================ --}}
-                                    <div id="windowWaitBanner" class="alert alert-warning border-warning shadow-sm text-left d-none" role="status" aria-live="polite">
-                                        <div class="d-flex align-items-start">
-                                            <i class="fas fa-hourglass-half fa-2x text-warning mr-3 mt-1"></i>
-                                            <div class="flex-grow-1">
-                                                <h6 class="font-weight-bold text-gray-900 mb-1" id="windowWaitTitle">
-                                                    Menunggu Window Presensi
-                                                </h6>
-                                                <div class="small text-gray-800 mb-1" id="windowWaitDesc">
-                                                    Waktu sekarang belum masuk window Clock In maupun Clock Out.
-                                                    Kamera dimatikan otomatis sampai window dibuka.
-                                                </div>
-                                                <div class="small font-weight-bold text-gray-900" id="windowWaitRange">
-                                                    Window: Clock In {{ $clockInStart->format('H:i') }}-{{ $clockInEnd->format('H:i') }}
-                                                    &middot; Clock Out {{ $clockOutStart->format('H:i') }}-{{ $clockOutEnd->format('H:i') }} WIB
-                                                </div>
-                                                <div class="small text-muted mt-1" id="windowWaitCountdown"></div>
-                                            </div>
+                                        <div id="placeholderBtnContainer">
+                                            <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="retryCamera()">
+                                                <i class="fas fa-video mr-1"></i> Mulai Kamera
+                                            </button>
                                         </div>
                                     </div>
+                                </div>
 
-                                    {{-- PERBAIKAN 26 (2026-11-02): banner liveness HANYA dirender
-                                         bila toggle liveness ON. Saat OFF, banner tidak ada
-                                         sama sekali di HTML (bukan disembunyikan CSS), supaya
-                                         user tidak melihat instruksi kedip/geleng yang tidak
-                                         berlaku. --}}
-                                    @if($livenessEnabled ?? true)
-                                    {{-- PERBAIKAN V31.3 (2026-11-04): banner sekarang memuat
-                                         ANIMASI WAJAH (mata berkedip + kepala menoleh),
-                                         bukan teks yang zoom-in/zoom-out. Wajah digambar
-                                         dengan SVG inline supaya tidak perlu file gambar
-                                         dan tidak menambah request jaringan.
-                                         SVG memakai atribut aria-hidden karena murni
-                                         hiasan; maknanya sudah ada di teks di sebelahnya. --}}
-                                    <div id="livenessAlertBox" class="alert alert-warning py-2 px-3 mb-3 shadow-sm border-warning liveness-alert-box d-flex align-items-center justify-content-center">
-                                        {{-- PERBAIKAN V31.3b: wajah animasi dipindah ke partial
-                                             agar halaman login memakai animasi yang SAMA PERSIS.
-                                             Lihat resources/views/face_attendance/_liveness_face.blade.php --}}
-                                        @include('face_attendance._liveness_face', ['ukuran' => 56])
-                                        <span id="livenessInstructionText" class="font-weight-bold ml-2">
-                                            LIVENESS CHECK: Silakan <u>BERKEDIP</u> atau <u>MENOLEH</u> sedikit ke kiri / kanan
-                                        </span>
-                                    </div>
-                                    @endif
+                                <!-- Canvas tersembunyi untuk capture wajah saat liveness berhasil -->
+                                <canvas id="faceCaptureCanvas" width="320" height="320" style="display: none;"></canvas>
 
-                                    <div class="position-relative d-inline-block rounded overflow-hidden shadow-sm" style="max-width: 640px; width: 100%; height: 420px; background: #1a1c23;">
-                                        <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
-                                        
-                                        <div id="scannerGuide" class="scanner-guide-box"></div>
-
-                                        <div id="camOverlayBadge" class="position-absolute bg-dark text-white px-3 py-1 rounded-pill small font-weight-bold shadow" style="top: 15px; left: 15px; opacity: 0.9; z-index: 10;">
-                                            <span id="overlayText"><i class="fas fa-user-clock text-warning mr-1"></i> Posisikan Wajah</span>
-                                        </div>
-
-                                        <div id="cameraPlaceholder" class="position-absolute d-flex flex-column align-items-center justify-content-center text-white" style="top:0; left:0; width:100%; height:100%; background: #2e3340; z-index: 5;">
-                                            <i class="fas fa-clock fa-3x text-warning mb-3" id="placeholderIcon"></i>
-                                            <h5 class="font-weight-bold" id="placeholderTitle">Memeriksa Jadwal Presensi...</h5>
-                                            <p class="text-gray-400 small px-4 mb-3" id="placeholderDesc">
-                                                Menyiapkan sistem presensi...
-                                            </p>
-                                            <div id="placeholderBtnContainer">
-                                                <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="retryCamera()">
-                                                    <i class="fas fa-video mr-1"></i> Mulai Kamera
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Canvas tersembunyi untuk capture wajah saat liveness berhasil -->
-                                    <canvas id="faceCaptureCanvas" width="320" height="320" style="display: none;"></canvas>
-
-                                    {{-- PERBAIKAN V31.3 (2026-11-04): kalimat bantuan ini DULU
-                                         tampil walau liveness OFF, karena ikut blok
-                                         @if($nextAction == 'completed') yang membungkus
-                                         seluruh area kamera. Akibatnya user tetap diberi
-                                         tahu soal "kedipan / menoleh" padahal sistem tidak
-                                         memintanya. Sekarang dibungkus toggle liveness. --}}
-                                    @if($livenessEnabled ?? true)
-                                    <div class="mt-3 text-muted small">
-                                        <i class="fas fa-info-circle mr-1 text-primary"></i>
-                                        Sistem secara otomatis mendeteksi gerakan wajah asli (kedipan mata atau menoleh) untuk verifikasi kehadiran.
-                                    </div>
-                                    @endif
-                                @endif
+                                {{-- PERBAIKAN V35 (2026-11-05): #livenessAlertBox TIDAK lagi
+                                     dirender sebagai banner HTML statis. JS tetap dapat
+                                     mengisi elemen ini saat liveness sedang aktif.
+                                     Div kosong default supaya getElementById tidak null. --}}
+                                <div id="livenessAlertBox" class="d-none"></div>
                             </div>
                         </div>
                     </div>
+                    @else
+                    {{-- PERBAIKAN V34 (2026-11-05): Card "Presensi Hari Ini
+                         Selesai" lama (gambar ke-1 dari user) DIHAPUS dari
+                         sini karena informasinya sudah ter-cover penuh oleh
+                         "Card Status Presensi" yang sekarang berada di ATAS
+                         card "Data Karyawan". --}}
+                    @endif
                 </div>
 
             </div>
@@ -644,82 +1056,152 @@
 
     // Mini Map Leaflet di Card Profil Karyawan
     let miniMapProfile = null;
-    let userCircleProfile = null;
-    let userMarkerProfile = null;
     let polyGroupProfile = null;
+    // PERBAIKAN V34 (2026-11-05): variabel marker posisi GPS LIVE
+    // (userCircleProfile / userMarkerProfile) DIHAPUS. Minimap sekarang
+    // menampilkan hasil attendance, bukan posisi real-time user.
+    // PERBAIKAN V32.8 (2026-11-05): marker untuk setiap scan face attendance
+    // hari ini (clock in & clock out). Sebelumnya minimap hanya menampilkan
+    // 1 marker (posisi GPS saat ini), sehingga jejak 2 penggunaan presensi
+    // tidak terlihat.
+    let scanMarkersProfile = [];
 
-    // PERBAIKAN (2026-11-04): buka/tutup card Kamera Presensi.
-    // Default: TERTUTUP (body d-none). Klik header -> buka, klik lagi -> tutup.
-    // Catatan: status hidden di-refresh ke localStorage supaya pilihan user
-    // tidak hilang saat reload halaman (kamera tetap punya logically state).
-    function toggleCameraCard(forceState) {
-        const body = document.getElementById('cameraCardBody');
-        const header = body ? body.previousElementSibling : null;
-        const chevron = document.getElementById('cameraCardChevron');
-        if (!body) return;
-
-        const isHidden = body.classList.contains('d-none');
-        const willOpen = (typeof forceState === 'boolean') ? forceState : isHidden;
-
-        body.classList.toggle('d-none', !willOpen);
-        if (chevron) {
-            // Konvensi: TERTUTUP -> chevron ke ATAS (fa-chevron-up, klik untuk buka)
-            //            TERBUKA -> chevron ke BAWAH (fa-chevron-down, klik untuk tutup)
-            chevron.classList.toggle('fa-chevron-up', !willOpen);
-            chevron.classList.toggle('fa-chevron-down', willOpen);
-        }
-        if (header) {
-            header.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-        }
-
+    // PERBAIKAN V32.8: baca daftar titik scan dari JSON di DOM.
+    function getFaScanPoints() {
+        const el = document.getElementById('faScanPointsJson');
+        if (!el) return [];
         try {
-            localStorage.setItem('fa_camera_card_open', willOpen ? '1' : '0');
-        } catch (e) {}
-
-        // Leaflet (Mini Map) ada di card lain, jadi invalidate peta aman.
-        // Kamera TIDAK dinyalakan/dimatikan oleh toggle ini.
-    }
-
-    // Pulihkan pilihan buka/tutup dari storage saat halaman dimuat.
-    function restoreCameraCardState() {
-        let saved = null;
-        try { saved = localStorage.getItem('fa_camera_card_open'); } catch (e) {}
-        // Default TERTUTUP. Nilai '1' hanya berlaku bila user pernah membukanya.
-        if (saved === '1') {
-            toggleCameraCard(true);
+            const parsed = JSON.parse(el.textContent || el.innerText || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            console.warn('[FaceAttendance] Gagal parse titik scan:', e);
+            return [];
         }
     }
 
-    // PERBAIKAN V1.1: fokus peta ke titik GPS user.
-    // PERBAIKAN V1.2: zoom dihitung dari ukuran container ASLI + akurasi GPS,
-    // supaya tampilannya street-level (bukan skala kota/regional).
-    // Rumus lama salah: zoom dibatasi min 11 dan mengabaikan lebar container,
-    // sehingga mini map selalu menampilkan ~30 km (kota + kecamatan sekitar).
-    function focusOnUserProfile(mapInstance, lat, lng, accuracy) {
-        if (!mapInstance) return;
-        const acc = Math.max(Number(accuracy) || 0, 0);
+    // PERBAIKAN V34 (2026-11-05): helper untuk mengisi badge status +
+    // teks jumlah absensi. Dipanggil dari renderScanMarkersProfile() agar
+    // badge benar sejak peta pertama kali digambar, tidak hanya setelah
+    // GPS berhasil (kalau GPS gagal, badge tetap harus tampil benar).
+    function updateMiniMapStatusProfile() {
+        const statusBadge = document.getElementById('miniMapProfileStatus');
+        const accuracyText = document.getElementById('miniMapAccuracyText');
+        const points = getFaScanPoints().filter(p =>
+            p && p.lat !== null && p.lng !== null &&
+            !isNaN(parseFloat(p.lat)) && !isNaN(parseFloat(p.lng))
+        );
+        const scanCount = points.length;
 
-        // 1. Tentukan lebar viewport efektif (px) dari container asli.
-        const el = mapInstance.getContainer && mapInstance.getContainer();
-        const w = (el && el.clientWidth) ? el.clientWidth : 320;
-        const h = (el && el.clientHeight) ? el.clientHeight : 180;
-
-        // 2. Target cakupan tanah (meter) yang ditampilkan:
-        //    - cukup lebar untuk melihat area geofencing kecil di sekitar user
-        //    - tetap sempit supaya area geofencing yang jauh tidak ikut terlihat
-        //    Radius akurasi GPS dipakai sebagai baseline, minimal 250m, maksimal 900m.
-        //    (akurasi 66m -> 330m -> street-level, +/- sekitar 350-450m terlihat)
-        const targetMeters = Math.min(Math.max(acc * 5, 250), 900);
-
-        // 3. Konversi target meter -> level zoom Leaflet, memperhitungkan
-        //    ukuran viewport (lebar = tujuan agar area muat, tinggi ikut skala).
-        const mpp = 156543.03392 * Math.cos(lat * Math.PI / 180);
-        const zoom = Math.max(13, Math.min(18, Math.round(
-            Math.log2(mpp * w / targetMeters)
-        )));
-
-        mapInstance.setView([lat, lng], zoom, { animate: true, duration: 0.6 });
+        if (statusBadge) {
+            if (scanCount > 0) {
+                statusBadge.className = 'badge badge-success small';
+                statusBadge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> ' + scanCount + ' Absensi';
+            } else {
+                statusBadge.className = 'badge badge-light border small text-muted';
+                statusBadge.innerHTML = 'Belum Absensi';
+            }
+        }
+        if (accuracyText) {
+            if (scanCount > 0) {
+                const list = points.map(p => (p.type === 'in' ? 'In' : 'Out') + ' ' + (p.time || '')).join(' · ');
+                accuracyText.innerHTML = 'Absensi hari ini: <strong>' + scanCount + '</strong> scan (' + list + ')';
+            } else {
+                accuracyText.innerHTML = 'Belum ada data absensi hari ini';
+            }
+        }
+        return scanCount;
     }
+
+    // PERBAIKAN V34 (2026-11-05): marker scan DIBUAT SEPERSI rekap.
+    // Gaya: divIcon lingkaran bewajah (👤) dengan warna hijau = Clock In,
+    // merah = Clock Out; garis putus-putus menghubungkan titik-titiknya.
+    // Tujuannya: minimap di halaman ini menampilkan HASIL ATTENDANCE,
+    // sama seperti "Minimap Lokasi Absensi" di /face-attendance/rekap.
+    function renderScanMarkersProfile() {
+        if (!miniMapProfile) return;
+
+        scanMarkersProfile.forEach(m => {
+            try { miniMapProfile.removeLayer(m); } catch (e) {}
+        });
+        scanMarkersProfile = [];
+
+        const points = getFaScanPoints().filter(p =>
+            p && p.lat !== null && p.lng !== null &&
+            !isNaN(parseFloat(p.lat)) && !isNaN(parseFloat(p.lng))
+        );
+
+        // Badge + teks jumlah absensi selalu diperbarui, walau tidak ada
+        // titik (status jadi "Belum Absensi").
+        updateMiniMapStatusProfile();
+
+        if (points.length === 0) return;
+
+        const scanPts = [];
+
+        points.forEach((p, idx) => {
+            const isIn = p.type === 'in';
+            const bg = isIn ? '#1cc88a' : '#e74a3b';
+            const label = (isIn ? 'Clock In' : 'Clock Out') + (p.time ? ' ' + p.time : '');
+            const slat = parseFloat(p.lat);
+            const slng = parseFloat(p.lng);
+            const sAcc = (p.acc !== null && p.acc !== undefined && !isNaN(parseFloat(p.acc)))
+                ? Math.round(parseFloat(p.acc)) : null;
+
+            scanPts.push([slat, slng]);
+
+            try {
+                const icon = L.divIcon({
+                    className: 'custom-face-marker',
+                    html: '<div style="background:' + bg + ';color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:13px;border:2px solid #fff;">&#128100;</div>',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+
+                const mk = L.marker([slat, slng], { icon: icon }).addTo(miniMapProfile);
+                mk.bindPopup(
+                    '<strong>' + label + '</strong>' +
+                    (sAcc !== null ? '<br>Akurasi ±' + sAcc + ' m' : '')
+                );
+                mk.bindTooltip(label, { direction: 'top', offset: [0, -12] });
+                scanMarkersProfile.push(mk);
+            } catch (e) {
+                console.warn('[FaceAttendance] Gagal gambar marker scan:', e);
+            }
+        });
+
+        // Garis penghubung antar scan (urutan waktu) bila ada >= 2 titik.
+        if (scanPts.length >= 2) {
+            try {
+                const line = L.polyline(scanPts, {
+                    color: '#4e73df',
+                    weight: 2,
+                    opacity: 0.55,
+                    dashArray: '6,6'
+                }).addTo(miniMapProfile);
+                scanMarkersProfile.push(line);
+            } catch (e) {}
+        }
+
+        // Fokus ke titik-titik absensi (bukan ke posisi GPS live).
+        try {
+            const bounds = L.latLngBounds(scanPts);
+            if (bounds.isValid()) {
+                miniMapProfile.fitBounds(bounds, { padding: [35, 35], maxZoom: 17 });
+            }
+        } catch (e) {}
+    }
+
+    // PERBAIKAN V33 (2026-11-05): fungsi toggleCameraCard() dan
+    // restoreCameraCardState() DIHAPUS. Card Kamera Presensi (beserta
+    // id="cameraCardBody") sudah tidak ada di markup, jadi kedua fungsi
+    // ini tidak punya target dan hanya jadi kode mati yang bisa
+    // membingungkan. Kamera sekarang selalu tampil di card itself.
+
+    // PERBAIKAN V34 (2026-11-05): fungsi focusOnUserProfile() DIHAPUS.
+    // Dulu dipakai untuk auto-zoom ke posisi GPS LIVE. Sekarang minimap
+    // menampilkan HASIL ATTENDANCE, jadi zoom ditentukan oleh
+    // fitBounds() ke titik-titik absensi (lihat renderScanMarkersProfile).
+    // Fungsi ini jadi kode mati kalau tidak dihapus.
 
     function initMiniMapProfile() {
         if (miniMapProfile) return;
@@ -762,84 +1244,120 @@
             return;
         }
 
-        if (activeLocations && activeLocations.length > 0) {
-            let bounds = [];
-            activeLocations.forEach(loc => {
-                if (loc.polygon_geojson) {
-                    try {
-                        let geo = JSON.parse(loc.polygon_geojson);
-                        let poly = L.geoJSON(geo, {
-                            style: {
-                                color: '#4e73df',
-                                fillColor: '#4e73df',
-                                fillOpacity: 0.3,
-                                weight: 2
-                            }
-                        }).bindPopup('<b>' + loc.name + '</b><br>Area Presensi Resmi');
-                        polyGroupProfile.addLayer(poly);
-                        bounds.push(poly.getBounds());
-                    } catch(e) {}
-                }
-            });
-            if (bounds.length > 0) {
-                let group = new L.featureGroup(bounds.map(b => L.rectangle(b)));
-                // PERBAIKAN: jangan fitBounds ke seluruh area geofencing di sini.
-                // Mini Map harus fokus ke titik GPS user, bukan ke seluruh area
-                // terdaftar (area yang jauh membuat bounds sangat lebar -> peta
-                // zoom-out ke skala regional/whole island).
-                // View awal dibiarkan pada koordinat user (di-set oleh updateMiniMapProfile).
-                void group;
-            }
-        }
+        // PERBAIKAN V34 (2026-11-05): polygon lokasi kerja sekarang digambar
+        // oleh renderLocationPolygonsProfile() supaya warnanya bisa membedakan
+        // polygon yang memuat titik absensi (hijau) vs polygon lain (biru/abu),
+        // sama seperti halaman rekap. Blok lama yang menggambar semua polygon
+        // biru DISEKIPSI supaya tidak ada polygon dobel.
+        renderLocationPolygonsProfile();
+
+        // PERBAIKAN V32.8: gambar marker scan segera setelah peta siap, supaya
+        // marker terlihat walau GPS belum selesai diambil.
+        renderScanMarkersProfile();
     }
 
+    // PERBAIKAN V34 (2026-11-05): minimap kini menampilkan HASIL ATTENDANCE,
+    // sama seperti "Minimap Lokasi Absensi" di /face-attendance/rekap.
+    //   - Marker posisi GPS LIVE ("Posisi Anda") DIHAPUS supaya tidak
+    //     mendominasi peta. Peta fokus ke titik-titik absensi.
+    //   - Polygon lokasi kerja digambar dengan warna:
+    //       hijau  = polygon yang memuat titik absensi (match)
+    //       biru   = polygon aktif lain
+    //       abu    = polygon non-aktif
+    //   - Fungsi GPS di halaman ini TETAP dipakai untuk gerbang kamera
+    //     (harus di dalam area + di dalam window) -- hanya visualnya yang
+    //     berubah.
     function updateMiniMapProfile(lat, lng, accuracy, inside) {
         initMiniMapProfile();
         if (!miniMapProfile) return;
 
-        if (userCircleProfile) miniMapProfile.removeLayer(userCircleProfile);
-        if (userMarkerProfile) miniMapProfile.removeLayer(userMarkerProfile);
+        // PERBAIKAN V34: marker posisi GPS live sudah dihapus, jadi tidak
+        // ada lagi layer yang perlu dibersihkan di sini.
 
-        let color = inside ? '#1cc88a' : '#e74a3b';
+        // Gambar ulang polygon lokasi kerja dengan pewarnaan match.
+        renderLocationPolygonsProfile();
 
-        userCircleProfile = L.circle([lat, lng], {
-            radius: Math.max(accuracy, 15),
-            color: color,
-            fillColor: color,
-            fillOpacity: 0.2,
-            weight: 1
-        }).addTo(miniMapProfile);
+        // Gambar marker untuk SETIAP scan face attendance hari ini.
+        renderScanMarkersProfile();
 
-        userMarkerProfile = L.circleMarker([lat, lng], {
-            radius: 6,
-            color: '#ffffff',
-            fillColor: color,
-            fillOpacity: 1,
-            weight: 2
-        }).addTo(miniMapProfile).bindPopup('<b>Posisi Anda</b><br>' + (inside ? '<span class="text-success">Dalam Area Presensi</span>' : '<span class="text-danger">Di Luar Area</span>')).openPopup();
+        // Badge + teks jumlah absensi (helper dipanggil juga dari
+        // renderScanMarkersProfile, di sini untuk memastikan status GPS
+        // ikut terupdate bila belum ada scan sama sekali).
+        updateMiniMapStatusProfile();
+    }
 
-        // PERBAIKAN (inti): auto-zoom ke titik GPS user.
-        // Sebelumnya: fitBounds(area geofencing + user) -> kalau ada area yang
-        // jauh, peta ikut zoom-out sehingga lokasi user cuma titipan kecil.
-        // Sekarang: setView ke koordinat user dengan zoom yang dihitung dari
-        // akurasi GPS, dibatasi agar tidak pernah tampil terlalu jauh.
-        focusOnUserProfile(miniMapProfile, lat, lng, accuracy);
+    // PERBAIKAN V34 (2026-11-05): gambar polygon lokasi kerja dengan
+    // pewarnaan seperti halaman rekap (hijau bila memuat titik absensi).
+    function renderLocationPolygonsProfile() {
+        if (!miniMapProfile) return;
 
-        const statusBadge = document.getElementById('miniMapProfileStatus');
-        const accuracyText = document.getElementById('miniMapAccuracyText');
+        if (polyGroupProfile) {
+            try { miniMapProfile.removeLayer(polyGroupProfile); } catch (e) {}
+        }
+        polyGroupProfile = L.featureGroup().addTo(miniMapProfile);
 
-        if (statusBadge) {
-            if (inside) {
-                statusBadge.className = 'badge badge-success small';
-                statusBadge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Dalam Area';
-            } else {
-                statusBadge.className = 'badge badge-danger small';
-                statusBadge.innerHTML = '<i class="fas fa-times-circle mr-1"></i> Luar Area';
+        const points = getFaScanPoints().filter(p =>
+            p && p.lat !== null && p.lng !== null &&
+            !isNaN(parseFloat(p.lat)) && !isNaN(parseFloat(p.lng))
+        );
+
+        let matchedName = null;
+        for (let i = 0; i < points.length; i++) {
+            const loc = findLocationByCoordsProfile(activeLocations, parseFloat(points[i].lat), parseFloat(points[i].lng));
+            if (loc) { matchedName = loc.name; break; }
+        }
+
+        if (!activeLocations || activeLocations.length === 0) return;
+
+        activeLocations.forEach(loc => {
+            if (!loc.polygon_geojson) return;
+            try {
+                const geo = JSON.parse(loc.polygon_geojson);
+                const isActive = loc.is_active !== false;
+                const isMatched = matchedName !== null && loc.name === matchedName;
+                const color = isMatched ? '#1cc88a' : (isActive ? '#4e73df' : '#858796');
+                const fillOpacity = isMatched ? 0.25 : (isActive ? 0.15 : 0.08);
+
+                const poly = L.geoJSON(geo, {
+                    style: {
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: fillOpacity,
+                        weight: isMatched ? 3 : 2
+                    }
+                }).bindPopup(
+                    '<strong>' + (loc.name || 'Lokasi Kerja') + '</strong><br>' +
+                    'Status: ' + (isActive ? 'Aktif' : 'Non-aktif')
+                );
+                polyGroupProfile.addLayer(poly);
+            } catch (e) {}
+        });
+    }
+
+    // PERBAIKAN V34: helper point-in-polygon versi client untuk mencari
+    // polygon lokasi kerja yang memuat koordinat absensi. Sama seperti
+    // findLocationByCoords() di halaman rekap.
+    function findLocationByCoordsProfile(locations, lat, lng) {
+        if (!locations || !locations.length) return null;
+        for (let i = 0; i < locations.length; i++) {
+            const coords = locations[i].coordinates;
+            if (!coords || coords.length < 3) continue;
+            let inside = false;
+            const n = coords.length;
+            let j = n - 1;
+            for (let k = 0; k < n; k++) {
+                const lngI = parseFloat(coords[k][0]);
+                const latI = parseFloat(coords[k][1]);
+                const lngJ = parseFloat(coords[j][0]);
+                const latJ = parseFloat(coords[j][1]);
+                const intersect = ((latI > lat) !== (latJ > lat)) &&
+                    (lng < (lngJ - lngI) * (lat - latI) / ((latJ - latI) || 0.0000001) + lngI);
+                if (intersect) inside = !inside;
+                j = k;
             }
+            if (inside) return locations[i];
         }
-        if (accuracyText) {
-            accuracyText.innerHTML = 'Akurasi GPS: <strong>±' + accuracy + '</strong> meter';
-        }
+        return null;
     }
 
     // Ray-casting polygon intersection
@@ -1039,12 +1557,40 @@
         }
 
         if (!timeOk) {
-            reasons.push({
-                icon: 'fas fa-clock',
-                title: 'Belum Memasuki Window Absensi',
-                desc: 'Waktu sekarang belum masuk window clock in atau clock out. '
-                    + 'Kamera dimatikan otomatis. Window absensi Anda: ' + windowText + '.'
-            });
+            // ============================================================
+            // PERBAIKAN V35 (2026-11-05): TAMBAHKAN KASUS "WINDOW SUDAH
+            // LEWAT" — ini akar masalah yang dilaporkan user.
+            //
+            // DULU: di luar window apa pun selalu muncul teks
+            // "Belum Memasuki Window Absensi" yang menyesatkan, karena
+            // user yang clock in jam 07:47 dan sekarang jam 21:39
+            // (window Clock Out 17:00-21:00 sudah lewat) tetap diberi
+            // tahu "waktu sekarang belum masuk window".
+            //
+            // SEKARANG: bila sudah Clock In DAN sekarang sudah melewati
+            // akhir window Clock Out, teksnya eksplisit menyatakan
+            // bahwa presensi TIDAK BISA dilakukan.
+            // ============================================================
+            const nowMs = Date.now();
+            const sudahLewatSemuaWindow = (nowMs > clockOutEndMs)
+                || (nowMs > clockInEndMs && nowMs > clockOutEndMs);
+
+            if (hasClockIn && !hasClockOut && sudahLewatSemuaWindow) {
+                reasons.push({
+                    icon: 'fas fa-ban',
+                    title: 'Waktu Clock Out Sudah Lewat, Anda Tidak Bisa Melakukan Presensi',
+                    desc: 'Window Clock Out (' + clockOutStartStr + '-' + clockOutEndStr
+                        + ') WIB sudah lewat. Presensi tidak dapat dilakukan sampai '
+                        + 'window berikutnya. Kamera dimatikan otomatis.'
+                });
+            } else {
+                reasons.push({
+                    icon: 'fas fa-clock',
+                    title: 'Belum Memasuki Window Absensi',
+                    desc: 'Waktu sekarang belum masuk window clock in atau clock out. '
+                        + 'Kamera dimatikan otomatis. Window absensi Anda: ' + windowText + '.'
+                });
+            }
         }
 
         if (reasons.length === 0) return;
@@ -1063,7 +1609,18 @@
             //    salah satu alasannya "sedang memeriksa area" (GPS belum
             //    selesai), judulnya tetap "Memeriksa Area..." supaya user
             //    tahu itu sementara, bukan error permanen.
-            if (reasons.length > 1) {
+            //
+            // PERBAIKAN V35 (2026-11-05): bila SUDAH Clock In DAN window
+            // Clock Out sudah lewat, status "tidak bisa presensi" harus
+            // jadi JUDUL UTAMA — bukan ditenggelkan jadi "Kamera Belum
+            // Dapat Digunakan". Ini yang dilaporkan user: jam sudah lewat
+            // tapi status masih terlihat seperti sekadar masalah kamera.
+            const expiredReason = reasons.find(function(r) {
+                return r.title.indexOf('Waktu Clock Out Sudah Lewat') === 0;
+            });
+            if (expiredReason) {
+                phTitle.innerText = expiredReason.title;
+            } else if (reasons.length > 1) {
                 const checking = reasons.some(function(r) {
                     return r.title.indexOf('Memeriksa') === 0;
                 });
@@ -1098,58 +1655,57 @@
      * @param {boolean} inClockOut sekarang di window clock out
      */
     function updateWindowWaitBanner(inClockIn, inClockOut, masihAdaKerjaan) {
+        // ============================================================
+        // PERBAIKAN V35 (2026-11-05) — BANNER WINDOW DIHAPUS TOTAL.
+        // ============================================================
+        // Permintaan user: hapus elemen banner "Window Presensi Hari Ini
+        // Sudah Berakhir" beserta sub-elemennya (#windowWaitTitle,
+        // #windowWaitDesc, #windowWaitRange, #windowWaitCountdown).
+        //
+        // Fungsi ini TETAP ADA karena dipanggil dari
+        // evaluateCameraGate() tiap detik — tapi sekarang hanya_RESET
+        // placeholder kamera dengan teks ringkas, tanpa banner.
+        //
+        // Catatan: #windowWaitBanner sendiri masih ada di DOM (div
+        // kosong, class d-none) supaya tidak ada error ReferenceError
+        // bila ada pemanggilan lain.
+        // ============================================================
         const banner = document.getElementById('windowWaitBanner');
-        if (!banner) return;      // halaman "Presensi Selesai" tidak punya banner
+        if (banner) banner.classList.add('d-none');
 
-        // PERBAIKAN 23 (2026-11-02): banner tampil juga saat berada DI DALAM
-        // window tetapi aksi untuk window itu sudah selesai (mis. sudah
-        // clock in di window Clock In). Dulu banner hanya muncul di luar
-        // window, sehingga user yang sudah clock in melihat kamera nyala
-        // tanpa penjelasan apa pun.
+        // Kamera boleh nyala -> tidak ada yang perlu ditulis.
+        if (masihAdaKerjaan) return;
 
-        // Kamera boleh nyala -> sembunyikan banner, selesai.
-        if (masihAdaKerjaan) {
-            banner.classList.add('d-none');
-            return;
-        }
-
-        // ---- Tampilkan banner ----
-        banner.classList.remove('d-none');
-
-        const title = document.getElementById('windowWaitTitle');
-        const desc  = document.getElementById('windowWaitDesc');
-        const cd    = document.getElementById('windowWaitCountdown');
         const nowMs = Date.now();
+        const phIcon  = document.getElementById('placeholderIcon');
+        const phTitle = document.getElementById('placeholderTitle');
+        const phDesc  = document.getElementById('placeholderDesc');
+        const phBtn   = document.getElementById('placeholderBtnContainer');
 
         let judul, keterangan;
 
         // Kasus 1: sudah clock in, window Clock In masih berjalan.
-        // (user tidak perlu memindai lagi sampai window Clock Out)
         if (inClockIn && hasClockIn && !hasClockOut) {
-            judul = 'Clock In Sudah Tercatat — Menunggu Window Clock Out';
-            keterangan = 'Anda sudah Clock In hari ini. Kamera dimatikan karena '
-                + 'tidak ada yang perlu dipindai. Window Clock Out dibuka pukul '
+            judul = 'Clock In Sudah Tercatat';
+            keterangan = 'Anda sudah Clock In hari ini. Window Clock Out dibuka pukul '
                 + clockOutStartStr + ' WIB.';
         }
-        // Kasus 2: sudah clock out (di window Clock Out maupun setelahnya).
+        // Kasus 2: sudah clock out -> presensi hari ini selesai.
         else if (inClockOut && hasClockOut) {
-            judul = 'Clock Out Sudah Tercatat — Presensi Selesai';
-            keterangan = 'Presensi hari ini sudah lengkap. Kamera dimatikan otomatis. '
-                + 'Presensi berikutnya menunggu window Clock In berikutnya.';
+            judul = 'Presensi Hari Ini Selesai';
+            keterangan = 'Presensi hari ini sudah lengkap. Presensi berikutnya menunggu '
+                + 'window Clock In berikutnya.';
         }
         // Kasus 3: terlalu pagi (sebelum window Clock In dibuka).
         else if (nowMs < clockInStartMs) {
             judul = 'Menunggu Window Clock In';
-            keterangan = 'Window Clock In dibuka pukul ' + clockInStartStr
-                + ' WIB. Kamera dimatikan otomatis dan akan menyala sendiri '
-                + 'begitu window dibuka.';
+            keterangan = 'Window Clock In dibuka pukul ' + clockInStartStr + ' WIB.';
         }
         // Kasus 4: di antara dua window.
         else if (nowMs > clockInEndMs && nowMs < clockOutStartMs) {
             judul = 'Menunggu Window Clock Out';
             keterangan = 'Window Clock In sudah ditutup pukul ' + clockInEndStr
-                + ' WIB. Window Clock Out dibuka pukul ' + clockOutStartStr
-                + ' WIB. Kamera dimatikan otomatis sampai window dibuka.';
+                + ' WIB. Window Clock Out dibuka pukul ' + clockOutStartStr + ' WIB.';
         }
         // Kasus 5: sudah lewat semua window hari ini.
         else {
@@ -1161,29 +1717,12 @@
         }
 
         // Tulis hanya bila berubah -> mencegah kedipan teks tiap detik.
-        if (title && title.innerText !== judul) title.innerText = judul;
-        if (desc && desc.innerText !== keterangan) desc.innerText = keterangan;
+        if (phTitle && phTitle.innerText !== judul) phTitle.innerText = judul;
+        if (phDesc && phDesc.innerText !== keterangan) phDesc.innerText = keterangan;
 
-        // Hitung mundur ke batas window berikutnya (informasi bantu, bukan syarat).
-        if (cd) {
-            let targetMs = null;
-            if (nowMs < clockInStartMs)      targetMs = clockInStartMs;
-            else if (nowMs < clockOutStartMs) targetMs = clockOutStartMs;
-
-            if (targetMs === null) {
-                cd.innerText = '';
-            } else {
-                let sisa = Math.max(0, Math.floor((targetMs - nowMs) / 1000));
-                const j = Math.floor(sisa / 3600);
-                const m = Math.floor((sisa % 3600) / 60);
-                const d = sisa % 60;
-                const bagian = [];
-                if (j > 0) bagian.push(j + ' jam');
-                if (m > 0) bagian.push(m + ' menit');
-                bagian.push(d + ' detik');
-                cd.innerText = 'Window berikutnya dalam ' + bagian.join(' ') + '.';
-            }
-        }
+        // Ikon jam + sembunyikan tombol "Mulai Kamera" (kamera wajib mati).
+        if (phIcon) phIcon.className = 'fas fa-clock fa-3x text-warning mb-3';
+        if (phBtn) phBtn.innerHTML = '';
     }
 
     /**
@@ -1212,6 +1751,8 @@
         } else {
             // Server tidak mengirim info aksi: pakai nextAction sebagai
             // petunjuk TERAKHIR. Ini hanya cadangan, bukan jalur utama.
+            // PERBAIKAN V35: 'expired' BUKAN 'clock_out' -- jangan set
+            // hasClockOut=true karena itu akan mengarang presensi.
             if (nextAction === 'clock_in') hasClockIn = true;
             else if (nextAction === 'clock_out') hasClockOut = true;
         }
@@ -1488,10 +2029,10 @@
     }
 
     function refreshLocation() {
-        // Badge status GPS berada di card Data Karyawan (Mini Map Lokasi).
-        // Badge card Kamera ("cameraBadge") TIDAK disentuh di sini —
-        // kamera dan GPS adalah dua hal yang terpisah.
-        const badge = document.getElementById('miniMapProfileStatus');
+        // PERBAIKAN V34 (2026-11-05): badge minimap sekarang menampilkan
+        // JUMLAH ABSENSI (bukan status GPS), jadi variabel `badge` tidak
+        // lagi dipakai di sini. Status GPS ditulis ke elemen terpisah
+        // #faGpsStatusText supaya kedua informasi tidak saling menimpa.
         const alertBox = document.getElementById('livenessAlertBox');
         const alertText = document.getElementById('livenessInstructionText');
 
@@ -1514,10 +2055,10 @@
         }
 
         if (!navigator.geolocation) {
-            if (badge) {
-                badge.className = 'badge badge-danger';
-                badge.innerHTML = 'GPS Tidak Didukung';
-            }
+            // PERBAIKAN V34 (2026-11-05): badge minimap menampilkan JUMLAH
+            // ABSENSI, jadi pesan GPS ditulis ke elemen terpisah.
+            const gpsStatusEl0 = document.getElementById('faGpsStatusText');
+            if (gpsStatusEl0) gpsStatusEl0.textContent = 'GPS Tidak Didukung Browser';
             if (alertText) alertText.innerHTML = 'Browser tidak mendukung GPS Geolocation.';
             // PERBAIKAN (2026-11-03): FAIL-CLOSED.
             // Dulu di sini gpsVerified = true sehingga kamera tetap nyala
@@ -1581,9 +2122,12 @@
                     isGpsValid = true;
                     gpsChecked = true;
                     gpsVerified = true;   // GPS OK + DI DALAM area → syarat 1 terpenuhi
-                    if (badge) {
-                        badge.className = 'badge badge-success';
-                        badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Area Kerja (±' + accuracy + 'm)';
+                    // PERBAIKAN V34 (2026-11-05): badge minimap menampilkan
+                    // JUMLAH ABSENSI, jadi status GPS ditulis ke elemen
+                    // terpisah (faGpsStatusText) supaya tidak saling menimpa.
+                    const gpsStatusOk = document.getElementById('faGpsStatusText');
+                    if (gpsStatusOk) {
+                        gpsStatusOk.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Dalam Area Kerja (±' + accuracy + 'm)';
                     }
                     // Syarat 1 (area) terpenuhi. startCamera() masih akan memeriksa
                     // syarat 2 (window waktu) sebelum benar-benar menyalakan kamera.
@@ -1595,9 +2139,9 @@
                     // (Ketentuan user 2026-11-03: "jika gps diluar area kamera
                     // tidak menyala".)
                     gpsVerified = false;
-                    if (badge) {
-                        badge.className = 'badge badge-danger';
-                        badge.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> Di Luar Area Kerja';
+                    const gpsStatusOut = document.getElementById('faGpsStatusText');
+                    if (gpsStatusOut) {
+                        gpsStatusOut.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> Di Luar Area Kerja';
                     }
                     if (alertText) {
                         alertText.innerHTML = 'Posisi Anda terdeteksi di luar area lokasi presensi. Kamera tidak dapat dimulai. Mendekatlah ke area kerja, lalu tekan "Cek Ulang GPS".';
@@ -1624,10 +2168,13 @@
                 // dinyalakan. (Ketentuan user 2026-11-03.)
                 gpsChecked = true;
                 gpsVerified = false;
-                if (badge) {
-                    badge.className = 'badge badge-light border small text-muted';
-                    badge.innerHTML = 'GPS Tidak Tersedia';
-                }
+                // PERBAIKAN V34 (2026-11-05): badge minimap sekarang
+                // menampilkan JUMLAH ABSENSI, bukan status GPS. Jadi di sini
+                // badge TIDAK lagi ditulis; pesan GPS dipindah ke elemen
+                // status GPS terpisah supaya dua informasi tidak saling
+                // menimpa.
+                const gpsStatusEl = document.getElementById('faGpsStatusText');
+                if (gpsStatusEl) gpsStatusEl.textContent = 'GPS Tidak Tersedia';
                 console.warn('[FaceAttendance] GPS gagal, kamera tidak dinyalakan:', err);
                 if (cameraActive) stopCamera();
                 evaluateCameraGate();   // tampilkan "Di Luar Area Kerja"
@@ -1796,11 +2343,32 @@
             }
         }
 
-        const video = document.getElementById('webcam');
         const ph = document.getElementById('cameraPlaceholder');
         const phIcon = document.getElementById('placeholderIcon');
         const phTitle = document.getElementById('placeholderTitle');
         const phDesc = document.getElementById('placeholderDesc');
+
+        // PERBAIKAN V33 (2026-11-05): <video id="webcam"> hanya ada di DOM
+        // kalau Blade merender blok kamera (bukan saat presensi sudah
+        // 'completed'). evaluateCameraGate() tetap berjalan tiap detik dan
+        // SELALU memanggil startCamera(), sehingga pada kondisi itu
+        // `document.getElementById('webcam')` mengembalikan null dan baris
+        // `video.srcObject = stream` melempar:
+        //   TypeError: Cannot set properties of null (setting 'srcObject')
+        // Guard di bawahstop crash tanpa merusak alur auto-presensi.
+        //
+        // Catatan: video diambil ULANG di sini (bukan hanya di baris atas)
+        // karena elemen bisa di-re-render / di-mount ulang oleh DOM.
+        const video = document.getElementById('webcam');
+        if (!video) {
+            cameraActive = false;
+            cameraStarting = false;
+            cameraFailed = false;
+            cameraRetryAfter = 0;
+            // Jangan tampilkan placeholder kamera kalau memang tidak ada
+            // elemen video (mis. presensi hari ini sudah selesai).
+            return;
+        }
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             cameraFailed = true;
@@ -2213,7 +2781,10 @@
         const overlayText = document.getElementById('overlayText');
         const guideBox = document.getElementById('scannerGuide');
 
-        if (!video || video.paused || video.ended || isScanning || nextAction === 'completed') return;
+        // PERBAIKAN V35 (2026-11-05): 'expired' (window Clock Out sudah lewat)
+        // juga harus menghentikan loop deteksi — sama seperti 'completed'.
+        if (!video || video.paused || video.ended || isScanning
+            || nextAction === 'completed' || nextAction === 'expired') return;
 
         if (!isModelLoaded) {
             setTimeout(detectFaceLoop, 400);
@@ -2435,9 +3006,9 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // PERBAIKAN (2026-11-04): pulihkan status buka/tutup card Kamera Presensi.
-        // Default TERTUTUP; user yang pernah membukanya akan ingat.
-        restoreCameraCardState();
+        // PERBAIKAN V33 (2026-11-05): restoreCameraCardState() dihapus
+        // bersamaan dengan card cameraCardBody. Kamera tidak lagi punya
+        // state buka/tutup; card-nya selalu tampil.
 
         // PERBAIKAN (2026-11-03): kamera TIDAK lagi dinyalakan langsung di
         // sini. evaluateCameraGate() yang memutuskan, dan dia hanya menyalakan
@@ -2460,6 +3031,42 @@
         // (autoStartCameraOnGps) akan memicu evaluateCameraGate() lagi supaya
         // kamera langsung mencoba menyala kalau syarat waktunya juga terpenuhi.
         refreshLocation();
+    });
+</script>
+
+{{-- PERBAIKAN V32.8 (2026-11-05): modal untuk memperbesar wajah yang
+     TERCAPTURE saat scan (klik thumbnail di tabel Riwayat Scan). --}}
+<div class="modal fade" id="faFaceZoomModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-dark text-white">
+                <h6 class="modal-title font-weight-bold mb-0" id="faFaceZoomTitle">
+                    <i class="fas fa-camera mr-1"></i> Wajah Tercapture
+                </h6>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-0 bg-dark">
+                <img id="faFaceZoomImg" src="" alt="Wajah Tercapture" style="width:100%;display:block;">
+            </div>
+            <div class="modal-footer py-2 bg-dark border-0">
+                <small id="faFaceZoomMeta" class="text-white-50 mr-auto"></small>
+                <button type="button" class="btn btn-sm btn-outline-light" data-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // PERBAIKAN V32.8 (2026-11-05): klik thumbnail wajah -> tampilkan besar.
+    $(document).on('click', '.fa-scan-thumb', function (e) {
+        e.preventDefault();
+        var $t = $(this);
+        $('#faFaceZoomImg').attr('src', $t.data('img') || '');
+        $('#faFaceZoomTitle').html('<i class="fas fa-camera mr-1"></i> Wajah ' + ($t.data('type') || ''));
+        $('#faFaceZoomMeta').text('Jam: ' + ($t.data('time') || '-'));
+        $('#faFaceZoomModal').modal('show');
     });
 </script>
 

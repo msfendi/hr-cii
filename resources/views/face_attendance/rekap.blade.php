@@ -39,21 +39,23 @@
         background: #eef1f7;
         overflow: hidden;
     }
-    /* PERBAIKAN (2026-11-03): kotak foto wajah dibuat SAMA TINGGI
-       dengan peta supaya keduanya sejajar dan tidak ada ruang kosong. */
+    /* PERBAIKAN V2 (2026-11-05): kotak foto wajah tidak lagi tinggi FIXED
+       260px supaya grid multi-foto (clock in + clock out) muat.
+       Tinggi auto dengan batas maksimal + scroll internal. */
     .face-detail-box {
-        height: 260px;
         min-height: 260px;
+        max-height: 340px;
         width: 100%;
         border: 1px solid #e3e6f0;
         border-radius: 8px;
         background: #f8f9fc;
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        padding: 6px;
+        justify-content: flex-start;
+        padding: 8px;
     }
     .face-detail-box .face-detail-main {
         max-height: 200px;
@@ -80,11 +82,38 @@
         cursor: pointer;
         flex: 0 0 auto;
     }
+    /* PERBAIKAN V2 (2026-11-05): grid multi-foto wajah. */
+    .face-detail-box .face-grid {
+        display: grid;
+        gap: 10px;
+        width: 100%;
+        align-items: start;
+    }
+    .face-detail-box .face-grid-item {
+        margin: 0;
+        text-align: center;
+    }
+    .face-detail-box .face-grid-item img {
+        width: 100%;
+        object-fit: contain;
+        background: #fff;
+        border: 2px solid #e3e6f0;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+    .face-detail-box .face-grid-item figcaption {
+        font-size: 11px;
+        line-height: 1.35;
+        margin-top: 4px;
+    }
     @media (max-width: 767.98px) {
-        #miniMapDetail,
-        .face-detail-box {
+        #miniMapDetail {
             height: 220px;
             min-height: 220px;
+        }
+        .face-detail-box {
+            min-height: 220px;
+            max-height: 300px;
         }
     }
     /* PERBAIKAN (2026-11-03): pastikan isi peta Leaflet tidak menimpa
@@ -581,41 +610,43 @@
                     '<i class="fas fa-image fa-2x mb-2 d-block text-secondary"></i>' +
                     'Tidak ada gambar wajah tersimpan.</div>';
             } else {
-                // PERBAIKAN (2026-11-03): foto utama mengisi kotak
-                // .face-detail-box (260px, sama tinggi dengan peta).
-                // Foto tambahan ditampilkan sebagai thumbnail kecil
-                // supaya kotak tidak memanjang dan menyisakan ruang kosong.
-                const first = withImage[0];
-                const srcFirst = first.face_image.indexOf('data:') === 0
-                    ? first.face_image
-                    : 'data:image/jpeg;base64,' + first.face_image;
+                // PERBAIKAN V2 (2026-11-05): SEMUA foto wajah (clock in + clock
+                // out) ditampilkan dengan ukuran sama dalam grid. Sebelumnya
+                // hanya foto pertama yang besar, sisanya thumbnail 44px.
+                const count = withImage.length;
+                const cols = count === 1 ? 1 : (count === 2 ? 2 : 3);
+                const maxH = count === 1 ? 190 : 130;
 
-                const wrap = document.createElement('div');
-                wrap.className = 'face-detail-wrap w-100 d-flex flex-column align-items-center justify-content-center';
-                wrap.innerHTML =
-                    '<img src="' + srcFirst + '" alt="Wajah terakhir" class="face-detail-main">' +
-                    '<div class="small text-muted mt-1 text-center">' +
+                const grid = document.createElement('div');
+                grid.className = 'face-grid';
+                grid.style.display = 'grid';
+                grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+                grid.style.gap = '10px';
+                grid.style.width = '100%';
+                grid.style.alignItems = 'start';
+
+                withImage.forEach(function (d, idx) {
+                    const s = d.face_image.indexOf('data:') === 0
+                        ? d.face_image
+                        : 'data:image/jpeg;base64,' + d.face_image;
+
+                    const cell = document.createElement('figure');
+                    cell.className = 'face-grid-item mb-0';
+                    cell.style.margin = '0';
+                    cell.style.textAlign = 'center';
+                    cell.innerHTML =
+                        '<img src="' + s + '" alt="Wajah ' + (idx + 1) + '" ' +
+                        'style="width:100%;max-height:' + maxH + 'px;object-fit:contain;background:#fff;' +
+                        'border:2px solid #e3e6f0;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.10);">' +
+                        '<figcaption class="small text-muted mt-1" style="font-size:11px;line-height:1.35;">' +
                         '<i class="fas fa-clock mr-1"></i>' +
-                        (first.action_type || 'Absensi') + ' - ' + (first.scan_time || '-') +
-                    '</div>';
-                container.appendChild(wrap);
+                        (d.action_type || 'Absensi') + '<br>' +
+                        '<span class="font-weight-bold text-dark">' + (d.scan_time || '-') + '</span>' +
+                        '</figcaption>';
+                    grid.appendChild(cell);
+                });
 
-                if (withImage.length > 1) {
-                    const strip = document.createElement('div');
-                    strip.className = 'face-detail-strip mt-1';
-                    withImage.slice(1).forEach(function (d, idx) {
-                        const s = d.face_image.indexOf('data:') === 0
-                            ? d.face_image
-                            : 'data:image/jpeg;base64,' + d.face_image;
-                        const th = document.createElement('img');
-                        th.src = s;
-                        th.className = 'face-detail-thumb';
-                        th.alt = 'Wajah ' + (idx + 2);
-                        th.title = (d.action_type || 'Absensi') + ' - ' + (d.scan_time || '-');
-                        strip.appendChild(th);
-                    });
-                    container.appendChild(strip);
-                }
+                container.appendChild(grid);
             }
 
             // Daftar seluruh scan -> disusun sebagai tabel rapi & mudah dibaca.
@@ -665,6 +696,18 @@
                     ? '<span class="text-muted">-</span>'
                     : '<span class="badge badge-light border text-dark">' + acc + '</span>';
 
+                // PERBAIKAN V2 (2026-11-05): kolom Koordinat Attendance.
+                var coordText = '-';
+                if (d.latitude !== null && d.latitude !== undefined && d.latitude !== '' &&
+                    d.longitude !== null && d.longitude !== undefined && d.longitude !== '') {
+                    var clat = parseFloat(d.latitude);
+                    var clng = parseFloat(d.longitude);
+                    if (!isNaN(clat) && !isNaN(clng)) {
+                        coordText = '<span class="font-monospace small" style="font-size:11px;">' +
+                            clat.toFixed(6) + ', ' + clng.toFixed(6) + '</span>';
+                    }
+                }
+
                 rowsHtml +=
                     '<tr>' +
                     '<td class="text-center text-muted align-middle">' + (i + 1) + '</td>' +
@@ -673,6 +716,7 @@
                     '<td class="align-middle">' + modeBadge + '</td>' +
                     '<td class="align-middle">' + (d.action_type || '-') + '</td>' +
                     '<td class="align-middle">' + loc + '</td>' +
+                    '<td class="align-middle">' + coordText + '</td>' +
                     '<td class="text-center align-middle">' + accBadge + '</td>' +
                     '</tr>';
             });
@@ -687,6 +731,7 @@
                 '<th style="width:110px;">Metode</th>' +
                 '<th>Keterangan</th>' +
                 '<th>Lokasi</th>' +
+                '<th>Koordinat</th>' +
                 '<th class="text-center" style="width:85px;">Akurasi</th>' +
                 '</tr>' +
                 '</thead>' +
@@ -695,7 +740,7 @@
                 '</div>';
         }
 
-        function initMap(lat, lng, accuracy, locations) {
+        function initMap(lat, lng, accuracy, locations, allScans) {
             destroyMap();
 
             const el = document.getElementById('miniMapDetail');
@@ -709,7 +754,7 @@
                 attribution: '&copy; OpenStreetMap'
             }).addTo(detailMap);
 
-            // PERBAIKAN (2026-11-03): polygon lokasi kerja digambar untuk
+            // PERBAIKAN V2 (2026-11-05): polygon lokasi kerja digambar untuk
             // SEMUA lokasi (aktif & non-aktif), dengan warna berbeda.
             // Polygon yang memuat titik absensi diberi warna hijau.
             const matchedLoc = findLocationByCoords(locations, lat, lng);
@@ -743,25 +788,59 @@
                 });
             }
 
-            // Marker posisi absensi
-            const markerIcon = L.divIcon({
-                className: 'custom-face-marker',
-                html: '<div style="background:#e74a3b;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:14px;">&#128100;</div>',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14]
+            // PERBAIKAN V2 (2026-11-05): minimap menampilkan SEMUA scan
+            // face attendance pada hari tersebut (clock in + clock out),
+            // bukan hanya scan pertama. Warna marker: hijau = Clock In,
+            // merah = Clock Out. Garis putus-putus menghubungkan titik-titiknya.
+            const scans = Array.isArray(allScans) ? allScans : [];
+            const scanPts = [];
+            let markerIdx = 0;
+
+            scans.forEach(function(s) {
+                if (s.latitude === null || s.latitude === undefined ||
+                    s.longitude === null || s.longitude === undefined) return;
+                const slat = parseFloat(s.latitude);
+                const slng = parseFloat(s.longitude);
+                if (isNaN(slat) || isNaN(slng)) return;
+
+                scanPts.push([slat, slng]);
+
+                const label = (s.action_type || 'Absensi');
+                const isIn = /clock\s*in|masuk/i.test(label);
+                const bg = isIn ? '#1cc88a' : '#e74a3b';
+                const sAcc = (s.accuracy !== null && s.accuracy !== undefined && s.accuracy !== '')
+                    ? Math.round(parseFloat(s.accuracy)) : null;
+                const accTxt = sAcc !== null && !isNaN(sAcc) ? ('Akurasi ±' + sAcc + ' m') : 'Akurasi tidak tersedia';
+                const locName = s.location_resolved || s.location_name || 'Posisi Absensi';
+
+                const icon = L.divIcon({
+                    className: 'custom-face-marker',
+                    html: '<div style="background:' + bg + ';color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:13px;border:2px solid #fff;">&#128100;</div>',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+
+                const mk = L.marker([slat, slng], { icon: icon }).addTo(detailMap);
+                mk.bindPopup(
+                    '<strong>' + label + '</strong> - ' + (s.scan_time || '-') + '<br>' +
+                    locName + '<br>' + accTxt
+                );
+                if (markerIdx === 0) {
+                    detailMarker = mk;
+                }
+                markerIdx++;
             });
 
-            detailMarker = L.marker([lat, lng], { icon: markerIcon }).addTo(detailMap);
-            // PERBAIKAN (2026-11-03): popup marker tidak lagi menampilkan
-            // koordinat mentah (lat, lng), diganti nama lokasi + akurasi.
-            const popupName = (matchedLoc && matchedLoc.name) || 'Posisi Absensi';
-            const accText = (accuracy && accuracy > 0) ? 'Akurasi ±' + Math.round(accuracy) + ' m' : '';
-            detailMarker.bindPopup(
-                '<strong>' + popupName + '</strong><br>' +
-                (accText ? accText : 'Titik lokasi absensi')
-            );
+            if (scanPts.length >= 2) {
+                L.polyline(scanPts, {
+                    color: '#4e73df',
+                    weight: 2,
+                    opacity: 0.55,
+                    dashArray: '6,6'
+                }).addTo(detailMap);
+            }
 
-            // Circle radius akurasi GPS
+            // Circle radius akurasi GPS untuk scan pertama (acuan).
             if (accuracy && accuracy > 0) {
                 detailCircle = L.circle([lat, lng], {
                     radius: accuracy,
@@ -868,7 +947,9 @@
             renderFaceImages(details);
 
             if (!isNaN(lat) && !isNaN(lng)) {
-                initMap(lat, lng, parseFloat(first.accuracy), workLocations);
+                // PERBAIKAN V2 (2026-11-05): kirim SELURUH scan ke minimap
+                // supaya semua titik absensi hari itu tampil (clock in + out).
+                initMap(lat, lng, parseFloat(first.accuracy), workLocations, details);
             } else {
                 destroyMap();
             }

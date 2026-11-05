@@ -258,6 +258,89 @@ class FaceRecognitionService
     }
 
     /**
+     * PERBAIKAN V33 (2026-11-05): pencocokan wajah TERBATAS pada satu NPK.
+     *
+     * Dipakai oleh halaman /face-attendance/login ketika setting
+     * "input NPK dulu" aktif. User sudah mengetik NPK, jadi descriptor
+     * wajahnya hanya perlu dibandingkan dengan data wajah karyawan
+     * dengan NPK tersebut - bukan mencari ke seluruh karyawan.
+     *
+     * Keuntungan:
+     *   1. Tidak mungkin salah mengambil wajah orang lain, karena kandidat
+     *      lain tidak pernah dipertimbangkan sama sekali.
+     *   2. Jauh lebih cepat (hanya 1 baris employee_faces yang dibaca),
+     *      bukan seluruh tabel.
+     *
+     * @param array    $descriptor Descriptor 128 float.
+     * @param string   $npk        NPK karyawan yang diinput user.
+     * @return array{face: EmployeeFace|null, distance: float|null, runner_up: float|null, margin: float|null}
+     */
+    public static function matchByNpk(array $descriptor, string $npk): array
+    {
+        $npk = trim($npk);
+
+        if ($npk === '') {
+            return [
+                'face'      => null,
+                'distance'  => null,
+                'runner_up' => null,
+                'margin'    => null,
+            ];
+        }
+
+        try {
+            $face = EmployeeFace::query()
+                ->where('npk', $npk)
+                ->where('is_active', true)
+                ->whereNotNull('descriptor')
+                ->orderByDesc('is_active')
+                ->orderByDesc('id')
+                ->first();
+        } catch (\Throwable $e) {
+            \Log::warning('FaceRecognitionService::matchByNpk gagal: ' . $e->getMessage());
+
+            return [
+                'face'      => null,
+                'distance'  => null,
+                'runner_up' => null,
+                'margin'    => null,
+            ];
+        }
+
+        if (!$face) {
+            return [
+                'face'      => null,
+                'distance'  => null,
+                'runner_up' => null,
+                'margin'    => null,
+            ];
+        }
+
+        $stored = static::normalizeDescriptor($face->descriptor);
+
+        if ($stored === null) {
+            return [
+                'face'      => null,
+                'distance'  => null,
+                'runner_up' => null,
+                'margin'    => null,
+            ];
+        }
+
+        $distance = static::euclidean($descriptor, $stored);
+
+        // Runner-up tidak ada (hanya satu kandidat), jadi margin = null.
+        // isConfidentMatch() memperlakukan margin null sebagai "lolos",
+        // karena tidak ada kandidat lain yang bisa dibandingkan.
+        return [
+            'face'      => $face,
+            'distance'  => $distance,
+            'runner_up' => null,
+            'margin'    => null,
+        ];
+    }
+
+    /**
      * Apakah hasil pencocokan cukup yakin untuk dipakai.
      */
     public static function isConfidentMatch(array $result, ?float $threshold = null): bool

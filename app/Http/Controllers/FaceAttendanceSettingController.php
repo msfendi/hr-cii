@@ -89,6 +89,17 @@ class FaceAttendanceSettingController extends Controller
             $setting->clock_out_allowance_minutes = (int) $request->input('clock_out_allowance_minutes', 0);
         }
 
+        // PERBAIKAN V33 (2026-11-05): toggle "input NPK dulu" di halaman
+        // /face-attendance/login. Kalau aktif, user wajib mengetik NPK
+        // sebelum kamera dibuka, dan pencocokan wajah hanya dilakukan
+        // terhadap NPK tersebut (lebih akurat, tidak bisa salah orang).
+        //
+        // Disimpan di sini (bukan form terpisah) supaya admin cukup sekali
+        // klik "Simpan" untuk seluruh pengaturan presensi.
+        if (FaceAttendanceSetting::hasAllowanceColumn('is_npk_required_enabled')) {
+            $setting->is_npk_required_enabled = $request->boolean('is_npk_required_enabled');
+        }
+
         $setting->save();
 
         $pesan = 'Pengaturan window presensi wajah berhasil disimpan.';
@@ -98,6 +109,10 @@ class FaceAttendanceSettingController extends Controller
         }
         if (!FaceAttendanceSetting::hasAllowanceColumn('clock_out_allowance_minutes')) {
             $pesan .= ' CATATAN: kolom allowance clock out belum ada di database, nilainya BELUM tersimpan. '
+                    . 'Jalankan "php artisan migrate" lalu simpan ulang.';
+        }
+        if (!FaceAttendanceSetting::hasAllowanceColumn('is_npk_required_enabled')) {
+            $pesan .= ' CATATAN: kolom "Input NPK Dulu" belum ada di database, nilainya BELUM tersimpan. '
                     . 'Jalankan "php artisan migrate" lalu simpan ulang.';
         }
 
