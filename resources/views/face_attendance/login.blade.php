@@ -56,6 +56,8 @@
             100% { transform: scale(1); }
         }
     </style>
+{{-- SweetAlert seragam untuk karyawan sudah resign (PKWT.TKK terisi) --}}
+@include('partials.sweetalert-resign')
 </head>
 <body>
 
@@ -855,6 +857,25 @@
                             window.location.href = data.redirect_url;
                         });
                     } else {
+                        // =======================================================
+                        // PERBAIKAN V31.8 (2026-11-04) - KARYAWAN SUDAH KELUAR
+                        // =======================================================
+                        // Wajah terbaca & cocok, tapi PKWT.TKK terisi ->
+                        // karyawan sudah keluar. Login DITOLAK dan presensi
+                        // tidak dikirim ke server.
+                        if (data.inactive_employee) {
+                            showResignAlert({
+                                message: data.message || 'Data kepegawaian Anda sudah tercatat keluar.',
+                                action : 'Login dan presensi ditolak.',
+                                npk    : data.npk || null
+                            }).then(() => {
+                                isScanning = false;
+                                livenessVerified = !LIVENESS_REQUIRED;
+                                resetLivenessState();
+                            });
+                            return;
+                        }
+
                         Swal.fire({
                             icon: 'error',
                             title: 'Login Ditolak',

@@ -133,21 +133,47 @@
     @media (max-width: 575.98px) {
         #miniMapDetail { height: 240px; min-height: 240px; }
     }
+
+    /* ==========================================================
+       PERBAIKAN 2026-11-04 - MOBILE FRIENDLY /face-attendance/rekap
+       ----------------------------------------------------------
+       Sidebar + navbar dihapus. CSS di bawah memastikan konten
+       rekapitulasi memakai SELURUH lebar layar (dulu terpotong
+       oleh sidebar sehingga tabel terasa sempit).
+       ========================================================== */
+    #wrapper {
+        display: block !important;
+        width: 100% !important;
+        min-height: 100vh !important;
+    }
+    #content-wrapper {
+        width: 100% !important;
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+    }
+    #content {
+        padding-top: 0 !important;
+        top: 0 !important;
+    }
+    @media (max-width: 575.98px) {
+        .container-fluid {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+    }
 </style>
 
 <body id="page-top">
 @include('sweetalert::alert')
 
 <div id="wrapper">
-    @if(Session::has('face_attendance_npk') || auth()->check())
-        @include('layout.sidebar')
-    @endif
+    {{-- PERBAIKAN 2026-11-04: sidebar dihapus agar halaman /face-attendance/rekap
+         menjadi mobile friendly (dulu FULL oleh navbar + sidebar sehingga konten
+         rekapitulasi terasa sempit). --}}
 
     <div id="content-wrapper" class="d-flex flex-column">
         <div id="content">
-            @if(Session::has('face_attendance_npk') || auth()->check())
-                @include('layout.navbar')
-            @endif
+            {{-- PERBAIKAN 2026-11-04: navbar dihapus demi tampilan mobile. --}}
 
             <div class="container-fluid py-3">
 

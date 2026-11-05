@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmployeeFace;
 use App\Models\FaceRecognitionSetting;
 use App\Models\User;
+use App\Services\EmployeeActiveStatusService;
 use App\Services\FaceRecognitionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -431,6 +432,31 @@ class FaceRecognitionController extends Controller
 
         $npk = strtoupper(trim($validated['npk']));
         $birthInput = $validated['tgl_lahir']; // YYMMDD
+
+        // ===============================================================
+        // PERBAIKAN V31.8 (2026-11-04) - CEK STATUS KARYAWAN (PKWT.TKK)
+        // ===============================================================
+        // Dilakukan PALING AWAL, sebelum query data karyawan yang lain.
+        //   - PKWT.TKK NULL     -> karyawan masih aktif, lanjut.
+        //   - PKWT.TKK terisi   -> karyawan sudah keluar, TOLAK. Tidak
+        //                            boleh lanjut ke step 2.
+        //
+        // Menaruh di awal membuat pengecekan jadi gerbang pertama: karyawan
+        // yang sudah keluar langsung ditolak tanpa perlu memuat data lain.
+        // ===============================================================
+        $activeStatus = EmployeeActiveStatusService::check($npk);
+
+        if ($activeStatus['found'] && !$activeStatus['active']) {
+            return response()->json([
+                'status'            => false,
+                'inactive_employee' => true,
+                'npk'               => (string) $npk,
+                'message'           => EmployeeActiveStatusService::inactiveMessage(
+                    $activeStatus['nama'],
+                    $activeStatus['tkk']
+                ),
+            ], 422);
+        }
 
         $employee = DB::connection('cii')->table('PKWT')
             ->where('NPK', $npk)

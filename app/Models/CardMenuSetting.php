@@ -58,7 +58,11 @@ class CardMenuSetting extends Model
 
             $cards[] = [
                 'key'   => $r->key,
-                'name'  => $r->name,
+                // Nama tampilan memakai versi Bahasa Inggris; nilai aslinya
+                // (dari DB) tetap disimpan di 'name_db' supaya halaman
+                // pengaturan admin tetap menampilkan/menyimpan nama asli.
+                'name'  => self::englishLabel($r->key, $r->name),
+                'name_db' => $r->name,
                 'route' => $r->route,
                 'icon'  => $r->icon,
                 'color' => $r->color ?: 'primary',
@@ -66,6 +70,36 @@ class CardMenuSetting extends Model
         }
 
         return $cards;
+    }
+
+    /**
+     * Peta label Bahasa Inggris untuk card menu HRIS.
+     *
+     * Keterangan:
+     *  - Halaman HRIS (display) memakai label Bahasa Inggris.
+     *  - Halaman Pengaturan Card Menu (admin) tetap memakai nilai DB apa
+     *    adanya supaya admin tidak bingung melihat nama yang berubah.
+     *  - Kalau key tidak ada di peta, nama dari DB dipakai apa adanya
+     *    (aman untuk card kustom milik admin).
+     */
+    private static function englishLabel(?string $key, ?string $dbName): string
+    {
+        $map = [
+            'login'              => 'Login',
+            'slip'               => 'Payslip',
+            'career'             => 'Career',
+            'recruitment'        => 'Recruitment Announcement',
+            'food-orders'        => 'Food Orders',
+            'leave-request'      => 'Leave Request',
+            'face-attendance'    => 'Face Attendance',
+            'self-register-face' => 'Face Self Registration',
+        ];
+
+        if ($key !== null && array_key_exists($key, $map)) {
+            return $map[$key];
+        }
+
+        return $dbName ?: '';
     }
 
     /**
@@ -280,13 +314,13 @@ class CardMenuSetting extends Model
     {
         $cards = [
             ['key' => 'login',              'name' => 'Login',                    'route' => '/login',                      'icon' => 'fas fa-users',              'color' => 'primary'],
-            ['key' => 'slip',               'name' => 'Lihat Slip',               'route' => '/employee-payroll',          'icon' => 'fas fa-file-invoice-dollar', 'color' => 'primary'],
+            ['key' => 'slip',               'name' => 'Payslip',                  'route' => '/employee-payroll',          'icon' => 'fas fa-file-invoice-dollar', 'color' => 'primary'],
             ['key' => 'career',             'name' => 'Career',                   'route' => '/lowongan',                  'icon' => 'fas fa-briefcase',          'color' => 'success'],
             ['key' => 'recruitment',        'name' => 'Recruitment Announcement', 'route' => '/portal-recruitment-status', 'icon' => 'fa fa-bullhorn',            'color' => 'success'],
             ['key' => 'food-orders',        'name' => 'Food Orders',              'route' => '/food-orders/scan',          'icon' => 'fas fa-utensils',           'color' => 'primary'],
-            ['key' => 'leave-request',      'name' => 'Pengajuan Cuti',           'route' => '/pengajuan-cuti/login',      'icon' => 'fas fa-calendar',           'color' => 'warning'],
-            ['key' => 'face-attendance',    'name' => 'Presensi Wajah',           'route' => '/face-attendance/login',     'icon' => 'fas fa-camera',             'color' => 'primary'],
-            ['key' => 'self-register-face', 'name' => 'Self Register Wajah',      'route' => '/self-register-face',        'icon' => 'fas fa-id-badge',           'color' => 'info'],
+            ['key' => 'leave-request',      'name' => 'Leave Request',            'route' => '/pengajuan-cuti/login',      'icon' => 'fas fa-calendar',           'color' => 'warning'],
+            ['key' => 'face-attendance',    'name' => 'Face Attendance',          'route' => '/face-attendance/login',     'icon' => 'fas fa-camera',             'color' => 'primary'],
+            ['key' => 'self-register-face', 'name' => 'Face Self Registration',   'route' => '/self-register-face',        'icon' => 'fas fa-id-badge',           'color' => 'info'],
         ];
 
         // Lengkapi dengan `order` + `is_visible` supaya aman dipakai view.

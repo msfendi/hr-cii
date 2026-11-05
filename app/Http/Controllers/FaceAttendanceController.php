@@ -10,6 +10,7 @@ use App\Models\EmployeeFace;
 use App\Models\FaceAttendanceLog;
 use App\Services\FaceRecognitionService;
 use App\Services\AttendanceNonceService;
+use App\Services\EmployeeActiveStatusService;
 use Carbon\Carbon;
 
 class FaceAttendanceController extends Controller
@@ -418,6 +419,36 @@ class FaceAttendanceController extends Controller
         $matchedNpk = $face->npk;
         $sessionNpk = Session::get('face_attendance_npk');
 
+        // ===============================================================
+        // PERBAIKAN V31.8 (2026-11-04) - CEK STATUS KARYAWAN (PKWT.TKK)
+        // ===============================================================
+        // Wajah sudah terbaca dan cocok dengan NPK tertentu. Cek status
+        // kepegawaian SEBELUM sesi diubah & sebelum presensi diproses:
+        //   - PKWT.TKK NULL     -> masih aktif, lanjut (presensi dikirim).
+        //   - PKWT.TKK terisi   -> sudah keluar, tolak & tampilkan alert.
+        //
+        // Pengejaan yang sama juga ada di storeAttendanceProcess() dan
+        // loginAuth(), sehingga tidak ada jalur yang bisa lolos.
+        // ===============================================================
+        $activeStatus = EmployeeActiveStatusService::check((string)$matchedNpk);
+
+        if ($activeStatus['found'] && !$activeStatus['active']) {
+            \Log::warning('Presensi wajah ditolak: karyawan sudah keluar (PKWT.TKK terisi)', [
+                'npk' => (string)$matchedNpk,
+                'tkk' => $activeStatus['tkk'],
+            ]);
+
+            return response()->json([
+                'success'           => false,
+                'inactive_employee' => true,
+                'npk'               => (string) $matchedNpk,
+                'message'           => EmployeeActiveStatusService::inactiveMessage(
+                    $activeStatus['nama'],
+                    $activeStatus['tkk']
+                ),
+            ], 403);
+        }
+
         // Bila wajah yang discan ≠ sesi aktif, UPDATE sesi ke NPK hasil match.
         // Ini menangani kasus: B scan di tablet yang sesi-nya masih A.
         if ($sessionNpk !== $matchedNpk) {
@@ -488,6 +519,43 @@ class FaceAttendanceController extends Controller
                 'success' => false,
                 'message' => 'Session telah berakhir, silakan scan wajah kembali.'
             ], 401);
+        }
+
+        // ===============================================================
+        // PERBAIKAN V31.8 (2026-11-04) - CEK STATUS KARYAWAN (PKWT.TKK)
+        // ===============================================================
+        // Permintaan user: "Saat wajah sudah terbaca, cek juga di table
+        // PKWT kolom TKK. Kalau TKK NULL -> karyawan masih aktif dan
+        // attendance dikirim ke server. Kalau TKK tidak NULL -> karyawan
+        // sudah keluar, tampilkan alert dan attendance TIDAK dikirim."
+        //
+        // Letak pengecekan ini SATU-SATUNYA titik yang dipakai route
+        // `face.attendance.store` (halaman presensi index) maupun
+        // `loginAuth` (wajah terbaca saat login), karena keduanya
+        // memanggil method yang sama. Maka tidak ada jalur yang bisa
+        // lolos tanpa pengecekan.
+        //
+        // Diletakkan paling awal (sebelum geofencing & sebelum query
+        // BIODATA/att_log) supaya tidak ada satupun data presensi yang
+        // ditulis atau terkirim untuk karyawan yang sudah keluar.
+        // ===============================================================
+        $activeStatus = EmployeeActiveStatusService::check((string)$npk);
+
+        if ($activeStatus['found'] && !$activeStatus['active']) {
+            \Log::warning('Presensi wajah ditolak: karyawan sudah keluar (PKWT.TKK terisi)', [
+                'npk' => (string)$npk,
+                'tkk' => $activeStatus['tkk'],
+            ]);
+
+            return response()->json([
+                'success'           => false,
+                'inactive_employee' => true,
+                'npk'               => (string) $npk,
+                'message'           => EmployeeActiveStatusService::inactiveMessage(
+                    $activeStatus['nama'],
+                    $activeStatus['tkk']
+                ),
+            ], 403);
         }
 
         $lat = (float) $request->latitude;
@@ -1581,6 +1649,36 @@ class FaceAttendanceController extends Controller
 
             $npk = $face->npk;
             $name = $face->name ?? $npk;
+
+            // ===============================================================
+            // PERBAIKAN V31.8 (2026-11-04) - CEK STATUS KARYAWAN (PKWT.TKK)
+            // ===============================================================
+            // Wajah sudah terbaca & cocok. Sebelum menyiapkan session dan
+            // sebelum presensi dikirim ke server, cek status kepegawaian:
+            //   - PKWT.TKK NULL     -> masih aktif, lanjut (presensi dikirim).
+            //   - PKWT.TKK terisi   -> sudah keluar, tolak + tampilkan alert.
+            //
+            // Pengecekan yang sama juga ada di storeAttendanceProcess(),
+            // jadi keduanya tidak bisa berbeda perilaku.
+            // ===============================================================
+            $activeStatus = EmployeeActiveStatusService::check((string)$npk);
+
+            if ($activeStatus['found'] && !$activeStatus['active']) {
+                \Log::warning('Login wajah ditolak: karyawan sudah keluar (PKWT.TKK terisi)', [
+                    'npk' => (string)$npk,
+                    'tkk' => $activeStatus['tkk'],
+                ]);
+
+                return response()->json([
+                    'success'           => false,
+                    'inactive_employee' => true,
+                    'npk'               => (string) $npk,
+                    'message'           => EmployeeActiveStatusService::inactiveMessage(
+                        $activeStatus['nama'],
+                        $activeStatus['tkk']
+                    ),
+                ], 403);
+            }
 
             // Simpan NPK dan nama ke session untuk presensi wajah (bukan Auth user)
             Session::put('face_attendance_npk', (string)$npk);

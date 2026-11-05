@@ -20,22 +20,24 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px 12px;
+            padding: 24px 16px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            box-sizing: border-box;
         }
         .sr-card {
             background: #ffffff;
-            border-radius: 18px;
+            border-radius: 16px;
             box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
-            max-width: 520px;
+            max-width: 440px;
             width: 100%;
             overflow: hidden;
             animation: fadeIn 0.35s ease-in-out;
             border: 1px solid rgba(255, 255, 255, 0.2);
+            box-sizing: border-box;
         }
         .sr-header {
             background: #ffffff;
-            padding: 24px 24px 16px 24px;
+            padding: 24px 20px 16px 20px;
             border-bottom: 1px solid #edf2f7;
             text-align: center;
         }
@@ -53,7 +55,7 @@
             box-shadow: 0 4px 10px rgba(30, 60, 114, 0.12);
         }
         .sr-body {
-            padding: 24px 28px 28px 28px;
+            padding: 20px 20px 24px 20px;
         }
         .sr-progress {
             display: flex;
@@ -91,11 +93,11 @@
         .camera-square {
             position: relative;
             width: 100%;
-            max-width: 360px;
-            height: 360px;
+            max-width: 320px;
+            height: 320px;
             margin: 0 auto;
             background: #000;
-            border-radius: 16px;
+            border-radius: 14px;
             overflow: hidden;
         }
         .camera-square video {
@@ -125,11 +127,55 @@
             border-style: solid;
             box-shadow: 0 0 25px #1cc88a, 0 0 0 9999px rgba(0, 0, 0, 0.2);
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
+        @media (max-width: 390px) {
+        .sr-card {
+            border-radius: 8px;
+            margin: 0;
         }
+        .sr-header {
+            padding: 16px 12px 8px 12px;
+        }
+        .sr-body {
+            padding: 16px 14px 20px 14px;
+        }
+        .camera-square {
+            max-width: 260px;
+            height: 260px;
+            border-radius: 10px;
+        }
+        .scanner-guide-oval {
+            width: 140px;
+            height: 180px;
+        }
+        .btn-lg {
+            padding: 10px 14px !important;
+            font-size: 0.9rem !important;
+        }
+        .form-control-custom {
+            padding: 10px 12px !important;
+            font-size: 0.95rem !important;
+        }
+        .sr-progress {
+            height: 4px;
+            margin-bottom: 16px;
+        }
+        .sr-step-title {
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+        .badge-icon {
+            width: 42px !important;
+            height: 42px !important;
+            font-size: 18px !important;
+        }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
     </style>
+{{-- SweetAlert seragam untuk karyawan sudah resign (PKWT.TKK terisi) --}}
+@include('partials.sweetalert-resign')
 </head>
 <body>
 
@@ -469,6 +515,16 @@
             }).then(r => r.json()).catch(() => ({ status: false, message: 'Gagal terhubung ke server.' }));
 
             if (!res.status) {
+                // Karyawan sudah keluar (PKWT.TKK terisi) -> JANGAN lanjut ke step 2
+                if (res.inactive_employee) {
+                    showResignAlert({
+                        message: res.message || 'Data kepegawaian Anda sudah tercatat keluar.',
+                        action : 'Pendaftaran wajah tidak dapat dilanjutkan.',
+                        npk    : npkInput
+                    });
+                    return;
+                }
+
                 // Jika wajah sudah terdaftar di sistem -> JANGAN lanjut ke step 2 & beri notif hubungi HRD
                 if (res.already_registered) {
                     Swal.fire({

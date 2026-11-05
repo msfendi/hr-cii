@@ -75,6 +75,8 @@
         }
     }
 </style>
+{{-- SweetAlert seragam untuk karyawan sudah resign (PKWT.TKK terisi) --}}
+@include('partials.sweetalert-resign')
 
 <body id="page-top">
 @include('sweetalert::alert')
@@ -2347,6 +2349,33 @@
                                 window.location.reload();
                             });
                         } else {
+                            // ===========================================================
+                            // PERBAIKAN V31.8 (2026-11-04) - KARYAWAN SUDAH KELUAR
+                            // ===========================================================
+                            // Server menolak dengan `inactive_employee` (PKWT.TKK
+                            // terisi). Tampilkan alert yang jelas dan JANGAN
+                            // jadwalkan ulang loop scan - mengulang tidak akan
+                            // pernah berhasil dan hanya membebani kamera/server.
+                            if (data && data.inactive_employee) {
+                                showResignAlert({
+                                    message: (data && data.message) ? data.message : 'Data kepegawaian Anda sudah tercatat keluar.',
+                                    action : 'Presensi tidak dapat dikirim.',
+                                    npk    : (data && data.npk) ? data.npk : null
+                                });
+                                // Berhenti total: matikan kamera & hentikan loop.
+                                isScanning = false;
+                                livenessVerified = !LIVENESS_REQUIRED;
+                                resetLivenessState();
+                                if (guideBox) guideBox.classList.remove('liveness-ok');
+                                if (alertBox) {
+                                    alertBox.classList.remove('alert-warning', 'alert-success', 'alert-danger', 'border-warning');
+                                    alertBox.classList.add('alert-danger', 'font-weight-bold');
+                                }
+                                if (alertText) alertText.innerHTML = '<i class="fas fa-user-slash mr-1"></i> Karyawan Sudah Resign - Presensi Tidak Dikirim';
+                                if (overlayText) overlayText.innerHTML = '<i class="fas fa-user-slash text-danger mr-1"></i> Presensi Ditolak';
+                                return;
+                            }
+
                             // PERBAIKAN: tampilkan pesan error yang SEBENARNYA dari
                             // server, termasuk detail kegagalan simpan ke database.
                             // Dulu kegagalan insert ditelan diam-diam sehingga user
