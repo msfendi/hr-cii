@@ -621,11 +621,31 @@ class GeneratePayrollExport implements ShouldQueue
                 'status' => "Generating PDF Files for $key"
             ]);
 
+            // ===== Ukuran halaman REKAP dinamis (mm) =====
+            // Lebar kolom HARUS sama dengan konstanta di view payroll/rekap_pdf.blade.php
+            $wNpk = 22;
+            $wName = 48;
+            $wAbs = 12;
+            $wIjin = 18;
+            $wComp = 28;
+            $wTotal = 34;
+
+            $rekapTableMm = $wNpk + $wName + ($wAbs * 7) + $wIjin
+                + ($wComp * max($allComponents->count(), 1)) + $wTotal;
+
+            // + margin kiri/kanan (8mm x 2) + cadangan 4mm
+            $rekapPageW = $rekapTableMm + 16 + 4;
+
             $pdf = App::make('snappy.pdf.wrapper');
             $pdf->setTimeout(600);
             $pdf->loadHTML($htmlRekap)
-                ->setPaper('a4')
-                ->setOrientation('landscape')
+                ->setOption('page-width', $rekapPageW . 'mm')
+                ->setOption('page-height', '297mm')
+                ->setOption('margin-top', '10mm')
+                ->setOption('margin-bottom', '10mm')
+                ->setOption('margin-left', '8mm')
+                ->setOption('margin-right', '8mm')
+                ->setOption('disable-smart-shrinking', true)
                 ->setOption('enable-local-file-access', true)
                 ->setOption('no-stop-slow-scripts', true)
                 ->setOption('encoding', 'UTF-8');

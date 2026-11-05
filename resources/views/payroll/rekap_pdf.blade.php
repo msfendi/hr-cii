@@ -28,10 +28,22 @@
   };
 
 
-  // Lebar kolom tetap (A3 landscape): NPK 4.2 + Name 8.5 + 7 kolom absen x 2.1 (=14.7) + Ijin 3.2 + Total 6.5 = 37.1%
-  // Sisa 62.9% dibagi rata ke semua komponen agar tabel selalu muat di 1 halaman lebar
+  // Lebar kolom ABSOLUT (mm). Ukuran kertas menyesuaikan jumlah komponen,
+  // jadi kolom tidak akan menyempit walau komponennya banyak.
+  $wNpk   = 22;   // NPK
+  $wName  = 48;   // Name
+  $wAbs   = 12;   // MA, P1, CT, CU, SD, BR, OUT (7 kolom)
+  $wIjin  = 18;   // Ijin (Menit)
+  $wComp  = 28;   // tiap komponen gaji
+  $wTotal = 34;   // Total Salary
+
   $compCount = max(count($allComponents), 1);
-  $compWidth = round(62.9 / $compCount, 2);
+  $tableW    = $wNpk + $wName + ($wAbs * 7) + $wIjin + ($wComp * $compCount) + $wTotal;
+
+  $pageMargin = 8;                         // margin kiri/kanan (mm)
+  $pageW      = $tableW + ($pageMargin * 2);
+  $pageH      = 297;                       // tinggi halaman (mm)
+  $summaryW   = min($tableW, 260);         // lebar tabel ringkasan
 
   @endphp
 
@@ -40,24 +52,24 @@
     <style>
       /* ===== GLOBAL & PAGE SETUP ===== */
       @page {
-        size: A3 landscape;  /* kertas lebih lebar agar kolom lebih lega */
-        margin: 10mm 8mm;
+        size: {{ $pageW }}mm {{ $pageH }}mm;  /* lebar halaman mengikuti jumlah kolom */
+        margin: 10mm {{ $pageMargin }}mm;
       }
 
       body {
         font-family: sans-serif;
-        font-size: 10px;
+        font-size: 11px;
         margin: 0;
         padding: 0;
       }
 
       /* ===== TABEL UTAMA ===== */
       table {
-        width: 100%;
+        width: {{ $tableW }}mm;
         border-collapse: collapse;
-        margin-bottom: 12px;
-        table-layout: fixed;  /* lebar kolom dikunci supaya tidak melebihi halaman */
-        font-size: 8px;
+        margin-bottom: 14px;
+        table-layout: fixed;  /* lebar kolom dikunci */
+        font-size: 10px;
       }
 
       table,
@@ -68,7 +80,7 @@
 
       th,
       td {
-        padding: 5px 2px;
+        padding: 7px 5px;
         word-wrap: break-word;
         overflow-wrap: break-word;
         vertical-align: middle;
@@ -77,8 +89,8 @@
       th {
         background: #eee;
         text-align: center;
-        font-size: 7px;
-        line-height: 1.2;
+        font-size: 9px;
+        line-height: 1.3;
         word-wrap: normal;
         overflow-wrap: normal;
       }
@@ -103,8 +115,18 @@
         font-weight: bold;
       }
 
+      /* satu departemen dijaga utuh di satu halaman;
+         baru pindah halaman kalau tidak muat (departemen yang lebih
+         panjang dari 1 halaman tetap boleh lanjut ke halaman berikutnya) */
       .dept-block {
         margin-bottom: 8px;
+        page-break-inside: avoid;
+      }
+
+      /* judul departemen selalu menempel dengan tabelnya */
+      .dept-block h4 {
+        margin: 0 0 6px 0;
+        page-break-after: avoid;
       }
 
       .page-break {
@@ -112,38 +134,28 @@
       }
 
       /* ===== LEBAR KOLOM (relatif) ===== */
-      .col-npk {
-        width: 4.2%;
-      }
-      .col-name {
-        width: 8.5%;
-      }
-      .col-abs {
-        width: 2.1%;
-      }
-      .col-details {
-        width: 3.2%;
-      }
-      .col-total {
-        width: 6.5%;
-      }
-      /* lebar .col-component diset inline (dinamis sesuai jumlah komponen) */
+      .col-npk     { width: {{ $wNpk }}mm; }
+      .col-name    { width: {{ $wName }}mm; }
+      .col-abs     { width: {{ $wAbs }}mm; }
+      .col-details { width: {{ $wIjin }}mm; }
+      .col-total   { width: {{ $wTotal }}mm; }
+      /* lebar .col-component diset inline ($wComp mm) */
       .num {
         white-space: nowrap;
-        padding-right: 3px;
+        padding-right: 6px;
       }
 
       /* ===== TABEL RINGKASAN ===== */
       .summary-table {
-        width: 100%;
+        width: {{ $summaryW }}mm;
         margin-top: 15px;
         table-layout: auto;
-        font-size: 8px;
+        font-size: 10px;
       }
 
       .summary-table th,
       .summary-table td {
-        padding: 3px 5px;
+        padding: 6px 8px;
       }
 
       /* ===== APPROVAL ===== */
@@ -204,7 +216,7 @@
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
-            <th class="col-component" style="width:{{ $compWidth }}%">{{ $component->name }}</th>
+            <th class="col-component" style="width:{{ $wComp }}mm">{{ $component->name }}</th>
             @endforeach
 
             <th class="col-total">Total Salary</th>
@@ -310,7 +322,7 @@
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
-            <th class="col-component" style="width:{{ $compWidth }}%">{{ $component->name }}</th>
+            <th class="col-component" style="width:{{ $wComp }}mm">{{ $component->name }}</th>
             @endforeach
 
             <th class="col-total">Total Salary</th>
@@ -415,7 +427,7 @@
             <th class="col-details">Ijin (Menit)</th>
 
             @foreach($allComponents as $component)
-            <th class="col-component" style="width:{{ $compWidth }}%">{{ $component->name }}</th>
+            <th class="col-component" style="width:{{ $wComp }}mm">{{ $component->name }}</th>
             @endforeach
 
             <th class="col-total">Total Salary</th>
@@ -597,7 +609,7 @@ $totalOrangMangkir = $groupedMangkir->sum(fn($g) => $g->count());
     </table>
     {{-- ================= APPROVAL ================= --}}
     @if(!empty($approvals))
-      <table style="width:100%;border:none">
+      <table style="width:{{ $summaryW }}mm;border:none">
       <tr>
 
       @foreach($approvals as $approve)
