@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use App\Models\AttendanceWorkLocation;
 use App\Models\EmployeeFace;
 use App\Models\FaceAttendanceSetting;
+use App\Models\FaceRecognitionSetting;
 use App\Models\Holiday;
 use Carbon\Carbon;
 
@@ -89,18 +90,8 @@ class FaceAttendanceSettingController extends Controller
             $setting->clock_out_allowance_minutes = (int) $request->input('clock_out_allowance_minutes', 0);
         }
 
-        // PERBAIKAN V33 (2026-11-05): toggle "input NPK dulu" di halaman
-        // /face-attendance/login. Kalau aktif, user wajib mengetik NPK
-        // sebelum kamera dibuka, dan pencocokan wajah hanya dilakukan
-        // terhadap NPK tersebut (lebih akurat, tidak bisa salah orang).
-        //
-        // Disimpan di sini (bukan form terpisah) supaya admin cukup sekali
-        // klik "Simpan" untuk seluruh pengaturan presensi.
-        if (FaceAttendanceSetting::hasAllowanceColumn('is_npk_required_enabled')) {
-            $setting->is_npk_required_enabled = $request->boolean('is_npk_required_enabled');
-        }
-
-        $setting->save();
+        // PERBAIKAN 4 (2026-11-06): toggle "input NPK dulu" sekarang disimpan
+        // di face_recognition_settings via updateLiveness().
 
         $pesan = 'Pengaturan window presensi wajah berhasil disimpan.';
         if (!FaceAttendanceSetting::hasAllowanceColumn()) {
@@ -109,10 +100,6 @@ class FaceAttendanceSettingController extends Controller
         }
         if (!FaceAttendanceSetting::hasAllowanceColumn('clock_out_allowance_minutes')) {
             $pesan .= ' CATATAN: kolom allowance clock out belum ada di database, nilainya BELUM tersimpan. '
-                    . 'Jalankan "php artisan migrate" lalu simpan ulang.';
-        }
-        if (!FaceAttendanceSetting::hasAllowanceColumn('is_npk_required_enabled')) {
-            $pesan .= ' CATATAN: kolom "Input NPK Dulu" belum ada di database, nilainya BELUM tersimpan. '
                     . 'Jalankan "php artisan migrate" lalu simpan ulang.';
         }
 
@@ -129,61 +116,67 @@ class FaceAttendanceSettingController extends Controller
      * Form di halaman Face Recognition TETAP berfungsi (tidak dihapus
      * dari sisi simpan) agar tidak ada fitur yang hilang.
      */
-    public function updateLiveness(Request $request)
-    {
-        $request->validate([
-            'is_liveness_enabled'       => 'nullable|boolean',
-            'liveness_presensi_enabled' => 'nullable|boolean',
-            'liveness_login_enabled'    => 'nullable|boolean',
-            'liveness_slip_enabled'     => 'nullable|boolean',
-            'liveness_cuti_enabled'     => 'nullable|boolean',
-            // PERBAIKAN V31.3d (2026-11-04): menu registrasi mandiri.
-            'liveness_registrasi_enabled' => 'nullable|boolean',
-        ]);
+        public function updateLiveness(Request $request)
+        {
+            $request->validate([
+                'is_liveness_enabled'       => 'nullable|boolean',
+                'liveness_presensi_enabled' => 'nullable|boolean',
+                'liveness_login_enabled'    => 'nullable|boolean',
+                'liveness_slip_enabled'     => 'nullable|boolean',
+                'liveness_cuti_enabled'     => 'nullable|boolean',
+                // PERBAIKAN V31.3d (2026-11-04): menu registrasi mandiri.
+                'liveness_registrasi_enabled' => 'nullable|boolean',
+                // PERBAIKAN 4 (2026-11-06): toggle "input NPK dulu" pindah ke face_recognition_settings
+                'is_npk_required_enabled'   => 'nullable|boolean',
+            ]);
 
-        try {
-            if (!Schema::hasTable('face_recognition_settings')) {
+            try {
+                if (!Schema::hasTable('face_recognition_settings')) {
+                    return redirect()
+                        ->route('face.attendance.settings.index')
+                        ->with('error', 'Tabel face_recognition_settings belum ada. Jalankan "php artisan migrate".');
+                }
+
+                $setting = \App\Models\FaceRecognitionSetting::current();
+
+                if (Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled')) {
+                    $setting->is_liveness_enabled = $request->boolean('is_liveness_enabled');
+                }
+                if (Schema::hasColumn('face_recognition_settings', 'liveness_presensi_enabled')) {
+                    $setting->liveness_presensi_enabled = $request->boolean('liveness_presensi_enabled');
+                }
+                if (Schema::hasColumn('face_recognition_settings', 'liveness_login_enabled')) {
+                    $setting->liveness_login_enabled = $request->boolean('liveness_login_enabled');
+                }
+                if (Schema::hasColumn('face_recognition_settings', 'liveness_slip_enabled')) {
+                    $setting->liveness_slip_enabled = $request->boolean('liveness_slip_enabled');
+                }
+                if (Schema::hasColumn('face_recognition_settings', 'liveness_cuti_enabled')) {
+                    $setting->liveness_cuti_enabled = $request->boolean('liveness_cuti_enabled');
+                }
+                // PERBAIKAN V31.3d: guard hasColumn tetap dipakai supaya halaman
+                // ini tidak error bila migrasi belum dijalankan di server.
+                if (Schema::hasColumn('face_recognition_settings', 'liveness_registrasi_enabled')) {
+                    $setting->liveness_registrasi_enabled = $request->boolean('liveness_registrasi_enabled');
+                }
+                // PERBAIKAN 4 (2026-11-06): simpan toggle "input NPK dulu" di sini juga
+                if (Schema::hasColumn('face_recognition_settings', 'is_npk_required_enabled')) {
+                    $setting->is_npk_required_enabled = $request->boolean('is_npk_required_enabled');
+                }
+
+                $setting->save();
+
                 return redirect()
                     ->route('face.attendance.settings.index')
-                    ->with('error', 'Tabel face_recognition_settings belum ada. Jalankan "php artisan migrate".');
-            }
+                    ->with('success', 'Pengaturan Liveness Check & Input NPK Dulu berhasil disimpan.');
+            } catch (\Throwable $e) {
+                \Log::error('Gagal simpan liveness/npk dari Pengaturan Presensi Wajah: ' . $e->getMessage());
 
-            $setting = \App\Models\FaceRecognitionSetting::current();
-
-            if (Schema::hasColumn('face_recognition_settings', 'is_liveness_enabled')) {
-                $setting->is_liveness_enabled = $request->boolean('is_liveness_enabled');
+                return redirect()
+                    ->route('face.attendance.settings.index')
+                    ->with('error', 'Gagal menyimpan pengaturan: ' . $e->getMessage());
             }
-            if (Schema::hasColumn('face_recognition_settings', 'liveness_presensi_enabled')) {
-                $setting->liveness_presensi_enabled = $request->boolean('liveness_presensi_enabled');
-            }
-            if (Schema::hasColumn('face_recognition_settings', 'liveness_login_enabled')) {
-                $setting->liveness_login_enabled = $request->boolean('liveness_login_enabled');
-            }
-            if (Schema::hasColumn('face_recognition_settings', 'liveness_slip_enabled')) {
-                $setting->liveness_slip_enabled = $request->boolean('liveness_slip_enabled');
-            }
-            if (Schema::hasColumn('face_recognition_settings', 'liveness_cuti_enabled')) {
-                $setting->liveness_cuti_enabled = $request->boolean('liveness_cuti_enabled');
-            }
-            // PERBAIKAN V31.3d: guard hasColumn tetap dipakai supaya halaman
-            // ini tidak error bila migrasi belum dijalankan di server.
-            if (Schema::hasColumn('face_recognition_settings', 'liveness_registrasi_enabled')) {
-                $setting->liveness_registrasi_enabled = $request->boolean('liveness_registrasi_enabled');
-            }
-
-            $setting->save();
-
-            return redirect()
-                ->route('face.attendance.settings.index')
-                ->with('success', 'Pengaturan Liveness Check berhasil disimpan.');
-        } catch (\Throwable $e) {
-            \Log::error('Gagal simpan liveness dari Pengaturan Presensi Wajah: ' . $e->getMessage());
-
-            return redirect()
-                ->route('face.attendance.settings.index')
-                ->with('error', 'Gagal menyimpan pengaturan liveness: ' . $e->getMessage());
         }
-    }
 
     /**
      * Update pengaturan akses presensi wajah per karyawan.

@@ -20,6 +20,8 @@ class FaceRecognitionSetting extends Model
         'liveness_login_enabled',
         'liveness_slip_enabled',
         'liveness_cuti_enabled',
+        // PERBAIKAN 4 (2026-11-06): toggle input NPK dulu
+        'is_npk_required_enabled',
     ];
 
     protected $casts = [
@@ -35,6 +37,8 @@ class FaceRecognitionSetting extends Model
         'liveness_login_enabled'    => 'boolean',
         'liveness_slip_enabled'     => 'boolean',
         'liveness_cuti_enabled'     => 'boolean',
+        // PERBAIKAN 4
+        'is_npk_required_enabled'   => 'boolean',
     ];
 
     /**
@@ -71,6 +75,13 @@ class FaceRecognitionSetting extends Model
                     // Skip jika kolom belum termigrasi
                 }
                 try {
+                    if (Schema::hasColumn('face_recognition_settings', 'is_npk_required_enabled')) {
+                        $setting->is_npk_required_enabled = true;
+                    }
+                } catch (\Throwable $e) {
+                    // Skip jika kolom belum termigrasi
+                }
+                try {
                     $setting->save();
                 } catch (\Throwable $e) {
                     // PERBAIKAN 25 (2026-11-05): DULU error ditelan diam-diam,
@@ -98,6 +109,7 @@ class FaceRecognitionSetting extends Model
             $fallback->liveness_login_enabled    = true;
             $fallback->liveness_slip_enabled     = true;
             $fallback->liveness_cuti_enabled     = true;
+            $fallback->is_npk_required_enabled   = true;
             return $fallback;
         }
     }
@@ -134,6 +146,33 @@ class FaceRecognitionSetting extends Model
     public function getIsLivenessEnabledAttribute($value)
     {
         return $value !== null ? (bool) $value : true;
+    }
+
+    public function getIsNpkRequiredEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Static helper -- dipakai controller & view
+    |--------------------------------------------------------------------------
+    | FaceAttendanceController memanggil FaceRecognitionSetting::isNpkRequiredEnabled()
+    | secara statik. Tanpa method ini akan fatal error:
+    | "Call to undefined method App\Models\FaceRecognitionSetting::isNpkRequiredEnabled()".
+    | Default TRUE supaya bila kolom belum termigrasi, langkah input NPK tetap aman.
+    */
+
+    public static function isNpkRequiredEnabled(): bool
+    {
+        try {
+            return (bool) static::current()->is_npk_required_enabled;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning(
+                'FaceRecognitionSetting::isNpkRequiredEnabled() gagal: ' . $e->getMessage()
+            );
+            return true;
+        }
     }
 
     public function getLivenessPresensiEnabledAttribute($value)

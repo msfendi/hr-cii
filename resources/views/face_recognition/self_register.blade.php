@@ -380,6 +380,9 @@
     let regToken = null;
     let regNpk = null;
     let capturedDescriptor = null;
+    // PERBAIKAN V15 (2026-11-06): foto hasil capture ditahan di memori
+    // sampai user menekan tombol Simpan di popup konfirmasi.
+    let pendingFaceImg = null;
     let autoDetectTimer = null;
     let verTimer = null;
     let isCapturing = false;
@@ -491,6 +494,7 @@
         regToken = null;
         regNpk = null;
         capturedDescriptor = null;
+        pendingFaceImg = null;
         isCapturing = false;
         isVerified = false;
         document.getElementById('formVerify').reset();
@@ -649,6 +653,17 @@
         }, 250);
     }
 
+    // PERBAIKAN V15 (2026-11-06)
+    // ---------------------------
+    // 1) Foto hasil capture TIDAK lagi langsung dikirim ke server.
+    //    Data hanya ditahan di memori (pendingFaceImg / capturedDescriptor)
+    //    sampai user menekan tombol "Simpan & Lanjutkan".
+    // 2) Tombol "Ulangi Ambil Foto" harus membuka ULANG kamera.
+    //    Dulu hanya stopAllStreams() dipanggil sehingga video.srcObject
+    //    masih menunjuk stream yang sudah mati -> layar tampil hitam.
+    //    Sekarang pakai restartCaptureCamera() yang menjalankan ulang
+    //    getUserMedia dan memasang stream baru ke elemen video.
+
     async function captureAndSave(det) {
         const video = document.getElementById('recVideo');
         capturedDescriptor = Array.from(det.descriptor);
@@ -660,7 +675,41 @@
         ctx.drawImage(video, 0, 0, cv.width, cv.height);
         const faceImg = cv.toDataURL('image/jpeg', 0.9);
 
+        // Tahan hasil capture di memori. BELUM dikirim ke server.
+        pendingFaceImg = faceImg;
+
         const st = document.getElementById('recStatus');
+        st.innerHTML = '<span class="text-info font-weight-bold"><i class="fas fa-check-circle mr-1"></i> Foto diambil. Mohon konfirmasi di bawah ini.</span>';
+
+        // Popup konfirmasi foto. Pilihan:
+        //   - Simpan & Lanjutkan ke Verifikasi -> baru simpan ke server
+        //   - Ulangi Ambil Foto -> buang hasil, buka kamera lagi
+        const { isConfirmed } = await Swal.fire({
+            title: 'Foto Wajah Berhasil Diambil',
+            html:
+                '<div class="text-center mb-3">' +
+                '  <img src="' + faceImg + '" style="max-width:180px;max-height:180px;border:2px solid #e2e8f0;border-radius:10px;" alt="Foto Wajah">' +
+                '</div>' +
+                '<p class="small text-muted mb-0">Apakah foto wajah di atas sudah benar? Data baru disimpan ke sistem setelah Anda menekan tombol Simpan.</p>',
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonText: 'Simpan & Lanjutkan ke Verifikasi',
+            cancelButtonText: 'Ulangi Ambil Foto',
+            reverseButtons: true,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showCloseButton: false
+        });
+
+        if (!isConfirmed) {
+            // Buang hasil capture, lalu buka ULANG kamera (bukan layar hitam).
+            pendingFaceImg = null;
+            capturedDescriptor = null;
+            await restartCaptureCamera();
+            return;
+        }
+
+        // Hanya setelah tombol Simpan ditekan, baru kirim ke server.
         st.innerHTML = '<span class="text-primary font-weight-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan foto wajah ke sistem...</span>';
 
         Swal.fire({
@@ -679,7 +728,7 @@
             },
             body: JSON.stringify({
                 token: regToken,
-                face_img: faceImg,
+                face_img: pendingFaceImg,
                 descriptor: capturedDescriptor
             })
         }).then(r => r.json()).catch(() => ({ status: false, message: 'Gagal menghubungi server.' }));
@@ -689,15 +738,19 @@
         if (!res.status) {
             Swal.fire({ icon: 'error', title: 'Gagal', text: res.message || 'Gagal menyimpan foto wajah.' });
             st.innerHTML = '<span class="text-danger">Penyimpanan gagal. Mengulang deteksi...</span>';
+            pendingFaceImg = null;
+            capturedDescriptor = null;
             setTimeout(startAutoCapture, 1500);
             return;
         }
 
+        pendingFaceImg = null;
+
         Swal.fire({
             icon: 'success',
-            title: 'Foto Wajah Berhasil Diambil!',
+            title: 'Foto Wajah Disimpan',
             text: 'Melanjutkan ke verifikasi langsung...',
-            timer: 1000,
+            timer: 900,
             showConfirmButton: false
         });
 
@@ -705,6 +758,62 @@
             if (autoDetectTimer) clearInterval(autoDetectTimer);
             startVerification();
         }, 900);
+    }
+
+    // PERBAIKAN V15 (2026-11-06): buka ulang kamera untuk step 3.
+    // Fungsi ini menutup stream lama, melepas srcObject supaya elemen
+    // video tidak menampilkan frame terakhir yang sudah mati (layar
+    // hitam), lalu menjalankan getUserMedia lagi dan memasang stream
+    // baru. Hanya setelah video benar-benar siap, auto-capture
+    // dinyalakan.
+    async function restartCaptureCamera() {
+        const st = document.getElementById('recStatus');
+        const capBtn = document.getElementById('btnCapture');
+
+        if (autoDetectTimer) {
+            clearInterval(autoDetectTimer);
+            autoDetectTimer = null;
+        }
+        isCapturing = false;
+
+        // Matikan stream lama DAN lepaskan dari elemen video.
+        if (recStream) {
+            recStream.getTracks().forEach(t => t.stop());
+            recStream = null;
+        }
+        const video = document.getElementById('recVideo');
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+        }
+
+        setProgress(3);
+        showPane('paneStep3');
+        st.innerHTML = '<span class="text-info font-weight-bold"><i class="fas fa-camera mr-1"></i> Menyalakan kamera...</span>';
+        if (capBtn) capBtn.disabled = true;
+
+        try {
+            recStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
+                audio: false
+            });
+            if (video) {
+                video.srcObject = recStream;
+                // Tunggu sampai video benar-benar punya frame.
+                await new Promise((resolve) => {
+                    if (video.readyState >= 2) return resolve();
+                    video.onloadeddata = () => resolve();
+                    setTimeout(resolve, 3000);
+                });
+                try { await video.play(); } catch (e) { /* autoplay ditolak, tidak fatal */ }
+            }
+            st.innerHTML = '<span class="text-info font-weight-bold"><i class="fas fa-camera mr-1"></i> Silakan ambil foto wajah ulang.</span>';
+            if (capBtn) capBtn.disabled = false;
+            startAutoCapture();
+        } catch (err) {
+            st.innerHTML = '<span class="text-danger font-weight-bold"><i class="fas fa-times-circle mr-1"></i> Tidak dapat mengakses kamera: ' + err.message + '</span>';
+            if (capBtn) capBtn.disabled = false;
+        }
     }
 
     // Manual capture fallback
@@ -805,7 +914,15 @@
                 // dari Settings menu "registrasi", bukan ditulis di sini.
                 if (livenessWajib) {
                     if (!livenessStep4) {
-                        livenessStep4 = new LivenessCheck({ required: true });
+                        // PERBAIKAN V14 (2026-11-06): samakan dengan
+                        // /face-attendance/login dan pakai toleransi sensor
+                        // hilang yang sama (12 frame ~ 1,8 detik), supaya
+                        // user tidak perlu mengulang gerakan terus-menerus
+                        // saat wajah sesaat keluar kotak deteksi.
+                        livenessStep4 = new LivenessCheck({
+                            required: true,
+                            missToleranceFrames: 12
+                        });
                     }
                     const hasilLiveness = livenessStep4.update(det.landmarks || null);
                     if (!hasilLiveness.passed) {

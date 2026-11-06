@@ -17,7 +17,8 @@ class FaceAttendanceSetting extends Model
         'is_saturday_enabled',
         'is_sunday_enabled',
         'is_holiday_enabled',
-        'is_npk_required_enabled',
+        // PERBAIKAN 4 (2026-11-06): 'is_npk_required_enabled' dipindahkan
+        // ke FaceRecognitionSetting (table face_recognition_settings).
     ];
 
     protected $casts = [
@@ -28,7 +29,8 @@ class FaceAttendanceSetting extends Model
         'is_saturday_enabled'      => 'boolean',
         'is_sunday_enabled'        => 'boolean',
         'is_holiday_enabled'       => 'boolean',
-        'is_npk_required_enabled'  => 'boolean',
+        // PERBAIKAN 4 (2026-11-06): 'is_npk_required_enabled' dipindahkan
+        // ke FaceRecognitionSetting.
     ];
 
     /**
@@ -144,36 +146,23 @@ class FaceAttendanceSetting extends Model
     }
 
     /**
-     * PERBAIKAN V33 (2026-11-05): apakah NPK wajib diinput lebih dulu
-     * di halaman /face-attendance/login.
+     * PERBAIKAN V14 (2026-11-06): method isNpkRequiredEnabled() DIHAPUS
+     * dari model ini.
      *
-     * Kalau TRUE (default), user harus mengetik NPK sebelum kamera
-     * boleh dibuka, dan descriptor wajah hanya dicocokkan terhadap
-     * karyawan dengan NPK tersebut.
+     * Alasannya: flag "Input NPK Dulu" kini disimpan HANYA di tabel
+     * `face_recognition_settings` (bukan `face_attendance_settings`),
+     * dan dibaca lewat:
+     *     FaceRecognitionSetting::isNpkRequiredEnabled()
+     * atau
+     *     FaceRecognitionService::isNpkRequiredEnabled()
      *
-     * Kalau FALSE, flow lama berlaku: kamera langsung terbuka dan
-     * pencocokan wajah dilakukan ke semua karyawan.
+     * Menyinggirkan method ini supaya tidak ada dua sumber kebenaran
+     * yang bisa berbeda nilainya (mis. Settings menyimpan ke tabel A
+     * tapi halaman membaca dari tabel B).
      *
-     * Fail-safe: kalau kolom belum ada (migrasi belum dijalankan) atau
-     * DB error, nilai dikembalikan TRUE supaya tidak ada celah salah
-     * mengambil wajah orang lain.
+     * @see \App\Models\FaceRecognitionSetting::isNpkRequiredEnabled()
+     * @see \App\Services\FaceRecognitionService::isNpkRequiredEnabled()
      */
-    public static function isNpkRequiredEnabled(): bool
-    {
-        try {
-            if (!static::hasAllowanceColumn('is_npk_required_enabled')) {
-                return true;
-            }
-
-            $setting = static::current();
-            $value = $setting->is_npk_required_enabled;
-
-            // Null = kolom ada tapi nilainya null -> default TRUE.
-            return $value === null ? true : (bool) $value;
-        } catch (\Throwable $e) {
-            return true;
-        }
-    }
 
     /**
      * Setting window presensi bersifat singleton (1 baris).

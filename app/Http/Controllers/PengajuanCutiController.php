@@ -30,7 +30,35 @@ class PengajuanCutiController extends Controller
             // DULU tidak dikirim ke view. Toggle di Settings bisa ON,
             // tapi halaman login cuti tidak pernah memeriksa apa pun.
             'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('cuti'),
+            // PERBAIKAN V13 (2026-11-06): wajib input NPK sebelum kamera
+            // pada halaman pengajuan cuti.
+            'npkRequired' => FaceRecognitionService::isNpkRequiredEnabled(),
         ]);
+    }
+
+    /**
+     * PERBAIKAN V13 (2026-11-06): validasi NPK sebelum kamera menyala
+     * di halaman pengajuan cuti.
+     */
+    public function validateNpk(Request $request)
+    {
+        $request->validate([
+            'npk' => 'required|string|max:50',
+        ], [], [
+            'npk.required' => 'NPK wajib diisi.',
+        ]);
+
+        $result = FaceRecognitionService::validateNpkForFace((string) $request->input('npk'));
+
+        return response()->json([
+            'ok'       => (bool) $result['ok'],
+            'status'   => $result['status'],
+            'npk'      => $result['npk'],
+            'name'     => $result['name'],
+            'has_face' => $result['has_face'],
+            'inactive' => $result['inactive'],
+            'message'  => $result['message'],
+        ], $result['ok'] ? 200 : $result['status']);
     }
 
     public function logout()
@@ -107,9 +135,33 @@ class PengajuanCutiController extends Controller
             return response()->json(['success' => false, 'message' => 'Descriptor wajah tidak valid.']);
         }
 
-        $matchResult = \App\Services\FaceRecognitionService::match($descriptor);
+        // PERBAIKAN V13 (2026-11-06): bila NPK sudah divalidasi pada
+        // langkah input NPK, pencocokan WAJIB dibatasi ke NPK itu.
+        $requestedNpk = strtoupper(trim((string) $request->input('npk', '')));
+
+        if ($requestedNpk !== '') {
+            $check = \App\Services\FaceRecognitionService::validateNpkForFace($requestedNpk);
+
+            if (!$check['ok']) {
+                return response()->json([
+                    'success'   => false,
+                    'message'   => $check['message'],
+                    'inactive'  => (bool) $check['inactive'],
+                ], $check['status']);
+            }
+
+            $matchResult = \App\Services\FaceRecognitionService::matchByNpk($descriptor, $requestedNpk);
+        } else {
+            $matchResult = \App\Services\FaceRecognitionService::match($descriptor);
+        }
+
         if (!\App\Services\FaceRecognitionService::isConfidentMatch($matchResult)) {
-            return response()->json(['success' => false, 'message' => 'Wajah tidak dikenali atau belum terdaftar pada sistem.']);
+            return response()->json([
+                'success' => false,
+                'message' => $requestedNpk !== ''
+                    ? 'Wajah tidak cocok dengan NPK ' . $requestedNpk . '. Silakan coba lagi.'
+                    : 'Wajah tidak dikenali atau belum terdaftar pada sistem.',
+            ], 401);
         }
 
         $employeeFace = $matchResult['face'] ?? null;

@@ -135,6 +135,36 @@
         blinkCloseRatio: 0.55,   // mata dianggap menutup bila rasio < 55% baseline
         blinkAbsFloor: 0.21,     // batas atas mutlak (sama seperti halaman acuan)
         blinkClosedFrames: 1,    // minimal frame menutup untuk dihitung kedip
+
+        // ==================================================================
+        // PERBAIKAN V14 (2026-11-06): TOLERANSI SENSOR HILANG
+        // ==================================================================
+        // Keluhan: "terlalu sensitif ketika menegok dan sensor hilang".
+        //
+        // Dua masalah yang sebelumnya terpisah:
+        //   1. Saat user MENOLEH, wajah bisa sesaat keluar dari kotak
+        //      deteksi face-api. Kalau itu dihitung sebagai "gagal", maka
+        //      progress liveness (terutama streak "menoleh") HANGUS,
+        //      dan user harus mengulang gerakan terus-menerus.
+        //   2. Kalibrasi baseline "diam" butuh 10 sampel netral berturut.
+        //      Kalau wajah hilang di tengah kalibrasi, sampel yang sudah
+        //      terkumpul TIDAK boleh di-reset, karena itu membuat user
+        //      harus diam lama sekali sebelum boleh lanjut.
+        //
+        // Solusi di sini:
+        //   * `missToleranceFrames`: berapa frame berturut-turut wajah
+        //     boleh hilang tanpa membatalkan progres liveness.
+        //   * `missResetOnExceed`: kalau toleransi terlampaui, baru
+        //     reset streak (bukan reset seluruh kalibrasi), supaya
+        //     tetap aman tapi tidak bikin frustrasi.
+        //
+        // Nilai default 12 frame @ ~150ms = ~1,8 detik toleransi.
+        // Cukup untuk wajah keluar frame sesaat saat menoleh, tapi
+        // tetap terlalu singkat untuk cartels/foto/video yang dipegang.
+        missToleranceFrames: 12,
+        // Kalau lewat toleransi: reset streak menoleh, tapi JANGAN
+        // menghapus sampel netral yang sudah terkumpul.
+        missResetOnExceed: true,
     };
 
     /**
@@ -197,6 +227,11 @@
                 ? options.neutralBandLow : DEFAULTS.neutralBandLow,
             neutralBandHigh: options.neutralBandHigh !== undefined
                 ? options.neutralBandHigh : DEFAULTS.neutralBandHigh,
+            // PERBAIKAN V14 (2026-11-06): toleransi sensor hilang.
+            missToleranceFrames: options.missToleranceFrames !== undefined
+                ? options.missToleranceFrames : DEFAULTS.missToleranceFrames,
+            missResetOnExceed: options.missResetOnExceed !== undefined
+                ? options.missResetOnExceed : DEFAULTS.missResetOnExceed,
         };
 
         this.reset();
@@ -215,6 +250,8 @@
         // V31.5: pelacak gerakan untuk kalibrasi netral.
         this.yawPrev = null;
         this.yawStillFrames = 0;
+        // PERBAIKAN V14 (2026-11-06): penghitung frame tanpa wajah.
+        this.missFrames = 0;
     };
 
     /**
@@ -254,12 +291,41 @@
         }
 
         if (landmarks) {
+            // PERBAIKAN V14 (2026-11-06): wajah terdeteksi lagi, reset
+            // penghitung frame hilang. Progress liveness TIDAK di-reset.
+            this.missFrames = 0;
+
             this._checkBlink(landmarks);
             this._checkTurn(landmarks);
         } else {
+            // ==================================================================
+            // PERBAIKAN V14 (2026-11-06): TOLERANSI SENSOR HILANG
+            // ==================================================================
             // Wajah hilang: jangan anggap otomatis gagal, tapi jangan
             // menambah hitungan frame menoleh dari frame kosong.
-            this.yawExceededFrames = 0;
+            //
+            // Tambahan: wajah yang hilang SEJENAK (mis. user menoleh
+            // sehingga keluar kotak deteksi) TIDAK boleh menghapus
+            // progress liveness. Hanya kalau hilang lebih lama dari
+            // `missToleranceFrames` barulah streak "menoleh" di-reset,
+            // dan sampel netral yang sudah terkumpul tetap disimpan.
+            //
+            // Sebelumnya: begitu `update(null)` dipanggil, streak langsung
+            // jadi 0, sehingga user harus mengulang gerakan terus
+            // kemeren. Inilah akar keluhan "terlalu sensitif".
+            this.missFrames += 1;
+
+            if (this.missFrames > this.cfg.missToleranceFrames) {
+                this.yawExceededFrames = 0;
+
+                if (this.cfg.missResetOnExceed) {
+                    // Reset HANYA streak, JANGAN reset kalibrasi netral
+                    // (yawNeutral / yawNeutralSamples) supaya user tidak
+                    // harus mengulang seluruh fase "diam".
+                    this.yawPrev = null;
+                    this.yawStillFrames = 0;
+                }
+            }
         }
 
         return {

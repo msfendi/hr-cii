@@ -39,7 +39,35 @@ class EmployeePayrollController extends Controller
             // DULU tidak dikirim ke view. Toggle di Settings bisa ON,
             // tapi halaman login payroll tidak pernah memeriksa apa pun.
             'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('slip'),
+            // PERBAIKAN V13 (2026-11-06): wajib input NPK sebelum kamera
+            // pada halaman slip gaji.
+            'npkRequired' => FaceRecognitionService::isNpkRequiredEnabled(),
         ]);
+    }
+
+    /**
+     * PERBAIKAN V13 (2026-11-06): validasi NPK sebelum kamera menyala
+     * di halaman slip gaji.
+     */
+    public function validateNpk(Request $request)
+    {
+        $request->validate([
+            'npk' => 'required|string|max:50',
+        ], [], [
+            'npk.required' => 'NPK wajib diisi.',
+        ]);
+
+        $result = FaceRecognitionService::validateNpkForFace((string) $request->input('npk'));
+
+        return response()->json([
+            'ok'       => (bool) $result['ok'],
+            'status'   => $result['status'],
+            'npk'      => $result['npk'],
+            'name'     => $result['name'],
+            'has_face' => $result['has_face'],
+            'inactive' => $result['inactive'],
+            'message'  => $result['message'],
+        ], $result['ok'] ? 200 : $result['status']);
     }
 
     public function apiPeriods()
@@ -156,12 +184,34 @@ class EmployeePayrollController extends Controller
             ], 422);
         }
 
-        $result = FaceRecognitionService::match($descriptor);
+        // PERBAIKAN V13 (2026-11-06): bila NPK sudah divalidasi pada
+        // langkah sebelumnya (input NPK dulu sebelum kamera), maka
+        // pencocokan WAJIB dibatasi ke NPK itu saja. Tanpa ini, wajah
+        // orang lain yang kebetulan mirip masih bisa lolos.
+        $requestedNpk = strtoupper(trim((string) $request->input('npk', '')));
+
+        if ($requestedNpk !== '') {
+            $check = FaceRecognitionService::validateNpkForFace($requestedNpk);
+
+            if (!$check['ok']) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => $check['message'],
+                    'inactive' => (bool) $check['inactive'],
+                ], $check['status']);
+            }
+
+            $result = FaceRecognitionService::matchByNpk($descriptor, $requestedNpk);
+        } else {
+            $result = FaceRecognitionService::match($descriptor);
+        }
 
         if (!FaceRecognitionService::isConfidentMatch($result)) {
             return response()->json([
                 'status'  => false,
-                'message' => 'Wajah tidak dikenali. Pastikan wajah sudah terdaftar di menu Manage Face Recognition.',
+                'message' => $requestedNpk !== ''
+                    ? 'Wajah tidak cocok dengan NPK ' . $requestedNpk . '. Silakan coba lagi.'
+                    : 'Wajah tidak dikenali. Pastikan wajah sudah terdaftar di menu Manage Face Recognition.',
             ], 401);
         }
 

@@ -153,7 +153,24 @@
                         {{-- Pane wajib punya 'show active' ketika tab Scan Wajah adalah default.
                              Tanpa ini panelnya tetap hidden sampai user klik tab lain dulu. --}}
                         <div class="tab-pane fade {{ $defaultTab === 'facelogin' ? 'show active' : '' }}" id="facelogin">
-                           <div id="faceStep1">
+                           {{-- PERBAIKAN V13 (2026-11-06): input NPK dulu
+                                sebelum kamera menyala, supaya pencocokan wajah
+                                tidak bisa salah orang. --}}
+                           @if ($npkRequired ?? true)
+                           <div id="faceStep0">
+                              <div class="form-group">
+                                 <label class="font-weight-bold text-gray-700">NPK Karyawan</label>
+                                 <input type="text" id="face_npk_input" class="form-control rounded-pill"
+                                    placeholder="Masukkan NPK Anda" autocomplete="off" maxlength="50">
+                                 <small class="text-muted">Wajib diisi sebelum kamera dibuka.</small>
+                              </div>
+                              <button type="button" class="btn btn-primary btn-block rounded-pill font-weight-bold shadow-sm mt-2"
+                                 id="faceNpkNextBtn" onclick="validateFaceNpk()">
+                                 <i class="fas fa-arrow-right mr-1"></i> Lanjut Scan Wajah
+                              </button>
+                           </div>
+                           @endif
+                           <div id="faceStep1" @if ($npkRequired ?? true) style="display:none" @endif>
                               <div class="form-group">
                                  <label class="font-weight-bold text-gray-700">Pilih Periode</label>
                                  <select class="form-control rounded-pill" id="run_id_face">
@@ -397,6 +414,8 @@
 
             const modelUrl   = "{{ asset('vendor-face-api/model') }}";
             const identifyUrl = "{{ route('employee-payroll.face-identify') }}";
+            const validateNpkUrl = "{{ route('employee-payroll.validate-npk') }}";
+            const npkRequired = {{ ($npkRequired ?? true) ? 'true' : 'false' }};
 
             let active = false;
             let busy = false;
@@ -405,6 +424,9 @@
             // V31.9g: penanda sedang mengirim verifikasi. Loop tetap hidup.
             let verifying = false;
             let identifiedNpk = null;
+            // PERBAIKAN V13 (2026-11-06): NPK hasil validasi, dipakai
+            // membatasi pencocokan wajah ke satu karyawan saja.
+            let validatedNpk = '';
 
             const faceGuide = document.getElementById('faceGuide');
 
@@ -441,44 +463,88 @@
                startFace();
             };
 
+            // PERBAIKAN V13 (2026-11-06): validasi NPK (langkah 0)
+            // dijalankan terpisah dari nextFace() supaya alurnya:
+            // NPK -> pilih periode -> kamera.
+            window.validateFaceNpk = function () {
+               const npkInput = document.getElementById('face_npk_input');
+               const npk = (npkInput ? npkInput.value : '').trim();
+
+               if (!npk) {
+                  Swal.fire('NPK Wajib Diisi', 'Masukkan NPK Anda sebelum membuka kamera.', 'warning');
+                  return;
+               }
+
+               const btn = document.getElementById('faceNpkNextBtn');
+               if (btn) btn.disabled = true;
+
+               Swal.fire({
+                  title: 'Memvalidasi NPK...',
+                  allowOutsideClick: false,
+                  didOpen: () => Swal.showLoading()
+               });
+
+               // PERBAIKAN V15 (2026-11-06): kirim token CSRF.
+               // Tanpa _token, Laravel menolak dengan 419
+               // "CSRF token mismatch" sehingga NPK selalu gagal divalidasi.
+               $.post(validateNpkUrl, {
+                  _token: csrf,
+                  npk: npk
+               })
+                  .done(function (res) {
+                     validatedNpk = res.npk || npk;
+                     if (npkInput) npkInput.value = validatedNpk;
+
+                     Swal.close();
+
+                     document.getElementById('faceStep0').style.display = 'none';
+                     document.getElementById('faceStep1').style.display = 'block';
+                  })
+                  .fail(function (xhr) {
+                     const res = (xhr.responseJSON) || {};
+                     Swal.close();
+                     if (btn) btn.disabled = false;
+
+                     Swal.fire({
+                        icon: 'error',
+                        title: res.inactive ? 'Karyawan Sudah Keluar' : 'NPK Tidak Valid',
+                        text: res.message || 'NPK tidak dapat diverifikasi. Silakan coba lagi.'
+                     });
+                  });
+            };
+
             // PERBAIKAN V31.3c (2026-11-04): liveness untuk login slip gaji.
             // Dulu halaman ini langsung mengirim descriptor begitu wajah
             // terdeteksi, sehingga foto cetak bisa dipakai membuka slip.
             const livenessWajib = {{ ($livenessEnabled ?? true) ? 'true' : 'false' }};
 
             // ================================================================
-            // PERBAIKAN V31.9 (2026-11-05): LIVENESS DISAMAKAN PERSIS DENGAN
-            // HALAMAN ACUAN /face-attendance/login.
+            // PERBAIKAN V14 (2026-11-06): PAKAI LivenessCheck BERSAMA.
             // ================================================================
-            // Sebelumnya halaman ini memakai pustaka LivenessCheck yang
-            // skema kalibrasinya berbeda dari halaman acuan, sehingga
-            // liveness terasa tidak pernah lolos walau user sudah menoleh.
+            // Semua halaman face login kini memakai satu file:
+            // public/js/liveness-check.js
+            //   - /face-attendance/login (acuan)
+            //   - /self-register-face
+            //   - /employee-payroll (halaman ini)
+            //   - /pengajuan-cuti/login
             //
-            // Sekarang logikanya diambil APA ADANYA dari halaman acuan:
-            //   * checkEyeBlink()  -> EAR rata-rata, ambang min(baseline*0.55, 0.21)
-            //   * checkHeadTurn()  -> rasio hidung absolut, zona netral 0.32-0.68,
-            //                         deviasi > 0.06, streak 3 frame
+            // Tujuannya: (1) ambang "menoleh" seragam, dan (2) toleransi
+            // sensor hilang seragam, sehingga user tidak perlu mengulang
+            // gerakan terus-menerus ("terlalu sensitif").
             //
-            // Catatan V31.9: zona netral & deviasi sengaja DIPERLONGGAR dari acuan
-            // (acuan: 0.40-0.60 / 0.12) karena dengan nilai acuan, menoleh 8-12
-            // derajat masih TIDAK lolos -- itulah keluhan "menoleh sedikit tetap
-            // gagal". Nilai baru sudah diuji: menoleh 8 derajat lolos, sedangkan
-            // wajah diam dengan goyangan kamera tetap tidak lolos (anti-foto).
-            //   * toleransi hilang-deteksi 8 frame (DETECT_MISS_TOLERANCE)
-            const DETECT_MISS_TOLERANCE = 8;       // toleransi 8 frame tanpa wajah
-            const HEAD_TURN_STREAK_REQUIRED = 2;   // butuh 2 frame berturut-turut
+            // missToleranceFrames: 12 frame (~1,8 detik) wajah boleh hilang
+            // tanpa menghapus progress liveness.
+            const liveness = new LivenessCheck({
+               required: true,
+               missToleranceFrames: 12
+            });
+
+            const DETECT_MISS_TOLERANCE = 12;      // toleransi 12 frame tanpa wajah
 
             let livenessVerified = false;
-            let initialNoseRatio = null;
             let blinkDetected = false;
             let headTurnDetected = false;
-            let headTurnStreak = 0;
-            let lastGoodNoseRatio = null;
-            let eyeBaseline = null;
-            let eyeClosedSeen = false;
             let detectMissCount = 0;
-            let livenessAdaptiveThreshold = 0.04;  // ambang deviasi, bisa turun adaptif
-            let livenessSmallDeltaCount = 0;
 
             /**
              * Log diagnostik liveness ke console browser.
@@ -487,149 +553,6 @@
                 try {
                     console.log('[LIVENESS] ' + msg);
                 } catch (e) { /* noop */ }
-            }
-
-            /**
-             * Deteksi kedipan mata (sama persis dengan halaman acuan).
-             */
-            function checkEyeBlink(landmarks) {
-                let leftEye, rightEye;
-                try {
-                    leftEye = landmarks.getLeftEye();
-                    rightEye = landmarks.getRightEye();
-                } catch (e) {
-                    return false;
-                }
-                if (!leftEye || !rightEye || leftEye.length < 6 || rightEye.length < 6) return false;
-
-                const hitungEAR = (eye) => {
-                    const d1 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
-                    const d2 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
-                    const d3 = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
-                    return (d1 + d2) / (2.0 * d3);
-                };
-
-                const ear = (hitungEAR(leftEye) + hitungEAR(rightEye)) / 2.0;
-                if (!isFinite(ear) || ear <= 0) return false;
-
-                if (eyeBaseline === null) {
-                    eyeBaseline = ear;
-                    eyeClosedSeen = false;
-                    return false;
-                }
-
-                const closedThreshold = Math.min(eyeBaseline * 0.55, 0.21);
-                if (ear < closedThreshold) {
-                    eyeClosedSeen = true;
-                    return false;   // tunggu mata membuka kembali
-                }
-
-                if (eyeClosedSeen) {
-                    eyeBaseline = eyeBaseline * 0.4 + ear * 0.6;
-                    eyeClosedSeen = false;
-                    blinkDetected = true;
-                    return true;
-                }
-
-                eyeBaseline = eyeBaseline * 0.9 + ear * 0.1;
-                return false;
-            }
-
-            /**
-             * Deteksi menoleh (sama persis dengan halaman acuan).
-             */
-            function checkHeadTurn(landmarks) {
-                const positions = landmarks.positions;
-                const leftJaw = positions[0];
-                const rightJaw = positions[16];
-                const noseTip = positions[30];
-
-                if (!leftJaw || !rightJaw || !noseTip) return false;
-
-                const jawWidth = Math.abs(rightJaw.x - leftJaw.x);
-                // Wajah terlalu kecil / jauh -> jangan ambil kesimpulan apa pun.
-                // V32.5: ambang 40px diturunkan ke 30px. Webcam laptop (720p/1080p,
-                // user duduk lebih jauh) menghasilkan landmark wajah lebih kecil ->
-                // iterasi berbasis landmark lama berhenti di guard ini, delta selalu 0
-                // dan streak tidak pernah naik.
-                if (!isFinite(jawWidth) || jawWidth < 30) {
-                    DBG('STOP: jawWidth=' + jawWidth.toFixed(1) + ' (< 30, wajah terlalu kecil)');
-                    return false;
-                }
-
-                const currentRatio = (noseTip.x - leftJaw.x) / jawWidth;
-                if (!isFinite(currentRatio)) return false;
-
-                // -- Baseline pertama: rekam, belum bisa dinilai --
-                if (initialNoseRatio === null) {
-                    initialNoseRatio = currentRatio;
-                    lastGoodNoseRatio = currentRatio;
-                    headTurnStreak = 0;
-                    livenessAdaptiveThreshold = 0.04;
-                    livenessSmallDeltaCount = 0;
-                    DBG('INIT ratio=' + currentRatio.toFixed(3) + ' jawWidth=' + jawWidth.toFixed(1));
-                    return false;
-                }
-
-                // -- Hitung deviasi terhadap baseline --
-                const delta = currentRatio - initialNoseRatio;
-                const absDelta = Math.abs(delta);
-
-                // Menoleh sah bila:
-                //   a. hidung jelas bergeser dari tengah (di luar 0.32-0.68), ATAU
-                //   b. deviasi terhadap baseline melewati ambang adaptif
-                const jauhDariTengah = (currentRatio < 0.32 || currentRatio > 0.68);
-
-                // ============================================================
-                // AMBANG ADAPTIF (menyamakan halaman /login).
-                // Ambang diturunkan DINAMIS hanya ketika delta kecil terus-
-                // terus teramati, sehingga keamanan tidak diturunkan statis.
-                // ============================================================
-                const AMBANG_MIN = 0.03;
-                const AMBANG_STASIS = 0.04;
-
-                if (absDelta > 0.08) {
-                    // Gerak tegas terdeteksi -> kembalikan ambang ke normal.
-                    livenessAdaptiveThreshold = AMBANG_STASIS;
-                    livenessSmallDeltaCount = 0;
-                } else if (absDelta < 0.02) {
-                    livenessSmallDeltaCount += 1;
-                    if (livenessSmallDeltaCount > 8) {
-                        livenessAdaptiveThreshold = Math.max(AMBANG_MIN, livenessAdaptiveThreshold - 0.005);
-                        livenessSmallDeltaCount = 0;
-                    }
-                } else {
-                    livenessSmallDeltaCount = 0;
-                }
-
-                const deviasiCukup = absDelta > livenessAdaptiveThreshold;
-
-                // Log UNCONDITIONAL: setiap frame yang lolos guard print
-                // ratio/delta/streak/ambang, sehingga ada jejak di console.
-                DBG('ratio=' + currentRatio.toFixed(3) +
-                    ' delta=' + absDelta.toFixed(3) +
-                    ' streak=' + headTurnStreak +
-                    ' ambang=' + livenessAdaptiveThreshold.toFixed(3) +
-                    ' netral=' + (!jauhDariTengah) +
-                    ' blink=' + blinkDetected);
-
-                if (jauhDariTengah || deviasiCukup) {
-                    headTurnStreak += 1;
-                } else {
-                    // Gerakan kecil / noise -> jangan reset baseline, cukup kurangi streak.
-                    headTurnStreak = Math.max(0, headTurnStreak - 1);
-                }
-
-                // Baseline diperbarui pelan HANYA saat wajah kembali ke posisi netral,
-                // supaya perubahan postur jangka panjang (geser duduk, dsb.) terserap
-                // tanpa menghapus bukti geleng yang sedang berlangsung. (sama acuan)
-                if (!deviasiCukup) {
-                    initialNoseRatio = initialNoseRatio * 0.85 + currentRatio * 0.15;
-                }
-
-                lastGoodNoseRatio = currentRatio;
-
-                return headTurnStreak >= HEAD_TURN_STREAK_REQUIRED;
             }
 
             async function loop() {
@@ -647,22 +570,19 @@
                         // Wajah terdeteksi -> reset hitungan frame hilang.
                         detectMissCount = 0;
 
-                        // --- GERBANG LIVENESS (sama seperti halaman acuan) ---
+                        // --- GERBANG LIVENESS (detektor BERSAMA) ---
                         if (livenessWajib && !livenessVerified) {
-                           if (detected.landmarks) {
-                              const isBlink = checkEyeBlink(detected.landmarks);
-                              const isTurn = checkHeadTurn(detected.landmarks);
+                           const hasilLiveness = liveness.update(detected.landmarks || null);
 
-                              if (isBlink) {
+                           if (hasilLiveness.passed) {
+                              if (hasilLiveness.blink) {
                                  blinkDetected = true;
-                                 livenessVerified = true;
-                              } else if (isTurn) {
+                              } else if (hasilLiveness.turn) {
                                  headTurnDetected = true;
-                                 livenessVerified = true;
                               }
-                           }
-                           if (!livenessVerified) {
-                              setStatus('LIVENESS CHECK: Silakan BERKEDIP atau MENOLEH sedikit ke kiri / kanan', 'info');
+                              livenessVerified = true;
+                           } else {
+                              setStatus('LIVENESS CHECK: ' + (hasilLiveness.hint || 'Silakan BERKEDIP atau MENOLEH sedikit ke kiri / kanan'), 'info');
                               busy = false;
                               setTimeout(loop, 120);
                               return;
@@ -677,7 +597,8 @@
                         setStatus('Wajah terdeteksi, memverifikasi...');
 
                         const data = await FaceRecognition.postJson(identifyUrl, {
-                           descriptor: detected.descriptor
+                           descriptor: detected.descriptor,
+                           npk: validatedNpk || ((document.getElementById('face_npk_input') || {}).value || '').trim()
                         });
 
                         if (data.status) {
@@ -732,12 +653,8 @@
                         // liveness diminta ulang (kecuali dimatikan).
                         verifying = false;
                         livenessVerified = !livenessWajib;
-                        initialNoseRatio = null;
-                        headTurnStreak = 0;
-                        livenessAdaptiveThreshold = 0.04;
-                        livenessSmallDeltaCount = 0;
-                        eyeBaseline = null;
-                        eyeClosedSeen = false;
+                        // Reset sesi liveness BERSAMA.
+                        liveness.reset();
                         setStatus('Wajah belum cocok. Posisikan wajah dengan jelas...', 'error');
                         active = true;
                         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -750,22 +667,25 @@
                         // menoleh.
                         detectMissCount += 1;
 
+                        // PERBAIKAN V14: teruskan "wajah hilang" ke detektor
+                        // BERSAMA. Di dalamnya sudah ada toleransi
+                        // missToleranceFrames, jadi 1-2 frame lost (wajar
+                        // saat menoleh) TIDAK menghapus progress liveness.
+                        if (livenessWajib && !livenessVerified) {
+                           liveness.update(null);
+                        }
+
                         if (detectMissCount > DETECT_MISS_TOLERANCE) {
                            // Wajah benar-benar pergi -> baru reset sesi liveness.
                            setStatus('Arahkan Wajah ke Kamera', 'error');
-                           initialNoseRatio = null;
-                           headTurnStreak = 0;
-                           livenessAdaptiveThreshold = 0.04;
-                           livenessSmallDeltaCount = 0;
-                           lastGoodNoseRatio = null;
-                           eyeBaseline = null;
-                           eyeClosedSeen = false;
+                           liveness.reset();
                            if (!livenessWajib) {
                               livenessVerified = true;
                            }
-                        } else if (headTurnStreak > 0 && livenessWajib) {
-                           // Sedang di tengah menoleh -> tahan instruksi.
-                           setStatus('LIVENESS CHECK: Silakan BERKEDIP atau MENOLEH sedikit ke kiri / kanan', 'info');
+                        } else if (livenessWajib) {
+                           // Wajah sesaat hilang (wajar saat menoleh) ->
+                           // tahan instruksi, jangan reset progress.
+                           setStatus('LIVENESS CHECK: ' + (liveness.hint() || 'Silakan BERKEDIP atau MENOLEH sedikit ke kiri / kanan'), 'info');
                         }
                      }
                   } catch (error) {
@@ -774,12 +694,8 @@
                      // mematikan sesi; liveness diminta ulang dan loop jalan.
                      verifying = false;
                      livenessVerified = !livenessWajib;
-                     initialNoseRatio = null;
-                     headTurnStreak = 0;
-                     livenessAdaptiveThreshold = 0.04;
-                     livenessSmallDeltaCount = 0;
-                     eyeBaseline = null;
-                     eyeClosedSeen = false;
+                     // Reset sesi liveness BERSAMA.
+                     liveness.reset();
                      active = true;
                      setStatus('Gagal memproses wajah: ' + error.message, 'error');
                   }

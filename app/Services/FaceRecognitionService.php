@@ -142,6 +142,137 @@ class FaceRecognitionService
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | PERBAIKAN V13 (2026-11-06): toggle "Input NPK Dulu"
+    |--------------------------------------------------------------------------
+    | Satu sumber kebenaran untuk semua halaman yang memakai face login:
+    | presensi, slip gaji, dan pengajuan cuti.
+    */
+    public static function isNpkRequiredEnabled(): bool
+    {
+        try {
+            return (bool) static::settings()->is_npk_required_enabled;
+        } catch (\Throwable $e) {
+            return true;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PERBAIKAN V13 (2026-11-06): validasi NPK sebelum kamera menyala
+    |--------------------------------------------------------------------------
+    | Dipakai bersama oleh /face-attendance/login, /employee-payroll, dan
+    | /pengajuan-cuti/login agar tidak ada duplikasi logika.
+    |
+    | Mengembalikan array:
+    |   ok            => bool   NPK boleh lanjut ke kamera
+    |   status        => int    HTTP status (200/403/404/422/500)
+    |   npk, name     => string
+    |   has_face      => bool
+    |   inactive      => bool   karyawan sudah keluar (PKWT.TKK terisi)
+    |   message       => string
+    */
+    public static function validateNpkForFace(string $npk): array
+    {
+        $npk = trim($npk);
+
+        if ($npk === '') {
+            return [
+                'ok'       => false,
+                'status'   => 422,
+                'npk'      => '',
+                'name'     => '',
+                'has_face' => false,
+                'inactive' => false,
+                'message'  => 'NPK wajib diisi.',
+            ];
+        }
+
+        try {
+            $biodata = \Illuminate\Support\Facades\DB::table('BIODATA')
+                ->where('NPK', $npk)
+                ->select('NPK', 'NAMA_KARYAWAN')
+                ->first();
+        } catch (\Throwable $e) {
+            \Log::warning('validateNpkForFace gagal baca BIODATA: ' . $e->getMessage());
+
+            return [
+                'ok'       => false,
+                'status'   => 500,
+                'npk'      => $npk,
+                'name'     => '',
+                'has_face' => false,
+                'inactive' => false,
+                'message'  => 'Gagal memuat data karyawan. Silakan coba lagi.',
+            ];
+        }
+
+        if (!$biodata) {
+            return [
+                'ok'       => false,
+                'status'   => 404,
+                'npk'      => $npk,
+                'name'     => '',
+                'has_face' => false,
+                'inactive' => false,
+                'message'  => 'NPK ' . $npk . ' tidak ditemukan.',
+            ];
+        }
+
+        $name = (string) ($biodata->NAMA_KARYAWAN ?? $npk);
+
+        // Karyawan keluar (PKWT.TKK terisi) tidak boleh lanjut face attendance.
+        $activeStatus = EmployeeActiveStatusService::check($npk);
+        if ($activeStatus['found'] && !$activeStatus['active']) {
+            return [
+                'ok'       => false,
+                'status'   => 403,
+                'npk'      => $npk,
+                'name'     => $name,
+                'has_face' => false,
+                'inactive' => true,
+                'message'  => EmployeeActiveStatusService::inactiveMessage(
+                    $activeStatus['nama'],
+                    $activeStatus['tkk']
+                ),
+            ];
+        }
+
+        $hasFace = false;
+        try {
+            $hasFace = EmployeeFace::query()
+                ->where('npk', $npk)
+                ->where('is_active', true)
+                ->whereNotNull('descriptor')
+                ->exists();
+        } catch (\Throwable $e) {
+            \Log::warning('validateNpkForFace gagal baca employee_faces: ' . $e->getMessage());
+        }
+
+        if (!$hasFace) {
+            return [
+                'ok'       => false,
+                'status'   => 422,
+                'npk'      => $npk,
+                'name'     => $name,
+                'has_face' => false,
+                'inactive' => false,
+                'message'  => 'Wajah untuk NPK ' . $npk . ' belum terdaftar. Silakan hubungi admin.',
+            ];
+        }
+
+        return [
+            'ok'       => true,
+            'status'   => 200,
+            'npk'      => $npk,
+            'name'     => $name,
+            'has_face' => true,
+            'inactive' => false,
+            'message'  => 'NPK valid. Silakan posisikan wajah di kamera.',
+        ];
+    }
+
     public static function isQrPayrollEnabled(): bool
     {
         try {

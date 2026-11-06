@@ -16,6 +16,7 @@ use App\Http\Controllers\PelamarController;
 use App\Http\Controllers\PKWTController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\QuizController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OvertimeController;
@@ -1324,6 +1325,11 @@ Route::get('/employee-payroll/qr-login', [EmployeePayrollController::class, 'qrL
 Route::post('/employee-payroll/face-identify', [EmployeePayrollController::class, 'faceIdentify'])
     ->middleware('throttle:20,1')
     ->name('employee-payroll.face-identify');
+// PERBAIKAN V13 (2026-11-06): validasi NPK sebelum kamera menyala
+// di halaman slip gaji.
+Route::post('/employee-payroll/validate-npk', [EmployeePayrollController::class, 'validateNpk'])
+    ->middleware('throttle:20,1')
+    ->name('employee-payroll.validate-npk');
 Route::get('/employee-payroll/show/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlip'])->name('employee-payroll.view-slip');
 Route::get('/employee-payroll/show-audit/{run_id}/{npk}', [EmployeePayrollController::class, 'showSlipAudit'])->name('employee-payroll.view-slip-audit');
 Route::get('/employee-payroll/view/{run_id}/{npk}', [EmployeePayrollController::class, 'viewSlip'])->name('employee-payroll.view-slip-html');
@@ -1481,6 +1487,11 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::post('/verify-manual', [PengajuanCutiController::class, 'verifyManual'])->name('pengajuan-cuti.verify-manual');
     Route::get('/qr-login', [PengajuanCutiController::class, 'qrLogin'])->name('pengajuan-cuti.qr-login');
     Route::post('/face-login', [PengajuanCutiController::class, 'faceLogin'])->name('pengajuan-cuti.face-login');
+    // PERBAIKAN V13 (2026-11-06): validasi NPK sebelum kamera menyala
+    // di halaman pengajuan cuti.
+    Route::post('/validate-npk', [PengajuanCutiController::class, 'validateNpk'])
+        ->middleware('throttle:20,1')
+        ->name('pengajuan-cuti.validate-npk');
     Route::get('/form', [PengajuanCutiController::class, 'form'])->name('pengajuan-cuti.form');
     Route::post('/submit', [PengajuanCutiController::class, 'submitForm'])->name('pengajuan-cuti.submit-form');
     Route::get('/get-leave-balance', [PengajuanCutiController::class, 'getLeaveBalance'])->name('pengajuan-cuti.get-leave-balance');
@@ -1589,4 +1600,32 @@ Route::name('face-attendance.')->group(function () {
     Route::get('/face-attendance/sign-in', [FaceAttendanceController::class, 'login'])->name('login');
     Route::get('/face-attendance/summary', [FaceAttendanceController::class, 'rekap'])->name('rekap');
     Route::get('/face-attendance/area-map', [FaceAttendanceController::class, 'map'])->name('map');
+});
+
+// ========================================
+// QUIZ / POLLING (Mentimeter-like)
+// ========================================
+// Admin routes (protected)
+Route::prefix('quiz')->name('quiz.')->middleware(['auth'])->group(function () {
+    Route::get('/', [QuizController::class, 'index'])->name('index');
+    Route::get('/create', [QuizController::class, 'create'])->name('create');
+    Route::post('/', [QuizController::class, 'store'])->name('store');
+    Route::get('/{quiz}/edit', [QuizController::class, 'edit'])->name('edit');
+    Route::patch('/{quiz}', [QuizController::class, 'update'])->name('update');
+    Route::post('/{quiz}/questions', [QuizController::class, 'addQuestion'])->name('addQuestion');
+    Route::delete('/{quiz}/questions/{question}', [QuizController::class, 'deleteQuestion'])->name('deleteQuestion');
+    Route::post('/{quiz}/start', [QuizController::class, 'start'])->name('start');
+    Route::get('/{quiz}/live', [QuizController::class, 'live'])->name('live');
+    Route::get('/{quiz}/live-data', [QuizController::class, 'liveData'])->name('liveData');
+    Route::post('/{quiz}/close', [QuizController::class, 'close'])->name('close');
+    Route::delete('/{quiz}', [QuizController::class, 'destroy'])->name('destroy');
+});
+
+// Peserta routes (public - akses via QR code)
+Route::prefix('quiz')->name('quiz.')->group(function () {
+    Route::get('/join/{qrCode}', [QuizController::class, 'joinShow'])->name('join.show');
+    Route::post('/join/{qrCode}', [QuizController::class, 'joinStore'])->name('joinStore');
+    Route::get('/session/{session}/question/{question}', [QuizController::class, 'sessionQuestion'])->name('sessionQuestion');
+    Route::post('/session/{session}/answer', [QuizController::class, 'submitAnswer'])->name('submitAnswer');
+    Route::get('/session/{session}/result', [QuizController::class, 'sessionResult'])->name('sessionResult');
 });

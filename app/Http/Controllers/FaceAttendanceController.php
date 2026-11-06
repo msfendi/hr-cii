@@ -11,6 +11,8 @@ use App\Models\FaceAttendanceLog;
 // PERBAIKAN V33 (2026-11-05): dipakai untuk toggle "input NPK dulu"
 // di halaman /face-attendance/login.
 use App\Models\FaceAttendanceSetting;
+// PERBAIKAN 4 (2026-11-06): is_npk_required_enabled sudah dipindah ke face_recognition_settings
+use App\Models\FaceRecognitionSetting;
 use App\Services\FaceRecognitionService;
 use App\Services\AttendanceNonceService;
 use App\Services\EmployeeActiveStatusService;
@@ -34,7 +36,9 @@ class FaceAttendanceController extends Controller
         // Kalau TRUE: user input NPK -> server memvalidasi -> baru kamera
         // dibuka, dan descriptor wajah HANYA dicocokkan ke NPK tersebut.
         // Kalau FALSE: flow lama (kamera langsung, cari ke semua karyawan).
-        $npkRequired = FaceAttendanceSetting::isNpkRequiredEnabled();
+        // PERBAIKAN 4 (2026-11-06): setting input NPK dulu sudah dipindah
+        // dari face_attendance_settings ke face_recognition_settings.
+        $npkRequired = FaceRecognitionSetting::isNpkRequiredEnabled();
 
         return view('face_attendance.login', compact('locations', 'livenessEnabled', 'npkRequired'));
     }
@@ -1851,7 +1855,9 @@ class FaceAttendanceController extends Controller
             // Fallback ke match() hanya kalau setting OFF (npk tidak dikirim),
             // sehingga flow lama tetap utuh.
             // ===============================================================
-            $npkRequired = FaceAttendanceSetting::isNpkRequiredEnabled();
+            // PERBAIKAN 4 (2026-11-06): setting input NPK dulu sudah dipindah
+            // ke face_recognition_settings.
+            $npkRequired = FaceRecognitionSetting::isNpkRequiredEnabled();
             $npkInput = trim((string) $request->input('npk', ''));
 
             if ($npkRequired && $npkInput === '') {
