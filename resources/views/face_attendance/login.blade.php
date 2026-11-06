@@ -219,6 +219,8 @@
      Tujuannya: perilaku "menoleh" dan toleransi sensor hilang seragam
      di semua halaman, dan perbaikan cukup dilakukan di satu file. --}}
 <script src="{{ asset('js/liveness-check.js') }}?v=14"></script>
+{{-- RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09 --}}
+<script src="{{ asset('js/random-challenge.js') }}?v=2"></script>
 
 <script>
     const activeLocations = @json($locations);
@@ -411,6 +413,26 @@
 
     let blinkDetected = false;
     let headTurnDetected = false;
+
+    // ==================================================================
+    // RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09
+    // ==================================================================
+    // ORTogonal terhadap liveness. Logika liveness di bawah TIDAK diubah
+    // sama sekali. Random challenge menambah satu syarat terpisah yang
+    // harus terpenuhi SEBELUM liveness boleh dimulai (dan sebelum descriptor
+    // dikirim ke server).
+    const RANDOM_CHALLENGE_REQUIRED = Boolean(@json((bool) ($randomChallengeEnabled ?? false)));
+    const RANDOM_CHALLENGE_TYPE = @json($randomChallenge['type'] ?? null);
+    const randomChallenge = new RandomChallenge({
+        // Preview kamera depan memakai scaleX(-1), jadi arah kiri/kanan
+        // pada landmark face-api terbalik dari yang terlihat user.
+        // mirrored=true membalik tanda yaw agar challenge tidak terbalik.
+        mirrored: true,
+        required: RANDOM_CHALLENGE_REQUIRED,
+        target: RANDOM_CHALLENGE_TYPE,
+        missToleranceFrames: 12
+    });
+    let randomChallengeVerified = !RANDOM_CHALLENGE_REQUIRED;
 
     // ==================================================================
     // PERBAIKAN V14 (2026-11-06): liveness memakai detektor BERSAMA.
@@ -820,6 +842,26 @@
 
             // PERBAIKAN 24: deteksi berhasil -> reset hitungan gagal.
             detectMissCount = 0;
+
+            // ==================================================================
+            // GERBANG RANDOM CHALLENGE (V1, 2026-11-09)
+            // ==================================================================
+            // ORTogonal terhadap liveness. Kalau challenge belum terpenuhi,
+            // proses BERHENTI di sini: descriptor TIDAK dikirim ke server
+            // dan gerbang liveness di bawah tidak dijalankan.
+            // Logika liveness sendiri tidak diubah sama sekali.
+            if (RANDOM_CHALLENGE_REQUIRED && !randomChallengeVerified) {
+                const hasilChallenge = randomChallenge.update(landmarks);
+
+                if (hasilChallenge.passed) {
+                    randomChallengeVerified = true;
+                } else {
+                    if (overlayText) overlayText.innerHTML = '<i class="fas fa-random text-warning mr-1"></i> ' + (hasilChallenge.hint || 'Ikuti tantangan yang diminta');
+                    if (alertText) alertText.innerHTML = 'TANTANGAN: ' + (hasilChallenge.hint || 'Ikuti tantangan yang diminta');
+                    setTimeout(detectFaceLoop, 200);
+                    return;
+                }
+            }
 
             if (!livenessVerified) {
                 // PERBAIKAN V14 (2026-11-06): pakai detektor BERSAMA.

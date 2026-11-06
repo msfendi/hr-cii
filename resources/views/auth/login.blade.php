@@ -266,6 +266,8 @@
 <script src="{{ asset('js/face-recognition.js') . '?v=327' }}"></script>
 {{-- PERBAIKAN V31.3c (2026-11-04): detektor liveness bersama --}}
 <script src="{{ asset('js/liveness-check.js') . '?v=327' }}"></script>
+{{-- RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09 --}}
+<script src="{{ asset('js/random-challenge.js') . '?v=2' }}"></script>
 @endif
 </body>
 
@@ -502,6 +504,25 @@ window.stopFaceLogin  = function () {};
     // ditulis mati di sini. Bila livenessEnabled false, objek ini
     // selalu melaporkan passed=true sehingga perilaku lama tidak berubah.
     const livenessWajib = {{ ($livenessEnabled ?? true) ? 'true' : 'false' }};
+
+    // ================================================================
+    // RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09
+    // ================================================================
+    // ORTogonal terhadap liveness. Implementasi liveness lokal di halaman
+    // ini TIDAK diubah sama sekali. Random challenge hanya menambah satu
+    // syarat terpisah yang harus terpenuhi SEBELUM liveness & match.
+    const randomChallengeWajib = {{ ($randomChallengeEnabled ?? false) ? 'true' : 'false' }};
+    const randomChallengeType = @json($randomChallenge['type'] ?? null);
+    const randomChallenge = new RandomChallenge({
+        // Preview kamera depan memakai scaleX(-1), jadi arah kiri/kanan
+        // pada landmark face-api terbalik dari yang terlihat user.
+        // mirrored=true membalik tanda yaw agar challenge tidak terbalik.
+        mirrored: true,
+        required: randomChallengeWajib,
+        target: randomChallengeType,
+        missToleranceFrames: 12
+    });
+    let randomChallengeVerified = !randomChallengeWajib;
 
     // ================================================================
     // PERBAIKAN V31.9 (2026-11-05): LIVENESS DISAMAKAN PERSIS DENGAN
@@ -742,6 +763,23 @@ window.stopFaceLogin  = function () {};
                 if (detected) {
                     // Wajah terdeteksi -> reset hitungan frame yang hilang.
                     detectMissCount = 0;
+
+                    // --- GERBANG RANDOM CHALLENGE (V1, 2026-11-09) ---
+                    // ORTogonal terhadap liveness. Kalau challenge belum
+                    // terpenuhi, proses BERHENTI di sini -- descriptor
+                    // TIDAK dikirim dan gerbang liveness tidak dijalankan.
+                    if (randomChallengeWajib && !randomChallengeVerified) {
+                        const hasilChallenge = randomChallenge.update(detected.landmarks || null);
+
+                        if (hasilChallenge.passed) {
+                            randomChallengeVerified = true;
+                        } else {
+                            setStatus('TANTANGAN: ' + (hasilChallenge.hint || 'Ikuti tantangan yang diminta'), 'info');
+                            busy = false;
+                            setTimeout(loop, 120);
+                            return;
+                        }
+                    }
 
                     // --- GERBANG LIVENESS (sama seperti halaman acuan) ---
                     // Verifikasi ditahan sampai liveness lolos.

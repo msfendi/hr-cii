@@ -358,8 +358,12 @@
 {{-- PERBAIKAN V31.3d (2026-11-04): detektor liveness bersama.
      Dipakai gerbang verifikasi step 4 supaya registrasi tidak bisa
      diselesaikan memakai foto/video (anti daftar wajah orang lain). --}}
-@if ($livenessEnabled ?? false)
+{{-- Script random challenge dimuat kalau random challenge ATAU liveness aktif,
+     karena keduanya memakai landmark face-api yang sama. --}}
+@if (($livenessEnabled ?? false) || ($randomChallengeEnabled ?? false))
 <script src="{{ asset('js/liveness-check.js') }}"></script>
+{{-- RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09 --}}
+<script src="{{ asset('js/random-challenge.js') }}?v=2"></script>
 @endif
 <script>
     if (typeof faceapi === 'undefined') {
@@ -393,6 +397,16 @@
     // gerbang dilewati sehingga perilaku lama tetap utuh.
     const livenessWajib = {{ ($livenessEnabled ?? false) ? 'true' : 'false' }};
     let livenessStep4 = null;
+
+    // ================================================================
+    // RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09
+    // ================================================================
+    // ORTogonal terhadap liveness. Status wajib/tidaknya dibaca dari
+    // Settings (menu "registrasi"). Bila OFF, gerbang dilewati sehingga
+    // perilaku lama tetap utuh.
+    const randomChallengeWajib = {{ ($randomChallengeEnabled ?? false) ? 'true' : 'false' }};
+    const randomChallengeType = @json($randomChallenge['type'] ?? null);
+    let randomChallengeStep4 = null;
 
     function setProgress(n) {
         const bars = document.querySelectorAll('#srProgress span');
@@ -905,6 +919,32 @@
                 }
 
                 const liveDesc = Array.from(det.descriptor);
+
+                // --- GERBANG RANDOM CHALLENGE (V1, 2026-11-09) ---
+                // ORTogonal terhadap liveness. Kalau challenge belum
+                // terpenuhi, registrasi TIDAK bisa diselesaikan. Logika
+                // liveness di bawah tidak diubah sama sekali.
+                if (randomChallengeWajib) {
+                    if (!randomChallengeStep4) {
+                        randomChallengeStep4 = new RandomChallenge({
+                            // Preview kamera depan memakai scaleX(-1), jadi arah kiri/kanan
+                            // pada landmark face-api terbalik dari yang terlihat user.
+                            // mirrored=true membalik tanda yaw agar challenge tidak terbalik.
+                            mirrored: true,
+                            required: true,
+                            target: randomChallengeType,
+                            missToleranceFrames: 12
+                        });
+                    }
+                    const hasilChallenge = randomChallengeStep4.update(det.landmarks || null);
+                    if (!hasilChallenge.passed) {
+                        verGuide.classList.remove('success');
+                        st.innerHTML = '<span class="text-info font-weight-bold">'
+                            + '<i class="fas fa-random mr-1"></i> ' + hasilChallenge.hint + '</span>';
+                        isVerifying = false;
+                        return;
+                    }
+                }
 
                 // --- GERBANG LIVENESS (PERBAIKAN V31.3d) ---
                 // DULU baris berikutnya langsung menghitung jarak, jadi

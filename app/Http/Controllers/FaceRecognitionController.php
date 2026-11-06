@@ -405,6 +405,8 @@ class FaceRecognitionController extends Controller
             $isEnabled = true;
         }
 
+        $rcEnabledReg = FaceRecognitionService::isRandomChallengeEnabled('registrasi');
+
         return view('face_recognition.self_register', [
             'isFaceEnabled' => $isEnabled,
             // PERBAIKAN V31.3d (2026-11-04): kirim ambang resmi ke halaman
@@ -417,6 +419,12 @@ class FaceRecognitionController extends Controller
             // "registrasi". Tanpa ini, gerbang liveness di step 4 tidak akan
             // pernah aktif karena view tidak tahu setelan admin.
             'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('registrasi'),
+            // Random challenge (anti-kecurangan) ORTogonal terhadap liveness.
+            // Berlaku di Langkah 4 (liveness + challenge sebelum simpan wajah).
+            'randomChallengeEnabled' => $rcEnabledReg,
+            'randomChallenge' => $rcEnabledReg
+                ? FaceRecognitionService::issueRandomChallenge('self-register-' . session()->getId())
+                : null,
         ]);
     }
 

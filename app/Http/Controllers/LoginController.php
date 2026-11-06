@@ -15,6 +15,12 @@ class LoginController extends Controller
 {
     public function login()
     {
+        // Random challenge (anti-kecurangan) ORTogonal terhadap liveness.
+        $rcEnabled = FaceRecognitionService::isRandomChallengeEnabled('login');
+        $rcChallenge = $rcEnabled
+            ? FaceRecognitionService::issueRandomChallenge('auth-login-' . session()->getId())
+            : null;
+
         return view('auth.login', [
             'faceEnabled' => FaceRecognitionService::isEnabled(),
             'qrEnabled'   => FaceRecognitionService::isQrLoginEnabled(),
@@ -23,6 +29,8 @@ class LoginController extends Controller
             // walau toggle di Settings ON, halaman /login tidak tahu apa-apa
             // dan tidak pernah memeriksa liveness.
             'livenessEnabled' => FaceRecognitionService::isLivenessEnabled('login'),
+            'randomChallengeEnabled' => $rcEnabled,
+            'randomChallenge' => $rcChallenge,
         ]);
     }
 

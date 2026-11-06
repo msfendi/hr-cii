@@ -1539,6 +1539,7 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index');
     Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
     Route::post('/settings/liveness', [FaceAttendanceSettingController::class, 'updateLiveness'])->name('settings.update-liveness');
+    Route::post('/settings/random-challenge', [FaceAttendanceSettingController::class, 'updateRandomChallenge'])->name('settings.update-random-challenge');
     Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
 });
 
@@ -1616,7 +1617,7 @@ Route::prefix('quiz')->name('quiz.')->middleware(['auth'])->group(function () {
     Route::delete('/{quiz}/questions/{question}', [QuizController::class, 'deleteQuestion'])->name('deleteQuestion');
     Route::post('/{quiz}/start', [QuizController::class, 'start'])->name('start');
     Route::get('/{quiz}/live', [QuizController::class, 'live'])->name('live');
-    Route::get('/{quiz}/live-data', [QuizController::class, 'liveData'])->name('liveData');
+    Route::get('/{quiz}/live-data', [QuizController::class, 'liveData'])->name('live-data');
     Route::post('/{quiz}/close', [QuizController::class, 'close'])->name('close');
     Route::delete('/{quiz}', [QuizController::class, 'destroy'])->name('destroy');
 });

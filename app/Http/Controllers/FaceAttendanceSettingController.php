@@ -50,13 +50,25 @@ class FaceAttendanceSettingController extends Controller
             $livenessTersedia = false;
         }
 
+        // Random challenge (anti-kecurangan) memakai objek setting yang sama,
+        // tapi dicek terpisah supaya halaman tetap tampil kalau kolumnya belum ada.
+        $randomChallengeTersedia = false;
+        try {
+            if (Schema::hasTable('face_recognition_settings')) {
+                $randomChallengeTersedia = Schema::hasColumn('face_recognition_settings', 'is_random_challenge_enabled');
+            }
+        } catch (\Throwable $e) {
+            $randomChallengeTersedia = false;
+        }
+
         return view('face_attendance.settings', compact(
             'setting',
             'locations',
             'holidays',
             'employeeFaces',
             'liveness',
-            'livenessTersedia'
+            'livenessTersedia',
+            'randomChallengeTersedia'
         ));
     }
 
@@ -177,6 +189,65 @@ class FaceAttendanceSettingController extends Controller
                     ->with('error', 'Gagal menyimpan pengaturan: ' . $e->getMessage());
             }
         }
+
+    /**
+     * Simpan pengaturan Random Challenge (anti-kecurangan).
+     *
+     * TERPISAH dari updateLiveness() dengan sengaja. Random challenge
+     * adalah fitur TAMBAHAN yang berdiri sendiri; logika liveness tidak
+     * boleh tersentuh oleh fitur ini.
+     *
+     * Kolom hanya ditulis bila sudah tersedia di database (hasColumn),
+     * sehingga halaman ini tetap berfungsi walau migrasi belum dijalankan.
+     */
+    public function updateRandomChallenge(Request $request)
+    {
+        $request->validate([
+            'is_random_challenge_enabled'         => 'nullable|boolean',
+            'random_challenge_presensi_enabled'   => 'nullable|boolean',
+            'random_challenge_login_enabled'      => 'nullable|boolean',
+            'random_challenge_slip_enabled'       => 'nullable|boolean',
+            'random_challenge_cuti_enabled'       => 'nullable|boolean',
+            'random_challenge_registrasi_enabled' => 'nullable|boolean',
+        ]);
+
+        try {
+            if (!Schema::hasTable('face_recognition_settings')) {
+                return redirect()
+                    ->route('face.attendance.settings.index')
+                    ->with('error', 'Tabel face_recognition_settings belum ada. Jalankan "php artisan migrate".');
+            }
+
+            $setting = \App\Models\FaceRecognitionSetting::current();
+
+            $pairs = [
+                'is_random_challenge_enabled'         => $request->boolean('is_random_challenge_enabled'),
+                'random_challenge_presensi_enabled'   => $request->boolean('random_challenge_presensi_enabled'),
+                'random_challenge_login_enabled'      => $request->boolean('random_challenge_login_enabled'),
+                'random_challenge_slip_enabled'       => $request->boolean('random_challenge_slip_enabled'),
+                'random_challenge_cuti_enabled'       => $request->boolean('random_challenge_cuti_enabled'),
+                'random_challenge_registrasi_enabled' => $request->boolean('random_challenge_registrasi_enabled'),
+            ];
+
+            foreach ($pairs as $column => $value) {
+                if (Schema::hasColumn('face_recognition_settings', $column)) {
+                    $setting->{$column} = $value;
+                }
+            }
+
+            $setting->save();
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('success', 'Pengaturan Random Challenge (anti-kecurangan) berhasil disimpan.');
+        } catch (\Throwable $e) {
+            \Log::error('Gagal simpan random challenge dari Pengaturan Presensi Wajah: ' . $e->getMessage());
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('error', 'Gagal menyimpan pengaturan random challenge: ' . $e->getMessage());
+        }
+    }
 
     /**
      * Update pengaturan akses presensi wajah per karyawan.

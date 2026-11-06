@@ -22,6 +22,13 @@ class FaceRecognitionSetting extends Model
         'liveness_cuti_enabled',
         // PERBAIKAN 4 (2026-11-06): toggle input NPK dulu
         'is_npk_required_enabled',
+        // Random challenge (anti-kecurangan): master + per menu
+        'is_random_challenge_enabled',
+        'random_challenge_presensi_enabled',
+        'random_challenge_login_enabled',
+        'random_challenge_slip_enabled',
+        'random_challenge_cuti_enabled',
+        'random_challenge_registrasi_enabled',
     ];
 
     protected $casts = [
@@ -39,6 +46,13 @@ class FaceRecognitionSetting extends Model
         'liveness_cuti_enabled'     => 'boolean',
         // PERBAIKAN 4
         'is_npk_required_enabled'   => 'boolean',
+        // Random challenge (anti-kecurangan)
+        'is_random_challenge_enabled'         => 'boolean',
+        'random_challenge_presensi_enabled'   => 'boolean',
+        'random_challenge_login_enabled'      => 'boolean',
+        'random_challenge_slip_enabled'       => 'boolean',
+        'random_challenge_cuti_enabled'       => 'boolean',
+        'random_challenge_registrasi_enabled' => 'boolean',
     ];
 
     /**
@@ -82,6 +96,13 @@ class FaceRecognitionSetting extends Model
                     // Skip jika kolom belum termigrasi
                 }
                 try {
+                    if (Schema::hasColumn('face_recognition_settings', 'is_random_challenge_enabled')) {
+                        $setting->is_random_challenge_enabled = false;
+                    }
+                } catch (\Throwable $e) {
+                    // Skip jika kolom belum termigrasi
+                }
+                try {
                     $setting->save();
                 } catch (\Throwable $e) {
                     // PERBAIKAN 25 (2026-11-05): DULU error ditelan diam-diam,
@@ -110,6 +131,7 @@ class FaceRecognitionSetting extends Model
             $fallback->liveness_slip_enabled     = true;
             $fallback->liveness_cuti_enabled     = true;
             $fallback->is_npk_required_enabled   = true;
+            $fallback->is_random_challenge_enabled = false;
             return $fallback;
         }
     }
@@ -191,6 +213,48 @@ class FaceRecognitionSetting extends Model
     }
 
     public function getLivenessCutiEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accessor Random Challenge (anti-kecurangan)
+    |--------------------------------------------------------------------------
+    |
+    | ORTogonal terhadap liveness: nilai default kolom master adalah FALSE
+    | (fitur baru, belum diaktifkan sampai admin menyalakannya), sedangkan
+    | switch per menu default TRUE supaya begitu master dinyalakan, semua
+    | menu yang relevan langsung ikut aktif.
+    |
+    */
+
+    public function getIsRandomChallengeEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : false;
+    }
+
+    public function getRandomChallengePresensiEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getRandomChallengeLoginEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getRandomChallengeSlipEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getRandomChallengeCutiEnabledAttribute($value)
+    {
+        return $value !== null ? (bool) $value : true;
+    }
+
+    public function getRandomChallengeRegistrasiEnabledAttribute($value)
     {
         return $value !== null ? (bool) $value : true;
     }

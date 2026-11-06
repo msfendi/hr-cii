@@ -30,6 +30,8 @@ class EmployeePayrollController extends Controller
             ->orderBy('pp.start_date', 'desc')
             ->get();
 
+        $rcEnabledSlip = FaceRecognitionService::isRandomChallengeEnabled('slip');
+
         return view('payroll.employee_payroll', [
             'npk'         => $request->npk,
             'periods'     => $periods,
@@ -42,6 +44,11 @@ class EmployeePayrollController extends Controller
             // PERBAIKAN V13 (2026-11-06): wajib input NPK sebelum kamera
             // pada halaman slip gaji.
             'npkRequired' => FaceRecognitionService::isNpkRequiredEnabled(),
+            // Random challenge (anti-kecurangan) ORTogonal terhadap liveness.
+            'randomChallengeEnabled' => $rcEnabledSlip,
+            'randomChallenge' => $rcEnabledSlip
+                ? FaceRecognitionService::issueRandomChallenge('payroll-slip-' . session()->getId())
+                : null,
         ]);
     }
 

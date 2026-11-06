@@ -384,6 +384,147 @@
             </div>
         </div>
 
+        {{-- ================================================================
+             RANDOM CHALLENGE (ANTI-KECURANGAN) -- V1, 2026-11-09
+             ================================================================
+             Form TERPISAH dari form liveness di atas. Tujuannya jelas:
+             logika liveness tidak boleh ikut tersentuh, dan perubahan
+             random challenge tidak boleh mengubah apa pun soal liveness.
+             ================================================================ --}}
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-danger">
+                        <i class="fas fa-random mr-1"></i> Random Challenge (Anti-Kecurangan)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Sebelum wajah dicocokkan, sistem meminta gerakan <strong>acak</strong>:
+                        <strong>hadap ke kiri</strong>, <strong>hadap ke kanan</strong>, atau
+                        <strong>buka mulut</strong>. Karena tantangannya dipilih acak dan tidak
+                        diketahui lebih dulu, foto atau rekaman video lama tidak bisa dipakai
+                        untuk menipu sistem.
+                    </p>
+
+                    <div class="alert alert-warning py-2 px-3 small mb-3">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        <strong>Catatan:</strong> fitur ini <strong>terpisah</strong> dari Liveness Check
+                        dan tidak mengubah logika liveness sama sekali. Kedua fitur bisa
+                        dinyalakan bersamaan atau sendirian.
+                    </div>
+
+                    @if(!$randomChallengeTersedia)
+                        <div class="alert alert-danger py-2 px-3 small mb-3">
+                            <i class="fas fa-database mr-1"></i>
+                            Kolom pengaturan random challenge belum tersedia di database.
+                            Jalankan <code>php artisan migrate</code> lalu muat ulang halaman ini.
+                        </div>
+                    @endif
+
+                    <form method="POST" action="{{ route('face.attendance.settings.update-random-challenge') }}">
+                        @csrf
+
+                        <div class="border rounded p-3 mb-3 bg-white">
+                            <div class="custom-control custom-switch">
+                                <input type="hidden" name="is_random_challenge_enabled" value="0">
+                                <input type="checkbox" class="custom-control-input" id="is_random_challenge_enabled"
+                                    name="is_random_challenge_enabled" value="1"
+                                    {{ ($liveness->is_random_challenge_enabled ?? false) ? 'checked' : '' }}>
+                                <label class="custom-control-label font-weight-bold text-gray-800" for="is_random_challenge_enabled">
+                                    Aktifkan Random Challenge (Global)
+                                </label>
+                            </div>
+                            <small class="text-muted d-block ml-4">
+                                Switch utama. Jika OFF, semua switch per menu di bawah tidak berlaku.
+                            </small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="random_challenge_presensi_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="random_challenge_presensi_enabled"
+                                            name="random_challenge_presensi_enabled" value="1"
+                                            {{ ($liveness->random_challenge_presensi_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="random_challenge_presensi_enabled">
+                                            Presensi Wajah
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/face-attendance</small>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="random_challenge_login_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="random_challenge_login_enabled"
+                                            name="random_challenge_login_enabled" value="1"
+                                            {{ ($liveness->random_challenge_login_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="random_challenge_login_enabled">
+                                            Login Presensi Wajah
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/face-attendance/login</small>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="random_challenge_slip_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="random_challenge_slip_enabled"
+                                            name="random_challenge_slip_enabled" value="1"
+                                            {{ ($liveness->random_challenge_slip_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="random_challenge_slip_enabled">
+                                            Slip Gaji
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/employee-payroll</small>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="random_challenge_cuti_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="random_challenge_cuti_enabled"
+                                            name="random_challenge_cuti_enabled" value="1"
+                                            {{ ($liveness->random_challenge_cuti_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="random_challenge_cuti_enabled">
+                                            Pengajuan Cuti
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/pengajuan-cuti</small>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6 mb-2">
+                                <div class="border rounded p-2 bg-light h-100">
+                                    <input type="hidden" name="random_challenge_registrasi_enabled" value="0">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" class="custom-control-input" id="random_challenge_registrasi_enabled"
+                                            name="random_challenge_registrasi_enabled" value="1"
+                                            {{ ($liveness->random_challenge_registrasi_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="custom-control-label font-weight-bold small" for="random_challenge_registrasi_enabled">
+                                            Registrasi Wajah Mandiri
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">/self-register-face (Langkah 4)</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-danger btn-sm mt-2">
+                            <i class="fas fa-save mr-1"></i> Simpan Pengaturan Random Challenge
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- Akses Presensi per Karyawan -->
         <div class="col-12">
             <div class="card shadow">

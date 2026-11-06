@@ -74,6 +74,127 @@ class FaceRecognitionService
     public const MENU_LIVENESS = ['presensi', 'login', 'slip', 'cuti', 'registrasi'];
 
     /**
+     * Menu yang punya sakelar random challenge sendiri.
+     * Sama dengan MENU_LIVENESS supaya kedua fitur bisa dikontrol
+     * di halaman yang persis sama.
+     *
+     * @var array<int,string>
+     */
+    public const MENU_RANDOM_CHALLENGE = ['presensi', 'login', 'slip', 'cuti', 'registrasi'];
+
+    /**
+     * Random Challenge (anti-kecurangan).
+     *
+     * Berbeda dengan liveness: liveness selalu challenge yang sama
+     * (berkedip ATAU menoleh), sehingga bisa direkam sekali lalu dipakai
+     * berulang. Random challenge MEMILIH tantangannya secara acak dari
+     * daftar (hadap kiri / hadap kanan / buka mulut) sehingga rekaman
+     * sebelumnya tidak bisa memenuhi tantangan yang sedang aktif.
+     *
+     * ORTogonal terhadap liveness: dua fitur ini berdiri sendiri. Menyalakan
+     * random challenge tidak mengubah ambang/syarat liveness sama sekali.
+     *
+     * Aturan:
+     *   - Master OFF  -> semua halaman OFF.
+     *   - Master ON   -> ikut switch per menu.
+     *   - $menu null  -> hanya master yang menentukan.
+     *
+     * Default: master FALSE (fitur baru belum diaktifkan), switch per menu TRUE.
+     * Bila kolom belum dimigrasi / DB error -> FALSE, supaya fitur baru yang
+     * belum diaktifkan secara sengaja tidak tiba-tiba aktif di produksi.
+     *
+     * @param string|null $menu  presensi|login|slip|cuti|registrasi
+     */
+    public static function isRandomChallengeEnabled(?string $menu = null): bool
+    {
+        try {
+            $settings = static::settings();
+
+            if (!$settings->is_random_challenge_enabled) {
+                return false;
+            }
+
+            if ($menu === null) {
+                return true;
+            }
+
+            $column = 'random_challenge_' . strtolower(trim($menu)) . '_enabled';
+
+            $value = $settings->{$column};
+
+            return $value !== null ? (bool) $value : true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Daftar challenge yang tersedia untuk random challenge.
+     * Dipakai juga oleh server saat menerbitkan challenge token.
+     *
+     * @var array<int,string>
+     */
+    public const RANDOM_CHALLENGE_TYPES = ['left', 'right', 'mouth'];
+
+    /**
+     * Terbitkan challenge acak untuk satu sesi/percobaan.
+     *
+     * Challenge disimpan di cache ber-TTL pendek (default 5 menit) dengan
+     * token acak. Frontend tidak bisa menebak challenge aktif, dan challenge
+     * yang sama tidak bisa dipakai ulang di luar jendela cache-nya.
+     *
+     * @param string $scope  kunci unik per halaman/percobaan
+     * @param int    $ttlSeconds
+     * @return array{token:string,type:string,expires_in:int}
+     */
+    public static function issueRandomChallenge(string $scope, int $ttlSeconds = 300): array
+    {
+        $type = static::RANDOM_CHALLENGE_TYPES[array_rand(static::RANDOM_CHALLENGE_TYPES)];
+
+        $token = bin2hex(random_bytes(16));
+
+        \Illuminate\Support\Facades\Cache::put(
+            'face_random_challenge:' . $scope,
+            ['type' => $type, 'issued_at' => now()->toIso8601String()],
+            now()->addSeconds($ttlSeconds)
+        );
+
+        return [
+            'token'      => $token,
+            'type'       => $type,
+            'expires_in' => $ttlSeconds,
+        ];
+    }
+
+    /**
+     * Ambil challenge yang sedang aktif untuk sebuah scope.
+     *
+     * @return array{type:string,issued_at:string}|null
+     */
+    public static function getRandomChallenge(string $scope): ?array
+    {
+        $data = \Illuminate\Support\Facades\Cache::get('face_random_challenge:' . $scope);
+
+        return is_array($data) && isset($data['type']) ? $data : null;
+    }
+
+    /**
+     * Peta random challenge untuk semua menu, siap dikirim ke view.
+     *
+     * @return array<string,bool>
+     */
+    public static function randomChallengeMap(): array
+    {
+        $map = [];
+
+        foreach (static::MENU_RANDOM_CHALLENGE as $menu) {
+            $map[$menu] = static::isRandomChallengeEnabled($menu);
+        }
+
+        return $map;
+    }
+
+    /**
      * PERBAIKAN 25 -- Toggle Liveness Check.
      *
      * Titik tunggal yang dibaca SEMUA halaman face recognition supaya tidak

@@ -40,7 +40,16 @@ class FaceAttendanceController extends Controller
         // dari face_attendance_settings ke face_recognition_settings.
         $npkRequired = FaceRecognitionSetting::isNpkRequiredEnabled();
 
-        return view('face_attendance.login', compact('locations', 'livenessEnabled', 'npkRequired'));
+        // Random challenge (anti-kecurangan): challenge acak diterbitkan server
+        // supaya user tidak bisa menebak gerakan yang diminta.
+        $randomChallengeEnabled = \App\Services\FaceRecognitionService::isRandomChallengeEnabled('login');
+        $randomChallenge = $randomChallengeEnabled
+            ? \App\Services\FaceRecognitionService::issueRandomChallenge('face-login-' . session()->getId())
+            : null;
+
+        return view('face_attendance.login', compact(
+            'locations', 'livenessEnabled', 'npkRequired', 'randomChallengeEnabled', 'randomChallenge'
+        ));
     }
 
     /**
@@ -487,8 +496,16 @@ class FaceAttendanceController extends Controller
         $attendanceNonce = app(AttendanceNonceService::class)
             ->issueBatch((string) $npk, 'attendance');
 
+        // Random challenge (anti-kecurangan): challenge acak diterbitkan server.
+        $randomChallengeEnabled = \App\Services\FaceRecognitionService::isRandomChallengeEnabled('presensi');
+        $randomChallenge = $randomChallengeEnabled
+            ? \App\Services\FaceRecognitionService::issueRandomChallenge('face-presensi-' . session()->getId())
+            : null;
+
         return view('face_attendance.index', compact(
             'livenessEnabled',
+            'randomChallengeEnabled',
+            'randomChallenge',
             'biodata',
             'employeeFaceImg',
             'shift',

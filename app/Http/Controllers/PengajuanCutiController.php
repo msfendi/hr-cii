@@ -23,6 +23,8 @@ class PengajuanCutiController extends Controller
 {
     public function login()
     {
+        $rcEnabledCuti = FaceRecognitionService::isRandomChallengeEnabled('cuti');
+
         return view('cuti.login', [
             'qrEnabled'   => FaceRecognitionService::isQrCutiEnabled(),
             'faceEnabled' => FaceRecognitionService::isEnabled(),
@@ -33,6 +35,11 @@ class PengajuanCutiController extends Controller
             // PERBAIKAN V13 (2026-11-06): wajib input NPK sebelum kamera
             // pada halaman pengajuan cuti.
             'npkRequired' => FaceRecognitionService::isNpkRequiredEnabled(),
+            // Random challenge (anti-kecurangan) ORTogonal terhadap liveness.
+            'randomChallengeEnabled' => $rcEnabledCuti,
+            'randomChallenge' => $rcEnabledCuti
+                ? FaceRecognitionService::issueRandomChallenge('cuti-login-' . session()->getId())
+                : null,
         ]);
     }
 

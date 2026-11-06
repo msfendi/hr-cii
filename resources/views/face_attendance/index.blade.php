@@ -899,6 +899,8 @@
 
 <!-- face-api.js -->
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+{{-- RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09 --}}
+<script src="{{ asset('js/random-challenge.js') }}?v=2"></script>
 
 <script>
     const activeLocations = @json($locations);
@@ -982,6 +984,25 @@
     if (!LIVENESS_REQUIRED) {
         livenessVerified = true;
     }
+
+    // ==================================================================
+    // RANDOM CHALLENGE (anti-kecurangan) -- V1, 2026-11-09
+    // ==================================================================
+    // ORTogonal terhadap liveness. Logika liveness di bawah TIDAK diubah
+    // sama sekali. Random challenge menambah satu syarat terpisah yang
+    // harus terpenuhi SEBELUM presensi boleh dikirim.
+    const RANDOM_CHALLENGE_REQUIRED = Boolean(@json((bool) ($randomChallengeEnabled ?? false)));
+    const RANDOM_CHALLENGE_TYPE = @json($randomChallenge['type'] ?? null);
+    const randomChallenge = new RandomChallenge({
+        // Preview kamera depan memakai scaleX(-1), jadi arah kiri/kanan
+        // pada landmark face-api terbalik dari yang terlihat user.
+        // mirrored=true membalik tanda yaw agar challenge tidak terbalik.
+        mirrored: true,
+        required: RANDOM_CHALLENGE_REQUIRED,
+        target: RANDOM_CHALLENGE_TYPE,
+        missToleranceFrames: 12
+    });
+    let randomChallengeVerified = !RANDOM_CHALLENGE_REQUIRED;
 
     // ==================================================================
     // STATE MESIN KAMERA — REBUILD TOTAL (2026-11-03)
@@ -2797,6 +2818,25 @@
             const landmarks = detection.landmarks;
 
             // PERBAIKAN 25: blok tantangan hanya berjalan bila liveness ON.
+            // ==================================================================
+            // GERBANG RANDOM CHALLENGE (V1, 2026-11-09)
+            // ==================================================================
+            // ORTogonal terhadap liveness. Kalau challenge belum terpenuhi,
+            // proses BERHENTI di sini -- presensi TIDAK dikirim dan gerbang
+            // liveness di bawah tidak dijalankan. Logika liveness tidak diubah.
+            if (RANDOM_CHALLENGE_REQUIRED && !randomChallengeVerified) {
+                const hasilChallenge = randomChallenge.update(landmarks);
+
+                if (hasilChallenge.passed) {
+                    randomChallengeVerified = true;
+                } else {
+                    if (overlayText) overlayText.innerHTML = '<i class="fas fa-random text-warning mr-1"></i> ' + (hasilChallenge.hint || 'Ikuti tantangan yang diminta');
+                    if (alertText) alertText.innerHTML = 'TANTANGAN: ' + (hasilChallenge.hint || 'Ikuti tantangan yang diminta');
+                    setTimeout(detectFaceLoop, 200);
+                    return;
+                }
+            }
+
             if (LIVENESS_REQUIRED && !livenessVerified) {
                 const isBlink = checkEyeBlink(landmarks);
                 const isTurn = checkHeadTurn(landmarks);
