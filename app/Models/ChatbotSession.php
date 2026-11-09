@@ -12,7 +12,7 @@ class ChatbotSession extends Model
     use HasFactory;
 
     public const MODE_GLOBAL = 'global';
-    public const MODE_RTG = 'rtg';
+    public const MODE_RAG = 'rag';
 
     protected $fillable = [
         'user_id',
@@ -31,9 +31,9 @@ class ChatbotSession extends Model
         return $this->belongsTo(\App\Models\User::class);
     }
 
-    public function isRtg(): bool
+    public function isRag(): bool
     {
-        return $this->mode === self::MODE_RTG;
+        return $this->mode === self::MODE_RAG;
     }
 
     public function resolveTitle(): string

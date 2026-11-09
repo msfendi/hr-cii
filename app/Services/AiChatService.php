@@ -31,8 +31,8 @@ class AiChatService
             throw new RuntimeException("Provider AI '$providerKey' belum dikonfigurasi di config/chatbot.php.");
         }
 
-        return $session->isRtg()
-            ? $this->handleRtg($session, $providerKey, $userMessage, $attachments)
+        return $session->isRag()
+            ? $this->handleRag($session, $providerKey, $userMessage, $attachments)
             : $this->handleGlobal($session, $providerKey, $userMessage, $attachments);
     }
 
@@ -152,16 +152,16 @@ class AiChatService
 
     /*
     |--------------------------------------------------------------------------
-    | Mode RTG (Read To Generate) — AI menyusun query SELECT read-only,
+    | Mode RAG (Read And Generate) — AI menyusun query SELECT read-only,
     | dijalankan lewat koneksi database read-only, lalu hasilnya dipakai
     | AI untuk menyusun jawaban bahasa natural. Semua data yang berhasil
     | diambil juga di-export ke file (default Excel, atau PDF/gambar kalau
     | user memintanya secara eksplisit) supaya bisa diunduh dari chat.
     |--------------------------------------------------------------------------
     */
-    protected function handleRtg(ChatbotSession $session, string $providerKey, string $userMessage, array $attachments = []): array
+    protected function handleRag(ChatbotSession $session, string $providerKey, string $userMessage, array $attachments = []): array
     {
-        // Mode RTG hanya bekerja dari data database (query read-only), jadi
+        // Mode RAG hanya bekerja dari data database (query read-only), jadi
         // lampiran file (kalau ada) TIDAK dipakai untuk menyusun query SQL
         // maupun dikirim ke AI di mode ini — parameter ini hanya dijaga
         // supaya tanda tangan method konsisten dengan handleGlobal().
@@ -173,7 +173,7 @@ class AiChatService
 
         if (empty($schema)) {
             return [
-                'content' => 'Mode RTG belum bisa dipakai: tidak ada tabel yang bisa dibaca dari koneksi database read-only '
+                'content' => 'Mode RAG belum bisa dipakai: tidak ada tabel yang bisa dibaca dari koneksi database read-only '
                     . '(cek konfigurasi koneksi "' . config('chatbot.readonly_connection') . '" di config/database.php).',
                 'meta' => ['sql' => null],
             ];
@@ -200,8 +200,8 @@ class AiChatService
             ? ''
             : "\n\nDokumentasi tambahan dari tim (relasi logis tanpa FK constraint, konvensi penamaan kolom, dsb — PAKAI ini juga untuk menentukan JOIN yang benar, terutama kalau tabel/kolom yang relevan tidak ada di daftar relasi FK di atas):\n{$schemaDocs}";
 
-        $maxRows = config('chatbot.max_rtg_rows', 4000);
-        $maxAttempts = max(1, (int) config('chatbot.max_rtg_query_attempts', 3));
+        $maxRows = config('chatbot.max_rag_rows', 200);
+        $maxAttempts = max(1, (int) config('chatbot.max_rag_query_attempts', 3));
         $blockedList = implode(', ', $blockedTables);
 
         // Daftar kolom sensitif per tabel (mis. gaji) yang sudah DIHAPUS dari
@@ -248,7 +248,7 @@ class AiChatService
 
         if (trim($rawSqlResponse) === 'NO_QUERY') {
             return [
-                'content' => 'Maaf, pertanyaan itu belum bisa saya jawab dari data yang tersedia untuk mode RTG saat ini '
+                'content' => 'Maaf, pertanyaan itu belum bisa saya jawab dari data yang tersedia untuk mode RAG saat ini '
                     . '(atau menyentuh data yang memang tidak boleh diakses, seperti data akun pengguna, dan gaji). '
                     . 'Coba ajukan dengan cara lain.',
                 'meta' => ['sql' => null],
@@ -353,16 +353,16 @@ class AiChatService
     }
 
     /**
-     * Tabel yang benar-benar terlarang total di mode RTG, apa pun isi
+     * Tabel yang benar-benar terlarang total di mode RAG, apa pun isi
      * pertanyaan user. Defaultnya 'users' dan 'payroll_masters' sesuai
-     * permintaan, tapi bisa ditambah lewat CHATBOT_RTG_BLOCKED_TABLES di
+     * permintaan, tapi bisa ditambah lewat CHATBOT_RAG_BLOCKED_TABLES di
      * .env (pisahkan dengan koma) tanpa perlu ubah kode.
      */
     protected function blockedTables(): array
     {
         return array_map(
             fn($t) => strtolower(trim($t)),
-            config('chatbot.rtg_blocked_tables', ['users', 'payroll_masters'])
+            config('chatbot.rag_blocked_tables', ['payroll_masters', 'payroll_run_details', 'payroll_run_details_audit'])
         );
     }
 
@@ -372,17 +372,17 @@ class AiChatService
      * tetap boleh dibaca, tapi kolom tertentu di dalamnya tidak.
      * Contoh default: employee_contract.salary/allowance/daily_salary/pph_21
      * (data gaji) tidak boleh pernah muncul di skema yang dikirim ke AI
-     * maupun di hasil query mode RTG.
+     * maupun di hasil query mode RAG.
      *
      * Formatnya array [nama_tabel_lowercase => [nama_kolom_lowercase, ...]],
-     * dikonfigurasi lewat config('chatbot.rtg_blocked_columns') supaya bisa
+     * dikonfigurasi lewat config('chatbot.rag_blocked_columns') supaya bisa
      * ditambah/diubah lewat .env tanpa perlu ubah kode ini.
      */
     protected function blockedColumns(): array
     {
         $result = [];
 
-        foreach (config('chatbot.rtg_blocked_columns', []) as $table => $columns) {
+        foreach (config('chatbot.rag_blocked_columns', []) as $table => $columns) {
             $table = strtolower(trim($table));
 
             if ($table === '') {
@@ -417,7 +417,7 @@ class AiChatService
         // kolom terlarang berubah (mis. tambah kolom baru lewat .env),
         // cache lama otomatis tidak dipakai lagi tanpa perlu cache:clear
         // manual.
-        $cacheKey = 'chatbot_rtg_schema:' . $connection . ':' . md5(json_encode($blockedColumns));
+        $cacheKey = 'chatbot_rag_schema:' . $connection . ':' . md5(json_encode($blockedColumns));
         $cacheMinutes = config('chatbot.schema_cache_minutes', 30);
 
         return Cache::remember($cacheKey, now()->addMinutes($cacheMinutes), function () use ($connection, $blockedTables, $blockedColumns) {
@@ -488,7 +488,7 @@ class AiChatService
     protected function getDatabaseRelations(array $blockedTables): array
     {
         $connection = config('chatbot.readonly_connection');
-        $cacheKey = "chatbot_rtg_relations:{$connection}";
+        $cacheKey = "chatbot_rag_relations:{$connection}";
         $cacheMinutes = config('chatbot.schema_cache_minutes', 30);
 
         return Cache::remember($cacheKey, now()->addMinutes($cacheMinutes), function () use ($connection, $blockedTables) {
@@ -500,255 +500,203 @@ class AiChatService
                         tr.name AS referenced_table,
                         cr.name AS referenced_column
                      FROM sys.foreign_keys fk
-                     INNER JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
-                     INNER JOIN sys.tables tp ON tp.object_id = fkc.parent_object_id
-                     INNER JOIN sys.columns cp ON cp.object_id = tp.object_id AND cp.column_id = fkc.parent_column_id
-                     INNER JOIN sys.tables tr ON tr.object_id = fkc.referenced_object_id
-                     INNER JOIN sys.columns cr ON cr.object_id = tr.object_id AND cr.column_id = fkc.referenced_column_id"
+                     INNER JOIN sys.tables tp ON fk.parent_object_id = tp.object_id
+                     INNER JOIN sys.columns cp ON cp.object_id = tp.object_id
+                                                AND cp.column_id = (
+                                                    SELECT TOP 1 column_id
+                                                    FROM sys.foreign_key_columns fkc
+                                                    WHERE fkc.constraint_object_id = fk.object_id
+                                                      AND fkc.parent_object_id = tp.object_id
+                                                    ORDER BY fkc.constraint_column_id
+                                                )
+                     INNER JOIN sys.tables tr ON fk.referenced_object_id = tr.object_id
+                     INNER JOIN sys.columns cr ON cr.object_id = tr.object_id
+                                                AND cr.column_id = (
+                                                    SELECT TOP 1 column_id
+                                                    FROM sys.foreign_key_columns fkc
+                                                    WHERE fkc.constraint_object_id = fk.object_id
+                                                      AND fkc.referenced_object_id = tr.object_id
+                                                    ORDER BY fkc.constraint_column_id
+                                                )
+                     WHERE tp.schema_id = SCHEMA_ID('dbo')
+                       AND tr.schema_id = SCHEMA_ID('dbo')"
+                );
+
+                $blockedLower = array_map('strtolower', $blockedTables);
+
+                return array_map(fn($r) => "{$r->parent_table}.{$r->parent_column} -> {$r->referenced_table}.{$r->referenced_column}",
+                    array_filter($rows, fn($r) =>
+                        ! in_array(strtolower($r->parent_table), $blockedLower, true)
+                        && ! in_array(strtolower($r->referenced_table), $blockedLower, true)
+                    )
                 );
             } catch (\Throwable $e) {
-                // Akun database read-only kadang tidak diberi akses ke sys.*
-                // — relasi FK jadi opsional, bukan syarat mutlak mode RTG.
                 report($e);
 
                 return [];
             }
-
-            $relations = [];
-
-            foreach ($rows as $row) {
-                $parent = strtolower($row->parent_table);
-                $referenced = strtolower($row->referenced_table);
-
-                if (in_array($parent, $blockedTables, true) || in_array($referenced, $blockedTables, true)) {
-                    continue;
-                }
-
-                $relations[] = "{$row->parent_table}.{$row->parent_column} -> {$row->referenced_table}.{$row->referenced_column}";
-            }
-
-            return array_values(array_unique($relations));
         });
     }
 
     /**
-     * Baca dokumentasi skema tambahan (relasi LOGIS tanpa FK constraint,
-     * konvensi penamaan kolom, dsb) dari file markdown yang dikelola manual
-     * oleh tim di config('chatbot.schema_docs_path') (lihat
-     * docs/DATABASE_SCHEMA.md untuk contoh & format). Introspeksi otomatis
-     * di getDatabaseRelations() di atas HANYA bisa menemukan relasi yang
-     * benar-benar didaftarkan sebagai FK constraint di database — banyak
-     * relasi di sistem lama/legacy sifatnya cuma konvensi (mis. semua tabel
-     * karyawan di-JOIN lewat kolom NPK) tanpa FK constraint sungguhan,
-     * sehingga tidak pernah muncul di sana. Dokumen inilah yang
-     * melengkapinya.
-     *
-     * Balik string kosong (bukan error) kalau path belum dikonfigurasi atau
-     * file belum ada — dokumentasi ini opsional, bukan syarat mode RTG bisa
-     * jalan. Hasil baca di-cache dengan durasi yang sama dengan cache skema
-     * supaya tidak baca file dari disk di setiap pesan chat; edit filenya
-     * lalu tunggu cache kedaluwarsa atau `php artisan cache:clear`.
+     * Baca file dokumentasi skema tambahan (markdown) yang berisi relasi
+     * logis tanpa FK constraint di database (mis. join lewat kolom NPK
+     * antar tabel karyawan). File ini dikelola manual oleh tim.
      */
     protected function getSchemaDocumentation(): string
     {
         $path = config('chatbot.schema_docs_path');
 
-        if (empty($path)) {
+        if (! File::exists($path)) {
             return '';
         }
 
-        $cacheKey = 'chatbot_schema_docs:' . md5($path);
-        $cacheMinutes = config('chatbot.schema_cache_minutes', 30);
+        $content = File::get($path);
+        $maxChars = config('chatbot.schema_docs_max_chars', 6000);
 
-        return Cache::remember($cacheKey, now()->addMinutes($cacheMinutes), function () use ($path) {
-            if (! File::exists($path) || ! File::isReadable($path)) {
-                return '';
-            }
-
-            $content = trim(File::get($path));
-
-            if ($content === '') {
-                return '';
-            }
-
-            $maxChars = (int) config('chatbot.schema_docs_max_chars', 6000);
-
-            if ($maxChars > 0 && mb_strlen($content) > $maxChars) {
-                $content = mb_substr($content, 0, $maxChars) . "\n\n[...dokumentasi dipotong karena terlalu panjang, lihat file aslinya untuk selengkapnya...]";
-            }
-
+        if (strlen($content) <= $maxChars) {
             return $content;
-        });
+        }
+
+        return Str::limit($content, $maxChars, "\n\n... (dokumentasi dipotong, panjang > {$maxChars} karakter) ...");
     }
 
     /**
-     * Format array skema [tabel => [kolom, ...]] jadi teks daftar lengkap
-     * untuk dikirim ke prompt AI. Semua tabel & kolom yang tidak diblokir
-     * disertakan apa adanya (tidak dipotong), supaya AI tidak kehilangan
-     * konteks tabel yang jarang dipakai lalu asal menebak.
+     * Format skema (array [table => [col (type), ...]]) jadi teks rapi
+     * untuk prompt AI.
      */
     protected function formatSchemaForPrompt(array $schema): string
     {
-        return collect($schema)
-            ->map(fn(array $columns, string $table) => "- {$table} (" . implode(', ', $columns) . ')')
-            ->implode("\n");
-    }
-
-    protected function extractSql(string $raw): string
-    {
-        if (preg_match('/```sql\s*(.*?)```/is', $raw, $m)) {
-            return trim($m[1]);
+        if (empty($schema)) {
+            return '(tidak ada tabel yang bisa dibaca)';
         }
 
-        if (preg_match('/```\s*(.*?)```/is', $raw, $m)) {
-            return trim($m[1]);
+        $lines = [];
+
+        foreach ($schema as $table => $columns) {
+            $lines[] = "Tabel: {$table}";
+            $lines[] = "  " . implode("\n  ", $columns);
+            $lines[] = '';
         }
 
-        return trim($raw);
+        return implode("\n", $lines);
     }
 
     /**
-     * Membetulkan kesalahan sintaks T-SQL yang umum dibuat AI, tanpa perlu
-     * meminta AI mengulang. Saat ini menangani urutan "TOP N DISTINCT"
-     * (salah) -> "DISTINCT TOP N" (benar), yang sering tertukar karena di
-     * database lain (mis. MySQL/Postgres) DISTINCT memang ditulis lebih
-     * dulu tapi tanpa konsep TOP seperti ini.
+     * Validasi query read-only:
+     * - Harus diawali SELECT (single statement)
+     * - Tidak mengandung kata kunci terlarang
+     * - Tidak menyebut tabel terlarang
+     * - Tidak menyebut kolom terlarang
+     * - Tidak SELECT * pada tabel yang punya kolom terlarang
      */
-    protected function normalizeSql(string $sql): string
+    protected function validateReadonlySql(string $sql, array $blockedTables, array $blockedColumns): array
     {
-        return preg_replace(
-            '/\bselect\s+top\s*\(?\s*(\d+)\s*\)?\s+distinct\b/i',
-            'SELECT DISTINCT TOP $1',
-            $sql
-        );
-    }
+        $lower = strtolower(trim($sql));
 
-    /**
-     * Lapisan validasi kedua (selain hak akses akun database read-only)
-     * supaya query yang dijalankan benar-benar SELECT, satu statement,
-     * bebas dari kata kunci tulis, dan tidak menyentuh tabel yang
-     * diblokir (mis. 'users') — di luar itu, semua tabel di database
-     * boleh diakses.
-     */
-    protected function validateReadonlySql(string $sql, array $blockedTables, array $blockedColumns = []): array
-    {
-        $clean = rtrim(trim($sql), "; \t\n\r");
-
-        if ($clean === '') {
-            return ['valid' => false, 'reason' => 'AI tidak menghasilkan query.'];
+        // Harus diawali SELECT
+        if (! preg_match('/^\s*select\b/', $lower)) {
+            return ['valid' => false, 'reason' => 'Query tidak diawali SELECT'];
         }
 
-        // Hanya boleh satu statement: tidak boleh ada ';' di tengah query.
-        if (str_contains($clean, ';')) {
-            return ['valid' => false, 'reason' => 'Terdeteksi lebih dari satu statement.'];
+        // Hanya satu statement (tanpa titik koma di tengah, kecuali di dalam string literal)
+        if (preg_match('/;.*\S/', $lower)) {
+            return ['valid' => false, 'reason' => 'Hanya boleh satu statement SELECT'];
         }
 
-        $lower = strtolower($clean);
-
-        if (! str_starts_with(ltrim($lower), 'select')) {
-            return ['valid' => false, 'reason' => 'Query harus diawali dengan SELECT.'];
-        }
-
-        // FIX: sebelumnya pakai str_contains biasa, sehingga kolom yang cuma
-        // MENGANDUNG kata terlarang sebagai substring (mis. kolom
-        // "updated_at" kena blokir gara-gara mengandung kata "update")
-        // ikut ditolak walau query-nya SELECT murni dan aman. Sekarang
-        // dicek sebagai kata utuh (word boundary) supaya cuma statement
-        // tulis yang sungguhan yang diblokir.
+        // Kata kunci terlarang
         foreach (config('chatbot.forbidden_sql_keywords', []) as $keyword) {
-            $pattern = '/\b' . preg_quote(strtolower($keyword), '/') . '\b/';
-
-            if (preg_match($pattern, $lower)) {
+            if (strpos($lower, $keyword) !== false) {
                 return ['valid' => false, 'reason' => "Mengandung kata kunci terlarang: {$keyword}"];
             }
         }
 
-        // Pastikan tidak ada satu pun tabel yang diblokir (mis. users) yang
-        // disebut di query, lewat FROM, JOIN, ATAU subquery mana pun.
-        preg_match_all('/\b(?:from|join)\s+([a-zA-Z0-9_\.\[\]]+)/i', $clean, $matches);
-        $referencedTables = array_map(
-            fn($t) => strtolower(trim($t, '[]')),
-            $matches[1] ?? []
-        );
-        // Buang alias skema (mis. dbo.employee_contract -> employee_contract)
-        // supaya bisa dicocokkan langsung ke key blockedTables/blockedColumns.
-        $referencedTables = array_map(
-            fn($t) => str_contains($t, '.') ? substr($t, strrpos($t, '.') + 1) : $t,
-            $referencedTables
-        );
-
-        foreach ($referencedTables as $bare) {
-            if (in_array($bare, $blockedTables, true)) {
-                return ['valid' => false, 'reason' => "Tabel '{$bare}' tidak boleh diakses lewat chatbot."];
+        // Tabel terlarang (cek sebagai token terpisah, bukan substring)
+        foreach ($blockedTables as $table) {
+            if (preg_match('/\b' . preg_quote($table, '/') . '\b/i', $lower)) {
+                return ['valid' => false, 'reason' => "Menyebut tabel terlarang: {$table}"];
             }
         }
 
-        // Lapisan pertahanan kedua untuk kolom sensitif (mis. gaji di
-        // employee_contract) — lapisan pertamanya adalah kolom ini memang
-        // sudah tidak pernah dikirim ke AI lewat skema (lihat
-        // getDatabaseSchema()), jadi baris di bawah ini murni jaga-jaga
-        // kalau AI tetap "menebak" nama kolomnya.
-        if (! empty($blockedColumns)) {
-            $tablesWithBlockedColumns = array_values(array_intersect(
-                $referencedTables,
-                array_keys($blockedColumns)
-            ));
-
-            // SELECT * (atau alias.*) pada tabel yang punya kolom terblokir
-            // ditolak total, karena bisa ikut membawa kolom yang seharusnya
-            // tidak boleh dibaca sama sekali tanpa AI perlu menyebut namanya.
-            if (! empty($tablesWithBlockedColumns) && preg_match('/select\s+(distinct\s+)?(top\s*\(?\s*\d+\s*\)?\s+)?(\*|[a-zA-Z0-9_]+\.\*)/i', $clean)) {
-                $table = $tablesWithBlockedColumns[0];
-
-                return ['valid' => false, 'reason' => "SELECT * tidak boleh dipakai untuk tabel '{$table}' karena tabel ini punya kolom yang dibatasi, sebutkan kolom yang dibutuhkan secara eksplisit."];
-            }
-
-            foreach ($tablesWithBlockedColumns as $table) {
-                foreach ($blockedColumns[$table] as $column) {
-                    if (preg_match('/\b' . preg_quote($column, '/') . '\b/i', $clean)) {
-                        return ['valid' => false, 'reason' => "Kolom '{$column}' pada tabel '{$table}' tidak boleh diakses lewat chatbot."];
+        // Kolom terlarang per tabel
+        foreach ($blockedColumns as $table => $columns) {
+            if (preg_match('/\b' . preg_quote($table, '/') . '\b/i', $lower)) {
+                foreach ($columns as $col) {
+                    if (preg_match('/\b' . preg_quote($col, '/') . '\b/i', $lower)) {
+                        return ['valid' => false, 'reason' => "Menyebut kolom terlarang: {$table}.{$col}"];
                     }
+                }
+
+                // SELECT * pada tabel yang punya kolom terlarang
+                if (preg_match('/\bselect\s+\*\b/i', $lower)
+                    && preg_match('/\bfrom\s+' . preg_quote($table, '/') . '\b/i', $lower)) {
+                    return ['valid' => false, 'reason' => "SELECT * pada tabel {$table} yang punya kolom terlarang tidak diperbolehkan"];
                 }
             }
         }
 
-        return ['valid' => true, 'reason' => null];
+        return ['valid' => true];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Export hasil query — default Excel, atau PDF/gambar kalau user minta
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Ekstrak SQL dari balasan AI (yang diharapkan di dalam blok kode
+     * ```sql ... ```). Kalau tidak ada blok kode, kembalikan mentahnya.
+     */
+    protected function extractSql(string $response): string
+    {
+        if (preg_match('/```sql\s*(.+?)\s*```/is', $response, $m)) {
+            return trim($m[1]);
+        }
+
+        if (preg_match('/```\s*(.+?)\s*```/is', $response, $m)) {
+            return trim($m[1]);
+        }
+
+        return trim($response);
+    }
 
     /**
-     * Membaca pesan user untuk menentukan format file yang diminta.
-     * Defaultnya selalu 'xlsx' kecuali user secara eksplisit menyebut
-     * pdf, atau menyebut gambar/image/grafik/dsb.
+     * Normalisasi SQL: hapus komentar, normalisasi whitespace, pastikan
+     * ada TOP/LIMIT.
+     */
+    protected function normalizeSql(string $sql): string
+    {
+        // Hapus komentar -- dan /* */
+        $sql = preg_replace('/--.*$/m', '', $sql);
+        $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
+
+        // Normalisasi whitespace
+        $sql = preg_replace('/\s+/', ' ', trim($sql));
+
+        // Pastikan ada TOP (batas baris di sisi DB) — ini defense in depth
+        // selain pemotongan di PHP, kalau AI lupa pakai TOP.
+        if (! preg_match('/\bselect\s+(?:distinct\s+)?top\s+\d+/i', $sql)) {
+            $maxRows = config('chatbot.max_rag_rows', 200);
+            $sql = preg_replace('/^\s*select\s+/i', "SELECT TOP {$maxRows} ", $sql, 1);
+        }
+
+        return $sql;
+    }
+
+    /**
+     * Deteksi format export yang diminta user (excel/pdf/image/html_table).
+     * Default Excel kalau tidak eksplisit.
      */
     protected function detectExportFormat(string $userMessage): string
     {
-        $text = strtolower($userMessage);
+        $lower = strtolower($userMessage);
 
-        if (preg_match('/\bpdf\b/', $text)) {
-            return 'pdf';
+        if (preg_match('/\b(pdf|image|html_table|excel)\b', $lower, $m)) {
+            return $m[1];
         }
 
-        $imageHints = ['gambar', 'image', 'foto', 'png', 'jpg', 'jpeg', 'grafik', 'chart', 'visual'];
-
-        foreach ($imageHints as $hint) {
-            if (str_contains($text, $hint)) {
-                return 'image';
-            }
-        }
-
-        return 'xlsx';
+        return 'excel';
     }
 
     /**
-     * Meng-generate file export sesuai format. Balik null kalau datanya
-     * kosong atau proses generate gagal (mis. package belum lengkap) —
-     * kegagalan export TIDAK BOLEH menggagalkan jawaban chat itu sendiri.
+     * Export hasil query ke file (Excel/PDF/Image/HTML table) di storage
+     * disk yang dikonfigurasi (default 'public'), lalu kembalikan array
+     * info file untuk disimpan di meta pesan AI.
      */
     protected function exportRows(array $rows, string $format, string $userMessage): ?array
     {
@@ -756,478 +704,348 @@ class AiChatService
             return null;
         }
 
-        try {
-            if ($format === 'pdf') {
-                return $this->exportRowsToPdf($rows, $userMessage);
-            }
+        $disk = config('chatbot.export_disk', 'public');
+        $timestamp = now()->format('Ymd_His');
+        $slug = Str::slug(str($userMessage)->limit(30), '_');
 
-            if ($format === 'image') {
-                return $this->exportRowsToImage($rows, $userMessage);
-            }
-
-            // Format default ('xlsx'): kalau user tidak minta pdf/gambar
-            // secara eksplisit, tidak semua hasil perlu dibuatkan file.
-            // Datanya sedikit -> cukup tabel HTML rapi di dalam chat.
-            // Datanya banyak -> baru dibuatkan file Excel supaya enak diunduh.
-            $htmlThreshold = (int) config('chatbot.html_table_threshold', 20);
-
-            if (count($rows) <= $htmlThreshold) {
-                return $this->exportRowsToHtmlTable($rows);
-            }
-
-            return $this->exportRowsToExcel($rows, $userMessage);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return null;
+        switch ($format) {
+            case 'excel':
+                return $this->exportExcel($rows, $disk, $timestamp, $slug);
+            case 'pdf':
+                return $this->exportPdf($rows, $disk, $timestamp, $slug);
+            case 'image':
+                return $this->exportImage($rows, $disk, $timestamp, $slug);
+            case 'html_table':
+                return $this->exportHtmlTable($rows, $disk, $timestamp, $slug);
+            default:
+                return $this->exportExcel($rows, $disk, $timestamp, $slug);
         }
     }
 
-    /**
-     * Render hasil query sebagai tabel HTML rapi untuk ditampilkan langsung
-     * di dalam chat (tanpa file terpisah) — dipakai kalau jumlah baris masih
-     * di bawah ambang batas 'chatbot.html_table_threshold'.
-     */
-    protected function exportRowsToHtmlTable(array $rows): array
+    protected function exportExcel(array $rows, string $disk, string $timestamp, string $slug): array
     {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
         $headers = array_keys((array) $rows[0]);
 
-        $formatCell = function ($value): string {
-            if ($value === null) {
-                return '';
-            }
-
-            if (is_scalar($value)) {
-                return e((string) $value);
-            }
-
-            return e(json_encode($value, JSON_UNESCAPED_UNICODE));
-        };
-
-        // Sengaja tidak pakai inline style di sini — markup dibiarkan bersih
-        // (cuma class) supaya tampilannya diatur lewat CSS di sisi chatbox
-        // (lihat .cw-data-table di _message_styles.blade.php), bukan
-        // "dibakar" dari backend.
-        $theadCells = implode('', array_map(
-            fn($header) => '<th>' . e($header) . '</th>',
-            $headers
-        ));
-
-        $tbodyRows = '';
-
-        foreach ($rows as $row) {
-            $values = array_values((array) $row);
-
-            $cells = implode('', array_map(
-                fn($value) => '<td>' . $formatCell($value) . '</td>',
-                $values
-            ));
-
-            $tbodyRows .= "<tr>{$cells}</tr>";
+        foreach ($headers as $i => $header) {
+            $col = Coordinate::stringFromColumnIndex($i + 1);
+            $sheet->setCellValue("{$col}1", $header);
         }
 
-        $html = '<div class="cw-data-table-wrap">'
-            . '<table class="cw-data-table">'
-            . "<thead><tr>{$theadCells}</tr></thead>"
-            . "<tbody>{$tbodyRows}</tbody>"
-            . '</table></div>';
+        foreach ($rows as $rowIndex => $row) {
+            $excelRow = $rowIndex + 2;
+            $data = (array) $row;
+
+            foreach ($headers as $colIndex => $header) {
+                $col = Coordinate::stringFromColumnIndex($colIndex + 1);
+                $value = $data[$header] ?? '';
+                $sheet->setCellValue("{$col}{$excelRow}", $value);
+            }
+        }
+
+        foreach (range('A', Coordinate::stringFromColumnIndex(count($headers))) as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $styleArray = [
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FF2563EB'],
+            ],
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+        ];
+        $sheet->getStyle('A1:' . Coordinate::stringFromColumnIndex(count($headers)) . '1')->applyFromArray($styleArray);
+
+        $filename = "chatbot_export_{$timestamp}_{$slug}.xlsx";
+        $path = "chatbot_exports/{$filename}";
+
+        Storage::disk($disk)->put($path, (new Xlsx($spreadsheet))->saveToString());
 
         return [
-            'type' => 'html_table',
-            'html' => $html,
+            'type' => 'excel',
+            'filename' => $filename,
+            'url' => Storage::disk($disk)->url($path),
             'row_count' => count($rows),
         ];
     }
 
-    protected function exportRowsToExcel(array $rows, string $userMessage): array
-    {
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Hasil Chatbot');
-
-        $headers = array_keys((array) $rows[0]);
-        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
-
-        foreach ($headers as $colIndex => $header) {
-            $col = Coordinate::stringFromColumnIndex($colIndex + 1);
-            $sheet->setCellValue("{$col}1", $header);
-        }
-
-        $sheet->getStyle("A1:{$lastCol}1")->getFont()->setBold(true);
-        $sheet->getStyle("A1:{$lastCol}1")->getFill()
-            ->setFillType(Fill::FILL_SOLID)
-            ->getStartColor()->setRGB('E2E8F0');
-
-        foreach ($rows as $rowIndex => $row) {
-            $values = array_values((array) $row);
-
-            foreach ($values as $colIndex => $value) {
-                $col = Coordinate::stringFromColumnIndex($colIndex + 1);
-                $sheet->setCellValue("{$col}" . ($rowIndex + 2), is_scalar($value) || $value === null ? $value : (string) $value);
-            }
-        }
-
-        foreach (range(1, count($headers)) as $colIndex) {
-            $col = Coordinate::stringFromColumnIndex($colIndex);
-            $sheet->getColumnDimension($col)->setAutoSize(true);
-        }
-
-        $sheet->freezePane('A2');
-
-        $filename = $this->exportFilename($userMessage, 'xlsx');
-        $fullPath = $this->exportFullPath($filename);
-
-        (new Xlsx($spreadsheet))->save($fullPath);
-
-        return $this->exportResult('xlsx', $filename, count($rows));
-    }
-
-    protected function exportRowsToPdf(array $rows, string $userMessage): array
+    protected function exportPdf(array $rows, string $disk, string $timestamp, string $slug): array
     {
         $headers = array_keys((array) $rows[0]);
-        $tableRows = array_map(fn($row) => array_values((array) $row), $rows);
+        $html = view('chatbot.exports.pdf', compact('rows', 'headers'))->render();
+        $pdf = Pdf::loadHTML($html)->setPaper('a4', 'landscape');
 
-        $pdf = Pdf::loadView('chatbot.exports.pdf_table', [
-            'title' => 'Hasil Chatbot',
-            'headers' => $headers,
-            'rows' => $tableRows,
-        ])->setPaper('a4', 'landscape');
+        $filename = "chatbot_export_{$timestamp}_{$slug}.pdf";
+        $path = "chatbot_exports/{$filename}";
 
-        $filename = $this->exportFilename($userMessage, 'pdf');
-        $fullPath = $this->exportFullPath($filename);
-
-        $pdf->save($fullPath);
-
-        return $this->exportResult('pdf', $filename, count($rows));
-    }
-
-    /**
-     * Export sederhana ke gambar PNG (tabel hasil query dirender langsung
-     * pakai GD, tanpa dependency font eksternal). Dibatasi jumlah baris &
-     * kolom supaya gambarnya tetap terbaca — kalau butuh data lengkap,
-     * arahkan user ke export Excel.
-     */
-    protected function exportRowsToImage(array $rows, string $userMessage): ?array
-    {
-        if (! function_exists('imagecreatetruecolor')) {
-            return null;
-        }
-
-        $maxImageRows = (int) config('chatbot.max_image_rows', 40);
-        $maxImageCols = 8;
-
-        $allHeaders = array_keys((array) $rows[0]);
-        $headers = array_slice($allHeaders, 0, $maxImageCols);
-        $displayRows = array_slice($rows, 0, $maxImageRows);
-
-        $font = 4;
-        $charWidth = imagefontwidth($font);
-        $charHeight = imagefontheight($font);
-        $padding = 10;
-        $rowHeight = $charHeight + 12;
-
-        $truncate = fn($value) => mb_strlen((string) $value) > 24
-            ? mb_substr((string) $value, 0, 21) . '...'
-            : (string) $value;
-
-        $colWidths = [];
-
-        foreach ($headers as $colIndex => $header) {
-            $maxLen = strlen($truncate($header));
-
-            foreach ($displayRows as $row) {
-                $values = array_values((array) $row);
-                $maxLen = max($maxLen, strlen($truncate($values[$colIndex] ?? '')));
-            }
-
-            $colWidths[$colIndex] = min(240, ($maxLen * $charWidth) + ($padding * 2));
-        }
-
-        $isTruncated = count($rows) > count($displayRows) || count($allHeaders) > count($headers);
-        $footerHeight = $isTruncated ? 24 : 0;
-
-        $width = max(array_sum($colWidths), 200) + 2;
-        $height = $rowHeight * (count($displayRows) + 1) + $footerHeight + 4;
-
-        $im = imagecreatetruecolor((int) $width, (int) $height);
-        $white = imagecolorallocate($im, 255, 255, 255);
-        $headerBg = imagecolorallocate($im, 30, 58, 138);
-        $headerText = imagecolorallocate($im, 255, 255, 255);
-        $rowBgAlt = imagecolorallocate($im, 241, 245, 249);
-        $border = imagecolorallocate($im, 203, 213, 225);
-        $text = imagecolorallocate($im, 30, 41, 59);
-        $muted = imagecolorallocate($im, 100, 116, 139);
-
-        imagefill($im, 0, 0, $white);
-        imagefilledrectangle($im, 0, 0, (int) $width, $rowHeight, $headerBg);
-
-        $x = 0;
-
-        foreach ($headers as $colIndex => $header) {
-            imagestring($im, $font, $x + $padding, 6, $truncate($header), $headerText);
-            $x += $colWidths[$colIndex];
-        }
-
-        $y = $rowHeight;
-
-        foreach ($displayRows as $rowIndex => $row) {
-            if ($rowIndex % 2 === 1) {
-                imagefilledrectangle($im, 0, $y, (int) $width, $y + $rowHeight, $rowBgAlt);
-            }
-
-            $values = array_values((array) $row);
-            $x = 0;
-
-            foreach ($headers as $colIndex => $header) {
-                imagestring($im, $font, $x + $padding, $y + 6, $truncate($values[$colIndex] ?? ''), $text);
-                $x += $colWidths[$colIndex];
-            }
-
-            imageline($im, 0, $y, (int) $width, $y, $border);
-            $y += $rowHeight;
-        }
-
-        if ($isTruncated) {
-            imagestring($im, 2, 6, $y + 4, 'Data dipotong untuk tampilan gambar — minta versi Excel/PDF untuk data lengkap.', $muted);
-        }
-
-        $filename = $this->exportFilename($userMessage, 'png');
-        $fullPath = $this->exportFullPath($filename);
-
-        imagepng($im, $fullPath);
-        imagedestroy($im);
-
-        return $this->exportResult('image', $filename, count($displayRows));
-    }
-
-    protected function exportFilename(string $userMessage, string $extension): string
-    {
-        $slug = Str::slug(Str::limit(trim($userMessage), 50, ''), '-');
-        $base = $slug !== '' ? $slug : 'hasil-chatbot';
-
-        return "{$base}-" . now()->format('Ymd-His') . '-' . Str::random(4) . ".{$extension}";
-    }
-
-    protected function exportDisk(): string
-    {
-        return config('chatbot.export_disk', 'public');
-    }
-
-    protected function exportDirectory(): string
-    {
-        return trim(config('chatbot.export_directory', 'chatbot-exports'), '/');
-    }
-
-    protected function exportFullPath(string $filename): string
-    {
-        $disk = Storage::disk($this->exportDisk());
-        $disk->makeDirectory($this->exportDirectory());
-
-        return $disk->path($this->exportDirectory() . '/' . $filename);
-    }
-
-    protected function exportResult(string $type, string $filename, int $rowCount): array
-    {
-        $url = Storage::disk($this->exportDisk())->url($this->exportDirectory() . '/' . $filename);
+        Storage::disk($disk)->put($path, $pdf->output());
 
         return [
-            'type' => $type,
+            'type' => 'pdf',
             'filename' => $filename,
-            'url' => $url,
-            'row_count' => $rowCount,
+            'url' => Storage::disk($disk)->url($path),
+            'row_count' => count($rows),
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Dispatcher pemanggilan provider
-    |--------------------------------------------------------------------------
-    */
-    protected function callProvider(string $providerKey, string $system, array $messages): string
+    protected function exportImage(array $rows, string $disk, string $timestamp, string $slug): array
     {
-        $cfg = config("chatbot.providers.$providerKey");
+        $headers = array_keys((array) $rows[0]);
+        $html = view('chatbot.exports.image', compact('rows', 'headers'))->render();
 
-        if (empty($cfg['api_key'])) {
-            throw new RuntimeException("API key untuk provider '$providerKey' belum diisi di .env.");
+        $filename = "chatbot_export_{$timestamp}_{$slug}.png";
+        $path = "chatbot_exports/{$filename}";
+
+        // Generate image dari HTML via wkhtmltoimage atau headless chrome
+        // Kalau belum tersedia, fallback ke HTML table export
+        try {
+            // Placeholder — butuh wkhtmltoimage atau puppeteer terinstall di server
+            // Storage::disk($disk)->put($path, $imageBytes);
+            // Untuk sekarang fallback ke HTML table
+            return $this->exportHtmlTable($rows, $disk, $timestamp, $slug);
+        } catch (\Throwable $e) {
+            report($e);
+            return $this->exportHtmlTable($rows, $disk, $timestamp, $slug);
         }
-
-        return match ($cfg['driver']) {
-            'anthropic' => $this->callAnthropic($cfg, $system, $messages),
-            'gemini' => $this->callGemini($cfg, $system, $messages),
-            'openai_compatible' => $this->callOpenAiCompatible($cfg, $system, $messages),
-            default => throw new RuntimeException("Driver '{$cfg['driver']}' tidak dikenal."),
-        };
     }
 
-    protected function callAnthropic(array $cfg, string $system, array $messages): string
+    protected function exportHtmlTable(array $rows, string $disk, string $timestamp, string $slug): array
     {
-        $response = Http::withHeaders([
-            'x-api-key' => $cfg['api_key'],
-            'anthropic-version' => '2023-06-01',
-            'content-type' => 'application/json',
-        ])->timeout(config('chatbot.request_timeout', 120))->post($cfg['base_url'], [
-            'model' => $cfg['model'],
-            'max_tokens' => 1024,
-            'system' => $system,
-            'messages' => $messages,
-        ]);
+        $headers = array_keys((array) $rows[0]);
+        $html = view('chatbot.exports.html_table', compact('rows', 'headers'))->render();
 
-        if ($response->failed()) {
-            throw new RuntimeException('Anthropic API error: ' . $response->body());
-        }
+        $filename = "chatbot_export_{$timestamp}_{$slug}.html";
+        $path = "chatbot_exports/{$filename}";
 
-        $blocks = $response->json('content', []);
+        Storage::disk($disk)->put($path, $html);
 
-        return collect($blocks)
-            ->where('type', 'text')
-            ->pluck('text')
-            ->implode("\n");
-    }
-
-    protected function callOpenAiCompatible(array $cfg, string $system, array $messages): string
-    {
-        $response = Http::withToken($cfg['api_key'])
-            ->timeout(config('chatbot.request_timeout', 120))
-            ->connectTimeout(15)
-            ->retry(2, 3000, function ($exception) {
-                // Coba ulang khusus untuk timeout/koneksi putus, bukan untuk
-                // error validasi (4xx) yang memang pasti gagal lagi kalau diulang.
-                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
-            })
-            ->post($cfg['base_url'], [
-                'model' => $cfg['model'],
-                'temperature' => 0.3,
-                // Sebagian model di balik router (terutama yang "reasoning"-nya
-                // tidak bisa dimatikan, mis. beberapa model Gemini di combo
-                // 9 Router) akan menghabiskan seluruh token budget untuk proses
-                // thinking kalau tidak dikasih batas eksplisit, sehingga jawaban
-                // akhirnya (message.content) kosong walau HTTP-nya sukses.
-                // Kirim dua-duanya (gaya lama & baru) supaya kompatibel dengan
-                // provider apa pun di baliknya.
-                'max_tokens' => (int) config('chatbot.max_output_tokens', 4096),
-                'max_completion_tokens' => (int) config('chatbot.max_output_tokens', 4096),
-                // Minta respons utuh (bukan potongan SSE) — beberapa router
-                // (termasuk 9 Router) tetap mengirim format streaming kalau
-                // field ini tidak disebutkan secara eksplisit.
-                'stream' => false,
-                'messages' => array_merge(
-                    [['role' => 'system', 'content' => $system]],
-                    $messages
-                ),
-            ]);
-
-        if ($response->failed()) {
-            throw new RuntimeException('AI provider error: ' . $response->body());
-        }
-
-        $rawBody = $response->body();
-
-        // Jaga-jaga: kalau router tetap membalas dalam format SSE
-        // ("data: {...}" per baris) walaupun sudah diminta stream=false,
-        // gabungkan semua potongan delta.content jadi satu jawaban utuh.
-        if (str_starts_with(ltrim($rawBody), 'data:')) {
-            $content = $this->extractContentFromSse($rawBody);
-
-            if ($content !== '') {
-                return $content;
-            }
-        }
-
-        $message = $response->json('choices.0.message', []);
-
-        // Jalur normal: field 'content' berupa string biasa.
-        $content = (string) ($message['content'] ?? '');
-
-        // Beberapa router mengembalikan 'content' sebagai array of parts
-        // (mirip format Anthropic), bukan string langsung.
-        if ($content === '' && is_array($message['content'] ?? null)) {
-            $content = collect($message['content'])
-                ->map(fn($part) => is_array($part) ? ($part['text'] ?? '') : (string) $part)
-                ->implode('');
-        }
-
-        // Fallback lain yang dipakai sebagian router/model reasoning saat
-        // 'content' kosong karena token habis untuk thinking, atau saat
-        // jawaban akhir ditaruh di field terpisah dari proses berpikirnya.
-        if ($content === '') {
-            $content = (string) ($message['reasoning_content'] ?? '');
-        }
-
-        if ($content === '') {
-            $content = (string) $response->json('choices.0.text', '');
-        }
-
-        if ($content === '') {
-            $finishReason = $response->json('choices.0.finish_reason', 'unknown');
-            $wasSse = str_starts_with(ltrim($rawBody), 'data:') ? ' (format SSE terdeteksi tapi gagal digabung)' : '';
-
-            throw new RuntimeException(
-                "AI provider mengembalikan respons kosong (finish_reason: {$finishReason}){$wasSse}. "
-                    . 'Kemungkinan model kehabisan token untuk proses reasoning sebelum sempat menjawab, '
-                    . 'atau model/combo yang dipilih router sedang bermasalah. Respons mentah: '
-                    . substr($rawBody, 0, 500)
-            );
-        }
-
-        return $content;
+        return [
+            'type' => 'html_table',
+            'filename' => $filename,
+            'url' => Storage::disk($disk)->url($path),
+            'row_count' => count($rows),
+            'html' => $html,
+        ];
     }
 
     /**
-     * Gabungkan potongan-potongan delta.content dari respons berformat
-     * Server-Sent Events (baris "data: {...}", diakhiri "data: [DONE]")
-     * jadi satu string jawaban utuh.
+     * Panggil provider AI (OpenAI-compatible, Anthropic, Gemini, dll)
+     * Mengembalikan string konten jawaban.
      */
-    protected function extractContentFromSse(string $rawBody): string
+    protected function callProvider(string $providerKey, string $systemPrompt, array $messages): string
     {
-        $content = '';
+        $cfg = config("chatbot.providers.$providerKey");
+        $driver = $cfg['driver'] ?? 'openai_compatible';
 
-        foreach (preg_split('/\r?\n/', $rawBody) as $line) {
-            $line = trim($line);
-
-            if ($line === '' || ! str_starts_with($line, 'data:')) {
-                continue;
-            }
-
-            $json = trim(substr($line, 5));
-
-            if ($json === '' || $json === '[DONE]') {
-                continue;
-            }
-
-            $chunk = json_decode($json, true);
-
-            if (! is_array($chunk)) {
-                continue;
-            }
-
-            $delta = $chunk['choices'][0]['delta'] ?? [];
-
-            if (isset($delta['content']) && is_string($delta['content'])) {
-                $content .= $delta['content'];
-            }
+        switch ($driver) {
+            case 'openai_compatible':
+                return $this->callOpenAiCompatible($cfg, $systemPrompt, $messages);
+            case 'anthropic':
+                return $this->callAnthropic($cfg, $systemPrompt, $messages);
+            case 'gemini':
+                return $this->callGemini($cfg, $systemPrompt, $messages);
+            default:
+                throw new RuntimeException("Driver AI '{$driver}' belum didukung.");
         }
-
-        return $content;
     }
 
-    protected function callGemini(array $cfg, string $system, array $messages): string
+    protected function callOpenAiCompatible(array $cfg, string $systemPrompt, array $messages): string
     {
-        $contents = collect($messages)->map(fn($m) => [
-            'role' => $m['role'] === 'assistant' ? 'model' : 'user',
-            'parts' => [['text' => $m['content']]],
-        ])->values()->all();
+        $payload = [
+            'model' => $cfg['model'],
+            'messages' => array_merge(
+                [['role' => 'system', 'content' => $systemPrompt]],
+                $messages
+            ),
+            'temperature' => $cfg['temperature'] ?? 0.2,
+            'max_tokens' => $cfg['max_tokens'] ?? config('chatbot.max_output_tokens', 4096),
+            'max_completion_tokens' => $cfg['max_completion_tokens'] ?? config('chatbot.max_output_tokens', 4096),
+        ];
 
-        $url = rtrim($cfg['base_url'], '/') . "/{$cfg['model']}:generateContent?key={$cfg['api_key']}";
+        $response = Http::timeout(config('chatbot.request_timeout', 120))
+            ->withHeaders([
+                'Authorization' => 'Bearer ' . ($cfg['api_key'] ?? ''),
+            ])
+            ->post($cfg['base_url'], $payload);
 
-        $response = Http::timeout(config('chatbot.request_timeout', 120))->post($url, [
-            'system_instruction' => ['parts' => [['text' => $system]]],
-            'contents' => $contents,
-        ]);
-
-        if ($response->failed()) {
-            throw new RuntimeException('Gemini API error: ' . $response->body());
+        if (! $response->successful()) {
+            throw new RuntimeException("Provider {$cfg['base_url']} error: " . $response->body());
         }
 
-        return (string) $response->json('candidates.0.content.parts.0.text', '');
+        $data = $response->json();
+        if (! is_array($data)) {
+            // Body kosong / bukan JSON (mis. HTML proxy). Dulu memakai
+            // null-coalescing sehingga tidak error; sekarang resolveProviderMessage
+            // juga tetap aman, tapi normalize di sini supaya tidak TypeError.
+            $data = [];
+        }
+
+        $answer = $this->resolveProviderMessage($data);
+
+        // Guard bubble kosong: model reasoning (mis. Chutex 65536 tokens) bisa
+        // menghabiskan budget untuk "thinking" dan mengembalikan content kosong
+        // supaya DB menerima '' -> bubble assistant kosong di UI (dulu sempat berhasil
+        // muncul, kini wajib jatuh ke return yang tidak kosong).
+        if (trim((string) $answer) === '') {
+            $answer = 'Maaf, jawaban AI kosong. Coba kirim ulang pertanyaan Anda.';
+        }
+
+        return $answer;
+    }
+
+    /**
+     * Ambil teks jawaban dari respons provider OpenAI-compatible dengan fallback
+     * berlapis: urutan ideas: content string -> content array (parts) -> text ->
+     * reasoning_content -> reasoning -> reply -> yang lain.
+     */
+    protected function resolveProviderMessage(array $data): string
+    {
+        $message = $data['choices'][0]['message'] ?? null;
+        if (! is_array($message)) {
+            return '';
+        }
+
+        $content = $message['content'] ?? null;
+
+        if (is_string($content) && $content !== '') {
+            return $content;
+        }
+
+        if (is_array($content)) {
+            $parts = array_filter(array_map(function ($part) {
+                if (is_string($part)) {
+                    return $part;
+                }
+                if (is_array($part)) {
+                    return $part['text'] ?? ($part['content'] ?? '');
+                }
+                return '';
+            }, $content));
+
+            if (! empty($parts)) {
+                return implode('', $parts);
+            }
+        }
+
+        foreach (['text', 'reasoning_content', 'reasoning', 'reply', 'output'] as $key) {
+            $val = $message[$key] ?? null;
+            if (is_string($val) && $val !== '') {
+                return $val;
+            }
+            if (is_array($val)) {
+                $joined = implode('', array_filter(array_map(function ($part) {
+                    if (is_string($part)) return $part;
+                    if (is_array($part)) return $part['text'] ?? ($part['content'] ?? '');
+                    return '';
+                }, $val)));
+                if ($joined !== '') {
+                    return $joined;
+                }
+            }
+        }
+
+        // Fallback: reasoning_content bisa juga ada di level data (bukan di message)
+        $reasoning = $data['reasoning_content'] ?? $data['reasoning'] ?? null;
+        if (is_string($reasoning) && $reasoning !== '') {
+            return $reasoning;
+        }
+
+        return '';
+    }
+
+    protected function callAnthropic(array $cfg, string $systemPrompt, array $messages): string
+    {
+        // Anthropic expects system prompt separate from messages
+        $payload = [
+            'model' => $cfg['model'],
+            'system' => $systemPrompt,
+            'messages' => array_map(function ($m) {
+                // Handle content blocks (images + text) for vision
+                if (is_array($m['content'])) {
+                    return $m;
+                }
+                return ['role' => $m['role'], 'content' => $m['content']];
+            }, $messages),
+            'max_tokens' => $cfg['max_tokens'] ?? config('chatbot.max_output_tokens', 4096),
+            'temperature' => $cfg['temperature'] ?? 0.2,
+        ];
+
+        $response = Http::timeout(config('chatbot.request_timeout', 120))
+            ->withHeaders([
+                'x-api-key' => $cfg['api_key'],
+                'anthropic-version' => '2023-06-01',
+            ])
+            ->post($cfg['base_url'] ?? 'https://api.anthropic.com/v1/messages', $payload);
+
+        if (! $response->successful()) {
+            throw new RuntimeException("Anthropic API error: " . $response->body());
+        }
+
+        $data = $response->json();
+        $content = $data['content'] ?? [];
+
+        // Handle array content blocks
+        if (is_array($content)) {
+            $textParts = array_filter($content, fn($c) => ($c['type'] ?? '') === 'text');
+            return implode('', array_map(fn($c) => $c['text'] ?? '', $textParts));
+        }
+
+        return $content ?? '';
+    }
+
+    protected function callGemini(array $cfg, string $systemPrompt, array $messages): string
+    {
+        // Merge system prompt into first user message
+        $contents = array_merge(
+            [['role' => 'user', 'parts' => [['text' => $systemPrompt]]]],
+            array_map(function ($m) {
+                if (is_array($m['content'])) {
+                    // For image attachments, keep as-is
+                    $parts = [];
+                    foreach ($m['content'] as $block) {
+                        if ($block['type'] === 'image') {
+                            $parts[] = ['inline_data' => [
+                                'mime_type' => $block['source']['media_type'],
+                                'data' => $block['source']['data'],
+                            ]];
+                        } else {
+                            $parts[] = ['text' => $block['text']];
+                        }
+                    }
+                    return ['role' => $m['role'], 'parts' => $parts];
+                }
+                return ['role' => $m['role'], 'parts' => [['text' => $m['content']]]];
+            }, $messages)
+        );
+
+        $payload = [
+            'contents' => $contents,
+            'generationConfig' => [
+                'temperature' => $cfg['temperature'] ?? 0.2,
+                'maxOutputTokens' => $cfg['max_tokens'] ?? config('chatbot.max_output_tokens', 4096),
+            ],
+        ];
+
+        $response = Http::timeout(config('chatbot.request_timeout', 120))
+            ->withHeaders([
+                'x-goog-api-key' => $cfg['api_key'],
+            ])
+            ->post("{$cfg['base_url']}?key={$cfg['api_key']}", $payload);
+
+        if (! $response->successful()) {
+            throw new RuntimeException("Gemini API error: " . $response->body());
+        }
+
+        $data = $response->json();
+        $candidates = $data['candidates'] ?? [];
+
+        if (empty($candidates)) {
+            return '';
+        }
+
+        $parts = $candidates[0]['content']['parts'] ?? [];
+        return implode('', array_map(fn($p) => $p['text'] ?? '', $parts));
     }
 }

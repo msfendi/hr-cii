@@ -300,13 +300,78 @@
     }
 
     #video{
-        width:100%;
-        height:100%;
-        object-fit:cover;
-    }
+            width:100%;
+            height:100%;
+            object-fit:cover;
+        }
 
-    </style>
-</head>
+        </style>
+        <style>
+            /* === FIX SB ADMIN 2 LAYOUT: sidebar + content side-by-side === */
+            #wrapper {
+                display: flex !important;
+                flex-direction: row !important;
+                min-height: 100vh;
+            }
+            .sidebar {
+                flex-shrink: 0;
+                min-height: 100vh;
+            }
+            #content-wrapper {
+                flex: 1 1 auto;
+                min-width: 0;
+                overflow-x: hidden;
+                background-color: #f8f9fc;
+            }
+            #content-wrapper #content {
+                flex: 1 0 auto;
+            }
+            /* Hilangkan gap putih: pastikan tidak ada margin/padding liar */
+            #wrapper > .sidebar + #content-wrapper {
+                margin-left: 0 !important;
+            }
+            body.sidebar-toggled #wrapper > .sidebar.toggled + #content-wrapper {
+                margin-left: 0 !important;
+            }
+            /* === FIX DOUBLE PADDING GLOBAL (2026-11-09) ===
+               Akar masalah: layouts/app membungkus @yield('content') dalam
+               .container-fluid.py-3 (padding: 1.5rem kiri/kanan di bawah sb-admin-2),
+               lalu halaman individual lagi bungkus dengan .card/.card-body
+               serta @section('content') <div class="container">...</div>
+               untuk hasil padding berlapis 1.5rem + 1.25rem + mt-5/mb-4.
+               Below overrides mengganti .container-fluid.py-3 jadi 1rem horizontal
+               dan 0.75rem vertikal dulu, dan menghapus padding ganda container di
+               dalam halaman yang sudah di-wrap .container-fluid oleh layouts/app. */
+            .container-fluid.py-3 {
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+            }
+            .container-fluid .container {
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+                max-width: none !important;
+                width: 100% !important;
+            }
+            /* Hilangkan mb-4/mb-5 ganda yang ditumpuk oleh card shadow pada
+               halaman login/hris */
+            body.bg-gradient-primary .card.my-5 {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+            }
+            /* Login: di dalam <body class="bg-gradient-primary"> pakai
+               .container.container-center. .container punya padding 0.75rem kiri/kanan
+               + .card-body p-5 punya padding 3rem -> terasa longgar. */
+            .container-center {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+        </style>
+
+        </head>
 <script>
     window.reverbKey = "{{ config('broadcasting.connections.reverb.key') }}";
 </script>

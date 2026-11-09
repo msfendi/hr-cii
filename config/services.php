@@ -40,8 +40,29 @@ return [
         'timeout' => env('NODE_EXPORTER_TIMEOUT', 3), // detik
     ],
 
+    'node_exporter_nextcloud' => [
+        'url'     => env('NODE_EXPORTER_NEXTCLOUD_URL', 'http://192.168.1.242:9100/metrics'),
+        'timeout' => env('NODE_EXPORTER_NEXTCLOUD_TIMEOUT', 3),
+    ],
+
+    'node_exporter_passbolt' => [
+        'url'     => env('NODE_EXPORTER_PASSBOLT_URL', 'http://192.168.1.245:9100/metrics'),
+        'timeout' => env('NODE_EXPORTER_PASSBOLT_TIMEOUT', 3),
+    ],
+
+    'node_exporter_factory' => [
+        'url'     => env('NODE_EXPORTER_FACTORY_URL', 'http://factory.chutex.id:9100/metrics'),
+        'timeout' => env('NODE_EXPORTER_FACTORY_TIMEOUT', 3),
+    ],
+
     'ssl_monitor' => [
         'host' => env('SSL_MONITOR_HOST'),
+        'nextcloud_host' => env('SSL_MONITOR_NEXTCLOUD_HOST', 'nextcloud.chutex.id'),
+        'nextcloud_port' => env('SSL_MONITOR_NEXTCLOUD_PORT', 8010),
+        'passbolt_host' => env('SSL_MONITOR_PASSBOLT_HOST', 'passbolt.chutex.id'),
+        'passbolt_port' => env('SSL_MONITOR_PASSBOLT_PORT', 8012),
+        'factory_host' => env('SSL_MONITOR_FACTORY_HOST', 'factory.chutex.id'),
+        'factory_port' => env('SSL_MONITOR_FACTORY_PORT', 8001),
     ],
 
     'ga4' => [

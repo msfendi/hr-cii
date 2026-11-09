@@ -4,7 +4,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Koneksi Database Read-Only untuk mode RTG
+    | Koneksi Database Read-Only untuk mode RAG
     |--------------------------------------------------------------------------
     |
     | Nama koneksi ini HARUS terdaftar di config/database.php, dan HARUS
@@ -19,10 +19,10 @@ return [
 
     // Batas jumlah baris hasil query yang boleh dibawa ke AI (defense in depth,
     // selain TOP/LIMIT yang diminta lewat prompt ke AI).
-    'max_rtg_rows' => (int) env('CHATBOT_RTG_MAX_ROWS', 200),
+    'max_rag_rows' => (int) env('CHATBOT_RAG_MAX_ROWS', 200),
 
     // Berapa banyak pesan riwayat terakhir yang disertakan sebagai konteks
-    // saat mode 'global'. Mode 'rtg' sengaja tidak memakai riwayat panjang
+    // saat mode 'global'. Mode 'rag' sengaja tidak memakai riwayat panjang
     // supaya generasi query SQL tetap fokus ke pertanyaan terakhir.
     'history_limit' => (int) env('CHATBOT_HISTORY_LIMIT', 20),
 
@@ -40,7 +40,7 @@ return [
     'max_output_tokens' => (int) env('CHATBOT_MAX_OUTPUT_TOKENS', 4096),
 
     // Berapa lama (menit) hasil introspeksi skema database (daftar tabel &
-    // kolom yang dipakai AI di mode RTG) disimpan di cache, supaya tidak
+    // kolom yang dipakai AI di mode RAG) disimpan di cache, supaya tidak
     // query INFORMATION_SCHEMA berulang di setiap pesan chat. Kalau baru
     // menambah/mengubah tabel di database, tunggu cache ini kedaluwarsa
     // atau jalankan `php artisan cache:clear`.
@@ -60,7 +60,7 @@ return [
     |
     | File markdown di path ini (lihat docs/DATABASE_SCHEMA.md untuk contoh
     | & formatnya) dibaca oleh AiChatService::getSchemaDocumentation() dan
-    | disisipkan ke prompt AI di mode RTG, BERSAMAAN dengan relasi FK hasil
+    | disisipkan ke prompt AI di mode RAG, BERSAMAAN dengan relasi FK hasil
     | introspeksi — supaya AI bisa memakai keduanya untuk menyusun JOIN yang
     | benar tanpa perlu menebak-nebak nama kolom.
     |
@@ -108,52 +108,11 @@ return [
             'model'    => env('ROUTER9_MODEL', 'chutex'),
         ],
 
-        'anthropic' => [
-            'driver'   => 'anthropic',
-            'base_url' => 'https://api.anthropic.com/v1/messages',
-            'api_key'  => env('ANTHROPIC_API_KEY'),
-            'model'    => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
-        ],
-
-        'deepseek' => [
-            'driver'   => 'openai_compatible',
-            'base_url' => env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1/chat/completions'),
-            'api_key'  => env('DEEPSEEK_API_KEY'),
-            'model'    => env('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
-        ],
-
-        'gemini' => [
-            'driver'   => 'gemini',
-            'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/models'),
-            'api_key'  => env('GEMINI_API_KEY'),
-            'model'    => env('GEMINI_MODEL', 'gemini-3.5-flash'),
-        ],
-
-        'openrouter' => [
-            'driver'   => 'openai_compatible',
-            'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1/chat/completions'),
-            'api_key'  => env('OPENROUTER_API_KEY'),
-            'model'    => env('OPENROUTER_MODEL', 'minimax/minimax-m3:free'),
-        ],
-
-        'mistral' => [
-            'driver'   => 'openai_compatible',
-            'base_url' => env('MISTRAL_BASE_URL', 'https://api.mistral.ai/v1/chat/completions'),
-            'api_key'  => env('MISTRAL_API_KEY'),
-            'model'    => env('MISTRAL_MODEL', 'mistral-large-latest'),
-        ],
-
-        'groq' => [
-            'driver'   => 'openai_compatible',
-            'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1/chat/completions'),
-            'api_key'  => env('GROQ_API_KEY'),
-            'model'    => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
-        ],
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Blocklist tabel untuk mode RTG (Read To Generate)
+    | Blocklist tabel untuk mode RAG (Read And Generate)
     |--------------------------------------------------------------------------
     |
     | AI boleh SELECT ke SEMUA tabel di database (skemanya diambil otomatis
@@ -161,7 +120,7 @@ return [
     | KECUALI tabel-tabel yang disebut di sini. Nama tabel tidak case
     | sensitive. Default: 'users' (data akun login) dan 'payroll_masters'
     | (data master payroll) — tambahkan tabel lain lewat .env
-    | (CHATBOT_RTG_BLOCKED_TABLES, pisahkan dengan koma) kalau perlu
+    | (CHATBOT_RAG_BLOCKED_TABLES, pisahkan dengan koma) kalau perlu
     | memblokir tabel lain tanpa ubah kode, misalnya tabel sesi login,
     | password reset, token API, dsb.
     |
@@ -169,17 +128,17 @@ return [
     | docs/SSMS_READONLY_SETUP.md — tetap wajib dipasang keduanya.
     |
     */
-    'rtg_blocked_tables' => array_filter(array_map(
+    'rag_blocked_tables' => array_filter(array_map(
         'trim',
-        explode(',', env('CHATBOT_RTG_BLOCKED_TABLES', 'payroll_masters,payroll_run_details,payroll_run_details_audit'))
+        explode(',', env('CHATBOT_RAG_BLOCKED_TABLES', 'payroll_masters,payroll_run_details,payroll_run_details_audit'))
     )),
 
     /*
     |--------------------------------------------------------------------------
-    | Blocklist KOLOM per tabel untuk mode RTG (Read To Generate)
+    | Blocklist KOLOM per tabel untuk mode RAG (Read And Generate)
     |--------------------------------------------------------------------------
     |
-    | Beda dari rtg_blocked_tables di atas (yang memblokir SATU TABEL SECARA
+    | Beda dari rag_blocked_tables di atas (yang memblokir SATU TABEL SECARA
     | TOTAL): ini untuk kasus tabelnya boleh dibaca, tapi ada kolom tertentu
     | di dalamnya yang tidak boleh (mis. kolom gaji). Kolom-kolom ini
     | dihapus dari skema yang dikirim ke AI (AiChatService::getDatabaseSchema)
@@ -189,14 +148,14 @@ return [
     | yang punya kolom terblokir juga otomatis ditolak.
     |
     | Default: employee_contract.salary, allowance, daily_salary, pph_21
-    | (data gaji karyawan). Override lewat CHATBOT_RTG_BLOCKED_COLUMNS di
+    | (data gaji karyawan). Override lewat CHATBOT_RAG_BLOCKED_COLUMNS di
     | .env dengan format "tabel:kolom1,kolom2;tabel_lain:kolom3,kolom4"
     | (pisahkan tabel dengan titik koma, kolom dengan koma) kalau perlu
     | menambah/mengubah tanpa deploy ulang kode.
     |
     */
-    'rtg_blocked_columns' => (function () {
-        $raw = env('CHATBOT_RTG_BLOCKED_COLUMNS', 'employee_contract:salary,allowance,daily_salary,pph_21;users:password,email');
+    'rag_blocked_columns' => (function () {
+        $raw = env('CHATBOT_RAG_BLOCKED_COLUMNS', 'employee_contract:salary,allowance,daily_salary,pph_21;users:password,email');
         $result = [];
 
         foreach (array_filter(array_map('trim', explode(';', $raw))) as $group) {
