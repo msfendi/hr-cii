@@ -1192,6 +1192,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/employee-late/template', [EmployeeLateController::class, 'template'])->name('employee-late.template')->middleware(['auth', 'permission']);
     Route::post('/employee-late/import', [EmployeeLateController::class, 'import'])->name('employee-late.import')->middleware(['auth', 'permission']);
     Route::get('/employee-late/search-npk', [EmployeeLateController::class, 'searchNpk'])->name('employee-late.search-npk')->middleware(['auth', 'permission']);
+    Route::get('/employee-late/export/excel', [EmployeeLateController::class, 'export'])->name('employee-late.export')->middleware(['auth', 'permission']);
 
     // Payroll 
     Route::get('/payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
