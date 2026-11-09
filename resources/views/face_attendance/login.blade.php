@@ -210,9 +210,16 @@
     </div>
 </div>
 
-<!-- SweetAlert2 & JS Dependencies -->
+<!-- SweetAlert2 & JS Dependencies — vendor-face-api lokal dulu (1.3MB,
+     jalan di Android lama tanpa CDN), CDN hanya fallback. -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="{{ asset('vendor-face-api/face-api.js') }}"></script>
+<script>
+    // Fallback CDN bila file lokal gagal dimuat (mis. deploy belum copy folder).
+    if (typeof faceapi === 'undefined') {
+        document.write('<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"><\/script>');
+    }
+</script>
 {{-- PERBAIKAN V14 (2026-11-06): halaman ini sekarang memakai detektor
      liveness BERSAMA dari public/js/liveness-check.js, sama seperti
      /self-register-face, /employee-payroll, dan /pengajuan-cuti/login.
@@ -304,6 +311,10 @@
             message: 'Respons server tidak valid (HTTP ' + res.status + ').'
         })))
         .then(data => {
+            // PERBAIKAN 2026-11-09: jangan pernah mengosongkan input NPK
+            // secara diam-diam. Nilai input dipertahankan apa adanya,
+            // supaya user TIDAK merasa "NPK reset" saat kamera gagal.
+            // Tombol selalu dikembalikan ke state aktif bila gagal.
             // PERBAIKAN 1 (2026-11-06): karyawan sudah keluar (PKWT.TKK terisi)
             // -> blokir lanjut ke kamera, beri alert serupa self-register.
             if (data.inactive_employee) {
@@ -503,6 +514,11 @@
         if (miniMap) return;
         const container = document.getElementById('miniMap');
         if (!container) return;
+        // PERBAIKAN 2026-11-09 (Android lama): Leaflet CDN bisa gagal
+        // dimuat -> `L` undefined -> initMiniMap throw ReferenceError
+        // yang membunuh alur lanjutan (kamera tidak pernah start).
+        // Guard di sini: peta boleh tidak ada, kamera TIDAK boleh ikut mati.
+        if (typeof L === 'undefined') { console.warn('[FaceAttendance] Leaflet tidak termuat, mini map dinonaktifkan.'); return; }
 
         miniMap = L.map('miniMap', {
             zoomControl: false,
@@ -612,6 +628,20 @@
     }
 
     async function loadModels() {
+        // PERBAIKAN 2026-11-09 (Android lama): faceapi bisa undefined bila
+        // script gagal dimuat (CDN block / file belum dicopy). Dulu
+        // `faceapi.nets...` throw TypeError yang ditelan try/catch di loop
+        // candidates -> isModelLoaded tidak pernah true -> detectFaceLoop
+        // menunggu selamanya tanpa pesan. Sekarang: pesan jelas + overlay.
+        if (typeof faceapi === 'undefined') {
+            console.error('[FaceAttendance] faceapi tidak termuat.');
+            var ov = document.querySelector('#overlayText');
+            var ab = document.querySelector('#livenessInstructionText');
+            if (ov) ov.innerHTML = '<i class="fas fa-exclamation-triangle text-danger mr-1"></i> Library wajah gagal dimuat. Muat ulang halaman.';
+            if (ab) ab.innerHTML = 'Library wajah (face-api) gagal dimuat. Periksa koneksi lalu muat ulang.';
+            isModelLoaded = false;
+            return;
+        }
         const loadFrom = async (url) => {
             if (faceapi.nets.tinyFaceDetector && !faceapi.nets.tinyFaceDetector.isLoaded) {
                 await faceapi.nets.tinyFaceDetector.loadFromUri(url);
@@ -644,19 +674,46 @@
         }
     }
 
+    // PERBAIKAN 2026-11-09 (Android lama): watchdog GPS — bila
+    // callback GPS tidak pernah datang (bug browser lama / permission
+    // menggantung), kamera dikunci selamanya tanpa pesan. Watchdog
+    // 12 detik memaksa UI memberi tahu + tombol Cek Ulang.
+    let gpsWatchdog = null;
+    function armGpsWatchdog(alertText) {
+        clearTimeout(gpsWatchdog);
+        gpsWatchdog = setTimeout(function () {
+            // Hanya bila GPS benar-benar belum selesai (tidak ada koordinat
+            // dan kamera belum jalan)
+            if (currentLat === null && !isGpsValid) {
+                if (alertText) alertText.innerHTML = 'GPS lama belum merespons. Periksa izin lokasi di browser lalu klik "Cek Ulang GPS".';
+                var ph = document.getElementById('cameraPlaceholder');
+                var pt = document.getElementById('placeholderTitle');
+                var pd = document.getElementById('placeholderDesc');
+                if (ph) { ph.classList.remove('d-none'); ph.style.setProperty('display', 'flex', 'important'); }
+                if (pt) pt.innerText = 'GPS Belum Merespons';
+                if (pd) pd.innerText = 'Browser Android lama kadang menggantung izin lokasi. Aktifkan Location, beri izin "Precise", lalu klik Cek Ulang GPS.';
+            }
+        }, 12000);
+    }
+
     function checkGPS() {
         const alertBox = document.getElementById('livenessAlertBox');
         const alertText = document.getElementById('livenessInstructionText');
 
-        initMiniMap();
+        // Peta tidak boleh membunuh kamera bila Leaflet gagal (lihat initMiniMap)
+        try { initMiniMap(); } catch (e) { console.warn('[FaceAttendance] initMiniMap gagal:', e); }
 
         if (!navigator.geolocation) {
             if (alertText) alertText.innerHTML = 'Browser Anda tidak mendukung GPS Geolocation.';
+            showGpsWarning('GPS Tidak Didukung', 'Browser ini tidak mendukung geolokasi. Gunakan Chrome / Edge terbaru via HTTPS.');
             return;
         }
 
+        armGpsWatchdog(alertText);
+
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                clearTimeout(gpsWatchdog);
                 const rawAccuracy = pos.coords.accuracy;
                 let accuracy = gpsAccuracyLabel(rawAccuracy);
 
@@ -749,16 +806,59 @@
         isGpsValid = true;
         const video = document.getElementById('webcam');
         const ph = document.getElementById('cameraPlaceholder');
+        const phTitle = document.getElementById('placeholderTitle');
+        const phDesc = document.getElementById('placeholderDesc');
 
         // Jika stream sudah aktif, jangan mulai ulang agar tidak memicu AbortError
-        if (video.srcObject && video.srcObject.active) {
+        if (video && video.srcObject && video.srcObject.active) {
             return;
         }
 
+        // PERBAIKAN 2026-11-09 (Android lama): guard getUserMedia.
+        // Di browser lama / halaman HTTP, `navigator.mediaDevices`
+        // === undefined -> `await navigator.mediaDevices.getUserMedia`
+        // throw TypeError yang dulu hanya console.error + placeholder
+        // tetap, tanpa pesan ke user (klik Lanjut = tidak terjadi apa-apa).
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.error('[FaceAttendance] getUserMedia tidak didukung.');
+            if (ph) { ph.classList.remove('d-none'); ph.style.setProperty('display', 'flex', 'important'); }
+            if (phTitle) phTitle.innerText = 'Kamera Tidak Didukung Browser';
+            if (phDesc) phDesc.innerText = 'Browser ini tidak mendukung akses kamera. Kamera HANYA bisa aktif lewat HTTPS atau localhost. Gunakan Chrome / Edge terbaru dan pastikan halaman diakses via HTTPS.';
+            return;
+        }
+
+        // Timeout izin kamera: getUserMedia() tidak pernah resolve bila
+        // prompt izin diabaikan/ditutup (Android lama) -> kameraStarting
+        // terkunci. 20 detik cukup untuk user memutuskan.
+        let camTimeout = null;
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 640, height: 480, facingMode: 'user' }
+            const stream = await new Promise((resolve, reject) => {
+                camTimeout = setTimeout(() => {
+                    const e = new Error('Izin kamera belum diberikan dalam 20 detik.');
+                    e.name = 'IZIN_KAMERA_TIMEOUT';
+                    reject(e);
+                }, 20000);
+                // Constraint "ideal" (bukan nilai tetap) supaya perangkat
+                // lama yang tidak mendukung 640x480 tidak kena
+                // OverconstrainedError. Fallback berurutan bila gagal.
+                const tryConstraints = (constraints, fallback) => {
+                    navigator.mediaDevices.getUserMedia(constraints).then(resolve, (err) => {
+                        if (fallback && fallback.length) {
+                            tryConstraints(fallback[0], fallback.slice(1));
+                        } else {
+                            reject(err);
+                        }
+                    });
+                };
+                tryConstraints(
+                    { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false },
+                    [
+                        { video: { facingMode: 'user' }, audio: false },
+                        { video: true, audio: false }
+                    ]
+                );
             });
+            clearTimeout(camTimeout);
             video.srcObject = stream;
             
             try {
@@ -777,10 +877,33 @@
 
             detectFaceLoop();
         } catch (err) {
+            clearTimeout(camTimeout);
             console.error("Camera error:", err);
             if (ph) {
                 ph.classList.remove('d-none');
                 ph.style.setProperty('display', 'flex', 'important');
+            }
+            // PERBAIKAN 2026-11-09: beri tahu user alasan spesifik,
+            // jangan hanya placeholder statis. Saya samakan dengan
+            // halaman presensi (index) yang sudah punya mapping ini.
+            var name = (err && err.name) ? err.name : '';
+            if (phTitle && phDesc) {
+                if (name === 'IZIN_KAMERA_TIMEOUT') {
+                    phTitle.innerText = 'Menunggu Izin Kamera';
+                    phDesc.innerText = 'Izin kamera belum diberikan. Klik ikon kamera di address bar, pilih "Izinkan", lalu klik "Cek Ulang GPS" / muat ulang.';
+                } else if (name === 'NotAllowedError' || name === 'SecurityError') {
+                    phTitle.innerText = 'Izin Kamera Ditolak';
+                    phDesc.innerText = 'Klik ikon kamera di address bar browser, pilih "Izinkan", lalu coba lagi.';
+                } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+                    phTitle.innerText = 'Kamera Tidak Ditemukan';
+                    phDesc.innerText = 'Tidak ada kamera yang terdeteksi pada perangkat ini.';
+                } else if (name === 'NotReadableError') {
+                    phTitle.innerText = 'Kamera Sedang Dipakai Aplikasi Lain';
+                    phDesc.innerText = 'Tutup aplikasi lain yang memakai kamera, lalu coba lagi.';
+                } else {
+                    phTitle.innerText = 'Kamera Gagal Dinyalakan';
+                    phDesc.innerText = 'Terjadi kendala: ' + (name || String(err)) + '. Pastikan halaman diakses melalui HTTPS dan izin kamera aktif.';
+                }
             }
         }
     }
@@ -1082,9 +1205,21 @@
         if (faceFlowStarted) return;
         faceFlowStarted = true;
 
-        initMiniMap();
-        loadModels();
-        checkGPS();
+        // PERBAIKAN 2026-11-09 (Android lama): satu langkah gagal TIDAK
+        // boleh membunuh langkah lain. Dulu `initMiniMap()` yang throw
+        // (Leaflet undefined) menghentikan loadModels()+checkGPS()
+        // sepenuhnya, dan faceFlowStarted tetap true -> user terkunci
+        // permanen (klik Lanjut berikutnya diabaikan, NPK tampak reset
+        // karena halaman harus dimuat ulang manual).
+        try { initMiniMap(); } catch (e) { console.warn('[FaceAttendance] initMiniMap:', e); }
+        Promise.resolve().then(loadModels).catch(function (e) {
+            console.error('[FaceAttendance] loadModels:', e);
+            faceFlowStarted = false; // izinkan retry
+        });
+        try { checkGPS(); } catch (e) {
+            console.error('[FaceAttendance] checkGPS:', e);
+            faceFlowStarted = false;
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {

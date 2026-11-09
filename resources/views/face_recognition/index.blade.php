@@ -368,9 +368,9 @@
                           <tr>
                             <td>{{ $loop->iteration }}</td>
                             <td class="text-center">
-                              <img src="{{ $face->face_img }}" class="face-thumb rounded border shadow-sm btn-preview-photo"
+                              <img data-src="{{ $face->face_img }}" class="face-thumb rounded border shadow-sm btn-preview-photo"
                                 alt="Wajah {{ $face->npk }}" loading="lazy" style="cursor: pointer; width: 50px; height: 50px; object-fit: cover;"
-                                data-img="{{ $face->face_img }}"
+                                data-full="{{ $face->face_img }}"
                                 data-npk="{{ $face->npk }}"
                                 data-name="{{ $face->name }}"
                                 title="Klik untuk perbesar foto">
@@ -477,6 +477,11 @@
     @include('layout.footer')
   </body>
 
+  {{-- PERBAIKAN (2026-11-09): DataTables wajib dimuat SETELAH jQuery.
+       Halaman ini memakai layout.footer, yang sudah memuat jQuery synchron,
+       sehingga `$` tersedia di sini sebelum baris ini jalan. Urutan
+       jQuery -> bootstrap -> DataTables dipertahankan supaya tidak ada
+       lagi error "jQuery is not defined" di console. --}}
   <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
   <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -877,23 +882,65 @@
 
       /* ============================ DATA TABLE & ACTIONS ============================ */
       jQuery(function () {
+        // Lazy-load thumbnail wajah: tanpa src, browser menahan decode base64
+        // sampai baris benar-benar dibutuhkan. Ini menjaga payload awal tab
+        // Data tetap ringan saat ribuan foto terdaftar, sementara modal
+        // preview tetap memuat foto penuh saat diklik.
+        var faceThumbObserver = null;
+        if ('IntersectionObserver' in window) {
+          faceThumbObserver = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                var img = entry.target;
+                if (img.dataset.src) {
+                  img.src = img.dataset.src;
+                  img.removeAttribute('data-src');
+                }
+                faceThumbObserver.unobserve(img);
+              }
+            });
+          }, { rootMargin: '200px 0px' });
+        }
+
+        function observeFaceThumbs(container) {
+          var scope = container ? jQuery(container) : jQuery(document);
+          scope.find('img.face-thumb[data-src]').each(function () {
+            if (faceThumbObserver) {
+              faceThumbObserver.observe(this);
+            } else if (this.dataset.src) {
+              this.src = this.dataset.src;
+              this.removeAttribute('data-src');
+            }
+          });
+        }
+
         if (jQuery('#faceDataTable').length && !jQuery.fn.DataTable.isDataTable('#faceDataTable')) {
           jQuery('#faceDataTable').DataTable({
             order: [[0, 'asc']],
             pageLength: 25,
             language: {
               emptyTable: 'Belum ada data wajah terdaftar.'
+            },
+            createdRow: function (row) {
+              observeFaceThumbs(row);
+            },
+            drawCallback: function () {
+              observeFaceThumbs(this.api().table().node());
             }
           });
         }
 
+        // Fallback untuk DataTables lama / jika observer tidak dipanggil
+        // saat inisialisasi pertama.
+        observeFaceThumbs();
+
         // Modal Preview Foto Wajah
         jQuery(document).on('click', '.btn-preview-photo', function () {
-          const imgUrl = jQuery(this).data('img');
-          const npk    = jQuery(this).data('npk');
-          const name   = jQuery(this).data('name') || '-';
+          var fullImgUrl = jQuery(this).data('full') || jQuery(this).data('img');
+          var npk    = jQuery(this).data('npk');
+          var name   = jQuery(this).data('name') || '-';
 
-          jQuery('#facePhotoModalImg').attr('src', imgUrl);
+          jQuery('#facePhotoModalImg').attr('src', fullImgUrl);
           jQuery('#facePhotoModalNpk').text('NPK: ' + npk);
           jQuery('#facePhotoModalName').text(name);
           jQuery('#facePhotoModal').modal('show');

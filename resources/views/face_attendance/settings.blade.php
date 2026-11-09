@@ -183,6 +183,11 @@
         </div>
 
         <!-- Daftar Hari Libur -->
+        {{-- RAPI: card memakai `h-100` agar mengikuti tinggi kolom (rata dengan
+             kartu Window di sebelah), TAPI TIDAK memakai max-height tetap.
+             Tabel memakai DataTables (pencarian/sortir/paginasi) sehingga
+             area kosong di bawah tabel tidak muncul: card mengikuti isi
+             wrapper DataTables, bukan tinggi tetap. --}}
         <div class="col-xl-6 mb-4">
             <div class="card shadow h-100">
                 <div class="card-header py-3">
@@ -190,25 +195,29 @@
                         <i class="fas fa-calendar-times mr-1"></i> Daftar Hari Libur (tabel <code>holidays</code>)
                     </h6>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-3 d-flex flex-column">
                     @if($holidays->count() > 0)
-                        <div class="table-responsive" style="max-height: 420px;">
-                            <table class="table table-sm table-striped mb-0">
-                                <thead class="thead-light sticky-top">
+                        {{-- DATATABLES: pencarian, sortir, dan paginasi untuk tabel holidays.
+                             Card-body p-3 memberi jarak dari tepi card; CSS scoped
+                             #holidaysTable_wrapper memberi jarak antar tabel dan controls. --}}
+                        <div class="table-responsive flex-grow-1">
+                            <table class="table table-sm table-striped mb-0" id="holidaysTable" width="100%">
+                                <thead class="thead-light">
                                     <tr>
-                                        <th class="px-3">Tanggal</th>
+                                        <th>Tanggal</th>
                                         <th>Nama Hari Libur</th>
-                                        <th class="text-center px-3">Jenis</th>
+                                        <th class="text-center">Jenis</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach($holidays as $holiday)
                                         <tr>
-                                            <td class="px-3 text-nowrap">
+                                            <td class="text-nowrap"
+                                                data-order="{{ $holiday->holiday_date ? \Carbon\Carbon::parse($holiday->holiday_date)->format('Y-m-d') : '' }}">
                                                 {{ $holiday->holiday_date ? \Carbon\Carbon::parse($holiday->holiday_date)->format('d-m-Y') : '-' }}
                                             </td>
                                             <td>{{ $holiday->name ?: '-' }}</td>
-                                            <td class="text-center px-3">
+                                            <td class="text-center">
                                                 @if($holiday->is_national)
                                                     <span class="badge badge-danger">Nasional</span>
                                                 @else
@@ -391,8 +400,8 @@
              logika liveness tidak boleh ikut tersentuh, dan perubahan
              random challenge tidak boleh mengubah apa pun soal liveness.
              ================================================================ --}}
-        <div class="col-12">
-            <div class="card shadow">
+        <div class="col-xl-6 mb-4">
+            <div class="card shadow h-100">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-danger">
                         <i class="fas fa-random mr-1"></i> Random Challenge (Anti-Kecurangan)
@@ -533,20 +542,23 @@
                         <i class="fas fa-users-cog mr-1"></i> Izin Presensi Wajah per Karyawan
                     </h6>
                     <span class="small text-muted">
-                        Total karyawan terdaftar: <strong>{{ $employeeFaces->count() }}</strong>
+                        Total karyawan terdaftar: <strong id="employeeFaceTotal">{{ $employeeFaces->count() }}</strong>
                     </span>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-3">
                     @if($employeeFaces->count() > 0)
+                        {{-- DATATABLES: pencarian, sortir, dan paginasi.
+                             Padding card-body (p-3) memberi jarak dari tepi card,
+                             sedangkan .table-responsive memberi space antar tabel. --}}
                         <div class="table-responsive">
-                            <table class="table table-hover table-sm mb-0">
+                            <table class="table table-hover table-sm mb-0" id="employeeFaceTable" width="100%">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th class="px-3">NPK</th>
+                                        <th>NPK</th>
                                         <th>Nama</th>
                                         <th class="text-center">Presensi</th>
                                         <th class="text-center">Scope Lokasi</th>
-                                        <th class="text-center px-3">Aksi</th>
+                                        <th class="text-center">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -556,7 +568,7 @@
                                             $allowed = $face->allowed_location_id_list;
                                         @endphp
                                         <tr>
-                                            <td class="px-3"><strong>{{ $face->npk }}</strong></td>
+                                            <td><strong>{{ $face->npk }}</strong></td>
                                             <td>{{ $face->name ?: '-' }}</td>
                                             <td class="text-center">
                                                 @if($face->is_attendance_enabled)
@@ -572,7 +584,7 @@
                                                     <span class="badge badge-warning">{{ count($allowed) }} Lokasi Dipilih</span>
                                                 @endif
                                             </td>
-                                            <td class="text-center px-3">
+                                            <td class="text-center">
                                                 <button type="button" class="btn btn-sm btn-primary btn-manage-face-access"
                                                     data-id="{{ $face->id }}"
                                                     data-npk="{{ $face->npk }}"
@@ -697,36 +709,213 @@
         enabledValue.value = enabled.checked ? '1' : '0';
     });
 
-    document.querySelectorAll('.btn-manage-face-access').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            const d = btn.dataset;
+    // Fungsi ini dipanggil ulang oleh DataTables setiap kali <tbody>
+    // dirender ulang (sortir / paginasi / pencarian), supaya tombol
+    // "Kelola Akses" tetap punya event listener.
+    window.__initFaceAccessButtons = function () {
+        document.querySelectorAll('.btn-manage-face-access').forEach(function (btn) {
+            if (btn.dataset.bound === '1') return;
+            btn.dataset.bound = '1';
 
-            form.setAttribute('action', d.url);
-            document.getElementById('faNpk').textContent = d.npk || '-';
-            document.getElementById('faName').textContent = d.name || '-';
+            btn.addEventListener('click', function () {
+                const d = btn.dataset;
 
-            const isEnabled = d.enabled === '1';
-            enabled.checked = isEnabled;
-            enabledValue.value = isEnabled ? '1' : '0';
+                form.setAttribute('action', d.url);
+                document.getElementById('faNpk').textContent = d.npk || '-';
+                document.getElementById('faName').textContent = d.name || '-';
 
-            const scope = d.scope || 'all';
-            scopeAll.checked = scope !== 'selected';
-            scopeSelected.checked = scope === 'selected';
+                const isEnabled = d.enabled === '1';
+                enabled.checked = isEnabled;
+                enabledValue.value = isEnabled ? '1' : '0';
 
-            let allowed = [];
-            try {
-                allowed = JSON.parse(d.allowed || '[]');
-            } catch (e) {
-                allowed = [];
-            }
+                const scope = d.scope || 'all';
+                scopeAll.checked = scope !== 'selected';
+                scopeSelected.checked = scope === 'selected';
 
-            document.querySelectorAll('[id^="faLoc"]').forEach(function (cb) {
-                cb.checked = allowed.indexOf(parseInt(cb.value, 10)) !== -1;
+                let allowed = [];
+                try {
+                    allowed = JSON.parse(d.allowed || '[]');
+                } catch (e) {
+                    allowed = [];
+                }
+
+                document.querySelectorAll('[id^="faLoc"]').forEach(function (cb) {
+                    cb.checked = allowed.indexOf(parseInt(cb.value, 10)) !== -1;
+                });
+
+                togglePicker();
+                $(modal).modal('show');
             });
-
-            togglePicker();
-            $(modal).modal('show');
         });
+    };
+
+    window.__initFaceAccessButtons();
+})();
+</script>
+@endsection
+
+@section('scripts')
+<!-- Page level plugins: DataTables untuk "Izin Presensi Wajah per Karyawan" -->
+<link rel="stylesheet" href="{{ asset('vendor/datatables/dataTables.bootstrap4.min.css') }}">
+<style>
+    /* Padding DataTables di dalam card pada halaman ini.
+       Selector memakai ID tabel (scoped) agar tidak memengaruhi halaman lain.
+       Berlaku untuk: holidaysTable dan employeeFaceTable. */
+    #holidaysTable_wrapper .dataTables_length,
+    #holidaysTable_wrapper .dataTables_filter,
+    #employeeFaceTable_wrapper .dataTables_length,
+    #employeeFaceTable_wrapper .dataTables_filter {
+        padding: 0 0 .75rem 0;
+    }
+
+    /* Jarak antar isi tabel dan tepi card. */
+    #holidaysTable_wrapper table.dataTable,
+    #employeeFaceTable_wrapper table.dataTable {
+        margin-top: 0 !important;
+        margin-bottom: .5rem !important;
+    }
+
+    /* Sel tabel diberi jarak kiri-kanan agar tidak menempel tepi. */
+    #holidaysTable_wrapper table.dataTable thead th,
+    #holidaysTable_wrapper table.dataTable tbody td,
+    #employeeFaceTable_wrapper table.dataTable thead th,
+    #employeeFaceTable_wrapper table.dataTable tbody td {
+        padding: .65rem .75rem;
+        vertical-align: middle;
+    }
+
+    /* Baris info (jumlah data) & pagination diberi jarak dari tabel. */
+    #holidaysTable_wrapper .dataTables_info,
+    #holidaysTable_wrapper .dataTables_paginate,
+    #employeeFaceTable_wrapper .dataTables_info,
+    #employeeFaceTable_wrapper .dataTables_paginate {
+        padding-top: .5rem;
+    }
+
+    /* Padding sel pertama/terakhir tetap simetris supaya kolom
+       NPK/Tanggal dan Aksi/Jenis tidak jadi renggang. */
+    #holidaysTable_wrapper table.dataTable thead th:first-child,
+    #holidaysTable_wrapper table.dataTable tbody td:first-child,
+    #employeeFaceTable_wrapper table.dataTable thead th:first-child,
+    #employeeFaceTable_wrapper table.dataTable tbody td:first-child {
+        padding-left: .75rem;
+    }
+
+    #holidaysTable_wrapper table.dataTable thead th:last-child,
+    #holidaysTable_wrapper table.dataTable tbody td:last-child,
+    #employeeFaceTable_wrapper table.dataTable thead th:last-child,
+    #employeeFaceTable_wrapper table.dataTable tbody td:last-child {
+        padding-right: .75rem;
+    }
+
+    /* Card hari libur: wrapper DataTables mengisi sisa tinggi card
+       tanpa memaksa tinggi tetap (menghindari area kosong).
+       Rantai: card-body(flex-column) > table-responsive(flex-grow-1)
+               > #holidaysTable_wrapper > tabel */
+    #holidaysTable_wrapper {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+</style>
+<script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
+<script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
+<script>
+/* ---------------------------------------------------------
+   DataTables: Daftar Hari Libur (tabel holidays)
+   Client-side: seluruh $holidays sudah dimuat controller
+   (Holiday::orderBy('holiday_date')->get()).
+   --------------------------------------------------------- */
+(function () {
+    const table = document.getElementById('holidaysTable');
+    if (!table || typeof jQuery === 'undefined') return;
+
+    jQuery(function ($) {
+        if (!$.fn.DataTable) return;
+
+        const dt = $('#holidaysTable').DataTable({
+            processing: true,
+            serverSide: false,
+            autoWidth: false,
+            deferRender: true,
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Semua']],
+            // Default urut berdasarkan tanggal (kolom 0) secara kronologis.
+            // Kolom Tanggal memakai data-order="Y-m-d" supaya sortir
+            // mengikuti tanggal asli, bukan teks "d-m-Y".
+            order: [[0, 'asc']],
+            language: {
+                search: 'Cari:',
+                lengthMenu: 'Tampilkan _MENU_ data',
+                info: 'Menampilkan _START_ sampai _END_ dari _TOTAL_ hari libur',
+                infoEmpty: 'Tidak ada hari libur',
+                zeroRecords: 'Hari libur tidak ditemukan',
+                emptyTable: 'Belum ada data hari libur.',
+                processing: 'Memproses...',
+                paginate: {
+                    first: 'Awal',
+                    last: 'Akhir',
+                    next: 'Berikutnya',
+                    previous: 'Sebelumnya'
+                }
+            },
+            columnDefs: [
+                // Kolom Jenis hanya badge -> tidak perlu diurutkan/dicari.
+                { targets: 2, orderable: false }
+            ]
+        });
+
+        window.holidaysTable = dt;
+    });
+})();
+</script>
+<script>
+(function () {
+    const table = document.getElementById('employeeFaceTable');
+    if (!table || typeof jQuery === 'undefined') return;
+
+    jQuery(function ($) {
+        if (!$.fn.DataTable) return;
+
+        const dt = $('#employeeFaceTable').DataTable({
+            // Client-side: seluruh $employeeFaces sudah dimuat oleh controller.
+            // Cocok karena daftar karyawan face recognition relatif terbatas.
+            processing: true,
+            serverSide: false,
+            autoWidth: false,
+            deferRender: true,
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Semua']],
+            order: [[1, 'asc']],
+            language: {
+                search: 'Cari:',
+                lengthMenu: 'Tampilkan _MENU_ data',
+                info: 'Menampilkan _START_ sampai _END_ dari _TOTAL_ karyawan',
+                infoEmpty: 'Tidak ada karyawan',
+                zeroRecords: 'Karyawan tidak ditemukan',
+                emptyTable: 'Belum ada karyawan terdaftar pada face recognition.',
+                processing: 'Memproses...',
+                paginate: {
+                    first: 'Awal',
+                    last: 'Akhir',
+                    next: 'Berikutnya',
+                    previous: 'Sebelumnya'
+                }
+            },
+            columnDefs: [
+                { targets: 2, orderable: false },
+                { targets: 4, orderable: false, searchable: false }
+            ],
+            drawCallback: function () {
+                // Event listener "Kelola Akses" dipasang ulang karena
+                // DataTables merender ulang <tbody> saat sort/paginasi.
+                if (typeof window.__initFaceAccessButtons === 'function') {
+                    window.__initFaceAccessButtons();
+                }
+            }
+        });
+
+        // Simpan instance agar bisa dipakai bila perlu (mis. refresh count).
+        window.employeeFaceTable = dt;
     });
 })();
 </script>
