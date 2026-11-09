@@ -212,6 +212,9 @@
                                             ['label'=>'Kabupaten / Kota','value'=>$pkwt->KABUPATEN,'icon'=>'fa-city'],
                                             ['label'=>'Pendidikan Terakhir','value'=>$pkwt->PDDK,'icon'=>'fa-graduation-cap'],
                                             ['label'=>'Jurusan','value'=>$pkwt->JURUSAN,'icon'=>'fa-book'],
+                                            ['label'=>'Nama KTK Darurat','value'=>$namaKtkDarurat ?? '-','icon'=>'fa-user-nurse'],
+                                            ['label'=>'Hubungan KTK Darurat','value'=>$hubunganKtkDarurat ?? '-','icon'=>'fa-people-arrows'],
+                                            ['label'=>'Nomor KTK Darurat','value'=>$noTelpDarurat ?? '-','icon'=>'fa-phone-alt'],
                                         ];
                                         @endphp
                                         @foreach($personalFields as $f)
@@ -320,7 +323,7 @@
                         <div class="card shadow-sm border-0 mb-4" style="border-radius:12px;">
                             <div class="card-header bg-white border-0 pt-3 pb-2">
                                 <h6 class="font-weight-bold text-gray-800 mb-0">
-                                    <i class="fas fa-users mr-2 text-primary"></i>Data Keluarga
+                                    <i class="fas fa-users mr-2 text-primary"></i>Data Keluarga & KTK Darurat
                                 </h6>
                             </div>
                             <div class="card-body pt-2">
@@ -633,6 +636,18 @@
                                                 <div class="col-md-6 mb-3">
                                                     <label class="small font-weight-bold">Jurusan</label>
                                                     <input type="text" class="form-control" name="jurusan" value="{{ $pkwt->JURUSAN }}">
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="small font-weight-bold">Nama KTK Darurat</label>
+                                                    <input type="text" class="form-control" name="nama_ktk_darurat" value="{{ $namaKtkDarurat }}" placeholder="Nama kontak darurat">
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="small font-weight-bold">Hubungan KTK Darurat</label>
+                                                    <input type="text" class="form-control" name="hubungan_ktk_darurat" value="{{ $hubunganKtkDarurat }}" placeholder="Contoh: Istri / Orang Tua / Saudara">
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="small font-weight-bold">Nomor KTK Darurat</label>
+                                                    <input type="text" class="form-control" name="no_telp_darurat" value="{{ $noTelpDarurat }}" placeholder="Contoh: 0812...">
                                                 </div>
                                             </div>
                                         </div>
