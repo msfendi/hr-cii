@@ -24,7 +24,7 @@ class CanteenTransactionController extends Controller
     {
         $setting = CanteenSetting::current();
         $canteens = Canteen::where('is_active', true)->orderBy('canteen_id')->get();
-        $windows = CanteenBreakWindow::active()->orderBy('sort_order')->get();
+        $windows = CanteenBreakWindow::query()->orderBy('id')->get();
         $locations = AttendanceWorkLocation::where('is_active', true)->orderBy('name')->get();
 
         $livenessEnabled = CanteenSetting::isLivenessEnabled();
@@ -338,7 +338,7 @@ class CanteenTransactionController extends Controller
     public function adminIndex()
     {
         $canteens = Canteen::orderBy('canteen_id')->get();
-        $windows = CanteenBreakWindow::orderBy('sort_order')->get();
+        $windows = CanteenBreakWindow::query()->orderBy('id')->get();
         $setting = CanteenSetting::current();
         $locations = AttendanceWorkLocation::where('is_active', true)->orderBy('name')->get();
 
@@ -353,26 +353,19 @@ class CanteenTransactionController extends Controller
             'time_end' => 'required|date_format:H:i|after:time_start',
         ]);
 
-        // Aturan Fitur 1: total window istirahat maksimal 3.
-        if (CanteenBreakWindow::query()->count() >= 3) {
-            return back()->withErrors(['name' => 'Sudah 3 window — hapus salah satu sebelum menambah baru.'])
-                ->withInput();
-        }
-
-        CanteenBreakWindow::create([
-            'name' => $request->input('name'),
+        // Break window diambil dari tabel break_masters (existing), bukan tabel canteen_break_windows.
+        \App\Models\BreakMaster::create([
+            'sesi' => $request->input('name'),
             'time_start' => $request->input('time_start'),
             'time_end' => $request->input('time_end'),
-            'sort_order' => $request->input('sort_order', 0),
-            'is_active' => $request->boolean('is_active', true),
         ]);
 
-        return back()->with('success', 'Window istirahat ditambahkan.');
+        return back()->with('success', 'Window istirahat ditambahkan ke break_masters.');
     }
 
     public function adminUpdateWindow(Request $request, $id)
     {
-        $w = CanteenBreakWindow::findOrFail($id);
+        $w = \App\Models\BreakMaster::findOrFail($id);
         $request->validate([
             'name' => 'required|string|max:100',
             'time_start' => 'required|date_format:H:i',
@@ -380,20 +373,18 @@ class CanteenTransactionController extends Controller
         ]);
 
         $w->update([
-            'name' => $request->input('name'),
+            'sesi' => $request->input('name'),
             'time_start' => $request->input('time_start'),
             'time_end' => $request->input('time_end'),
-            'sort_order' => $request->input('sort_order', $w->sort_order),
-            'is_active' => $request->boolean('is_active', true),
         ]);
 
-        return back()->with('success', 'Window istirahat diperbarui.');
+        return back()->with('success', 'Window istirahat diperbarui di break_masters.');
     }
 
     public function adminDeleteWindow($id)
     {
-        CanteenBreakWindow::findOrFail($id)->delete();
-        return back()->with('success', 'Window istirahat dihapus.');
+        \App\Models\BreakMaster::findOrFail($id)->delete();
+        return back()->with('success', 'Window istirahat dihapus dari break_masters.');
     }
 
     public function adminUpdateSetting(Request $request)

@@ -1603,6 +1603,10 @@ Route::middleware(['auth', 'permission'])->prefix('satisfaction-survey/admin')->
     Route::put('/{id}', [SatisfactionSurveyController::class, 'adminUpdate'])->name('update');
     Route::delete('/{id}', [SatisfactionSurveyController::class, 'adminDestroy'])->name('destroy');
     Route::post('/{id}/toggle', [SatisfactionSurveyController::class, 'adminToggle'])->name('toggle');
+    Route::get('/results', [SatisfactionSurveyController::class, 'adminResults'])->name('results');
+    Route::get('/export', [SatisfactionSurveyController::class, 'adminExport'])->name('export');
+    Route::get('/export-likert', [SatisfactionSurveyController::class, 'adminExportLikert'])->name('export-likert');
+    Route::get('/export-likert-pdf', [SatisfactionSurveyController::class, 'adminExportLikertPdf'])->name('export-likert-pdf');
 });
 
 // ========================================

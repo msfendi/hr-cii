@@ -28,4 +28,9 @@ class SatisfactionQuestion extends Model
     {
         return $this->question_type === self::TYPE_LIKERT;
     }
+
+    public function responses()
+    {
+        return $this->hasMany(SatisfactionResponse::class, 'question_id');
+    }
 }

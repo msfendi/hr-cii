@@ -9,7 +9,9 @@ return new class extends Migration
 {
     /**
      * Fitur 1 & 2 (2026-11-09):
-     * - canteen_settings + canteen_break_windows di database utama.
+     * - canteen_settings di database utama.
+     * - Window istirahat: SUMBER UTAMA = break_masters (existing). Tabel canteen_break_windows dipertahankan
+h     *   hanya sebagai mirror kompatibilitas lama agar migrasi lama tidak error; transaksi kantin membaca isi break_masters.
      * - satisfaction_questions + satisfaction_responses di database utama (pertanyaan di-manage admin).
      * - Alter canteens: tambah canteen_id (1/2 + unique), contact_person, contact_phone.
      * - Tabel canteen & canteen_twos di database 'canteen' (bukan CII).

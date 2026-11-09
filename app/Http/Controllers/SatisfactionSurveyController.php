@@ -7,6 +7,10 @@ use App\Models\SatisfactionResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\SatisfactionSurveyResultExport;
+use App\Exports\SatisfactionLikertDistributionExport;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class SatisfactionSurveyController extends Controller
 {
@@ -146,5 +150,127 @@ class SatisfactionSurveyController extends Controller
         $q->save();
 
         return back()->with('success', $q->is_active ? 'Pertanyaan diaktifkan.' : 'Pertanyaan dinonaktifkan.');
+    }
+
+    public function adminResults()
+    {
+        $stats = SatisfactionQuestion::withCount('responses')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        // Total paket = 1 submit = 1 kelompok jawaban dalam window 2 detik yang sama.
+        // Bukan jumlah baris per-pertanyaan. Sekalian bangun list paket:
+        // tiap paket = waktu submit + semua jawaban + total terjawab.
+        $allResp = SatisfactionResponse::with('question')->orderBy('created_at')->orderBy('id')->get();
+        $paketCount = 0;
+        $paketList = collect();
+        $bucket = null;
+        $lastKey = null;
+        foreach ($allResp as $r) {
+            $cur = \Carbon\Carbon::parse($r->created_at);
+            if ($lastKey === null) {
+                $paketCount = 1;
+                $lastKey = $cur;
+                $bucket = [];
+            } elseif ($cur->diffInSeconds($lastKey) > 2) {
+                if ($bucket !== null) {
+                    $paketList->push($bucket);
+                }
+                $paketCount++;
+                $lastKey = $cur;
+                $bucket = [];
+            }
+            $bucket['waktu'] = $bucket['waktu'] ?? $cur;
+            $bucket['answers'][] = $r;
+        }
+        if ($bucket !== null) {
+            $paketList->push($bucket);
+        }
+        foreach ($paketList as &$pk) {
+            $waktu = $pk['waktu'] ?? now();
+            $pk['waktu'] = $waktu;
+            $pk['waktu_label'] = $waktu->format('Y-m-d H:i:s');
+            $pk['total'] = count($pk['answers'] ?? []);
+        }
+        unset($pk);
+        $paketList = $paketList->map(function ($pk) {
+            $pk['waktu_label'] = $pk['waktu_label'] ?? (isset($pk['waktu']) ? $pk['waktu']->format('Y-m-d H:i:s') : date('Y-m-d H:i:s'));
+            $pk['total'] = $pk['total'] ?? count($pk['answers'] ?? []);
+            return $pk;
+        });
+        $totalResponses = $paketCount;
+        $likert = $stats->where('question_type', 'likert');
+        $avg = collect();
+        $dist = collect();
+        foreach ($likert as $q) {
+            $avg[$q->id] = SatisfactionResponse::where('question_id', $q->id)->avg('score');
+            $rows = SatisfactionResponse::where('question_id', $q->id)
+                ->selectRaw('score, COUNT(*) as c')->groupBy('score')->pluck('c', 'score');
+            $arr = [];
+            for ($s = 1; $s <= 5; $s++) {
+                $arr[$s] = (int) ($rows[$s] ?? 0);
+            }
+            $dist[$q->id] = $arr;
+        }
+
+        return view('satisfaction_survey.admin_results', compact('stats', 'totalResponses', 'avg', 'dist', 'paketList'));
+    }
+
+    public function adminExport(Request $request)
+    {
+        $request->validate([
+            'from' => 'nullable|date',
+            'to'   => 'nullable|date|after_or_equal:from',
+        ]);
+
+        $from = $request->input('from');
+        $to   = $request->input('to');
+        $file = 'hasil-kuesioner-kepuasan-' . now()->format('Ymd-His') . '.xlsx';
+
+        return Excel::download(new SatisfactionSurveyResultExport($from, $to), $file);
+    }
+
+    public function adminExportLikert(Request $request)
+    {
+        $request->validate([
+            'from' => 'nullable|date',
+            'to'   => 'nullable|date|after_or_equal:from',
+        ]);
+        $from = $request->input('from');
+        $to   = $request->input('to');
+        $file = 'distribusi-likert-kuesioner-' . now()->format('Ymd-His') . '.xlsx';
+
+        return Excel::download(new SatisfactionLikertDistributionExport($from, $to), $file);
+    }
+
+    public function adminExportLikertPdf(Request $request)
+    {
+        $request->validate([
+            'from' => 'nullable|date',
+            'to'   => 'nullable|date|after_or_equal:from',
+        ]);
+        $from = $request->input('from');
+        $to   = $request->input('to');
+
+        $questions = SatisfactionQuestion::where('question_type', 'likert')
+            ->orderBy('sort_order')->orderBy('id')->get();
+        $avg = collect();
+        $dist = collect();
+        $totalAll = 0;
+        foreach ($questions as $q) {
+            $avg[$q->id] = SatisfactionResponse::where('question_id', $q->id)->avg('score');
+            $rows = SatisfactionResponse::where('question_id', $q->id)
+                ->selectRaw('score, COUNT(*) as c')->groupBy('score')->pluck('c', 'score');
+            $arr = [];
+            for ($s = 1; $s <= 5; $s++) {
+                $arr[$s] = (int) ($rows[$s] ?? 0);
+            }
+            $dist[$q->id] = $arr;
+            $totalAll += array_sum($arr);
+        }
+
+        $pdf = Pdf::loadView('satisfaction_survey.admin_likert_pdf', compact('questions', 'avg', 'dist', 'totalAll', 'from', 'to'));
+        return $pdf->download('distribusi-likert-' . now()->format('Ymd-His') . '.pdf');
     }
 }

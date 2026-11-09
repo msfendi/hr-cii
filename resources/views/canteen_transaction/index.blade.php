@@ -106,6 +106,11 @@
 
                         <div class="position-relative mx-auto" style="max-width:360px;">
                             <video id="canteenVideo" autoplay playsinline class="w-100 rounded bg-dark" style="min-height:260px;"></video>
+                            <div id="cameraPlaceholder" class="text-center text-white py-4" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,.55);">
+                                <div style="font-size:28px;"><i class="fas fa-video-slash"></i></div>
+                                <div class="small font-weight-bold mt-1" id="placeholderTitle">Kamera belum aktif</div>
+                                <div class="small text-white-50 px-3" id="placeholderDesc">Menunggu izin kamera…</div>
+                            </div>
                             <div class="scanner-guide-box" id="scannerGuide"></div>
                         </div>
                         <div id="faceStatus" class="text-center small text-muted mt-2"></div>
@@ -200,8 +205,11 @@ $('npkForm').addEventListener('submit', async (e)=>{
     $('faceCanteenLabel').textContent = 'Kantin ' + selectedCanteenId + ' — ' + selectedCanteenName;
     $('faceNpkLabel').textContent = validatedNpk;
     showStep('stepFace');
-    loadFaceModels();
     requestGeo();
+    // Kamera nyala otomatis setelah NPK valid (sejajar FaceAttendance: kamera nyala saat NPK valid).
+    await loadFaceModels();
+    await startCamera();
+    if (window.Swal) { Swal.fire({ icon: 'success', title: 'NPK valid', text: 'Silakan posisikan wajah di kamera.', confirmButtonText: 'OK', timer: 3000, timerProgressBar: true }); }
   } catch(err){
     setError('Gagal memvalidasi NPK. Periksa koneksi lalu coba lagi.');
   } finally {
@@ -247,19 +255,55 @@ async function loadFaceModels(){
 
 async function startCamera(){
   if(!faceLoaded) await loadFaceModels();
+  const video = $('canteenVideo');
+  const ph = $('cameraPlaceholder'), phTitle = $('placeholderTitle'), phDesc = $('placeholderDesc');
+  if (video && video.srcObject && video.srcObject.active) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.error('[Canteen] getUserMedia tidak didukung.');
+    if (ph) { ph.classList.remove('d-none'); ph.style.setProperty('display','flex','important'); }
+    if (phTitle) phTitle.innerText = 'Kamera Tidak Didukung Browser';
+    if (phDesc) phDesc.innerText = 'Browser ini tidak mendukung akses kamera. Kamera HANYA bisa aktif lewat HTTPS atau localhost. Gunakan Chrome / Edge terbaru dan pastikan halaman diakses via HTTPS.';
+    return;
+  }
+  let camTimeout = null;
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user' }, audio:false });
-    $('canteenVideo').srcObject = cameraStream;
-    await $('canteenVideo').play();
+    cameraStream = await new Promise((resolve, reject) => {
+      camTimeout = setTimeout(() => { const e = new Error('Izin kamera belum diberikan dalam 20 detik.'); e.name = 'IZIN_KAMERA_TIMEOUT'; reject(e); }, 20000);
+      const tryConstraints = (constraints, fallback) => {
+        navigator.mediaDevices.getUserMedia(constraints).then(resolve, (err) => {
+          if (fallback && fallback.length) { tryConstraints(fallback[0], fallback.slice(1)); } else { reject(err); }
+        });
+      };
+      tryConstraints(
+        { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false },
+        [ { video: { facingMode: 'user' }, audio: false }, { video: true, audio: false } ]
+      );
+    });
+    clearTimeout(camTimeout);
+    video.srcObject = cameraStream;
+    try { await video.play(); } catch(e) { if (e.name !== 'AbortError') console.warn('Video play warning:', e); }
+    if (ph) { ph.classList.add('d-none'); ph.style.setProperty('display','none','important'); }
     $('btnScanCapture').disabled = false;
     $('btnCameraToggle').innerHTML = '<i class=\"fas fa-camera mr-1\"></i> Matikan Kamera';
     setStatus('Posisikan wajah di dalam lingkaran, lalu tekan <b>Scan &amp; Simpan</b>.');
-  } catch(e){
+  } catch(err){
+    clearTimeout(camTimeout);
+    console.error('Camera error:', err);
+    if (ph) { ph.classList.remove('d-none'); ph.style.setProperty('display','flex','important'); }
+    var name = (err && err.name) ? err.name : '';
+    if (phTitle && phDesc) {
+      if (name === 'IZIN_KAMERA_TIMEOUT') { phTitle.innerText = 'Menunggu Izin Kamera'; phDesc.innerText = 'Izin kamera belum diberikan. Klik ikon kamera di address bar, pilih "Izinkan", lalu coba lagi.'; }
+      else if (name === 'NotAllowedError' || name === 'SecurityError') { phTitle.innerText = 'Izin Kamera Ditolak'; phDesc.innerText = 'Klik ikon kamera di address bar browser, pilih "Izinkan", lalu coba lagi.'; }
+      else if (name === 'NotFoundError' || name === 'OverconstrainedError') { phTitle.innerText = 'Kamera Tidak Ditemukan'; phDesc.innerText = 'Tidak ada kamera yang terdeteksi pada perangkat ini.'; }
+      else if (name === 'NotReadableError') { phTitle.innerText = 'Kamera Sedang Digunakan'; phDesc.innerText = 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi tersebut lalu coba lagi.'; }
+      else { phTitle.innerText = 'Kamera Tidak Dapat Diakses'; phDesc.innerText = (err && err.message) ? err.message : String(err); }
+    }
     setStatus('Kamera tidak dapat diakses. Beri izin kamera di browser.');
   }
 }
 function stopCamera(){
   if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+  const ph2 = $('cameraPlaceholder'); if (ph2) { ph2.classList.remove('d-none'); ph2.style.setProperty('display','flex','important'); }
   $('btnScanCapture').disabled = true;
   $('btnCameraToggle').innerHTML = '<i class=\"fas fa-camera mr-1\"></i> Nyalakan Kamera';
 }
@@ -330,7 +374,7 @@ $('btnScanCapture').addEventListener('click', async ()=>{
   }
 });
 
-function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',\"'\":'&#39;'}[c])); }
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function renderReceipt(inv){
   const inside = inv.inside_geomap === null || inv.inside_geomap === undefined ? '-' : (inv.inside_geomap ? 'Ya' : 'Tidak');

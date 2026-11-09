@@ -11,8 +11,11 @@
             <div class="container-fluid">
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">Kelola Pertanyaan Kuesioner Kepuasan</h1>
-                    <small class="text-muted">Semua pertanyaan disimpan di database (satisfaction_questions) dan langsung dipakai di form karyawan.</small>
-                </div>
+                    <div>
+                        <a href="{{ route('satisfaction-survey.admin.results') }}" class="btn btn-sm btn-info"><i class="fas fa-chart-bar"></i> Lihat Hasil</a>
+                        <a href="{{ route('satisfaction-survey.admin.export') }}" class="btn btn-sm btn-success"><i class="fas fa-file-excel"></i> Export Excel</a>
+                    </div>
+                    </div>
 
                 @if ($message = Session::get('success'))
                     <div class="alert alert-success">{{ $message }}</div>
@@ -20,33 +23,6 @@
                 @if ($errors->any())
                     <div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
                 @endif
-
-                <div class="card shadow mb-4">
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm" id="dataTable">
-                                <thead><tr><th width="50">ID</th><th width="70">Bagian</th><th>Pertanyaan</th><th width="100">Tipe</th><th width="80">Urutan</th><th width="90">Aktif</th><th width="160">Aksi</th></tr></thead>
-                                <tbody>
-                                @foreach($questions as $q)
-                                    <tr>
-                                        <td>{{ $q->id }}</td>
-                                        <td>{{ $q->section }}</td>
-                                        <td>{{ $q->question_text }}</td>
-                                        <td>{{ $q->question_type === 'likert' ? 'Likert 1–5' : 'Open' }}</td>
-                                        <td>{{ $q->sort_order }}</td>
-                                        <td>{{ $q->is_active ? '<span class="badge badge-success">Ya</span>' : '<span class="badge badge-secondary">Tidak</span>' }}</td>
-                                        <td>
-                                            <form method="POST" action="{{ route('satisfaction-survey.admin.toggle', $q->id) }}" style="display:inline">@csrf<button class="btn btn-warning btn-sm" title="Toggle aktif">{{ $q->is_active ? 'Nonaktifkan' : 'Aktifkan' }}</button></form>
-                                            <button class="btn btn-primary btn-sm btn-edit" data-id="{{ $q->id }}" data-section="{{ $q->section }}" data-text="{{ e($q->question_text) }}" data-type="{{ $q->question_type }}" data-order="{{ $q->sort_order }}" data-active="{{ $q->is_active ? 1 : 0 }}" data-toggle="modal" data-target="#editModal"><i class="fas fa-edit"></i></button>
-                                            <form method="POST" action="{{ route('satisfaction-survey.admin.destroy', $q->id) }}" style="display:inline" onsubmit="return confirm('Hapus pertanyaan dan jawabannya?')">@csrf @method('DELETE')<button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="card shadow mb-4">
                     <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Tambah Pertanyaan</h6></div>
@@ -66,9 +42,37 @@
                         </form>
                     </div>
                 </div>
+                <div class="card shadow mb-4">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm" id="dataTable">
+                                <thead><tr><th width="50">ID</th><th width="70">Bagian</th><th>Pertanyaan</th><th width="100">Tipe</th><th width="80">Urutan</th><th width="90">Aktif</th><th width="160">Aksi</th></tr></thead>
+                                <tbody>
+                                @foreach($questions as $q)
+                                    <tr>
+                                        <td>{{ $q->id }}</td>
+                                        <td>{{ $q->section }}</td>
+                                        <td>{{ $q->question_text }}</td>
+                                        <td>{{ $q->question_type === 'likert' ? 'Likert 1–5' : 'Open' }}</td>
+                                        <td>{{ $q->sort_order }}</td>
+                                        <td>{!! $q->is_active ? '<span class="badge badge-success">Ya</span>' : '<span class="badge badge-secondary">Tidak</span>' !!}</td>
+                                        <td>
+                                            <form method="POST" action="{{ route('satisfaction-survey.admin.toggle', $q->id) }}" style="display:inline" class="form-toggle">@csrf<button type="button" class="btn btn-sm btn-toggle-aktif {{ $q->is_active ? 'btn-success' : 'btn-secondary' }}" data-id="{{ $q->id }}" data-active="{{ $q->is_active ? 1 : 0 }}" data-text="{{ e($q->question_text) }}" title="{{ $q->is_active ? 'Nonaktifkan' : 'Aktifkan' }}"><i class="fas fa-{{ $q->is_active ? 'power-off' : 'check' }}"></i> {{ $q->is_active ? 'On' : 'Off' }}</button></form>
+                                            <button class="btn btn-primary btn-sm btn-edit" data-id="{{ $q->id }}" data-section="{{ $q->section }}" data-text="{{ e($q->question_text) }}" data-type="{{ $q->question_type }}" data-order="{{ $q->sort_order }}" data-active="{{ $q->is_active ? 1 : 0 }}" data-toggle="modal" data-target="#editModal"><i class="fas fa-edit"></i></button>
+                                            <form method="POST" action="{{ route('satisfaction-survey.admin.destroy', $q->id) }}" style="display:inline" onsubmit="return confirm('Hapus pertanyaan dan jawabannya?')">@csrf @method('DELETE')<button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
 
             </div>
         </div>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         @include('layout.footer')
     </div>
 </div>
@@ -97,6 +101,23 @@
 <script>
 $(function(){
   $('#dataTable').DataTable({ pageLength:25, order:[[4,'asc']] });
+  $('.btn-toggle-aktif').on('click', function(){
+    const btn = $(this);
+    const form = btn.closest('form.form-toggle');
+    const isActive = btn.data('active') == 1;
+    const text = btn.data('text');
+    Swal.fire({
+      title: isActive ? 'Nonaktifkan pertanyaan?' : 'Aktifkan pertanyaan?',
+      text: text,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: isActive ? 'Ya, Nonaktifkan' : 'Ya, Aktifkan',
+      cancelButtonText: 'Batal',
+      danger: isActive
+    }).then((result)=>{
+      if(result.isConfirmed){ form.submit(); }
+    });
+  });
   $('.btn-edit').click(function(){
     const b = $(this);
     const id = b.data('id');
