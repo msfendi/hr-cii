@@ -230,6 +230,9 @@ class BiodataManageController extends Controller
         };
 
         $nomorSim = $pelamarDetail->nomor_sim ?? null;
+        $namaKtkDarurat = $pelamarDetail->nama_ktk_darurat ?? null;
+        $hubunganKtkDarurat = $pelamarDetail->hubungan ?? null;
+        $noTelpDarurat = $pelamarDetail->no_telp_darurat ?? null;
         $pengalamanKerja = $safeJson($pelamarDetail->pengalaman_kerja ?? null);
         $dataAyah = $safeJson($pelamarDetail->data_ayah ?? null);
         $dataIbu = $safeJson($pelamarDetail->data_ibu ?? null);
@@ -251,6 +254,9 @@ class BiodataManageController extends Controller
             'masaKerja',
             'canExportAllDocs',
             'nomorSim',
+            'namaKtkDarurat',
+            'hubunganKtkDarurat',
+            'noTelpDarurat',
             'pengalamanKerja',
             'dataAyah',
             'dataIbu',
@@ -434,6 +440,9 @@ class BiodataManageController extends Controller
 
             $detailData = [
                 'nomor_sim'          => $request->nomor_sim ?: null,
+                'nama_ktk_darurat'   => trim((string) $request->nama_ktk_darurat) !== '' ? trim((string) $request->nama_ktk_darurat) : null,
+                'hubungan'           => trim((string) $request->hubungan_ktk_darurat) !== '' ? trim((string) $request->hubungan_ktk_darurat) : null,
+                'no_telp_darurat'    => trim((string) $request->no_telp_darurat) !== '' ? trim((string) $request->no_telp_darurat) : null,
                 'data_ayah'          => !empty($ayahPayload) ? json_encode($ayahPayload) : null,
                 'data_ibu'           => !empty($ibuPayload) ? json_encode($ibuPayload) : null,
                 'pengalaman_kerja'   => $cleanArray($request->pengalaman_kerja, 'perusahaan'),
