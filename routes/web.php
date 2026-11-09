@@ -102,6 +102,8 @@ use App\Http\Controllers\RolePayrollController;
 use App\Http\Controllers\QrDeviceController;
 use App\Http\Controllers\FaceRecognitionController;
 use App\Http\Controllers\CanteenController;
+use App\Http\Controllers\CanteenTransactionController;
+use App\Http\Controllers\SatisfactionSurveyController;
 use App\Http\Controllers\CanteenReportController;
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\DoorprizeController;
@@ -1563,6 +1565,44 @@ Route::middleware(['auth', 'permission'])->group(function () {
         ->name('card-menu-hris.index');
     Route::post('/pengaturan/card-menu-hris', [FaceAttendanceAdminController::class, 'updateCardMenu'])
         ->name('card-menu-hris.update');
+});
+
+// ========================================
+// CANTEEN TRANSACTION (FITUR 1)
+// ========================================
+// Publik: karyawan pilih kantin (canteen_id 1/2) + input NPK + scan wajah.
+// Data transaksi disimpan ke database 'canteen' (tabel canteen / canteen_twos).
+// Admin: master kantin (/canteens), window istirahat (/canteen-transaction/admin), setting geomap/liveness.
+Route::prefix('canteen-transaction')->name('canteen-transaction.')->group(function () {
+    Route::get('/', [CanteenTransactionController::class, 'index'])->name('index');
+    Route::post('/validate-npk', [CanteenTransactionController::class, 'validateNpk'])->name('validate-npk');
+    Route::post('/store', [CanteenTransactionController::class, 'store'])->name('store');
+});
+
+Route::middleware(['auth', 'permission'])->prefix('canteen-transaction/admin')->name('canteen-transaction.admin.')->group(function () {
+    Route::get('/', [CanteenTransactionController::class, 'adminIndex'])->name('index');
+    Route::post('/window', [CanteenTransactionController::class, 'adminStoreWindow'])->name('window.store');
+    Route::put('/window/{id}', [CanteenTransactionController::class, 'adminUpdateWindow'])->name('window.update');
+    Route::delete('/window/{id}', [CanteenTransactionController::class, 'adminDeleteWindow'])->name('window.destroy');
+    Route::post('/setting', [CanteenTransactionController::class, 'adminUpdateSetting'])->name('setting.update');
+});
+
+// ========================================
+// KUESIONER KEPUASAN KARYAWAN (FITUR 2) — ANONIM
+// ========================================
+// Publik: form 35 pertanyaan (29 likert + 6 open). Semua pertanyaan disimpan di DB dan bisa di-manage admin.
+Route::prefix('satisfaction-survey')->name('satisfaction-survey.')->group(function () {
+    Route::get('/', [SatisfactionSurveyController::class, 'create'])->name('create');
+    Route::post('/', [SatisfactionSurveyController::class, 'store'])->name('store');
+    Route::get('/thanks', [SatisfactionSurveyController::class, 'thanks'])->name('thanks');
+});
+
+Route::middleware(['auth', 'permission'])->prefix('satisfaction-survey/admin')->name('satisfaction-survey.admin.')->group(function () {
+    Route::get('/', [SatisfactionSurveyController::class, 'adminIndex'])->name('index');
+    Route::post('/', [SatisfactionSurveyController::class, 'adminStore'])->name('store');
+    Route::put('/{id}', [SatisfactionSurveyController::class, 'adminUpdate'])->name('update');
+    Route::delete('/{id}', [SatisfactionSurveyController::class, 'adminDestroy'])->name('destroy');
+    Route::post('/{id}/toggle', [SatisfactionSurveyController::class, 'adminToggle'])->name('toggle');
 });
 
 // ========================================

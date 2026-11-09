@@ -37,6 +37,14 @@
 
                 <div class="form-row">
                   <div class="form-group col-md-6">
+                    <label>Kantin <span class="text-danger">*</span> <small class="text-muted">(canteen_id: 1 atau 2)</small></label>
+                    <select name="canteen_id" class="form-control" required>
+                      <option value="">-- Pilih --</option>
+                      <option value="1" {{ old('canteen_id') == 1 ? 'selected' : '' }}>Kantin 1</option>
+                      <option value="2" {{ old('canteen_id') == 2 ? 'selected' : '' }}>Kantin 2</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-md-6">
                     <label>Nama Kantin <span class="text-danger">*</span></label>
                     <input type="text" name="name" class="form-control" value="{{ old('name') }}" required>
                   </div>
@@ -54,6 +62,17 @@
                   <div class="form-group col-md-6">
                     <label>No. HP PIC</label>
                     <input type="text" name="pic_phone" class="form-control" value="{{ old('pic_phone') }}">
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group col-md-6">
+                    <label>Kontak Kantin (Nama)</label>
+                    <input type="text" name="contact_person" class="form-control" value="{{ old('contact_person') }}" placeholder="Nama penanggung jawab kantin">
+                  </div>
+                  <div class="form-group col-md-6">
+                    <label>Kontak Kantin (No. HP)</label>
+                    <input type="text" name="contact_phone" class="form-control" value="{{ old('contact_phone') }}" placeholder="No HP kantin">
                   </div>
                 </div>
 

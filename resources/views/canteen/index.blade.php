@@ -34,6 +34,7 @@
                         <th>Lokasi</th>
                         <th>PIC</th>
                         <th>No. HP PIC</th>
+                        <th>Kontak Kantin</th>
                         <th width="90">Status</th>
                         <th width="120">Action</th>
                       </tr>
@@ -46,6 +47,7 @@
                         <td>{{ $row->location }}</td>
                         <td>{{ $row->pic_name }}</td>
                         <td>{{ $row->pic_phone }}</td>
+                        <td>{{ $row->contact_person }}{{ $row->contact_phone ? ' / ' . $row->contact_phone : '' }}</td>
                         <td>
                           @if($row->is_active)
                             <span class="badge badge-success">Aktif</span>

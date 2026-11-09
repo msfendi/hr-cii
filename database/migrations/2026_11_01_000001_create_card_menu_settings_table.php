@@ -38,6 +38,8 @@ return new class extends Migration
             ['key' => 'leave-request',      'name' => 'Pengajuan Cuti',               'route' => '/pengajuan-cuti/login',      'icon' => 'fas fa-calendar',           'color' => 'warning', 'order' => 6],
             ['key' => 'face-attendance',    'name' => 'Presensi Wajah',               'route' => '/face-attendance/login',     'icon' => 'fas fa-camera',             'color' => 'primary', 'order' => 7],
             ['key' => 'self-register-face', 'name' => 'Self Register Wajah',          'route' => '/self-register-face',        'icon' => 'fas fa-id-badge',           'color' => 'info',    'order' => 8],
+            ['key' => 'canteen-transaction', 'name' => 'Canteen Transaction',               'route' => '/canteen-transaction',       'icon' => 'fas fa-utensils',         'color' => 'warning', 'order' => 9],
+            ['key' => 'satisfaction-survey', 'name' => 'Satisfaction Survey',              'route' => '/satisfaction-survey',       'icon' => 'fas fa-heart',            'color' => 'danger',  'order' => 10],
         ];
 
         foreach ($defaults as $d) {

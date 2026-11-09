@@ -93,6 +93,8 @@ class CardMenuSetting extends Model
             'leave-request'      => 'Leave Request',
             'face-attendance'    => 'Face Attendance',
             'self-register-face' => 'Face Self Registration',
+            'canteen-transaction' => 'Canteen Transaction',
+            'satisfaction-survey' => 'Satisfaction Survey',
         ];
 
         if ($key !== null && array_key_exists($key, $map)) {
@@ -321,6 +323,8 @@ class CardMenuSetting extends Model
             ['key' => 'leave-request',      'name' => 'Leave Request',            'route' => '/pengajuan-cuti/login',      'icon' => 'fas fa-calendar',           'color' => 'warning'],
             ['key' => 'face-attendance',    'name' => 'Face Attendance',          'route' => '/face-attendance/login',     'icon' => 'fas fa-camera',             'color' => 'primary'],
             ['key' => 'self-register-face', 'name' => 'Face Self Registration',   'route' => '/self-register-face',        'icon' => 'fas fa-id-badge',           'color' => 'info'],
+            ['key' => 'canteen-transaction', 'name' => 'Canteen Transaction',    'route' => '/canteen-transaction',       'icon' => 'fas fa-utensils',         'color' => 'warning'],
+            ['key' => 'satisfaction-survey', 'name' => 'Satisfaction Survey',   'route' => '/satisfaction-survey',       'icon' => 'fas fa-heart',            'color' => 'danger'],
         ];
 
         // Lengkapi dengan `order` + `is_visible` supaya aman dipakai view.
