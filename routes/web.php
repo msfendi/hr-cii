@@ -9,6 +9,7 @@ use App\Http\Controllers\BiodataController;
 use App\Http\Controllers\BiodataManageController;
 use App\Http\Controllers\FaceAttendanceController;
 use App\Http\Controllers\FaceAttendanceAdminController;
+use App\Http\Controllers\FaceAttendanceLogController;
 use App\Http\Controllers\FaceAttendanceSettingController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginController;
@@ -1572,6 +1573,15 @@ Route::prefix('face-attendance/admin')
     ->group(function () {
         // Rekap presensi WAJAH + FINGERPRINT semua karyawan
         Route::get('/summary', [FaceAttendanceAdminController::class, 'index'])->name('index');
+        // [Log Face] Query memakai joinSub di atas koneksi cii +
+        // baris master DI-PHP-kan (biodata union) sehingga query
+        // tidak bisa dibungkus Yajra sebagai subquery SQL Server
+        // (ORDER BY dalam subquery -> error 42000). DataTables pakai
+        // collection dari buildLogs(); lihat method data().
+        // Log face attendance per transaksi scan (filter rentang tanggal)
+        Route::get('/log', [FaceAttendanceLogController::class, 'index'])->name('log');
+        Route::get('/log/data', [FaceAttendanceLogController::class, 'data'])->name('log.data');
+        Route::get('/log/export', [FaceAttendanceLogController::class, 'export'])->name('log.export');
         Route::get('/export', [FaceAttendanceAdminController::class, 'export'])->name('export');
         Route::get('/detail/{npk}/{date}', [FaceAttendanceAdminController::class, 'employeeDetail'])->name('detail');
 

@@ -18,6 +18,11 @@ class HeatEfficiencyImport implements ToModel, WithHeadingRow
 
     public function model(array $row)
     {
+        // group: "sewing" / "cutting", kosong = null (data lama / tanpa grup)
+        $group = isset($row['group']) && trim((string) $row['group']) !== ''
+            ? strtolower(trim((string) $row['group']))
+            : null;
+
         return HeatEfficiency::updateOrCreate(
             [
                 'npk' => $row['npk'],
@@ -35,6 +40,8 @@ class HeatEfficiencyImport implements ToModel, WithHeadingRow
                 'tim' => isset($row['tim']) && $row['tim'] !== ''
                     ? (int) $row['tim']
                     : null,
+                // group: sewing / cutting
+                'group' => $group,
             ]
         );
     }

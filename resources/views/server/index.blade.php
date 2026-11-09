@@ -131,6 +131,12 @@
                             'icon'     => 'fa-key',
                             'ga4'      => false,
                         ],
+                        'factory' => [
+                            'label'    => 'Factory',
+                            'subtitle' => 'factory.chutex.id:8001',
+                            'icon'     => 'fa-industry',
+                            'ga4'      => false,
+                        ],
                     ];
                 @endphp
 

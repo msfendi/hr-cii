@@ -156,10 +156,18 @@ class MonitoringController extends Controller
             ],
             'passbolt' => [
                 'name'         => 'Passbolt',
-                'exporter_url' => config('services.node_exporter_passbolt.url', 'http://192.168.1.245:9100/metrics'),
+                'exporter_url' => config('services.node_exporter_passbolt.url', env('NODE_EXPORTER_PASSBOLT_URL', 'http://192.168.1.245:9100/metrics')),
                 'timeout'      => (int) config('services.node_exporter_passbolt.timeout', 3),
                 'ssl_host'     => config('services.ssl_monitor.passbolt_host', 'passbolt.chutex.id'),
                 'ssl_port'     => (int) config('services.ssl_monitor.passbolt_port', 8012),
+                'ga4'          => false,
+            ],
+            'factory' => [
+                'name'         => 'Factory',
+                'exporter_url' => config('services.node_exporter_factory.url', env('NODE_EXPORTER_FACTORY_URL', 'http://factory.chutex.id:9100/metrics')),
+                'timeout'      => (int) config('services.node_exporter_factory.timeout', 3),
+                'ssl_host'     => config('services.ssl_monitor.factory_host', 'factory.chutex.id'),
+                'ssl_port'     => (int) config('services.ssl_monitor.factory_port', 8001),
                 'ga4'          => false,
             ],
         ];

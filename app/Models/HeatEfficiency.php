@@ -16,7 +16,8 @@ class HeatEfficiency extends Model
         'efficiency',
         'piece',
         'date',
-        'tim'
+        'tim',
+        'group'
     ];
 
     protected $casts = [

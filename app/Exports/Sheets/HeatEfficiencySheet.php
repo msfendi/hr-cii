@@ -26,7 +26,8 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
             'efficiency',
             'piece',
             'date',
-            'tim'
+            'tim',
+            'group'
         ];
     }
     public static function afterSheet(AfterSheet $event)
@@ -35,10 +36,10 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $spreadsheet = $sheet->getParent();
 
         // bold header
-        $sheet->getStyle('A1:F1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:G1')->getFont()->setBold(true);
 
         // auto width
-        foreach (range('A', 'F') as $column) {
+        foreach (range('A', 'G') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
@@ -54,6 +55,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $date = Date::stringToExcel('2026-01-12');
         $sheet->setCellValue('E2', $date);
         $sheet->setCellValue('F2', 1);
+        $sheet->setCellValue('G2', 'sewing');
 
         $sheet->setCellValue('A3', 'C-00827');
         $sheet->setCellValue('B3', 'operator');
@@ -62,6 +64,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $date = Date::stringToExcel('2026-01-13');
         $sheet->setCellValue('E3', $date);
         $sheet->setCellValue('F3', 1);
+        $sheet->setCellValue('G3', 'sewing');
 
         $sheet->setCellValue('A4', 'C-00827');
         $sheet->setCellValue('B4', 'operator');
@@ -70,6 +73,7 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
         $date = Date::stringToExcel('2026-01-14');
         $sheet->setCellValue('E4', $date);
         $sheet->setCellValue('F4', 2);
+        $sheet->setCellValue('G4', 'cutting');
 
         $roles = DB::table('insentif_role_formulas')
             ->where('dept', 'heat')
@@ -109,6 +113,21 @@ class HeatEfficiencySheet implements WithTitle, WithHeadings, WithEvents
             $validation->setErrorTitle('Input Salah');
             $validation->setError('Pilih role dari daftar.');
             $validation->setFormula1("=role_master!\$A\$1:\$A\${$lastRow}");
+        }
+
+        // Apply dropdown (group: sewing / cutting) to G2:G5000
+        for ($row = 2; $row <= 5000; $row++) {
+            $validation = $sheet->getCell('G' . $row)->getDataValidation();
+
+            $validation->setType(DataValidation::TYPE_LIST);
+            $validation->setErrorStyle(DataValidation::STYLE_STOP);
+            $validation->setAllowBlank(true);
+            $validation->setShowDropDown(true);
+            $validation->setShowInputMessage(true);
+            $validation->setShowErrorMessage(true);
+            $validation->setErrorTitle('Input Salah');
+            $validation->setError('Pilih group: sewing atau cutting.');
+            $validation->setFormula1('"sewing,cutting"');
         }
     }
 

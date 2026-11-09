@@ -1565,7 +1565,24 @@ buttons: [
                         return data ?? 0;
                     }
 
-                    return salaryMaskColored(data ?? 0, row.components?.pinalty_deduction?.type);
+                    let pinaltyData =
+                        encodeURIComponent(
+                            JSON.stringify(
+                                row.pinalty_details || []
+                            )
+                        );
+
+                    if(!(row.pinalty_details || []).length){
+                        return salaryMaskColored(data ?? 0, row.components?.pinalty_deduction?.type);
+                    }
+
+                    return `
+                        <a href="javascript:void(0)"
+                        class="btn-pinalty-detail"
+                        data-pinalty="${pinaltyData}">
+                            ${salaryMaskColored(data ?? 0, row.components?.pinalty_deduction?.type)}
+                        </a>
+                    `;
                 }
             },
 
@@ -2150,6 +2167,35 @@ function salaryMaskColored(amount, componentType){
 
 #specialOvertimeDetailModal .table-primary{
     font-size:14px;
+}
+
+    .btn-pinalty-detail{
+    color:#4e73df !important;
+    text-decoration:none;
+    transition:.2s;
+    font-weight:600;
+}
+
+.btn-pinalty-detail:hover{
+    color:#0056b3 !important;
+    text-decoration:none;
+}
+
+#pinaltyDetailModal .modal-content{
+    border-radius:15px;
+    overflow:hidden;
+}
+
+#pinaltyDetailModal .modal-header{
+    background:linear-gradient(
+        135deg,
+        #4e73df,
+        #224abe
+    );
+}
+
+#table-pinalty-detail{
+    font-size:13px;
 }
 
     .btn-night-shift-detail{
@@ -3660,6 +3706,94 @@ $(document).on(
 
     }
 );
+</script>
+<div class="modal fade"
+     id="pinaltyDetailModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-primary text-white">
+
+                <h5 class="modal-title">
+                    <i class="fas fa-gavel mr-2"></i>
+                    Pinalty Deduction Details
+                </h5>
+
+                <button type="button"
+                        class="close text-white"
+                        data-dismiss="modal">
+
+                    <span>&times;</span>
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <table id="table-pinalty-detail"
+                       class="table table-bordered table-striped table-hover w-100">
+
+                    <thead class="thead-light">
+
+                        <tr>
+                            <th>NPK</th>
+                            <th>Name</th>
+                            <th class="text-right">Basic Salary</th>
+                            <th class="text-center">Kontrak (Bulan)</th>
+                            <th class="text-center">Kontrak (Hari)</th>
+                            <th class="text-right">Nominal Pinalty</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody></tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<script>
+    $(document).on(
+        'click',
+        '.btn-pinalty-detail',
+        function(){
+
+            let details = JSON.parse(
+                decodeURIComponent(
+                    $(this).data('pinalty')
+                )
+            );
+
+            let $tbody = $('#table-pinalty-detail tbody').empty();
+
+            details.forEach(function(d){
+
+                let $tr = $('<tr></tr>');
+
+                $tr.append($('<td></td>').text(d.NPK ?? ''));
+                $tr.append($('<td></td>').text(d.NAMA_KARYAWAN ?? ''));
+                $tr.append($('<td class="text-right"></td>').text(salaryMask(d.basic_salary ?? 0)));
+                $tr.append($('<td class="text-center"></td>').text(d.contract_months ?? 0));
+                $tr.append($('<td class="text-center"></td>').text(d.contract_days ?? 0));
+                $tr.append($('<td class="text-right"></td>').html(
+                    salaryMaskColored(d.pinalty_amount ?? 0, 'deduction')
+                ));
+
+                $tbody.append($tr);
+            });
+
+            $('#pinaltyDetailModal').modal('show');
+        }
+    );
 </script>
    </body>
 </html>

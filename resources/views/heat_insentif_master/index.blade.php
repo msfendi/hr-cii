@@ -169,6 +169,7 @@ Detail Insentif Karyawan
                                  <th>NPK</th>
                                  <th>Name</th>
                                  <th>Role</th>
+                                 <th>Group</th>
                                  <th>Efficiency</th>
                                  <th>Piece</th>
                                  <th>Tanggal</th>
@@ -182,6 +183,7 @@ Detail Insentif Karyawan
                                  <td>{{ $row->npk }}</td>
                                  <td>{{ $row->name }}</td>
                                  <td>{{ $row->role }}</td>
+                                 <td>{{ $row->group ? ucfirst($row->group) : '-' }}</td>
                                  <td>{{ number_format($row->efficiency,0,',','.') }}</td>
                                  <td>{{ $row->piece }}</td>
                                  <td>{{ $row->date }}</td>
@@ -571,6 +573,7 @@ $('#checkPeriod').on('change',function(){
                     row.npk,
                     row.name,
                     row.role,
+                    row.group ? row.group.charAt(0).toUpperCase() + row.group.slice(1) : '-',
                     Number(row.efficiency).toLocaleString('id-ID'),
                     Number(row.piece).toLocaleString('id-ID'),
                     row.date,

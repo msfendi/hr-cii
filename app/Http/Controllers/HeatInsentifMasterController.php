@@ -45,7 +45,8 @@ class HeatInsentifMasterController extends Controller
                 'h.efficiency',
                 'h.piece',
                 'h.date',
-                'h.tim'
+                'h.tim',
+                'h.group'
             )
             ->where('pp.is_closed', 0)
             ->orderBy('h.date')
@@ -83,7 +84,8 @@ class HeatInsentifMasterController extends Controller
                 'h.efficiency',
                 'h.piece',
                 'h.date',
-                'h.tim'
+                'h.tim',
+                'h.group'
             )
             ->where('h.period_id', $period)
             ->orderBy('h.date')
@@ -621,7 +623,7 @@ class HeatInsentifMasterController extends Controller
             | sehingga segmen TIM II tgl 1-9 ikut dibagi 16 operator, bukan 9.)
             |--------------------------------------------------------------------------
             */
-            $segments = []; // key: tim (atau 'null') => ['total' => x, 'npks' => []]
+            $segments = []; // key: group|tim => ['total' => x, 'npks' => []]
 
             foreach ($employeeAssignmentsByDate as $date => $rowsForDate) {
 
@@ -630,43 +632,63 @@ class HeatInsentifMasterController extends Controller
                     continue;
                 }
 
-                // TIM EMPLOYEE UNTUK TANGGAL INI
-                $tim = $rowsForDate
-                    ->pluck('tim')
-                    ->filter(fn($t) => $t !== null && $t !== '')
-                    ->first();
+                /*
+                |--------------------------------------------------------------------------
+                | GROUPING (SEWING / CUTTING)
+                |--------------------------------------------------------------------------
+                | Assignment employee pada tanggal ini dipisah per group. Operator
+                | pembanding hanya dari group yang sama (sewing hanya sewing,
+                | cutting hanya cutting). group null = tanpa filter group
+                | (perilaku lama untuk data yang belum punya group).
+                */
+                $rowsByGroup = $rowsForDate->groupBy(fn($r) => $r->group ?? '');
 
-                $segKey = is_null($tim) ? 'null' : (string) $tim;
+                foreach ($rowsByGroup as $groupKey => $rowsForGroup) {
 
-                if (!isset($segments[$segKey])) {
-                    $segments[$segKey] = ['total' => 0, 'npks' => []];
-                }
+                    $group = ($groupKey === '' || $groupKey === null) ? null : (string) $groupKey;
 
-                // OPERATOR PEMBANDING (TIM SAMA JIKA ADA)
-                $operatorQuery = DB::table('heat_efficiencies')
-                    ->where('period_id', $period->id)
-                    ->where('role', '=', 'operator')
-                    ->where('date', $date);
+                    // TIM EMPLOYEE UNTUK TANGGAL + GROUP INI
+                    $tim = $rowsForGroup
+                        ->pluck('tim')
+                        ->filter(fn($t) => $t !== null && $t !== '')
+                        ->first();
 
-                if (!is_null($tim)) {
-                    $operatorQuery->where('tim', $tim);
-                }
+                    $segKey = (is_null($group) ? 'null' : $group) . '|' . (is_null($tim) ? 'null' : (string) $tim);
 
-                $operatorsForDate = $operatorQuery->get();
-
-                foreach ($operatorsForDate as $operator) {
-                    // FILTER HANYA NUMERATOR
-                    if (!$isValidOvertime($operator->npk, $operator->date)) {
-                        continue;
+                    if (!isset($segments[$segKey])) {
+                        $segments[$segKey] = ['total' => 0, 'npks' => []];
                     }
 
-                    $rate = $this->getInsentifByEfficiency(
-                        $operator->efficiency,
-                        $formula
-                    );
+                    // OPERATOR PEMBANDING (GROUP SAMA & TIM SAMA JIKA ADA)
+                    $operatorQuery = DB::table('heat_efficiencies')
+                        ->where('period_id', $period->id)
+                        ->where('role', '=', 'operator')
+                        ->where('date', $date);
 
-                    $segments[$segKey]['total'] += $rate * $operator->piece;
-                    $segments[$segKey]['npks'][] = $operator->npk;
+                    if (!is_null($group)) {
+                        $operatorQuery->where('group', $group);
+                    }
+
+                    if (!is_null($tim)) {
+                        $operatorQuery->where('tim', $tim);
+                    }
+
+                    $operatorsForDate = $operatorQuery->get();
+
+                    foreach ($operatorsForDate as $operator) {
+                        // FILTER HANYA NUMERATOR
+                        if (!$isValidOvertime($operator->npk, $operator->date)) {
+                            continue;
+                        }
+
+                        $rate = $this->getInsentifByEfficiency(
+                            $operator->efficiency,
+                            $formula
+                        );
+
+                        $segments[$segKey]['total'] += $rate * $operator->piece;
+                        $segments[$segKey]['npks'][] = $operator->npk;
+                    }
                 }
             }
 

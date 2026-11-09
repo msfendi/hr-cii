@@ -191,6 +191,7 @@ class GeneratePayrollProcess implements ShouldQueue
                 'bio.IS_STAFF',
                 'd.IS_SEWING',
                 'p.KETERANGAN',
+                'p.is_agreement_signed',
                 'p.TANGGUNGAN',
                 'bio.IS_EXPAT'
             )
@@ -1003,6 +1004,7 @@ END AS special_overtime_hours
                 'emp.IS_SEWING',
                 'emp.IS_EXPAT',
                 'emp.KETERANGAN',
+                'emp.is_agreement_signed',
                 'emp.TANGGUNGAN',
                 'a6s.percentage',
                 'lt.late_minutes as total_telat',
@@ -1446,6 +1448,9 @@ END AS special_overtime_hours
 
             $isSpdPinalty = ($isSpd && $isTkkInPeriod && $contractEnd) ? 1 : 0;
 
+            // PKWT.is_agreement_signed -> dikirim ke formula pinalty_deduction (1 = sudah tanda tangan, selain itu 0)
+            $isAgreementSigned = ((int) ($employee->is_agreement_signed ?? 0)) === 1 ? 1 : 0;
+
             // meal_days: hanya karyawan expat (komponen "Meal Allowance Expat")
             $mealDays = $employee->IS_EXPAT == '1'
                 ? (float) max(0, $mealTotalDays - count($mealAbsenceByNpk[$employee->NPK] ?? []))
@@ -1504,12 +1509,10 @@ END AS special_overtime_hours
                 'has_tkk'        => $tkk ? 1 : 0,
                 // BARU — dipakai formula pinalty_deduction (karyawan SPD)
                 'is_spd'         => $isSpdPinalty,
-                // 'pinalty_salary' => (float) $employee->salary,
-                // 'pinalty_months' => (float) $pinaltyMonths,
-                // 'pinalty_days'   => (float) $pinaltyDays,
-                'pinalty_salary' => 0,
-                'pinalty_months' => 0,
-                'pinalty_days'   => 0,
+                'is_agreement_signed' => $isAgreementSigned,
+                'pinalty_salary' => (float) $employee->salary,
+                'pinalty_months' => (float) $pinaltyMonths,
+                'pinalty_days'   => (float) $pinaltyDays,
             ];
 
             /*
@@ -2776,9 +2779,10 @@ END AS special_overtime_hours
                     'has_tkk'        => $tkk ? 1 : 0,
                     // BARU — dipakai formula pinalty_deduction (karyawan SPD)
                     'is_spd'         => $isSpdPinalty,
-                    // 'pinalty_salary' => (float) $employee->salary,
-                    // 'pinalty_months' => (float) $pinaltyMonths,
-                    // 'pinalty_days'   => (float) $pinaltyDays,
+                    'is_agreement_signed' => $isAgreementSigned,
+                    'pinalty_salary' => (float) $employee->salary,
+                    'pinalty_months' => (float) $pinaltyMonths,
+                    'pinalty_days'   => (float) $pinaltyDays,
                     'employee_npk'  => $employee->NPK,
                     'employee_name' => $employee->NAMA_KARYAWAN,
                     'tanggungan' => $employee->TANGGUNGAN,
@@ -2795,6 +2799,19 @@ END AS special_overtime_hours
                     'ijin_details' => ($ijinDetails[$employee->NPK] ?? collect())->values(),
                     'night_shift_details' => ($nightShiftDetails[$employee->NPK] ?? collect())
                         ->values(),
+                    // Detail komponen Pinalty Deduction (untuk modal di blade).
+                    // Nominal DIAMBIL dari hasil evaluasi formula payroll_components
+                    // (code pinalty_deduction) di $results, bukan dihitung ulang di sini.
+                    'pinalty_details' => $isSpdPinalty
+                        ? [[
+                            'NPK'             => $employee->NPK,
+                            'NAMA_KARYAWAN'   => $employee->NAMA_KARYAWAN,
+                            'basic_salary'    => (float) $employee->salary,
+                            'contract_months' => (int) $pinaltyMonths,
+                            'contract_days'   => (int) $pinaltyDays,
+                            'pinalty_amount'  => (float) ($results['pinalty_deduction'] ?? 0),
+                        ]]
+                        : [],
                     'total_salary'  => $grandTotal
                 ];
             }

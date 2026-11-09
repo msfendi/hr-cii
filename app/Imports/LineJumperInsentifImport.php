@@ -12,8 +12,11 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
  * Kolom Excel: npk | operation | machine
  *
  * - 1 baris = 1 operasi yang dikuasai jumper pada periode tsb
+ * - Saat import, semua data operasi jumper pada period_id ini dihapus
+ *   terlebih dulu, lalu diganti dengan data baru dari Excel
+ *   (hapus + insert dalam 1 transaksi, jadi kalau gagal data lama aman)
  * - NPK + operasi yang sama (abaikan nomor urut/huruf besar-kecil) tidak
- *   akan terhitung dobel, import ulang cukup meng-update machine
+ *   akan terhitung dobel
  */
 class LineJumperInsentifImport implements ToCollection, WithHeadingRow
 {
@@ -30,6 +33,10 @@ class LineJumperInsentifImport implements ToCollection, WithHeadingRow
     public function collection(Collection $rows)
     {
         DB::transaction(function () use ($rows) {
+
+            // Hapus data lama pada period ini
+            LineJumperOperation::where('period_id', $this->periodId)->delete();
+
             foreach ($rows as $row) {
 
                 $npk       = trim((string) ($row['npk'] ?? ''));
