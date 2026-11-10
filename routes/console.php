@@ -18,3 +18,8 @@ use Illuminate\Support\Facades\Schedule;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Schedule: cek pending leave approval setiap 5 jam
+// Interval bisa diubah: everyFiveHours(), everyThirtyMinutes(), hourly(), dll.
+// CATATAN: Schedule sudah dipindahkan ke app/Console/Kernel.php
+

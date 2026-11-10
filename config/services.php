@@ -31,6 +31,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'wa_gateway' => [
+        'url'   => env('WA_GATEWAY_URL', 'http://localhost:3000'),
+        'token' => env('WA_GATEWAY_TOKEN', ''),
+    ],
+
     'fonnte' => [
         'master_key' => env('FONNTE_MASTER_KEY'),
     ],
