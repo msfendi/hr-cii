@@ -19,8 +19,11 @@ class WaGateway
         $token = config('services.wa_gateway.token', '');
 
         try {
+            // Hermes WA bridge uses chatId in JID format: 628xxx@s.whatsapp.net
+            $chatId = $phone . '@s.whatsapp.net';
+
             $payload = [
-                'phone'   => $phone,
+                'chatId'  => $chatId,
                 'message' => $message,
             ];
 
@@ -29,7 +32,7 @@ class WaGateway
                 $request = $request->withToken($token);
             }
 
-            $response = $request->post("$url/send-message", $payload);
+            $response = $request->post("$url/send", $payload);
 
             if ($response->successful()) {
                 Log::info("[WaGateway] Sent to $phone: OK");
