@@ -63,14 +63,29 @@ Implementasi: `LeaveApprovalQuery::getPendingForNotification()`
 
 | File | Fungsi |
 |------|--------|
-| `app/Services/ApprovalWa/LeaveApprovalQuery.php` | Query pending + filter sequential, lookup approver, validasi, update DB |
+| `app/Services/ApprovalWa/LeaveApprovalNotifier.php` | **Notifikasi per-token** — pilih level yang giliran, format, kirim |
+| `app/Services/ApprovalWa/LeaveApprovalEffects.php` | Efek approve/reject: advance progress, finalisasi (potong saldo + overtime), void sibling rows |
+| `app/Services/ApprovalWa/LeaveApprovalQuery.php` | Query pending, filter sequential, lookup approver, validasi, update DB |
 | `app/Services/ApprovalWa/PhoneFormatter.php` | Normalisasi & validasi nomor HP (`08xxx`/`+62xxx`/`8xxx` → `62xxx`) |
 | `app/Services/ApprovalWa/WaMessageFormatter.php` | Format pesan outbound (dengan deep link) + konfirmasi + error |
 | `app/Services/ApprovalWa/WaGateway.php` | POST ke WA bridge (`/send`, payload `chatId` JID) |
-| `app/Services/ApprovalWa/InboundApprovalProcessor.php` | Parse `/approve`/`/tolak`, validasi, update DB |
-| `app/Console/Commands/CheckPendingLeaveApproval.php` | Artisan command `approval:check-pending [--dry-run]` |
+| `app/Services/ApprovalWa/InboundApprovalProcessor.php` | Parse `/approve`/`/tolak`, validasi, update DB, cascade notify |
+| `app/Console/Commands/CheckPendingLeaveApproval.php` | `approval:check-pending [--dry-run]` — sweep semua pending |
+| `app/Console/Commands/NotifyLeaveApprovalToken.php` | `approval:notify-token <token> [--dry-run]` — notif 1 pengajuan |
 | `app/Http/Controllers/Api/ApprovalWebhookController.php` | `POST /api/approval/webhook` (opsional, kalau gateway pakai webhook) |
-| `app/Console/Kernel.php` | Schedule Laravel: `approval:check-pending` tiap 5 jam |
+| `app/Console/Kernel.php` | Schedule Laravel: `approval:check-pending` tiap 5 jam (safety net) |
+
+### Trigger Notifikasi
+
+| Event | Hook | Efek |
+|-------|------|------|
+| Karyawan submit pengajuan | `PengajuanCutiController::store()` | Notif level 1 **langsung** |
+| Approve via web portal | `LeaveApprovalController::approve()` | Notif level N+1 **langsung** |
+| Approve via WhatsApp | `InboundApprovalProcessor::handle()` | Notif level N+1 **langsung** |
+| Cron tiap 5 jam | `approval:check-pending` | Sweep semua pending, group by token, safety net |
+
+Semua notifikasi per-token melewati `LeaveApprovalNotifier::pickEligibleLevel()` —
+hanya level yang "giliran" yang dikabari.
 
 ### Artefak Hermes
 
@@ -84,11 +99,13 @@ Implementasi: `LeaveApprovalQuery::getPendingForNotification()`
 ## Command
 
 ```bash
-# Dry run — print pesan, TIDAK kirim
+# Sweep semua pending (cron / safety net)
 php8.3 artisan approval:check-pending --dry-run
-
-# Live — kirim pesan WA
 php8.3 artisan approval:check-pending
+
+# Notifikasi 1 pengajuan (by token)
+php8.3 artisan approval:notify-token <token> --dry-run
+php8.3 artisan approval:notify-token <token>
 ```
 
 > ⚠️ Tanpa `--dry-run` **langsung mengirim**. Selalu dry-run dulu saat verifikasi.

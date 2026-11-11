@@ -41,6 +41,40 @@ php8.3 artisan approval:check-pending              # live send
 
 ⚠️ Without `--dry-run` messages ARE sent. Always dry-run first when verifying.
 
+## Per-Request Notification (primary flow)
+
+Notifications are sent **per pengajuan (token)**, triggered by the app itself —
+not only by cron.
+
+| Trigger | Effect |
+|---------|--------|
+| Employee submits leave form | Level 1 approver notified immediately |
+| Level N approved (web portal) | Level N+1 notified immediately |
+| Level N approved (WhatsApp) | Level N+1 notified immediately |
+| Cron (every 5h) | Safety net — sweep all pending, group by token, notify eligible levels |
+
+```bash
+# Manual notification for one pengajuan (testing / re-send)
+php8.3 artisan approval:notify-token <token> --dry-run
+php8.3 artisan approval:notify-token <token>
+```
+
+Get a token:
+```sql
+SELECT TOP 5 token, id, NPK, approval_level, status FROM leave_requests
+WHERE status = 'pending' ORDER BY id DESC
+```
+
+## Decision Effects (approve/reject)
+
+Approving via WhatsApp applies the SAME side effects as the web portal:
+- advances `approval_progress` to the next level, or
+- finalizes at the last level (deducts leave balance + creates Overtime CT/CU)
+
+Rejecting voids all sibling rows in the same token (chain stops).
+
+Implemented in `App\Services\ApprovalWa\LeaveApprovalEffects` — shared by both paths.
+
 ## Inbound Processing
 
 ```bash
@@ -127,12 +161,15 @@ Validation: `/^628[0-9]{8,12}$/`
 app/Services/ApprovalWa/
 ├── PhoneFormatter.php
 ├── LeaveApprovalQuery.php
+├── LeaveApprovalNotifier.php   ← per-token notify + level selection
+├── LeaveApprovalEffects.php    ← advance progress / finalize / void siblings
 ├── WaMessageFormatter.php
 ├── WaGateway.php
 └── InboundApprovalProcessor.php
 
 app/Console/Commands/
-└── CheckPendingLeaveApproval.php   (approval:check-pending)
+├── CheckPendingLeaveApproval.php   (approval:check-pending)
+└── NotifyLeaveApprovalToken.php    (approval:notify-token <token>)
 
 app/Http/Controllers/Api/
 └── ApprovalWebhookController.php   (POST /api/approval/webhook)

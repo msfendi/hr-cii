@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
 use App\Models\Overtime;
+use App\Services\ApprovalWa\LeaveApprovalEffects;
+use App\Services\ApprovalWa\LeaveApprovalNotifier;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class LeaveApprovalController extends Controller
@@ -416,6 +419,11 @@ class LeaveApprovalController extends Controller
             $this->advanceOrFinalize($leave);
 
             DB::commit();
+
+            // Notifikasi WhatsApp ke approver level berikutnya (kalau ada).
+            // Setelah commit supaya hanya terkirim kalau perubahan benar-benar tersimpan.
+            $this->notifyNextApprover($leave->token);
+
             return response()->json(['success' => true, 'message' => 'Permohonan Cuti berhasil disetujui.']);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -544,24 +552,43 @@ class LeaveApprovalController extends Controller
     }
 
     /**
-     * Cek apakah ada proses level selanjutnya di token ini; kalau ada, majukan
-     * approval_progress ke level itu. Kalau tidak ada (ini level terakhir),
-     * finalisasi (potong leave balance + isi Overtime "CT").
+     * Kirim notifikasi WhatsApp ke approver level berikutnya untuk satu pengajuan.
+     *
+     * Dipanggil setelah approve (web portal / admin). Notifikasi hanya dikirim ke
+     * level yang "giliran" — level N hanya dikabari bila semua level 1..N-1 sudah
+     * approved. Kalau ada level yang rejected, chain berhenti dan tidak ada notif.
+     *
+     * Kegagalan notifikasi tidak boleh menggagalkan proses approve — karena itu
+     * semua error ditangkap dan hanya di-log.
      */
-    private function advanceOrFinalize(LeaveRequest $leave)
+    private function notifyNextApprover(?string $token): void
     {
-        $nextLevel = LeaveRequest::where('token', $leave->token)
-            ->where('approval_level', '>', $leave->approval_level)
-            ->orderBy('approval_level', 'asc')
-            ->first();
-
-        if ($nextLevel) {
-            LeaveRequest::where('token', $leave->token)
-                ->update(['approval_progress' => $nextLevel->approval_level]);
+        if (empty($token)) {
             return;
         }
 
-        $this->finalizeApproval($leave);
+        try {
+            $result = LeaveApprovalNotifier::notifyNextLevel($token);
+
+            foreach ($result['skipped'] as $reason) {
+                Log::warning("[ApprovalNotifier] token $token: $reason");
+            }
+        } catch (\Throwable $e) {
+            Log::error("[ApprovalNotifier] token $token: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Cek apakah ada proses level selanjutnya di token ini; kalau ada, majukan
+     * approval_progress ke level itu. Kalau tidak ada (ini level terakhir),
+     * finalisasi (potong leave balance + isi Overtime "CT").
+     *
+     * Logic di-delegate ke LeaveApprovalEffects supaya path approve via web dan
+     * approve via WhatsApp memakai implementasi yang sama.
+     */
+    private function advanceOrFinalize(LeaveRequest $leave)
+    {
+        LeaveApprovalEffects::advanceOrFinalize($leave);
     }
 
     /**
@@ -571,79 +598,7 @@ class LeaveApprovalController extends Controller
      */
     private function finalizeApproval(LeaveRequest $leave)
     {
-        $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
-
-        // Hanya cuti tahunan yang memakai saldo; jenis cuti lain dibatasi per pengajuan
-        // sehingga tidak perlu memotong saldo.
-        if ($leaveType && $leaveType->usesBalance()) {
-            $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
-
-            if ($isNegativeLeave) {
-                DB::table('leave_balances')
-                    ->where('NPK', $leave->NPK)
-                    ->where('leave_type_id', $leave->leave_type_id)
-                    ->where('year', date('Y'))
-                    ->update([
-                        'negative_leave' => DB::raw('COALESCE(negative_leave, 0) + ' . $leave->total_days)
-                    ]);
-            } else {
-                DB::table('leave_balances')
-                    ->where('NPK', $leave->NPK)
-                    ->where('leave_type_id', $leave->leave_type_id)
-                    ->where('year', date('Y'))
-                    ->update([
-                        'used_days' => DB::raw('used_days + ' . $leave->total_days),
-                        'remained_days' => DB::raw('remained_days - ' . $leave->total_days)
-                    ]);
-            }
-        }
-
-        $karyawan = DB::connection('cii')->table('BIODATA')
-            ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-            ->where('BIODATA.NPK', $leave->NPK)
-            ->select('BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT', 'BIODATA.ID_DEPT', 'BIODATA.IS_STAFF', 'DEPT.IS_SEWING')
-            ->first();
-
-        $holidays = json_decode(file_get_contents(storage_path('app/calendar.json')), true);
-        $holidays = array_filter($holidays, function($item) {
-            return isset($item['holiday']) && $item['holiday'] === true;
-        });
-        $holidays = array_keys($holidays);
-
-        $startDate = Carbon::parse($leave->start_date);
-        $endDate = Carbon::parse($leave->end_date);
-
-        // Khusus tipe cuti 'pribadi', kode JUMLAH_JAM_LEMBUR adalah 'CU', selain itu 'CT' (hutang cuti tetap 'CT')
-        $overtimeCode = ($leaveType && $leaveType->code === 'pribadi') ? 'CU' : 'CT';
-
-        // Pengajuan dengan tanggal bebas (custom_dates) hanya memakai tanggal-tanggal
-        // yang benar-benar dipilih, bukan seluruh rentang min..max.
-        $leaveDates = $leave->leaveDates();
-
-        foreach ($leaveDates as $date) {
-            $dayOfWeek = $date->dayOfWeek; // 0 = Minggu, 6 = Sabtu
-            $dateString = $date->format('Y-m-d');
-
-            // Lewati hari Sabtu, Minggu, atau Hari Libur Nasional
-            if ($dayOfWeek == 0 || $dayOfWeek == 6 || in_array($dateString, $holidays)) {
-                continue;
-            }
-
-            Overtime::updateOrCreate(
-                [
-                    'NPK' => $leave->NPK,
-                    'OVERTIME_DATE' => $dateString,
-                ],
-                [
-                    'NAMA_KARYAWAN' => $karyawan ? $karyawan->NAMA_KARYAWAN : $leave->NPK,
-                    'BAGIAN' => $karyawan ? $karyawan->DEPARTEMENT : '-',
-                    'DAY' => $date->translatedFormat('l'),
-                    'JUMLAH_JAM_LEMBUR' => $overtimeCode,
-                    'DEPT_GROUP' => '',
-                    'is_request' => 'true',
-                ]
-            );
-        }
+        LeaveApprovalEffects::finalizeApproval($leave);
     }
 
     /**
