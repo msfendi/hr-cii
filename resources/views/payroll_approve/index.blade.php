@@ -254,6 +254,7 @@
                                     <th>Pad Print Insentif</th>
                                     <th>Cutting Insentif</th>
                                     <th>Heat Insentif</th>
+                                    <th>Line Jumper Insentif</th>
                                     <th>6S Insentif</th>
                                     <th>Night Shift Compensation</th>
                                     <th>Adjusments</th>
@@ -264,6 +265,7 @@
                                     <th>Absence</th>
                                     <th>Late Deduction</th>
                                     <th>Work Leave Deduction</th>
+                                    <th>Pinalty Deduction</th>
                                     <th>Total Salary</th>
                                     <th>% Difference</th>
                                     <th>Status</th>
@@ -277,6 +279,8 @@
                     <tr style="font-weight:bold;background:#f8f9fc">
 
                         <th colspan="3" class="text-right">TOTAL</th>
+                                    <th></th>
+                                    <th></th>
                                     <th></th>
                                     <th></th>
                                     <th></th>
@@ -457,7 +461,7 @@ buttons: [
             columns: [
                 1,2,3,4,5,6,7,8,9,10,
                 11,12,13,14,15,16,17,18,
-                19,20,21,22,23,24,25,26,27,28
+                19,20,21,22,23,24,25,26,27,28,29,30
             ],
 
             format: {
@@ -690,6 +694,19 @@ buttons: [
             },
 
             {
+                data:'components.line_jumper_insentif.amount',
+                defaultContent:0,
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    return salaryMaskColored(data ?? 0, row.components?.line_jumper_insentif?.type);
+                }
+            },
+
+            {
                 data:'components.sixs_insentif.amount',
                 defaultContent:0,
                 render:function(data,type,row){
@@ -879,6 +896,20 @@ buttons: [
                             ${salaryMaskColored(data ?? 0, row.components?.work_leave_deduction?.type)}
                         </a>
                     `;
+                }
+            },
+
+            {
+                data:'components.pinalty_deduction.amount',
+                defaultContent:0,
+                render:function(data,type,row){
+
+                    if(type !== 'display'){
+                        return data ?? 0;
+                    }
+
+                    // selalu merah (deduction), apa pun type dari backend
+                    return salaryMaskColored(data ?? 0, 'deduction');
                 }
             },
 
@@ -1198,7 +1229,7 @@ buttons: [
                 6,7,8,
                 9,10,11,12,
                 13,14,15,16,
-                17,18,19,20,21,22,23,24,25,26,27
+                17,18,19,20,21,22,23,24,25,26,27,28,29
             ];
 
             // let ijinTotal = api
