@@ -11,6 +11,8 @@ class LeaveBalances extends Model
 
     protected $table = 'leave_balances';
 
+    protected $connection = 'cii';
+
     protected $fillable = [
         'NPK',
         'leave_type_id',

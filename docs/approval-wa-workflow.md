@@ -146,7 +146,23 @@ Atau balas langsung:
 ```
 /approve 849          /approve #849          APPROVE 849
 /tolak 849 alasan     /tolak 849 alasan     REJECT 849 alasan
+/batal 849 alasan     /batal 849 alasan     BATAL 849 alasan
 ```
+
+| Command | Status sebelum | Hasil |
+|---------|---------------|-------|
+| `/approve <ID>` | `pending` | → `approved`, advance progress, notif level berikutnya |
+| `/tolak <ID> <alasan>` | `pending` | → `rejected`, void sibling rows (chain berhenti) |
+| `/batal <ID> <alasan>` | `approved` | → `rejected`, **saldo cuti dikembalikan**, un-void siblings |
+
+`/batal` ditolak kalau level berikutnya sudah bertindak (chain sudah maju).
+
+### Atomicity
+
+Approve/reject jalan dalam `DB::connection('cii')->beginTransaction()`. Status
+di-write dengan conditional UPDATE (`WHERE id = ? AND status = 'pending'`), jadi
+dua approval bersamaan tidak bisa dua-duanya lolos — yang kedua dapat 0 affected
+rows dan **abort sebelum** ada perubahan saldo.
 
 ### Konfirmasi
 

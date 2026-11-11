@@ -605,49 +605,13 @@ class LeaveApprovalController extends Controller
      * Kebalikan dari finalizeApproval() -- dipakai saat keputusan "approved" di
      * level terakhir diubah jadi status lain: kembalikan leave_balances / kurangi negative_leave
      * dan hapus record Overtime "CT"/"CU" yang sempat dibuat untuk periode cuti ini.
+     *
+     * Logic di-delegate ke LeaveApprovalEffects supaya path web dan path WhatsApp
+     * memakai implementasi yang sama.
      */
     private function reverseFinalize(LeaveRequest $leave)
     {
-        $leaveType = $leave->leaveType ?? LeaveTypes::find($leave->leave_type_id);
-
-        // Hanya cuti tahunan yang memakai saldo; jenis lain tidak menyentuh leave_balances.
-        if ($leaveType && $leaveType->usesBalance()) {
-            $isNegativeLeave = str_contains($leave->reason, '[Hutang Cuti]');
-
-            if ($isNegativeLeave) {
-                DB::table('leave_balances')
-                    ->where('NPK', $leave->NPK)
-                    ->where('leave_type_id', $leave->leave_type_id)
-                    ->where('year', date('Y'))
-                    ->update([
-                        'negative_leave' => DB::raw('GREATEST(0, COALESCE(negative_leave, 0) - ' . $leave->total_days . ')')
-                    ]);
-            } else {
-                DB::table('leave_balances')
-                    ->where('NPK', $leave->NPK)
-                    ->where('leave_type_id', $leave->leave_type_id)
-                    ->where('year', date('Y'))
-                    ->update([
-                        'used_days' => DB::raw('used_days - ' . $leave->total_days),
-                        'remained_days' => DB::raw('remained_days + ' . $leave->total_days)
-                    ]);
-            }
-        }
-
-        // Hanya tanggal-tanggal yang benar-benar dipakai pengajuan ini yang dikembalikan
-        // (untuk pengajuan tanggal bebas, hanya tanggal yang dipilih).
-        $dateStrings = array_map(
-            fn ($d) => $d->format('Y-m-d'),
-            $leave->leaveDates()
-        );
-
-        Overtime::where('NPK', $leave->NPK)
-            ->whereIn('OVERTIME_DATE', $dateStrings)
-            ->whereIn('JUMLAH_JAM_LEMBUR', ['CT', 'CU'])
-            ->update([
-                'JUMLAH_JAM_LEMBUR' => null,
-                'is_request' => 'false',
-            ]);
+        LeaveApprovalEffects::reverseFinalize($leave);
     }
 
     /**
@@ -656,8 +620,6 @@ class LeaveApprovalController extends Controller
      */
     private function voidSiblingRows(LeaveRequest $leave)
     {
-        LeaveRequest::where('token', $leave->token)
-            ->where('id', '!=', $leave->id)
-            ->update(['status' => 'rejected', 'void' => 'true']);
+        LeaveApprovalEffects::voidSiblingRows($leave);
     }
 }

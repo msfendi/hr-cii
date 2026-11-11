@@ -21,6 +21,7 @@ export WA_BOT_NUMBER="6287731665679"    # bot WhatsApp number
 Load this skill automatically when a WhatsApp message matches:
 - `/approve <ID>` or `APPROVE <ID>` (with or without `#`)
 - `/tolak <ID> <alasan>` or `REJECT <ID> <alasan>`
+- `/batal <ID> <alasan>` or `BATAL <ID> <alasan>` — cancels an already-approved request
 
 When triggered inbound:
 1. Parse decision + ID + reason from message
@@ -28,8 +29,29 @@ When triggered inbound:
 3. Validate approver authorized (NPK in `approval_rules.approval_id`) AND matches
    `leave_requests.approval_id` for that exact row
 4. Validate sequential: all previous levels in the chain already `approved`
-5. Update DB status to `approved` / `rejected`
-6. Send confirmation reply back to WhatsApp
+5. Update DB status to `approved` / `rejected` — **conditional UPDATE**
+   (`WHERE id = ? AND status = 'pending'`), abort if affected rows = 0
+6. Apply decision effects inside the same transaction (advance progress /
+   finalize / void siblings)
+7. Send confirmation reply back to WhatsApp
+
+### Decision Semantics
+
+| Command | Status before | Result |
+|---------|---------------|--------|
+| `/approve <ID>` | `pending` | → `approved`, advance progress, notify next level |
+| `/tolak <ID> <alasan>` | `pending` | → `rejected`, void sibling rows (chain stops) |
+| `/batal <ID> <alasan>` | `approved` | → `rejected`, **restore leave balance**, un-void siblings |
+
+`/batal` is refused when a later level already acted (chain already advanced).
+
+### Atomicity
+
+Approve/reject runs inside `DB::connection('cii')->beginTransaction()`. The
+status write uses a conditional UPDATE so two concurrent approvals cannot both
+pass — the second gets 0 affected rows and aborts **before** any balance change.
+
+Revert (batal) does the same, with `WHERE id = ? AND status = 'approved'`.
 
 ## Outbound (cron)
 

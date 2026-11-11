@@ -183,23 +183,116 @@ class LeaveApprovalQuery
     }
 
     /**
-     * Update leave_request status after decision.
+     * Update leave_request status after decision — ATOMIK.
+     *
+     * Memakai conditional UPDATE:
+     *   UPDATE ... WHERE id = ? AND status = 'pending'
+     *
+     * Affected rows = 1 → berhasil, proceed dengan efek samping (potong balance).
+     * Affected rows = 0 → request sudah diproses orang lain (race condition),
+     *                    pemanggil harus abort dan TIDAK applying efek.
+     *
+     * Ini mencegah double potong saldo cuti saat dua pesan approval datang
+     * bersamaan (double-tap link, retry WA, dua device).
+     *
+     * @return int jumlah row yang ter-update (1 = berhasil, 0 = sudah diproses)
      */
-    public static function updateDecision(int $requestId, string $decision, ?string $comment, string $approverNpk): void
+    public static function updateDecision(int $requestId, string $decision, ?string $comment, string $approverNpk): int
     {
         $status = strtolower($decision) === 'approve' ? 'approved' : 'rejected';
         $now    = now()->toDateTimeString();
 
-        DB::connection('cii')->update("
+        $affected = DB::connection('cii')->update("
             UPDATE leave_requests
             SET status       = ?,
                 approval_date = ?,
                 comment      = ?,
                 updated_at   = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'pending'
         ", [$status, $now, $comment, $now, $requestId]);
 
-        Log::info("[ApprovalWa] Request #$requestId → $status by $approverNpk");
+        if ($affected > 0) {
+            Log::info("[ApprovalWa] Request #$requestId → $status by $approverNpk");
+        } else {
+            Log::warning("[ApprovalWa] Request #$requestId NOT updated (already processed) by $approverNpk");
+        }
+
+        return $affected;
+    }
+
+    /**
+     * Batalkan keputusan yang SUDAH diambil (approved → rejected).
+     *
+     * Dipakai untuk command /batal via WhatsApp. Hanya boleh kalau level
+     * berikutnya belum bertindak — kalau level bawah sudah approve, chain sudah
+     * maju dan pembatalan tidak aman.
+     *
+     * @return array{ok:bool, reason:?string}
+     */
+    public static function revertDecision(int $requestId, string $approverNpk): array
+    {
+        $req = DB::connection('cii')->select("
+            SELECT TOP 1 id, token, approval_id, approval_level, status
+            FROM leave_requests
+            WHERE id = ?
+        ", [$requestId]);
+
+        if (empty($req)) {
+            return ['ok' => false, 'reason' => "Pengajuan #$requestId tidak ditemukan."];
+        }
+
+        $req = $req[0];
+
+        // Hanya approver yang=row ini yang boleh membatalkan
+        if ($req->approval_id !== $approverNpk) {
+            return ['ok' => false, 'reason' => "Anda tidak berwenang membatalkan pengajuan #$requestId."];
+        }
+
+        // Hanya bisa membatalkan yang sudah approved
+        if ($req->status !== 'approved') {
+            return [
+                'ok'     => false,
+                'reason' => "Pengajuan #$requestId berstatus '{$req->status}'. Gunakan /tolak untuk pengajuan yang masih pending.",
+            ];
+        }
+
+        // Guard: level berikutnya belum boleh bertindak
+        $laterLevelActed = DB::connection('cii')->select("
+            SELECT COUNT(*) as cnt
+            FROM leave_requests
+            WHERE token = ?
+              AND approval_level > ?
+              AND status != 'pending'
+              AND void != 'true'
+        ", [$req->token, $req->approval_level]);
+
+        if ((int)($laterLevelActed[0]->cnt ?? 0) > 0) {
+            return [
+                'ok'     => false,
+                'reason' => "Tidak bisa dibatalkan — level berikutnya sudah menyetujui pengajuan #$requestId.",
+            ];
+        }
+
+        return ['ok' => true, 'request' => $req];
+    }
+
+    /**
+     * Update status row secara bersyarat (untuk revert).
+     *
+     * @return int affected rows (1 = berhasil, 0 = gagal / sudah berubah)
+     */
+    public static function applyRevert(int $requestId, string $reason): int
+    {
+        $now = now()->toDateTimeString();
+
+        return DB::connection('cii')->update("
+            UPDATE leave_requests
+            SET status       = 'rejected',
+                approval_date = ?,
+                comment      = ?,
+                updated_at   = ?
+            WHERE id = ? AND status = 'approved'
+        ", [$now, $reason, $now, $requestId]);
     }
 
     /**
