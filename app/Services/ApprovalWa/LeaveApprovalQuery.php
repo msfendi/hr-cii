@@ -296,6 +296,20 @@ class LeaveApprovalQuery
     }
 
     /**
+     * Hitung jumlah level dalam satu token (total chain approval).
+     */
+    public static function countTokenLevels(string $token): int
+    {
+        $rows = DB::connection('cii')->select("
+            SELECT COUNT(DISTINCT approval_level) as cnt
+            FROM leave_requests
+            WHERE token = ?
+        ", [$token]);
+
+        return (int)($rows[0]->cnt ?? 0);
+    }
+
+    /**
      * Find approver by normalized phone number.
      * Looks up all approver NPKs from approval_rules, then checks PKWT.HP one by one.
      * Returns NPK + NAMA if found.

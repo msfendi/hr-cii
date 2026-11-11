@@ -10,7 +10,7 @@ use App\Models\LeaveBalances;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
 use App\Services\FaceRecognitionService;
-use App\Services\ApprovalWa\LeaveApprovalNotifier;
+use App\Services\ApprovalWa\ApprovalWebhookTrigger;
 use App\Services\LeaveDayService;
 use App\Services\LeaveRuleService;
 use Carbon\Carbon;
@@ -510,14 +510,14 @@ class PengajuanCutiController extends Controller
             // Notifikasi WhatsApp ke approver level 1 untuk tiap pengajuan baru.
             // Dilakukan setelah commit supaya notifikasi tidak terkirim untuk data
             // yang akhirnya gagal disimpan.
+            //
+            // Opsi C: Laravel hanya trigger messaging layer (Hermes) via webhook.
+            // Pengiriman pesan WA dilakukan di sisi messaging layer.
             foreach ($createdTokens as $newToken) {
                 try {
-                    $notifyResult = LeaveApprovalNotifier::notifyToken($newToken);
-                    foreach ($notifyResult['skipped'] as $skipReason) {
-                        Log::warning("[ApprovalNotifier] token $newToken: $skipReason");
-                    }
+                    ApprovalWebhookTrigger::notify($newToken, 'submit');
                 } catch (\Throwable $e) {
-                    Log::error("[ApprovalNotifier] token $newToken: " . $e->getMessage());
+                    Log::error("[ApprovalWebhook] token $newToken: " . $e->getMessage());
                 }
             }
             $count = count($preparedLeaves);

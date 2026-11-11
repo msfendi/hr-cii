@@ -7,35 +7,59 @@ description: Use when managing leave approval via WhatsApp gateway.
 
 2-way WhatsApp approval workflow for `leave_requests` in the CII HR system.
 
-## Paths
+**Architecture (Opsi C — decoupling):** Laravel holds all business logic.
+Hermes is the messaging layer. The agent never queries the DB directly and
+never decides approval validity — it only relays messages.
 
-Set these once per server before use:
+```
+Laravel (business logic)          Hermes (messaging layer)
+┌────────────────────────┐         ┌──────────────────────────┐
+│ submit pengajuan       │         │ cron 5 jam (safety net)   │
+│   → webhook trigger ───┼──POST──►│   → GET /pending → send   │
+│ approve level N        │         │                          │
+│   → webhook trigger ───┼──POST──►│ inbound WA (approver)     │
+│ /api/approval/pending  │◄─GET────│   → POST /decision        │
+│ /api/approval/trigger  │◄─POST───│   → send reply            │
+│ /api/approval/decision │◄─POST───│                          │
+└────────────────────────┘         └──────────────────────────┘
+```
+
+## Paths & Env
 
 ```bash
-export HR_CII_PATH="/path/to/hr-cii"     # Laravel repo
-export WA_BOT_NUMBER="6287731665679"    # bot WhatsApp number
+export HR_CII_API_URL="http://192.168.0.68:8010"   # Laravel API base
+export APPROVAL_API_TOKEN="<bearer token>"          # same as Laravel APPROVAL_API_TOKEN
+export WA_BRIDGE_URL="http://127.0.0.1:3000"        # Hermes Baileys bridge
 ```
 
 ## Trigger Pattern (Inbound WA)
 
-Load this skill automatically when a WhatsApp message matches:
+Load this skill when a WhatsApp message matches:
 - `/approve <ID>` or `APPROVE <ID>` (with or without `#`)
 - `/tolak <ID> <alasan>` or `REJECT <ID> <alasan>`
 - `/batal <ID> <alasan>` or `BATAL <ID> <alasan>` — cancels an already-approved request
 
-When triggered inbound:
-1. Parse decision + ID + reason from message
-2. Normalize sender phone → lookup NPK via `PKWT.HP`
-3. Validate approver authorized (NPK in `approval_rules.approval_id`) AND matches
-   `leave_requests.approval_id` for that exact row
-4. Validate sequential: all previous levels in the chain already `approved`
-5. Update DB status to `approved` / `rejected` — **conditional UPDATE**
-   (`WHERE id = ? AND status = 'pending'`), abort if affected rows = 0
-6. Apply decision effects inside the same transaction (advance progress /
-   finalize / void siblings)
-7. Send confirmation reply back to WhatsApp
+**Never validate approver authorization yourself** — Laravel does that. The agent
+parses, relays, and replies.
 
-### Decision Semantics
+### Inbound Flow
+
+```bash
+python3 ~/.hermes/scripts/approval-inbound.py \
+  --phone "<nomor_pengirim>" \
+  --message "<pesan asli dari approver>"
+```
+
+The script POSTs to `/api/approval/decision` and sends the returned `reply`
+back to the approver via the WA bridge.
+
+Dry-run (no WA reply sent):
+```bash
+python3 ~/.hermes/scripts/approval-inbound.py \
+  --phone "<nomor_pengirim>" --message "<pesan>" --dry-run
+```
+
+### Decision Semantics (decided by Laravel)
 
 | Command | Status before | Result |
 |---------|---------------|--------|
@@ -43,94 +67,42 @@ When triggered inbound:
 | `/tolak <ID> <alasan>` | `pending` | → `rejected`, void sibling rows (chain stops) |
 | `/batal <ID> <alasan>` | `approved` | → `rejected`, **restore leave balance**, un-void siblings |
 
-`/batal` is refused when a later level already acted (chain already advanced).
+Laravel returns HTTP 200 with `status: ok|rejected|ignored` and a `reply` string.
+Always send `reply` to the approver — including error replies.
 
-### Atomicity
+### Atomicity (Laravel side)
 
-Approve/reject runs inside `DB::connection('cii')->beginTransaction()`. The
-status write uses a conditional UPDATE so two concurrent approvals cannot both
-pass — the second gets 0 affected rows and aborts **before** any balance change.
+Approve/reject runs inside `DB::connection('cii')->beginTransaction()`. Status
+write uses conditional UPDATE (`WHERE id = ? AND status = 'pending'`) so two
+concurrent approvals cannot both pass — the second gets 0 affected rows and
+aborts **before** any balance change.
 
-Revert (batal) does the same, with `WHERE id = ? AND status = 'approved'`.
+## Outbound
 
-## Outbound (cron)
+### Via webhook (instant — triggered by Laravel)
 
-```bash
-cd "$HR_CII_PATH"
-php8.3 artisan approval:check-pending --dry-run   # preview, NO send
-php8.3 artisan approval:check-pending              # live send
-```
+Laravel POSTs to the Hermes webhook route when a leave is submitted or a level
+is approved. The webhook runs `approval-webhook.py`, which fetches the payload
+from `/api/approval/trigger` and sends the WhatsApp message.
 
-⚠️ Without `--dry-run` messages ARE sent. Always dry-run first when verifying.
-
-## Per-Request Notification (primary flow)
-
-Notifications are sent **per pengajuan (token)**, triggered by the app itself —
-not only by cron.
-
-| Trigger | Effect |
-|---------|--------|
-| Employee submits leave form | Level 1 approver notified immediately |
-| Level N approved (web portal) | Level N+1 notified immediately |
-| Level N approved (WhatsApp) | Level N+1 notified immediately |
-| Cron (every 5h) | Safety net — sweep all pending, group by token, notify eligible levels |
+### Via cron (safety net — sweeps all pending)
 
 ```bash
-# Manual notification for one pengajuan (testing / re-send)
-php8.3 artisan approval:notify-token <token> --dry-run
-php8.3 artisan approval:notify-token <token>
+python3 ~/.hermes/scripts/approval-outbound.py --dry-run   # preview, NO send
+python3 ~/.hermes/scripts/approval-outbound.py              # live send
+python3 ~/.hermes/scripts/approval-outbound.py --token <token>  # one pengajuan
 ```
 
-Get a token:
-```sql
-SELECT TOP 5 token, id, NPK, approval_level, status FROM leave_requests
-WHERE status = 'pending' ORDER BY id DESC
-```
+## Throttle (anti-ban)
 
-## Decision Effects (approve/reject)
+Applied in the messaging layer scripts, not in Laravel:
+- jitter: random 70-130% of `WA_JITTER_SECONDS` (default 15s) before each send
+- min gap: `WA_MIN_GAP_SECONDS` (default 15s) between messages
+- burst guard: max `WA_MAX_PER_MINUTE` (default 6) per minute
 
-Approving via WhatsApp applies the SAME side effects as the web portal:
-- advances `approval_progress` to the next level, or
-- finalizes at the last level (deducts leave balance + creates Overtime CT/CU)
+Laravel's own `WaSendThrottle` applies only in single-server fallback mode.
 
-Rejecting voids all sibling rows in the same token (chain stops).
-
-Implemented in `App\Services\ApprovalWa\LeaveApprovalEffects` — shared by both paths.
-
-## Inbound Processing
-
-```bash
-cd "$HR_CII_PATH"
-
-SENDER_PHONE="6281234567890"   # nomor pengirim (raw dari WA)
-MESSAGE="/approve 849"         # pesan dari approver
-
-php8.3 artisan tinker --execute="
-  use App\\Services\\ApprovalWa\\InboundApprovalProcessor;
-  \$reply = InboundApprovalProcessor::handle('$SENDER_PHONE', '$MESSAGE');
-  echo \$reply;
-"
-```
-
-The command echoes the reply text. Send it back via WA bridge:
-
-```bash
-curl -X POST http://localhost:3000/send \
-  -H "Content-Type: application/json" \
-  -d '{"chatId":"<62xxx>@s.whatsapp.net","message":"<reply>"}'
-```
-
-Or use `App\Services\ApprovalWa\WaGateway::send($phone, $reply)`.
-
-## Context
-
-- **App**: Laravel, path in `$HR_CII_PATH`
-- **DB**: SQL Server `192.168.3.55:13279`, database `CII`, user `hr_app`
-- **PHP**: `php8.3`
-- **WA Bridge**: Hermes WhatsApp gateway, default `http://localhost:3000`
-- **Bot number**: `$WA_BOT_NUMBER`
-
-## Key Tables
+## Key Tables (Laravel side — for reference only)
 
 | Table | Key Columns |
 |-------|-------------|
@@ -138,111 +110,37 @@ Or use `App\Services\ApprovalWa\WaGateway::send($phone, $reply)`.
 | `approval_rules` | `rules_id`, `approval_id` (NPK approver), `level`, `name` |
 | `PKWT` | `NPK`, `NAMA`, `HP` (phone source) |
 
-## Schema Facts (CRITICAL)
+One leave submission creates **N rows** in `leave_requests` — one per approver
+in the chain. All rows share the same `token`. `approval_id` = NPK of the
+approver responsible for that row.
 
-One leave submission creates **N rows** in `leave_requests` — one per approver in
-the chain. All rows of one submission share the same `token`.
+## API Endpoints (Laravel)
 
-- `approval_id` = **NPK of the approver responsible for that row** (NOT a group ID)
-- `approval_level` = that approver's level in the chain (1, 2, 3, ...)
-- `approval_progress` = always `1` when created
-- `status` = `pending` | `approved` | `rejected`
-- `void` = string `'false'` (not NULL)
+All under `/api/approval/*`, auth = `Authorization: Bearer $APPROVAL_API_TOKEN`.
 
-## Sequential Rule
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/approval/pending` | list pengajuan eligible + pesan siap kirim |
+| POST | `/api/approval/trigger` | payload 1 pengajuan by token (`{token}`) |
+| POST | `/api/approval/decision` | proses keputusan (`{sender, message}`) |
 
-```
-level 1 pending → notify NPK level 1
-level 2 pending → notify NPK level 2 ONLY IF level 1 row = approved
-level 3 pending → notify NPK level 3 ONLY IF level 1 AND level 2 rows = approved
-```
-
-A `rejected` row stops the whole chain — higher levels never get notified,
-even though their rows remain `pending` in the DB.
-
-Implementation: `LeaveApprovalQuery::getPendingForNotification()` groups pending
-rows by `token` and checks every previous level's status.
-
-## Phone Normalization
-
-`App\Services\ApprovalWa\PhoneFormatter::normalize()`
-
-| Input | Output |
-|-------|--------|
-| `081234567890` | `6281234567890` |
-| `+6281234567890` | `6281234567890` |
-| `81234567890` | `6281234567890` |
-| `0812-3456-7890` | `6281234567890` |
-| unrecognized | `null` → skipped + logged |
-
-Validation: `/^628[0-9]{8,12}$/`
-
-## Service Classes
+## Scripts Location
 
 ```
-app/Services/ApprovalWa/
-├── PhoneFormatter.php
-├── LeaveApprovalQuery.php
-├── LeaveApprovalNotifier.php   ← per-token notify + level selection
-├── LeaveApprovalEffects.php    ← advance progress / finalize / void siblings
-├── WaMessageFormatter.php
-├── WaGateway.php
-└── InboundApprovalProcessor.php
-
-app/Console/Commands/
-├── CheckPendingLeaveApproval.php   (approval:check-pending)
-└── NotifyLeaveApprovalToken.php    (approval:notify-token <token>)
-
-app/Http/Controllers/Api/
-└── ApprovalWebhookController.php   (POST /api/approval/webhook)
+~/.hermes/scripts/approval-outbound.py   # cron sweep + per-token notify
+~/.hermes/scripts/approval-inbound.py    # relay inbound decision + reply
+~/.hermes/scripts/approval-webhook.py    # webhook handler (Laravel → Hermes)
 ```
 
-## Inbound Webhook (optional)
-
-Endpoint `POST /api/approval/webhook`:
-
-```json
-{
-  "sender": "6281234567890",
-  "message": "/approve 123"
-}
-```
-
-Set `WA_WEBHOOK_SECRET` → gateway must send header `X-WA-Token` with that value.
-
-## Env Variables
-
-```env
-DB_CII_CONNECTION=cii
-DB_CII_HOST=192.168.3.55
-DB_CII_PORT=13279
-DB_CII_DATABASE=CII
-DB_CII_USERNAME=hr_app
-DB_CII_PASSWORD=<password>
-
-WA_GATEWAY_URL=http://localhost:3000
-WA_GATEWAY_TOKEN=
-WA_WEBHOOK_SECRET=
-WA_BOT_NUMBER=6287731665679
-```
-
-## Security Rules
-
-- Only NPKs in `approval_rules.approval_id` can send decisions
-- Approver can only decide rows where `leave_requests.approval_id` matches their NPK
-- All previous levels must be `approved` before the next approver can act
-- Phone lookup against `PKWT.HP`, normalized to 62xxx
-- Sender not found as approver → rejected with WA message
-- Never decide on a different request ID than the one notified
+Source of truth: `docs/hermes/scripts/` in the `hr-cii` repo.
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---------|-------|
-| "No pending requests" but rows exist | Sequential filter — check previous level status in same token |
-| "Failed to send" | `WA_GATEWAY_URL`; bridge health `curl http://localhost:3000/health` |
-| "invalid/missing phone" | `PKWT.HP` empty for that NPK |
-| Approver unauthorized | `PKWT.HP` format wrong, or NPK missing from `approval_rules` |
-| SSPI error | SQL Server still Windows-Auth only — switch to mixed mode + SQL login |
-| Query timeout | `PKWT` is large/unindexed — queries are split in `LeaveApprovalQuery` |
-| Cron not firing | `hermes cron list`; check `hermes cron edit <job_id>` |
+| No message sent | `HR_CII_API_URL` + `APPROVAL_API_TOKEN` set? Laravel reachable? |
+| "not eligible" | Previous level not approved yet — expected behavior |
+| Approval rejected | Read `reply` from Laravel; it explains why (unauthorized / wrong level / already processed) |
+| Bridge error | `curl http://127.0.0.1:3000/health` → must show `{"status":"connected"}` |
+| WA session logged out | Bridge needs re-auth (QR scan); check `~/.hermes/whatsapp/bridge.log` |
+| Laravel 401 | Token mismatch between Hermes env and Laravel `APPROVAL_API_TOKEN` |

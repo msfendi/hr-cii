@@ -90,6 +90,63 @@ class LeaveApprovalNotifier
     }
 
     /**
+     * Build payload item (tanpa mengirim) untuk satu token.
+     *
+     * Dipakai oleh Opsi C: messaging layer (Hermes) yang benar-benar mengirim,
+     * Laravel hanya menyiapkan data + pesan siap kirim.
+     *
+     * @return array|null payload item, atau null kalau tidak ada level eligible
+     */
+    public static function buildPayloadForToken(string $token): ?array
+    {
+        $rows = self::getTokenRows($token);
+        if (empty($rows)) {
+            return null;
+        }
+
+        $eligible = self::pickEligibleLevel($rows);
+        if ($eligible === null) {
+            return null;
+        }
+
+        $row = $eligible['row'];
+
+        $approverInfo = LeaveApprovalQuery::getApproverInfo($row->approval_id);
+        if (!$approverInfo) {
+            Log::warning("[ApprovalNotifier] approver {$row->approval_id} not found in PKWT (token $token)");
+            return null;
+        }
+
+        $phone = PhoneFormatter::normalize($approverInfo->HP ?? null);
+        if (!PhoneFormatter::isValid($phone)) {
+            Log::warning("[ApprovalNotifier] invalid phone for {$row->approval_id} (token $token): '{$approverInfo->HP}'");
+            return null;
+        }
+
+        $id      = (int) $row->id;
+        $message = WaMessageFormatter::formatApprovalRequest($row, $approverInfo);
+
+        return [
+            'request_id'      => $id,
+            'token'           => $token,
+            'level'           => (int) $row->approval_level,
+            'total_levels'    => LeaveApprovalQuery::countTokenLevels($token),
+            'phone'           => $phone,
+            'raw_phone'       => $approverInfo->HP,
+            'approver_npk'    => $row->approval_id,
+            'approver_name'   => $approverInfo->NAMA ?? $approverInfo->NPK,
+            'employee_npk'    => $row->NPK,
+            'start_date'      => $row->start_date,
+            'end_date'        => $row->end_date,
+            'total_days'      => $row->total_days,
+            'reason'          => $row->reason,
+            'message'         => $message,
+            'approve_command' => "/approve $id",
+            'reject_command'  => "/tolak $id <alasan>",
+        ];
+    }
+
+    /**
      * Ambil semua row satu token, urut level.
      */
     public static function getTokenRows(string $token): array

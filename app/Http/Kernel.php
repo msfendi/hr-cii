@@ -70,5 +70,6 @@ class Kernel extends HttpKernel
         'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         'qr.verified' => \App\Http\Middleware\EnsureQrScanned::class,
         'face.attendance.auth' => \App\Http\Middleware\FaceAttendanceAuth::class,
+        'approval_api' => \App\Http\Middleware\AuthenticateApprovalApi::class,
     ];
 }

@@ -1,331 +1,220 @@
-# Approval Cuti via WhatsApp — Paket Deploy Hermes Agent
+# Approval Cuti via WhatsApp — Paket Deploy Hermes (Opsi C)
 
-Paket ini berisi **3 commit** di branch `agents-approval-wa` + artefak Hermes
-(skill + cron script) supaya bisa di-deploy ke server Hermes manapun.
+Arsitektur **decoupling**: Laravel = business logic, Hermes = messaging layer.
+
+```
+Laravel (server business logic)          Hermes (server messaging)
+┌──────────────────────────────┐         ┌─────────────────────────────┐
+│ submit pengajuan             │         │ webhook :8644               │
+│   → POST webhook trigger ────┼────────►│   → approval-webhook.py     │
+│ approve level N              │         │   → GET /approval/trigger   │
+│   → POST webhook trigger ────┼────────►│   → throttle → WA bridge    │
+│                              │         │                             │
+│ GET  /api/approval/pending   │◄────────│ cron 5 jam (safety net)     │
+│ POST /api/approval/trigger   │◄────────│   → approval-outbound.py    │
+│ POST /api/approval/decision  │◄────────│ inbound WA (approver)       │
+│                              │         │   → approval-inbound.py     │
+└──────────────────────────────┘         └─────────────────────────────┘
+```
+
+Laravel tidak pernah mengirim WhatsApp sendiri. Hermes tidak pernah query DB
+dan tidak pernah memutuskan validitas approval.
 
 ---
 
-## Daftar File yang Perlu Disiapkan di Server Hermes Baru
+## File yang Perlu Disiapkan di Server Hermes Baru
 
-| # | File | Sumber | Tujuan di Server Baru |
-|---|------|--------|-----------------------|
-| 1 | `docs/hermes/skill/approval-manager.SKILL.md` | repo | `~/.hermes/skills/approval-manager/SKILL.md` |
-| 2 | `docs/hermes/scripts/check-leave-approval.sh` | repo | `~/.hermes/scripts/check-leave-approval.sh` |
-| 3 | `docs/hermes/HERMES_SETUP.md` | repo | panduan setup (file ini) |
-| 4 | Cron job | dibuat via CLI | `hermes cron create ...` |
+| # | File (dari repo) | Tujuan di server Hermes |
+|---|------------------|-------------------------|
+| 1 | `docs/hermes/skill/approval-manager.SKILL.md` | `~/.hermes/skills/approval-manager/SKILL.md` |
+| 2 | `docs/hermes/scripts/approval-webhook.py` | `~/.hermes/scripts/` |
+| 3 | `docs/hermes/scripts/approval-outbound.py` | `~/.hermes/scripts/` |
+| 4 | `docs/hermes/scripts/approval-inbound.py` | `~/.hermes/scripts/` |
+| 5 | `docs/hermes/scripts/approval_env.py` | `~/.hermes/scripts/` |
+| 6 | `docs/hermes/scripts/approval-wa.env.example` | `~/.hermes/approval-wa.env` (isi nilai asli) |
+| 7 | `docs/hermes/HERMES_SETUP.md` | panduan ini |
 
-Kode Laravel (branch `agents-approval-wa`) **tetap di repo** — itu execution engine
-yang dipanggil oleh script cron dan oleh Hermes saat memproses inbound.
-
----
-
-## Ringkasan Arsitektur
-
-```
-                    OUTBOUND (Hermes cron, tiap 5 jam)
-                    ───────────────────────────────────
-  [Hermes cron job: leave-approval-check]
-            │
-            ▼
-  [~/.hermes/scripts/check-leave-approval.sh]
-            │  php8.3 artisan approval:check-pending
-            ▼
-  [LeaveApprovalQuery::getPendingForNotification()]
-            │  - filter sequential (level N butuh level <N approved)
-            │  - cek status approved/rejected di chain token
-            ▼
-  [WaGateway::send()] ──POST http://localhost:3000/send──► [WA Bridge]
-            │                                               │
-            ▼                                               ▼
-      log                                    [Approver WhatsApp]
-                                                          │
-                    INBOUND (Hermes WA gateway)         │ balas /approve 849
-                    ────────────────────────────────      │       /tolak 849 alasan
-                                                          ▼
-                                              [Hermes WA Gateway]
-                                                          │
-                                                          ▼
-                                       [Load skill: approval-manager]
-                                                          │
-                                                          ▼
-                                       [InboundApprovalProcessor::handle()]
-                                            - parse /approve, /tolak
-                                            - phone → NPK (PKWT.HP)
-                                            - validasi approval_id + sequential
-                                            - update DB status
-                                                          │
-                                                          ▼
-                                            [WaGateway::send() konfirmasi]
-```
+Semua script wajib ada di `~/.hermes/scripts/` — Hermes menolak path di luar itu.
 
 ---
 
-## Skema DB yang Benar
+## Bagian A — Setup di Server Laravel (business logic)
 
-**Penting:** satu pengajuan cuti menghasilkan **N row** di `leave_requests` —
-satu row per approver dalam chain. Semua row satu pengajuan punya `token` yang sama.
-
-| Kolom | Isi | Arti |
-|-------|-----|------|
-| `id` | auto | Primary key row ini |
-| `token` | string random | Pengenal pengajuan (pengSATUAN pengajuan) |
-| `NPK` | NPK pemohon | Yang mengajukan cuti |
-| `approval_id` | NPK approver | **Approver yang bertanggung jawab untuk row ini** |
-| `approval_level` | int | Level approver ini dalam chain (1, 2, 3, ...) |
-| `approval_progress` | int | Selalu `1` saat dibuat; tetap `1` sampai diproses |
-| `status` | pending/approved/rejected | Status keputusan row ini |
-| `void` | 'false' | Flag void (bukan NULL) |
-
-Tabel pendukung:
-
-| Tabel | Dipakai untuk |
-|-------|---------------|
-| `approval_rules` | Daftar NPK yang punya hak jadi approver (`approval_id` + `level` + `rules_id`) |
-| `PKWT` | Data karyawan: `NPK`, `NAMA`, `HP` (sumber nomor WhatsApp) |
-
-### Aturan Sequential
-
-```
-Row level 1 pending  → notifikasi dikirim ke NPK level 1
-Row level 2 pending  → notifikasi dikirim ke NPK level 2 HANYA jika row level 1 = approved
-Row level 3 pending  → notifikasi dikirim ke NPK level 3 HANYA jika row level 1 & 2 = approved
-```
-
-**Rejected menghentikan chain:** jika row level N di-reject, seluruh row level > N
-di chain yang sama **tidak akan menerima notifikasi** (walau statusnya masih `pending` di DB).
-
-Implementasi: `LeaveApprovalQuery::getPendingForNotification()` — group by `token`,
-lalu cek `statusMap[token][1..N-1] === 'approved'` untuk semua level sebelumnya.
-
----
-
-## Deploy di Server Hermes Baru
-
-### Step 1 — Clone repo + install Laravel deps
-
-```bash
-git clone -b agents-approval-wa https://github.com/msfendi/hr-cii.git
-cd hr-cii
-composer install --no-dev
-cp .env.example .env
-php8.3 artisan key:generate
-```
-
-### Step 2 — Install PHP + sqlsrv extension
-
-```bash
-sudo add-apt-repository ppa:ondrej/php -y
-sudo apt-get update
-sudo apt-get install -y php8.3-cli php8.3-dev php8.3-xml php8.3-mbstring \
-  php8.3-zip php8.3-gd php8.3-bcmath php8.3-curl php8.3-intl
-
-curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | \
-  sudo tee /usr/share/keyrings/microsoft-prod.gpg > /dev/null
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] \
-  https://packages.microsoft.com/ubuntu/24.04/prod noble main" | \
-  sudo tee /etc/apt/sources.list.d/mssql-release.list
-sudo apt-get update
-sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
-sudo pecl install sqlsrv pdo_sqlsrv
-echo "extension=sqlsrv.so" | sudo tee /etc/php/8.3/cli/conf.d/20-sqlsrv.ini
-echo "extension=pdo_sqlsrv.so" | sudo tee /etc/php/8.3/cli/conf.d/20-pdo_sqlsrv.ini
-```
-
-### Step 3 — Configure `.env`
+### A1. Konfigurasi `.env`
 
 ```env
-# Database SQL Server (harus SQL Auth, bukan Windows Auth)
+# Database SQL Server (SQL Auth, bukan Windows Auth)
 DB_CII_CONNECTION=cii
 DB_CII_HOST=192.168.3.55
 DB_CII_PORT=13279
 DB_CII_DATABASE=CII
 DB_CII_USERNAME=hr_app
 DB_CII_PASSWORD=<password>
+DB_CII_LOGIN_TIMEOUT=10
 
-# WhatsApp Gateway (Hermes WA bridge, default port 3000)
-WA_GATEWAY_URL=http://localhost:3000
-WA_GATEWAY_TOKEN=
-WA_WEBHOOK_SECRET=
-WA_BOT_NUMBER=6287731665679
+# API yang dipanggil messaging layer (Hermes) untuk ambil data & kirim keputusan
+APPROVAL_API_TOKEN=<token-acak-panjang>
+APPROVAL_API_ALLOWED_IPS=192.168.0.68        # IP server Hermes (opsional)
+
+# Hermes webhook — Laravel POST ke sini saat ada pengajuan/approve
+APPROVAL_WEBHOOK_URL=http://192.168.0.68:8644/webhooks/leave-approval
+APPROVAL_WEBHOOK_SECRET=<secret-dari-hermes-webhook-subscribe>
 ```
 
-Lalu: `php8.3 artisan config:clear && php8.3 artisan storage:link`
+Generate token:
+```bash
+php8.3 -r "echo bin2hex(random_bytes(24)), PHP_EOL;"
+```
 
-### Step 4 — Verifikasi koneksi DB
+### A2. Verifikasi
 
 ```bash
-cd /path/to/hr-cii
-php8.3 artisan tinker --execute="DB::connection('cii')->getPdo(); echo 'DB OK';"
+php8.3 artisan config:clear
+php8.3 artisan route:list --path=api/approval
+
+# Tanpa token harus 401
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8010/api/approval/pending
+
+# Dengan token harus 200 (butuh DB hidup)
+curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:8010/api/approval/pending | head -c 300
 ```
 
-### Step 5 — Install Hermes skill
+### A3. Endpoint yang tersedia
+
+| Method | Path | Auth | Fungsi |
+|--------|------|------|--------|
+| GET | `/api/approval/pending` | Bearer | list pengajuan eligible + pesan siap kirim |
+| POST | `/api/approval/trigger` | Bearer | payload 1 pengajuan (`{token}`) |
+| POST | `/api/approval/decision` | Bearer | proses keputusan (`{sender, message}`) |
+
+---
+
+## Bagian B — Setup di Server Hermes (messaging layer)
+
+### B1. Install skill + scripts
 
 ```bash
-mkdir -p ~/.hermes/skills/approval-manager
-cp docs/hermes/skill/approval-manager.SKILL.md ~/.hermes/skills/approval-manager/SKILL.md
+mkdir -p ~/.hermes/skills/approval-manager ~/.hermes/scripts
+
+cp <repo>/docs/hermes/skill/approval-manager.SKILL.md ~/.hermes/skills/approval-manager/SKILL.md
+cp <repo>/docs/hermes/scripts/approval-webhook.py   ~/.hermes/scripts/
+cp <repo>/docs/hermes/scripts/approval-outbound.py  ~/.hermes/scripts/
+cp <repo>/docs/hermes/scripts/approval-inbound.py   ~/.hermes/scripts/
+cp <repo>/docs/hermes/scripts/approval_env.py       ~/.hermes/scripts/
+chmod +x ~/.hermes/scripts/approval-*.py
 ```
 
-Atau via Hermes tooling (dari repo hr-cii):
+### B2. Config messaging layer
 
 ```bash
-cp /home/hermes/workspace/hr-cii/docs/hermes/skill/approval-manager.SKILL.md \
-   ~/.hermes/skills/approval-manager/SKILL.md
+cp <repo>/docs/hermes/scripts/approval-wa.env.example ~/.hermes/approval-wa.env
+chmod 600 ~/.hermes/approval-wa.env
 ```
 
-### Step 6 — Install cron script
+Isi `~/.hermes/approval-wa.env`:
+
+```env
+HR_CII_API_URL=http://192.168.0.68:8010
+APPROVAL_API_TOKEN=<harus sama dengan .env Laravel>
+WA_BRIDGE_URL=http://127.0.0.1:3000
+WA_JITTER_SECONDS=15
+WA_MIN_GAP_SECONDS=15
+WA_MAX_PER_MINUTE=6
+```
+
+### B3. Enable webhook platform
 
 ```bash
-mkdir -p ~/.hermes/scripts
-cp docs/hermes/scripts/check-leave-approval.sh ~/.hermes/scripts/
-chmod +x ~/.hermes/scripts/check-leave-approval.sh
+hermes config set platforms.webhook.enabled true
+hermes config set platforms.webhook.extra.port 8644
+hermes config set platforms.webhook.extra.secret <secret-acak>
+
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+systemctl --user daemon-reload
+systemctl --user restart hermes-gateway
+curl -s http://localhost:8644/health
+# → {"status": "ok", "platform": "webhook"}
 ```
 
-Edit `HR_CII_PATH` di script jika path repo berbeda:
+### B4. Subscribe route webhook
 
 ```bash
-#!/bin/bash
-# Hermes cron script: cek pending leave approval dan kirim notif WA
-HR_CII_PATH="/path/to/hr-cii"          # ← SESUAIKAN
-cd "$HR_CII_PATH" || exit 1
-php8.3 artisan approval:check-pending 2>&1
+hermes webhook subscribe leave-approval \
+  --description "Laravel trigger: kirim notif WA ke approver cuti" \
+  --script "approval-webhook.py" \
+  --deliver local \
+  --secret <secret-sama-dengan-B3>
 ```
 
-### Step 7 — Register Hermes cron job
+Catat URL + secret yang dikembalikan → masukkan ke `.env` Laravel
+(`APPROVAL_WEBHOOK_URL`, `APPROVAL_WEBHOOK_SECRET`).
+
+### B5. Cron safety net (opsional tapi disarankan)
 
 ```bash
 hermes cron create "every 5h" \
-  --name "leave-approval-check" \
-  --script "check-leave-approval.sh" \
+  --name "leave-approval-sweep" \
+  --script "approval-outbound.py" \
   --no-agent \
-  --deliver "whatsapp:<nomor_admin>" \
-  --workdir "/path/to/hr-cii"
+  --deliver local
 ```
 
-`--no-agent` → script stdout dikirim langsung, tanpa LLM. Logic sudah di PHP.
+`--no-agent` → script stdout dikirim langsung, tanpa LLM.
 
-Cek: `hermes cron list`
-Ubah interval: `hermes cron edit 0a23a91b534f`
-Pause: `hermes cron pause 0a23a91b534f` | Resume: `hermes cron resume 0a23a91b534f`
-
-### Step 8 — Inbound WA
-
-Hermes WA gateway menerima pesan masuk → agent auto-load skill `approval-manager`
-(lihat SKILL.md bagian "Trigger Pattern") → jalankan:
+### B6. Verifikasi
 
 ```bash
-cd /path/to/hr-cii
-php8.3 artisan tinker --execute="
-  use App\Services\ApprovalWa\InboundApprovalProcessor;
-  \$phone = '<nomor_pengirim>';
-  echo InboundApprovalProcessor::handle(\$phone, '<pesan>');
-"
-```
+# Tanpa kirim WA
+python3 ~/.hermes/scripts/approval-outbound.py --dry-run
 
-Lalu Hermes kirim balasan konfirmasi via WA bridge:
-
-```bash
-curl -X POST http://localhost:3000/send \
-  -H "Content-Type: application/json" \
-  -d '{"chatId":"<62xxx>@s.whatsapp.net","message":"<balasan>"}'
-```
-
-Atau pakai `WaGateway::send()`.
-
-### Step 9 — Test (TANPA kirim pesan!)
-
-```bash
-cd /path/to/hr-cii
-php8.3 artisan approval:check-pending --dry-run
-```
-
-`--dry-run` hanya print pesan, **tidak mengirim**. Selalu pakai ini sebelum live run.
-
----
-
-## Format Pesan
-
-### Outbound (Notifikasi ke Approver)
-
-```
-╔══════════════════════════╗
-🗂 *PENGAJUAN CUTI - PERLU APPROVAL*
-╚══════════════════════════╝
-
-📋 *ID Pengajuan:* #859
-👤 *Pemohon:* C-00825
-📅 *Tanggal:* 2026-10-29 s/d 2026-10-30 (2 hari)
-📝 *Alasan:* Acara Gereja
-🔢 *Level Approval:* 2
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-Yth. *RAKHMAT BUDIYONO*,
-Silakan berikan keputusan Anda:
-
-✅ *Setujui* → https://wa.me/6287731665679?text=%2Fapprove+859
-❌ *Tolak* → https://wa.me/6287731665679?text=%2Ftolak+859+%3Calasan%3E
-
-Atau balas langsung:
-• */approve 859*
-• */tolak 859 <alasan>*
-
-⚠️ Pastikan ID pengajuan sesuai sebelum membalas.
-```
-
-Approver tap link → WA terbuka dengan teks sudah terisi → tinggal kirim.
-
-### Inbound — Format yang Diterima
-
-```
-/approve 849
-/approve #849
-APPROVE 849
-/tolak 849 anggaran over budget
-REJECT 849 anggaran over budget
-```
-
-Regex: `/^(?:APPROVE|\/approve)\s+#?(\d+)$/i` dan
-`/^(?:REJECT|\/tolak)\s+#?(\d+)(?:\s+(.+))?$/i`
-
-### Konfirmasi Balik
-
-```
-✔️ *Konfirmasi Keputusan*
-
-Pengajuan cuti *#859* telah *✅ DISETUJUI*.
-Oleh: RAKHMAT BUDIYONO
-Waktu: 10/11/2026 15:30 WIB
-
-Terima kasih.
+# Health bridge WA
+curl -s http://127.0.0.1:3000/health
 ```
 
 ---
 
-## Normalisasi Nomor HP
+## Bagian C — Inbound (approver balas via WA)
 
-`PhoneFormatter::normalize()` — sumber: `PKWT.HP`
+Hermes WA gateway menerima pesan → agent load skill `approval-manager` →
+jalankan:
 
-| Input | Output |
-|-------|--------|
-| `081234567890` | `6281234567890` ✅ |
-| `+6281234567890` | `6281234567890` ✅ |
-| `6281234567890` | `6281234567890` ✅ |
-| `81234567890` | `6281234567890` ✅ |
-| `0812-3456-7890` | `6281234567890` ✅ (separator dihapus) |
-| `12345` | `null` ⚠️ dilewati + di-log |
+```bash
+python3 ~/.hermes/scripts/approval-inbound.py \
+  --phone "<nomor_pengirim>" \
+  --message "<pesan asli approver>"
+```
 
-Validasi: `/^628[0-9]{8,12}$/`
+Script ini:
+1. POST ke Laravel `/api/approval/decision`
+2. Laravel validasi (approver berwenang? level giliran? sudah diproses?)
+3. Laravel update DB dalam transaksi + trigger notif level berikutnya
+4. Script kirim `reply` dari response ke approver via WA bridge
 
-Nomor invalid → request di-skip, di-log sebagai warning, tidak dikirim.
+Format yang diterima approver:
+
+| Command | Status sebelum | Hasil |
+|---------|---------------|-------|
+| `/approve <ID>` | pending | approved, progress maju, notif level berikutnya |
+| `/tolak <ID> <alasan>` | pending | rejected, sibling rows void (chain berhenti) |
+| `/batal <ID> <alasan>` | approved | rejected, **saldo cuti dikembalikan** |
 
 ---
 
-## Keamanan
+## Bagian D — Skema Data (referensi)
 
-1. **Otorisasi 2 lapis** — nomor HP → lookup `PKWT.HP` → cek NPK ada di `approval_rules.approval_id`
-2. **Sequential enforcement** — approver hanya bisa memutuskan row yang `approval_id`-nya dia
-3. **Anti salah-ID** — NPK approver harus match persis `leave_requests.approval_id` row tersebut
-4. **Whitelist inbound** — nomor yang tidak terdaftar di `PKWT.HP` sebagai approver → ditolak
-5. `WA_WEBHOOK_SECRET` — header `X-WA-Token` untuk autentikasi endpoint webhook
+Satu pengajuan cuti = **N row** di `leave_requests`, satu per approver.
+
+| Kolom | Arti |
+|-------|------|
+| `token` | pengenal pengajuan (sama untuk semua row satu pengajuan) |
+| `approval_id` | NPK approver yang bertanggung jawab pada row ini |
+| `approval_level` | level approver ini dalam chain (1, 2, 3, ...) |
+| `approval_progress` | pointer level aktif (di-update saat level approve) |
+| `status` | pending / approved / rejected |
+| `void` | string `'false'` (bukan NULL) |
+
+Aturan sequential: level N hanya dikabari jika semua level 1..N-1 `approved`.
+Rejected menghentikan chain — level di atasnya tidak dikabari.
 
 ---
 
@@ -333,18 +222,10 @@ Nomor invalid → request di-skip, di-log sebagai warning, tidak dikirim.
 
 | Gejala | Cek |
 |--------|-----|
-| Cron jalan tapi "No pending requests" | Filter sequential terlalu ketat? Cek status row level sebelumnya |
-| "Failed to send" | `WA_GATEWAY_URL` benar? Bridge health: `curl http://localhost:3000/health` |
-| "invalid/missing phone" | `PKWT.HP` kosong untuk NPK itu — isi di master karyawan |
-| Approver unauthorized | `PKWT.HP` ≠ format, atau NPK tidak ada di `approval_rules` |
-| Notifikasi ke orang salah | Cek `approval_id` di row — harus NPK approver, bukan rules_id |
-| Timeout query | `PKWT` sangat besar & tanpa index — query dipecah (sudah di `LeaveApprovalQuery`) |
-| SSPI error | SQL Server masih Windows Auth mode — ubah ke mixed mode + buat SQL login |
-
----
-
-## Catatan Keamanan Penting
-
-> Command `approval:check-pending` (tanpa `--dry-run`) **langsung mengirim pesan WA**.
-> Selalu jalankan `--dry-run` dulu untuk verifikasi. Kron Hermes memakai mode ini,
-> jadi，要是 cron terpicu otomatis, pesan WILL terkirim.
+| Webhook 401 | Secret tidak sama antara `hermes config`/`webhook subscribe` dan `APPROVAL_WEBHOOK_SECRET` |
+| Webhook 200 tapi `{"status":"ignored","reason":"script"}` | Normal — script selesai tanpa perlu kirim (tidak ada yang eligible), tidak memicu LLM |
+| Laravel 401 saat dipanggil script | `APPROVAL_API_TOKEN` beda antara `~/.hermes/approval-wa.env` dan `.env` Laravel |
+| Script timeout di webhook | Laravel lambat (DB tidak terjangkau) — cek `DB_CII_LOGIN_TIMEOUT` |
+| Tidak ada WA terkirim | `curl http://127.0.0.1:3000/health` → harus `{"status":"connected"}` |
+| WA session logged out | Bridge perlu re-auth (scan QR), cek `~/.hermes/whatsapp/bridge.log` |
+| Notif dobel | Cron sweep + webhook trigger sama-sama jalan → normal, cron hanya safety net |

@@ -1,200 +1,120 @@
-# Approval Cuti via WhatsApp — Dokumentasi
+# Approval Cuti via WhatsApp
 
-> **Untuk setup di server Hermes lain → [`hermes/HERMES_SETUP.md`](hermes/HERMES_SETUP.md)**
+> **Setup/deploy → [`hermes/HERMES_SETUP.md`](hermes/HERMES_SETUP.md)**
 
-Dokumen ini menjelaskan logika bisnis. Setup/install ada di `hermes/HERMES_SETUP.md`.
+## Arsitektur (Opsi C — decoupling)
 
----
+**Laravel = business logic. Hermes = messaging layer.**
 
-## Ringkasan
+- Laravel: validasi approver, filter sequential, update status, potong saldo,
+  finalisasi overtime. **Tidak pernah mengirim WhatsApp sendiri.**
+- Hermes: kirim pesan, terima pesan, teruskan keputusan.
+  **Tidak pernah query DB dan tidak memutuskan validitas approval.**
 
-Sistem approval cuti via WhatsApp 2 arah:
-
-- **Outbound** — Hermes cron (tiap 5 jam) cek `leave_requests` berstatus `pending`,
-  kirim notif WhatsApp ke approver yang gilirannya
-- **Inbound** — approver balas `/approve <ID>` atau `/tolak <ID> <alasan>`,
-  Hermes proses, update DB, balas konfirmasi
-
----
+```
+Laravel                                Hermes
+  submit / approve ──POST webhook──────► approval-webhook.py
+                        ──GET trigger──► (ambil payload)
+                        ────────────────► WA bridge → approver
+  GET /approval/pending ◄────cron─────── approval-outbound.py
+  POST /approval/decision ◄───inbound── approval-inbound.py
+```
 
 ## Skema DB
 
-Satu pengajuan cuti menghasilkan **N row** di `leave_requests` — satu per approver
-dalam chain. Semua row satu pengajuan punya `token` yang sama.
+Satu pengajuan = **N row** di `leave_requests` (satu per approver), semua row
+share `token` yang sama.
 
-| Kolom | Isi | Arti |
-|-------|-----|------|
-| `id` | auto | Primary key row ini |
-| `token` | string random | Pengenal **pengajuan** (bukan row) |
-| `NPK` | NPK pemohon | Yang mengajukan |
-| `approval_id` | NPK approver | **Approver bertanggung jawab untuk row ini** |
-| `approval_level` | int | Level approver dalam chain (1, 2, 3, ...) |
-| `approval_progress` | int | Selalu `1` saat dibuat |
-| `status` | pending/approved/rejected | Status keputusan row ini |
-| `void` | `'false'` | Flag void (string, bukan NULL) |
+| Kolom | Arti |
+|-------|------|
+| `token` | pengenal pengajuan |
+| `approval_id` | NPK approver untuk row ini |
+| `approval_level` | level approver dalam chain |
+| `approval_progress` | pointer level aktif |
+| `status` | pending / approved / rejected |
+| `void` | `'false'` (string) |
 
-Pendukung: `approval_rules` (`approval_id` = NPK approver, `level`, `rules_id`),
-`PKWT` (`NPK`, `NAMA`, `HP` — sumber nomor WhatsApp).
+**Sequential:** level N hanya dikabari jika level 1..N-1 sudah `approved`.
+**Rejected menghentikan chain** — level di atasnya tidak dikabari.
 
----
-
-## Aturan Sequential (Inti)
-
-```
-Row level 1 pending  → notif ke NPK level 1
-Row level 2 pending  → notif ke NPK level 2 HANYA jika row level 1 = approved
-Row level 3 pending  → notif ke NPK level 3 HANYA jika row level 1 & 2 = approved
-```
-
-**Rejected menghentikan chain.** Jika row level N di-reject, row level > N di chain
-yang sama tidak akan menerima notifikasi — walau statusnya masih `pending` di DB.
-
-Implementasi: `LeaveApprovalQuery::getPendingForNotification()`
-- group row pending by `token`
-- cek `statusMap[token][1..N-1] === 'approved'` untuk semua level sebelumnya
-- skip chain jika ada level yang `rejected`
-
-> **Perbaikan bug (commit `a2f7c14`):** sebelumnya notifikasi dikirim ke semua
-> approver dalam chain sekaligus. Sekarang satu-per-sesuai level.
-
----
-
-## Komponen Kode
+## Komponen Kode (Laravel)
 
 | File | Fungsi |
 |------|--------|
-| `app/Services/ApprovalWa/LeaveApprovalNotifier.php` | **Notifikasi per-token** — pilih level yang giliran, format, kirim |
-| `app/Services/ApprovalWa/LeaveApprovalEffects.php` | Efek approve/reject: advance progress, finalisasi (potong saldo + overtime), void sibling rows |
-| `app/Services/ApprovalWa/LeaveApprovalQuery.php` | Query pending, filter sequential, lookup approver, validasi, update DB |
-| `app/Services/ApprovalWa/PhoneFormatter.php` | Normalisasi & validasi nomor HP (`08xxx`/`+62xxx`/`8xxx` → `62xxx`) |
-| `app/Services/ApprovalWa/WaMessageFormatter.php` | Format pesan outbound (dengan deep link) + konfirmasi + error |
-| `app/Services/ApprovalWa/WaGateway.php` | POST ke WA bridge (`/send`, payload `chatId` JID) |
-| `app/Services/ApprovalWa/InboundApprovalProcessor.php` | Parse `/approve`/`/tolak`, validasi, update DB, cascade notify |
-| `app/Console/Commands/CheckPendingLeaveApproval.php` | `approval:check-pending [--dry-run]` — sweep semua pending |
-| `app/Console/Commands/NotifyLeaveApprovalToken.php` | `approval:notify-token <token> [--dry-run]` — notif 1 pengajuan |
-| `app/Http/Controllers/Api/ApprovalWebhookController.php` | `POST /api/approval/webhook` (opsional, kalau gateway pakai webhook) |
-| `app/Console/Kernel.php` | Schedule Laravel: `approval:check-pending` tiap 5 jam (safety net) |
+| `app/Services/ApprovalWa/LeaveApprovalQuery.php` | query pending, filter sequential, conditional UPDATE, validasi approver |
+| `app/Services/ApprovalWa/LeaveApprovalEffects.php` | advance progress, finalisasi (saldo + overtime), void siblings, reverse |
+| `app/Services/ApprovalWa/LeaveApprovalNotifier.php` | pilih level eligible, format pesan, kirim (mode single-server) |
+| `app/Services/ApprovalWa/ApprovalWebhookTrigger.php` | **trigger Hermes via webhook** (HMAC V2) |
+| `app/Services/ApprovalWa/ApprovalApiPayload.php` | payload JSON untuk messaging layer |
+| `app/Services/ApprovalWa/PhoneFormatter.php` | normalisasi HP (`08xxx`/`+62xxx` → `62xxx`) |
+| `app/Services/ApprovalWa/WaMessageFormatter.php` | format pesan + deep link |
+| `app/Services/ApprovalWa/WaGateway.php` | kirim ke bridge (fallback mode) |
+| `app/Services/ApprovalWa/WaSendThrottle.php` | jitter + rate limit (fallback mode) |
+| `app/Services/ApprovalWa/InboundApprovalProcessor.php` | parse, validasi, transaksi, cascade |
+| `app/Http/Controllers/Api/ApprovalApiController.php` | `pending` / `trigger` / `decision` |
+| `app/Http/Middleware/AuthenticateApprovalApi.php` | bearer token + IP allowlist |
+| `app/Console/Commands/CheckPendingLeaveApproval.php` | `approval:check-pending` (sweep) |
+| `app/Console/Commands/NotifyLeaveApprovalToken.php` | `approval:notify-token <token>` |
 
-### Trigger Notifikasi
+## Trigger Notifikasi
 
 | Event | Hook | Efek |
 |-------|------|------|
-| Karyawan submit pengajuan | `PengajuanCutiController::store()` | Notif level 1 **langsung** |
-| Approve via web portal | `LeaveApprovalController::approve()` | Notif level N+1 **langsung** |
-| Approve via WhatsApp | `InboundApprovalProcessor::handle()` | Notif level N+1 **langsung** |
-| Cron tiap 5 jam | `approval:check-pending` | Sweep semua pending, group by token, safety net |
+| Submit pengajuan | `PengajuanCutiController::store()` | trigger Hermes → notif level 1 |
+| Approve web portal | `LeaveApprovalController::approve()` | trigger Hermes → notif level N+1 |
+| Approve via WA | `InboundApprovalProcessor::handle()` | trigger Hermes → notif level N+1 |
+| Cron 5 jam | `approval:check-pending` / `approval-outbound.py` | safety net |
 
-Semua notifikasi per-token melewati `LeaveApprovalNotifier::pickEligibleLevel()` —
-hanya level yang "giliran" yang dikabari.
-
-### Artefak Hermes
-
-| File | Target |
-|------|--------|
-| `docs/hermes/skill/approval-manager.SKILL.md` | `~/.hermes/skills/approval-manager/SKILL.md` |
-| `docs/hermes/scripts/check-leave-approval.sh` | `~/.hermes/scripts/check-leave-approval.sh` |
-
----
+Semua setelah `DB::commit()` — tidak ada notif untuk data yang gagal disimpan.
 
 ## Command
 
 ```bash
-# Sweep semua pending (cron / safety net)
+# Sweep semua pending (safety net)
 php8.3 artisan approval:check-pending --dry-run
 php8.3 artisan approval:check-pending
 
-# Notifikasi 1 pengajuan (by token)
+# Notifikasi 1 pengajuan
 php8.3 artisan approval:notify-token <token> --dry-run
 php8.3 artisan approval:notify-token <token>
 ```
 
-> ⚠️ Tanpa `--dry-run` **langsung mengirim**. Selalu dry-run dulu saat verifikasi.
+> ⚠️ Tanpa `--dry-run` **langsung mengirim**.
 
----
-
-## Format Pesan
-
-### Outbound
+## Inbound — Diterima
 
 ```
-╔══════════════════════════╗
-🗂 *PENGAJUAN CUTI - PERLU APPROVAL*
-╚══════════════════════════╝
-
-📋 *ID Pengajuan:* #859
-👤 *Pemohon:* C-00825
-📅 *Tanggal:* 2026-10-29 s/d 2026-10-30 (2 hari)
-📝 *Alasan:* Acara Gereja
-🔢 *Level Approval:* 2
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-Yth. *RAKHMAT BUDIYONO*,
-Silakan berikan keputusan Anda:
-
-✅ *Setujui* → https://wa.me/6287731665679?text=%2Fapprove+859
-❌ *Tolak* → https://wa.me/6287731665679?text=%2Ftolak+859+%3Calasan%3E
-
-Atau balas langsung:
-• */approve 859*
-• */tolak 859 <alasan>*
-
-⚠️ Pastikan ID pengajuan sesuai sebelum membalas.
-```
-
-### Inbound — Diterima
-
-```
-/approve 849          /approve #849          APPROVE 849
-/tolak 849 alasan     /tolak 849 alasan     REJECT 849 alasan
-/batal 849 alasan     /batal 849 alasan     BATAL 849 alasan
+/approve 849        APPROVE 849        /approve #849
+/tolak 849 alasan   REJECT 849 alasan
+/batal 849 alasan   BATAL 849 alasan
 ```
 
 | Command | Status sebelum | Hasil |
 |---------|---------------|-------|
-| `/approve <ID>` | `pending` | → `approved`, advance progress, notif level berikutnya |
-| `/tolak <ID> <alasan>` | `pending` | → `rejected`, void sibling rows (chain berhenti) |
-| `/batal <ID> <alasan>` | `approved` | → `rejected`, **saldo cuti dikembalikan**, un-void siblings |
+| `/approve <ID>` | pending | approved, progress maju, notif level berikutnya |
+| `/tolak <ID> <alasan>` | pending | rejected, sibling rows void |
+| `/batal <ID> <alasan>` | approved | rejected, **saldo dikembalikan** |
 
-`/batal` ditolak kalau level berikutnya sudah bertindak (chain sudah maju).
+`/batal` ditolak kalau level berikutnya sudah bertindak.
 
-### Atomicity
+## Keamanan & Konsistensi
 
-Approve/reject jalan dalam `DB::connection('cii')->beginTransaction()`. Status
-di-write dengan conditional UPDATE (`WHERE id = ? AND status = 'pending'`), jadi
-dua approval bersamaan tidak bisa dua-duanya lolos — yang kedua dapat 0 affected
-rows dan **abort sebelum** ada perubahan saldo.
-
-### Konfirmasi
-
-```
-✔️ *Konfirmasi Keputusan*
-
-Pengajuan cuti *#859* telah *✅ DISETUJUI*.
-Oleh: RAKHMAT BUDIYONO
-Waktu: 10/11/2026 15:30 WIB
-
-Terima kasih.
-```
-
----
-
-## Keamanan
-
-1. **Otorisasi 2 lapis** — nomor HP → `PKWT.HP` → cek NPK ada di `approval_rules.approval_id`
-2. **Sequential enforcement** — approver hanya bisa memutuskan row dengan `approval_id` = NPK-nya
-3. **Anti salah-ID** — match persis, tidak ada fallback ke request lain
-4. **Nomor tidak terdaftar** → ditolak
-5. `WA_WEBHOOK_SECRET` untuk autentikasi endpoint webhook
-
----
+1. **Otorisasi 2 lapis** — HP → `PKWT.HP` → NPK ada di `approval_rules.approval_id`
+2. **Anti salah-ID** — NPK approver harus match `leave_requests.approval_id` row itu
+3. **Sequential enforcement** — tidak bisa skip level
+4. **Atomic** — conditional UPDATE (`WHERE status='pending'`) + transaction,
+   mencegah dobel potong saldo saat double-tap/retry
+5. **API auth** — bearer token + optional IP allowlist (fail-closed kalau token kosong)
+6. **Webhook auth** — HMAC-SHA256 V2 (`X-Webhook-Timestamp` + `X-Webhook-Signature-V2`)
+7. **Anti-ban** — jitter 15s + gap 15s + max 6 pesan/menit
 
 ## Troubleshooting
 
 | Gejala | Cek |
 |--------|-----|
-| "No pending requests" padahal ada | Filter sequential — cek status row level sebelumnya |
-| "Failed to send" | `WA_GATEWAY_URL` benar? `curl http://localhost:3000/health` |
-| "invalid/missing phone" | `PKWT.HP` kosong untuk NPK itu |
-| Approver unauthorized | `PKWT.HP` format salah, atau NPK tidak ada di `approval_rules` |
-| SSPI error | SQL Server masih Windows Auth — ubah mixed mode + buat SQL login |
-| Timeout query | `PKWT` besar tanpa index — query sudah dipecah di `LeaveApprovalQuery` |
+| "No pending" padahal ada | Filter sequential — cek status level sebelumnya |
+| Failed to send | `curl http://127.0.0.1:3000/health` |
+| invalid/missing phone | `PKWT.HP` kosong/format salah |
+| SSPI error | SQL Server masih Windows Auth — pindah ke mixed mode |
+| Webhook 401 | Secret beda antara Laravel dan Hermes |
+| Laravel 401 | `APPROVAL_API_TOKEN` beda |

@@ -125,14 +125,12 @@ class InboundApprovalProcessor
         }
 
         // ── Cascade notify level berikutnya (setelah commit, supaya tidak buka lock) ──
+        // Opsi C: Laravel trigger messaging layer (Hermes) via webhook.
         if ($decision === 'approve') {
             try {
                 $token = $validation['request']->token ?? null;
                 if (!empty($token)) {
-                    $notifyResult = LeaveApprovalNotifier::notifyNextLevel($token);
-                    foreach ($notifyResult['skipped'] as $skipReason) {
-                        Log::warning("[InboundApproval] token $token: $skipReason");
-                    }
+                    ApprovalWebhookTrigger::notify($token, 'approve');
                 }
             } catch (\Throwable $e) {
                 Log::error("[InboundApproval] cascade notify: " . $e->getMessage());

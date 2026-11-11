@@ -47,6 +47,24 @@ return [
         'master_key' => env('FONNTE_MASTER_KEY'),
     ],
 
+    // Approval API (Opsi C) — messaging layer Hermes ↔ business logic Laravel.
+    // Token WAJIB diset; kalau kosong endpoint menolak semua request (fail-closed).
+    'approval_api' => [
+        'token'       => env('APPROVAL_API_TOKEN', ''),
+        'allowed_ips' => array_filter(array_map(
+            'trim',
+            explode(',', (string) env('APPROVAL_API_ALLOWED_IPS', ''))
+        )),
+        // URL messaging layer (Hermes) yang menerima trigger notifikasi.
+        // Kosong = mode single-server (Laravel kirim langsung ke bridge lokal).
+        'notify_url'  => env('APPROVAL_NOTIFY_URL', ''),
+        // Hermes Webhook platform — cara Laravel memberi tahu Hermes
+        // agar ia langsung mengirim notif (bukan menunggu cron).
+        // Contoh: http://192.168.0.68:8644/webhooks/leave-approval
+        'webhook_url'    => env('APPROVAL_WEBHOOK_URL', ''),
+        'webhook_secret' => env('APPROVAL_WEBHOOK_SECRET', ''),
+    ],
+
     'node_exporter' => [
         'url'     => env('NODE_EXPORTER_URL', 'http://192.168.1.240:9100/metrics'),
         'timeout' => env('NODE_EXPORTER_TIMEOUT', 3), // detik

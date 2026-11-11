@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
 use App\Models\Overtime;
+use App\Services\ApprovalWa\ApprovalWebhookTrigger;
 use App\Services\ApprovalWa\LeaveApprovalEffects;
-use App\Services\ApprovalWa\LeaveApprovalNotifier;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -552,14 +552,16 @@ class LeaveApprovalController extends Controller
     }
 
     /**
-     * Kirim notifikasi WhatsApp ke approver level berikutnya untuk satu pengajuan.
+     * Trigger messaging layer (Hermes) untuk mengirim notifikasi ke approver
+     * level berikutnya.
      *
-     * Dipanggil setelah approve (web portal / admin). Notifikasi hanya dikirim ke
-     * level yang "giliran" — level N hanya dikabari bila semua level 1..N-1 sudah
-     * approved. Kalau ada level yang rejected, chain berhenti dan tidak ada notif.
+     * Opsi C: Laravel tidak mengirim WA sendiri — dia trigger messaging layer
+     * via webhook. Messaging layer mengambil payload dari /api/approval/trigger
+     * lalu mengirim ke WA.
      *
      * Kegagalan notifikasi tidak boleh menggagalkan proses approve — karena itu
-     * semua error ditangkap dan hanya di-log.
+     * semua error ditangkap dan hanya di-log. Cron safety net akan mengambilnya
+     * nanti kalau messaging layer sempat tidak reachable.
      */
     private function notifyNextApprover(?string $token): void
     {
@@ -568,13 +570,9 @@ class LeaveApprovalController extends Controller
         }
 
         try {
-            $result = LeaveApprovalNotifier::notifyNextLevel($token);
-
-            foreach ($result['skipped'] as $reason) {
-                Log::warning("[ApprovalNotifier] token $token: $reason");
-            }
+            ApprovalWebhookTrigger::notify($token, 'approve');
         } catch (\Throwable $e) {
-            Log::error("[ApprovalNotifier] token $token: " . $e->getMessage());
+            Log::error("[ApprovalWebhook] token $token: " . $e->getMessage());
         }
     }
 
