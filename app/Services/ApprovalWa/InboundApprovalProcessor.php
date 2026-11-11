@@ -8,18 +8,18 @@ class InboundApprovalProcessor
 {
     /**
      * Parse inbound WhatsApp message.
-     * Expected format:
+     * Accepted formats:
      *   APPROVE <id>
+     *   /approve <id>
      *   REJECT <id> <optional reason>
-     *
-     * Returns null if message doesn't match expected pattern.
+     *   /tolak <id> <optional reason>
      */
     public static function parse(string $message): ?array
     {
         $message = trim($message);
 
-        // APPROVE 123
-        if (preg_match('/^APPROVE\s+#?(\d+)$/i', $message, $m)) {
+        // APPROVE / /approve
+        if (preg_match('/^(?:APPROVE|\/approve)\s+#?(\d+)$/i', $message, $m)) {
             return [
                 'decision' => 'approve',
                 'id'       => (int) $m[1],
@@ -27,12 +27,12 @@ class InboundApprovalProcessor
             ];
         }
 
-        // REJECT 123 optional reason
-        if (preg_match('/^REJECT\s+#?(\d+)(?:\s+(.+))?$/i', $message, $m)) {
+        // REJECT / /tolak with optional reason
+        if (preg_match('/^(?:REJECT|\/tolak)\s+#?(\d+)(?:\s+(.+))?$/i', $message, $m)) {
             return [
                 'decision' => 'reject',
                 'id'       => (int) $m[1],
-                'reason'   => $m[2] ?? null,
+                'reason'   => isset($m[2]) ? trim($m[2]) : null,
             ];
         }
 
@@ -41,73 +41,43 @@ class InboundApprovalProcessor
 
     /**
      * Full inbound flow:
-     *  1. Parse message
-     *  2. Find approver by phone number (lookup PKWT.HP → NPK → approval_rules)
-     *  3. Validate approver has right to decide on this request
-     *  4. Update DB
-     *  5. Return response message
-     *
-     * @param string $senderPhone  Normalized phone number of the sender (628xxx)
-     * @param string $message      Raw WhatsApp message text
-     * @return string              Reply message to send back
+     * 1. Parse message
+     * 2. Validate approver + request
+     * 3. Update DB
+     * 4. Return reply message
      */
     public static function handle(string $senderPhone, string $message): string
     {
-        // 1. Parse
         $parsed = self::parse($message);
         if (!$parsed) {
-            return "⚠️ Format tidak dikenali.\n\nGunakan:\n- APPROVE <ID>\n- REJECT <ID> <alasan>";
+            return "⚠️ Format tidak dikenali.\n\nGunakan:\n- /approve <ID>\n- /tolak <ID> <alasan>";
         }
 
         $requestId = $parsed['id'];
         $decision  = $parsed['decision'];
         $reason    = $parsed['reason'];
 
-        // 2. Find approver NPK by phone number
-        $approver = self::findApproverByPhone($senderPhone);
-        if (!$approver) {
-            Log::warning("[InboundApproval] Unknown sender phone: $senderPhone");
-            return "⛔ Nomor Anda ($senderPhone) tidak terdaftar sebagai approver di sistem.";
+        // Normalize phone
+        $phone = PhoneFormatter::normalize($senderPhone);
+        if (!PhoneFormatter::isValid($phone)) {
+            Log::warning("[InboundApproval] Invalid phone format: $senderPhone");
+            return "⛔ Nomor pengirim tidak valid: $senderPhone";
         }
 
-        $approverNpk  = $approver->NPK;
-        $approverName = $approver->NAMA ?? $approverNpk;
-
-        // 3. Validate
-        $validation = LeaveApprovalQuery::validateApproverForRequest($requestId, $approverNpk);
+        // Validate
+        $validation = LeaveApprovalQuery::validateApprover($phone, $requestId);
         if (!$validation['valid']) {
+            Log::warning("[InboundApproval] Unauthorized: $phone for #$requestId — {$validation['reason']}");
             return WaMessageFormatter::formatUnauthorized($requestId, $validation['reason']);
         }
 
-        // 4. Update DB
-        LeaveApprovalQuery::updateDecision($requestId, $decision, $reason, $approverNpk);
+        $approver = $validation['approver'];
+        $approverName = $approver->NAMA ?? $approver->NPK;
 
-        // 5. Return confirmation
+        // Update DB
+        LeaveApprovalQuery::updateDecision($requestId, $decision, $reason, $approver->NPK);
+
+        // Return confirmation
         return WaMessageFormatter::formatConfirmation($requestId, $decision, $approverName);
-    }
-
-    /**
-     * Find approver by their phone number.
-     * Looks up PKWT by HP field (normalized), then checks if that NPK is in approval_rules.
-     */
-    private static function findApproverByPhone(string $senderPhone): ?object
-    {
-        // Get all approval_rules NPKs with their phone numbers from PKWT
-        // We normalize on the fly in PHP since SQL Server doesn't have easy regex
-        $rows = \Illuminate\Support\Facades\DB::connection('cii')->select("
-            SELECT DISTINCT ar.approval_id AS NPK, p.NAMA, p.HP
-            FROM approval_rules ar
-            JOIN PKWT p ON p.NPK = ar.approval_id
-            WHERE p.HP IS NOT NULL AND LEN(p.HP) > 5
-        ");
-
-        foreach ($rows as $row) {
-            $normalized = PhoneFormatter::normalize($row->HP);
-            if ($normalized === $senderPhone) {
-                return $row;
-            }
-        }
-
-        return null;
     }
 }

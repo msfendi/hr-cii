@@ -8,17 +8,28 @@ use Illuminate\Support\Facades\Log;
 class LeaveApprovalQuery
 {
     /**
-     * Get all pending leave_requests that have not yet reached their final approval level.
-     * Returns requests where approval_progress < approval_level AND status = 'pending'.
-     * NOTE: Does NOT join PKWT here (slow table). pemohon_nama resolved separately.
+     * Get pending leave_requests that NEED notification NOW.
+     *
+     * Skema: Satu pengajuan cuti menghasilkan N row di leave_requests,
+     * satu per approver dalam chain. Semua row satu pengajuan punya token yang sama.
+     * - approval_id    = NPK approver yang bertanggung jawab untuk row ini
+     * - approval_level = level approver ini dalam chain (1, 2, 3, ...)
+     * - approval_progress = selalu '1' saat baru dibuat; tetap '1' sampai diproses
+     * - status = 'pending' | 'approved' | 'rejected'
+     *
+     * Aturan notifikasi sequential:
+     * - Level 1: kirim jika status = 'pending' (tidak ada prerequisite)
+     * - Level N: kirim hanya jika row level N-1 (token sama) sudah status = 'approved'
+     * - Jangan kirim jika salah satu row sebelumnya 'rejected'
      */
-    public static function getPendingRequests(): array
+    public static function getPendingForNotification(): array
     {
-        return DB::connection('cii')->select("
+        // Ambil semua pending rows beserta info token-group mereka
+        $rows = DB::connection('cii')->select("
             SELECT
                 lr.id,
                 lr.NPK,
-                lr.leave_type_id,
+                lr.token,
                 lr.reason,
                 lr.start_date,
                 lr.end_date,
@@ -27,143 +38,197 @@ class LeaveApprovalQuery
                 lr.approval_level,
                 lr.approval_progress,
                 lr.status,
-                lr.NPK AS pemohon_nama
+                lr.leave_type_id
             FROM leave_requests lr
             WHERE lr.status = 'pending'
               AND (lr.void IS NULL OR lr.void = 'false' OR lr.void = '')
-              AND lr.approval_progress < lr.approval_level
-            ORDER BY lr.id ASC
+            ORDER BY lr.token, lr.approval_level ASC
         ");
-    }
 
-    /**
-     * Get the approver at a specific level for a given leave request.
-     * approval_id on leave_requests maps to approval_id on approval_rules.
-     * We pick the approver whose level = approval_progress + 1 (next level to act).
-     * NOTE: HP fetched separately to avoid slow PKWT join.
-     */
-    public static function getNextApprover(string $approvalId, int $currentProgress): ?object
-    {
-        $nextLevel = $currentProgress + 1;
-
-        // Get approver NPK from approval_rules (fast)
-        $rule = DB::connection('cii')->select("
-            SELECT TOP 1 ar.id, ar.approval_id, ar.name, ar.level, ar.rules_id
-            FROM approval_rules ar
-            WHERE ar.approval_id = ?
-              AND ar.level = ?
-        ", [$approvalId, $nextLevel]);
-
-        if (empty($rule)) {
-            return null;
+        if (empty($rows)) {
+            return [];
         }
 
-        $approver = $rule[0];
+        // Group by token untuk bisa cek prerequisite level sebelumnya
+        $byToken = [];
+        foreach ($rows as $row) {
+            $byToken[$row->token][] = $row;
+        }
 
-        // Fetch HP separately with timeout-safe query
-        $pkwt = DB::connection('cii')->select("
-            SELECT TOP 1 p.HP, p.NAMA
-            FROM PKWT p
-            WHERE p.NPK = ?
-        ", [$approver->approval_id]);
+        // Ambil semua approved rows untuk token yang ada (cek prerequisite)
+        $tokens = array_keys($byToken);
+        $placeholders = implode(',', array_fill(0, count($tokens), '?'));
+        $approvedRows = DB::connection('cii')->select("
+            SELECT token, approval_level, status
+            FROM leave_requests
+            WHERE token IN ($placeholders)
+              AND status IN ('approved', 'rejected')
+        ", $tokens);
 
-        $approver->HP   = $pkwt[0]->HP ?? null;
-        $approver->NAMA = $pkwt[0]->NAMA ?? $approver->name;
+        // Build lookup: token -> level -> status
+        $statusMap = [];
+        foreach ($approvedRows as $r) {
+            $statusMap[$r->token][(int)$r->approval_level] = $r->status;
+        }
 
-        return $approver;
+        // Filter: hanya row yang giliran notifikasi sekarang
+        $toNotify = [];
+        foreach ($byToken as $token => $pendingRows) {
+            foreach ($pendingRows as $row) {
+                $level = (int) $row->approval_level;
+
+                if ($level === 1) {
+                    // Level 1: langsung eligible
+                    $toNotify[] = $row;
+                } else {
+                    // Level N: cek semua level 1..N-1 sudah 'approved'
+                    $allPrevApproved = true;
+                    for ($prevLevel = 1; $prevLevel < $level; $prevLevel++) {
+                        $prevStatus = $statusMap[$token][$prevLevel] ?? null;
+                        if ($prevStatus !== 'approved') {
+                            $allPrevApproved = false;
+                            break;
+                        }
+                    }
+
+                    // Jika ada yang 'rejected' di level sebelumnya, skip seluruh chain
+                    $anyRejected = false;
+                    foreach ($statusMap[$token] ?? [] as $st) {
+                        if ($st === 'rejected') {
+                            $anyRejected = true;
+                            break;
+                        }
+                    }
+
+                    if ($allPrevApproved && !$anyRejected) {
+                        $toNotify[] = $row;
+                    }
+                }
+            }
+        }
+
+        return $toNotify;
     }
 
     /**
-     * Get approver info by NPK (used for inbound validation).
+     * Get approver info (HP, NAMA) for a given NPK from PKWT.
      */
-    public static function getApproverByNpk(string $npk): ?object
+    public static function getApproverInfo(string $npk): ?object
     {
         $result = DB::connection('cii')->select("
-            SELECT TOP 1 ar.approval_id, ar.name, ar.level, ar.rules_id, p.HP
-            FROM approval_rules ar
-            LEFT JOIN PKWT p ON p.NPK = ar.approval_id
-            WHERE ar.approval_id = ?
+            SELECT TOP 1 p.NPK, p.NAMA, p.HP
+            FROM PKWT p
+            WHERE p.NPK = ?
         ", [$npk]);
 
         return $result[0] ?? null;
     }
 
     /**
-     * Find leave_request by ID and validate the approver has the right to approve it.
+     * Validate that a sender (by phone) is authorized to approve a specific request.
+     *
      * Checks:
-     *   - request exists and is pending
-     *   - approver NPK matches the approval_id on the request
-     *   - approver level = approval_progress + 1 (sequential enforcement)
+     * 1. Phone → NPK lookup in PKWT (normalized)
+     * 2. NPK matches approval_id of the target leave_request row
+     * 3. That row is still 'pending'
+     * 4. All previous levels in the chain are 'approved'
      */
-    public static function validateApproverForRequest(int $requestId, string $approverNpk): array
+    public static function validateApprover(string $senderPhone, int $requestId): array
     {
-        $request = DB::connection('cii')->select("
-            SELECT TOP 1 id, NPK, approval_id, approval_level, approval_progress, status
+        // 1. Find the leave_request
+        $req = DB::connection('cii')->select("
+            SELECT TOP 1 id, NPK, token, approval_id, approval_level, approval_progress, status
             FROM leave_requests
-            WHERE id = ? AND status = 'pending' AND void IS NULL
+            WHERE id = ?
         ", [$requestId]);
 
-        if (empty($request)) {
-            return ['valid' => false, 'reason' => 'Pengajuan tidak ditemukan atau bukan status pending.'];
+        if (empty($req)) {
+            return ['valid' => false, 'reason' => "Pengajuan #$requestId tidak ditemukan."];
+        }
+        $req = $req[0];
+
+        if ($req->status !== 'pending') {
+            return ['valid' => false, 'reason' => "Pengajuan #$requestId sudah berstatus: {$req->status}."];
         }
 
-        $req = $request[0];
-        $nextLevel = (int)$req->approval_progress + 1;
-
-        // Check approver is in approval_rules for this request's approval_id at the correct level
-        $rule = DB::connection('cii')->select("
-            SELECT TOP 1 id, level
-            FROM approval_rules
-            WHERE approval_id = ? AND level = ?
-        ", [$approverNpk, $nextLevel]);
-
-        // Also check the request's approval_id group matches this approver's rules_id chain
-        $inChain = DB::connection('cii')->select("
-            SELECT TOP 1 ar2.approval_id
-            FROM approval_rules ar1
-            JOIN approval_rules ar2 ON ar1.rules_id = ar2.rules_id
-            WHERE ar1.approval_id = ? AND ar2.approval_id = ?
-        ", [$req->approval_id, $approverNpk]);
-
-        if (empty($rule) || empty($inChain)) {
-            return [
-                'valid'  => false,
-                'reason' => "Anda tidak berwenang approve pengajuan #$requestId di level ini.",
-            ];
+        // 2. Find approver NPK by phone
+        $approver = self::findApproverByPhone($senderPhone);
+        if (!$approver) {
+            return ['valid' => false, 'reason' => "Nomor Anda tidak terdaftar sebagai approver di sistem."];
         }
 
-        return ['valid' => true, 'request' => $req, 'next_level' => $nextLevel];
+        // 3. Check this approver is the one assigned to this request
+        if ($approver->NPK !== $req->approval_id) {
+            return ['valid' => false, 'reason' => "Anda tidak berwenang memutuskan pengajuan #$requestId."];
+        }
+
+        // 4. Check all previous levels approved (sequential enforcement)
+        $level = (int) $req->approval_level;
+        if ($level > 1) {
+            $prevApproved = DB::connection('cii')->select("
+                SELECT COUNT(*) as cnt
+                FROM leave_requests
+                WHERE token = ?
+                  AND approval_level < ?
+                  AND status = 'approved'
+            ", [$req->token, $level]);
+
+            $approvedCount = (int)($prevApproved[0]->cnt ?? 0);
+            if ($approvedCount < $level - 1) {
+                return ['valid' => false, 'reason' => "Belum semua level sebelumnya menyetujui pengajuan #$requestId."];
+            }
+        }
+
+        return ['valid' => true, 'request' => $req, 'approver' => $approver];
     }
 
     /**
-     * Update leave_request after approval/rejection.
+     * Update leave_request status after decision.
      */
     public static function updateDecision(int $requestId, string $decision, ?string $comment, string $approverNpk): void
     {
-        $status   = strtolower($decision) === 'approve' ? 'approved' : 'rejected';
-        $now      = now()->toDateTimeString();
-
-        // If approved and not yet at final level, increment progress
-        $req = DB::connection('cii')->select(
-            'SELECT TOP 1 approval_level, approval_progress FROM leave_requests WHERE id = ?',
-            [$requestId]
-        )[0];
-
-        $newProgress = (int)$req->approval_progress + 1;
-        $finalStatus = ($status === 'rejected' || $newProgress >= (int)$req->approval_level)
-            ? $status
-            : 'pending'; // still pending, waiting next level
+        $status = strtolower($decision) === 'approve' ? 'approved' : 'rejected';
+        $now    = now()->toDateTimeString();
 
         DB::connection('cii')->update("
             UPDATE leave_requests
-            SET status            = ?,
-                approval_progress = ?,
-                approval_date     = ?,
-                comment           = ?,
-                updated_at        = ?
+            SET status       = ?,
+                approval_date = ?,
+                comment      = ?,
+                updated_at   = ?
             WHERE id = ?
-        ", [$finalStatus, $newProgress, $now, $comment, $now, $requestId]);
+        ", [$status, $now, $comment, $now, $requestId]);
 
-        Log::info("[ApprovalWa] Request #$requestId → $finalStatus by $approverNpk (progress: $newProgress)");
+        Log::info("[ApprovalWa] Request #$requestId → $status by $approverNpk");
+    }
+
+    /**
+     * Find approver by normalized phone number.
+     * Looks up all approver NPKs from approval_rules, then checks PKWT.HP one by one.
+     * Returns NPK + NAMA if found.
+     */
+    public static function findApproverByPhone(string $senderPhone): ?object
+    {
+        // Get distinct approver NPKs from approval_rules
+        $npks = DB::connection('cii')->select("
+            SELECT DISTINCT approval_id FROM approval_rules
+        ");
+
+        foreach ($npks as $row) {
+            $pkwt = DB::connection('cii')->select("
+                SELECT TOP 1 NPK, NAMA, HP FROM PKWT WHERE NPK = ?
+            ", [$row->approval_id]);
+
+            if (empty($pkwt) || empty($pkwt[0]->HP)) {
+                continue;
+            }
+
+            $normalized = PhoneFormatter::normalize($pkwt[0]->HP);
+            if ($normalized === $senderPhone) {
+                return $pkwt[0];
+            }
+        }
+
+        return null;
     }
 }

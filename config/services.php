@@ -32,8 +32,10 @@ return [
     ],
 
     'wa_gateway' => [
-        'url'   => env('WA_GATEWAY_URL', 'http://localhost:3000'),
-        'token' => env('WA_GATEWAY_TOKEN', ''),
+        'url'        => env('WA_GATEWAY_URL', 'http://localhost:3000'),
+        'token'      => env('WA_GATEWAY_TOKEN', ''),
+        'bot_number' => env('WA_BOT_NUMBER', '6287731665679'),
+        'webhook_secret' => env('WA_WEBHOOK_SECRET', ''),
     ],
 
     'fonnte' => [
