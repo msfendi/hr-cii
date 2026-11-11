@@ -36,6 +36,11 @@ return [
         'token'      => env('WA_GATEWAY_TOKEN', ''),
         'bot_number' => env('WA_BOT_NUMBER', '6287731665679'),
         'webhook_secret' => env('WA_WEBHOOK_SECRET', ''),
+
+        // Throttle anti-ban: jeda acak + rate limit per menit
+        'jitter_seconds'   => env('WA_SEND_JITTER_SECONDS', 15),
+        'min_gap_seconds'  => env('WA_SEND_MIN_GAP_SECONDS', 15),
+        'max_per_minute'   => env('WA_SEND_MAX_PER_MINUTE', 6),
     ],
 
     'fonnte' => [
