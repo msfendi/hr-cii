@@ -368,28 +368,57 @@
         var deleteGroupId = null;     // Stores ID of the group to be deleted
         var searchTimer;              // Timer for employee search debounce
 
-        function doAjax(url, data, onDone) {
+        /**
+         * Bersihkan sisa overlay (backdrop) yang bisa membuat halaman
+         * "membeku" / tidak bisa diklik setelah SweetAlert2 + Bootstrap Modal
+         * dipakai bersamaan.
+         */
+        function cleanupOverlays() {
+            // Swal2 container selalu aman dibuang setelah popup ditutup
+            $('.swal2-container').remove();
+            $('.swal2-shade').remove();
+
+            // Backdrop Bootstrap + class modal-open hanya dibuang kalau
+            // tidak ada modal yang masih terbuka (mis. modal Rules).
+            if ($('.modal.show').length === 0) {
+                $('.modal-backdrop').remove();
+                $('body').removeClass('modal-open');
+                $('body').css({ overflow: '', 'padding-right': '' });
+            }
+        }
+
+        function doAjax(url, data, onDone, onFail) {
             $.post(url, data)
                 .done(function (response) {
                     if (response.status === 'success') {
-                        // Show success notification
+                        // Penting: onDone (tutup modal + reload tabel) dijalankan
+                        // DULUAN sebelum SweetAlert2 muncul. Kalau modal
+                        // Bootstrap ditutup saat Swal masih terbuka, backdrop-nya
+                        // saling menumpuk dan halaman ikut terkunci.
+                        if (onDone) {
+                            onDone(response);
+                        }
+
                         Swal.fire({
                             icon: 'success',
                             title: 'Berhasil!',
                             text: response.message,
                             timer: 1500,
                             showConfirmButton: false
+                        }).then(function () {
+                            cleanupOverlays();
                         });
-                        // Run callback if provided
-                        if (onDone) {
-                            onDone(response);
-                        }
                     } else {
                         Swal.fire({
                             icon: 'error',
                             title: 'Gagal!',
-                            text: response.message
+                            text: response.message,
+                            didClose: cleanupOverlays
                         });
+
+                        if (onFail) {
+                            onFail(response);
+                        }
                     }
                 })
                 .fail(function (xhr) {
@@ -398,11 +427,17 @@
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         errorMsg = xhr.responseJSON.message;
                     }
+
                     Swal.fire({
                         icon: 'error',
                         title: 'Gagal!',
-                        text: errorMsg
+                        text: errorMsg,
+                        didClose: cleanupOverlays
                     });
+
+                    if (onFail) {
+                        onFail(xhr.responseJSON || {});
+                    }
                 });
         }
 
@@ -452,6 +487,9 @@
         // =========================================================
         var table = $('#approvalTable').DataTable({
             processing: true,
+            // Render baris saat benar-benar terlihat saja → halaman tetap
+            // responsif walau datanya sudah ratusan group.
+            deferRender: true,
             ajax: {
                 url: '{{ route("approval.get-data") }}',
                 dataSrc: 'data'
@@ -562,9 +600,24 @@
                 ? '{{ url("/approval/update") }}/' + id
                 : '{{ route("approval.store") }}';
 
-            doAjax(url, $(this).serialize(), function () {
+            var $btn = $('#btnSimpanGroup');
+            var $form = $(this);
+
+            // Cegah double submit (klik berulang saat request masih jalan)
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...');
+
+            doAjax(url, $form.serialize(), function () {
+                // Tutup modal & bersihkan form SEBELUM SweetAlert muncul
                 $('#modalGroup').modal('hide');
+                $form[0].reset();
+                $('#group_id').val('');
+                $('#group_dept').val(null).trigger('change');
+                $('#group_section').val(null).trigger('change');
+
                 table.ajax.reload(null, false);
+            }, function () {
+                // Gagal → tombol aktif lagi supaya user bisa coba ulang
+                $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Simpan');
             });
         });
 
