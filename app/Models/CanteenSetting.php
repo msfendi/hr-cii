@@ -14,28 +14,69 @@ class CanteenSetting extends Model
 
     protected $fillable = [
         'is_enabled',
-        // PERBAIKAN V32 (2026-11-09): kolom liveness_canteen_enabled,
+        // PERBAIKAN V32 & V44 (2026-11-11): kolom liveness_canteen_enabled,
         // is_random_challenge_enabled, random_challenge_canteen_enabled
-        // sudah DEPRECATED. Mode canteen kini disimpan di
+        // sudah DEPRECATED dan telah di-drop dari tabel canteen_settings
+        // oleh migration 2026_11_09_143000. Mode kantin kini disimpan di
         // face_recognition_settings.canteen_verification_mode.
-        // Kolom ini tetap ada di fillable agar tidak error bila masih
-        // ada di database lama, tetapi tidak lagi ditulis controller.
-        'liveness_canteen_enabled',
-        'is_random_challenge_enabled',
-        'random_challenge_canteen_enabled',
+        // Kolom deprecated ini ditiadakan dari fillable agar tidak memicu
+        // error SQLSTATE[42S22] Invalid column name saat INSERT / UPDATE.
         'require_geomap',
         'allowed_work_location_ids',
     ];
 
     protected $casts = [
         'is_enabled' => 'boolean',
-        // Deprecated: lihat catatan di $fillable di atas.
-        'liveness_canteen_enabled' => 'boolean',
-        'is_random_challenge_enabled' => 'boolean',
-        'random_challenge_canteen_enabled' => 'boolean',
         'require_geomap' => 'boolean',
         'allowed_work_location_ids' => 'array',
     ];
+
+    /**
+     * Sanitasi attributes agar kolom deprecated tidak pernah dikirim ke SQL Server.
+     *
+     * PERBAIKAN V44 HOTFIX KEDUA (2026-11-11): kolom deprecated SELALU dihapus,
+     * tidak lagi bergantung pada pembacaan skema fisik. Alasan: ada dua lapisan
+     * cache kolom (Laravel Cache 'schema_columns_*' TTL 1 jam DAN static
+     * request-scope FaceRecognitionSetting::$cachedColumnsCache) yang bisa
+     * stale setelah migrasi drop kolom. Bila salah satu cache mengira kolom
+     * masih ada, kolom deprecated ikut terkirim ke INSERT/UPDATE dan SQL Server
+     * menolak dengan SQLSTATE[42S22] Invalid column name.
+     * Fail-closed: lebih baik selalu hapus kolom deprecated (memang sudah tidak
+     * dipakai; mode verifikasi kantin kini di face_recognition_settings).
+     */
+    public static function sanitizeAttributes(array $attributes): array
+    {
+        // Bersihkan kedua lapisan cache schema canteen_settings supaya tidak basi.
+        try {
+            \App\Models\FaceRecognitionSetting::forgetSchemaCache();
+        } catch (\Throwable $e) {
+            // Abaikan.
+        }
+        try {
+            \Illuminate\Support\Facades\Cache::forget('schema_columns_canteen_settings');
+        } catch (\Throwable $e) {
+            // Abaikan.
+        }
+
+        $deprecatedCols = [
+            'liveness_canteen_enabled',
+            'is_random_challenge_enabled',
+            'random_challenge_canteen_enabled',
+        ];
+
+        foreach ($deprecatedCols as $col) {
+            unset($attributes[$col]);
+        }
+
+        return $attributes;
+    }
+
+    protected static function booted()
+    {
+        static::saving(function (self $model) {
+            $model->attributes = static::sanitizeAttributes($model->attributes);
+        });
+    }
 
     // PERBAIKAN V33 (2026-11-09) -- forward helper cache kolom/tabel
     // ke FaceRecognitionSetting supaya controller tidak perlu memanggil
@@ -69,9 +110,6 @@ class CanteenSetting extends Model
             if (!$setting) {
                 $setting = new static();
                 $setting->is_enabled = true;
-                $setting->liveness_canteen_enabled = true;
-                $setting->is_random_challenge_enabled = false;
-                $setting->random_challenge_canteen_enabled = false;
                 $setting->require_geomap = false;
                 $setting->allowed_work_location_ids = [];
                 try {
@@ -85,9 +123,6 @@ class CanteenSetting extends Model
         } catch (\Throwable $e) {
             $fallback = new static();
             $fallback->is_enabled = true;
-            $fallback->liveness_canteen_enabled = true;
-            $fallback->is_random_challenge_enabled = false;
-            $fallback->random_challenge_canteen_enabled = false;
             $fallback->require_geomap = false;
             $fallback->allowed_work_location_ids = [];
             return $fallback;
@@ -101,6 +136,7 @@ class CanteenSetting extends Model
 
     public function save(array $options = [])
     {
+        $this->attributes = static::sanitizeAttributes($this->attributes);
         $result = parent::save($options);
         if ($result) {
             static::$cachedCurrent = $this;
@@ -123,6 +159,40 @@ class CanteenSetting extends Model
         } catch (\Throwable $e) {
             return true;
         }
+    }
+
+    public function getLivenessCanteenEnabledAttribute(): bool
+    {
+        return static::isLivenessEnabled();
+    }
+
+    public function getIsRandomChallengeEnabledAttribute(): bool
+    {
+        try {
+            return \App\Models\FaceRecognitionSetting::isRandomChallengeCanteenMode();
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    public function getRandomChallengeCanteenEnabledAttribute(): bool
+    {
+        return $this->getIsRandomChallengeEnabledAttribute();
+    }
+
+    public function setLivenessCanteenEnabledAttribute($value): void
+    {
+        // DEPRECATED: Jangan simpan ke attributes tabel canteen_settings
+    }
+
+    public function setIsRandomChallengeEnabledAttribute($value): void
+    {
+        // DEPRECATED: Jangan simpan ke attributes tabel canteen_settings
+    }
+
+    public function setRandomChallengeCanteenEnabledAttribute($value): void
+    {
+        // DEPRECATED: Jangan simpan ke attributes tabel canteen_settings
     }
 
     public static function isRequireGeomap(): bool
