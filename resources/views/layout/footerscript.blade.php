@@ -15,9 +15,24 @@
      SEBELUM inline script di bawah berjalan. Jangan pakai document.createElement
      + appendChild karena itu async dan $ masih undefined saat inline script jalan.
 
-     Halaman yang juga include 'layout.footer' tidak suffers double-load karena
-     script di footer.blade.php dimuat SESUDAH file ini (jQuery sudah ada). --}}
+     PERBAIKAN V32 (2026-11-09): klaim "halaman yang juga include
+     'layout.footer' tidak suffers double-load" ITU SALAH untuk
+     layouts/app. Di layouts/app urutannya footer (baris 22) DULU,
+     footerscript (baris 26) SESUDAHNYA, dan keduanya memuat
+     jquery + bootstrap.bundle + sb-admin-2 yang sama.
 
+     Akibat double-load: plugin Bootstrap 4.6 (termasuk collapse)
+     terdaftar DUA kali. Handler klik collapse berjalan dua kali
+     (toggle lalu toggle lagi) sehingga submenu sidebar TIDAK MAU
+     TERTUTUP setelah terbuka (/face-attendance/settings &
+     /face-attendance/admin/log, keduanya layouts/app).
+
+     Solusi: @once menjamin blok vendor ini hanya dirender SEKALI
+     per request, tidak peduli berapa kali file ini di-include.
+     Halaman footer-only (tanpa footerscript) tetap dapat vendor dari
+     footer; halaman layouts/app hanya dapat SATU kali. --}}
+
+@once('vendor-js')
 @if (!file_exists(public_path('vendor/jquery/jquery.min.js')))
     {{-- vendor jquery tidak ada, jangan emit tag rusak --}}
 @else
@@ -27,6 +42,7 @@
     <script src="{{ asset('vendor/jquery-easing/jquery.easing.min.js') }}"></script>
     <script src="{{ asset('js/sb-admin-2.min.js') }}"></script>
 @endif
+@endonce
 
 {{-- ============================================================
      TOGGLE SIDEBAR — SATU handler saja (PERBAIKAN 2026-11-03)
@@ -106,4 +122,13 @@
     @include('face_attendance._scripts')
 @endif
 
+{{-- @stack('scripts') dirender DI SINI (sebelumnya di layouts/app baris 28, setelah
+     @include('layout.footerscript')). @stack dirender in place, jadi dulu output
+     footerscript = [jQuery ... sidebar-race JS ...] lalu baru @stack -> JS halaman
+     (@push('scripts'), mis. DataTables log_index) jalan SETELAH jQuery.
+     Di v5 @stack dipindah? Tidak -- KEMBALI ke di sini adalah agar halaman yang
+     @include('layout.footerscript') langsung (chatbot, event_invitation, auth/login,
+     cuti/form, hris, approval, ...) ikut merender @push('scripts') mereka.
+     layouts/app me-render footerscript lalu @stack('scripts') SATU kali di sini;
+     jangan tambah @stack lagi di layouts/app (double-push -> DataTables tn/3). --}}
 @stack('scripts')

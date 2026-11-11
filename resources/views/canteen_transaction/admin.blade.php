@@ -95,22 +95,31 @@
                 </div>
 
                 <div class="card shadow mb-4">
-                    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Pengaturan Transaksi Kantin</h6></div>
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap">
+                        <h6 class="m-0 font-weight-bold text-primary">Pengaturan Transaksi Kantin</h6>
+                        {{-- PERBAIKAN V32 (2026-11-09): mode canteen (liveness ATAU
+                             random challenge) TIDAK lagi disetting di sini.
+                             Disimpan di face_recognition_settings dan diatur dari
+                             /face-attendance/settings. Card ini hanya menampilkan
+                             ringkasan mode aktif. --}}
+                        <span class="badge badge-light border small">
+                            Mode: @if(($canteenVerificationMode ?? '') === 'random_challenge') Random Challenge @elseif(($canteenVerificationMode ?? '') === 'none') Tanpa Verifikasi @else Liveness @endif
+                        </span>
+                    </div>
                     <div class="card-body">
+                        <div class="alert alert-info py-2 px-3 small mb-3">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Mode verifikasi canteen (<strong>liveness ATAU random challenge</strong>)
+                            diatur dari <a href="{{ route('face.attendance.settings.index') }}"><strong>/face-attendance/settings</strong></a>
+                            (tabel <code>face_recognition_settings</code>), bukan dari halaman ini.
+                            Di halaman ini hanya fitur aktif + geomap yang bisa disimpan.
+                        </div>
                         <form method="POST" action="{{ route('canteen-transaction.admin.setting.update') }}">
                             @csrf
                             <div class="form-row">
                                 <div class="form-group col-md-3 form-check">
                                     <input type="checkbox" name="is_enabled" value="1" {{ $setting->is_enabled ? 'checked' : '' }} class="form-check-input" id="setEnabled">
                                     <label class="form-check-label" for="setEnabled">Fitur aktif</label>
-                                </div>
-                                <div class="form-group col-md-3 form-check">
-                                    <input type="checkbox" name="liveness_canteen_enabled" value="1" {{ $setting->liveness_canteen_enabled ? 'checked' : '' }} class="form-check-input" id="setLiveness">
-                                    <label class="form-check-label" for="setLiveness">Liveness check</label>
-                                </div>
-                                <div class="form-group col-md-3 form-check">
-                                    <input type="checkbox" name="random_challenge_canteen_enabled" value="1" {{ $setting->random_challenge_canteen_enabled ? 'checked' : '' }} class="form-check-input" id="setChallenge">
-                                    <label class="form-check-label" for="setChallenge">Random challenge</label>
                                 </div>
                                 <div class="form-group col-md-3 form-check">
                                     <input type="checkbox" name="require_geomap" value="1" {{ $setting->require_geomap ? 'checked' : '' }} class="form-check-input" id="setGeomap">

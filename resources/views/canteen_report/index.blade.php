@@ -322,6 +322,8 @@ body{ background-color: #f4f6fb; }
                                                 <th>Nama</th>
                                                 <th>Departemen</th>
                                                 <th>Kantin</th>
+                                                {{-- PERBAIKAN V41 (2026-11-10): kolom ID Tiket. --}}
+                                                <th>ID Tiket</th>
                                                 <th>Window</th>
                                                 <th>Aksi</th>
                                             </tr>
@@ -555,17 +557,140 @@ body{ background-color: #f4f6fb; }
               </div>
             </div>
 
+            <!-- RECEIPT MODAL (Bukti Scan Kantin) - PERBAIKAN LAYOUT (2026-11-10) -->
+            <div class="modal fade" id="receiptModal" tabindex="-1" role="dialog" aria-labelledby="receiptModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="receiptModalLabel"><i class="fas fa-receipt mr-1"></i> Bukti Scan Kantin</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                      <span aria-hidden="true">&times;</span>
+                    </button>
+                  </div>
+                  <div class="modal-body p-3" id="receiptModalBody">
+                    <div class="text-center text-muted">Memuat bukti scan...</div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fas fa-times mr-1"></i> Tutup</button>
+                    <button type="button" class="btn btn-primary" id="btnPrintReceipt"><i class="fas fa-print mr-1"></i> Cetak</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             @include('layout.footer')
         </div>
     </div>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <style>
+        /* PERBAIKAN LAYOUT (2026-11-10): gaya receipt sama persis dengan canteen transaction */
+        .receipt {
+            max-width: 420px;
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid #e3e6f0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,.06);
+            font-size: .85rem;
+        }
+        .receipt .rowline {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            border-bottom: 1px dashed #eef0f6;
+        }
+        .receipt .rowline span:first-child { color: #8a8fa3; }
+        #receiptModalMap {
+            height: 180px;
+            width: 100%;
+            z-index: 1;
+        }
+        .id-ticket-link { cursor: pointer; }
+        .id-ticket-link:hover { color: #2e59d9 !important; }
+
+        /* Layout cetak struk Bukti Scan Kantin teroptimasi */
+        @media print {
+            body * {
+                visibility: hidden !important;
+            }
+            .modal-backdrop, .modal-header, .modal-footer, .btn, .close, #wrapper > *:not(#content-wrapper), #content > nav {
+                display: none !important;
+            }
+            #receiptModalBox, #receiptModalBox * {
+                visibility: visible !important;
+            }
+            #receiptModalBox {
+                position: fixed !important;
+                left: 50% !important;
+                top: 15px !important;
+                transform: translateX(-50%) !important;
+                width: 440px !important;
+                max-width: 440px !important;
+                margin: 0 !important;
+                padding: 18px 20px !important;
+                background: #ffffff !important;
+                border: 1px dashed #b0b5be !important;
+                border-radius: 12px !important;
+                box-shadow: none !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                z-index: 999999 !important;
+            }
+            #receiptModalBox .row {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+            }
+            #receiptModalBox .col-5 {
+                flex: 0 0 41.666667% !important;
+                max-width: 41.666667% !important;
+                width: 41.666667% !important;
+                padding-right: 4px !important;
+            }
+            #receiptModalBox .col-7 {
+                flex: 0 0 58.333333% !important;
+                max-width: 58.333333% !important;
+                width: 58.333333% !important;
+                padding-left: 4px !important;
+            }
+            #receiptModalBox .rowline {
+                display: flex !important;
+                justify-content: space-between !important;
+                padding: 3px 0 !important;
+                border-bottom: 1px dashed #e3e6f0 !important;
+            }
+            #receiptModalFaceImg {
+                width: 100% !important;
+                height: 180px !important;
+                object-fit: cover !important;
+                border-radius: 6px !important;
+                border: 1px solid #d1d3e2 !important;
+            }
+            #receiptModalMap {
+                height: 180px !important;
+                border-radius: 6px !important;
+                border: 1px solid #d1d3e2 !important;
+                overflow: hidden !important;
+                position: relative !important;
+            }
+            .leaflet-control-zoom,
+            .leaflet-control-attribution {
+                display: none !important;
+            }
+        }
+    </style>
 
     <script>
         let recapChart = null;
@@ -613,6 +738,17 @@ body{ background-color: #f4f6fb; }
                     {
                         data: 'kantin',
                         render: (d) => `<span class="badge ${d === 'Kantin 1' ? 'badge-kantin-1' : 'badge-kantin-2'}">${d}</span>`
+                    },
+                    {
+                        // PERBAIKAN V41 (2026-11-10): kolom ID Tiket.
+                        // PERBAIKAN LAYOUT (2026-11-10): id_ticket dibuat bisa diklik
+                        // untuk membuka modal bukti scan (desain sama persis
+                        // dengan canteen transaction).
+                        data: 'id_ticket',
+                        render: (d, type, row) => {
+                            if (!d) return '-';
+                            return `<code class="small text-primary cursor-pointer id-ticket-link" data-id_ticket="${d}" style="text-decoration:underline;" title="Klik untuk lihat bukti scan">${d}</code>`;
+                        }
                     },
                     {
                         data: 'window',
@@ -1063,6 +1199,331 @@ body{ background-color: #f4f6fb; }
 
                 if (target === '#section-2' && detailTable) detailTable.columns.adjust();
                 if (target === '#section-3' && duplicateTable) duplicateTable.columns.adjust();
+            });
+
+            // PERBAIKAN LAYOUT (2026-11-10): klik id_ticket -> buka modal bukti scan
+            // desain sama persis dengan canteen transaction (renderReceipt + drawReceiptMap).
+            let receiptModalMap = null;
+            let receiptModalMapGroup = null;
+            let receiptModalScanMarker = null;
+            let activeLocations = @json($locations ?? []);
+
+            function formatTanggalId(dateStr) {
+                if (!dateStr) return '-';
+                const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (!m) return dateStr;
+                const y = m[1], mo = parseInt(m[2], 10), day = parseInt(m[3], 10);
+                const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+                const monthName = MONTHS_ID[mo - 1] || m[2];
+                return day + ' ' + monthName + ' ' + y;
+            }
+
+            function extractPolygonRing(polygonGeojson) {
+                if (!polygonGeojson) return [];
+                let data = polygonGeojson;
+                if (typeof data === 'string') {
+                    try { data = JSON.parse(data); } catch(e) { return []; }
+                }
+                if (!data || typeof data !== 'object') return [];
+
+                // Array polos berisi titik [lng,lat]
+                if (Array.isArray(data) && data.length && Array.isArray(data[0]) && typeof data[0][0] !== 'object') {
+                    return data
+                        .map(p => [parseFloat(p[0]), parseFloat(p[1])])
+                        .filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+                }
+
+                if (data.type === 'FeatureCollection' && data.features && data.features.length) {
+                    const first = data.features[0];
+                    if (first.geometry) return extractPolygonRing(first.geometry);
+                    if (first.geometry) return extractPolygonRing(first);
+                }
+                if (data.type === 'Feature' && data.geometry) {
+                    return extractPolygonRing(data.geometry);
+                }
+
+                let coords = data.coordinates;
+                if (!Array.isArray(coords) || coords.length === 0) return [];
+                if (Array.isArray(coords[0]) && Array.isArray(coords[0][0]) && Array.isArray(coords[0][0][0])) {
+                    coords = coords[0];
+                }
+                if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
+                    coords = coords[0];
+                }
+                if (!Array.isArray(coords) || coords.length === 0) return [];
+
+                return coords
+                    .map(p => [parseFloat(p[0]), parseFloat(p[1])])
+                    .filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+            }
+
+            function formatPhotoFaceSrc(photo) {
+                if (!photo) return '';
+                photo = String(photo).trim();
+                if (!photo) return '';
+                if (photo.startsWith('data:image/')) return photo;
+                return 'data:image/jpeg;base64,' + photo;
+            }
+
+            function createScanAvatarIcon() {
+                return L.divIcon({
+                    className: 'canteen-user-marker',
+                    html: `
+                        <div style="
+                            width: 32px;
+                            height: 32px;
+                            border-radius: 50%;
+                            background: #00c08b;
+                            border: 2.5px solid #ffffff;
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            transform: translate(-50%, -50%);
+                        ">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="#3a206e" style="display:block;">
+                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                            </svg>
+                        </div>
+                    `,
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 0]
+                });
+            }
+
+            function drawReceiptModalMap(lat, lng) {
+                const box = document.getElementById('receiptModalMap');
+                if (!box) return;
+                if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return;
+                if (typeof L === 'undefined') { console.warn('[CanteenReport] Leaflet tidak termuat, peta bukti dinonaktifkan.'); return; }
+
+                try {
+                    if (receiptModalMap) {
+                        try { receiptModalMap.remove(); } catch(e) {}
+                        receiptModalMap = null;
+                        receiptModalMapGroup = null;
+                        receiptModalScanMarker = null;
+                        box.innerHTML = '';
+                    }
+
+                    // PERBAIKAN V44: peta bukti scan kantin street-level zoom (zoom 17):
+                    // - Inisialisasi langsung dengan center [lat, lng], zoom 17, dan zoomControl: true
+                    // - Polygon styling hijau toska (#00c08b), semi-transparan, dengan noClip: true
+                    // - Pointer lingkaran toska dengan avatar siluet user di tengahnya
+                    receiptModalMap = L.map('receiptModalMap', {
+                        center: [lat, lng],
+                        zoom: 17,
+                        zoomControl: true,
+                        attributionControl: false,
+                        dragging: true,
+                        scrollWheelZoom: false
+                    });
+
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(receiptModalMap);
+
+                    receiptModalMapGroup = L.featureGroup().addTo(receiptModalMap);
+
+                    let nearbyPolyBounds = null;
+
+                    // 1) Polygon area kerja kantin — sesuai referensi Gambar 2
+                    if (activeLocations && activeLocations.length > 0) {
+                        activeLocations.forEach(loc => {
+                            if (!loc.polygon_geojson) return;
+                            const ring = extractPolygonRing(loc.polygon_geojson);
+                            if (ring.length < 3) return;
+                            try {
+                                const geoJson = {
+                                    type: 'Feature',
+                                    properties: { name: loc.name || 'Area Lokasi Kerja' },
+                                    geometry: { type: 'Polygon', coordinates: [ring] }
+                                };
+                                const poly = window.L.geoJSON(geoJson, {
+                                    style: {
+                                        color: '#00c08b',
+                                        fillColor: '#00c08b',
+                                        fillOpacity: 0.28,
+                                        weight: 3,
+                                        noClip: true
+                                    }
+                                });
+                                poly.bindPopup('<b>' + (loc.name || 'Area Lokasi Kerja') + '</b>');
+                                receiptModalMapGroup.addLayer(poly);
+
+                                const pBounds = poly.getBounds();
+                                if (pBounds.isValid()) {
+                                    const center = pBounds.getCenter();
+                                    if (Math.abs(center.lat - lat) < 0.05 && Math.abs(center.lng - lng) < 0.05) {
+                                        nearbyPolyBounds = pBounds;
+                                    }
+                                }
+                            } catch(e) { console.warn('[CanteenReport] Gagal menggambar polygon di peta bukti:', e); }
+                        });
+                    }
+
+                    // 2) Pointer avatar user — sesuai referensi Gambar 2
+                    L.circleMarker([lat, lng], {
+                        radius: 9,
+                        color: '#ffffff',
+                        fillColor: '#1cc88a',
+                        fillOpacity: 1,
+                        weight: 2,
+                        noClip: true
+                    }).addTo(receiptModalMap);
+
+                    receiptModalScanMarker = L.marker([lat, lng], {
+                        icon: createScanAvatarIcon()
+                    });
+                    receiptModalScanMarker.bindPopup('<b>Lokasi Scan</b><br>' + lat.toFixed(6) + ', ' + lng.toFixed(6));
+                    receiptModalMapGroup.addLayer(receiptModalScanMarker);
+
+                    // Kunci view ke koordinat scan pada zoom 17 (street level)
+                    receiptModalMap.setView([lat, lng], 17);
+
+                    setTimeout(() => {
+                        if (!receiptModalMap) return;
+                        try { receiptModalMap.invalidateSize(); } catch(e) {}
+                        try {
+                            if (nearbyPolyBounds && nearbyPolyBounds.isValid()) {
+                                nearbyPolyBounds.extend([lat, lng]);
+                                const calcZ = receiptModalMap.getBoundsZoom(nearbyPolyBounds);
+                                if (calcZ >= 16) {
+                                    receiptModalMap.fitBounds(nearbyPolyBounds, { padding: [12, 12], maxZoom: 18 });
+                                } else {
+                                    receiptModalMap.setView([lat, lng], 17);
+                                }
+                            } else {
+                                receiptModalMap.setView([lat, lng], 17);
+                            }
+                        } catch(e) {
+                            receiptModalMap.setView([lat, lng], 17);
+                        }
+                    }, 150);
+
+                    setTimeout(() => {
+                        if (!receiptModalMap) return;
+                        try { receiptModalMap.invalidateSize(); } catch(e) {}
+                        if (receiptModalMap.getZoom() < 16) {
+                            receiptModalMap.setView([lat, lng], 17);
+                        }
+                    }, 400);
+                } catch(err) {
+                    console.warn('[CanteenReport] Gagal inisialisasi peta bukti modal:', err);
+                }
+            }
+
+            function renderReceiptModal(inv) {
+                const inside = inv.inside_geomap === null || inv.inside_geomap === undefined ? '-' : (inv.inside_geomap ? 'Ya' : 'Tidak');
+                const tglId = formatTanggalId(inv.date);
+                const lat = (inv.latitude !== null && inv.latitude !== undefined) ? Number(inv.latitude) : null;
+                const lng = (inv.longitude !== null && inv.longitude !== undefined) ? Number(inv.longitude) : null;
+                const hasCoords = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng);
+                const photoSrc = formatPhotoFaceSrc(inv.photo_face);
+
+                const box = document.getElementById('receiptModalBody');
+                if (!box) return;
+
+                box.innerHTML = `
+                    <div class="receipt" id="receiptModalBox">
+                        <div class="text-center mb-2">
+                            <div class="font-weight-bold">PT Chutex International Indonesia</div>
+                            <div class="small text-muted">Bukti transaksi kantin — tunjukkan ke pihak kantin</div>
+                        </div>
+                        <hr class="my-2">
+                        <div class="rounded p-2 mb-2 text-center" style="background:#e8f0fe; border:1px solid #4e73df;">
+                            <div style="font-size:1.05rem; font-weight:700; color:#1d3f86;">${esc(inv.canteen_name || ('Kantin ' + inv.canteen_id))}</div>
+                            <div style="font-size:1.15rem; font-weight:700; color:#1d3f86;"><i class="far fa-calendar-alt mr-1"></i>${esc(tglId)}</div>
+                            <div style="font-size:1.15rem; font-weight:700; color:#1d3f86;"><i class="far fa-clock mr-1"></i>${esc(inv.time)}</div>
+                        </div>
+                        <div class="rowline"><span>ID Tiket</span><span>${esc(inv.id_ticket || inv.no || '-')}</span></div>
+                        <div class="rowline"><span>Lokasi</span><span>${esc(inv.canteen_location || '-')}</span></div>
+                        <div class="rowline"><span>Kontak</span><span>${esc(inv.contact_person || '-')}${inv.contact_phone ? ' / ' + esc(inv.contact_phone) : ''}</span></div>
+                        <hr class="my-2">
+                        <div class="rowline"><span>NPK</span><span>${esc(inv.npk)}</span></div>
+                        <div class="rowline"><span>Nama</span><span>${esc(inv.name)}</span></div>
+                        <div class="rowline"><span>Dept</span><span>${esc(inv.dept || '-')}</span></div>
+                        <div class="rowline"><span>Window</span><span>${esc(inv.window_name)}</span></div>
+                        <div class="rowline"><span>Area Geomap</span><span>${esc(inv.location_name || '-')} (${inside})</span></div>
+                        ${hasCoords ? `<div class="rowline"><span>Koordinat</span><span>${lat.toFixed(6)}, ${lng.toFixed(6)}</span></div>` : ''}
+
+                        {{-- HASIL SCAN WAJAH DAN MINIMAP: 1 ROW KANAN-KIRI --}}
+                        <div class="row no-gutters mt-2 mb-2" style="margin-left:-4px; margin-right:-4px;">
+                            <div class="col-6 px-1">
+                                <div class="small font-weight-bold text-gray-700 text-center mb-1"><i class="fas fa-camera text-primary mr-1"></i> Foto Wajah</div>
+                                <div class="rounded border bg-light d-flex align-items-center justify-content-center overflow-hidden shadow-sm" style="height:170px;">
+                                    ${photoSrc
+                                        ? `<img src="${photoSrc}" alt="Foto Wajah" style="width:100%; height:100%; object-fit:cover;">`
+                                        : `<div class="text-center text-muted p-2"><i class="fas fa-user fa-3x mb-2 text-gray-400"></i><div class="small">Tidak ada foto</div></div>`
+                                    }
+                                </div>
+                            </div>
+                            <div class="col-6 px-1">
+                                <div class="small font-weight-bold text-gray-700 text-center mb-1"><i class="fas fa-map-marked-alt text-primary mr-1"></i> Lokasi Scan</div>
+                                ${hasCoords
+                                    ? `<div id="receiptModalMap" class="rounded border shadow-sm" style="height:170px; width:100%; z-index:1;"></div>`
+                                    : `<div class="rounded border bg-light d-flex align-items-center justify-content-center text-muted small p-2 text-center" style="height:170px;"><i class="fas fa-map-marker-alt text-gray-400 mr-1"></i> Koordinat tidak tersedia</div>`
+                                }
+                            </div>
+                        </div>
+
+                        <hr class="my-2">
+                        <div class="text-center small text-muted">Terima kasih — selamat makan!</div>
+                    </div>
+                `;
+
+                if (hasCoords) {
+                    try {
+                        drawReceiptModalMap(lat, lng);
+                    } catch(err) {
+                        console.warn('[CanteenReport] Gagal memuat peta bukti modal:', err);
+                    }
+                }
+            }
+
+            // Saat modal selesai dibuka, panggil invalidateSize dan pastikan tetap street level zoom (17)
+            $('#receiptModal').off('shown.bs.modal.canteenmap').on('shown.bs.modal.canteenmap', function () {
+                if (receiptModalMap) {
+                    try { receiptModalMap.invalidateSize(); } catch(e) {}
+                    if (receiptModalMap.getZoom() < 16) {
+                        receiptModalMap.setZoom(17);
+                    }
+                }
+            });
+
+            function esc(str) {
+                if (str === null || str === undefined) return '-';
+                return String(str).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"').replace(/'/g, '&#039;');
+            }
+
+            $('#detailTable').on('click', '.id-ticket-link', function () {
+                const idTicket = $(this).data('id_ticket');
+                if (!idTicket) return;
+
+                $('#receiptModalBody').html('<div class="text-center text-muted">Memuat bukti scan...</div>');
+                $('#receiptModal').modal('show');
+
+                fetch("{{ route('canteen-report.receipt') }}?id_ticket=" + encodeURIComponent(idTicket), {
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
+                })
+                .then(res => res.json().catch(()=>({})))
+                .then(data => {
+                    if (!data.success || !data.invoice) {
+                        $('#receiptModalBody').html('<div class="text-center text-danger">Gagal memuat bukti scan: ' + (data.message || 'Unknown error') + '</div>');
+                        return;
+                    }
+                    if (data.locations && data.locations.length) {
+                        activeLocations = data.locations;
+                    }
+                    renderReceiptModal(data.invoice);
+                })
+                .catch(err => {
+                    console.error('[CanteenReport] Error loading receipt:', err);
+                    $('#receiptModalBody').html('<div class="text-center text-danger">Terjadi kesalahan jaringan.</div>');
+                });
+            });
+
+            // Print receipt: cetak langsung dengan layout CSS @media print teroptimasi
+            $('#btnPrintReceipt').on('click', function () {
+                window.print();
             });
         });
     </script>

@@ -9,8 +9,17 @@ class CanteenSetting extends Model
 {
     protected $table = 'canteen_settings';
 
+    // PERBAIKAN V33 (2026-11-09) -- cache request-scope untuk current().
+    protected static $cachedCurrent = null;
+
     protected $fillable = [
         'is_enabled',
+        // PERBAIKAN V32 (2026-11-09): kolom liveness_canteen_enabled,
+        // is_random_challenge_enabled, random_challenge_canteen_enabled
+        // sudah DEPRECATED. Mode canteen kini disimpan di
+        // face_recognition_settings.canteen_verification_mode.
+        // Kolom ini tetap ada di fillable agar tidak error bila masih
+        // ada di database lama, tetapi tidak lagi ditulis controller.
         'liveness_canteen_enabled',
         'is_random_challenge_enabled',
         'random_challenge_canteen_enabled',
@@ -20,6 +29,7 @@ class CanteenSetting extends Model
 
     protected $casts = [
         'is_enabled' => 'boolean',
+        // Deprecated: lihat catatan di $fillable di atas.
         'liveness_canteen_enabled' => 'boolean',
         'is_random_challenge_enabled' => 'boolean',
         'random_challenge_canteen_enabled' => 'boolean',
@@ -27,8 +37,33 @@ class CanteenSetting extends Model
         'allowed_work_location_ids' => 'array',
     ];
 
+    // PERBAIKAN V33 (2026-11-09) -- forward helper cache kolom/tabel
+    // ke FaceRecognitionSetting supaya controller tidak perlu memanggil
+    // Schema::hasTable/hasColumn langsung (lambat di SQL Server remote).
+    public static function cachedColumns(string $table): array
+    {
+        return \App\Models\FaceRecognitionSetting::cachedColumns($table);
+    }
+
+    public static function cachedHasTable(string $table): bool
+    {
+        return \App\Models\FaceRecognitionSetting::cachedHasTable($table);
+    }
+
+    public static function cachedHasColumn(string $table, string $column): bool
+    {
+        return \App\Models\FaceRecognitionSetting::cachedHasColumn($table, $column);
+    }
+
     public static function current(): self
     {
+        // PERBAIKAN V33 (2026-11-09) -- cache request-scope supaya
+        // CanteenTransactionController::index() yang memanggil current()
+        // 4x (setting, allowedLocationIds, isRequireGeomap, dll) tidak
+        // query tabel yang sama berulang dalam satu request.
+        if (static::$cachedCurrent !== null) {
+            return static::$cachedCurrent;
+        }
         try {
             $setting = static::query()->first();
             if (!$setting) {
@@ -45,6 +80,7 @@ class CanteenSetting extends Model
                     \Log::warning('CanteenSetting::current() gagal membuat baris default: ' . $e->getMessage());
                 }
             }
+            static::$cachedCurrent = $setting;
             return $setting;
         } catch (\Throwable $e) {
             $fallback = new static();
@@ -58,14 +94,32 @@ class CanteenSetting extends Model
         }
     }
 
+    public static function forgetCurrent(): void
+    {
+        static::$cachedCurrent = null;
+    }
+
+    public function save(array $options = [])
+    {
+        $result = parent::save($options);
+        if ($result) {
+            static::$cachedCurrent = $this;
+        }
+        return $result;
+    }
+
+    /**
+     * PERBAIKAN V32 (2026-11-09): method ini DEPRECATED.
+     * Mode canteen kini ditentukan oleh
+     * FaceRecognitionSetting::canteenVerificationMode()
+     * (face_recognition_settings.canteen_verification_mode),
+     * BUKAN canteen_settings. Method ini dipertahankan hanya supaya
+     * pemanggil lama tidak fatal error.
+     */
     public static function isLivenessEnabled(): bool
     {
         try {
-            $s = static::current();
-            if (!$s->is_liveness_enabled ?? false) {
-                return false;
-            }
-            return (bool) ($s->liveness_canteen_enabled ?? true);
+            return \App\Models\FaceRecognitionSetting::isLivenessCanteenMode();
         } catch (\Throwable $e) {
             return true;
         }

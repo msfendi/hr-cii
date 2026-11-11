@@ -55,10 +55,10 @@
                                         <td>{{ $q->question_text }}</td>
                                         <td>{{ $q->question_type === 'likert' ? 'Likert 1–5' : 'Open' }}</td>
                                         <td>{{ $q->sort_order }}</td>
-                                        <td>{!! $q->is_active ? '<span class="badge badge-success">Ya</span>' : '<span class="badge badge-secondary">Tidak</span>' !!}</td>
+                                        <td>@if($q->is_active)<span class="badge badge-success">Ya</span>@else<span class="badge badge-secondary">Tidak</span>@endif</td>
                                         <td>
                                             <form method="POST" action="{{ route('satisfaction-survey.admin.toggle', $q->id) }}" style="display:inline" class="form-toggle">@csrf<button type="button" class="btn btn-sm btn-toggle-aktif {{ $q->is_active ? 'btn-success' : 'btn-secondary' }}" data-id="{{ $q->id }}" data-active="{{ $q->is_active ? 1 : 0 }}" data-text="{{ e($q->question_text) }}" title="{{ $q->is_active ? 'Nonaktifkan' : 'Aktifkan' }}"><i class="fas fa-{{ $q->is_active ? 'power-off' : 'check' }}"></i> {{ $q->is_active ? 'On' : 'Off' }}</button></form>
-                                            <button class="btn btn-primary btn-sm btn-edit" data-id="{{ $q->id }}" data-section="{{ $q->section }}" data-text="{{ e($q->question_text) }}" data-type="{{ $q->question_type }}" data-order="{{ $q->sort_order }}" data-active="{{ $q->is_active ? 1 : 0 }}" data-toggle="modal" data-target="#editModal"><i class="fas fa-edit"></i></button>
+                                            <button class="btn btn-primary btn-sm btn-edit" data-id="{{ $q->id }}" data-section="{{ e($q->section) }}" data-text="{{ e($q->question_text) }}" data-type="{{ e($q->question_type) }}" data-order="{{ e($q->sort_order) }}" data-active="{{ $q->is_active ? 1 : 0 }}" data-toggle="modal" data-target="#editModal"><i class="fas fa-edit"></i></button>
                                             <form method="POST" action="{{ route('satisfaction-survey.admin.destroy', $q->id) }}" style="display:inline" onsubmit="return confirm('Hapus pertanyaan dan jawabannya?')">@csrf @method('DELETE')<button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
                                         </td>
                                     </tr>

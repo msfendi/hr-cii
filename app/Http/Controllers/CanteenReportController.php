@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CanteenReport;
 use App\Models\CanteenTwoReport;
+use App\Models\Canteen;
 use App\Models\Outsource;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -41,11 +42,14 @@ class CanteenReportController extends Controller
 
     public function index(): View
     {
+        $locations = \App\Models\AttendanceWorkLocation::where('is_active', true)->select('id', 'name', 'polygon_geojson')->get();
+
         return view('canteen_report.index', [
             'departments'      => $this->getDepartments(),
             'defaultStartDate' => now()->format('Y-m-d'),
             'defaultEndDate'   => now()->format('Y-m-d'),
             'costPerMeal'      => $this->costPerMeal,
+            'locations'        => $locations,
         ]);
     }
 
@@ -147,6 +151,8 @@ class CanteenReportController extends Controller
                 'dept'       => $deptMap[$row['npk']] ?? ($row['dept'] ?: '-'),
                 'kantin'     => $row['kantin'],
                 'canteen_no' => $row['canteen_no'],
+                // PERBAIKAN V41 (2026-11-10): id_ticket ditampilkan di history.
+                'id_ticket'  => $row['id_ticket'],
                 'window'     => $row['window'],
             ]);
 
@@ -274,6 +280,10 @@ class CanteenReportController extends Controller
         return [
             'id'          => $row->id,
             'canteen_no'  => $row->canteen_no,
+            // PERBAIKAN V41 (2026-11-10): id_ticket (identitas unik transaksi)
+            // ikut ke history scan supaya setiap baris punya identitas
+            // yang bisa dirujuk (mis. saat investigasi).
+            'id_ticket'   => $row->id_ticket,
             'npk'         => $row->npk,
             'name'        => $row->name,
             'dept'        => $row->dept,
@@ -1343,15 +1353,113 @@ class CanteenReportController extends Controller
         $totalRow = $row;
 
         $sheet->getStyle("A1:G{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-        $sheet->getStyle("G2:G{$lastDataRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
-        $sheet->getStyle("A2:A{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle("B2:B{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle("E2:F{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle("G2:G{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle("G2:G{$lastDataRow}")->getNumberFormat()->setFormatCode('"Rp" #,##0');
+                $sheet->getStyle("A2:A{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("B2:B{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("E2:E{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("F2:F{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("G2:G{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $colWidths = ['A' => 5, 'B' => 12, 'C' => 28, 'D' => 12, 'E' => 13, 'F' => 15, 'G' => 16];
+                foreach ($colWidths as $col => $w) {
+                    $sheet->getColumnDimension($col)->setWidth($w);
+                }
+            }
 
-        $colWidths = ['A' => 5, 'B' => 12, 'C' => 28, 'D' => 12, 'E' => 13, 'F' => 15, 'G' => 16];
-        foreach ($colWidths as $col => $w) {
-            $sheet->getColumnDimension($col)->setWidth($w);
+            /**
+             * PERBAIKAN LAYOUT (2026-11-10): Ambil detail bukti scan berdasarkan id_ticket.
+             * Dipakai oleh modal di tab Detail Scan (/canteen-report) untuk menampilkan
+             * bukti scan dengan desain yang sama persis seperti di canteen transaction.
+             */
+            public function receiptByTicket(Request $request): JsonResponse
+            {
+                $idTicket = trim((string) $request->query('id_ticket', ''));
+                if ($idTicket === '') {
+                    return response()->json(['success' => false, 'message' => 'ID Tiket wajib diisi.'], 422);
+                }
+
+                // Cari di kedua tabel canteen
+                $row = null;
+                $canteenNo = null;
+
+                $models = [
+                    1 => \App\Models\CanteenReport::class,
+                    2 => \App\Models\CanteenTwoReport::class,
+                ];
+
+                foreach ($models as $canteenNo => $modelClass) {
+                    try {
+                        $found = $modelClass::query()
+                            ->where('id_ticket', $idTicket)
+                            ->first();
+                        if ($found) {
+                            $row = $found;
+                            break;
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning("Canteen receiptByTicket gagal di kantin {$canteenNo}: " . $e->getMessage());
+                    }
+                }
+
+                if (!$row) {
+                    return response()->json(['success' => false, 'message' => 'Bukti scan tidak ditemukan.'], 404);
+                }
+
+                // Ambil nama kantin dari tabel canteens
+                $canteen = Canteen::where('canteen_id', $canteenNo)->where('is_active', true)->first();
+                $canteenName = $canteen ? $canteen->name : ($canteenNo === 2 ? 'Kantin 2' : 'Kantin 1');
+
+                // Build invoice format yang sama persis dengan canteen transaction
+                $inside = $row->inside_geomap === null || $row->inside_geomap === undefined ? '-' : ($row->inside_geomap ? 'Ya' : 'Tidak');
+                $dateStr = $row->date ? \Carbon\Carbon::parse($row->date)->format('Y-m-d') : now()->format('Y-m-d');
+                $timeStr = $row->created_at ? \Carbon\Carbon::parse($row->created_at)->format('H:i:s') : '-';
+
+                $invoice = [
+                    'no' => 'CTN-' . $canteenNo . '-' . \Carbon\Carbon::parse($row->date)->format('Ymd-His') . '-' . strtoupper(substr(md5($row->npk . \Carbon\Carbon::parse($row->created_at)->timestamp), 0, 6)),
+                    'id_ticket' => $row->id_ticket,
+                    'canteen_id' => $canteenNo,
+                    'canteen_name' => $canteenName,
+                    'canteen_location' => $canteen ? $canteen->location : '-',
+                    'contact_person' => $canteen ? ($canteen->contact_person ?: $canteen->pic_name) : '-',
+                    'contact_phone' => $canteen ? ($canteen->contact_phone ?: $canteen->pic_phone) : '-',
+                    'npk' => $row->npk,
+                    'name' => $row->name,
+                    'dept' => $row->dept,
+                    'window_name' => $row->window_name,
+                    'date' => $dateStr,
+                    'time' => $timeStr,
+                    'location_name' => $row->location_name,
+                    'inside_geomap' => $row->inside_geomap,
+                    'latitude' => $row->latitude !== null ? (float) $row->latitude : null,
+                    'longitude' => $row->longitude !== null ? (float) $row->longitude : null,
+                    'photo_face' => $this->formatPhotoFaceForResponse($row->photo_face),
+                ];
+
+                $locations = \App\Models\AttendanceWorkLocation::where('is_active', true)->select('id', 'name', 'polygon_geojson')->get();
+
+                return response()->json([
+                    'success' => true,
+                    'invoice' => $invoice,
+                    'locations' => $locations,
+                ]);
+            }
+
+            /**
+             * Pastikan foto wajah memiliki prefix data URI (data:image/jpeg;base64,...)
+             * agar browser tidak memperlakukannya sebagai relative URL path yang memicu
+             * HTTP 414 (Request-URI Too Long).
+             */
+            private function formatPhotoFaceForResponse(?string $photo): ?string
+            {
+                if (!$photo) {
+                    return null;
+                }
+                $photo = trim($photo);
+                if ($photo === '') {
+                    return null;
+                }
+                if (str_starts_with($photo, 'data:image/')) {
+                    return $photo;
+                }
+                return 'data:image/jpeg;base64,' . $photo;
+            }
         }
-    }
-}
