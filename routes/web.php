@@ -46,6 +46,7 @@ use App\Http\Controllers\EmployeeExitHistoryController;
 use App\Http\Controllers\EmployeeLateController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
+use App\Http\Controllers\WorkAssignmentController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
 use App\Http\Controllers\EmployeeShiftController;
@@ -1515,6 +1516,27 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::post('/portal-approval/approve/{id}', [LeaveApprovalController::class, 'portalApprove'])->name('pengajuan-cuti.portal-approval.approve');
     Route::post('/portal-approval/reject/{id}', [LeaveApprovalController::class, 'portalReject'])->name('pengajuan-cuti.portal-approval.reject');
     Route::post('/portal-approval/update/{id}', [LeaveApprovalController::class, 'portalUpdateDecision'])->name('pengajuan-cuti.portal-approval.update');
+});
+
+// ========================================
+// WORK ASSIGNMENT REQUEST (Surat Ijin Dinas Luar — CII.FM.HR.02.08)
+// ========================================
+// Berbasis session (tanpa middleware auth), pemohon login pakai NPK.
+// Terpisah total dari `ijin_meninggalkan_pekerjaans`.
+Route::prefix('work-assignment')->name('work-assignment.')->group(function () {
+    Route::get('/login', [WorkAssignmentController::class, 'login'])->name('login');
+    Route::post('/verify-manual', [WorkAssignmentController::class, 'verifyManual'])->name('verify-manual');
+    Route::get('/logout', [WorkAssignmentController::class, 'logout'])->name('logout');
+
+    Route::get('/form', [WorkAssignmentController::class, 'form'])->name('form');
+    Route::post('/submit', [WorkAssignmentController::class, 'submit'])->name('submit');
+    Route::get('/riwayat', [WorkAssignmentController::class, 'riwayat'])->name('riwayat');
+
+    // Autofill (pemohon isi NPK → data karyawan terisi otomatis)
+    Route::post('/lookup-npk', [WorkAssignmentController::class, 'lookupNpk'])
+        ->middleware('throttle:30,1')->name('lookup-npk');
+    Route::post('/lookup-shift', [WorkAssignmentController::class, 'lookupShift'])
+        ->middleware('throttle:60,1')->name('lookup-shift');
 });
 
 // ========================================
