@@ -3,6 +3,7 @@
 namespace App\Services\WorkAssignment;
 
 use App\Models\ApprovalDept;
+use App\Services\WorkAssignment\EmployeeLookupService;
 use Throwable;
 
 /**
@@ -20,7 +21,8 @@ use Throwable;
  *     "role_key": "yang_diberi_tugas",
  *     "role_label": "Yang diberi Tugas",
  *     "npk": "C-00827",
- *     "name": "IT HOD"
+ *     "name": "IT HOD",            <- nama asli orang (dari PKWT.NAMA)
+ *     "jabatan": "IT HOD"          <- jabatan approver (dari approval_rules.name)
  *   }
  *
  * MEKANISME APPROVAL MASIH DRAFT — struktur dibuat generik supaya bisa dipakai
@@ -45,19 +47,31 @@ class ApprovalChainBuilder
 
         foreach ($group->rules as $rule) {
             $level = (int) $rule->level;
-            $name  = (string) ($rule->name ?? '');
-            $key   = self::roleKeyFor($name);
+            $jabatan = (string) ($rule->name ?? '');
+            $key   = self::roleKeyFor($jabatan);
 
             $chain[] = [
                 'level'      => $level,
                 'role_key'   => $key,
                 'role_label' => self::roleLabelFor($key),
                 'npk'        => (string) $rule->approval_id,
-                'name'       => $name,
+                'name'       => $jabatan,
+                'jabatan'    => $jabatan,
             ];
         }
 
         usort($chain, fn ($a, $b) => $a['level'] <=> $b['level']);
+
+        // Ganti nama = jabatan dengan nama asli orang dari master PKWT.
+        $names = EmployeeLookupService::namesFor(array_column($chain, 'npk'));
+
+        foreach ($chain as &$step) {
+            $real = $names[$step['npk']] ?? null;
+            if ($real !== null) {
+                $step['name'] = $real;
+            }
+        }
+        unset($step);
 
         return $chain;
     }

@@ -83,29 +83,46 @@ class EmployeeLookupService
     }
 
     /**
-     * Shift karyawan pada tanggal tertentu (read-only, tidak disimpan).
-     * Null kalau belum dijadwalkan.
+     * Nama asli approver (bukan jabatan) untuk sekumpulan NPK.
+     *
+     * `approval_rules.name` berisi JABATAN approver (mis. "HRD MANAGER").
+     * Nama orangnya ada di PKWT.NAMA — semua NPK approver ada di sana
+     * (verified: 538/538).
+     *
+     * @param  array<int, string>  $npks
+     * @return array<string, string>  NPK => nama
      */
-    public static function shiftFor(string $npk, ?string $date): ?string
+    public static function namesFor(array $npks): array
     {
-        if (empty($date)) {
-            return null;
+        $npks = array_values(array_filter(array_unique(array_map(
+            fn ($n) => trim((string) $n),
+            $npks
+        ))));
+
+        if (empty($npks)) {
+            return [];
         }
 
         try {
-            $date = \Carbon\Carbon::parse($date)->format('Y-m-d');
-
-            $name = DB::connection('cii')
-                ->table('employee_shifts')
-                ->leftJoin('shifts', 'employee_shifts.shift_id', '=', 'shifts.id')
-                ->where('employee_shifts.npk', $npk)
-                ->whereDate('employee_shifts.shift_date', $date)
-                ->value('shifts.name');
+            $rows = DB::connection('cii')
+                ->table('PKWT')
+                ->whereIn('NPK', $npks)
+                ->select('NPK', 'NAMA')
+                ->get();
         } catch (Throwable) {
-            return null;
+            return [];
         }
 
-        return self::clean($name);
+        $names = [];
+
+        foreach ($rows as $row) {
+            $name = self::clean($row->NAMA);
+            if ($name !== null) {
+                $names[(string) $row->NPK] = $name;
+            }
+        }
+
+        return $names;
     }
 
     /**

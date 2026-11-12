@@ -1528,14 +1528,11 @@ Route::prefix('work-assignment')->name('work-assignment.')->group(function () {
     Route::post('/verify-manual', [WorkAssignmentController::class, 'verifyManual'])->name('verify-manual');
     Route::get('/logout', [WorkAssignmentController::class, 'logout'])->name('logout');
 
+    // Dashboard: riwayat pengajuan milik pemohon + tombol pengajuan baru
+    Route::get('/', [WorkAssignmentController::class, 'dashboard'])->name('dashboard');
+
     Route::get('/form', [WorkAssignmentController::class, 'form'])->name('form');
     Route::post('/submit', [WorkAssignmentController::class, 'submit'])->name('submit');
-
-    // Autofill (pemohon isi NPK → data karyawan terisi otomatis)
-    Route::post('/lookup-npk', [WorkAssignmentController::class, 'lookupNpk'])
-        ->middleware('throttle:30,1')->name('lookup-npk');
-    Route::post('/lookup-shift', [WorkAssignmentController::class, 'lookupShift'])
-        ->middleware('throttle:60,1')->name('lookup-shift');
 });
 
 // ========================================

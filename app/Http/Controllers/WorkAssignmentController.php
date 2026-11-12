@@ -15,7 +15,9 @@ use RealRashid\SweetAlert\Facades\Alert;
  * WORK ASSIGNMENT REQUEST (Surat Ijin Dinas Luar — CII.FM.HR.02.08)
  *
  * Alur pemohon:
- *   login (NPK + tgl lahir) → form (autofill dari NPK) → submit
+ *   login (NPK + tgl lahir) → dashboard (riwayat + tombol pengajuan)
+ *                            → form (data karyawan otomatis dari session)
+ *                            → submit → kembali ke dashboard
  *
  * Satu row per pengajuan di `work_assignment_requests`. Data karyawan tidak
  * disimpan (hanya npk) — diambil dari join master saat dibaca.
@@ -60,7 +62,7 @@ class WorkAssignmentController extends Controller
             return back()->withInput();
         }
 
-        // Pastikan data karyawan lengkap + aktif sebelum masuk form
+        // Pastikan data karyawan lengkap + aktif sebelum masuk dashboard
         $lookup = EmployeeLookupService::lookup($npk);
         if (!$lookup['ok']) {
             Alert::error('Error', $lookup['message'] ?? 'Data karyawan tidak valid.');
@@ -69,7 +71,7 @@ class WorkAssignmentController extends Controller
 
         session([self::SESSION_KEY => $npk]);
 
-        return redirect()->route('work-assignment.form');
+        return redirect()->route('work-assignment.dashboard');
     }
 
     public function logout()
@@ -77,6 +79,37 @@ class WorkAssignmentController extends Controller
         session()->forget(self::SESSION_KEY);
 
         return redirect()->route('work-assignment.login');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Dashboard — daftar pengajuan milik pemohon
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Halaman utama setelah login: riwayat pengajuan + tombol pengajuan baru.
+     */
+    public function dashboard()
+    {
+        $npk = session(self::SESSION_KEY);
+        if (!$npk) {
+            return redirect()->route('work-assignment.login');
+        }
+
+        $lookup = EmployeeLookupService::lookup($npk);
+        if (!$lookup['ok']) {
+            session()->forget(self::SESSION_KEY);
+            Alert::error('Error', $lookup['message'] ?? 'Data karyawan tidak ditemukan.');
+            return redirect()->route('work-assignment.login');
+        }
+
+        $requests = WorkAssignmentRequest::forNpk($npk)
+            ->orderByDesc('id')
+            ->get();
+
+        return view('work_assignment.dashboard', [
+            'employee'  => $lookup['data'],
+            'requests' => $requests,
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -116,56 +149,6 @@ class WorkAssignmentController extends Controller
             'minDate'     => $minDate,
             'maxDate'     => $maxDate,
             'maxDates'    => (int) config('work_assignment.max_dates', 31),
-        ]);
-    }
-
-    /**
-     * Autofill via AJAX: kirim NPK → balikkan data karyawan.
-     */
-    public function lookupNpk(Request $request)
-    {
-        $request->validate([
-            'npk'     => 'required|string|max:50',
-            'tanggal' => 'nullable|date',
-        ]);
-
-        $npk    = trim((string) $request->input('npk'));
-        $lookup = EmployeeLookupService::lookup($npk);
-
-        if (!$lookup['ok']) {
-            return response()->json([
-                'ok'      => false,
-                'message' => $lookup['message'],
-            ], 404);
-        }
-
-        $data = $lookup['data'];
-
-        // Shift untuk tanggal pertama (kalau ada) — read-only, tidak disimpan
-        $data['shift'] = EmployeeLookupService::shiftFor($npk, $request->input('tanggal'));
-
-        return response()->json([
-            'ok'   => true,
-            'data' => $data,
-        ]);
-    }
-
-    /**
-     * Shift untuk NPK + tanggal tertentu.
-     */
-    public function lookupShift(Request $request)
-    {
-        $request->validate([
-            'npk'     => 'required|string|max:50',
-            'tanggal' => 'required|date',
-        ]);
-
-        return response()->json([
-            'ok'    => true,
-            'shift' => EmployeeLookupService::shiftFor(
-                (string) $request->input('npk'),
-                (string) $request->input('tanggal')
-            ),
         ]);
     }
 
@@ -254,7 +237,7 @@ class WorkAssignmentController extends Controller
             'Work Assignment #' . $record->id . ' berhasil diajukan (' . count($dates) . ' tanggal).'
         );
 
-        return redirect()->route('work-assignment.form');
+        return redirect()->route('work-assignment.dashboard');
     }
 
     // ─────────────────────────────────────────────────────────────

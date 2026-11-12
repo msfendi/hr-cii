@@ -96,6 +96,126 @@ class WorkAssignmentRequest extends Model
     }
 
     /**
+     * Timeline approval: chain digabung dengan jawaban yang sudah masuk.
+     *
+     * Setiap entri:
+     *   level, role_label, name, jabatan, npk,
+     *   decision  → null | approved | rejected | waiting | skipped
+     *   reason    → alasan penolakan (kalau ada)
+     *   decided_at, decided_by
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function timeline(): array
+    {
+        $answers = [];
+
+        foreach ($this->answered() as $answer) {
+            $level = $answer['level'] ?? null;
+            if ($level !== null) {
+                $answers[(int) $level] = $answer;
+            }
+        }
+
+        $timeline = [];
+
+        // Level tertinggi yang sudah ditolak → semua level di atasnya tidak
+        // akan pernah diminta (chain berhenti).
+        $rejectedAt = null;
+
+        foreach ($this->chain() as $step) {
+            $level = (int) ($step['level'] ?? 0);
+            $answer = $answers[$level] ?? null;
+
+            if ($answer !== null && strtolower((string) ($answer['decision'] ?? '')) === 'rejected') {
+                $rejectedAt = $rejectedAt === null ? $level : min($rejectedAt, $level);
+            }
+        }
+
+        $current = (int) $this->current_level;
+
+        foreach ($this->chain() as $step) {
+            $level   = (int) ($step['level'] ?? 0);
+            $answer  = $answers[$level] ?? null;
+
+            if ($answer !== null) {
+                $decision = strtolower((string) ($answer['decision'] ?? '')) ?: 'waiting';
+            } elseif ($rejectedAt !== null && $level > $rejectedAt) {
+                // Di atas level yang ditolak → tidak akan pernah diminta.
+                $decision = 'skipped';
+            } elseif ($level < $current) {
+                // Level terlewati tanpa jawaban → dilewati (mis. chain berubah).
+                $decision = 'skipped';
+            } elseif ($level === $current) {
+                $decision = 'waiting';
+            } else {
+                $decision = 'upcoming';
+            }
+
+            $timeline[] = [
+                'level'      => $level,
+                'role_label' => (string) ($step['role_label'] ?? ''),
+                'name'       => (string) ($step['name'] ?? ''),
+                'jabatan'    => (string) ($step['jabatan'] ?? ($step['role_label'] ?? '')),
+                'npk'        => (string) ($step['npk'] ?? ''),
+                'decision'   => $decision,
+                'reason'     => $answer ? ($answer['reason'] ?? null) : null,
+                'decided_at' => $answer ? ($answer['decided_at'] ?? null) : null,
+                'decided_by' => $answer ? ($answer['decided_by'] ?? null) : null,
+            ];
+        }
+
+        return $timeline;
+    }
+
+    /**
+     * Ringkasan status approval untuk ditampilkan.
+     *
+     * @return array{status:string,label:string,tone:string,done:int,total:int}
+     */
+    public function progress(): array
+    {
+        $timeline = $this->timeline();
+        $total    = count($timeline);
+        $done     = 0;
+        $rejected = false;
+
+        foreach ($timeline as $step) {
+            if ($step['decision'] === 'approved') {
+                $done++;
+            } elseif ($step['decision'] === 'rejected') {
+                $rejected = true;
+            }
+        }
+
+        if ($rejected) {
+            $status = 'rejected';
+            $label  = 'Ditolak';
+            $tone   = 'danger';
+        } elseif ($total > 0 && $done >= $total) {
+            $status = 'approved';
+            $label  = 'Disetujui';
+            $tone   = 'success';
+        } elseif ($this->status === 'cancelled') {
+            $status = 'cancelled';
+            $label  = 'Dibatalkan';
+            $tone   = 'secondary';
+        } else {
+            $status = 'pending';
+            $label  = 'Menunggu Persetujuan';
+            $tone   = 'warning';
+        }
+
+        return [
+            'status' => $status,
+            'label'  => $label,
+            'tone'   => $tone,
+            'done'   => $done,
+            'total'  => $total,
+        ];
+    }
+
+    /**
      * True kalau pengajuan masih bisa diproses.
      */
     public function isOpen(): bool
