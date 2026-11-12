@@ -38,7 +38,8 @@ class LeaveApprovalQuery
                 lr.approval_level,
                 lr.approval_progress,
                 lr.status,
-                lr.leave_type_id
+                lr.leave_type_id,
+                lr.created_at
             FROM leave_requests lr
             WHERE lr.status = 'pending'
               AND (lr.void IS NULL OR lr.void = 'false' OR lr.void = '')
@@ -293,6 +294,39 @@ class LeaveApprovalQuery
                 updated_at   = ?
             WHERE id = ? AND status = 'approved'
         ", [$now, $reason, $now, $requestId]);
+    }
+
+    /**
+     * Nama karyawan (pemohon) dari master data.
+     *
+     * BIODATA = master karyawan; dipakai juga oleh LeaveApprovalController.
+     * Lookup TOP 1 by NPK supaya tidak full-scan.
+     */
+    public static function getEmployeeName(string $npk): ?string
+    {
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 NAMA_KARYAWAN FROM BIODATA WHERE NPK = ?
+        ", [$npk]);
+
+        $name = $rows[0]->NAMA_KARYAWAN ?? null;
+        $name = is_string($name) ? trim($name) : null;
+
+        return ($name === '') ? null : $name;
+    }
+
+    /**
+     * Nama jenis cuti dari leave_types (mis. "Cuti Tahunan", "Cuti Menikah").
+     */
+    public static function getLeaveTypeName(int $leaveTypeId): ?string
+    {
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 name FROM leave_types WHERE id = ?
+        ", [$leaveTypeId]);
+
+        $name = $rows[0]->name ?? null;
+        $name = is_string($name) ? trim($name) : null;
+
+        return ($name === '') ? null : $name;
     }
 
     /**

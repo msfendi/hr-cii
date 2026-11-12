@@ -136,9 +136,13 @@ class LeaveApprovalNotifier
             'approver_npk'    => $row->approval_id,
             'approver_name'   => $approverInfo->NAMA ?? $approverInfo->NPK,
             'employee_npk'    => $row->NPK,
+            'employee_name'   => LeaveApprovalQuery::getEmployeeName((string) $row->NPK),
+            'leave_type_id'   => (int) ($row->leave_type_id ?? 0),
+            'leave_type'      => LeaveApprovalQuery::getLeaveTypeName((int) ($row->leave_type_id ?? 0)),
+            'submitted_at'    => $row->created_at ?? null,
             'start_date'      => $row->start_date,
             'end_date'        => $row->end_date,
-            'total_days'      => $row->total_days,
+            'duration_days'   => (int) $row->total_days,
             'reason'          => $row->reason,
             'message'         => $message,
             'approve_command' => "/approve $id",
@@ -164,7 +168,8 @@ class LeaveApprovalNotifier
                 lr.approval_level,
                 lr.approval_progress,
                 lr.status,
-                lr.leave_type_id
+                lr.leave_type_id,
+                lr.created_at
             FROM leave_requests lr
             WHERE lr.token = ?
             ORDER BY lr.approval_level ASC

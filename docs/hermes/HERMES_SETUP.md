@@ -200,7 +200,70 @@ Format yang diterima approver:
 
 ---
 
-## Bagian D — Skema Data (referensi)
+## Bagian D — Format Pesan Notifikasi
+
+Template dirender di **Laravel** (`App\Services\ApprovalWa\WaMessageFormatter`)
+dan dikirim sebagai field `message` di payload. Messaging layer hanya
+mengirimkan teks apa adanya.
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🗂️ *PENGAJUAN CUTI — BUTUH PERSETUJUAN*
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+*DATA PEMOHON*
+👤 DIMAS GALANG RAMADHAN
+🆔 C-00827
+
+*DETAIL PENGAJUAN*
+📌 Jenis cuti: Cuti Tahunan
+📅 Diajukan: 07/10/2026 15:51 WIB
+🗓️ Periode: 12/10/2026
+⏳ Durasi: 1 hari
+📝 Alasan: Acara keluarga ke Kudus
+
+*No. Pengajuan:* *#837*
+*Level approval:* *3 dari 3 (level terakhir)*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Yth. *RAKHMAT BUDIYONO*,
+mohon berikan keputusan Anda:
+
+✅ *Setujui* → https://wa.me/6287731665679?text=%2Fapprove+837
+❌ *Tolak* → https://wa.me/6287731665679?text=%2Ftolak+837+%3Calasan%3E
+
+Atau balas langsung ke chat ini:
+• `/approve 837`
+• `/tolak 837 <alasan>`
+
+⚠️ Mohon pastikan *No. Pengajuan* sudah sesuai.
+```
+
+Field yang ditampilkan:
+
+| Bagian | Sumber |
+|--------|--------|
+| Nama pemohon | `BIODATA.NAMA_KARYAWAN` (lookup by `leave_requests.NPK`) |
+| NPK | `leave_requests.NPK` |
+| Jenis cuti | `leave_types.name` (lookup by `leave_requests.leave_type_id`) |
+| Diajukan | `leave_requests.created_at` (WIB) |
+| Periode | `start_date` — `end_date` (kalau sama, satu tanggal saja) |
+| Durasi | `leave_requests.total_days` (hari kerja) |
+| Alasan | `leave_requests.reason` |
+| No. Pengajuan | `leave_requests.id` |
+| Level approval | `approval_level` / total level di token |
+
+Catatan:
+- Kalau `level == total level`, ditandai **(level terakhir)** — approver terakhir
+  yang memutuskan berdampak final ke saldo cuti.
+- Deep link `wa.me` membuka chat bot dengan command sudah terisi.
+- Format pakai `*bold*` WhatsApp, tanpa padding kolom (font WA proporsional
+  sehingga padding spasi tampak miring).
+- Biaya ~950 karakter — jauh di bawah limit 4096 karakter WhatsApp.
+
+---
+
+## Bagian E — Skema Data (referensi)
 
 Satu pengajuan cuti = **N row** di `leave_requests`, satu per approver.
 
