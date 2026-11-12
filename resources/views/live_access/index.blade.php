@@ -4,53 +4,69 @@
 
 @push('styles')
 <style>
-    /* ===== Live Map (ala threat map) ===== */
+    /* ===== Live Map (ala threat map) — LIGHT MODE =====
+       Palet terang: seluruh peta, HUD, panel kanan, dan modal memakai latar
+       putih/terang dengan teks gelap. Variabel di .lamap dipakai bersama supaya
+       warna konsisten dan mudah diubah lagi di satu tempat. */
     .lamap {
+        --lm-bg: #f6faff;
+        --lm-ocean: #eef5fc;
+        --lm-line: #dbe4ee;
+        --lm-line-soft: #eaf0f7;
+        --lm-text: #1e293b;
+        --lm-muted: #64748b;
+        --lm-accent: #1d3f86;
+        --lm-accent-2: #0891b2;
+        --lm-dock-w: 420px;
+        --lm-dock-h: 520px;
         position: relative;
-        background: radial-gradient(1200px 620px at 52% 42%, #0a2136 0%, #04101c 72%);
+        background: linear-gradient(180deg, #fbfdff 0%, var(--lm-ocean) 100%);
+        border: 1px solid var(--lm-line);
+        border-radius: .35rem;
         overflow: hidden;
     }
     #lamap-canvas {
         display: block;
         width: 100%;
-        height: 460px;
+        height: 660px;
     }
     .lamap-hud {
         position: absolute;
         top: 12px;
         left: 16px;
-        color: #7dd3fc;
+        color: var(--lm-accent);
         font-size: .7rem;
         letter-spacing: .04em;
         text-transform: uppercase;
         pointer-events: none;
-        background: rgba(4, 16, 28, .72);
-        border: 1px solid rgba(56, 189, 248, .18);
+        background: rgba(255, 255, 255, .94);
+        border: 1px solid var(--lm-line);
         border-radius: 8px;
         padding: 6px 12px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .07);
     }
     .lamap-hud .hud-row { display: flex; gap: 18px; }
     .lamap-hud .hud-num {
         display: block;
         font-size: 1.35rem;
         font-weight: 700;
-        color: #e0f2fe;
+        color: var(--lm-text);
         line-height: 1.1;
     }
-    .lamap-hud .hud-lbl { color: #94a3b8; }
+    .lamap-hud .hud-lbl { color: var(--lm-muted); }
     .lamap-hud .hud-hint {
         margin-top: 5px;
         padding-top: 5px;
-        border-top: 1px dashed rgba(56, 189, 248, .2);
+        border-top: 1px dashed var(--lm-line);
         font-size: .6rem;
         letter-spacing: 0;
         text-transform: none;
-        color: #64748b;
+        color: var(--lm-muted);
     }
     /* Kontrol zoom peta (roda mouse juga bisa) */
     .lamap-zoom {
         position: absolute;
-        right: 324px;
+        right: calc(var(--lm-dock-w) + 24px);
         bottom: 14px;
         display: flex;
         flex-direction: column;
@@ -61,68 +77,71 @@
         width: 32px;
         height: 32px;
         padding: 0;
-        border: 1px solid rgba(56, 189, 248, .35);
+        border: 1px solid var(--lm-line);
         border-radius: 8px;
-        background: rgba(4, 16, 28, .82);
-        color: #7dd3fc;
+        background: rgba(255, 255, 255, .96);
+        color: var(--lm-accent);
         font-size: .8rem;
         line-height: 1;
         cursor: pointer;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
     }
-    .lamap-zoom button:hover { background: rgba(34, 211, 238, .18); color: #e0f2fe; }
+    .lamap-zoom button:hover { background: #eaf1fa; color: var(--lm-accent); }
     #lamap-canvas { cursor: grab; }
     #lamap-canvas.lamap-grabbing { cursor: grabbing; }
     /* Modal detail wilayah */
     .lamap-modal {
-        background: #071a2b;
-        border: 1px solid rgba(56, 189, 248, .32);
-        color: #cbd5e1;
+        background: #ffffff;
+        border: 1px solid var(--lm-line);
+        color: #334155;
     }
     .lamap-modal .modal-header,
-    .lamap-modal .modal-footer { border-color: rgba(56, 189, 248, .22); }
-    .lamap-modal .modal-title { color: #e0f2fe; }
-    .lamap-modal .close { color: #94a3b8; opacity: .9; text-shadow: none; }
+    .lamap-modal .modal-footer { border-color: var(--lm-line-soft); }
+    .lamap-modal .modal-title { color: var(--lm-text); }
+    .lamap-modal .close { color: var(--lm-muted); opacity: .9; text-shadow: none; }
     .lamap-modal .modal-body { max-height: 60vh; overflow-y: auto; }
     .lm-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
     .lm-chip {
-        border: 1px solid rgba(56, 189, 248, .3);
+        border: 1px solid var(--lm-line);
         border-radius: 999px;
         padding: 2px 10px;
         font-size: .7rem;
-        color: #94a3b8;
+        color: var(--lm-muted);
         text-transform: uppercase;
         letter-spacing: .03em;
+        background: #f8fafc;
     }
-    .lm-chip b { color: #e0f2fe; font-size: .8rem; }
-    .lm-chip.c-4xx { border-color: rgba(245, 158, 11, .5); }
-    .lm-chip.c-5xx { border-color: rgba(239, 68, 68, .5); }
-    .lm-line { font-size: .78rem; color: #94a3b8; margin-bottom: 8px; }
+    .lm-chip b { color: var(--lm-accent); font-size: .8rem; }
+    .lm-chip.c-4xx { border-color: rgba(217, 119, 6, .45); background: #fffbeb; }
+    .lm-chip.c-5xx { border-color: rgba(220, 38, 38, .45); background: #fef2f2; }
+    .lm-line { font-size: .78rem; color: var(--lm-muted); margin-bottom: 8px; }
     .lm-sec {
         font-size: .68rem;
         text-transform: uppercase;
         letter-spacing: .06em;
-        color: #7dd3fc;
+        color: var(--lm-accent);
         margin: 10px 0 4px;
-        border-top: 1px dashed rgba(56, 189, 248, .2);
+        border-top: 1px dashed var(--lm-line);
         padding-top: 8px;
     }
-    .lm-item { padding: 6px 0; border-bottom: 1px dashed rgba(56, 189, 248, .14); font-size: .78rem; }
+    .lm-item { padding: 6px 0; border-bottom: 1px dashed var(--lm-line-soft); font-size: .78rem; }
     .lm-item:last-child { border-bottom: 0; }
     .lm-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-    .lm-row.meta { color: #64748b; font-size: .72rem; }
-    .lm-row .ip { color: #e0f2fe; font-weight: 600; }
+    .lm-row.meta { color: var(--lm-muted); font-size: .72rem; }
+    .lm-row .ip { color: var(--lm-accent); font-weight: 600; }
     .lm-badge {
-        border: 1px solid rgba(34, 211, 238, .4);
+        border: 1px solid var(--lm-line);
         border-radius: 6px;
         padding: 0 6px;
         font-size: .62rem;
-        color: #7dd3fc;
+        color: var(--lm-accent-2);
+        background: #f8fafc;
     }
-    .lm-at { color: #64748b; font-size: .72rem; margin-left: auto; }
-    .lm-empty { font-size: .8rem; color: #94a3b8; padding: 6px 0; }
+    .lm-at { color: var(--lm-muted); font-size: .72rem; margin-left: auto; }
+    .lm-empty { font-size: .8rem; color: var(--lm-muted); padding: 6px 0; }
     .lm-recent .lm-row { margin-bottom: 3px; }
     .lm-recent .lm-at { margin-left: 0; min-width: 62px; }
-    .lm-path { color: #94a3b8; word-break: break-all; }
+    .lm-path { color: var(--lm-muted); word-break: break-all; }
     .lamap-legend {
         position: absolute;
         left: 16px;
@@ -131,8 +150,12 @@
         flex-wrap: wrap;
         gap: 12px;
         font-size: .7rem;
-        color: #94a3b8;
+        color: #475569;
         pointer-events: none;
+        background: rgba(255, 255, 255, .86);
+        border: 1px solid var(--lm-line);
+        border-radius: 8px;
+        padding: 4px 10px;
     }
     .lamap-legend i { font-size: 8px; vertical-align: middle; }
     .lamap-foot {
@@ -140,47 +163,173 @@
         left: 16px;
         bottom: 10px;
         font-size: .7rem;
-        color: #64748b;
+        color: var(--lm-muted);
         pointer-events: none;
     }
-    .lamap-side {
+    /* ===== Dock HUD: panel data menempel di dalam peta =====
+       Akses per IP, Akses per User, Request Terbaru, Jobs & Queue, dan Services
+       berjalan dipindah ke sini sebagai tab, jadi seluruh halaman cuma punya satu
+       widget besar (peta) dan tidak ada kartu-kartu terpisah di bawahnya. */
+    .lamap-dock {
         position: absolute;
         top: 12px;
         right: 12px;
-        width: 300px;
+        width: var(--lm-dock-w);
         max-height: calc(100% - 24px);
-        overflow-y: auto;
-        background: rgba(4, 16, 28, .86);
-        border: 1px solid rgba(56, 189, 248, .25);
+        display: flex;
+        flex-direction: column;
+        background: rgba(255, 255, 255, .95);
+        border: 1px solid var(--lm-line);
         border-radius: 8px;
-        padding: 8px 10px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+        overflow: hidden;
+        z-index: 4;
     }
-    .lamap-side-title {
+    /* Baris tab bisa digeser mendatar; tombol tutup dipin di luar area scroll
+       supaya tetap terjangkau di layar kecil walau tab meluber. */
+    .lamap-dock-head {
+        display: flex;
+        align-items: flex-start;
+        border-bottom: 1px solid var(--lm-line);
+        flex: 0 0 auto;
+    }
+    .lamap-tabs {
+        display: flex;
+        align-items: stretch;
+        gap: 2px;
+        padding: 6px 6px 0;
+        overflow-x: auto;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .lamap-tab {
+        flex: 0 0 auto;
+        border: 1px solid transparent;
+        border-bottom: 0;
+        background: transparent;
+        color: var(--lm-muted);
+        font-size: .66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        padding: 5px 7px;
+        border-radius: 6px 6px 0 0;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .lamap-tab:hover { color: var(--lm-accent); background: #eef4fc; }
+    .lamap-tab.is-active {
+        color: var(--lm-accent);
+        background: #fff;
+        border-color: var(--lm-line);
+        box-shadow: inset 0 -2px 0 var(--lm-accent-2);
+    }
+    .lamap-dock-close {
+        display: none;
+        flex: 0 0 auto;
+        align-self: center;
+        margin: 0 6px 0 2px;
+        border: 1px solid var(--lm-line);
+        background: #fff;
+        color: var(--lm-muted);
+        border-radius: 6px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        cursor: pointer;
+    }
+    .lamap-panes { flex: 1 1 auto; min-height: 0; }
+    .lamap-pane {
+        display: none;
+        padding: 8px 10px;
+        max-height: var(--lm-dock-h);
+        overflow-y: auto;
+    }
+    .lamap-pane.is-active { display: block; }
+    .lamap-pane-title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
         font-size: .68rem;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: .06em;
-        color: #7dd3fc;
+        color: var(--lm-accent);
         margin-bottom: 6px;
     }
+    .lm-nodes { display: flex; flex-direction: column; gap: 8px; }
+    .lm-nodes .ip-node { min-width: 0 !important; }
+    .lm-nodes .ip-node .small { word-break: break-word; }
+    .lm-plain { font-size: .72rem; color: #334155; }
+    .lm-plain ul { margin-bottom: .35rem; padding-left: 1.1rem; }
+    .lm-plain code { font-size: .68rem; color: var(--lm-accent); }
+    /* Tombol pembuka dock di layar kecil (dock disembunyikan CSS). */
+    .lamap-dock-toggle {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: none;
+        align-items: center;
+        gap: 5px;
+        z-index: 5;
+        border: 1px solid var(--lm-line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, .96);
+        color: var(--lm-accent);
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        padding: 5px 9px;
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+    }
+    .lamap-dock-toggle:hover { background: #eaf1fa; }
     .lamap-item {
         padding: 5px 0;
-        border-bottom: 1px dashed rgba(56, 189, 248, .16);
+        border-bottom: 1px dashed var(--lm-line-soft);
         font-size: .7rem;
-        color: #cbd5e1;
+        color: #334155;
     }
     .lamap-item:last-child { border-bottom: 0; }
-    .lamap-item .ip { color: #e0f2fe; font-weight: 600; }
-    .lamap-item .meta { color: #64748b; }
+    .lamap-item .ip { color: var(--lm-accent); font-weight: 600; }
+    .lamap-item .meta { color: var(--lm-muted); }
     .lamap-item .line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
     .lamap-item .trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Layar lebar: peta makin tinggi, dock makin lebar. */
+    @media (min-width: 1400px) {
+        #lamap-canvas { height: 780px; }
+        .lamap { --lm-dock-w: 460px; --lm-dock-h: 620px; }
+    }
     @media (max-width: 991.98px) {
-        #lamap-canvas { height: 340px; }
-        .lamap-side { display: none; }
+        #lamap-canvas { height: 420px; }
+        .lamap { --lm-dock-w: 100%; --lm-dock-h: 300px; }
+        /* Dock jadi panel penuh di atas peta; dibuka lewat tombol "Panel". */
+        .lamap-dock {
+            top: 8px;
+            right: 8px;
+            left: 8px;
+            bottom: 8px;
+            width: auto;
+            max-height: none;
+            display: none;
+        }
+        /* Saat dipakai sebagai panel penuh, latar dibuat opak supaya peta di
+           belakang tidak menembus dan isi panel tetap enak dibaca. */
+        .lamap.is-dock-open .lamap-dock { display: flex; background: #fff; }
+        .lamap-dock-toggle { display: inline-flex; }
+        .lamap.is-dock-open .lamap-dock-toggle { display: none; }
+        .lamap-dock-close { display: block; }
+        /* Rapatkan tab supaya keenamnya muat di lebar layar kecil. */
+        .lamap-tabs { gap: 1px; padding: 6px 4px 0; }
+        .lamap-tab { font-size: .56rem; letter-spacing: -.01em; padding: 4px; }
+        .lamap-dock-close { margin: 0 5px 0 0; }
         .lamap-zoom { right: 12px; bottom: 56px; }
         .lamap-hud { padding: 5px 9px; }
         .lamap-hud .hud-row { gap: 13px; }
         .lamap-hud .hud-num { font-size: 1.1rem; }
-        .lamap-hud .hud-lbl { font-size: .6rem; color: #a8bccf; }
+        .lamap-hud .hud-lbl { font-size: .6rem; color: var(--lm-muted); }
         .lamap-hud .hud-hint { font-size: .55rem; }
     }
 </style>
@@ -235,7 +384,7 @@
             <div class="card shadow mb-4">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-globe mr-1"></i> Live Map Akses</h6>
-                    <span class="badge badge-dark" id="lamap-badge">0 sumber</span>
+                    <span class="badge badge-light border" id="lamap-badge" style="color:#1d3f86;">0 sumber</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="lamap">
@@ -265,16 +414,56 @@
                             <button type="button" id="lamap-zoom-reset" title="Reset ke seluruh dunia"><i class="fas fa-compress"></i></button>
                         </div>
 
-                        <div class="lamap-side">
-                            <div class="lamap-side-title">Sumber teratas</div>
-                            <div id="lamap-list"><div class="lamap-item meta">Memuat data...</div></div>
+                        <button type="button" class="lamap-dock-toggle" id="lamap-dock-toggle" title="Buka panel data">
+                            <i class="fas fa-list"></i> Panel
+                        </button>
+
+                        {{-- Dock HUD: panel data (IP, User, Request, Jobs, Services) --}}
+                        <div class="lamap-dock" id="lamap-dock">
+                            <div class="lamap-dock-head">
+                                <div class="lamap-tabs" role="tablist" aria-label="Panel Live Map">
+                                    <button type="button" class="lamap-tab is-active" data-lm-tab="sumber" role="tab" aria-selected="true">Sumber</button>
+                                    <button type="button" class="lamap-tab" data-lm-tab="ip" role="tab" aria-selected="false">IP</button>
+                                    <button type="button" class="lamap-tab" data-lm-tab="user" role="tab" aria-selected="false">User</button>
+                                    <button type="button" class="lamap-tab" data-lm-tab="request" role="tab" aria-selected="false">Request</button>
+                                    <button type="button" class="lamap-tab" data-lm-tab="jobs" role="tab" aria-selected="false">Jobs</button>
+                                    <button type="button" class="lamap-tab" data-lm-tab="services" role="tab" aria-selected="false">Services</button>
+                                </div>
+                                <button type="button" class="lamap-dock-close" id="lamap-dock-close" title="Tutup panel"><i class="fas fa-times"></i></button>
+                            </div>
+                            <div class="lamap-panes">
+                                <div class="lamap-pane is-active" data-lm-pane="sumber" role="tabpanel">
+                                    <div class="lamap-pane-title"><span>Sumber teratas</span></div>
+                                    <div id="lamap-list"><div class="lamap-item meta">Memuat data...</div></div>
+                                </div>
+                                <div class="lamap-pane" data-lm-pane="ip" role="tabpanel">
+                                    <div class="lamap-pane-title"><span>Akses per IP (5 menit)</span><span class="lm-badge" id="ip-count">0 IP</span></div>
+                                    <div id="ip-map" class="lm-nodes"><div class="lm-empty">Memuat data...</div></div>
+                                </div>
+                                <div class="lamap-pane" data-lm-pane="user" role="tabpanel">
+                                    <div class="lamap-pane-title"><span>Akses per User (5 menit)</span><span class="lm-badge" id="user-count">0 user</span></div>
+                                    <div id="user-map" class="lm-nodes"><div class="lm-empty">Memuat data...</div></div>
+                                </div>
+                                <div class="lamap-pane" data-lm-pane="request" role="tabpanel">
+                                    <div class="lamap-pane-title"><span>Request Terbaru</span><span class="lm-badge" id="recent-count">0 req</span></div>
+                                    <div id="recent-list" class="lm-recent"><div class="lm-empty">Memuat data...</div></div>
+                                </div>
+                                <div class="lamap-pane" data-lm-pane="jobs" role="tabpanel">
+                                    <div class="lamap-pane-title"><span>Jobs &amp; Queue</span><span class="lm-badge" id="jobs-badge">0 worker</span></div>
+                                    <div id="jobs-panel" class="lm-plain">Memuat...</div>
+                                </div>
+                                <div class="lamap-pane" data-lm-pane="services" role="tabpanel">
+                                    <div class="lamap-pane-title"><span>Services berjalan</span><span class="lm-badge" id="services-badge">0</span></div>
+                                    <div id="services-panel" class="lm-plain">Memuat...</div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="lamap-legend">
-                            <span><i class="fas fa-circle" style="color:#22d3ee;"></i> publik</span>
-                            <span><i class="fas fa-circle" style="color:#22c55e;"></i> jaringan lokal</span>
-                            <span><i class="fas fa-circle" style="color:#f59e0b;"></i> ada 4xx</span>
-                            <span><i class="fas fa-circle" style="color:#ef4444;"></i> ada 5xx</span>
+                            <span><i class="fas fa-circle" style="color:#0891b2;"></i> publik</span>
+                            <span><i class="fas fa-circle" style="color:#16a34a;"></i> jaringan lokal</span>
+                            <span><i class="fas fa-circle" style="color:#d97706;"></i> ada 4xx</span>
+                            <span><i class="fas fa-circle" style="color:#dc2626;"></i> ada 5xx</span>
                             <span><i class="fas fa-circle" style="color:#64748b;"></i> belum diketahui</span>
                         </div>
 
@@ -303,7 +492,7 @@
                     <button type="button" class="btn btn-sm btn-outline-info" id="lamapCountryZoom">
                         <i class="fas fa-search-plus mr-1"></i>Zoom ke wilayah
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-light" id="lamapCountryReset">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="lamapCountryReset">
                         <i class="fas fa-undo mr-1"></i>Reset peta
                     </button>
                     <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
@@ -312,77 +501,9 @@
         </div>
     </div>
 
-    <div class="row">
-        {{-- Peta akses per IP --}}
-        <div class="col-lg-7">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-network-wired mr-1"></i> Akses per IP (5 menit terakhir)</h6>
-                    <span class="badge badge-primary" id="ip-count">0 IP</span>
-                </div>
-                <div class="card-body" style="max-height: 420px; overflow-y: auto;">
-                    <div id="ip-map" class="d-flex flex-wrap" style="gap: 10px;">
-                        <div class="text-muted small w-100">Memuat data...</div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Peta akses per user --}}
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-shield mr-1"></i> Akses per User (5 menit terakhir)</h6>
-                    <span class="badge badge-info" id="user-count">0 user</span>
-                </div>
-                <div class="card-body" style="max-height: 420px; overflow-y: auto;">
-                    <div id="user-map" class="d-flex flex-wrap" style="gap: 10px;">
-                        <div class="text-muted small w-100">Memuat data...</div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Tabel request terbaru --}}
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-stream mr-1"></i> Request Terbaru</h6>
-                </div>
-                <div class="card-body table-responsive" style="max-height: 420px; overflow-y: auto;">
-                    <table class="table table-sm table-bordered" id="recent-table">
-                        <thead>
-                            <tr>
-                                <th>Waktu</th><th>IP</th><th>User</th><th>NPK</th>
-                                <th>Method</th><th>Path</th><th>Route</th><th>Status</th><th>ms</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-5">
-            {{-- Jobs / Queue --}}
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-tasks mr-1"></i> Jobs &amp; Queue</h6>
-                    <span class="badge badge-info" id="jobs-badge">0 worker</span>
-                </div>
-                <div class="card-body" style="max-height: 260px; overflow-y: auto; font-size: 12.5px;">
-                    <div id="jobs-panel" class="text-muted small">Memuat...</div>
-                </div>
-            </div>
-
-            {{-- Services --}}
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-server mr-1"></i> Services berjalan</h6>
-                    <span class="badge badge-success" id="services-badge">0</span>
-                </div>
-                <div class="card-body" style="max-height: 260px; overflow-y: auto; font-size: 12.5px;">
-                    <div id="services-panel" class="text-muted small">Memuat...</div>
-                </div>
-            </div>
-        </div>
-    </div>
+    {{-- Catatan: Akses per IP, Akses per User, Request Terbaru, Jobs & Queue, dan
+         Services berjalan TIDAK lagi berupa kartu terpisah di bawah peta. Kelimanya
+         sudah dipindah ke dalam HUD Live Map Akses (dock + tab di dalam peta). --}}
 </div>
 @endsection
 
@@ -437,7 +558,7 @@
                     const users = (ip.users || []).map(esc).join(', ') || (ip.npk || []).map(esc).join(', ') || '-';
                     return '' +
                     '<div class="ip-node" style="border:1px solid rgba(29,63,134,' + (intensity/100) + '); background: rgba(34,211,238,' + (intensity/300) + '); border-radius:10px; padding:8px 10px; min-width:150px;">' +
-                        '<div class="font-weight-bold" style="color:#1d3f86;"><i class="fas fa-circle" style="font-size:8px; color:#22c55e;"></i> ' + esc(ip.ip) + '</div>' +
+                        '<div class="font-weight-bold" style="color:#1d3f86;"><i class="fas fa-circle" style="font-size:8px; color:#16a34a;"></i> ' + esc(ip.ip) + '</div>' +
                         '<div class="small text-muted">' + ip.requests + ' request · ' + esc(users) + '</div>' +
                         '<div class="small" style="color:#475569;">' + esc(ip.last_path) + '</div>' +
                         (routes ? '<div class="small" style="color:#64748b;">top: ' + routes + '</div>' : '') +
@@ -462,7 +583,7 @@
                         const npkTag = (u.user && u.npk) ? ' <span class="text-muted small">' + esc(u.npk) + '</span>' : '';
                         return '' +
                         '<div class="ip-node" style="border:1px solid rgba(29,63,134,' + (intensity/100) + '); background: rgba(34,211,238,' + (intensity/300) + '); border-radius:10px; padding:8px 10px; min-width:150px;">' +
-                            '<div class="font-weight-bold" style="color:#1d3f86;"><i class="fas fa-circle" style="font-size:8px; color:#22c55e;"></i> ' + esc(name) + npkTag + '</div>' +
+                            '<div class="font-weight-bold" style="color:#1d3f86;"><i class="fas fa-circle" style="font-size:8px; color:#16a34a;"></i> ' + esc(name) + npkTag + '</div>' +
                             '<div class="small text-muted">' + u.requests + ' request · IP: ' + esc(ips) + '</div>' +
                             '<div class="small" style="color:#475569;">' + esc(u.last_path) + '</div>' +
                             (routes ? '<div class="small" style="color:#64748b;">top: ' + routes + '</div>' : '') +
@@ -472,20 +593,28 @@
                 }
             }
 
-            const tbody = document.querySelector('#recent-table tbody');
-            tbody.innerHTML = d.recent.map(r =>
-                '<tr>' +
-                '<td>' + fmtTime(r.at) + '</td>' +
-                '<td>' + esc(r.ip) + '</td>' +
-                '<td>' + esc(r.user) + '</td>' +
-                '<td>' + esc(r.npk) + '</td>' +
-                '<td><span class="badge badge-light">' + esc(r.method) + '</span></td>' +
-                '<td>' + esc(r.path) + '</td>' +
-                '<td>' + esc(r.route) + '</td>' +
-                '<td>' + statusBadge(r.status) + '</td>' +
-                '<td>' + (r.duration_ms ?? '-') + '</td>' +
-                '</tr>'
-            ).join('') || '<tr><td colspan="9" class="text-center text-muted">Kosong</td></tr>';
+            // Request terbaru: daftar ringkas (bukan tabel lebar) supaya muat di dock peta.
+            const rlist = document.getElementById('recent-list');
+            const recent = d.recent || [];
+            const rcount = document.getElementById('recent-count');
+            if (rcount) rcount.textContent = recent.length + ' req';
+            if (rlist) {
+                rlist.innerHTML = recent.length ? recent.map(r =>
+                    '<div class="lm-item">' +
+                        '<div class="lm-row">' +
+                            '<span class="lm-at">' + fmtTime(r.at) + '</span>' +
+                            statusBadge(r.status) +
+                            '<span class="lm-badge">' + esc(r.method) + '</span>' +
+                            '<span class="ip">' + esc(r.ip) + '</span>' +
+                            '<span class="text-muted" style="font-size:.66rem;">' + (r.duration_ms ?? '-') + ' ms</span>' +
+                        '</div>' +
+                        '<div class="lm-row meta lm-path">' + esc(r.path) + '</div>' +
+                        '<div class="lm-row meta">' + (esc(r.user) || '(anonim)') +
+                            (r.npk ? ' &middot; ' + esc(r.npk) : '') +
+                            ' &middot; ' + (esc(r.route) || '-') + '</div>' +
+                    '</div>'
+                ).join('') : '<div class="lm-empty">Belum ada request.</div>';
+            }
 
             refreshMap(d);
         } catch (e) { /* abaikan */ }
@@ -530,6 +659,58 @@
             }
         } catch (e) { /* abaikan */ }
     }
+
+    // ===================== DOCK HUD: panel data di dalam peta =====================
+    // Tab: Sumber / IP / User / Request / Jobs / Services. Semua wadah data
+    // (#lamap-list, #ip-map, #user-map, #recent-list, #jobs-panel, #services-panel)
+    // ada di dalam dock, jadi fungsi pengisi datanya tidak perlu diubah.
+    (function lamapInitDock() {
+        const dock = document.getElementById('lamap-dock');
+        if (!dock) return;
+        const wrap = document.querySelector('.lamap');
+        const tabs = Array.prototype.slice.call(dock.querySelectorAll('.lamap-tab'));
+        const panes = Array.prototype.slice.call(dock.querySelectorAll('.lamap-pane'));
+        const activate = key => {
+            tabs.forEach(t => {
+                const on = t.getAttribute('data-lm-tab') === key;
+                t.classList.toggle('is-active', on);
+                t.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+            panes.forEach(p => p.classList.toggle('is-active', p.getAttribute('data-lm-pane') === key));
+        };
+        tabs.forEach(tab => tab.addEventListener('click', ev => {
+            ev.preventDefault();
+            activate(tab.getAttribute('data-lm-tab'));
+        }));
+        const toggle = document.getElementById('lamap-dock-toggle');
+        const close = document.getElementById('lamap-dock-close');
+        // Di layar kecil dock disembunyikan CSS; tombol "Panel" yang membukanya.
+        if (toggle) toggle.addEventListener('click', ev => { ev.preventDefault(); wrap.classList.add('is-dock-open'); });
+        if (close) close.addEventListener('click', ev => { ev.preventDefault(); wrap.classList.remove('is-dock-open'); });
+
+        window.__lamapDock = {
+            tabs: () => tabs.map(t => t.getAttribute('data-lm-tab')),
+            active: () => {
+                const t = dock.querySelector('.lamap-tab.is-active');
+                return t ? t.getAttribute('data-lm-tab') : null;
+            },
+            open: () => wrap.classList.contains('is-dock-open'),
+            visible: () => {
+                const cs = getComputedStyle(dock);
+                return cs.display !== 'none' && cs.visibility !== 'hidden' && dock.getBoundingClientRect().width > 0;
+            },
+            box: () => { const r = dock.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; },
+            paneCount: key => {
+                const pane = dock.querySelector('.lamap-pane[data-lm-pane="' + key + '"]');
+                if (!pane) return -1;
+                return pane.querySelectorAll('.lamap-item, .ip-node, .lm-item, li, tr').length;
+            },
+            paneText: key => {
+                const pane = dock.querySelector('.lamap-pane[data-lm-pane="' + key + '"]');
+                return pane ? pane.innerText.replace(/\s+/g, ' ').trim() : '';
+            }
+        };
+    })();
 
     // ===================== LIVE MAP (ala threat map) =====================
     // Data peta datang dari endpoint data() yang sama (key "map"), jadi tidak
@@ -924,7 +1105,8 @@
         bctx.setTransform(LAMAP.dpr, 0, 0, LAMAP.dpr, 0, 0);
 
         bctx.lineWidth = 1;
-        bctx.strokeStyle = 'rgba(56,189,248,0.07)';
+        // Graticule versi terang (abu tipis di atas laut muda).
+        bctx.strokeStyle = 'rgba(148,163,184,0.28)';
         for (let lng = -180; lng <= 180; lng += 30) {
             const x = lamapProject(lng, 0)[0];
             bctx.beginPath(); bctx.moveTo(x, 0); bctx.lineTo(x, LAMAP.h); bctx.stroke();
@@ -935,8 +1117,9 @@
         }
 
         if (LAMAP.paths.length) {
-            bctx.fillStyle = 'rgba(13,42,63,0.95)';
-            bctx.strokeStyle = 'rgba(56,189,248,0.30)';
+            // Daratan putih + garis pantai abu-biru (light mode).
+            bctx.fillStyle = 'rgba(255,255,255,0.98)';
+            bctx.strokeStyle = 'rgba(148,163,184,0.85)';
             bctx.lineWidth = 1;
             const paths = LAMAP.paths;
             for (let i = 0; i < paths.length; i++) { bctx.fill(paths[i]); bctx.stroke(paths[i]); }
@@ -1016,10 +1199,11 @@
     }
 
     function lamapColor(src) {
-        if ((src.status_5xx || 0) > 0) return '#ef4444';
-        if ((src.status_4xx || 0) > 0) return '#f59e0b';
-        if (src.scope === 'lan') return '#22c55e';
-        return '#22d3ee';
+        // Warna titik/busur disesuaikan untuk latar terang (kontras lebih tinggi).
+        if ((src.status_5xx || 0) > 0) return '#dc2626';
+        if ((src.status_4xx || 0) > 0) return '#d97706';
+        if (src.scope === 'lan') return '#16a34a';
+        return '#0891b2';
     }
 
     function lamapControl(a, b) {
@@ -1076,16 +1260,16 @@
         // ini, bukan di latar, supaya hover tidak memicu pembangunan ulang.
         if (LAMAP.hover && LAMAP.hover !== LAMAP.selected) {
             const hp = lamapFeaturePath(LAMAP.hover);
-            ctx.fillStyle = 'rgba(148,163,184,0.10)';
-            ctx.strokeStyle = 'rgba(148,163,184,0.55)';
+            ctx.fillStyle = 'rgba(148,163,184,0.22)';
+            ctx.strokeStyle = 'rgba(100,116,139,0.75)';
             ctx.lineWidth = 1;
             ctx.fill(hp);
             ctx.stroke(hp);
         }
         if (LAMAP.selected) {
             const sp = lamapFeaturePath(LAMAP.selected);
-            ctx.fillStyle = 'rgba(34,211,238,0.18)';
-            ctx.strokeStyle = 'rgba(34,211,238,0.95)';
+            ctx.fillStyle = 'rgba(8,145,178,0.20)';
+            ctx.strokeStyle = 'rgba(8,145,178,0.95)';
             ctx.lineWidth = 1.8;
             ctx.fill(sp);
             ctx.stroke(sp);
@@ -1101,12 +1285,12 @@
             const radius = lamapLanRadius();
             ctx.save();
             ctx.setLineDash([4, 7]);
-            ctx.strokeStyle = 'rgba(34,197,94,0.35)';
+            ctx.strokeStyle = 'rgba(22,163,74,0.45)';
             ctx.beginPath();
             ctx.arc(originPt[0], originPt[1], radius, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
-            ctx.fillStyle = 'rgba(148,163,184,0.8)';
+            ctx.fillStyle = 'rgba(71,85,105,0.9)';
             ctx.font = '10px system-ui, -apple-system, Segoe UI, sans-serif';
             ctx.fillText('jaringan lokal (LAN)', originPt[0] - 52, originPt[1] + radius + 14);
         }
@@ -1138,7 +1322,7 @@
 
             // garis busur
             ctx.save();
-            ctx.globalAlpha = src.scope === 'lan' ? 0.5 : 0.36;
+            ctx.globalAlpha = src.scope === 'lan' ? 0.7 : 0.55;
             ctx.strokeStyle = color;
             ctx.lineWidth = src.scope === 'public' ? 1.4 : 1.1;
             ctx.beginPath();
@@ -1163,7 +1347,7 @@
             // partikel berjalan di sepanjang busur
             const p = lamapPointOnQuad(from, ctrl, originPt, phase);
             ctx.drawImage(lamapGlow(color), p[0] - 7, p[1] - 7, 14, 14);
-            ctx.fillStyle = '#e0f2fe';
+            ctx.fillStyle = '#0f172a';
             ctx.beginPath();
             ctx.arc(p[0], p[1], 2.1, 0, Math.PI * 2);
             ctx.fill();
@@ -1175,15 +1359,15 @@
         if (originPt) {
             const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
             ctx.save();
-            ctx.strokeStyle = 'rgba(34,211,238,' + (0.55 - 0.35 * pulse) + ')';
+            ctx.strokeStyle = 'rgba(8,145,178,' + (0.6 - 0.35 * pulse) + ')';
             ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.arc(originPt[0], originPt[1], 12 + 16 * pulse, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
 
-            ctx.drawImage(lamapGlow('#22d3ee'), originPt[0] - 11, originPt[1] - 11, 22, 22);
-            ctx.fillStyle = '#22d3ee';
+            ctx.drawImage(lamapGlow('#0891b2'), originPt[0] - 11, originPt[1] - 11, 22, 22);
+            ctx.fillStyle = '#0891b2';
             ctx.beginPath();
             ctx.arc(originPt[0], originPt[1], 4.2, 0, Math.PI * 2);
             ctx.fill();
@@ -1206,13 +1390,13 @@
             const tw = ctx.measureText(label).width;
             let lx = originPt[0] + 14;
             if (lx + tw + 10 > lamapProjWidth()) lx = originPt[0] - tw - 20;
-            ctx.fillStyle = 'rgba(4,16,28,0.75)';
+            ctx.fillStyle = 'rgba(255,255,255,0.94)';
             ctx.fillRect(lx - 5, originPt[1] - 18, tw + 10, 17);
-            ctx.fillStyle = '#e0f2fe';
+            ctx.fillStyle = '#1e293b';
             ctx.fillText(label, lx, originPt[1] - 6);
         }
 
-        ctx.fillStyle = 'rgba(148,163,184,0.75)';
+        ctx.fillStyle = 'rgba(100,116,139,0.9)';
         ctx.font = '10px system-ui, -apple-system, Segoe UI, sans-serif';
         ctx.fillText('window ' + LAMAP.windowMinutes + ' menit', 16, LAMAP.h - 26);
 
@@ -1224,12 +1408,12 @@
             const tw = ctx.measureText(label).width;
             const bx = Math.max(12, lamapProjWidth() - tw - 44);
             const by = LAMAP.h - 34;
-            ctx.fillStyle = 'rgba(4,16,28,0.85)';
-            ctx.strokeStyle = 'rgba(34,211,238,0.55)';
+            ctx.fillStyle = 'rgba(255,255,255,0.96)';
+            ctx.strokeStyle = 'rgba(29,63,134,0.45)';
             ctx.lineWidth = 1;
             ctx.fillRect(bx, by, tw + 18, 20);
             ctx.strokeRect(bx, by, tw + 18, 20);
-            ctx.fillStyle = '#a5f3fc';
+            ctx.fillStyle = '#1d3f86';
             ctx.fillText(label, bx + 9, by + 14);
         }
     }
@@ -1264,10 +1448,13 @@
     }
 
     function lamapSelectCountry(feature) {
+        const prev = LAMAP.selected;
         LAMAP.selected = feature || null;
         lamapLog('select:' + (feature ? lamapCountryName(feature) : 'null') + ' scale=' + LAMAP.view.scale.toFixed(2));
         if (feature) {
-            lamapZoomToFeature(feature);
+            // Klik pertama -> zoom ke negara. Klik negara yang sama saat sudah
+            // di-zoom tidak menambah zoom lagi (menghindari zoom beruntun).
+            if (feature !== prev || LAMAP.view.scale <= 1.001) lamapZoomToFeature(feature);
             lamapOpenCountryModal(feature);
         } else {
             lamapCloseCountryModal();
@@ -1418,7 +1605,10 @@
             '</div>';
     }
 
-    function lamapOpenCountryModal(feature) {
+    // Isi modal dibangun ulang TANPA menampilkan modal. Dipakai oleh klik user
+    // (lamapOpenCountryModal) dan oleh refresh data (refreshMap): saat modal
+    // sedang terbuka, HANYA isinya yang disegarkan.
+    function lamapRenderCountryModal(feature) {
         const modal = document.getElementById('lamapCountryModal');
         const body = document.getElementById('lamapCountryBody');
         if (!modal || !body) return;
@@ -1473,14 +1663,36 @@
 
         const zoomBtn = document.getElementById('lamapCountryZoom');
         if (zoomBtn) zoomBtn.classList.remove('d-none');
+    }
 
-        if (window.jQuery && jQuery.fn.modal) jQuery(modal).modal('show');
-        else modal.classList.add('show');
+    // Tampilkan modal detail wilayah (dipicu klik user). Kalau modal SUDAH
+    // terbuka, isinya saja yang sudah diperbarui di atas — modal('show') tidak
+    // dipanggil lagi supaya modal tidak muncul berulang/berkedip.
+    function lamapOpenCountryModal(feature) {
+        const modal = document.getElementById('lamapCountryModal');
+        if (!modal) return;
+        lamapRenderCountryModal(feature);
+        if (LAMAP.modalOpen) return;
+        if (window.jQuery && jQuery.fn.modal) {
+            if (!LAMAP.modalBound) {
+                LAMAP.modalBound = true;
+                // Status modal diambil dari event Bootstrap supaya tutup lewat
+                // tombol X / backdrop / ESC ikut terdeteksi.
+                jQuery(modal).on('shown.bs.modal', () => { LAMAP.modalOpen = true; });
+                jQuery(modal).on('hidden.bs.modal', () => { LAMAP.modalOpen = false; });
+            }
+            jQuery(modal).modal('show');
+            LAMAP.modalOpen = true;
+        } else {
+            modal.classList.add('show');
+            LAMAP.modalOpen = true;
+        }
     }
 
     function lamapCloseCountryModal() {
         const modal = document.getElementById('lamapCountryModal');
         if (!modal) return;
+        LAMAP.modalOpen = false;
         if (window.jQuery && jQuery.fn.modal) {
             if (jQuery(modal).hasClass('show') || document.querySelector('.modal-backdrop')) {
                 jQuery(modal).modal('hide');
@@ -1537,8 +1749,10 @@
         LAMAP.unknown = (map && map.unknown_count) || 0;
         LAMAP.windowMinutes = d.window_minutes || LAMAP.windowMinutes;
         lamapTagSourceCountries();
-        // Modal detail negara ikut diperbarui saat data refresh (peta live).
-        if (LAMAP.selected) lamapOpenCountryModal(LAMAP.selected);
+        // Modal detail negara: HANYA isinya yang disegarkan, dan hanya kalau
+        // modalnya sedang terbuka. Sebelumnya di sini modal dipaksa show() tiap
+        // refresh (5 detik) sehingga muncul sendiri walau sudah ditutup user.
+        if (LAMAP.selected && LAMAP.modalOpen) lamapRenderCountryModal(LAMAP.selected);
 
         const totalReq = sources.reduce((sum, s) => sum + (s.requests || 0), 0);
         const errors = sources.reduce((sum, s) => sum + (s.status_4xx || 0) + (s.status_5xx || 0), 0);

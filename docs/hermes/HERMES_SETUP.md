@@ -42,22 +42,12 @@ Semua script wajib ada di `~/.hermes/scripts/` — Hermes menolak path di luar i
 
 ### A1. Konfigurasi `.env`
 
-```env
-# Database SQL Server (SQL Auth, bukan Windows Auth)
-DB_CII_CONNECTION=cii
-DB_CII_HOST=192.168.3.55
-DB_CII_PORT=13279
-DB_CII_DATABASE=CII
-DB_CII_USERNAME=hr_app
-DB_CII_PASSWORD=<password>
-DB_CII_LOGIN_TIMEOUT=10
-
 # API yang dipanggil messaging layer (Hermes) untuk ambil data & kirim keputusan
-APPROVAL_API_TOKEN=<token-acak-panjang>
-APPROVAL_API_ALLOWED_IPS=192.168.0.68        # IP server Hermes (opsional)
+APPROVAL_API_TOKEN=9ffb4029649e0abd466622e7a24ec960f3be7df0c6225864
+APPROVAL_API_ALLOWED_IPS=192.168.1.252        # IP server Hermes (opsional)
 
 # Hermes webhook — Laravel POST ke sini saat ada pengajuan/approve
-APPROVAL_WEBHOOK_URL=http://192.168.0.68:8644/webhooks/leave-approval
+APPROVAL_WEBHOOK_URL=http://192.168.1.252:8644/webhooks/leave-approval
 APPROVAL_WEBHOOK_SECRET=<secret-dari-hermes-webhook-subscribe>
 ```
 
@@ -73,10 +63,10 @@ php8.3 artisan config:clear
 php8.3 artisan route:list --path=api/approval
 
 # Tanpa token harus 401
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8010/api/approval/pending
+curl -s -o /dev/null -w "%{http_code}\n" https://hris.chutex.id/api/approval/pending
 
 # Dengan token harus 200 (butuh DB hidup)
-curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:8010/api/approval/pending | head -c 300
+curl -s -H "Authorization: Bearer <token>" https://hris.chutex.id/api/approval/pending | head -c 300
 ```
 
 ### A3. Endpoint yang tersedia
@@ -114,7 +104,7 @@ chmod 600 ~/.hermes/approval-wa.env
 Isi `~/.hermes/approval-wa.env`:
 
 ```env
-HR_CII_API_URL=http://192.168.0.68:8010
+HR_CII_API_URL=http://192.168.1.252:8010
 APPROVAL_API_TOKEN=<harus sama dengan .env Laravel>
 WA_BRIDGE_URL=http://127.0.0.1:3000
 WA_JITTER_SECONDS=15
@@ -217,8 +207,8 @@ mengirimkan teks apa adanya.
 
 *DETAIL PENGAJUAN*
 📌 Jenis cuti: Cuti Tahunan
-📅 Diajukan: 07/10/2026 15:51 WIB
-🗓️ Periode: 12/10/2026
+📅 Diajukan: 07 Oktober 2026 15:51 WIB
+🗓️ Periode: 12 Oktober 2026
 ⏳ Durasi: 1 hari
 📝 Alasan: Acara keluarga ke Kudus
 
