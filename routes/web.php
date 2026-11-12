@@ -1530,7 +1530,6 @@ Route::prefix('work-assignment')->name('work-assignment.')->group(function () {
 
     Route::get('/form', [WorkAssignmentController::class, 'form'])->name('form');
     Route::post('/submit', [WorkAssignmentController::class, 'submit'])->name('submit');
-    Route::get('/riwayat', [WorkAssignmentController::class, 'riwayat'])->name('riwayat');
 
     // Autofill (pemohon isi NPK → data karyawan terisi otomatis)
     Route::post('/lookup-npk', [WorkAssignmentController::class, 'lookupNpk'])

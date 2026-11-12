@@ -254,73 +254,12 @@ class WorkAssignmentController extends Controller
             'Work Assignment #' . $record->id . ' berhasil diajukan (' . count($dates) . ' tanggal).'
         );
 
-        return redirect()->route('work-assignment.riwayat');
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // Riwayat
-    // ─────────────────────────────────────────────────────────────
-
-    public function riwayat()
-    {
-        $npk = session(self::SESSION_KEY);
-        if (!$npk) {
-            return redirect()->route('work-assignment.login');
-        }
-
-        $items = WorkAssignmentRequest::forNpk($npk)
-            ->orderByDesc('id')
-            ->limit(50)
-            ->get();
-
-        // Data karyawan diambil dari join master (tidak disimpan di tabel)
-        $employees = self::employeesFor(array_unique($items->pluck('npk')->all()));
-
-        return view('work_assignment.riwayat', compact('items', 'employees'));
+        return redirect()->route('work-assignment.form');
     }
 
     // ─────────────────────────────────────────────────────────────
     // Helper
     // ─────────────────────────────────────────────────────────────
-
-    /**
-     * Ambil data karyawan (nama, dept, section) untuk beberapa NPK sekaligus.
-     *
-     * @param  array<int,string> $npks
-     * @return array<string, object>
-     */
-    private static function employeesFor(array $npks): array
-    {
-        $npks = array_values(array_filter(array_unique($npks)));
-        if (empty($npks)) {
-            return [];
-        }
-
-        try {
-            $rows = DB::connection('cii')
-                ->table('BIODATA')
-                ->leftJoin('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
-                ->leftJoin('sections', 'BIODATA.SECTION', '=', 'sections.id')
-                ->whereIn('BIODATA.NPK', $npks)
-                ->select(
-                    'BIODATA.NPK',
-                    'BIODATA.NAMA_KARYAWAN',
-                    'BIODATA.BAG',
-                    'DEPT.DEPARTEMENT',
-                    'sections.name as SECTION_NAME'
-                )
-                ->get();
-        } catch (\Throwable) {
-            return [];
-        }
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[$row->NPK] = $row;
-        }
-
-        return $map;
-    }
 
     private static function deptIdFor(string $npk): ?string
     {
