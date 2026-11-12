@@ -137,6 +137,27 @@ class FaceRecognitionService
     public const RANDOM_CHALLENGE_TYPES = ['left', 'right', 'mouth'];
 
     /**
+     * Teks petunjuk (Bahasa Indonesia) untuk tiap jenis challenge.
+     *
+     * PERBAIKAN V38 (2026-11-10): challenge dulu hanya mengembalikan
+     * type/token, sehingga banner instruksi di semua halaman hanya
+     * menampilkan teks generik ("Ikuti tantangan yang diminta"). User
+     * tidak tahu harus bergerak apa, jadi challenge mustahil di-trigger.
+     * Petunjuk ini sekarang ikut dikirim ke view.
+     *
+     * CATATAN: teks memakai arah LAYAR (kiri/kanan yang terlihat user),
+     * sama seperti RandomChallenge.HINTS di public/js/random-challenge.js,
+     * karena preview kamera depan di-mirror.
+     *
+     * @var array<string,string>
+     */
+    public const RANDOM_CHALLENGE_HINTS = [
+        'left'  => 'Hadapkan wajah ke KIRI layar',
+        'right' => 'Hadapkan wajah ke KANAN layar',
+        'mouth' => 'BUKA MULUT Anda',
+    ];
+
+    /**
      * Terbitkan challenge acak untuk satu sesi/percobaan.
      *
      * Challenge disimpan di cache ber-TTL pendek (default 5 menit) dengan
@@ -162,6 +183,9 @@ class FaceRecognitionService
         return [
             'token'      => $token,
             'type'       => $type,
+            // PERBAIKAN V38 (2026-11-10): kirim teks petunjuk supaya banner
+            // instruksi di view menampilkan gerakan yang spesifik.
+            'hint'       => static::RANDOM_CHALLENGE_HINTS[$type] ?? 'Ikuti tantangan yang diminta',
             'expires_in' => $ttlSeconds,
         ];
     }
@@ -470,7 +494,13 @@ class FaceRecognitionService
      */
     public static function match(array $descriptor): array
     {
+        // PERBAIKAN V33 (2026-11-09): select kolom ringan saja.
+        // Query tanpa select() mengangkut face_img (base64 foto,
+        // ratusan KB per karyawan) yang TIDAK dipakai di match --
+        // hanya npk/name/descriptor yang dibutuhkan. Tanpa select,
+        // 2.000 karyawan * 500KB = ~1GB diangkut per scan.
         $faces = EmployeeFace::query()
+            ->select(['id', 'npk', 'name', 'descriptor', 'is_active'])
             ->where('is_active', true)
             ->whereNotNull('descriptor')
             ->get();
@@ -542,6 +572,7 @@ class FaceRecognitionService
 
         try {
             $face = EmployeeFace::query()
+                ->select(['id', 'npk', 'name', 'descriptor', 'is_active'])
                 ->where('npk', $npk)
                 ->where('is_active', true)
                 ->whereNotNull('descriptor')

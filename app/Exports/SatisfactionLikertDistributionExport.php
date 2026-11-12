@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Services\SurveySanitizer;
 use App\Models\SatisfactionQuestion;
 use App\Models\SatisfactionResponse;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -66,10 +67,12 @@ class SatisfactionLikertDistributionExport implements FromCollection, WithHeadin
         static $no = 0;
         $no++;
         $q = $row['question'];
+        // PERBAIKAN V32 (2026-11-09): escape formula-injection. Section dan
+        // question_text berasal dari input admin dan bisa diawali "=".
         return [
             $no,
-            $q->section ?? '',
-            $q->question_text,
+            SurveySanitizer::escapeFormula($q->section ?? ''),
+            SurveySanitizer::escapeFormula($q->question_text),
             $row['dist'][1], $row['dist'][2], $row['dist'][3], $row['dist'][4], $row['dist'][5],
             $row['total'],
             $row['avg'] !== null ? $row['avg'] : '—',

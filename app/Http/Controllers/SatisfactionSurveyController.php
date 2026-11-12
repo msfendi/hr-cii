@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\SurveySanitizer;
 use App\Models\SatisfactionQuestion;
 use App\Models\SatisfactionResponse;
 use Illuminate\Http\Request;
@@ -57,10 +58,16 @@ class SatisfactionSurveyController extends Controller
                             'answer_text' => null,
                         ]);
                     } else {
+                        // PERBAIKAN V32 (2026-11-09): bersihkan teks jawaban
+                        // sebelum disimpan. Mencegah control character (NUL),
+                        // payload yang keluar dari konteks HTML, dan
+                        // payload formula-injection yang nanti ikut ke file
+                        // Excel/CSV. Query tetap memakai binding Eloquent.
+                        $cleanText = SurveySanitizer::cleanText($val);
                         SatisfactionResponse::create([
                             'question_id' => $q->id,
                             'score' => null,
-                            'answer_text' => $val ? trim((string) $val) : null,
+                            'answer_text' => $cleanText !== '' ? $cleanText : null,
                         ]);
                     }
                 }
@@ -105,9 +112,13 @@ class SatisfactionSurveyController extends Controller
         ]);
 
         $maxOrder = (int) (SatisfactionQuestion::max('sort_order') ?? 0);
+        // PERBAIKAN V32 (2026-11-09): bersihkan section & question_text.
+        // Section & teks pertanyaan dirender di halaman admin DAN ikut ke
+        // export Excel, jadi harus dibersihkan di server. Output encoding
+        // tetap dipakai sebagai lapis kedua.
         SatisfactionQuestion::create([
-            'section' => $request->input('section'),
-            'question_text' => $request->input('question_text'),
+            'section' => SurveySanitizer::cleanSection($request->input('section')),
+            'question_text' => SurveySanitizer::cleanQuestionText($request->input('question_text')),
             'question_type' => $request->input('question_type'),
             'sort_order' => $request->input('sort_order') !== null ? (int) $request->input('sort_order') : $maxOrder + 1,
             'is_active' => $request->boolean('is_active', true),
@@ -126,9 +137,10 @@ class SatisfactionSurveyController extends Controller
             'sort_order' => 'nullable|integer',
         ]);
 
+        // PERBAIKAN V32 (2026-11-09): sanitasi sama seperti adminStore.
         $q->update([
-            'section' => $request->input('section'),
-            'question_text' => $request->input('question_text'),
+            'section' => SurveySanitizer::cleanSection($request->input('section')),
+            'question_text' => SurveySanitizer::cleanQuestionText($request->input('question_text')),
             'question_type' => $request->input('question_type'),
             'sort_order' => $request->input('sort_order') !== null ? (int) $request->input('sort_order') : $q->sort_order,
             'is_active' => $request->boolean('is_active', true),

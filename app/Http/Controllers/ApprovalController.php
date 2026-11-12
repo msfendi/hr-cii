@@ -29,44 +29,78 @@ class ApprovalController extends Controller
 
     /**
      * Return JSON for ApprovalDept DataTable.
+     *
+     * PENTING: jangan pakai query per group/per rule (N+1). Data master ini
+     * bisa hundreds group × beberapa approver, dan setiap reload DataTable
+     * akan menuju server SQL Server CII (jarak jauh). Versi lama melakukan
+     * ratusan query berurutan sehingga halaman menggantung ("freeze") setiap
+     * kali tabel di-refresh (mis. setelah create group).
+     *
+     * Sekarang semua master data diambil sekali (3 query) lalu di-map di PHP.
      */
     public function getData()
     {
-        $data = ApprovalDept::with(['rules', 'sectionDetail'])->get()->map(function ($item) {
-            // Resolve department names from CII DB
-            $deptNames = DB::connection('cii')
-                ->table('DEPT')
-                ->whereIn('ID_DEPT', $item->dept ?? [])
-                ->pluck('DEPARTEMENT')
-                ->toArray();
+        // 1. Master departemen (CII) — 1 query
+        $deptMap = DB::connection('cii')
+            ->table('DEPT')
+            ->select('ID_DEPT', 'DEPARTEMENT')
+            ->get()
+            ->mapWithKeys(fn ($d) => [(string) $d->ID_DEPT => $d->DEPARTEMENT]);
 
-            // Resolve approval names from BIODATA
-            $rulesData = $item->rules->map(function ($rule) {
-                $bio = DB::connection('cii')
-                    ->table('BIODATA')
-                    ->where('NPK', $rule->approval_id)
-                    ->first();
+        // 2. Nama approver (CII) — 1 query untuk semua NPK yang dipakai
+        $npks = ApprovalRule::query()
+            ->select('approval_id')
+            ->distinct()
+            ->pluck('approval_id')
+            ->filter()
+            ->values();
+
+        $employeeMap = collect();
+
+        if ($npks->isNotEmpty()) {
+            $employeeMap = DB::connection('cii')
+                ->table('BIODATA')
+                ->whereIn('NPK', $npks)
+                ->select('NPK', 'NAMA_KARYAWAN')
+                ->get()
+                ->mapWithKeys(fn ($e) => [$e->NPK => $e->NAMA_KARYAWAN]);
+        }
+
+        // 3. Group + rules + section (eager load, 3 query)
+        $data = ApprovalDept::with(['rules' => fn ($q) => $q->orderBy('level'), 'sectionDetail'])
+            ->get()
+            ->map(function ($item) use ($deptMap, $employeeMap) {
+                $deptNames = [];
+
+                foreach (($item->dept ?? []) as $deptId) {
+                    $deptId = (string) $deptId;
+
+                    if (isset($deptMap[$deptId])) {
+                        $deptNames[] = $deptMap[$deptId];
+                    }
+                }
+
+                $rulesData = $item->rules->map(function ($rule) use ($employeeMap) {
+                    return [
+                        'id'            => $rule->id,
+                        'name'          => $rule->name,
+                        'approval_id'   => $rule->approval_id,
+                        'approval_name' => $employeeMap[$rule->approval_id] ?? $rule->approval_id,
+                        'level'         => $rule->level,
+                    ];
+                });
 
                 return [
-                    'id'          => $rule->id,
-                    'name'        => $rule->name,
-                    'approval_id' => $rule->approval_id,
-                    'approval_name' => $bio ? $bio->NAMA_KARYAWAN : $rule->approval_id,
-                    'level'       => $rule->level,
+                    'id'           => $item->id,
+                    'name'         => $item->name,
+                    'dept'         => $item->dept,
+                    'dept_names'   => $deptNames,
+                    'section'      => $item->section,
+                    'section_name' => $item->sectionDetail ? $item->sectionDetail->name : null,
+                    'rules'        => $rulesData,
+                    'rules_count'  => $rulesData->count(),
                 ];
             });
-
-            return [
-                'id'           => $item->id,
-                'name'         => $item->name,
-                'dept'         => $item->dept,
-                'dept_names'   => $deptNames,
-                'section'      => $item->section,
-                'section_name' => $item->sectionDetail ? $item->sectionDetail->name : null,
-                'rules'        => $rulesData,
-                'rules_count'  => $rulesData->count(),
-            ];
-        });
 
         return response()->json(['data' => $data]);
     }

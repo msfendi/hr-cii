@@ -165,8 +165,29 @@ h     *   hanya sebagai mirror kompatibilitas lama agar migrasi lama tidak error
             try { $canteenConn->statement("CREATE INDEX IX_canteen_npk_date ON canteen (npk, date)"); } catch (\Throwable $e) {}
             try { $canteenConn->statement("CREATE INDEX IX_canteen_twos_npk_date ON canteen_twos (npk, date)"); } catch (\Throwable $e) {}
         } catch (\Throwable $e) {
-            \Log::warning('Migrasi canteen/canteen_twos di database canteen gagal: ' . $e->getMessage());
-            // Tidak throw — supaya migrasi CII tetap jalan walau koneksi canteen belum terjangkau.
+            // PERBAIKAN V40 (2026-11-10) — JANGAN swallow error.
+            //
+            // Sebelumnya blok ini hanya Log::warning() tanpa throw, jadi
+            // Laravel menandai migrasi sebagai SUCCEES padahal tabel
+            // 'canteen' / 'canteen_twos' TIDAK PERNAH dibuat. Akibatnya
+            // setiap scan kantin gagal 503 ("Sistem tidak dapat memeriksa
+            // transaksi sebelumnya") dan tidak ada yang tahu, karena
+            // migration status sudah hijau.
+            //
+            // Sekarang error dilempar supaya 'php artisan migrate'
+            // berhenti dengan jelas dan operator bisa menjalankan
+            // fix_canteen_tables_20261110.php --apply.
+            //
+            // Catatan: throw di sini HANYA menghentikan migrasi CII
+            // yang tersisa; tabel CII yang sudah dibuat tetap aman
+            // karena migrasi lain bersifat idempotent.
+            \Log::error('Migrasi canteen/canteen_twos di database canteen GAGAL: ' . $e->getMessage());
+            throw new \RuntimeException(
+                'Migrasi tabel kantin di database "canteen" gagal: ' . $e->getMessage()
+                . ' — jalankan: php fix_canteen_tables_20261110.php --apply',
+                0,
+                $e
+            );
         }
     }
 

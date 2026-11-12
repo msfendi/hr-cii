@@ -22,6 +22,19 @@ class CanteenReport extends Model
         'name',
         'dept',
         'date',
+        // PERBAIKAN V32 (2026-11-09): kolom tambahan agar tidak diam-diam
+        // diabaikan oleh mass-assignment. Tanpa ini, window_name /
+        // location_name / latitude / longitude / photo_face TIDAK AKAN
+        // tersimpan walau controller mengirimkannya.
+        'window_name',
+        'location_name',
+        'latitude',
+        'longitude',
+        'photo_face',
+        // PERBAIKAN V41 (2026-11-10): identitas unik per transaksi scan
+        // kantin. Tanpa ini di fillable, kolom id_ticket akan diam-diam
+        // diabaikan mass-assignment dan tidak pernah tersimpan.
+        'id_ticket',
     ];
 
     protected $casts = [

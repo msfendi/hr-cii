@@ -112,16 +112,24 @@
         </li>
 
         <!-- Nav Item - Search Menu Desktop (Inline) -->
-        <li class="nav-item d-none d-sm-block mr-2 d-flex align-items-center">
-            <div class="position-relative d-flex align-items-center">
-                <input type="text" id="navbarMenuSearch" class="form-control form-control-sm"
-                    placeholder="Cari menu..." autocomplete="off"
-                    style="border-radius:20px;padding-left:32px;padding-right:12px;font-size:13px;width:220px;height:36px;">
-                <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;pointer-events:none;"></i>
-            </div>
-        </li>
+                <li class="nav-item d-none d-sm-block mr-2 d-flex align-items-center">
+                    <div class="position-relative d-flex align-items-center">
+                        <input type="text" id="navbarMenuSearch" class="form-control form-control-sm"
+                            placeholder="Cari menu..." autocomplete="off"
+                            style="border-radius:20px;padding-left:32px;padding-right:12px;font-size:13px;width:220px;height:36px;">
+                        <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#b7b9cc;pointer-events:none;"></i>
+                    </div>
+                </li>
 
-    <li class="nav-item dropdown no-arrow mx-1">
+                <!-- Nav Item - AI Assistant (Chatbot) -->
+                <!-- <li class="nav-item d-none d-sm-block mx-1">
+                    <a href="{{ route('chatbot.index') }}" class="ai-assistant-btn" title="AI Assistant (Chatbot)">
+                        <i class="fas fa-robot"></i>
+                        <span class="ai-btn-text">AI Assistant</span>
+                    </a>
+                </li> -->
+
+                <div class="topbar-divider d-none d-sm-block"></div>
         <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
         data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             <i class="fas fa-bell fa-fw"></i>
@@ -259,12 +267,120 @@
 
             const normalize = (str) => (str || '').toLowerCase().trim();
 
+            // PERBAIKAN V32 (2026-11-09): buka/tutup submenu WAJIB lewat
+            // API plugin Bootstrap, bukan classList pada class 'show'.
+            //
+            // Kenapa: memanipulasi class 'show' langsung membuat state
+            // internal plugin (bs.collapse._isShown) TIDAK sinkron dengan
+            // tampilan. Akibatnya klik parent berikutnya tidak menutup
+            // submenu (plugin mengira masih tertutup lalu memanggil
+            // show() padahal class 'show' sudah ada).
+            //
+            // Fungsi ini menjaga DOM dan state plugin selalu sinkron.
+            function syncCollapseTrigger(el, shouldBeOpen) {
+                if (!el) return;
+                const trigger = document.querySelector('[data-target="#' + el.id + '"]');
+                if (!trigger) return;
+                trigger.classList.toggle('collapsed', !shouldBeOpen);
+                trigger.setAttribute('aria-expanded', shouldBeOpen ? 'true' : 'false');
+            }
+
+            function setCollapseState(el, shouldBeOpen) {
+                if (!el) return;
+
+                const wantOpen = !!shouldBeOpen;
+                const $ = window.jQuery;
+                const instance = ($ && $.data(el, 'bs.collapse')) ? $.data(el, 'bs.collapse') : null;
+
+                // Fallback: plugin Bootstrap belum termuat (mis. CDN gagal).
+                // Tandai sebagai state manual supaya handler klik berikutnya
+                // bisa menimpanya dengan benar (tidak meninggalkan state
+                // setengah jadi).
+                if (!instance) {
+                    el.classList.toggle('show', wantOpen);
+                    el.__manualCollapseState = wantOpen;
+                    syncCollapseTrigger(el, wantOpen);
+                    return;
+                }
+
+                // Plugin sedang transisi -> tunggu selesai dulu.
+                // Bootstrap MENGABAIKAN show()/hide() saat _isTransitioning
+                // true, jadi tanpa penantian state yang diminta hilang.
+                if (instance._isTransitioning) {
+                    // Bootstrap 4.x memancarkan event 'shown.bs.collapse' dan
+                    // 'hidden.bs.collapse' (BUKAN 'bsTransitionEnd' seperti
+                    // Bootstrap 5). Dengarkan keduanya.
+                    const cleanup = () => {
+                        el.removeEventListener('shown.bs.collapse', onDone);
+                        el.removeEventListener('hidden.bs.collapse', onDone);
+                        clearTimeout(timer);
+                    };
+                    const onDone = () => {
+                        cleanup();
+                        setCollapseState(el, wantOpen);
+                    };
+                    const timer = setTimeout(() => {
+                        cleanup();
+                        if (instance._isTransitioning) {
+                            instance._isTransitioning = false;
+                        }
+                        setCollapseState(el, wantOpen);
+                    }, 500);
+                    el.addEventListener('shown.bs.collapse', onDone);
+                    el.addEventListener('hidden.bs.collapse', onDone);
+                    return;
+                }
+
+                const isOpen = el.classList.contains('show');
+                if (wantOpen && !isOpen) {
+                    instance.show();
+                    syncCollapseTrigger(el, true);
+                } else if (!wantOpen && isOpen) {
+                    instance.hide();
+                    syncCollapseTrigger(el, false);
+                }
+            }
+
+            // PERBAIKAN V32 (2026-11-09) -- HANDLER KLIK PER-PARENT.
+            // Akar "tidak mau tertutup" yang tersisa setelah double-load
+            // diperbaiki: bila user SUDAH mengklik parent yang terbuka
+            // (mis. setelah search membuka submenu), klik berikutnya
+            // harus menutupnya secara deterministik, tidak bergantung
+            // pada state internal plugin yang bisa tidak sinkron.
+            //
+            // Handler ini memakai capture-phase + stopImmediatePropagation
+            // supaya Bootstrap tidak memproses klik yang sama dua kali.
+            // Ini pertahanan kedua (double-load once-block adalah pertahanan
+            // utama).
+            function bindSidebarCollapseToggle() {
+                const sidebar = document.getElementById('accordionSidebar');
+                if (!sidebar || sidebar.__collapseToggleBound) return;
+                sidebar.__collapseToggleBound = true;
+
+                sidebar.addEventListener('click', function (e) {
+                    const trigger = e.target.closest ? e.target.closest('[data-toggle="collapse"][data-target]') : null;
+                    if (!trigger) return;
+                    const targetId = trigger.getAttribute('data-target');
+                    if (!targetId || targetId[0] !== '#') return;
+                    const el = document.querySelector(targetId);
+                    if (!el) return;
+
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+                    const isOpen = el.classList.contains('show');
+                    setCollapseState(el, !isOpen);
+                }, true);
+            }
+
+            bindSidebarCollapseToggle();
+
             function resetSidebar() {
                 document.querySelectorAll('#accordionSidebar [data-menu-item]').forEach(li => li.classList.remove('d-none'));
                 document.querySelectorAll('#accordionSidebar [data-menu-child]').forEach(child => child.classList.remove('d-none'));
                 document.querySelectorAll('#accordionSidebar .collapse').forEach(el => {
-                    if (originallyOpen.has(el.id)) el.classList.add('show');
-                    else el.classList.remove('show');
+                    setCollapseState(el, originallyOpen.has(el.id));
                 });
             }
 
@@ -297,7 +413,10 @@
 
                     const showParent = parentMatch || anyChildMatch;
                     li.classList.toggle('d-none', !showParent);
-                    if (collapseEl) collapseEl.classList.toggle('show', showParent);
+                    // PERBAIKAN V32 (2026-11-09): pakai setCollapseState(),
+                    // bukan classList.toggle('show', ...), supaya state
+                    // plugin Bootstrap tetap sinkron dengan DOM.
+                    if (collapseEl) setCollapseState(collapseEl, showParent);
                     if (showParent) anyVisible = true;
                 });
 

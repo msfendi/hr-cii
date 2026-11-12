@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Services\SurveySanitizer;
 use App\Models\SatisfactionQuestion;
 use App\Models\SatisfactionResponse;
 use Carbon\Carbon;
@@ -84,8 +85,11 @@ class SatisfactionSurveyResultExport implements FromCollection, WithHeadings, Wi
     {
         $h = ['No.', 'Waktu Submit (WIB)'];
         foreach ($this->questions as $q) {
-            $label = $q->section ? "[{$q->section}] " : '';
-            $h[] = $label . $q->question_text;
+            // PERBAIKAN V32 (2026-11-09): escape formula-injection pada
+            // header. Header kolom bisa diawali "=" atau "+" kalau
+            // section/question_text berisi payload dari admin.
+            $label = $q->section ? '[' . SurveySanitizer::escapeFormula($q->section) . '] ' : '';
+            $h[] = SurveySanitizer::escapeFormula($label . $q->question_text);
         }
         return $h;
     }
@@ -99,7 +103,12 @@ class SatisfactionSurveyResultExport implements FromCollection, WithHeadings, Wi
                 $first = $r->created_at;
             }
             $q = $this->questions->firstWhere('id', $qid);
-            $values[$qid] = $q && $q->isLikert() ? $r->score : ($r->answer_text ?? '');
+            // PERBAIKAN V32 (2026-11-09): jawaban open question berasal dari
+            // input user. Kalau diawali =, +, -, atau @, Excel akan
+            // mengeksekusinya sebagai formula saat file dibuka.
+            $values[$qid] = $q && $q->isLikert()
+                ? $r->score
+                : SurveySanitizer::escapeFormula($r->answer_text ?? '');
         }
         $row = [
             0, // placeholder No., diisi nomor urut di events? Diisi di sini pakai random? Kita pakai waktu + urutan group di map via static counter

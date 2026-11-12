@@ -1310,6 +1310,8 @@ Route::group(['middleware' => 'auth'], function () {
         // Export rekap PDF (format "Realisasi Kantin")
         Route::get('/canteen-report/export-pdf', [CanteenReportController::class, 'exportRekapPdf'])->name('canteen-report.export-pdf');
         Route::get('canteen-report/export-excel', [CanteenReportController::class, 'exportRekapExcel'])->name('canteen-report.export-excel');
+        // PERBAIKAN LAYOUT (2026-11-10): endpoint bukti scan by id_ticket
+        Route::get('/canteen-report/receipt', [CanteenReportController::class, 'receiptByTicket'])->name('canteen-report.receipt');
     });
 
     Route::middleware(['auth', 'permission'])->prefix('audit-trail')->name('audit-trail.')->group(function () {
@@ -1544,6 +1546,13 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
     Route::post('/settings/liveness', [FaceAttendanceSettingController::class, 'updateLiveness'])->name('settings.update-liveness');
     Route::post('/settings/random-challenge', [FaceAttendanceSettingController::class, 'updateRandomChallenge'])->name('settings.update-random-challenge');
+    // PERBAIKAN V32 (2026-11-09): setting geomap untuk canteen transaction.
+    // Disimpan di tabel canteen_settings (kolom require_geomap +
+    // allowed_work_location_ids) -- tabel yang sama dengan /canteen-transaction/admin.
+    Route::post('/settings/canteen-geomap', [FaceAttendanceSettingController::class, 'updateCanteenGeomap'])->name('settings.update-canteen-geomap');
+    // PERBAIKAN V37 (2026-11-09): mode verifikasi transaksi kantin dipisah
+    // dari kartu Liveness Check & Random Challenge -> jadi kartu sendiri.
+    Route::post('/settings/canteen-verification-mode', [FaceAttendanceSettingController::class, 'updateCanteenVerificationMode'])->name('settings.update-canteen-verification-mode');
     Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
 });
 
@@ -1577,6 +1586,9 @@ Route::prefix('canteen-transaction')->name('canteen-transaction.')->group(functi
     Route::get('/', [CanteenTransactionController::class, 'index'])->name('index');
     Route::post('/validate-npk', [CanteenTransactionController::class, 'validateNpk'])->name('validate-npk');
     Route::post('/store', [CanteenTransactionController::class, 'store'])->name('store');
+    // PERBAIKAN V32 (2026-11-09): ambil bukti scan terakhir untuk NPK tertentu.
+    // Dipakai tombol "Lihat Bukti Scan" di SweetAlert duplikat.
+    Route::get('/receipt/latest', [CanteenTransactionController::class, 'latestReceipt'])->name('receipt.latest');
 });
 
 Route::middleware(['auth', 'permission'])->prefix('canteen-transaction/admin')->name('canteen-transaction.admin.')->group(function () {

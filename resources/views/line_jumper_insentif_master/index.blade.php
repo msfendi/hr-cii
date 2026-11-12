@@ -515,7 +515,7 @@ $('#checkPeriod').on('change',function(){
             insentifTable.draw();
 
             if(res.qc_violation !== undefined){
-                $('#qcInfo').text('QC Violation: ' + res.qc_violation + '%');
+                $('#qcInfo').text('' + res.qc_violation + '');
             }
 
             Swal.close();

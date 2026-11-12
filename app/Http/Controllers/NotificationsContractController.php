@@ -24,33 +24,47 @@ class NotificationsContractController extends Controller
      */
     public function index(Request $request)
     {
-        $perPage = (int) $request->input('per_page', 20);
-        $status = $request->input('status', 'unread');
-        $type = $request->input('type');
+        try {
+            $perPage = (int) $request->input('per_page', 20);
+            $status = $request->input('status', 'unread');
+            $type = $request->input('type');
 
-        $query = NotificationsContract::query();
+            $query = NotificationsContract::query();
 
-        if ($status !== 'all') {
-            $query->where('status', $status);
+            if ($status !== 'all') {
+                $query->where('status', $status);
+            }
+
+            if ($type) {
+                $query->where('type', $type);
+            }
+
+            $notifications = $query->recent()
+                ->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $notifications->items(),
+                'pagination' => [
+                    'total' => $notifications->total(),
+                    'per_page' => $notifications->perPage(),
+                    'current_page' => $notifications->currentPage(),
+                    'last_page' => $notifications->lastPage(),
+                ]
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('NotificationsContractController index error: ' . $e->getMessage());
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'pagination' => [
+                    'total' => 0,
+                    'per_page' => (int) $request->input('per_page', 20),
+                    'current_page' => 1,
+                    'last_page' => 1,
+                ]
+            ]);
         }
-
-        if ($type) {
-            $query->where('type', $type);
-        }
-
-        $notifications = $query->recent()
-            ->paginate($perPage);
-
-        return response()->json([
-            'success' => true,
-            'data' => $notifications->items(),
-            'pagination' => [
-                'total' => $notifications->total(),
-                'per_page' => $notifications->perPage(),
-                'current_page' => $notifications->currentPage(),
-                'last_page' => $notifications->lastPage(),
-            ]
-        ]);
     }
 
     /**
@@ -58,18 +72,27 @@ class NotificationsContractController extends Controller
      */
     public function unread()
     {
-        $unreadCount = NotificationsContract::unread()->count();
+        try {
+            $unreadCount = NotificationsContract::unread()->count();
 
-        $recentUnread = NotificationsContract::unread()
-            ->recent()
-            ->limit(5)
-            ->get();
+            $recentUnread = NotificationsContract::unread()
+                ->recent()
+                ->limit(5)
+                ->get();
 
-        return response()->json([
-            'success' => true,
-            'unread_count' => $unreadCount,
-            'recent' => $recentUnread->toArray()
-        ]);
+            return response()->json([
+                'success' => true,
+                'unread_count' => $unreadCount,
+                'recent' => $recentUnread->toArray()
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('NotificationsContractController unread error: ' . $e->getMessage());
+            return response()->json([
+                'success' => true,
+                'unread_count' => 0,
+                'recent' => []
+            ]);
+        }
     }
 
     /**

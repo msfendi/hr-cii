@@ -44,6 +44,16 @@ class FaceAttendanceSetting extends Model
      */
     protected static $punyaKolomAllowance = [];
 
+    // PERBAIKAN V33 (2026-11-09) -- cache request-scope untuk current()
+    // supaya isAttendanceDayAllowed() + settingController index() tidak
+    // query baris singleton yang sama berulang dalam satu request.
+    protected static $cachedCurrent = null;
+
+    public static function forgetCurrent(): void
+    {
+        static::$cachedCurrent = null;
+    }
+
     /**
      * PERBAIKAN V33 (2026-11-05): cache daftar kolom di Laravel cache.
      *
@@ -87,6 +97,13 @@ class FaceAttendanceSetting extends Model
         return $columns;
     }
 
+    // PERBAIKAN V34 HOTFIX (2026-11-09) -- hindari Schema::hasColumn()
+    // fallback. Kalau cachedColumns() gagal baca kolom (mis. DB
+    // timeout), jangan tembak lagi query INFORMATION_SCHEMA sys.columns
+    // yang berat; langsung kembalikan false supaya halaman tidak 500.
+    // Controller/model sudah punya fallback safe-default untuk kasus ini.
+    // (Helper ini tetap ada demi kompatibilitas, tapi tidak lagi
+    // memanggil Schema::hasColumn langsung.)
     public static function hasAllowanceColumn(string $kolom = 'clock_in_allowance_minutes'): bool
     {
         if (array_key_exists($kolom, static::$punyaKolomAllowance)) {
@@ -94,23 +111,15 @@ class FaceAttendanceSetting extends Model
         }
 
         // PERBAIKAN V33 (2026-11-05): pakai daftar kolom yang di-cache
-        // lebih dulu. Kalau cache tidak tersedia, jatuh ke Schema::hasColumn
-        // seperti sebelumnya (supaya tetap benar).
+        // lebih dulu. Kalau cache tidak tersedia, jangan tembak
+        // Schema::hasColumn lagi (V34 hotfix) -- langsung false.
         $cached = static::cachedColumns();
         if (!empty($cached)) {
             static::$punyaKolomAllowance[$kolom] = in_array($kolom, $cached, true);
             return static::$punyaKolomAllowance[$kolom];
         }
 
-        try {
-            static::$punyaKolomAllowance[$kolom] = Schema::hasColumn(
-                'face_attendance_settings',
-                $kolom
-            );
-        } catch (\Throwable $e) {
-            static::$punyaKolomAllowance[$kolom] = false;
-        }
-
+        static::$punyaKolomAllowance[$kolom] = false;
         return static::$punyaKolomAllowance[$kolom];
     }
 
@@ -169,6 +178,9 @@ class FaceAttendanceSetting extends Model
      */
     public static function current(): self
     {
+        if (static::$cachedCurrent !== null) {
+            return static::$cachedCurrent;
+        }
         try {
             $setting = static::query()->first();
 
@@ -188,6 +200,7 @@ class FaceAttendanceSetting extends Model
                 }
             }
 
+            static::$cachedCurrent = $setting;
             return $setting;
         } catch (\Throwable $e) {
             $fallback = new static();
@@ -200,6 +213,15 @@ class FaceAttendanceSetting extends Model
 
             return $fallback;
         }
+    }
+
+    public function save(array $options = [])
+    {
+        $result = parent::save($options);
+        if ($result) {
+            static::$cachedCurrent = $this;
+        }
+        return $result;
     }
 
     /**
@@ -231,14 +253,14 @@ class FaceAttendanceSetting extends Model
 
     /**
      * Cek apakah tanggal tersebut adalah hari libur (dari tabel holidays).
+     * PERBAIKAN V34 HOTFIX: tidak lagi pakai cachedHasTable() jaga-jaga
+     * kalau DB timeout, langsung DB::table()->exists() dalam try/catch.
+     * Kalau DB gagal, return false (dianggap bukan hari libur) agar
+     * halaman tidak 500.
      */
     public static function isHoliday(\Carbon\Carbon $date): bool
     {
         try {
-            if (!Schema::hasTable('holidays')) {
-                return false;
-            }
-
             $dateStr = $date->format('Y-m-d');
 
             return \Illuminate\Support\Facades\DB::table('holidays')
