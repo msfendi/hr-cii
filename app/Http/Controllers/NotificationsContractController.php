@@ -4,17 +4,52 @@ namespace App\Http\Controllers;
 
 use App\Models\NotificationsContract;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class NotificationsContractController extends Controller
 {
     public function __construct()
     {
-        // Protect dengan auth & hr role
-        $this->middleware('auth');
+        // Protect dengan auth & hr role.
+        // PENTING: dipakai juga dari halaman yang login lewat sesi face-attendance
+        // (tanpa auth()->user()). Dulu closure ini memanggil hasAnyRole() pada user
+        // null -> fatal -> HTTP 500 saat bell notifikasi di navbar di-klik.
+        // Sekarang dikembalikan sebagai JSON 200 success:false (UI tetap jalan).
+        $this->middleware('auth')->except([]);
+
         $this->middleware(function ($request, $next) {
-            if (!auth()->user()->hasAnyRole(['Admin', 'HRD', 'Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING'])) {
-                abort(403, 'Unauthorized');
+            $allowed = ['Admin', 'HRD', 'Payroll_STAFF', 'Payroll_SEWING', 'Payroll_NONSEWING'];
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Sesi ini tidak memiliki akses notifikasi kontrak.',
+                    'data' => [],
+                    'unread_count' => 0,
+                ]);
             }
+
+            try {
+                if (!$user->hasAnyRole($allowed)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Anda tidak memiliki akses notifikasi kontrak.',
+                        'data' => [],
+                        'unread_count' => 0,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('NotificationsContractController role check error: ' . $e->getMessage());
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gagal memeriksa hak akses notifikasi.',
+                    'data' => [],
+                    'unread_count' => 0,
+                ]);
+            }
+
             return $next($request);
         });
     }
@@ -53,7 +88,7 @@ class NotificationsContractController extends Controller
                 ]
             ]);
         } catch (\Throwable $e) {
-            \Log::warning('NotificationsContractController index error: ' . $e->getMessage());
+            Log::warning('NotificationsContractController index error: ' . $e->getMessage());
             return response()->json([
                 'success' => true,
                 'data' => [],
@@ -86,7 +121,7 @@ class NotificationsContractController extends Controller
                 'recent' => $recentUnread->toArray()
             ]);
         } catch (\Throwable $e) {
-            \Log::warning('NotificationsContractController unread error: ' . $e->getMessage());
+            Log::warning('NotificationsContractController unread error: ' . $e->getMessage());
             return response()->json([
                 'success' => true,
                 'unread_count' => 0,
@@ -100,19 +135,25 @@ class NotificationsContractController extends Controller
      */
     public function show($id)
     {
-        $notification = NotificationsContract::find($id);
+        try {
+            $notification = NotificationsContract::find($id);
 
-        if (!$notification) {
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found'
+                ], 404);
+            }
+
             return response()->json([
-                'success' => false,
-                'message' => 'Notification not found'
-            ], 404);
-        }
+                'success' => true,
+                'data' => $notification->toArray()
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('NotificationsContractController show error: ' . $e->getMessage());
 
-        return response()->json([
-            'success' => true,
-            'data' => $notification->toArray()
-        ]);
+            return response()->json(['success' => false, 'message' => 'Gagal memuat notifikasi.', 'data' => null]);
+        }
     }
 
     /**
@@ -120,22 +161,28 @@ class NotificationsContractController extends Controller
      */
     public function markAsRead($id)
     {
-        $notification = NotificationsContract::find($id);
+        try {
+            $notification = NotificationsContract::find($id);
 
-        if (!$notification) {
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found'
+                ], 404);
+            }
+
+            $notification->markAsRead();
+
             return response()->json([
-                'success' => false,
-                'message' => 'Notification not found'
-            ], 404);
+                'success' => true,
+                'message' => 'Notification marked as read',
+                'data' => $notification->toArray()
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('NotificationsContractController markAsRead error: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Gagal menandai notifikasi.']);
         }
-
-        $notification->markAsRead();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Notification marked as read',
-            'data' => $notification->toArray()
-        ]);
     }
 
     /**
@@ -143,15 +190,21 @@ class NotificationsContractController extends Controller
      */
     public function markAllAsRead()
     {
-        NotificationsContract::unread()->update([
-            'status' => 'read',
-            'read_at' => now()
-        ]);
+        try {
+            NotificationsContract::unread()->update([
+                'status' => 'read',
+                'read_at' => now()
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'All notifications marked as read'
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'All notifications marked as read'
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('NotificationsContractController markAllAsRead error: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Gagal menandai semua notifikasi.']);
+        }
     }
 
     /**
@@ -159,22 +212,28 @@ class NotificationsContractController extends Controller
      */
     public function archive($id)
     {
-        $notification = NotificationsContract::find($id);
+        try {
+            $notification = NotificationsContract::find($id);
 
-        if (!$notification) {
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found'
+                ], 404);
+            }
+
+            $notification->markAsArchived();
+
             return response()->json([
-                'success' => false,
-                'message' => 'Notification not found'
-            ], 404);
+                'success' => true,
+                'message' => 'Notification archived',
+                'data' => $notification->toArray()
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('NotificationsContractController archive error: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Gagal mengarsipkan notifikasi.']);
         }
-
-        $notification->markAsArchived();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Notification archived',
-            'data' => $notification->toArray()
-        ]);
     }
 
     /**
@@ -182,21 +241,27 @@ class NotificationsContractController extends Controller
      */
     public function destroy($id)
     {
-        $notification = NotificationsContract::find($id);
+        try {
+            $notification = NotificationsContract::find($id);
 
-        if (!$notification) {
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found'
+                ], 404);
+            }
+
+            $notification->delete();
+
             return response()->json([
-                'success' => false,
-                'message' => 'Notification not found'
-            ], 404);
+                'success' => true,
+                'message' => 'Notification deleted'
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('NotificationsContractController destroy error: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Gagal menghapus notifikasi.']);
         }
-
-        $notification->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Notification deleted'
-        ]);
     }
 
     /**

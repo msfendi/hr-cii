@@ -46,6 +46,8 @@ use App\Http\Controllers\EmployeeExitHistoryController;
 use App\Http\Controllers\EmployeeLateController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
+use App\Http\Controllers\LiveAccessController;
+use App\Http\Controllers\OrgChartController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
 use App\Http\Controllers\EmployeeShiftController;
@@ -647,6 +649,15 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/dept/export', [DeptController::class, 'exportData'])->name('dept.export')->middleware(['auth', 'permission']);
     Route::post('/dept/import', [DeptController::class, 'import'])->name('dept.import')->middleware(['auth', 'permission']);
     Route::get('/dept/get-data', [DeptController::class, 'getData'])->name('dept.get-data')->middleware(['auth', 'permission']);
+
+    // ORGANIZATION CHART (OrgChart JS) — setting manual ID_DEPT + level
+    Route::get('/org-chart', [OrgChartController::class, 'index'])->name('org-chart.index')->middleware(['auth', 'permission']);
+    Route::get('/org-chart/settings', [OrgChartController::class, 'settings'])->name('org-chart.settings')->middleware(['auth', 'permission']);
+    Route::post('/org-chart/settings', [OrgChartController::class, 'storeSetting'])->name('org-chart.settings.store')->middleware(['auth', 'permission']);
+    Route::put('/org-chart/settings/{setting}', [OrgChartController::class, 'updateSetting'])->name('org-chart.settings.update')->middleware(['auth', 'permission']);
+    Route::delete('/org-chart/settings/{setting}', [OrgChartController::class, 'destroySetting'])->name('org-chart.settings.destroy')->middleware(['auth', 'permission']);
+    Route::get('/org-chart/data', [OrgChartController::class, 'data'])->name('org-chart.data')->middleware(['auth', 'permission']);
+    Route::get('/org-chart/photo/{npk}', [OrgChartController::class, 'photo'])->name('org-chart.photo')->middleware(['auth', 'permission']);
     Route::post('/dept/store', [DeptController::class, 'store'])->name('dept.store')->middleware(['auth', 'permission']);
     Route::post('/dept/update/{id}', [DeptController::class, 'update'])->name('dept.update')->middleware(['auth', 'permission']);
     Route::post('/dept/destroy/{id}', [DeptController::class, 'destroy'])->name('dept.destroy')->middleware(['auth', 'permission']);
@@ -1372,6 +1383,17 @@ Route::prefix('chatbot')->name('chatbot.')->middleware(['auth'])->group(function
     Route::get('/sessions/{chatbotSession}/messages', [ChatbotController::class, 'messages'])->name('sessions.messages');
     Route::post('/sessions/{chatbotSession}/send', [ChatbotController::class, 'send'])->name('sessions.send');
     Route::delete('/sessions/{chatbotSession}', [ChatbotController::class, 'destroySession'])->name('sessions.destroy');
+});
+
+// ========================================
+// LIVE ACCESS — peta akses real-time (IP, route, job, service)
+// ========================================
+Route::prefix('live-access')->name('live-access.')->middleware(['auth', 'permission'])->group(function () {
+    Route::get('/', [LiveAccessController::class, 'index'])->name('index');
+    Route::get('/summary', [LiveAccessController::class, 'summary'])->name('summary');
+    Route::get('/data', [LiveAccessController::class, 'data'])->name('data');
+    Route::get('/jobs', [LiveAccessController::class, 'jobs'])->name('jobs');
+    Route::get('/services', [LiveAccessController::class, 'services'])->name('services');
 });
 
 

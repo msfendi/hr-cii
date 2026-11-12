@@ -37,6 +37,8 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            // Catat setiap request web ke live_access_logs untuk halaman /live-access.
+            \App\Http\Middleware\LiveAccessMiddleware::class,
         ],
 
         'api' => [
@@ -69,6 +71,5 @@ class Kernel extends HttpKernel
         'permission' => \App\Http\Middleware\CheckPermission::class, // BARU
         'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         'qr.verified' => \App\Http\Middleware\EnsureQrScanned::class,
-        'face.attendance.auth' => \App\Http\Middleware\FaceAttendanceAuth::class,
     ];
 }

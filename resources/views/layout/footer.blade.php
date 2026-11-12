@@ -117,13 +117,37 @@
                 if (data.success) {
                     this.updateBadge(data.data);
                     this.renderQuickPreview(data.data);
+                } else {
+                    // Endpoint mengembalikan success:false (mis. sesi tanpa hak akses)
+                    // -> tampilkan pesan di panel, jangan lempar error 500 ke console.
+                    this.updateBadge([]);
+                    this.renderMessage(data.message || 'Notifikasi tidak tersedia untuk sesi ini.');
                 }
             })
-            .catch(error => console.error('Error loading notifications:', error));
+            .catch(error => {
+                console.warn('Notification tidak dapat dimuat:', error.message);
+                this.updateBadge([]);
+                this.renderMessage('Gagal memuat notifikasi. Coba lagi nanti.');
+            });
+        },
+
+        renderMessage(message) {
+            const quickPanel = document.getElementById('quickNotificationPanel');
+            if (!quickPanel) return;
+
+            quickPanel.innerHTML = `
+                <div class="dropdown-item text-center text-muted py-3">
+                    <i class="fas fa-bell-slash mr-2"></i><br/>
+                    <small>${message}</small>
+                </div>
+            `;
         },
 
         renderQuickPreview(notifications) {
             const quickPanel = document.getElementById('quickNotificationPanel');
+
+            // Penjaga: panel tidak ada di layout tertentu -> jangan error.
+            if (!quickPanel) return;
 
             if (!notifications || notifications.length === 0) {
                 quickPanel.innerHTML = `
@@ -171,10 +195,14 @@
         updateBadge(notifications) {
             // Kita bisa langsung hitung unreadCount dari parameter notifications
             // Tanpa perlu fetch '/unread' terpisah jika kita sudah punya data
+            const badge = document.getElementById('unreadBadge');
+            const count = document.getElementById('unreadCount');
+
+            // Penjaga: navbar (dan badge-nya) tidak selalu ada.
+            if (!badge || !count) return;
+
             if (notifications) {
                 const unreadCount = notifications.filter(n => n.status === 'unread').length;
-                const badge = document.getElementById('unreadBadge');
-                const count = document.getElementById('unreadCount');
 
                 if (unreadCount > 0) {
                     badge.style.display = 'inline-block';
@@ -189,8 +217,6 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    const badge = document.getElementById('unreadBadge');
-                    const count = document.getElementById('unreadCount');
                     if (data.success && data.unread_count > 0) {
                         badge.style.display = 'inline-block';
                         count.textContent = data.unread_count;
@@ -198,7 +224,7 @@
                         badge.style.display = 'none';
                     }
                 })
-                .catch(error => console.error('Error updating badge:', error));
+                .catch(error => console.warn('Gagal memperbarui badge notifikasi:', error.message));
             }
         },
 

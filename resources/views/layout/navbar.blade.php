@@ -130,34 +130,40 @@
                 </li> -->
 
                 <div class="topbar-divider d-none d-sm-block"></div>
-        <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
-        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            <i class="fas fa-bell fa-fw"></i>
-            <!-- Counter - Notifications -->
-            <span class="badge badge-danger badge-counter" id="unreadBadge" style="display: none;">
-                <span id="unreadCount">0</span>
-            </span>
-        </a>
-        <!-- Dropdown - Alerts (Quick Preview) -->
-        <div class="dropdown-list dropdown-menu dropdown-menu-right shadow animated--grow-in"
-            aria-labelledby="alertsDropdown">
-            <h6 class="dropdown-header fw-bold">
-                Notification Center
-            </h6>
-            <div id="quickNotificationPanel">
-                <a class="dropdown-item d-flex align-items-center" href="#">
-                    <div class="me-3">
-                        <div class="bg-light rounded-circle p-3">
-                            <i class="fas fa-spinner fa-spin text-primary"></i>
+
+        {{-- PERBAIKAN: bell notifications WAJIB dibungkus <li class="nav-item dropdown">.
+             Sebelumnya <a data-toggle="dropdown"> jadi anak langsung <ul>, sehingga
+             Bootstrap mencari .dropdown-menu di dalam <ul> dan menemukan menu lain
+             (search/user) -> klik bell tidak memunculkan panel notifikasi. --}}
+        <li class="nav-item dropdown no-arrow mx-1">
+            <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
+                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-bell fa-fw"></i>
+                <!-- Counter - Notifications -->
+                <span class="badge badge-danger badge-counter" id="unreadBadge" style="display: none;">
+                    <span id="unreadCount">0</span>
+                </span>
+            </a>
+            <!-- Dropdown - Alerts (Quick Preview) -->
+            <div class="dropdown-list dropdown-menu dropdown-menu-right shadow animated--grow-in"
+                aria-labelledby="alertsDropdown">
+                <h6 class="dropdown-header fw-bold">
+                    Notification Center
+                </h6>
+                <div id="quickNotificationPanel">
+                    <a class="dropdown-item d-flex align-items-center" href="#">
+                        <div class="me-3">
+                            <div class="bg-light rounded-circle p-3">
+                                <i class="fas fa-spinner fa-spin text-primary"></i>
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <div class="small text-gray-500">Loading...</div>
-                    </div>
-                </a>
+                        <div>
+                            <div class="small text-gray-500">Loading...</div>
+                        </div>
+                    </a>
+                </div>
             </div>
-        </div>
-    </li>
+        </li>
 
         <div class="topbar-divider d-none d-sm-block"></div>
 
@@ -369,10 +375,35 @@
                     e.stopPropagation();
                     if (e.stopImmediatePropagation) e.stopImmediatePropagation();
 
+                    // PERBAIKAN TASK 5 (2026-11-11): baca state dari
+                    // class 'show' saja bisa salah kalau sebelumnya ada
+                    // manipulasi manual (mis. classList.toggle('show'))
+                    // yang tidak ikut mengubah state internal plugin
+                    // (bs.collapse._isShown). Akibatnya klik berikutnya
+                    // memanggil hide() padahal plugin mengira masih
+                    // tertutup -> submenu tidak bisa ditutup.
+                    // Solusi: selalu set state yang diminta secara eksplisit
+                    // via setCollapseState() yang menjaga sinkron DOM +
+                    // plugin, dengan toggle berdasarkan class 'show'.
                     const isOpen = el.classList.contains('show');
                     setCollapseState(el, !isOpen);
                 }, true);
             }
+
+            // PERBAIKAN TASK 5 (2026-11-11): pastikan juga state awal
+            // trigger (aria-expanded + class 'collapsed') selalu sinkron
+            // dengan class 'show' aktual setiap kali halaman dimuat —
+            // beberapa halaman lama bisa me-render submenu dengan
+            // class 'show' tapi trigger masih 'collapsed'.
+            function syncAllCollapseTriggers() {
+                document.querySelectorAll('#accordionSidebar [data-toggle="collapse"][data-target]').forEach(trigger => {
+                    const targetId = trigger.getAttribute('data-target');
+                    const el = targetId && targetId[0] === '#' ? document.querySelector(targetId) : null;
+                    if (!el) return;
+                    syncCollapseTrigger(el, el.classList.contains('show'));
+                });
+            }
+            syncAllCollapseTriggers();
 
             bindSidebarCollapseToggle();
 

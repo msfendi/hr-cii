@@ -131,4 +131,13 @@
      cuti/form, hris, approval, ...) ikut merender @push('scripts') mereka.
      layouts/app me-render footerscript lalu @stack('scripts') SATU kali di sini;
      jangan tambah @stack lagi di layouts/app (double-push -> DataTables tn/3). --}}
+
+{{-- PWA: daftarkan service worker setelah halaman siap (tidak menghalangi render). --}}
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('{{ asset('sw.js') }}').catch(function () { /* PWA opsional, jangan ganggu halaman */ });
+    });
+}
+</script>
 @stack('scripts')

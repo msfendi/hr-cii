@@ -74,11 +74,16 @@ class FaceAttendanceLogController extends Controller
 
         if ($shouldLoad) {
             try {
-                [$logs, $pagination, $summary] = $this->buildLogs($dateFrom, $dateTo, $search, $status, $mode, $department, (int) $request->get('page', 1), 50);
-                $totalIn = $summary['in'];
-                $totalOut = $summary['out'];
-                $totalWajah = $summary['wajah'];
-                $totalFinger = $summary['finger'];
+                // Ambil SEMUA baris pada rentang filter untuk ringkasan kartu
+                // (tanpa paging) supaya angka Clock In/Out/Wajah/Fingerprint
+                // menunjukkan jumlah sebenarnya, bukan hanya 50 baris halaman.
+                [$allLogs, , $summaryAll] = $this->buildLogs($dateFrom, $dateTo, $search, $status, $mode, $department, 1, 100000);
+                $totalIn = $summaryAll['in'];
+                $totalOut = $summaryAll['out'];
+                $totalWajah = $summaryAll['wajah'];
+                $totalFinger = $summaryAll['finger'];
+
+                [$logs, $pagination, ] = $this->buildLogs($dateFrom, $dateTo, $search, $status, $mode, $department, (int) $request->get('page', 1), 50);
             } catch (\Throwable $e) {
                 Log::error('Gagal memuat log face attendance: ' . $e->getMessage(), ['file' => $e->getFile() . ':' . $e->getLine()]);
                 $logError = $e->getMessage();
@@ -146,7 +151,7 @@ class FaceAttendanceLogController extends Controller
                 'tanggal' => $scan ? $scan->format('Y-m-d') : '-',
                 'waktu' => $scan ? $scan->format('H:i:s') : '-',
                 'karyawan' => $l->name ?? '-',
-                'npk_barcode' => trim((string) ($l->npk ?? '-')) . ' / pin: ' . ($l->pin ?? '-'),
+                'npk_barcode' => trim((string) ($l->npk ?? '-')) . ' / ' . ($l->pin ?? '-'),
                 'departemen' => $l->dept ?? '-',
                 'mode_label' => $l->mode_label ?? '-',
                 'action_label' => $l->action_label ?? '-',
@@ -286,25 +291,53 @@ class FaceAttendanceLogController extends Controller
             return [collect(), ['current_page' => $page, 'per_page' => $perPage, 'total' => 0, 'total_pages' => 0, 'has_prev' => false, 'has_next' => false], ['in' => 0, 'out' => 0, 'wajah' => 0, 'finger' => 0]];
         }
 
-        // att_log per scan pada rentang tanggal, join pin via subquery master union
+        // att_log per scan pada rentang tanggal. Kalau ada pencarian (q),
+        // longgarkan join master: cocokkan juga langsung ke a.pin supaya
+        // pencarian nama/NPK/barcode/pin tetap mengembalikan barisnya.
         $pinSub = DB::connection('cii')->table('BIODATA as b')->selectRaw(sprintf($barcodeExpr, 'b') . ' AS BARCODE');
         if ($department !== '') {
             $pinSub->where('b.ID_DEPT', $department);
+        }
+        if ($search !== '') {
+            $pinSub->where(function ($q) use ($search) {
+                $q->where('b.NAMA_KARYAWAN', 'like', '%' . $search . '%')
+                  ->orWhere('b.NPK', 'like', '%' . $search . '%')
+                  ->orWhere('b.BARCODE', 'like', '%' . $search . '%');
+            });
         }
         $pinSubKeluar = DB::connection('cii')->table('BIODATA_KELUAR as bk')->selectRaw(sprintf($barcodeExpr, 'bk') . ' AS BARCODE');
         if ($department !== '') {
             $pinSubKeluar->where('bk.ID_DEPT', $department);
         }
+        if ($search !== '') {
+            $pinSubKeluar->where(function ($q) use ($search) {
+                $q->where('bk.NAMA_KARYAWAN', 'like', '%' . $search . '%')
+                  ->orWhere('bk.NPK', 'like', '%' . $search . '%')
+                  ->orWhere('bk.BARCODE', 'like', '%' . $search . '%');
+            });
+        }
         $pinUnion = $pinSub->union($pinSubKeluar);
 
+        $pinExpr = DB::raw('LTRIM(RTRIM(a.pin))');
+
         $base = DB::connection('cii')->table('att_log as a')
-            ->joinSub($pinUnion, 'bio', function ($join) {
-                $join->on('bio.BARCODE', '=', DB::raw('LTRIM(RTRIM(a.pin))'));
+            ->leftJoinSub($pinUnion, 'bio', function ($join) use ($pinExpr) {
+                $join->on('bio.BARCODE', '=', $pinExpr);
             })
             ->whereBetween('a.scan_date', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
             ->select([
                 'a.pin', 'a.scan_date', 'a.verifymode', 'a.inoutmode', 'a.sn', 'a.att_id',
             ]);
+
+        // Kalau pencarian aktif, terima baris yang lolos join master ATAU
+        // yang pin-nya sendiri cocok dengan kata kunci (pin/dept via master
+        // tidak ikut di sini — dept tetap difilter lewat subquery pin).
+        if ($search !== '') {
+            $base->where(function ($q) use ($search, $pinExpr) {
+                $q->where('bio.BARCODE', 'is not null')
+                  ->orWhere('a.pin', 'like', '%' . $search . '%');
+            });
+        }
 
         // Mode filter P: wajah vs fingerprint
         if ($mode === 'wajah') {
@@ -320,6 +353,11 @@ class FaceAttendanceLogController extends Controller
                   ->where('a.verifymode', '<>', 15);
             });
         }
+
+        // Filter cari cepat (q) juga dicocokkan ke pin mentah di att_log,
+        // supaya pencarian berdasarkan PIN/Barcode perangkat tetap jalan
+        // walau pin belum terdaftar di master BIODATA.
+        // ( sudah ditangani di atas via leftJoinSub + where bio.BARCODE / a.pin )
 
         $total = (clone $base)->count();
 

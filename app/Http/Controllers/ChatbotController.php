@@ -149,14 +149,16 @@ class ChatbotController extends Controller
 
         $validated = $request->validate([
             'ai_provider' => ['required', 'string', 'in:' . implode(',', $enabledProviders)],
-            'mode' => ['nullable', 'string', 'in:' . ChatbotSession::MODE_GLOBAL . ',' . ChatbotSession::MODE_RAG],
+            'mode' => ['nullable', 'string', 'in:' . ChatbotSession::MODE_RAG],
             'title' => ['nullable', 'string', 'max:120'],
         ]);
 
         $session = ChatbotSession::create([
             'user_id' => $request->user()?->id,
             'ai_provider' => $validated['ai_provider'],
-            'mode' => $validated['mode'] ?? ChatbotSession::MODE_RAG,
+            // Chatbot HANYA mode RAG (tanya langsung ke database SQL Server).
+            // Mode global (ngobrol bebas tanpa database) sengaja dihapus.
+            'mode' => ChatbotSession::MODE_RAG,
             'title' => $validated['title'] ?? null,
         ]);
 

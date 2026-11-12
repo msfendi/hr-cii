@@ -43,7 +43,23 @@ class CanteenTransactionController extends Controller
         // PERBAIKAN V35: query aman dengan fallback koleksi kosong.
         $canteens  = $this->safeQuery(fn () => Canteen::where('is_active', true)->orderBy('canteen_id')->get(), 'canteen');
         $windows   = $this->safeQuery(fn () => CanteenBreakWindow::query()->orderBy('id')->get(), 'break_masters');
-        $locations = $this->safeQuery(fn () => AttendanceWorkLocation::where('is_active', true)->orderBy('name')->get(), 'attendance_work_locations');
+        // PERBAIKAN TASK 8 (2026-11-11): halaman transaksi kantin hanya
+        // mengirim geomap yang DIPILIH di allowed_work_location_ids —
+        // bukan SEMUA geomap aktif di attendance_work_locations.
+        // Kalau require_geomap aktif tapi daftar kosong, kirim koleksi
+        // kosong supaya sisi klien langsung menganggap "di luar area".
+        $locations = $this->safeQuery(function () {
+            $allowedIds = CanteenSetting::allowedLocationIds();
+            $query = AttendanceWorkLocation::where('is_active', true)->orderBy('name');
+            if (!empty($allowedIds)) {
+                $query->whereIn('id', $allowedIds);
+            } elseif (CanteenSetting::isRequireGeomap()) {
+                // Wajib geomap tapi belum ada yang dipilih -> fail-closed:
+                // jangan kirim semua lokasi, kirim kosong.
+                $query->whereRaw('1 = 0');
+            }
+            return $query->get();
+        }, 'attendance_work_locations');
 
         // CanteenSetting::current() sudah aman (V34) tapi tetap bungkus
         // supaya controller tidak pernah Rethrow dari mana pun.
@@ -955,9 +971,12 @@ class CanteenTransactionController extends Controller
     {
         $allowedIds = CanteenSetting::allowedLocationIds();
         if (empty($allowedIds)) {
-            // Jika admin belum memilih geomap, tidak ada batasan (fail-open untuk geomap).
-            // Bila require_geomap=true tapi daftar kosong, dianggap gagal agar tidak lolos diam-diam.
-            return ['inside' => false, 'location_name' => null, 'allowed_names' => 'area kantin (belum dikonfigurasi admin)'];
+            // PERBAIKAN TASK 8 (2026-11-11): fail-closed — kalau geomap
+            // wajib tapi admin belum memilih satu pun lokasi yang
+            // diizinkan, SEMUA transaksi ditolak (tidak fail-open ke
+            // "semua lokasi boleh"). Pesan ini juga dipakai saat
+            // require_geomap=true dengan daftar kosong.
+            return ['inside' => false, 'location_name' => null, 'allowed_names' => 'area kantin (belum dikonfigurasi admin — wajib geomap aktif tapi daftar lokasi kosong)'];
         }
 
         $locations = AttendanceWorkLocation::whereIn('id', $allowedIds)->where('is_active', true)->get();
@@ -1075,7 +1094,19 @@ class CanteenTransactionController extends Controller
 
     public function adminUpdateSetting(Request $request)
     {
+        // PERBAIKAN V44 HOTFIX (2026-11-11): bersihkan cache schema
+        // canteen_settings sebelum current()/save() supaya kolom
+        // deprecated tidak ikut terkirim bila sudah di-drop migrasi.
+        try {
+            \App\Models\FaceRecognitionSetting::forgetSchemaCache();
+        } catch (\Throwable $e) {
+            // Abaikan.
+        }
+
         $setting = CanteenSetting::current();
+        if (!$setting->exists && ($existing = CanteenSetting::query()->first())) {
+            $setting = $existing;
+        }
         $allowedIds = $request->input('allowed_work_location_ids', []);
         if (!is_array($allowedIds)) $allowedIds = [$allowedIds];
 
@@ -1087,11 +1118,10 @@ class CanteenTransactionController extends Controller
         // (face_recognition_settings.canteen_verification_mode).
         //
         // Method ini sekarang hanya menyimpan fitur aktif + geomap.
-        $setting->update([
-            'is_enabled' => $request->boolean('is_enabled', true),
-            'require_geomap' => $request->boolean('require_geomap', false),
-            'allowed_work_location_ids' => array_values(array_filter(array_map('intval', $allowedIds))),
-        ]);
+        $setting->is_enabled = $request->boolean('is_enabled', true);
+        $setting->require_geomap = $request->boolean('require_geomap', false);
+        $setting->allowed_work_location_ids = array_values(array_filter(array_map('intval', $allowedIds)));
+        $setting->save();
 
         return back()->with('success', 'Pengaturan transaksi kantin disimpan.');
     }

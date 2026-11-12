@@ -109,7 +109,6 @@
                             <th style="min-width:100px">Foto</th>
                             <th style="min-width:90px">Confidence</th>
                             <th style="min-width:100px">Status</th>
-                            <th style="min-width:130px">IP Address</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -205,8 +204,7 @@ $(function () {
             { data: 'gps_html', name: 'gps', orderable: false, searchable: false },
             { data: 'foto_html', name: 'foto', orderable: false, searchable: false, className: 'text-center' },
             { data: 'confidence_html', name: 'confidence', orderable: false, searchable: false, className: 'text-center' },
-            { data: 'status_html', name: 'status', orderable: false, searchable: false },
-            { data: 'ip_address', name: 'ip_address', orderable: false, searchable: false }
+            { data: 'status_html', name: 'status', orderable: false, searchable: false }
         ],
         language: {
             search: 'Cari cepat:',

@@ -11,7 +11,8 @@ class ChatbotSession extends Model
 {
     use HasFactory;
 
-    public const MODE_GLOBAL = 'global';
+    // Chatbot HANYA berjalan di mode RAG (tanya langsung ke database SQL
+    // Server). Konstanta MODE_GLOBAL sengaja tidak dipakai lagi.
     public const MODE_RAG = 'rag';
 
     protected $fillable = [

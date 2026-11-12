@@ -31,45 +31,19 @@ class AiChatService
             throw new RuntimeException("Provider AI '$providerKey' belum dikonfigurasi di config/chatbot.php.");
         }
 
-        return $session->isRag()
-            ? $this->handleRag($session, $providerKey, $userMessage, $attachments)
-            : $this->handleGlobal($session, $providerKey, $userMessage, $attachments);
+        // Chatbot HANYA jalan di mode RAG (tanya langsung ke database SQL
+        // Server lewat koneksi read-only). Mode global sengaja dihapus.
+        return $this->handleRag($session, $providerKey, $userMessage, $attachments);
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Mode GLOBAL — ngobrol bebas, tanpa akses database
+    | Mode GLOBAL (ngobrol bebas tanpa akses database) SUDAH DIHAPUS.
+    | Chatbot kini HANYA mode RAG — semua pesan dijawab dari data database
+    | SQL Server lewat handleRag().
     |--------------------------------------------------------------------------
     */
-    protected function handleGlobal(ChatbotSession $session, string $providerKey, string $userMessage, array $attachments = []): array
-    {
-        $system = 'Kamu adalah AI Assistant HRIS Chutex, asisten AI di dalam sistem internal HRIS Chutex. '
-            . 'Jawab dengan bahasa Indonesia yang ringkas, jelas, dan sopan. '
-            . 'Kamu TIDAK punya akses ke database perusahaan pada mode ini, jadi jangan mengarang data spesifik '
-            . '— cukup bantu pertanyaan umum, penjelasan proses, atau bantuan pemakaian sistem. '
-            . 'Kalau user melampirkan file: untuk gambar kamu bisa melihat isinya langsung, untuk jenis file lain '
-            . '(dokumen, audio, video) kamu hanya diberi tahu nama & jenis filenya saja (tidak bisa membaca isinya), '
-            . 'jadi kalau perlu tanyakan isinya ke user.';
 
-        $history = $session->messages()
-            ->reorder('created_at', 'desc')
-            ->take(config('chatbot.history_limit', 20))
-            ->get()
-            ->reverse()
-            ->values();
-
-        $messages = $history->map(fn(ChatbotMessage $m) => [
-            'role' => $m->role === ChatbotMessage::ROLE_ASSISTANT ? 'assistant' : 'user',
-            'content' => $m->content,
-        ])->push([
-            'role' => 'user',
-            'content' => $this->buildUserContent($providerKey, $userMessage, $attachments),
-        ])->all();
-
-        $content = $this->callProvider($providerKey, $system, $messages);
-
-        return ['content' => $content, 'meta' => null];
-    }
 
     /**
      * Bangun isi pesan user untuk dikirim ke provider AI. Kalau ada
@@ -333,7 +307,15 @@ class AiChatService
 
         $answerSystemPrompt = 'Kamu adalah AI Assistant HRIS Chutex, asisten data untuk sistem HRIS Chutex. Berdasarkan data JSON hasil query database '
             . 'berikut, jawab pertanyaan user dalam bahasa Indonesia yang natural dan ringkas. Jika data kosong, katakan datanya '
-            . 'tidak ditemukan. Jangan menyebutkan detail teknis (nama tabel/kolom SQL) kecuali user menanyakannya secara eksplisit.';
+            . 'tidak ditemukan. Jangan menyebutkan detail teknis (nama tabel/kolom SQL) kecuali user menanyakannya secara eksplisit. '
+            . 'Jika jawabanmu berupa daftar data dalam bentuk tabel, tulis tabelnya dalam format Markdown '
+            . '(| kolom | kolom | dengan baris pemisah |---|---|) supaya bisa dirender sebagai tabel di chat. '
+            . 'Jika user meminta melakukan sesuatu di aplikasi HRIS — misalnya "ajukan cuti", "pengajuan cuti", "buka form cuti", '
+            . '"lihat slip gaji", "slip payroll saya", "riwayat cuti saya", "cek saldo cuti" — sertakan link aksi yang relevan '
+            . 'dalam format Markdown [teks link](URL) dengan URL absolut ke halaman terkait di aplikasi ini, mis.: '
+            . 'pengajuan/riwayat cuti -> ' . url('/pengajuan-cuti/form') . ' , approval cuti -> ' . url('/pengajuan-cuti/approval') . ' , '
+            . 'riwayat cuti -> ' . url('/pengajuan-cuti/riwayat') . ' , slip gaji/payroll -> ' . url('/employee-payroll') . ' . '
+            . 'Jangan mengarang URL lain selain pola di atas; kalau tidak yakin, cukup arahkan user membuka menu yang disebutkan.';
 
         $answer = $this->callProvider($providerKey, $answerSystemPrompt, [
             ['role' => 'user', 'content' => "Pertanyaan user: {$userMessage}\n\nData JSON (maks {$maxRows} baris):\n{$rowsJson}"],
@@ -341,6 +323,7 @@ class AiChatService
 
         $format = $this->detectExportFormat($userMessage);
         $export = $this->exportRows($rows, $format, $userMessage);
+        $links = $this->detectActionLinks($userMessage);
 
         return [
             'content' => $answer,
@@ -348,8 +331,65 @@ class AiChatService
                 'sql' => $sql,
                 'row_count' => count($rows),
                 'export' => $export,
+                'links' => $links ?: null,
             ], fn($value) => $value !== null),
         ];
+    }
+
+    /**
+     * Deteksi permintaan aksi di aplikasi (pengajuan cuti, lihat slip, dsb)
+     * dari pesan user, lalu kembalikan daftar link aksi yang relevan untuk
+     * ditampilkan sebagai tombol cepat di bawah bubble AI.
+     *
+     * @return array<int, array{label: string, url: string}>
+     */
+    protected function detectActionLinks(string $userMessage): array
+    {
+        $text = mb_strtolower(trim($userMessage));
+        $links = [];
+
+        $add = function (string $label, string $url) use (&$links) {
+            $links[] = ['label' => $label, 'url' => $url];
+        };
+
+        $leaveCuti = preg_match('/\b(cuti|leave|izin|pengajuan|sakit)\b/u', $text);
+        $slipGaji  = preg_match('/\b(slip|gaji|payroll|salary|thr)\b/u', $text);
+        $saldo     = preg_match('/\b(saldo|balance|jatah|sisa)\b/u', $text);
+        $approval  = preg_match('/\b(approval|approve|setuju|tolak|reject)\b/u', $text);
+        $riwayat   = preg_match('/\b(riwayat|history|daftar|status)\b/u', $text);
+
+        if ($leaveCuti && ($saldo || $riwayat || preg_match('/\bcek\b/u', $text))) {
+            $add('Cek Saldo Cuti', url('/pengajuan-cuti/get-leave-balance'));
+        }
+
+        if ($leaveCuti && ! $approval) {
+            $add('Ajukan Cuti', url('/pengajuan-cuti/form'));
+        }
+
+        if ($leaveCuti && $riwayat) {
+            $add('Riwayat Cuti', url('/pengajuan-cuti/riwayat'));
+        }
+
+        if ($leaveCuti && $approval) {
+            $add('Approval Cuti', url('/pengajuan-cuti/approval'));
+        }
+
+        if ($slipGaji) {
+            $add('Lihat Slip Gaji', url('/employee-payroll'));
+        }
+
+        // Link duplikat dibuang berdasarkan URL.
+        $seen = [];
+        $unique = [];
+        foreach ($links as $link) {
+            if (isset($seen[$link['url']])) {
+                continue;
+            }
+            $seen[$link['url']] = true;
+            $unique[] = $link;
+        }
+
+        return $unique;
     }
 
     /**

@@ -8,7 +8,15 @@
     <title>Chutex HRIS</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <!-- Custom fonts for this template-->
+    <!-- PWA: manifest, theme color, ikon (installable ke home screen) -->
+    <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+    <meta name="theme-color" content="#1d3f86">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="HRIS Chutex">
+    <link rel="apple-touch-icon" href="{{ asset('icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('icons/icon-192x192.png') }}">
     <link rel="icon" type="image/x-icon" href="{{asset('storage/images/signature_icon.ico')}}">
     <link href="{{asset('vendor/fontawesome-free/css/all.min.css')}}" rel="stylesheet" type="text/css">
     <link
@@ -334,10 +342,11 @@
                 margin-left: 0 !important;
             }
             /* === FIX DOUBLE PADDING GLOBAL (2026-11-09) ===
-               Akar masalah: layouts/app membungkus @yield('content') dalam
-               .container-fluid.py-3 (padding: 1.5rem kiri/kanan di bawah sb-admin-2),
-               lalu halaman individual lagi bungkus dengan .card/.card-body
-               serta @section('content') <div class="container">...</div>
+               Akar masalah: layouts/app membungkus isi halaman (directive blade
+               yield content) dalam .container-fluid.py-3 (padding 1.5rem
+               kiri/kanan di bawah sb-admin-2), lalu halaman individual lagi
+               bungkus dengan .card/.card-body serta section content berisi
+               <div class="container">...</div>
                untuk hasil padding berlapis 1.5rem + 1.25rem + mt-5/mb-4.
                Below overrides mengganti .container-fluid.py-3 jadi 1rem horizontal
                dan 0.75rem vertikal dulu, dan menghapus padding ganda container di
@@ -370,6 +379,12 @@
                 padding-right: 0.5rem !important;
             }
         </style>
+
+        {{-- PERBAIKAN: @push('styles') dari 19 view (termasuk org_chart) sebelumnya
+             DIBUANG karena tidak ada @stack('styles') di layout mana pun.
+             Akibatnya CSS plugin (mis. jquery.orgchart.min.css) tidak pernah
+             dimuat -> node org chart tampil sebagai teks polos tanpa kotak. --}}
+        @stack('styles')
 
         </head>
 <script>

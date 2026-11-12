@@ -165,10 +165,19 @@
                                 @endif
 
                                 @if (! empty($meta['sql']))
-                                    <details class="message-details">
-                                        <summary>Lihat query yang dijalankan</summary>
+                                    <details class="message-sql">
+                                        <summary><i class="fas fa-code"></i> Lihat SQL</summary>
                                         <pre>{{ $meta['sql'] }}</pre>
                                     </details>
+                                @endif
+                                @if (! empty($meta['links']))
+                                    <div class="message-links">
+                                        @foreach ($meta['links'] as $link)
+                                            <a href="{{ $link['url'] }}" class="message-link-btn" target="_blank" rel="noopener">
+                                                <i class="fas fa-arrow-right"></i> {{ $link['label'] }}
+                                            </a>
+                                        @endforeach
+                                    </div>
                                 @endif
 
                                 @if (! empty($meta['error']))
@@ -578,6 +587,13 @@ body {
 .message-export-name { font-weight: 500; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .message-export-meta { font-size: 11px; color: #64748b; }
 .message-export-download { color: #94a3b8; font-size: 12px; margin-left: auto; }
+.message-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.message-link-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12.5px; font-weight: 500; color: #1d3f86; background: #eef4ff; border: 1px solid #c7d8f5; border-radius: 999px; text-decoration: none; transition: all 0.12s; }
+.message-link-btn:hover { background: #dce9ff; border-color: #9dbdf0; color: #16307a; }
+.message-link-btn i { font-size: 10px; }
+.md-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+.md-table th, .md-table td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+.md-table thead th { background: #f1f5f9; font-weight: 600; }
 
 /* Details / Error */
 .message-details { margin-top: 9px; }
@@ -913,10 +929,19 @@ body {
             errHtml = `<p class="message-error"><i class="fas fa-triangle-exclamation"></i> ${escHtml(meta.error)}</p>`;
         }
 
+        // Action links (mis. ajukan cuti / lihat slip gaji)
+        let linksHtml = '';
+        if (meta && Array.isArray(meta.links) && meta.links.length) {
+            const btns = meta.links.map(l =>
+                `<a href="${escHtml(l.url)}" class="message-link-btn" target="_blank" rel="noopener"><i class="fas fa-arrow-right"></i> ${escHtml(l.label)}</a>`
+            ).join('');
+            linksHtml = `<div class="message-links">${btns}</div>`;
+        }
+
         row.innerHTML = `
             <div class="message-avatar message-avatar--ai"><i class="fas fa-robot"></i></div>
             <div class="message-bubble-col">
-                <div class="message-bubble message-bubble--ai">${bodyHtml}${exportHtml}${errHtml}</div>
+                <div class="message-bubble message-bubble--ai">${bodyHtml}${exportHtml}${linksHtml}${errHtml}</div>
                 <span class="message-time">${nowTime()}</span>
             </div>`;
         chatMessages.appendChild(row);
@@ -949,12 +974,38 @@ body {
     function nowTime() {
         return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     }
-    /* Markdown sederhana: bold, italic, code, pre, heading, list, link, br */
+    /* Markdown sederhana: bold, italic, code, pre, heading, list, link, tabel, br */
+    function renderMarkdownTable(h) {
+        // Tabel markdown: baris header | a | b |, baris pemisah |---|---|, lalu baris data.
+        return h.replace(/(^|\n)((?:\s*\|[^\n]*\|\s*\n)+?\s*\|(?:[\s:|-]+\|)+\s*\n((?:\s*\|[^\n]*\|\s*\n?)+))/g,
+            function (m, lead, block, sep, rows) {
+                function cells(line) {
+                    return line.trim().replace(/^\|/, '').replace(/\|$/, '')
+                        .split('|').map(function (c) { return c.trim(); });
+                }
+                var lines = block.trim().split('\n');
+                var head = cells(lines[0]);
+                var body = rows.trim().split('\n').map(cells);
+                var html = '<div class="cw-table-wrap"><table class="md-table"><thead><tr>';
+                head.forEach(function (c) { html += '<th>' + c + '</th>'; });
+                html += '</tr></thead><tbody>';
+                body.forEach(function (r) {
+                    html += '<tr>';
+                    r.forEach(function (c) { html += '<td>' + c + '</td>'; });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+                return lead + html;
+            });
+    }
+
     function renderMarkdown(text) {
         if (!text) return '';
         let h = escHtml(text);
         // code block
         h = h.replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        // tabel markdown (sebelum inline code supaya tidak rusak oleh | di dalam sel)
+        h = renderMarkdownTable(h);
         // inline code
         h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
         // heading
@@ -1014,7 +1065,7 @@ body {
         const fd = new FormData();
         fd.append('_token', getCsrf());
         fd.append('ai_provider', aiProvider);
-        fd.append('mode', 'global');
+        fd.append('mode', 'rag');
 
         try {
             const res  = await fetch(storeUrl, { method: 'POST', body: fd });
