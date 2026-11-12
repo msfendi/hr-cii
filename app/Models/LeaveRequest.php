@@ -11,6 +11,12 @@ class LeaveRequest extends Model
 
     protected $table = 'leave_requests';
 
+    /**
+     * Explicit connection — pastikan Eloquent dan DB::connection('cii') memakai
+     * koneksi yang sama supaya transaksi (beginTransaction/commit) konsisten.
+     */
+    protected $connection = 'cii';
+
     protected $fillable = [
         'NPK',
         'leave_type_id',

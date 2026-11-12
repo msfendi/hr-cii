@@ -31,8 +31,38 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'wa_gateway' => [
+        'url'        => env('WA_GATEWAY_URL', 'http://localhost:3000'),
+        'token'      => env('WA_GATEWAY_TOKEN', ''),
+        'bot_number' => env('WA_BOT_NUMBER', '6287731665679'),
+        'webhook_secret' => env('WA_WEBHOOK_SECRET', ''),
+
+        // Throttle anti-ban: jeda acak + rate limit per menit
+        'jitter_seconds'   => env('WA_SEND_JITTER_SECONDS', 15),
+        'min_gap_seconds'  => env('WA_SEND_MIN_GAP_SECONDS', 15),
+        'max_per_minute'   => env('WA_SEND_MAX_PER_MINUTE', 6),
+    ],
+
     'fonnte' => [
         'master_key' => env('FONNTE_MASTER_KEY'),
+    ],
+
+    // Approval API (Opsi C) — messaging layer Hermes ↔ business logic Laravel.
+    // Token WAJIB diset; kalau kosong endpoint menolak semua request (fail-closed).
+    'approval_api' => [
+        'token'       => env('APPROVAL_API_TOKEN', ''),
+        'allowed_ips' => array_filter(array_map(
+            'trim',
+            explode(',', (string) env('APPROVAL_API_ALLOWED_IPS', ''))
+        )),
+        // URL messaging layer (Hermes) yang menerima trigger notifikasi.
+        // Kosong = mode single-server (Laravel kirim langsung ke bridge lokal).
+        'notify_url'  => env('APPROVAL_NOTIFY_URL', ''),
+        // Hermes Webhook platform — cara Laravel memberi tahu Hermes
+        // agar ia langsung mengirim notif (bukan menunggu cron).
+        // Contoh: http://192.168.0.68:8644/webhooks/leave-approval
+        'webhook_url'    => env('APPROVAL_WEBHOOK_URL', ''),
+        'webhook_secret' => env('APPROVAL_WEBHOOK_SECRET', ''),
     ],
 
     'node_exporter' => [

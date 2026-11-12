@@ -229,6 +229,27 @@ class SatisfactionSurveyController extends Controller
         return view('satisfaction_survey.admin_results', compact('stats', 'totalResponses', 'avg', 'dist', 'paketList'));
     }
 
+    /**
+     * Normalisasi filter tanggal export kuesioner.
+     *
+     * PERBAIKAN V36 (2026-11-12): nilai kosong = "export semua data" (sesuai
+     * keterangan di halaman hasil), jadi harus dinormalkan menjadi string kosong.
+     * Sebelumnya `$request->input('from')` mengembalikan null saat filter
+     * dikosongkan, dan null itu ditolak oleh konstruktor export bertipe
+     * `string` sehingga muncul TypeError (500) di /admin/export dan
+     * /admin/export-likert. Validasi 'nullable|date' tetap dipertahankan,
+     * hanya hasilnya yang dinormalkan.
+     *
+     * @return array{0:string,1:string} [$from, $to] format Y-m-d atau string kosong
+     */
+    private function exportDateRange(Request $request): array
+    {
+        return [
+            trim((string) $request->input('from', '')),
+            trim((string) $request->input('to', '')),
+        ];
+    }
+
     public function adminExport(Request $request)
     {
         $request->validate([
@@ -236,8 +257,7 @@ class SatisfactionSurveyController extends Controller
             'to'   => 'nullable|date|after_or_equal:from',
         ]);
 
-        $from = $request->input('from');
-        $to   = $request->input('to');
+        [$from, $to] = $this->exportDateRange($request);
         $file = 'hasil-kuesioner-kepuasan-' . now()->format('Ymd-His') . '.xlsx';
 
         return Excel::download(new SatisfactionSurveyResultExport($from, $to), $file);
@@ -249,8 +269,7 @@ class SatisfactionSurveyController extends Controller
             'from' => 'nullable|date',
             'to'   => 'nullable|date|after_or_equal:from',
         ]);
-        $from = $request->input('from');
-        $to   = $request->input('to');
+        [$from, $to] = $this->exportDateRange($request);
         $file = 'distribusi-likert-kuesioner-' . now()->format('Ymd-His') . '.xlsx';
 
         return Excel::download(new SatisfactionLikertDistributionExport($from, $to), $file);
@@ -262,8 +281,7 @@ class SatisfactionSurveyController extends Controller
             'from' => 'nullable|date',
             'to'   => 'nullable|date|after_or_equal:from',
         ]);
-        $from = $request->input('from');
-        $to   = $request->input('to');
+        [$from, $to] = $this->exportDateRange($request);
 
         $questions = SatisfactionQuestion::where('question_type', 'likert')
             ->orderBy('sort_order')->orderBy('id')->get();

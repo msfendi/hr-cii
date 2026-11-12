@@ -133,13 +133,16 @@ return [
             'host' => env('DB_CII_HOST', 'localhost'),
             'port' => env('DB_CII_PORT', '1433'),
             'database' => env('DB_CII_DATABASE', 'forge'),
-            'username' => env('DB_CII_USERNAME', 'forge'),
+            'username' => env('DB_CII_USERNAME', ''),
             'password' => env('DB_CII_PASSWORD', ''),
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
-            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            'encrypt' => env('DB_ENCRYPT', 'no'),
             'trust_server_certificate' => true,
+            // Timeout login pendek — kalau SQL Server tidak terjangkau, jangan
+            // menggantung request API (default ODBC = 15 dtk + retry).
+            'login_timeout' => (int) env('DB_CII_LOGIN_TIMEOUT', 10),
         ],
 
         'smartit' => [

@@ -47,6 +47,14 @@ class Kernel extends ConsoleKernel
                 ->where('status', 'read')
                 ->update(['status' => 'archived']);
         })->weekly()->sundays()->at('23:00');
+
+        // Cek pending leave approval tiap 5 jam, kirim notif WA ke approver
+        // Interval bisa diubah: everyThirtyMinutes(), hourly(), everyFiveHours(), dll.
+        $schedule->command('approval:check-pending')
+            ->everyFiveHours()
+            ->withoutOverlapping()
+            ->timezone('Asia/Jakarta')
+            ->appendOutputTo(storage_path('logs/approval-wa.log'));
     }
 
     /**

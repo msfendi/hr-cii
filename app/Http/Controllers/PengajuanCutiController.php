@@ -10,11 +10,13 @@ use App\Models\LeaveBalances;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
 use App\Services\FaceRecognitionService;
+use App\Services\ApprovalWa\ApprovalWebhookTrigger;
 use App\Services\LeaveDayService;
 use App\Services\LeaveRuleService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RealRashid\SweetAlert\Facades\Alert;
 use Yajra\DataTables\Facades\DataTables;
@@ -473,6 +475,8 @@ class PengajuanCutiController extends Controller
             // ── Tahap 2: Simpan — setiap baris cuti menjadi pengajuan approval TERPISAH (token beda) ──
             DB::beginTransaction();
 
+            $createdTokens = [];
+
             foreach ($preparedLeaves as $leaveData) {
                 $token = Str::random();
 
@@ -497,9 +501,25 @@ class PengajuanCutiController extends Controller
                             : null,
                     ]);
                 }
+
+                $createdTokens[] = $token;
             }
 
             DB::commit();
+
+            // Notifikasi WhatsApp ke approver level 1 untuk tiap pengajuan baru.
+            // Dilakukan setelah commit supaya notifikasi tidak terkirim untuk data
+            // yang akhirnya gagal disimpan.
+            //
+            // Opsi C: Laravel hanya trigger messaging layer (Hermes) via webhook.
+            // Pengiriman pesan WA dilakukan di sisi messaging layer.
+            foreach ($createdTokens as $newToken) {
+                try {
+                    ApprovalWebhookTrigger::notify($newToken, 'submit');
+                } catch (\Throwable $e) {
+                    Log::error("[ApprovalWebhook] token $newToken: " . $e->getMessage());
+                }
+            }
             $count = count($preparedLeaves);
             Alert::success('Success', "{$count} pengajuan cuti berhasil dikirim. Menunggu approval.");
             return redirect()->route('pengajuan-cuti.form');
