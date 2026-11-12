@@ -31,6 +31,10 @@ class OrgChartController extends Controller
      */
     public function settings(): View
     {
+        // Auto-perbaikan: kolom label ditambahkan bila migration-nya belum jalan,
+        // supaya halaman setting tidak error di database lama.
+        $labelColumn = OrgChartSetting::ensureLabelColumn();
+
         $settings = OrgChartSetting::query()
             ->orderByRaw('CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END')
             ->orderBy('sort_order')
@@ -47,12 +51,13 @@ class OrgChartController extends Controller
             'departments' => $departments,
             'deptNames' => $deptNames,
             'levels' => OrgChartSetting::LEVELS,
+            'labelColumn' => $labelColumn,
         ]);
     }
 
     public function storeSetting(Request $request): RedirectResponse
     {
-        $validated = $this->validateSetting($request);
+        $validated = $this->onlyExistingColumns($this->validateSetting($request));
 
         OrgChartSetting::create($validated);
 
@@ -71,7 +76,7 @@ class OrgChartController extends Controller
             ]);
         }
 
-        $setting->update($validated);
+        $setting->update($this->onlyExistingColumns($validated));
 
         return redirect()->route('org-chart.settings')
             ->with('success', 'Node organization chart berhasil diperbarui.');
@@ -239,6 +244,24 @@ class OrgChartController extends Controller
     }
 
     /**
+     * Buang kunci `label` bila kolomnya benar-benar belum ada di DB.
+     *
+     * Mencegah error "Invalid column name 'label'" (SQL Server) pada database
+     * yang belum menjalankan migration kolom label. Kolom dicoba dibuat lebih
+     * dulu (auto-perbaikan); kalau gagal, nama Company memakai nilai bawaan.
+     */
+    private function onlyExistingColumns(array $validated): array
+    {
+        if (! OrgChartSetting::ensureLabelColumn()) {
+            unset($validated['label']);
+            Log::warning('OrgChart: kolom label tidak tersedia dan tidak bisa dibuat otomatis; ' .
+                'nama Company memakai ' . OrgChartSetting::COMPANY_NAME_FALLBACK . '.');
+        }
+
+        return $validated;
+    }
+
+    /**
      * Validasi form setting.
      */
     private function validateSetting(Request $request, ?int $ignoreId = null): array
@@ -261,8 +284,24 @@ class OrgChartController extends Controller
         $label = trim((string) ($validated['label'] ?? ''));
 
         if ($level === 'company') {
-            // Level tertinggi memakai NAMA COMPANY (kolom label), bukan nama dept.
-            $validated['label'] = $label !== '' ? $label : OrgChartSetting::COMPANY_NAME_FALLBACK;
+            // Nama Company WAJIB dari input form — tidak boleh fallback hardcode.
+            if ($label === '') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'label' => 'Nama Company wajib diisi untuk level Company.',
+                ]);
+            }
+            // Hanya boleh satu node Company (juga melindungi unique index id_dept
+            // di SQL Server yang menganggap NULL = NULL sehingga hanya satu NULL).
+            $adaCompany = OrgChartSetting::query()->where('level', 'company')->where('is_active', true);
+            if ($ignoreId !== null) {
+                $adaCompany->where('id', '!=', $ignoreId);
+            }
+            if ($adaCompany->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'level' => 'Node level Company hanya boleh satu.',
+                ]);
+            }
+            $validated['label'] = $label;
         } else {
             // Level Department wajib terhubung ke master DEPT.
             if ($idDept === '') {
@@ -395,39 +434,43 @@ class OrgChartController extends Controller
             }
         }
 
-        // Karyawan aktif per ID_DEPT (PKWT.TKK IS NULL).
-        $employeesByDept = [];
-        if (!empty($deptIds)) {
-            $employees = $cii->table('PKWT as p')
-                ->join('BIODATA as b', 'b.NPK', '=', 'p.NPK')
-                ->whereNull('p.TKK')
-                ->whereIn('b.ID_DEPT', $deptIds)
-                ->select('b.NPK as NPK', 'p.NAMA', 'p.file_pas_foto', 'b.ID_DEPT')
-                ->orderBy('p.NAMA')
-                ->get();
+        // Karyawan aktif SELURUH perusahaan (PKWT.TKK IS NULL) — dipakai untuk
+        // node level Company (klik = menampilkan SEMUA karyawan) dan per dept.
+        $allEmployees = $cii->table('PKWT as p')
+            ->join('BIODATA as b', 'b.NPK', '=', 'p.NPK')
+            ->whereNull('p.TKK')
+            ->select('b.NPK as NPK', 'p.NAMA', 'p.file_pas_foto', 'b.ID_DEPT')
+            ->orderBy('p.NAMA')
+            ->get();
 
-            foreach ($employees as $emp) {
-                $npk = trim((string) $emp->NPK);
-                if ($npk === '') {
-                    continue;
-                }
-                // Satu karyawan satu node: PKWT bisa punya beberapa baris kontrak.
-                $deptKey = trim((string) $emp->ID_DEPT);
-                if (!isset($employeesByDept[$deptKey])) {
-                    $employeesByDept[$deptKey] = [];
-                }
-                if (!isset($employeesByDept[$deptKey][$npk])) {
-                    $employeesByDept[$deptKey][$npk] = $emp;
-                }
+        $employeesByDept = [];
+        $seenAllNpk = [];
+        $allEmployeesUnique = []; // unik per NPK (PKWT bisa multi-baris kontrak)
+        foreach ($allEmployees as $emp) {
+            $npk = trim((string) $emp->NPK);
+            if ($npk === '') {
+                continue;
+            }
+            if (!isset($seenAllNpk[$npk])) {
+                $seenAllNpk[$npk] = true;
+                $allEmployeesUnique[] = $emp;
+            }
+            // Satu karyawan satu node: PKWT bisa punya beberapa baris kontrak.
+            $deptKey = trim((string) $emp->ID_DEPT);
+            if (!isset($employeesByDept[$deptKey])) {
+                $employeesByDept[$deptKey] = [];
+            }
+            if (!isset($employeesByDept[$deptKey][$npk])) {
+                $employeesByDept[$deptKey][$npk] = $emp;
             }
         }
+        // Total karyawan = unik NPK seluruh karyawan aktif perusahaan.
+        $totalEmployees = count($seenAllNpk);
 
         $nodes = [];
-        $totalEmployees = 0;
         $treeNodes = [];
         $treeRoots = [];
         $employeesMap = [];   // nodeId => daftar karyawan (untuk modal)
-        $seenNpk = [];        // hindari hitung ganda (PKWT bisa beberapa baris)
 
         // Metadata untuk mengurutkan anak: semua anak kini unit
         // (Company/Department) — karyawan tidak lagi menjadi node bagan.
@@ -436,11 +479,12 @@ class OrgChartController extends Controller
         // 1) Buat node setting + karyawan (belum di-link ke parent).
         foreach ($settings as $setting) {
             $nodeId = 'cfg-' . $setting->id;
-            $deptCode = trim((string) $setting->id_dept);
+            $isCompany = $setting->level === 'company';
+            $deptCode = $isCompany ? '' : trim((string) $setting->id_dept);
             $label = trim((string) $setting->label);
 
-            if ($setting->level === 'company') {
-                // Level tertinggi: NAMA COMPANY, bukan nama department.
+            if ($isCompany) {
+                // Level tertinggi: NAMA COMPANY dari input setting (kolom label).
                 $nodeName = $label !== '' ? $label : OrgChartSetting::COMPANY_NAME_FALLBACK;
             } else {
                 $nodeName = $label !== '' ? $label : ($deptNames[$deptCode] ?? ($deptCode !== '' ? 'DEPT ' . $deptCode : 'Department'));
@@ -455,21 +499,20 @@ class OrgChartController extends Controller
             // Karyawan TIDAK dibuat sebagai card di bagan (permintaan user):
             // cukup dihitung pada card departemen, sedangkan daftar namanya
             // dikirim lewat key 'employees' -> dipakai modal "Daftar Karyawan"
-            // ketika card departemen diklik.
+            // ketika card diklik. Node Company menampilkan SEMUA karyawan aktif.
             $empList = [];
-            foreach (($employeesByDept[$deptCode] ?? []) as $emp) {
+            $sourceEmps = $isCompany
+                ? $allEmployeesUnique
+                : array_values($employeesByDept[$deptCode] ?? []);
+            foreach ($sourceEmps as $emp) {
                 $npk = trim((string) $emp->NPK);
                 if ($npk === '') {
                     continue;
                 }
-                if (!isset($seenNpk[$npk])) {
-                    $seenNpk[$npk] = true;
-                    $totalEmployees++;
-                }
                 $empList[] = [
                     'npk' => $npk,
                     'nama' => (string) ($emp->NAMA ?: $npk),
-                    'dept_code' => $deptCode,
+                    'dept_code' => $isCompany ? trim((string) $emp->ID_DEPT) : $deptCode,
                     'photo' => '/org-chart/photo/' . rawurlencode($npk),
                 ];
             }
@@ -549,7 +592,7 @@ class OrgChartController extends Controller
             return array_values($children);
         };
 
-        $buildTree = function (string $id) use (&$buildTree, $treeNodes, $childIds, $sortChildren): array {
+        $buildTree = function (string $id) use (&$buildTree, $treeNodes, &$childIds, $sortChildren): array {
             $node = $treeNodes[$id];
             $children = $node['children'];
 
@@ -602,6 +645,24 @@ class OrgChartController extends Controller
                 'code' => '',
                 'children' => $treeRoots,
             ];
+
+            // Root virtual (tanpa setting Company) juga menampilkan SEMUA karyawan.
+            $rootEmpList = [];
+            foreach ($allEmployeesUnique as $emp) {
+                $npk = trim((string) $emp->NPK);
+                if ($npk === '') {
+                    continue;
+                }
+                $rootEmpList[] = [
+                    'npk' => $npk,
+                    'nama' => (string) ($emp->NAMA ?: $npk),
+                    'dept_code' => trim((string) $emp->ID_DEPT),
+                    'photo' => '/org-chart/photo/' . rawurlencode($npk),
+                ];
+            }
+            if (! empty($rootEmpList)) {
+                $employeesMap['root'] = $rootEmpList;
+            }
         }
 
         return [

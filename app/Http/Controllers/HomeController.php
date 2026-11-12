@@ -168,4 +168,212 @@ class HomeController extends Controller
             'genderperdept' => $genderPerDept,
         ]);
     }
+
+    /**
+     * Analisis turn over karyawan per departemen per bulan.
+     * Karyawan MASUK dihitung dari PKWT.TMK, karyawan KELUAR dari PKWT.TKK.
+     * Departemen diambil dari kolom PKWT.BAGIAN (satu baris PKWT = satu NPK).
+     */
+    public function getTurnover(Request $request)
+    {
+        $bulanInput = $request->input('month');
+        try {
+            $awal = $bulanInput ? Carbon::createFromFormat('Y-m', substr($bulanInput, 0, 7))->startOfMonth()
+                : Carbon::now()->startOfMonth();
+        } catch (\Exception $e) {
+            $awal = Carbon::now()->startOfMonth();
+        }
+        $awalStr = $awal->toDateString();
+        $akhirStr = $awal->copy()->endOfMonth()->toDateString();
+
+        $dept = trim((string) $request->input('dept', 'ALL'));
+        $semuaDept = ($dept === '' || strtoupper($dept) === 'ALL');
+        $tanpaDept = ($dept === '__NODEPT__');
+
+        // Mode pengelompokan line sewing: pisah (per line) | global (semua line menjadi SEWING)
+        // | factory (Line 1-42 = FACTORY 2, Line 43-84 = FACTORY 1). Leader line TIDAK ikut digabung.
+        $sewing = strtolower(trim((string) $request->input('sewing', 'pisah')));
+        if (! in_array($sewing, ['pisah', 'global', 'factory'], true)) {
+            $sewing = 'pisah';
+        }
+
+        $conn = DB::connection('cii');
+
+        // Label departemen: baris tanpa BAGIAN tetap tampil agar total tetap utuh.
+        // Bila mode sewing aktif, nama LINE dipetakan ke label kelompok.
+        $labelDept = function ($bagian) use ($sewing) {
+            $bagian = trim((string) $bagian);
+            if ($bagian === '') {
+                return '(Tanpa bagian)';
+            }
+            if ($sewing !== 'pisah' && preg_match('/^LINE\s*0*(\d+)$/i', $bagian, $m)) {
+                $no = (int) $m[1];
+                if ($sewing === 'global') {
+                    return 'SEWING';
+                }
+                if ($no >= 1 && $no <= 42) {
+                    return 'FACTORY 2';
+                }
+                if ($no >= 43 && $no <= 84) {
+                    return 'FACTORY 1';
+                }
+            }
+            return $bagian;
+        };
+
+        // Daftar departemen asli (dari data PKWT supaya selalu cocok).
+        $daftarDeptRaw = $conn->table('PKWT')
+            ->select('BAGIAN')
+            ->whereNotNull('BAGIAN')
+            ->where('BAGIAN', '<>', '')
+            ->distinct()
+            ->orderBy('BAGIAN')
+            ->pluck('BAGIAN')
+            ->map(function ($v) {
+                return trim((string) $v);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        // Peta label kelompok -> daftar BAGIAN asli (dipakai filter whereIn saat mode sewing aktif).
+        $anggotaGrup = [];
+        foreach ($daftarDeptRaw as $b) {
+            $anggotaGrup[$labelDept($b)][] = $b;
+        }
+
+        // Daftar departemen untuk pilihan filter: sudah dikelompokkan sesuai mode sewing.
+        $daftarDept = collect($daftarDeptRaw)
+            ->map(function ($v) use ($labelDept) {
+                return $labelDept($v);
+            })
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        // Filter departemen yang dipakai berulang.
+        $pakaiDept = function ($q) use ($semuaDept, $tanpaDept, $dept, $anggotaGrup) {
+            if ($semuaDept) {
+                return $q;
+            }
+            if ($tanpaDept) {
+                return $q->where(function ($qq) {
+                    $qq->whereNull('BAGIAN')->orWhere('BAGIAN', '=', '');
+                });
+            }
+            if (isset($anggotaGrup[$dept])) {
+                return $q->whereIn('BAGIAN', $anggotaGrup[$dept]);
+            }
+            return $q->where('BAGIAN', '=', $dept);
+        };
+        $base = function () use ($conn, $pakaiDept) {
+            return $pakaiDept($conn->table('PKWT'));
+        };
+
+        // --- agregat bulan terpilih ---
+        $masukRows = $pakaiDept($conn->table('PKWT'))
+            ->select('BAGIAN', DB::raw('COUNT(*) as jml'))
+            ->whereBetween('TMK', [$awalStr, $akhirStr])
+            ->groupBy('BAGIAN')
+            ->get();
+
+        $keluarRows = $pakaiDept($conn->table('PKWT'))
+            ->select('BAGIAN', DB::raw('COUNT(*) as jml'))
+            ->whereBetween('TKK', [$awalStr, $akhirStr])
+            ->groupBy('BAGIAN')
+            ->get();
+
+        // Karyawan aktif di awal bulan (masuk sebelum awal bulan, belum keluar).
+        $awalRows = $pakaiDept($conn->table('PKWT'))
+            ->select('BAGIAN', DB::raw('COUNT(*) as jml'))
+            ->where('TMK', '<', $awalStr)
+            ->where(function ($q) use ($awalStr) {
+                $q->whereNull('TKK')->orWhere('TKK', '>=', $awalStr);
+            })
+            ->groupBy('BAGIAN')
+            ->get();
+
+        $kumpul = [];
+        foreach ([['masuk', $masukRows], ['keluar', $keluarRows], ['awal', $awalRows]] as $pasang) {
+            list($kunci, $rows) = $pasang;
+            foreach ($rows as $r) {
+                $nama = $labelDept($r->BAGIAN);
+                if (!isset($kumpul[$nama])) {
+                    $kumpul[$nama] = ['departemen' => $nama, 'awal' => 0, 'masuk' => 0, 'keluar' => 0];
+                }
+                $kumpul[$nama][$kunci] += (int) $r->jml;
+            }
+        }
+
+        $perDepartemen = [];
+        $totalAwal = 0;
+        $totalMasuk = 0;
+        $totalKeluar = 0;
+        foreach ($kumpul as $baris) {
+            $baris['net'] = $baris['masuk'] - $baris['keluar'];
+            $baris['rate'] = $baris['awal'] > 0 ? round($baris['keluar'] / $baris['awal'] * 100, 2) : 0.0;
+            $totalAwal += $baris['awal'];
+            $totalMasuk += $baris['masuk'];
+            $totalKeluar += $baris['keluar'];
+            $perDepartemen[] = $baris;
+        }
+        usort($perDepartemen, function ($a, $b) {
+            $ka = $a['masuk'] + $a['keluar'];
+            $kb = $b['masuk'] + $b['keluar'];
+            if ($ka === $kb) {
+                return strcmp($a['departemen'], $b['departemen']);
+            }
+            return $kb - $ka;
+        });
+
+        // --- tren 12 bulan (sampai bulan terpilih) ---
+        $mulaiTren = $awal->copy()->subMonths(11);
+        $trenLabels = [];
+        $trenMasuk = [];
+        $trenKeluar = [];
+        $trenRate = [];
+        for ($i = 0; $i < 12; $i++) {
+            $b = $mulaiTren->copy()->addMonths($i);
+            $bs = $b->copy()->startOfMonth()->toDateString();
+            $be = $b->copy()->endOfMonth()->toDateString();
+
+            $m = $base()->whereBetween('TMK', [$bs, $be])->count();
+            $k = $base()->whereBetween('TKK', [$bs, $be])->count();
+            $h = $base()->where('TMK', '<', $bs)
+                ->where(function ($q) use ($bs) {
+                    $q->whereNull('TKK')->orWhere('TKK', '>=', $bs);
+                })
+                ->count();
+
+            $trenLabels[] = $b->translatedFormat('M Y');
+            $trenMasuk[] = $m;
+            $trenKeluar[] = $k;
+            $trenRate[] = $h > 0 ? round($k / $h * 100, 2) : 0.0;
+        }
+
+        return response()->json([
+            'bulan' => $awal->format('Y-m'),
+            'bulan_label' => $awal->translatedFormat('F Y'),
+            'dept' => $semuaDept ? 'ALL' : $dept,
+            'sewing' => $sewing,
+            'ringkasan' => [
+                'awal' => $totalAwal,
+                'masuk' => $totalMasuk,
+                'keluar' => $totalKeluar,
+                'net' => $totalMasuk - $totalKeluar,
+                'rate' => $totalAwal > 0 ? round($totalKeluar / $totalAwal * 100, 2) : 0.0,
+            ],
+            'per_departemen' => $perDepartemen,
+            'tren' => [
+                'labels' => $trenLabels,
+                'masuk' => $trenMasuk,
+                'keluar' => $trenKeluar,
+                'rate' => $trenRate,
+            ],
+            'daftar_departemen' => $daftarDept,
+        ]);
+    }
 }

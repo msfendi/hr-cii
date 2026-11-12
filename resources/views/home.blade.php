@@ -216,6 +216,95 @@
                         </div>
                     </div>
 
+                    <!-- Charts Row 3: Turn Over Karyawan per Departemen per Bulan -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card shadow mb-4">
+                                <div
+                                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between"
+                                    style="flex-wrap: wrap; row-gap: .5rem;">
+                                    <h6 class="m-0 font-weight-bold text-primary">Turn Over Karyawan per Departemen
+                                    </h6>
+                                    <div class="d-flex align-items-center" style="flex-wrap: wrap; row-gap: .35rem;">
+                                        <input type="month" id="turnoverMonth" value="{{ now()->format('Y-m') }}"
+                                            class="form-control form-control-sm mr-2" style="width: auto;">
+                                        <select id="turnoverSewing" class="form-control form-control-sm mr-2"
+                                            style="width: auto;" title="Pengelompokan line sewing (leader line tidak ikut)">
+                                            <option value="pisah" selected>Pisah per Line</option>
+                                            <option value="global">Global Line (Sewing)</option>
+                                            <option value="factory">Per Factory</option>
+                                        </select>
+                                        <select id="turnoverDept" class="form-control form-control-sm"
+                                            style="width: auto; max-width: 240px;">
+                                            <option value="ALL">Semua Departemen</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Karyawan Aktif</div>
+                                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="tvAwal">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Masuk
+                                                    (TMK)</div>
+                                                <div class="h5 mb-0 font-weight-bold text-success" id="tvMasuk">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Keluar
+                                                    (TKK)</div>
+                                                <div class="h5 mb-0 font-weight-bold text-danger" id="tvKeluar">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Net
+                                                    (Masuk - Keluar)</div>
+                                                <div class="h5 mb-0 font-weight-bold text-primary" id="tvNet">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Turn
+                                                    Over</div>
+                                                <div class="h5 mb-0 font-weight-bold text-primary" id="tvRate">0 %</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="chart-bar" style="height: 300px;">
+                                        <canvas id="turnoverChart"></canvas>
+                                    </div>
+                                    <hr>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered table-hover mb-0"
+                                            id="turnoverTable" width="100%" cellspacing="0">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th>Departemen</th>
+                                                    <th class="text-center">Karyawan Aktif</th>
+                                                    <th class="text-center">Masuk</th>
+                                                    <th class="text-center">Keluar</th>
+                                                    <th class="text-center">Net</th>
+                                                    <th class="text-center">Turn Over (%)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <!-- Diisi lewat fetch /home/turnover -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="small text-muted mt-2" id="turnoverNote"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
                 <!-- /.container-fluid -->
 
@@ -459,6 +548,183 @@
 
             // Initial load
             loadPKWTChart();
+
+            // --- Turn over karyawan per departemen per bulan (sumber: PKWT.TMK / PKWT.TKK) ---
+            let turnoverChart = null;
+            let turnoverTable = null;
+
+            function setTeks(id, nilai) {
+                const el = document.getElementById(id);
+                if (el) { el.textContent = nilai; }
+            }
+
+            function isiPilihanDept(daftar, terpilih) {
+                const sel = document.getElementById('turnoverDept');
+                if (!sel) { return; }
+                const nilai = terpilih || sel.value || 'ALL';
+                const opsi = ['<option value="ALL">Semua Departemen</option>'];
+                (daftar || []).forEach(function (d) {
+                    const aman = String(d).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    opsi.push('<option value="' + aman + '">' + aman + '</option>');
+                });
+                opsi.push('<option value="__NODEPT__">(Tanpa bagian)</option>');
+                sel.innerHTML = opsi.join('');
+                sel.value = nilai;
+                if (sel.value !== nilai) { sel.value = 'ALL'; }
+            }
+
+            function loadTurnover() {
+                const elBulan = document.getElementById('turnoverMonth');
+                const elDept = document.getElementById('turnoverDept');
+                const elSewing = document.getElementById('turnoverSewing');
+                const bulan = elBulan ? (elBulan.value || '') : '';
+                const dept = elDept ? (elDept.value || 'ALL') : 'ALL';
+                const sewing = elSewing ? (elSewing.value || 'pisah') : 'pisah';
+                const url = "{{ route('home.turnover') }}?month=" + encodeURIComponent(bulan)
+                    + '&dept=' + encodeURIComponent(dept)
+                    + '&sewing=' + encodeURIComponent(sewing);
+
+                fetch(url)
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (elBulan && d.bulan) { elBulan.value = d.bulan; }
+                        if (elSewing && d.sewing) { elSewing.value = d.sewing; }
+                        isiPilihanDept(d.daftar_departemen, d.dept === 'ALL' ? null : d.dept);
+
+                        const rk = d.ringkasan || {};
+                        setTeks('tvAwal', rk.awal || 0);
+                        setTeks('tvMasuk', rk.masuk || 0);
+                        setTeks('tvKeluar', rk.keluar || 0);
+                        setTeks('tvNet', rk.net || 0);
+                        setTeks('tvRate', (rk.rate || 0) + ' %');
+
+                        const judulDept = (d.dept === 'ALL') ? 'Semua Departemen' : d.dept;
+                        const ctx = document.getElementById('turnoverChart');
+                        if (ctx) {
+                            if (turnoverChart) { turnoverChart.destroy(); }
+                            turnoverChart = new Chart(ctx, {
+                                type: 'bar',
+                                data: {
+                                    labels: (d.tren || {}).labels || [],
+                                    datasets: [
+                                        {
+                                            type: 'bar', label: 'Masuk (TMK)',
+                                            data: ((d.tren || {}).masuk) || [],
+                                            backgroundColor: '#1cc88a', hoverBackgroundColor: '#17a673'
+                                        },
+                                        {
+                                            type: 'bar', label: 'Keluar (TKK)',
+                                            data: ((d.tren || {}).keluar) || [],
+                                            backgroundColor: '#e74a3b', hoverBackgroundColor: '#e02d1b'
+                                        },
+                                        {
+                                            type: 'line', label: 'Turn Over (%)',
+                                            data: ((d.tren || {}).rate) || [],
+                                            borderColor: '#4e73df', backgroundColor: '#4e73df',
+                                            borderWidth: 2, tension: 0.3, fill: false, pointRadius: 2,
+                                            yAxisID: 'y2'
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    maintainAspectRatio: false,
+                                    layout: { padding: { left: 10, right: 10, top: 20, bottom: 0 } },
+                                    scales: {
+                                        x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                                        y: {
+                                            beginAtZero: true,
+                                            title: { display: true, text: 'Jumlah karyawan' },
+                                            ticks: { maxTicksLimit: 6, precision: 0 },
+                                            grid: {
+                                                color: 'rgb(234, 236, 244)', drawBorder: false,
+                                                borderDash: [2], zeroLineBorderDash: [2]
+                                            }
+                                        },
+                                        y2: {
+                                            beginAtZero: true, position: 'right',
+                                            title: { display: true, text: 'Turn Over (%)' },
+                                            grid: { drawOnChartArea: false },
+                                            ticks: { maxTicksLimit: 5, callback: function (v) { return v + ' %'; } }
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: { display: true },
+                                        title: {
+                                            display: true,
+                                            text: 'Tren 12 bulan - ' + judulDept
+                                        }
+                                    }
+                                }
+                            });
+                        }
+
+                        if (turnoverTable) { turnoverTable.destroy(); }
+                        $('#turnoverTable tbody').empty();
+                        turnoverTable = $('#turnoverTable').DataTable({
+                            data: d.per_departemen || [],
+                            columns: [
+                                { data: 'departemen' },
+                                { data: 'awal', className: 'text-center' },
+                                {
+                                    data: 'masuk', className: 'text-center',
+                                    render: function (v) { return '<span class="badge badge-success">' + (v || 0) + '</span>'; }
+                                },
+                                {
+                                    data: 'keluar', className: 'text-center',
+                                    render: function (v) {
+                                        const n = v || 0;
+                                        return '<span class="badge ' + (n > 0 ? 'badge-danger' : 'badge-secondary') + '">' + n + '</span>';
+                                    }
+                                },
+                                {
+                                    data: 'net', className: 'text-center',
+                                    render: function (v) {
+                                        const n = v || 0;
+                                        const warna = n < 0 ? 'badge-danger' : (n > 0 ? 'badge-primary' : 'badge-secondary');
+                                        return '<span class="badge ' + warna + '">' + n + '</span>';
+                                    }
+                                },
+                                {
+                                    data: 'rate', className: 'text-center',
+                                    render: function (v) { return (v || 0) + ' %'; }
+                                }
+                            ],
+                            pageLength: 10,
+                            lengthMenu: [10, 25, 50, 100],
+                            searching: true,
+                            ordering: true,
+                            order: [[2, 'desc']],
+                            info: true,
+                            paging: true,
+                            language: {
+                                emptyTable: 'Tidak ada data turn over pada bulan ini.',
+                                zeroRecords: 'Tidak ada data yang cocok.'
+                            }
+                        });
+
+                        const infoSewing = d.sewing === 'global'
+                            ? ' Line digabung menjadi SEWING.'
+                            : (d.sewing === 'factory' ? ' Line 1-42 = FACTORY 2, Line 43-84 = FACTORY 1.' : '');
+                        setTeks('turnoverNote',
+                            'Periode ' + (d.bulan_label || d.bulan) + ' - ' + judulDept
+                            + '. Masuk = PKWT.TMK, Keluar = PKWT.TKK. Turn over = keluar / karyawan aktif x 100.' + infoSewing);
+                    })
+                    .catch(function (e) { console.error('Gagal memuat data turn over:', e); });
+            }
+
+            const elBulanTurnover = document.getElementById('turnoverMonth');
+            if (elBulanTurnover) {
+                elBulanTurnover.addEventListener('change', loadTurnover);
+            }
+            const elDeptTurnover = document.getElementById('turnoverDept');
+            if (elDeptTurnover) {
+                elDeptTurnover.addEventListener('change', loadTurnover);
+            }
+            const elSewingTurnover = document.getElementById('turnoverSewing');
+            if (elSewingTurnover) {
+                elSewingTurnover.addEventListener('change', loadTurnover);
+            }
+            loadTurnover();
 
             // On change
             const monthFilter = document.getElementById('monthFilter');

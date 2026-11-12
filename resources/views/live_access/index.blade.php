@@ -30,48 +30,66 @@
         width: 100%;
         height: 660px;
     }
-    .lamap-hud {
+    /* ===== HUD di pojok kiri-atas peta: statistik ringkas ===== */
+    .lamap-panel {
         position: absolute;
         top: 12px;
         left: 16px;
+        z-index: 4;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        pointer-events: none;
+    }
+    .lamap-hud {
+        max-width: 100%;
         color: var(--lm-accent);
-        font-size: .7rem;
+        font-size: .68rem;
         letter-spacing: .04em;
         text-transform: uppercase;
-        pointer-events: none;
+        pointer-events: auto;
         background: rgba(255, 255, 255, .94);
         border: 1px solid var(--lm-line);
         border-radius: 8px;
-        padding: 6px 12px;
+        padding: 8px 14px;
         box-shadow: 0 1px 3px rgba(15, 23, 42, .07);
     }
-    .lamap-hud .hud-row { display: flex; gap: 18px; }
+    .lamap-hud .hud-row { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
     .lamap-hud .hud-num {
         display: block;
-        font-size: 1.35rem;
+        font-size: 1.15rem;
         font-weight: 700;
         color: var(--lm-text);
-        line-height: 1.1;
+        line-height: 1.15;
     }
-    .lamap-hud .hud-lbl { color: var(--lm-muted); }
-    .lamap-hud .hud-hint {
+    .lamap-hud .hud-lbl { color: var(--lm-muted); font-size: .58rem; }
+    .lamap-hud .hud-sub {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px 10px;
+        align-items: baseline;
         margin-top: 5px;
         padding-top: 5px;
         border-top: 1px dashed var(--lm-line);
-        font-size: .6rem;
+        font-size: .62rem;
         letter-spacing: 0;
         text-transform: none;
         color: var(--lm-muted);
     }
-    /* Kontrol zoom peta (roda mouse juga bisa) */
+    .lamap-hud .hud-hint { color: var(--lm-muted); }
+    .lamap-hud .hud-server { color: var(--lm-accent); font-weight: 600; font-size: .72rem; }
+
+    /* ===== Tombol zoom di pojok kanan BAWAH peta (bukan kiri-atas) ===== */
     .lamap-zoom {
         position: absolute;
-        right: calc(var(--lm-dock-w) + 24px);
-        bottom: 14px;
+        bottom: 12px;
+        right: 16px;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         gap: 6px;
-        z-index: 3;
+        pointer-events: auto;
+        z-index: 4;
     }
     .lamap-zoom button {
         width: 32px;
@@ -87,8 +105,7 @@
         box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
     }
     .lamap-zoom button:hover { background: #eaf1fa; color: var(--lm-accent); }
-    #lamap-canvas { cursor: grab; }
-    #lamap-canvas.lamap-grabbing { cursor: grabbing; }
+
     /* Modal detail wilayah */
     .lamap-modal {
         background: #ffffff;
@@ -99,72 +116,157 @@
     .lamap-modal .modal-footer { border-color: var(--lm-line-soft); }
     .lamap-modal .modal-title { color: var(--lm-text); }
     .lamap-modal .close { color: var(--lm-muted); opacity: .9; text-shadow: none; }
-    .lamap-modal .modal-body { max-height: 60vh; overflow-y: auto; }
-    .lm-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-    .lm-chip {
-        border: 1px solid var(--lm-line);
-        border-radius: 999px;
-        padding: 2px 10px;
-        font-size: .7rem;
-        color: var(--lm-muted);
-        text-transform: uppercase;
-        letter-spacing: .03em;
-        background: #f8fafc;
+    /* ---- Kerapian modal detail wilayah ---- */
+    #lamapCountryModal .modal-dialog { max-width: 820px; }
+    #lamapCountryModal .modal-header {
+        padding: 14px 18px;
+        align-items: flex-start;
+        border-bottom: 1px solid var(--lm-line-soft);
     }
-    .lm-chip b { color: var(--lm-accent); font-size: .8rem; }
-    .lm-chip.c-4xx { border-color: rgba(217, 119, 6, .45); background: #fffbeb; }
-    .lm-chip.c-5xx { border-color: rgba(220, 38, 38, .45); background: #fef2f2; }
-    .lm-line { font-size: .78rem; color: var(--lm-muted); margin-bottom: 8px; }
+    #lamapCountryModal .modal-title { font-size: 1rem; color: var(--lm-accent); font-weight: 600; }
+    #lamapCountryModal .modal-header .close { margin: 0; padding: 0 2px; line-height: 1; font-size: 1.5rem; }
+    /* Tinggi modal diatur sendiri (bukan modal-dialog-centered): dengan konten
+       panjang mekanisme centering Bootstrap mendorong header ke luar layar.
+       Di sini dialog diikat 1.5rem dari atas dan kontennya dibatasi tinggi viewport. */
+    #lamapCountryModal .lamap-dlg { max-width: 820px; margin: 1.5rem auto; }
+    #lamapCountryModal .modal-content {
+        max-height: calc(100vh - 3rem);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    #lamapCountryModal .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 16px 18px 18px;
+    }
+    #lamapCountryModal .modal-footer {
+        gap: 8px;
+        padding: 12px 18px;
+        border-top: 1px solid var(--lm-line-soft);
+    }
+    #lamapCountryModal .modal-footer .btn { margin: 0; }
+
+    /* Baris metrik: kartu angka seragam, bukan pil-pil campur. */
+    .lm-stats {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .lm-stat {
+        border: 1px solid var(--lm-line);
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 8px 10px;
+        min-width: 0;
+    }
+    .lm-stat .lm-stat-v {
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--lm-text);
+        line-height: 1.2;
+    }
+    .lm-stat .lm-stat-l {
+        display: block;
+        font-size: .58rem;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--lm-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .lm-stat.c-req .lm-stat-v { color: var(--lm-accent); }
+    .lm-stat.c-ip .lm-stat-v, .lm-stat.c-user .lm-stat-v { color: #0f766e; }
+    .lm-stat.c-4xx { background: #fffbeb; border-color: rgba(217, 119, 6, .35); }
+    .lm-stat.c-4xx .lm-stat-v { color: #b45309; }
+    .lm-stat.c-5xx { background: #fef2f2; border-color: rgba(220, 38, 38, .35); }
+    .lm-stat.c-5xx .lm-stat-v { color: #b91c1c; }
+
+    .lm-line {
+        font-size: .76rem;
+        color: var(--lm-muted);
+        background: #f8fafc;
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 5px;
+    }
+    .lm-line b { color: var(--lm-accent); }
     .lm-sec {
         font-size: .68rem;
         text-transform: uppercase;
-        letter-spacing: .06em;
+        letter-spacing: .07em;
         color: var(--lm-accent);
-        margin: 10px 0 4px;
+        margin: 16px 0 8px;
         border-top: 1px dashed var(--lm-line);
-        padding-top: 8px;
+        padding-top: 12px;
     }
-    .lm-item { padding: 6px 0; border-bottom: 1px dashed var(--lm-line-soft); font-size: .78rem; }
+    .lm-stats + .lm-line + .lm-sec { margin-top: 12px; }
+    /* Daftar akses terbaru di modal: kolom sejajar, path boleh terpotong rapi. */
+    #lamapCountryBody .lm-recent .lm-row {
+        display: grid;
+        grid-template-columns: 60px 120px 50px minmax(0, 1fr);
+        gap: 3px 12px;
+        align-items: baseline;
+        padding: 5px 2px;
+        border-bottom: 1px solid var(--lm-line-soft);
+        margin: 0;
+    }
+    #lamapCountryBody .lm-recent .lm-row:last-child { border-bottom: 0; }
+    #lamapCountryBody .lm-recent .lm-path {
+        word-break: break-all;
+        color: var(--lm-text);
+        font-size: .74rem;
+    }
+    #lamapCountryBody .lm-item { padding: 10px 0; }
+    #lamapCountryBody .lm-item + .lm-item { border-top: 1px solid var(--lm-line-soft); }
+    #lamapCountryBody .lm-row.meta { font-size: .72rem; }
+    @media (max-width: 575.98px) {
+        .lm-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        #lamapCountryBody .lm-recent .lm-row { grid-template-columns: 54px minmax(0, 1fr) 46px; }
+        #lamapCountryBody .lm-recent .lm-row .ip { display: none; }
+    }
+    .lm-item { padding: 8px 0; border-bottom: 1px dashed var(--lm-line-soft); font-size: .8rem; }
     .lm-item:last-child { border-bottom: 0; }
-    .lm-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-    .lm-row.meta { color: var(--lm-muted); font-size: .72rem; }
+    .lm-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+    .lm-row.meta { color: var(--lm-muted); font-size: .74rem; }
     .lm-row .ip { color: var(--lm-accent); font-weight: 600; }
     .lm-badge {
         border: 1px solid var(--lm-line);
         border-radius: 6px;
-        padding: 0 6px;
-        font-size: .62rem;
+        padding: 0 7px;
+        font-size: .64rem;
         color: var(--lm-accent-2);
         background: #f8fafc;
     }
-    .lm-at { color: var(--lm-muted); font-size: .72rem; margin-left: auto; }
-    .lm-empty { font-size: .8rem; color: var(--lm-muted); padding: 6px 0; }
-    .lm-recent .lm-row { margin-bottom: 3px; }
-    .lm-recent .lm-at { margin-left: 0; min-width: 62px; }
+    .lm-at { color: var(--lm-muted); font-size: .74rem; margin-left: auto; }
+    .lm-empty { font-size: .82rem; color: var(--lm-muted); padding: 8px 0; }
+    .lm-recent .lm-row { margin-bottom: 4px; }
+    .lm-recent .lm-at { margin-left: 0; min-width: 64px; }
     .lm-path { color: var(--lm-muted); word-break: break-all; }
-    .lamap-legend {
-        position: absolute;
-        left: 16px;
-        bottom: 46px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        font-size: .7rem;
-        color: #475569;
-        pointer-events: none;
-        background: rgba(255, 255, 255, .86);
-        border: 1px solid var(--lm-line);
-        border-radius: 8px;
-        padding: 4px 10px;
+    .lm-recent-head {
+        display: grid;
+        grid-template-columns: 60px 120px 50px minmax(0, 1fr);
+        gap: 3px 12px;
+        align-items: baseline;
+        padding: 6px 2px 4px;
+        border-bottom: 2px solid var(--lm-line);
+        margin-bottom: 4px;
+        font-size: .62rem;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--lm-accent);
+        font-weight: 700;
     }
-    .lamap-legend i { font-size: 8px; vertical-align: middle; }
-    .lamap-foot {
-        position: absolute;
-        left: 16px;
-        bottom: 10px;
-        font-size: .7rem;
-        color: var(--lm-muted);
-        pointer-events: none;
+    .lm-recent-head .status-col { text-align: center; }
+    @media (max-width: 575.98px) {
+        .lm-recent-head { grid-template-columns: 54px minmax(0, 1fr) 46px; }
+        .lm-recent-head .ip { display: none; }
     }
     /* ===== Dock HUD: panel data menempel di dalam peta =====
        Akses per IP, Akses per User, Request Terbaru, Jobs & Queue, dan Services
@@ -325,12 +427,17 @@
         .lamap-tabs { gap: 1px; padding: 6px 4px 0; }
         .lamap-tab { font-size: .56rem; letter-spacing: -.01em; padding: 4px; }
         .lamap-dock-close { margin: 0 5px 0 0; }
-        .lamap-zoom { right: 12px; bottom: 56px; }
+        /* Kelompok kontrol tetap di kiri-atas; di layar kecil statistik
+           opsional disembunyikan supaya peta tidak tertutup. */
+        .lamap-panel { top: 8px; left: 8px; right: 10px; gap: 6px; }
         .lamap-hud { padding: 5px 9px; }
-        .lamap-hud .hud-row { gap: 13px; }
-        .lamap-hud .hud-num { font-size: 1.1rem; }
-        .lamap-hud .hud-lbl { font-size: .6rem; color: var(--lm-muted); }
-        .lamap-hud .hud-hint { font-size: .55rem; }
+        .lamap-hud .hud-row { gap: 4px 12px; }
+        .lamap-hud .hud-num { font-size: .95rem; }
+        .lamap-hud .hud-lbl { font-size: .54rem; }
+        .lamap-hud .hud-sub { font-size: .58rem; }
+        .lamap-panel .hud-opt { display: none; }
+        .lamap-panel .hud-hint { display: none; }
+        .lamap-zoom button { width: 30px; height: 30px; }
     }
 </style>
 @endpush
@@ -339,43 +446,6 @@
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-globe-asia mr-2"></i>Live Access</h1>
-        <span class="text-muted small" id="server-time">Memuat...</span>
-    </div>
-
-    {{-- Kartu ringkasan --}}
-    <div class="row" id="summary-cards">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Request (5 menit)</div>
-                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="sum-requests">0</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">IP Unik Aktif</div>
-                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="sum-ips">0</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">User Aktif</div>
-                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="sum-users">0</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Rata-rata Durasi</div>
-                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="sum-duration">0 ms</div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <div class="row">
@@ -390,24 +460,48 @@
                     <div class="lamap">
                         <canvas id="lamap-canvas" aria-label="Peta akses langsung"></canvas>
 
-                        <div class="lamap-hud">
-                            <div class="hud-row">
-                                <div>
-                                    <span class="hud-num" id="lamap-reqpm">0</span>
-                                    <span class="hud-lbl">request/menit</span>
+                        {{-- Kelompok kiri-atas: HUD statistik + tombol zoom menempel
+                             jadi satu, jadi tidak ada kontrol di pojok kanan bawah. --}}
+                        <div class="lamap-panel">
+                            <div class="lamap-hud">
+                                <div class="hud-row">
+                                    <div>
+                                        <span class="hud-num" id="lamap-reqpm">0</span>
+                                        <span class="hud-lbl">request/menit</span>
+                                    </div>
+                                    <div>
+                                        <span class="hud-num" id="sum-requests">0</span>
+                                        <span class="hud-lbl">total request</span>
+                                    </div>
+                                    <div class="hud-opt">
+                                        <span class="hud-num" id="sum-ips">0</span>
+                                        <span class="hud-lbl">IP unik</span>
+                                    </div>
+                                    <div>
+                                        <span class="hud-num" id="sum-users">0</span>
+                                        <span class="hud-lbl">user aktif</span>
+                                    </div>
+                                    <div>
+                                        <span class="hud-num" id="sum-duration">0 ms</span>
+                                        <span class="hud-lbl">Rata-rata Durasi</span>
+                                    </div>
+                                    <div class="hud-opt">
+                                        <span class="hud-num" id="lamap-sources">0</span>
+                                        <span class="hud-lbl">sumber</span>
+                                    </div>
+                                    <div class="hud-opt">
+                                        <span class="hud-num" id="lamap-err">0</span>
+                                        <span class="hud-lbl">error</span>
+                                    </div>
                                 </div>
-                                <div>
-                                    <span class="hud-num" id="lamap-sources">0</span>
-                                    <span class="hud-lbl">sumber aktif</span>
-                                </div>
-                                <div>
-                                    <span class="hud-num" id="lamap-err">0</span>
-                                    <span class="hud-lbl">error 4xx/5xx</span>
+                                <div class="hud-sub">
+                                    <span class="hud-server" id="server-time">Memuat...</span>
+                                    <span class="hud-hint">Klik negara untuk zoom + detail · scroll = zoom · geser peta = pindah</span>
                                 </div>
                             </div>
-                            <div class="hud-hint">Klik negara untuk zoom + detail &middot; scroll = zoom &middot; geser peta = pindah</div>
                         </div>
 
+                        <!-- Tombol zoom di pojok kanan bawah peta -->
                         <div class="lamap-zoom">
                             <button type="button" id="lamap-zoom-in" title="Perbesar"><i class="fas fa-plus"></i></button>
                             <button type="button" id="lamap-zoom-out" title="Perkecil"><i class="fas fa-minus"></i></button>
@@ -458,16 +552,6 @@
                                 </div>
                             </div>
                         </div>
-
-                        <div class="lamap-legend">
-                            <span><i class="fas fa-circle" style="color:#0891b2;"></i> publik</span>
-                            <span><i class="fas fa-circle" style="color:#16a34a;"></i> jaringan lokal</span>
-                            <span><i class="fas fa-circle" style="color:#d97706;"></i> ada 4xx</span>
-                            <span><i class="fas fa-circle" style="color:#dc2626;"></i> ada 5xx</span>
-                            <span><i class="fas fa-circle" style="color:#64748b;"></i> belum diketahui</span>
-                        </div>
-
-                        <div class="lamap-foot" id="lamap-foot">Origin: -</div>
                     </div>
                 </div>
             </div>
@@ -476,20 +560,20 @@
 
     <!-- Detail negara/region yang diklik di peta -->
     <div class="modal fade" id="lamapCountryModal" tabindex="-1" role="dialog" aria-labelledby="lamapCountryTitle" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-dialog lamap-dlg modal-lg" role="document">
             <div class="modal-content lamap-modal">
-                <div class="modal-header py-2">
+                <div class="modal-header">
                     <div>
-                        <h6 class="modal-title m-0" id="lamapCountryTitle">Wilayah</h6>
-                        <div class="small text-muted" id="lamapCountrySub">-</div>
+                        <h5 class="modal-title m-0" id="lamapCountryTitle">Wilayah</h5>
+                        <div class="text-muted small" id="lamapCountrySub">-</div>
                     </div>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
                 <div class="modal-body" id="lamapCountryBody"></div>
-                <div class="modal-footer py-2">
-                    <button type="button" class="btn btn-sm btn-outline-info" id="lamapCountryZoom">
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="lamapCountryZoom">
                         <i class="fas fa-search-plus mr-1"></i>Zoom ke wilayah
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="lamapCountryReset">
@@ -502,7 +586,7 @@
     </div>
 
     {{-- Catatan: Akses per IP, Akses per User, Request Terbaru, Jobs & Queue, dan
-         Services berjalan TIDAK lagi berupa kartu terpisah di bawah peta. Kelimanya
+         Services berjalan TIDAK lagi berupa kartu terpisah di bawah peta. Seluruh data
          sudah dipindah ke dalam HUD Live Map Akses (dock + tab di dalam peta). --}}
 </div>
 @endsection
@@ -749,11 +833,10 @@
     const LAMAP_ZOOM_CLICK_MAX = 9;  // batas zoom otomatis saat negara diklik
 
     function lamapProjWidth() {
-        // Panel "Sumber teratas" menempel di kanan (lebar 300px). Peta diproyeksikan
-        // hanya pada lebar tersisa supaya titik origin (Indonesia, di kanan peta
-        // dunia) tidak tertutup panel.
-        const panelVisible = window.matchMedia('(min-width: 992px)').matches;
-        return Math.max(280, LAMAP.w - (panelVisible ? 320 : 0));
+        // Peta diproyeksikan full width canvas. Dock HUD adalah overlay absolut
+        // di kanan (CSS), bukan pengurangan area proyeksi. Ini memastikan
+        // konversi koordinat click (screen <-> geo) konsisten.
+        return LAMAP.w;
     }
 
     // Proyeksi dasar (tanpa zoom/geser): lng/lat -> koordinat peta "dunia penuh".
@@ -1424,12 +1507,22 @@
     // ada (sources + recent), jadi tidak ada request tambahan.
     function lamapCanvasPos(ev) {
         const r = LAMAP.canvas.getBoundingClientRect();
-        return [ev.clientX - r.left, ev.clientY - r.top];
+        const cssX = ev.clientX - r.left;
+        const cssY = ev.clientY - r.top;
+        // Konversi koordinat CSS ke buffer canvas (LAMAP.w x LAMAP.h)
+        // karena canvas bisa di-stretch oleh CSS (width: 100%).
+        const scaleX = LAMAP.w / r.width;
+        const scaleY = LAMAP.h / r.height;
+        return [cssX * scaleX, cssY * scaleY];
     }
 
     function lamapTouchPos(touch) {
         const r = LAMAP.canvas.getBoundingClientRect();
-        return [touch.clientX - r.left, touch.clientY - r.top];
+        const cssX = touch.clientX - r.left;
+        const cssY = touch.clientY - r.top;
+        const scaleX = LAMAP.w / r.width;
+        const scaleY = LAMAP.h / r.height;
+        return [cssX * scaleX, cssY * scaleY];
     }
 
     function lamapInsideCanvas(p) {
@@ -1595,13 +1688,15 @@
         const users = new Set();
         list.forEach(s => (s.users || []).forEach(u => users.add(u)));
         list.forEach(s => (s.npk || []).forEach(u => users.add(u)));
-        const chip = (cls, lbl, val) => '<span class="lm-chip ' + cls + '">' + lbl + ' <b>' + val + '</b></span>';
-        return '<div class="lm-chips">' +
-            chip('c-req', 'request', req) +
-            chip('c-ip', 'IP', ips) +
-            chip('c-user', 'user', users.size) +
-            chip('c-4xx', '4xx', e4) +
-            chip('c-5xx', '5xx', e5) +
+        const chip = (cls, val, lbl) => '<div class="lm-stat ' + cls + '">' +
+            '<span class="lm-stat-v">' + val + '</span>' +
+            '<span class="lm-stat-l">' + lbl + '</span></div>';
+        return '<div class="lm-stats">' +
+            chip('c-req', req, 'request') +
+            chip('c-ip', ips, 'IP') +
+            chip('c-user', users.size, 'user') +
+            chip('c-4xx', e4, '4xx') +
+            chip('c-5xx', e5, '5xx') +
             '</div>';
     }
 
@@ -1609,61 +1704,77 @@
     // (lamapOpenCountryModal) dan oleh refresh data (refreshMap): saat modal
     // sedang terbuka, HANYA isinya yang disegarkan.
     function lamapRenderCountryModal(feature) {
-        const modal = document.getElementById('lamapCountryModal');
-        const body = document.getElementById('lamapCountryBody');
-        if (!modal || !body) return;
-        const name = lamapCountryName(feature);
-        const props = feature.properties || {};
-        const inCountry = (LAMAP.sources || []).filter(s => s._country === feature);
-        const ipSet = new Set(inCountry.map(s => s.ip));
-        const recent = (LAMAP.recent || []).filter(r => ipSet.has(r.ip)).slice(0, 15);
-        const minutes = Math.max(1, LAMAP.windowMinutes || 5);
+            const modal = document.getElementById('lamapCountryModal');
+            const body = document.getElementById('lamapCountryBody');
+            if (!modal || !body) return;
+            const name = lamapCountryName(feature);
+            const props = feature.properties || {};
+            const inCountry = (LAMAP.sources || []).filter(s => s._country === feature);
+            const ipSet = new Set(inCountry.map(s => s.ip));
+            const recent = (LAMAP.recent || []).filter(r => ipSet.has(r.ip)).slice(0, 20);
+            const minutes = Math.max(1, LAMAP.windowMinutes || 5);
 
-        const t = document.getElementById('lamapCountryTitle');
-        const sub = document.getElementById('lamapCountrySub');
-        if (t) t.textContent = name + (props.iso ? ' (' + props.iso + ')' : '');
-        if (sub) {
-            sub.textContent = (props.continent || 'Wilayah') + ' · ' + inCountry.length + ' sumber · window ' +
-                minutes + ' menit';
-        }
-
-        let html = lamapStatusChips(inCountry);
-        const req = inCountry.reduce((a, s) => a + (s.requests || 0), 0);
-        html += '<div class="lm-line">Laju: <b>' + (req / minutes).toFixed(1) + '</b> request/menit</div>';
-
-        if (!inCountry.length) {
-            html += '<div class="lm-empty">Tidak ada akses dari wilayah ini pada ' + minutes +
-                ' menit terakhir. Akses LAN/loopback dihitung di negara lokasi server' +
-                (LAMAP.origin ? ' (' + esc(LAMAP.origin.label || 'server') + ')' : '') + '.</div>';
-        } else {
-            html += '<div class="lm-sec">Sumber</div>' + inCountry.map(s => {
-                const who = (s.users && s.users.length ? s.users.join(', ')
-                    : (s.npk && s.npk.length ? s.npk.join(', ') : '-'));
-                const route = (s.top_routes && s.top_routes.length) ? 
-                    s.top_routes.map(r => esc(r.route) + ' ×' + r.count).join(', ') : esc(s.last_route || '-');
-                return '<div class="lm-item">' +
-                    '<div class="lm-row"><span class="ip">' + esc(s.ip) + '</span>' +
-                    '<span class="lm-badge">' + (s.scope === 'public' ? 'publik' : (s.scope === 'lan' ? 'LAN' : 'server')) + '</span>' +
-                    '<span class="lm-at">' + fmtTime(s.last_at) + '</span></div>' +
-                    '<div class="lm-row meta">' + esc(s.label || '-') + ' · ' + (s.requests || 0) + ' req · ' + esc(who) + '</div>' +
-                    '<div class="lm-row meta">' + route + '</div>' +
-                    '<div class="lm-row">' + statusCounts(s) + '</div>' +
-                    '</div>';
-            }).join('');
-            if (recent.length) {
-                html += '<div class="lm-sec">Akses terbaru</div><div class="lm-recent">' + recent.map(r =>
-                    '<div class="lm-row"><span class="lm-at">' + fmtTime(r.at) + '</span> ' +
-                    '<span class="ip">' + esc(r.ip) + '</span> ' +
-                    '<span class="status">' + statusBadge(r.status) + '</span>' +
-                    '<span class="lm-path">' + esc((r.method || '') + ' ' + (r.path || '')) + '</span></div>'
-                ).join('') + '</div>';
+            const t = document.getElementById('lamapCountryTitle');
+            const sub = document.getElementById('lamapCountrySub');
+            if (t) t.textContent = name + (props.iso ? ' (' + props.iso + ')' : '');
+            if (sub) {
+                sub.textContent = (props.continent || 'Wilayah') + ' · ' + inCountry.length + ' sumber · window ' +
+                    minutes + ' menit';
             }
-        }
-        body.innerHTML = html;
 
-        const zoomBtn = document.getElementById('lamapCountryZoom');
-        if (zoomBtn) zoomBtn.classList.remove('d-none');
-    }
+            let html = lamapStatusChips(inCountry);
+            const req = inCountry.reduce((a, s) => a + (s.requests || 0), 0);
+            html += '<div class="lm-line">Laju: <b>' + (req / minutes).toFixed(1) + '</b> request/menit</div>';
+
+            if (!inCountry.length) {
+                html += '<div class="lm-empty">Tidak ada akses dari wilayah ini pada ' + minutes +
+                    ' menit terakhir. Akses LAN/loopback dihitung di negara lokasi server' +
+                    (LAMAP.origin ? ' (' + esc(LAMAP.origin.label || 'server') + ')' : '') + '.</div>';
+            } else {
+                html += '<div class="lm-sec">Sumber Akses</div>' + inCountry.map(s => {
+                    const whoList = (s.users && s.users.length ? s.users
+                        : (s.npk && s.npk.length ? s.npk : []));
+                    const whoFull = whoList.join(', ');
+                    // Daftar nama panjang bikin baris berdesakan: tampilkan 4 nama
+                    // pertama + jumlah sisanya (nama lengkap ada di tooltip).
+                    const who = whoList.length
+                        ? whoList.slice(0, 4).join(', ') + (whoList.length > 4 ? ' +' + (whoList.length - 4) + ' lainnya' : '')
+                        : '-';
+                    const route = (s.top_routes && s.top_routes.length) ?
+                        s.top_routes.map(r => esc(r.route) + ' ×' + r.count).join(', ') : esc(s.last_route || '-');
+                    const scopeLabel = s.scope === 'public' ? 'publik' : (s.scope === 'lan' ? 'LAN' : 'server');
+                    const scopeColor = s.scope === 'public' ? '#0891b2' : (s.scope === 'lan' ? '#16a34a' : '#64748b');
+                    return '<div class="lm-item">' +
+                        '<div class="lm-row"><span class="ip">' + esc(s.ip) + '</span>' +
+                        '<span class="lm-badge" style="background:' + scopeColor + '15; border-color:' + scopeColor + '40; color:' + scopeColor + ';">' + scopeLabel + '</span>' +
+                        '<span class="lm-at">' + fmtTime(s.last_at) + '</span></div>' +
+                        '<div class="lm-row meta">' + esc(s.label || '-') + ' · ' + (s.requests || 0) + ' req · ' +
+                            '<span title="' + esc(whoFull) + '">' + esc(who) + '</span></div>' +
+                        '<div class="lm-row meta">' + route + '</div>' +
+                        '<div class="lm-row">' + statusCounts(s) + '</div>' +
+                        '</div>';
+                }).join('');
+                if (recent.length) {
+                    html += '<div class="lm-sec">Akses Terbaru (' + recent.length + ')</div><div class="lm-recent"><div class="lm-recent-head">' +
+                        '<span class="lm-at">Waktu</span>' +
+                        '<span class="ip">IP</span>' +
+                        '<span class="status-col">Status</span>' +
+                        '<span class="lm-path">Method · Path</span>' +
+                        '</div>' + recent.map(r =>
+                        '<div class="lm-row">' +
+                        '<span class="lm-at">' + fmtTime(r.at) + '</span> ' +
+                        '<span class="ip">' + esc(r.ip) + '</span> ' +
+                        '<span class="status">' + statusBadge(r.status) + '</span>' +
+                        '<span class="lm-path">' + esc((r.method || '') + ' ' + (r.path || '')) + '</span>' +
+                        '</div>'
+                    ).join('') + '</div>';
+                }
+            }
+            body.innerHTML = html;
+
+            const zoomBtn = document.getElementById('lamapCountryZoom');
+            if (zoomBtn) zoomBtn.classList.remove('d-none');
+        }
 
     // Tampilkan modal detail wilayah (dipicu klik user). Kalau modal SUDAH
     // terbuka, isinya saja yang sudah diperbarui di atas — modal('show') tidak
@@ -1728,10 +1839,10 @@
             try { lamapRebuildScene(); lamapDraw(ts || 0); } catch (e) { LAMAP.drawError = String((e && e.message) || e); }
             return LAMAP.view;
         };
-        LAMAP.geoAt = function (x, y) { return lamapScreenToGeo(x, y); };
+        LAMAP.geoAt = function (x, y) { const r = LAMAP.canvas.getBoundingClientRect(); const scaleX = LAMAP.w / r.width; const scaleY = LAMAP.h / r.height; return lamapScreenToGeo((x - r.left) * scaleX, (y - r.top) * scaleY); };
         LAMAP.projectAt = function (lng, lat) { return lamapProject(lng, lat); };
-        LAMAP.countryAtXY = function (x, y) { const f = lamapCountryAt(lamapScreenToGeo(x, y).lng, lamapScreenToGeo(x, y).lat); return f ? lamapCountryName(f) : null; };
-        LAMAP.clickAt = function (x, y) { return lamapClickAt([x, y]); };
+        LAMAP.countryAtXY = function (x, y) { const r = LAMAP.canvas.getBoundingClientRect(); const scaleX = LAMAP.w / r.width; const scaleY = LAMAP.h / r.height; const f = lamapCountryAt(lamapScreenToGeo((x - r.left) * scaleX, (y - r.top) * scaleY).lng, lamapScreenToGeo((x - r.left) * scaleX, (y - r.top) * scaleY).lat); return f ? lamapCountryName(f) : null; };
+        LAMAP.clickAt = function (x, y) { const r = LAMAP.canvas.getBoundingClientRect(); const scaleX = LAMAP.w / r.width; const scaleY = LAMAP.h / r.height; return lamapClickAt([(x - r.left) * scaleX, (y - r.top) * scaleY]); };
         lamapResize();
         window.addEventListener('resize', lamapResize);
         lamapBindInteraction();
@@ -1766,13 +1877,6 @@
         setText('lamap-sources', sources.length);
         setText('lamap-err', errors);
         setText('lamap-badge', sources.length + ' sumber' + (LAMAP.unknown ? ' · ' + LAMAP.unknown + ' belum diketahui' : ''));
-
-        const foot = document.getElementById('lamap-foot');
-        if (foot && LAMAP.origin) {
-            foot.innerHTML = 'Origin: ' + esc(LAMAP.origin.label) +
-                ' (' + Number(LAMAP.origin.lat).toFixed(3) + ', ' + Number(LAMAP.origin.lng).toFixed(3) + ')' +
-                (LAMAP.unknown ? '<br>' + LAMAP.unknown + ' IP publik belum ada di cache GeoIP (tidak digambar)' : '');
-        }
 
         const list = document.getElementById('lamap-list');
         if (!list) return;

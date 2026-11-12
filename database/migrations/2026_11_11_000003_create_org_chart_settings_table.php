@@ -21,7 +21,7 @@ return new class extends Migration
         if (! Schema::hasTable('org_chart_settings')) {
             Schema::create('org_chart_settings', function (Blueprint $table) {
                 $table->id();
-                $table->string('id_dept', 50);                 // DEPT.ID_DEPT
+                $table->string('id_dept', 50)->nullable();  // DEPT.ID_DEPT (NULL untuk level Company)
                 $table->string('level', 20);                   // company|division|department|section|line
                 $table->unsignedBigInteger('parent_id')->nullable(); // org_chart_settings.id
                 $table->unsignedInteger('sort_order')->default(0);

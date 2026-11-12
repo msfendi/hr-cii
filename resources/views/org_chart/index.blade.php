@@ -4,30 +4,29 @@
 
 @section('content')
 <div class="container-fluid">
-    <div class="d-sm-flex align-items-center justify-content-between mb-3">
-        <div>
-            <h1 class="h3 mb-1 text-gray-800"><i class="fas fa-sitemap mr-2"></i>Organization Chart</h1>
-            <p class="text-muted mb-0" style="font-size:0.875rem;">
-                Struktur organisasi disusun dari <strong>setting manual</strong> (ID_DEPT + level).
-                Karyawan aktif (PKWT.TKK kosong) tidak digambar sebagai card &mdash;
-                klik card unit untuk membuka <strong>daftar karyawan unit tersebut</strong>. Unit yang punya sub-departemen tetap punya card sendiri, jadi daftar tidak pernah bercampur antar-departemen.
-            </p>
-        </div>
-        <div class="d-flex gap-2 flex-wrap align-items-center">
+    <div class="oc-head d-flex flex-wrap align-items-center justify-content-between mb-3">
+        <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-sitemap mr-2"></i>Organization Chart</h1>
+
+        {{-- Catatan internal (sengaja tidak ditampilkan lagi di halaman):
+             struktur disusun dari setting manual (ID_DEPT + level); karyawan aktif
+             (PKWT.TKK kosong) tidak digambar sebagai card — klik card unit membuka
+             daftar karyawan unit tersebut; unit yang punya sub-departemen tetap
+             punya card sendiri sehingga daftar tidak bercampur antar-departemen. --}}
+        <div class="oc-toolbar">
             <a href="{{ route('org-chart.settings') }}" class="btn btn-outline-primary btn-sm rounded-pill px-3">
-                <i class="fas fa-cog mr-1"></i> Setting Org Chart
+                <i class="fas fa-cog mr-1"></i>Setting Org Chart
             </a>
             <button id="btnReloadChart" class="btn btn-primary btn-sm rounded-pill px-3">
-                <i class="fas fa-sync-alt mr-1"></i> Muat Ulang
+                <i class="fas fa-sync-alt mr-1"></i>Muat Ulang
             </button>
-            <div class="btn-group btn-group-sm" role="group" aria-label="Zoom chart">
+            <div class="btn-group btn-group-sm oc-zoom" role="group" aria-label="Zoom chart">
                 <button type="button" class="btn btn-outline-secondary" id="zoomOut" title="Perkecil">&minus;</button>
                 <button type="button" class="btn btn-outline-secondary" id="zoomReset" title="Reset zoom">
                     <span id="zoomLabel">100%</span>
                 </button>
                 <button type="button" class="btn btn-outline-secondary" id="zoomIn" title="Perbesar">+</button>
             </div>
-            <span class="badge badge-info" id="empCount">0 karyawan</span>
+            <span class="badge badge-info oc-count" id="empCount">0 karyawan</span>
         </div>
     </div>
 
@@ -262,6 +261,40 @@
     #chart-container .orgchart > ul > li > ul li > .node::before {
         top: -16px;
         height: 14px;
+    }
+
+    /* ---- Toolbar header Organization Chart ----
+       Jarak antar tombol diatur di sini karena `gap-*` adalah utilitas
+       Bootstrap 5, sedangkan aplikasi ini memakai Bootstrap 4 (tidak ada efek). */
+    .oc-head { row-gap: 10px; }
+    .oc-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+    }
+    .oc-toolbar .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 32px;
+        line-height: 1;
+    }
+    .oc-zoom { border-radius: 999px; overflow: hidden; }
+    .oc-zoom .btn { min-width: 34px; padding: 0 8px; border-color: #cbd5e1; }
+    .oc-zoom #zoomReset { min-width: 62px; font-variant-numeric: tabular-nums; }
+    .oc-count {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        font-size: .74rem;
+        font-weight: 600;
+    }
+    @media (max-width: 575.98px) {
+        .oc-toolbar { width: 100%; justify-content: flex-start; margin-left: 0; }
     }
 </style>
 @endpush

@@ -34,6 +34,15 @@
         </div>
     @endif
 
+    @if (!($labelColumn ?? true))
+        <div class="alert alert-warning">
+            <strong>Kolom <code>label</code> belum ada di tabel <code>org_chart_settings</code>.</strong>
+            Sementara nama Company memakai nilai bawaan
+            <em>{{ \App\Models\OrgChartSetting::COMPANY_NAME_FALLBACK }}</em>.
+            Jalankan <code>php artisan migrate</code> di server supaya kolomnya dibuat permanen.
+        </div>
+    @endif
+
     <div class="row">
         {{-- Form tambah node --}}
         <div class="col-lg-4 mb-4">
@@ -70,7 +79,7 @@
                             <label class="small font-weight-bold">Nama Company <span class="text-danger js-label-star">*</span></label>
                             <input type="text" name="label" class="form-control form-control-sm" maxlength="150"
                                 placeholder="mis. PT. CHUTEX INTERNATIONAL INDONESIA" value="{{ old('label') }}">
-                            <small class="text-muted">Dipakai sebagai nama node level <strong>Company</strong> (level tertinggi). Kosongkan untuk memakai nama bawaan.</small>
+                            <small class="text-muted">Dipakai sebagai nama node level <strong>Company</strong> (level tertinggi) — <strong>wajib diisi</strong>, tidak hardcode.</small>
                         </div>
                         <div class="form-group">
                             <label class="small font-weight-bold">Parent Node</label>
@@ -221,7 +230,7 @@
                             <label class="small font-weight-bold">Nama Company <span class="text-danger js-label-star">*</span></label>
                             <input type="text" name="label" class="form-control form-control-sm" maxlength="150"
                                 placeholder="mis. PT. CHUTEX INTERNATIONAL INDONESIA" value="{{ $s->label }}">
-                            <small class="text-muted">Nama node level Company (level tertinggi) &mdash; bukan dari ID_DEPT.</small>
+                            <small class="text-muted">Nama node level Company (level tertinggi) dari input ini — wajib diisi, bukan dari ID_DEPT.</small>
                         </div>
                         <div class="form-group">
                             <label class="small font-weight-bold">Parent Node</label>

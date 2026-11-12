@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Setting MANUAL organization chart.
@@ -25,6 +28,65 @@ class OrgChartSetting extends Model
      * Level tertinggi memakai NAMA COMPANY, bukan nama department (ID_DEPT).
      */
     public const COMPANY_NAME_FALLBACK = 'PT. CHUTEX INTERNATIONAL INDONESIA';
+
+    /**
+     * Status kolom `label` di DB (di-cache per request; null = belum dicek).
+     */
+    protected static ?bool $labelColumnExists = null;
+
+    /**
+     * Apakah kolom `label` ada di tabel org_chart_settings?
+     */
+    public static function hasLabelColumn(): bool
+    {
+        if (self::$labelColumnExists !== null) {
+            return self::$labelColumnExists;
+        }
+
+        $exists = false;
+
+        try {
+            $exists = Schema::hasTable('org_chart_settings')
+                && Schema::hasColumn('org_chart_settings', 'label');
+        } catch (\Throwable $e) {
+            Log::warning('OrgChartSetting cek kolom label gagal: ' . $e->getMessage());
+        }
+
+        return self::$labelColumnExists = $exists;
+    }
+
+    /**
+     * Pastikan kolom `label` tersedia (idempotent, aman dipanggil berulang).
+     *
+     * Database bisa belum menjalankan migration
+     * 2026_11_11_000004_add_label_to_org_chart_settings sehingga menyimpan
+     * setting level Company gagal dengan "Invalid column name 'label'".
+     * Bila user DB tidak punya hak ALTER, fungsi ini mengembalikan false dan
+     * pemanggil tetap harus jalan (nama Company memakai nilai bawaan).
+     */
+    public static function ensureLabelColumn(): bool
+    {
+        if (self::hasLabelColumn()) {
+            return true;
+        }
+
+        try {
+            Schema::table('org_chart_settings', function (Blueprint $table) {
+                $table->string('label', 150)->nullable();
+            });
+        } catch (\Throwable $e) {
+            Log::warning('OrgChartSetting gagal menambah kolom label otomatis: ' . $e->getMessage());
+        }
+
+        self::$labelColumnExists = null;
+
+        if (! self::hasLabelColumn()) {
+            // Jangan coba DDL berulang-ulang di request yang sama.
+            self::$labelColumnExists = false;
+        }
+
+        return (bool) self::$labelColumnExists;
+    }
 
     protected $fillable = [
         'id_dept',
