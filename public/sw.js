@@ -5,7 +5,7 @@
  * (css/js/img/icon) yang immutable-ish. Versi cache dinaikkan setiap
  * kali ada perubahan aset supaya konten lama tergantikan.
  */
-const CACHE_VERSION = 'hrcii-v1';
+const CACHE_VERSION = 'hrcii-v2';
 const CACHE_STATIC = CACHE_VERSION + '-static';
 const CACHE_PAGES = CACHE_VERSION + '-pages';
 
@@ -15,6 +15,8 @@ const PRECACHE_URLS = [
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   '/icons/maskable-512x512.png',
+  '/icons/apple-touch-icon-180x180.png',
+  '/splash/chutex-hris-splash.jpg',
 ];
 
 self.addEventListener('install', (event) => {

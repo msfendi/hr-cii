@@ -7,13 +7,6 @@
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <div>
             <h1 class="h3 mb-1 text-gray-800"><i class="fas fa-sitemap mr-2"></i>Setting Organization Chart</h1>
-            <p class="text-muted mb-0" style="font-size:0.875rem;">
-                Atur node organisasi secara manual: pilih <strong>level</strong> dan <strong>ID_DEPT</strong>-nya,
-                lalu tentukan parent node.
-                <strong>Level Company</strong> (level tertinggi) memakai <strong>Nama Company</strong> yang diisi
-                manual &mdash; bukan nama department dari ID_DEPT.
-                Di chart, karyawan aktif (PKWT.TKK kosong) dari BIODATA akan tampil di bawah node sesuai ID_DEPT-nya.
-            </p>
         </div>
         <a href="{{ route('org-chart.index') }}" class="btn btn-outline-primary btn-sm rounded-pill px-3">
             <i class="fas fa-project-diagram mr-1"></i> Lihat Chart
