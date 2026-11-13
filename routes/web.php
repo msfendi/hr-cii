@@ -702,6 +702,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/', [\App\Http\Controllers\AdminLeaveRecapController::class, 'index'])->name('leave-recap.index');
         Route::get('/get-data', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getData'])->name('leave-recap.get-data');
         Route::get('/detail/{token}', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getDetail'])->name('leave-recap.detail');
+        Route::post('/delete/{token}', [\App\Http\Controllers\AdminLeaveRecapController::class, 'destroy'])->name('leave-recap.destroy');
     });
 
     // ========================================

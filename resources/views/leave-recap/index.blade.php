@@ -276,6 +276,74 @@
                 });
             });
 
+            // ── HAPUS pengajuan (semua baris dengan token sama) ──
+            $('#dataTable').on('click', '.btn-delete', function () {
+                var token  = $(this).data('token');
+                var nama   = $(this).data('nama');
+                var status = $(this).data('status');
+                var hari   = $(this).data('hari');
+
+                // Pengajuan yang sudah disetujui sudah memotong saldo cuti —
+                // beri tahu HR konsekuensinya sebelum menghapus.
+                var extra = '';
+                if (status === 'approved') {
+                    extra = '<div class="alert alert-warning text-left mt-3 mb-0" style="font-size:0.85rem;">'
+                          + '<i class="fas fa-exclamation-triangle mr-1"></i>'
+                          + 'Pengajuan ini <b>sudah disetujui</b>. Menghapusnya akan '
+                          + '<b>mengembalikan ' + hari + ' hari ke saldo cuti</b> dan '
+                          + 'membatalkan catatan Overtime "CT" yang terbentuk.'
+                          + '</div>';
+                } else if (status === 'rejected') {
+                    extra = '<div class="alert alert-secondary text-left mt-3 mb-0" style="font-size:0.85rem;">'
+                          + 'Pengajuan ini <b>ditolak</b> — tidak ada saldo cuti yang perlu dikembalikan.'
+                          + '</div>';
+                } else {
+                    extra = '<div class="alert alert-info text-left mt-3 mb-0" style="font-size:0.85rem;">'
+                          + 'Pengajuan ini <b>belum selesai</b> — tidak ada saldo cuti yang perlu dikembalikan.'
+                          + '</div>';
+                }
+
+                Swal.fire({
+                    title: 'Hapus pengajuan ini?',
+                    html: '<div class="text-left">Pengajuan <b>' + nama + '</b> (' + hari + ' hari cuti) '
+                        + 'beserta <b>semua level persetujuannya</b> akan dihapus permanen.</div>' + extra,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e74a3b',
+                    confirmButtonText: 'Ya, Hapus',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true
+                }).then(function (result) {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    $.ajax({
+                        url: '{{ url("leave-recap/delete") }}/' + encodeURIComponent(token),
+                        type: 'POST',
+                        data: { _token: '{{ csrf_token() }}' },
+                        success: function (res) {
+                            if (res.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Terhapus',
+                                    text: res.message,
+                                    timer: 2200,
+                                    showConfirmButton: false
+                                });
+                                table.ajax.reload(null, false);
+                            } else {
+                                Swal.fire({ icon: 'error', title: 'Gagal', text: res.message || 'Gagal menghapus pengajuan.' });
+                            }
+                        },
+                        error: function (xhr) {
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Terjadi kesalahan saat menghapus.';
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+                        }
+                    });
+                });
+            });
+
             // Zoom foto preview
             $(document).on('click', '.img-preview-thumb', function () {
                 var url = $(this).data('url');

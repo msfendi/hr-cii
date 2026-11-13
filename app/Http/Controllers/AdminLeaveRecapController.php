@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\LeaveRequest;
+use App\Services\ApprovalWa\LeaveApprovalEffects;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Yajra\DataTables\Facades\DataTables;
 
 class AdminLeaveRecapController extends Controller
@@ -95,7 +97,8 @@ class AdminLeaveRecapController extends Controller
                 return '<span class="badge badge-secondary">Menunggu</span>';
             })
             ->addColumn('action', function($row) {
-                return '<button class="btn btn-sm btn-info btn-detail" data-token="'.$row['token'].'"><i class="fas fa-eye"></i> Detail</button>';
+                return '<button class="btn btn-sm btn-info btn-detail" data-token="'.$row['token'].'"><i class="fas fa-eye"></i> Detail</button> '
+                     . '<button class="btn btn-sm btn-danger btn-delete" data-token="'.$row['token'].'" data-nama="'.e($row['nama']).'" data-status="'.$row['overall_status'].'" data-hari="'.$row['total_days'].'"><i class="fas fa-trash"></i> Hapus</button>';
             })
             ->rawColumns(['karyawan', 'status_badge', 'action'])
             ->make(true);
@@ -168,5 +171,124 @@ class AdminLeaveRecapController extends Controller
         ];
 
         return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Hapus SATU pengajuan (semua baris dengan token yang sama).
+     *
+     * Kalau pengajuan sudah selesai (semua level menyetujui), saldo cuti sudah
+     * terpotong dan record Overtime "CT"/"CU" sudah dibuat saat finalisasi.
+     * Keduanya DIKEMBALIKAN dulu sebelum barisnya dihapus — kalau tidak, saldo
+     * karyawan tetap terpotong untuk cuti yang datanya sudah tidak ada.
+     *
+     * Pengajuan yang belum selesai (pending / parsial / ditolak) tidak menyentuh
+     * saldo, jadi cukup dihapus.
+     */
+    public function destroy($token)
+    {
+        $rows = LeaveRequest::where('token', $token)->get();
+
+        if ($rows->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengajuan tidak ditemukan (mungkin sudah dihapus).',
+            ], 404);
+        }
+
+        $active = $rows->whereNotIn('status', ['cancelled']);
+
+        // Pengajuan dianggap sudah final kalau ada baris aktif dan semuanya approved.
+        $isFinal = $active->isNotEmpty()
+            && $active->every(fn ($r) => strtolower((string) $r->status) === 'approved');
+
+        $restored = false;
+
+        try {
+            DB::connection('cii')->transaction(function () use ($token, $active, $isFinal, &$restored) {
+                if ($isFinal) {
+                    $anchor = $active->sortByDesc('approval_level')->first();
+                    LeaveApprovalEffects::reverseFinalize($anchor);
+                    $restored = true;
+                }
+
+                LeaveRequest::where('token', $token)->delete();
+            });
+        } catch (\Throwable $e) {
+            Log::error("[LeaveRecap] gagal hapus token {$token}: " . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus pengajuan: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $filesDeleted = $this->deleteAttachments($rows);
+
+        $actor = optional(auth()->user())->name
+            ?? optional(auth()->user())->npk
+            ?? 'unknown';
+
+        Log::info(sprintf(
+            '[LeaveRecap] token %s dihapus oleh %s (%d baris, saldo dikembalikan: %s, file: %d)',
+            $token, $actor, $rows->count(), $restored ? 'ya' : 'tidak', $filesDeleted
+        ));
+
+        return response()->json([
+            'success'          => true,
+            'message'          => $restored
+                ? 'Pengajuan dihapus. Saldo cuti dikembalikan.'
+                : 'Pengajuan dihapus.',
+            'deleted_rows'     => $rows->count(),
+            'restored_balance' => $restored,
+            'deleted_files'    => $filesDeleted,
+        ]);
+    }
+
+    /**
+     * Hapus file lampiran milik baris-baris pengajuan ini.
+     *
+     * Hanya file di dalam folder `leave-attachments/` yang dihapus — path dari
+     * DB tidak dipercaya begitu saja.
+     *
+     * @return int jumlah file yang terhapus
+     */
+    private function deleteAttachments($rows): int
+    {
+        $paths = [];
+
+        foreach ($rows as $row) {
+            $files = $row->attach_files;
+
+            if (is_string($files)) {
+                $files = json_decode($files, true);
+            }
+
+            if (is_array($files)) {
+                foreach ($files as $path) {
+                    if (is_string($path) && trim($path) !== '') {
+                        $paths[] = $path;
+                    }
+                }
+            }
+        }
+
+        $deleted = 0;
+
+        foreach (array_unique($paths) as $path) {
+            $relative = ltrim(str_replace('\\', '/', $path), '/');
+
+            // Guard: hanya di dalam folder lampiran cuti, tanpa path traversal.
+            if (!str_starts_with($relative, 'leave-attachments/') || str_contains($relative, '..')) {
+                continue;
+            }
+
+            $full = storage_path('app/public/' . $relative);
+
+            if (is_file($full) && @unlink($full)) {
+                $deleted++;
+            }
+        }
+
+        return $deleted;
     }
 }
