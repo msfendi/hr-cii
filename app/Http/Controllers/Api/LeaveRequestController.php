@@ -138,6 +138,7 @@ class LeaveRequestController extends Controller
                     'status' => 'pending',
                     'token' => $random,
                     'void' => 'false',
+                    'rules_id' => $selectedGroup?->id,
                 ]);
             }
 

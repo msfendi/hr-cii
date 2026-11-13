@@ -56,54 +56,64 @@ class LeaveApprovalQuery
             $byToken[$row->token][] = $row;
         }
 
-        // Ambil semua approved rows untuk token yang ada (cek prerequisite)
+        // Ambil semua row yang sudah diputuskan untuk token yang ada.
+        // Baris void/cancelled diabaikan supaya celah level (akibat level
+        // dihapus dari Manage Approval) tidak memblokir rantai.
         $tokens = array_keys($byToken);
         $placeholders = implode(',', array_fill(0, count($tokens), '?'));
-        $approvedRows = DB::connection('cii')->select("
+        $decidedRows = DB::connection('cii')->select("
             SELECT token, approval_level, status
             FROM leave_requests
             WHERE token IN ($placeholders)
               AND status IN ('approved', 'rejected')
+              AND (void IS NULL OR void = 'false' OR void = '')
         ", $tokens);
 
         // Build lookup: token -> level -> status
         $statusMap = [];
-        foreach ($approvedRows as $r) {
+        foreach ($decidedRows as $r) {
             $statusMap[$r->token][(int)$r->approval_level] = $r->status;
         }
 
         // Filter: hanya row yang giliran notifikasi sekarang
         $toNotify = [];
         foreach ($byToken as $token => $pendingRows) {
+            // Semua level yang benar-benar ada di token ini (untuk cek prerequisite).
+            $allLevels = [];
+            foreach ($pendingRows as $row) {
+                $allLevels[] = (int) $row->approval_level;
+            }
+            foreach ($statusMap[$token] ?? [] as $lv => $st) {
+                $allLevels[] = (int) $lv;
+            }
+            $allLevels = array_values(array_unique($allLevels));
+
             foreach ($pendingRows as $row) {
                 $level = (int) $row->approval_level;
 
-                if ($level === 1) {
-                    // Level 1: langsung eligible
+                // Ada yang menolak di token ini → seluruh rantai berhenti.
+                $anyRejected = in_array('rejected', $statusMap[$token] ?? [], true);
+                if ($anyRejected) {
+                    continue;
+                }
+
+                // Semua level lain yang LEBIH RENDAH dari level ini harus sudah
+                // approved. Dicek per level yang ada — bukan 1..N-1 — supaya
+                // celah level tidak membuat rantai macet.
+                $allPrevApproved = true;
+                foreach ($allLevels as $otherLevel) {
+                    if ($otherLevel >= $level) {
+                        continue;
+                    }
+
+                    if (($statusMap[$token][$otherLevel] ?? null) !== 'approved') {
+                        $allPrevApproved = false;
+                        break;
+                    }
+                }
+
+                if ($allPrevApproved) {
                     $toNotify[] = $row;
-                } else {
-                    // Level N: cek semua level 1..N-1 sudah 'approved'
-                    $allPrevApproved = true;
-                    for ($prevLevel = 1; $prevLevel < $level; $prevLevel++) {
-                        $prevStatus = $statusMap[$token][$prevLevel] ?? null;
-                        if ($prevStatus !== 'approved') {
-                            $allPrevApproved = false;
-                            break;
-                        }
-                    }
-
-                    // Jika ada yang 'rejected' di level sebelumnya, skip seluruh chain
-                    $anyRejected = false;
-                    foreach ($statusMap[$token] ?? [] as $st) {
-                        if ($st === 'rejected') {
-                            $anyRejected = true;
-                            break;
-                        }
-                    }
-
-                    if ($allPrevApproved && !$anyRejected) {
-                        $toNotify[] = $row;
-                    }
                 }
             }
         }
@@ -165,19 +175,34 @@ class LeaveApprovalQuery
 
         // 4. Check all previous levels approved (sequential enforcement)
         $level = (int) $req->approval_level;
-        if ($level > 1) {
-            $prevApproved = DB::connection('cii')->select("
-                SELECT COUNT(*) as cnt
-                FROM leave_requests
-                WHERE token = ?
-                  AND approval_level < ?
-                  AND status = 'approved'
-            ", [$req->token, $level]);
 
-            $approvedCount = (int)($prevApproved[0]->cnt ?? 0);
-            if ($approvedCount < $level - 1) {
-                return ['valid' => false, 'reason' => "Belum semua level sebelumnya menyetujui pengajuan #$requestId."];
-            }
+        // Ada level lain yang menolak → rantai berhenti, jangan lanjut.
+        $anyRejected = DB::connection('cii')->select("
+            SELECT COUNT(*) as cnt
+            FROM leave_requests
+            WHERE token = ?
+              AND status = 'rejected'
+              AND (void IS NULL OR void = 'false' OR void = '')
+        ", [$req->token]);
+
+        if ((int)($anyRejected[0]->cnt ?? 0) > 0) {
+            return ['valid' => false, 'reason' => "Pengajuan #$requestId sudah ditolak pada level lain."];
+        }
+
+        // Semua level yang lebih rendah dari level ini harus sudah approved.
+        // Dicek berdasarkan level yang benar-benar ada — bukan 1..N-1 — supaya
+        // celah level (mis. level dihapus dari Manage Approval) tidak memblokir.
+        $unapprovedPrev = DB::connection('cii')->select("
+            SELECT COUNT(*) as cnt
+            FROM leave_requests
+            WHERE token = ?
+              AND approval_level < ?
+              AND status <> 'approved'
+              AND (void IS NULL OR void = 'false' OR void = '')
+        ", [$req->token, $level]);
+
+        if ((int)($unapprovedPrev[0]->cnt ?? 0) > 0) {
+            return ['valid' => false, 'reason' => "Belum semua level sebelumnya menyetujui pengajuan #$requestId."];
         }
 
         return ['valid' => true, 'request' => $req, 'approver' => $approver];
@@ -331,6 +356,9 @@ class LeaveApprovalQuery
 
     /**
      * Hitung jumlah level dalam satu token (total chain approval).
+     *
+     * Row yang sudah dibatalkan (void/cancelled — mis. levelnya dihapus dari
+     * Manage Approval) tidak dihitung, supaya "level N dari M" tetap benar.
      */
     public static function countTokenLevels(string $token): int
     {
@@ -338,6 +366,8 @@ class LeaveApprovalQuery
             SELECT COUNT(DISTINCT approval_level) as cnt
             FROM leave_requests
             WHERE token = ?
+              AND status <> 'cancelled'
+              AND (void IS NULL OR void = 'false' OR void = '')
         ", [$token]);
 
         return (int)($rows[0]->cnt ?? 0);

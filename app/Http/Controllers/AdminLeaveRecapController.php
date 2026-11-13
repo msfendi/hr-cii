@@ -105,6 +105,7 @@ class AdminLeaveRecapController extends Controller
     {
         $requests = LeaveRequest::with('leaveType')
             ->where('token', $token)
+            ->where('status', '!=', 'cancelled')
             ->orderBy('approval_level', 'asc')
             ->get();
 

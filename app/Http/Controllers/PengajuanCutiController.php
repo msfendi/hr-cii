@@ -499,6 +499,9 @@ class PengajuanCutiController extends Controller
                         'custom_dates'      => $leaveData['custom_dates']
                             ? json_encode($leaveData['custom_dates'])
                             : null,
+                        // Group approval yang dipakai — dipakai untuk menyinkronkan
+                        // pengajuan ini kalau master approval berubah.
+                        'rules_id'          => $selectedGroup?->id,
                     ]);
                 }
 
@@ -737,9 +740,12 @@ class PengajuanCutiController extends Controller
                 ->where('year', date('Y'))
                 ->first();
 
-            // Ambil daftar semua approver untuk token ini
+            // Ambil daftar semua approver untuk token ini.
+            // Baris void/cancelled (mis. levelnya dihapus dari Manage Approval)
+            // tidak ditampilkan — chain efektifnya saja.
             $allApprovers = LeaveRequest::where('token', $req->token)
-                ->where(function($q) {
+                ->where('status', '!=', 'cancelled')
+                ->where(function ($q) {
                     $q->whereNull('void')->orWhere('void', '!=', 'true');
                 })
                 ->orderBy('approval_level', 'asc')
@@ -747,6 +753,7 @@ class PengajuanCutiController extends Controller
 
             if ($allApprovers->isEmpty()) {
                 $allApprovers = LeaveRequest::where('token', $req->token)
+                    ->where('status', '!=', 'cancelled')
                     ->orderBy('approval_level', 'asc')
                     ->get();
             }

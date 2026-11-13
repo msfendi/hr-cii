@@ -33,6 +33,7 @@ class LeaveRequest extends Model
         'void',
         'attach_files',
         'custom_dates',
+        'rules_id',
     ];
 
     protected $casts = [
