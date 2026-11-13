@@ -99,6 +99,34 @@ python3 ~/.hermes/scripts/approval-outbound.py              # live send
 python3 ~/.hermes/scripts/approval-outbound.py --token <token>  # one pengajuan
 ```
 
+## Phone Number Handling
+
+Nomor telepon approver diambil dari `PKWT.HP`. **Tidak semua nomor Indonesia.**
+
+Normalization (harus sinkron antara Laravel & script Python):
+`app/Services/ApprovalWa/PhoneFormatter.php` ↔ `docs/hermes/scripts/approval_phone.py`
+
+| Input | Output | Meaning |
+|-------|--------|---------|
+| `+60127383232` | `60127383232` | Explicit international — country code kept |
+| `+84913662215` | `84913662215` | Vietnam |
+| `+94772605624` | `94772605624` | Sri Lanka |
+| `081390207272` | `6281390207272` | Indonesia local |
+| `84913662215` | `84913662215` | Non-Indonesian, no `+` → kept as-is |
+| `60127383232@s.whatsapp.net` | `60127383232` | Baileys JID |
+
+Rules:
+1. `+` prefix = already international → **country code preserved verbatim**.
+2. JID form → digits only.
+3. No `+` → Indonesian mobile pattern checked first (operator prefix
+   table `ID_MOBILE_PREFIXES`), then other country codes.
+4. Ambiguous → **rejected**, never force-prefixed with 62. A wrong number
+   reaching the wrong person is worse than a message not sent.
+
+Output is always digits-only so it can be suffixed with `@s.whatsapp.net`
+to form a Baileys chat id. **Never send a `+` to the bridge** — it needs
+raw digits.
+
 ## Throttle (anti-ban)
 
 Applied in the messaging layer scripts, not in Laravel:
