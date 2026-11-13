@@ -93,6 +93,8 @@ use App\Http\Controllers\NotificationsContractController;
 use App\Http\Controllers\ParentDeptController;
 use App\Http\Controllers\PortalRecruitmentStatusController;
 use App\Http\Controllers\RecruitmentFormController;
+use App\Http\Controllers\HrisV2Controller;
+use App\Http\Controllers\HrisV2AdminController;
 use App\Http\Controllers\SewingViolationController;
 use App\Http\Controllers\IjinMeninggalkanPekerjaanController;
 use App\Http\Controllers\MenuController;
@@ -1557,26 +1559,31 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::post('/logout-session', [FaceAttendanceController::class, 'logoutSession'])->name('logout-session');
 
     // Manage Geo Map & Lokasi Kerja (HRD/Admin)
-    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map');
-    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store');
-    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
-    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
-    Route::patch('/location/{id}/toggle-status', [FaceAttendanceController::class, 'toggleLocationStatus'])->name('location.toggle-status');
-    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
+    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map')->middleware(['auth', 'permission']);
+    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store')->middleware(['auth', 'permission'])   ;
+    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show')->middleware(['auth', 'permission']);
+    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations')->middleware(['auth', 'permission']);
+    Route::patch('/location/{id}/toggle-status', [FaceAttendanceController::class, 'toggleLocationStatus'])->name('location.toggle-status')->middleware(['auth', 'permission']);
+    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy')->middleware(['auth', 'permission']);
 
     // Pengaturan Window Presensi & Izin Akses Karyawan
-    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index');
-    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
-    Route::post('/settings/liveness', [FaceAttendanceSettingController::class, 'updateLiveness'])->name('settings.update-liveness');
-    Route::post('/settings/random-challenge', [FaceAttendanceSettingController::class, 'updateRandomChallenge'])->name('settings.update-random-challenge');
+    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index')->middleware(['auth', 'permission']);
+    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window')->middleware(['auth', 'permission']);
+    Route::post('/settings/liveness', [FaceAttendanceSettingController::class, 'updateLiveness'])->name('settings.update-liveness')->middleware(['auth', 'permission']);
+    Route::post('/settings/random-challenge', [FaceAttendanceSettingController::class, 'updateRandomChallenge'])->name('settings.update-random-challenge')->middleware(['auth', 'permission']);
     // PERBAIKAN V32 (2026-11-09): setting geomap untuk canteen transaction.
     // Disimpan di tabel canteen_settings (kolom require_geomap +
     // allowed_work_location_ids) -- tabel yang sama dengan /canteen-transaction/admin.
-    Route::post('/settings/canteen-geomap', [FaceAttendanceSettingController::class, 'updateCanteenGeomap'])->name('settings.update-canteen-geomap');
+    Route::post('/settings/canteen-geomap', [FaceAttendanceSettingController::class, 'updateCanteenGeomap'])->name('settings.update-canteen-geomap')->middleware(['auth', 'permission']);
     // PERBAIKAN V37 (2026-11-09): mode verifikasi transaksi kantin dipisah
     // dari kartu Liveness Check & Random Challenge -> jadi kartu sendiri.
-    Route::post('/settings/canteen-verification-mode', [FaceAttendanceSettingController::class, 'updateCanteenVerificationMode'])->name('settings.update-canteen-verification-mode');
-    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
+    Route::post('/settings/canteen-verification-mode', [FaceAttendanceSettingController::class, 'updateCanteenVerificationMode'])->name('settings.update-canteen-verification-mode')->middleware(['auth', 'permission']);
+
+    // HRIS v2: Mode Verifikasi Portal Karyawan (liveness | random challenge | none).
+    // Pola & lokasi sama seperti "Mode Verifikasi Transaksi Kantin" di atas.
+    Route::post('/settings/hris-v2-verification-mode', [FaceAttendanceSettingController::class, 'updateHrisV2VerificationMode'])->name('settings.update-hris-v2-verification-mode')->middleware(['auth', 'permission']);
+    Route::post('/settings/hris-v2-staff-face-mode', [FaceAttendanceSettingController::class, 'updateHrisV2StaffFaceMode'])->name('settings.update-hris-v2-staff-face-mode')->middleware(['auth', 'permission']);
+    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee')->middleware(['auth', 'permission']);
 });
 
 // ========================================
@@ -1719,4 +1726,53 @@ Route::prefix('quiz')->name('quiz.')->group(function () {
     Route::get('/session/{session}/question/{question}', [QuizController::class, 'sessionQuestion'])->name('sessionQuestion');
     Route::post('/session/{session}/answer', [QuizController::class, 'submitAnswer'])->name('submitAnswer');
     Route::get('/session/{session}/result', [QuizController::class, 'sessionResult'])->name('sessionResult');
+});
+
+/*
+|--------------------------------------------------------------------------
+| HRIS v2 — portal terpisah (route "/" lama TIDAK diubah)
+|--------------------------------------------------------------------------
+| Tiga portal terpisah:
+|   1) /v2/login           -> USER (staf/admin) login.
+|   2) /v2/karyawan/login  -> KARYAWAN: NPK dulu, lalu verifikasi wajah
+|                             sesuai mode (liveness | random challenge |
+|                             none). Satu login membuka semua menu izin:
+|                             slip gaji, presensi wajah, pengajuan cuti.
+|   3) /v2/publik          -> PUBLIK: karier & pengumuman rekrutmen.
+| Menu portal karyawan & mode verifikasi DIKELOLA ADMIN di /v2/admin.
+*/
+Route::prefix('v2')->name('v2.')->group(function () {
+    Route::get('/', [HrisV2Controller::class, 'portal'])->name('portal');
+
+    // 1) Portal USER (staf/admin) — form login aplikasi lama + Face ID
+    //    (mode verifikasi wajah diatur admin di /face-attendance/settings).
+    Route::get('/login', [HrisV2Controller::class, 'userLogin'])->name('login');
+    Route::post('/login/face-auth', [HrisV2Controller::class, 'staffFaceAuth'])->name('login.face-auth');
+
+    // 2) Portal KARYAWAN — satu kali login (NPK + wajah).
+    Route::get('/karyawan/login', [HrisV2Controller::class, 'employeeLogin'])->name('employee.login');
+    Route::post('/karyawan/check-npk', [HrisV2Controller::class, 'employeeCheckNpk'])->name('employee.check-npk');
+    Route::post('/karyawan/challenge', [HrisV2Controller::class, 'employeeChallenge'])->name('employee.challenge');
+    Route::post('/karyawan/verify', [HrisV2Controller::class, 'employeeVerify'])->name('employee.verify');
+    Route::post('/karyawan/logout', [HrisV2Controller::class, 'employeeLogout'])->name('employee.logout');
+
+    Route::middleware('v2.employee')->group(function () {
+        Route::get('/karyawan', [HrisV2Controller::class, 'employeeHome'])->name('employee.home');
+        Route::get('/karyawan/slip-gaji', [HrisV2Controller::class, 'employeePayslip'])->name('employee.payslip');
+        Route::get('/karyawan/biodata', [HrisV2Controller::class, 'employeeBiodata'])->name('employee.biodata');
+    });
+
+    // 3) Portal PUBLIK — karier & pengumuman rekrutmen.
+    Route::get('/publik', [HrisV2Controller::class, 'publicHome'])->name('public.home');
+    Route::get('/publik/karier', [HrisV2Controller::class, 'publicCareer'])->name('public.career');
+    Route::get('/publik/pengumuman', [HrisV2Controller::class, 'publicAnnouncement'])->name('public.announcement');
+
+    // Pengelola portal (admin): menu portal + mode verifikasi + lama sesi.
+    Route::middleware(['auth', 'permission'])->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/', [HrisV2AdminController::class, 'index'])->name('index');
+        Route::post('/menu', [HrisV2AdminController::class, 'storeMenu'])->name('menu.store');
+        Route::post('/menu/{id}', [HrisV2AdminController::class, 'updateMenu'])->name('menu.update');
+        Route::delete('/menu/{id}', [HrisV2AdminController::class, 'destroyMenu'])->name('menu.destroy');
+        Route::post('/settings', [HrisV2AdminController::class, 'updateSettings'])->name('settings.update');
+    });
 });
