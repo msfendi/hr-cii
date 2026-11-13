@@ -345,28 +345,42 @@ class LeaveApprovalQuery
 
     /**
      * Find approver by normalized phone number.
-     * Looks up all approver NPKs from approval_rules, then checks PKWT.HP one by one.
-     * Returns NPK + NAMA if found.
+     *
+     * Semua NPK approver diambil dalam SATU query, lalu dicocokkan di PHP
+     * dengan PhoneFormatter::normalize(). Hasilnya harus sama persis dengan
+     * nomor yang dipakai WhatsApp (digit saja, tanpa "+").
+     *
+     * Catatan: nomor non-Indonesia di PKWT boleh ditulis "+<kode negara>"
+     * (mis. "+84913662215" Vietnam) — kode negaranya dipertahankan.
+     * Nomor tanpa "+" yang tidak cocok pola seluler Indonesia juga
+     * dipertahankan, bukan dipaksa jadi 62.
+     *
+     * @return object|null  baris PKWT (NPK, NAMA, HP)
      */
     public static function findApproverByPhone(string $senderPhone): ?object
     {
-        // Get distinct approver NPKs from approval_rules
-        $npks = DB::connection('cii')->select("
-            SELECT DISTINCT approval_id FROM approval_rules
+        $senderPhone = trim($senderPhone);
+
+        if ($senderPhone === '') {
+            return null;
+        }
+
+        // Satu query: seluruh approver + nomor HP-nya.
+        $rows = DB::connection('cii')->select("
+            SELECT DISTINCT p.NPK, p.NAMA, p.HP
+            FROM approval_rules r
+            INNER JOIN PKWT p ON p.NPK = r.approval_id
+            WHERE r.approval_id IS NOT NULL
+              AND r.approval_id <> ''
+              AND p.HP IS NOT NULL
+              AND LTRIM(RTRIM(p.HP)) <> ''
         ");
 
-        foreach ($npks as $row) {
-            $pkwt = DB::connection('cii')->select("
-                SELECT TOP 1 NPK, NAMA, HP FROM PKWT WHERE NPK = ?
-            ", [$row->approval_id]);
+        foreach ($rows as $row) {
+            $normalized = PhoneFormatter::normalize($row->HP);
 
-            if (empty($pkwt) || empty($pkwt[0]->HP)) {
-                continue;
-            }
-
-            $normalized = PhoneFormatter::normalize($pkwt[0]->HP);
-            if ($normalized === $senderPhone) {
-                return $pkwt[0];
+            if ($normalized !== null && $normalized === $senderPhone) {
+                return $row;
             }
         }
 
