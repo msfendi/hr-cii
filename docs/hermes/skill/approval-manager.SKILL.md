@@ -127,6 +127,28 @@ Output is always digits-only so it can be suffixed with `@s.whatsapp.net`
 to form a Baileys chat id. **Never send a `+` to the bridge** — it needs
 raw digits.
 
+## Chain Sync (Manage Approval berubah)
+
+Saat orang HR menambah / menghapus / memindah level di **Manage Approval**,
+pengajuan yang masih `pending` di `leave_requests` ikut disinkronkan —
+approver yang dihapus dibatalkan, approver baru ditambahkan, dan level
+dirapikan `1..N`.
+
+Pengajuan yang **sudah diputuskan** (`approved`/`rejected`) tidak pernah
+diubah.
+
+Kalau pengajuan pending tampak "macet" (approver berikutnya tidak pernah
+dapat notifikasi) setelah master approval diubah:
+
+```bash
+php artisan approval:sync-chains --dry-run    # lihat group yang perlu dirapikan
+php artisan approval:sync-chains              # rapikan + sinkronkan
+php artisan approval:sync-chains --group=12   # satu group saja
+```
+
+Penyebab umum: level di master berlubang (`1,3,4`) sehingga cek "semua level
+sebelumnya sudah approved" tidak pernah terpenuhi untuk level 3+.
+
 ## Throttle (anti-ban)
 
 Applied in the messaging layer scripts, not in Laravel:
