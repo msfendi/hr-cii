@@ -355,6 +355,46 @@ class LeaveApprovalQuery
     }
 
     /**
+     * Jenis cuti lengkap (name + code) untuk menentukan apakah memakai saldo.
+     *
+     * @return object|null  {id, name, code}
+     */
+    public static function getLeaveType(int $leaveTypeId): ?object
+    {
+        if ($leaveTypeId <= 0) {
+            return null;
+        }
+
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 id, name, code FROM leave_types WHERE id = ?
+        ", [$leaveTypeId]);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
+     * Saldo cuti karyawan untuk satu jenis cuti pada tahun tertentu.
+     *
+     * `leave_balances` menyimpan saldo per NPK + jenis cuti + tahun.
+     *
+     * @return object|null  {remained_days, used_days, negative_leave}
+     */
+    public static function getLeaveBalance(string $npk, int $leaveTypeId, int $year): ?object
+    {
+        if ($npk === '' || $leaveTypeId <= 0 || $year <= 0) {
+            return null;
+        }
+
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 remained_days, used_days, negative_leave
+            FROM leave_balances
+            WHERE NPK = ? AND leave_type_id = ? AND year = ?
+        ", [$npk, $leaveTypeId, $year]);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
      * Hitung jumlah level dalam satu token (total chain approval).
      *
      * Row yang sudah dibatalkan (void/cancelled — mis. levelnya dihapus dari

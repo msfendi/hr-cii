@@ -91,6 +91,13 @@ contains: nama pemohon, NPK, jenis cuti, tanggal pengajuan, periode, durasi,
 alasan, no. pengajuan, posisi level approval, plus deep links for
 `/approve` and `/tolak`. Do not re-format it.
 
+**Saldo cuti:** untuk **Cuti Tahunan** saja, pesan juga memuat blok saldo —
+sisa saldo tahun berjalan (tahun tanggal mulai) dan sisa setelah pengajuan
+disetujui. Kalau saldo tidak cukup, kekurangannya ditandai **HUTANG CUTI**.
+Jenis cuti lain (menikah, melahirkan, pribadi, dll.) tidak menyertakan blok ini
+karena tidak memakai saldo. Saldo dibaca dari `leave_balances`
+(NPK + leave_type_id + year).
+
 ### Via cron (safety net — sweeps all pending)
 
 ```bash
