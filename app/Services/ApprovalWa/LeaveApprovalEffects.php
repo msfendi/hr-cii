@@ -27,8 +27,16 @@ class LeaveApprovalEffects
      */
     public static function advanceOrFinalize(LeaveRequest $leave): void
     {
+        // Level berikutnya = baris aktif berikutnya di token ini.
+        // Baris void/cancelled (mis. levelnya dihapus dari Manage Approval)
+        // TIDAK dihitung — kalau tidak, progress bisa maju ke level hantu yang
+        // tidak akan pernah approve, dan finalisasi tidak pernah jalan.
         $nextLevel = LeaveRequest::where('token', $leave->token)
             ->where('approval_level', '>', $leave->approval_level)
+            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->whereNull('void')->orWhere('void', 'false')->orWhere('void', '');
+            })
             ->orderBy('approval_level', 'asc')
             ->first();
 
@@ -81,11 +89,19 @@ class LeaveApprovalEffects
             ->select('BIODATA.NAMA_KARYAWAN', 'DEPT.DEPARTEMENT', 'BIODATA.ID_DEPT', 'BIODATA.IS_STAFF', 'DEPT.IS_SEWING')
             ->first();
 
-        $holidays = json_decode(file_get_contents(storage_path('app/calendar.json')), true);
-        $holidays = array_filter($holidays, function ($item) {
-            return isset($item['holiday']) && $item['holiday'] === true;
-        });
-        $holidays = array_keys($holidays);
+        $holidays = [];
+
+        $calendarPath = storage_path('app/calendar.json');
+
+        if (is_file($calendarPath)) {
+            $decoded = json_decode((string) file_get_contents($calendarPath), true);
+
+            if (is_array($decoded)) {
+                $holidays = array_keys(array_filter($decoded, function ($item) {
+                    return isset($item['holiday']) && $item['holiday'] === true;
+                }));
+            }
+        }
 
         $startDate = Carbon::parse($leave->start_date);
         $endDate   = Carbon::parse($leave->end_date);
@@ -125,11 +141,15 @@ class LeaveApprovalEffects
     /**
      * Set baris-baris lain (level approval lain) di token yang sama jadi
      * rejected/void, dipakai saat salah satu level menolak permohonan.
+     *
+     * Baris yang sudah dibatalkan otomatis (cancelled + void, mis. levelnya
+     * dihapus dari Manage Approval) tidak diubah lagi.
      */
     public static function voidSiblingRows(LeaveRequest $leave): void
     {
         LeaveRequest::where('token', $leave->token)
             ->where('id', '!=', $leave->id)
+            ->where('status', '!=', 'cancelled')
             ->update(['status' => 'rejected', 'void' => 'true']);
     }
 

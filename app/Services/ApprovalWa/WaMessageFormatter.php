@@ -35,6 +35,10 @@ class WaMessageFormatter
 
         $approverName = self::cleanText($approver->NAMA ?? null) ?? (string) $approver->NPK;
 
+        // Saldo cuti hanya relevan untuk Cuti Tahunan (jenis cuti yang memakai
+        // saldo). Jenis lain dibatasi per pengajuan, jadi tidak ditampilkan.
+        $saldoBlock = self::balanceBlock($request);
+
         // Label level: sertakan posisi dalam chain + tandai kalau ini level terakhir
         // (approver terakhir yang memutuskan → berdampak final ke saldo cuti).
         if ($total > 0) {
@@ -64,7 +68,7 @@ class WaMessageFormatter
         🗓️ Periode: $periode
         ⏳ Durasi: $durasi
         📝 Alasan: $reason
-
+        $saldoBlock
         *No. Pengajuan:* *#$id*
         *Level approval:* *$levelLabel*
 
@@ -81,6 +85,92 @@ class WaMessageFormatter
 
         ⚠️ Mohon pastikan *No. Pengajuan* sudah sesuai.
         MSG;
+    }
+
+    /**
+     * Blok saldo cuti untuk pesan approval.
+     *
+     * Hanya ditampilkan untuk Cuti Tahunan (satu-satunya jenis cuti yang
+     * memakai saldo). Saldo diambil untuk periode pengajuan (tahun tanggal
+     * mulai), sama seperti validasi saat pengajuan disubmit.
+     *
+     * Kalau saldo tidak cukup, sisanya dicatat sebagai HUTANG CUTI.
+     *
+     * @return string  baris siap tempel, atau '' kalau tidak perlu ditampilkan
+     */
+    private static function balanceBlock(object $request): string
+    {
+        $typeId = (int) ($request->leave_type_id ?? 0);
+
+        if ($typeId <= 0) {
+            return '';
+        }
+
+        $type = self::leaveType($typeId);
+
+        // Hanya Cuti Tahunan (code = 'tahunan').
+        if (!$type || strtolower(trim((string) ($type->code ?? ''))) !== 'tahunan') {
+            return '';
+        }
+
+        $year = self::balanceYear($request);
+        $npk  = (string) $request->NPK;
+        $need = (int) ($request->total_days ?? 0);
+
+        $balance = self::leaveBalance($npk, $typeId, $year);
+
+        if (!$balance) {
+            return "\n*SALDO CUTI TAHUNAN $year*\n"
+                . "💰 Sisa saldo: data belum tersedia — hubungi HR\n";
+        }
+
+        $remained = (int) ($balance->remained_days ?? 0);
+        $used     = (int) ($balance->used_days ?? 0);
+        $debt     = (int) ($balance->negative_leave ?? 0);
+
+        $lines = [];
+        $lines[] = "*SALDO CUTI TAHUNAN $year*";
+        $lines[] = "💰 Sisa saldo: *$remained hari* (terpakai $used hari)";
+
+        if ($need > 0) {
+            $after = $remained - $need;
+
+            if ($after >= 0) {
+                $lines[] = "📊 Diajukan $need hari → sisa setelah disetujui: *$after hari*";
+            } else {
+                $lines[] = "⚠️ Diajukan $need hari, sisa saldo hanya $remained hari";
+                $lines[] = "🟠 Kekurangan *" . abs($after) . " hari* dicatat sebagai *HUTANG CUTI*";
+            }
+        }
+
+        // Hutang cuti yang sudah tercatat sebelumnya tetap ditampilkan.
+        if ($debt > 0) {
+            $lines[] = "🟠 Hutang cuti tercatat: *$debt hari*";
+        }
+
+        return "\n" . implode("\n", $lines) . "\n";
+    }
+
+    /**
+     * Tahun saldo yang dipakai: tahun tanggal MULAI cuti (sama dengan
+     * validasi saat pengajuan dibuat). Fallback berurutan ke tanggal
+     * pengajuan, lalu tahun berjalan.
+     */
+    private static function balanceYear(object $request): int
+    {
+        foreach ([$request->start_date ?? null, $request->created_at ?? null] as $value) {
+            if (empty($value)) {
+                continue;
+            }
+
+            try {
+                return (int) Carbon::parse((string) $value)->year;
+            } catch (Throwable) {
+                // lanjut ke kandidat berikutnya
+            }
+        }
+
+        return (int) date('Y');
     }
 
     /**
@@ -173,6 +263,49 @@ class WaMessageFormatter
         }
 
         return (string) (self::$cache["lt:$leaveTypeId"] ?? "ID $leaveTypeId");
+    }
+
+    /**
+     * Jenis cuti lengkap (name + code) — cache per id.
+     * Dipakai untuk menentukan apakah jenis cuti memakai saldo.
+     */
+    private static function leaveType(int $leaveTypeId): ?object
+    {
+        if ($leaveTypeId <= 0) {
+            return null;
+        }
+
+        if (!array_key_exists("ltobj:$leaveTypeId", self::$cache)) {
+            $type = null;
+            try {
+                $type = LeaveApprovalQuery::getLeaveType($leaveTypeId);
+            } catch (Throwable) {
+                // biarkan null — pemanggil menanganinya
+            }
+            self::$cache["ltobj:$leaveTypeId"] = $type;
+        }
+
+        return self::$cache["ltobj:$leaveTypeId"];
+    }
+
+    /**
+     * Saldo cuti (NPK + jenis cuti + tahun) — cache per kombinasi.
+     */
+    private static function leaveBalance(string $npk, int $leaveTypeId, int $year): ?object
+    {
+        $key = "bal:$npk:$leaveTypeId:$year";
+
+        if (!array_key_exists($key, self::$cache)) {
+            $balance = null;
+            try {
+                $balance = LeaveApprovalQuery::getLeaveBalance($npk, $leaveTypeId, $year);
+            } catch (Throwable) {
+                // biarkan null
+            }
+            self::$cache[$key] = $balance;
+        }
+
+        return self::$cache[$key];
     }
 
     /**

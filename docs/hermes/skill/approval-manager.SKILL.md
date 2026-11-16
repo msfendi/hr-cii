@@ -91,6 +91,13 @@ contains: nama pemohon, NPK, jenis cuti, tanggal pengajuan, periode, durasi,
 alasan, no. pengajuan, posisi level approval, plus deep links for
 `/approve` and `/tolak`. Do not re-format it.
 
+**Saldo cuti:** untuk **Cuti Tahunan** saja, pesan juga memuat blok saldo —
+sisa saldo tahun berjalan (tahun tanggal mulai) dan sisa setelah pengajuan
+disetujui. Kalau saldo tidak cukup, kekurangannya ditandai **HUTANG CUTI**.
+Jenis cuti lain (menikah, melahirkan, pribadi, dll.) tidak menyertakan blok ini
+karena tidak memakai saldo. Saldo dibaca dari `leave_balances`
+(NPK + leave_type_id + year).
+
 ### Via cron (safety net — sweeps all pending)
 
 ```bash
@@ -126,6 +133,28 @@ Rules:
 Output is always digits-only so it can be suffixed with `@s.whatsapp.net`
 to form a Baileys chat id. **Never send a `+` to the bridge** — it needs
 raw digits.
+
+## Chain Sync (Manage Approval berubah)
+
+Saat orang HR menambah / menghapus / memindah level di **Manage Approval**,
+pengajuan yang masih `pending` di `leave_requests` ikut disinkronkan —
+approver yang dihapus dibatalkan, approver baru ditambahkan, dan level
+dirapikan `1..N`.
+
+Pengajuan yang **sudah diputuskan** (`approved`/`rejected`) tidak pernah
+diubah.
+
+Kalau pengajuan pending tampak "macet" (approver berikutnya tidak pernah
+dapat notifikasi) setelah master approval diubah:
+
+```bash
+php artisan approval:sync-chains --dry-run    # lihat group yang perlu dirapikan
+php artisan approval:sync-chains              # rapikan + sinkronkan
+php artisan approval:sync-chains --group=12   # satu group saja
+```
+
+Penyebab umum: level di master berlubang (`1,3,4`) sehingga cek "semua level
+sebelumnya sudah approved" tidak pernah terpenuhi untuk level 3+.
 
 ## Throttle (anti-ban)
 

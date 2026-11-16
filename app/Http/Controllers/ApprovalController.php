@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ApprovalDept;
 use App\Models\ApprovalRule;
 use App\Models\Section;
+use App\Services\Approval\ApprovalChainSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -180,9 +181,15 @@ class ApprovalController extends Controller
             ApprovalRule::where('rules_id', $id)->delete();
             $dept->delete();
 
+            // Group hilang → pengajuan pending-nya tidak punya chain master lagi.
+            // syncToken akan menolaknya (master kosong) dan membiarkan pengajuan
+            // apa adanya untuk diputuskan manual — jadi tidak ada yang dihapus.
+            $sync = ApprovalChainSync::syncGroup((int) $id);
+
             return response()->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'Approval Group berhasil dihapus',
+                'sync'    => $sync,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -209,12 +216,20 @@ class ApprovalController extends Controller
         ]);
 
         try {
+            // Kalau level yang diminta sudah terpakai, geser level di atasnya
+            // supaya tidak ada dua rule di level yang sama.
+            ApprovalChainSync::makeRoomForLevel((int) $request->rules_id, (int) $request->level);
+
             $rule = ApprovalRule::create($request->only('rules_id', 'name', 'approval_id', 'level'));
 
+            // Master berubah → rapikan level + sinkronkan pengajuan yang pending.
+            $sync = ApprovalChainSync::syncGroup((int) $rule->rules_id);
+
             return response()->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'Approval Rule berhasil ditambahkan',
-                'data' => $rule,
+                'data'    => $rule,
+                'sync'    => $sync,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -236,12 +251,33 @@ class ApprovalController extends Controller
         ]);
 
         try {
-            $rule = ApprovalRule::findOrFail($id);
-            $rule->update($request->only('name', 'approval_id', 'level'));
+            $rule    = ApprovalRule::findOrFail($id);
+            $groupId = (int) $rule->rules_id;
+
+            // Pindah level: keluarkan dulu rule ini dari urutan, rapatkan sisa
+            // rule, baru sisipkan di posisi baru. Tanpa langkah ini posisinya
+            // bisa meleset (sisa celah dari posisi lama ikut terhitung).
+            if ((int) $request->level !== (int) $rule->level) {
+                $rule->level = 999999;
+                $rule->save();
+
+                ApprovalChainSync::normalizeGroupLevels($groupId);
+                ApprovalChainSync::makeRoomForLevel($groupId, (int) $request->level, (int) $rule->id);
+
+                $rule->level       = (int) $request->level;
+                $rule->approval_id = $request->approval_id;
+                $rule->name        = $request->name;
+                $rule->save();
+            } else {
+                $rule->update($request->only('name', 'approval_id', 'level'));
+            }
+
+            $sync = ApprovalChainSync::syncGroup($groupId);
 
             return response()->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'Approval Rule berhasil diperbarui',
+                'sync'    => $sync,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -257,11 +293,19 @@ class ApprovalController extends Controller
     public function destroyRule($id)
     {
         try {
-            ApprovalRule::findOrFail($id)->delete();
+            $rule    = ApprovalRule::findOrFail($id);
+            $groupId = (int) $rule->rules_id;
+
+            $rule->delete();
+
+            // Level dirapikan (1..N) dan pengajuan pending disinkronkan ulang —
+            // tanpa ini, level yang hilang membuat rantai approval macet.
+            $sync = ApprovalChainSync::syncGroup($groupId);
 
             return response()->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'Approval Rule berhasil dihapus',
+                'sync'    => $sync,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -411,14 +455,16 @@ class ApprovalController extends Controller
 
             $groupCount = 0;
             $ruleCount = 0;
+            $groupsToSync = [];
 
-            DB::transaction(function () use ($grouped, &$groupCount, &$ruleCount) {
+            DB::transaction(function () use ($grouped, &$groupCount, &$ruleCount, &$groupsToSync) {
                 foreach ($grouped as $g) {
                     $dept = ApprovalDept::updateOrCreate(
                         ['name' => $g['name']],
                         ['dept' => array_map('strval', $g['dept'])]
                     );
                     $groupCount++;
+                    $groupsToSync[$dept->id] = (int) $dept->id;
 
                     foreach ($g['rules'] as $r) {
                         ApprovalRule::updateOrCreate(
@@ -436,9 +482,22 @@ class ApprovalController extends Controller
                 }
             });
 
+            // Rapikan level tiap group yang tersentuh, lalu sinkronkan pengajuan
+            // pending-nya ke chain baru.
+            $syncTotal = ['tokens' => 0, 'changed' => 0, 'skipped' => 0];
+
+            foreach ($groupsToSync as $groupId) {
+                $sync = ApprovalChainSync::syncGroup($groupId);
+
+                $syncTotal['tokens']  += $sync['tokens'];
+                $syncTotal['changed'] += $sync['changed'];
+                $syncTotal['skipped'] += $sync['skipped'];
+            }
+
             return response()->json([
                 'status'  => 'success',
                 'message' => "Import berhasil: {$groupCount} approval group, {$ruleCount} approver diproses.",
+                'sync'    => $syncTotal,
             ]);
         } catch (\Exception $e) {
             return response()->json([
