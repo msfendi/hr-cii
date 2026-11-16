@@ -223,6 +223,7 @@
         // Target challenge yang akan diminta. Kalau required=false, apa pun
         // target-nya akan langsung dianggap selesai.
         this.target = options.target || null;
+        this.lang = options.lang === 'en' ? 'en' : 'id';
 
         this.reset();
     }
@@ -245,6 +246,15 @@
         left:  'Hadapkan wajah ke KIRI layar',
         right: 'Hadapkan wajah ke KANAN layar',
         mouth: 'BUKA MULUT Anda'
+    };
+
+    // Versi Inggris untuk halaman berbahasa Inggris (mis. portal HRIS v2).
+    // Dipakai hanya bila dibuat dengan opsi { lang: 'en' }; halaman lain tetap
+    // memakai HINTS di atas tanpa perubahan.
+    RandomChallenge.HINTS_EN = {
+        left:  'TURN YOUR HEAD TO THE LEFT of the screen',
+        right: 'TURN YOUR HEAD TO THE RIGHT of the screen',
+        mouth: 'OPEN YOUR MOUTH'
     };
 
     /**
@@ -306,14 +316,17 @@
      */
     RandomChallenge.prototype.hint = function () {
         if (!this.required) return '';
-        if (this.passed()) return 'Tantangan terverifikasi';
+        if (this.passed()) return this.lang === 'en' ? 'Challenge verified' : 'Tantangan terverifikasi';
 
-        var base = RandomChallenge.HINTS[this.target] || 'Ikuti tantangan yang diminta';
+        var daftar = this.lang === 'en' ? RandomChallenge.HINTS_EN : RandomChallenge.HINTS;
+        var base = daftar[this.target] || (this.lang === 'en' ? 'Follow the requested challenge' : 'Ikuti tantangan yang diminta');
 
         // Saat kalibrasi baseline belum selesai, beri tahu user untuk diam
         // sebentar supaya baseline terekam dengan benar.
         if (this.yawNeutralSamples < this.cfg.neutralSamples && this.target !== 'mouth') {
-            return 'Posisikan wajah lurus ke kamera, jangan bergerak sebentar';
+            return this.lang === 'en'
+                ? 'Look straight at the camera and stay still for a moment'
+                : 'Posisikan wajah lurus ke kamera, jangan bergerak sebentar';
         }
 
         return base;
@@ -353,7 +366,7 @@
         // Belum ada target = tidak ada yang bisa diperiksa. Jangan dianggap
         // lolos: biarkan pemanggil yang menentukan target lebih dulu.
         if (!this.target) {
-            return { passed: false, target: null, hint: 'Menyiapkan tantangan...', progress: 0 };
+            return { passed: false, target: null, hint: this.lang === 'en' ? 'Preparing the challenge...' : 'Menyiapkan tantangan...', progress: 0 };
         }
 
         if (this.done) {

@@ -20,6 +20,14 @@ class FaceAttendanceSettingController extends Controller
      */
     public function index()
     {
+        // Jaring pengaman kedua (2026-11-13) — halaman ini WAJIB login.
+        // Penjagaan utama ada di routes/web.php (middleware auth + permission);
+        // blok ini menjaga kalau controller dipanggil dari route lain.
+        if (!auth()->check()) {
+            return redirect()->route('login.guest')
+                ->with('error', 'Silakan login untuk membuka Pengaturan Presensi Wajah.');
+        }
+
         // PERBAIKAN V35 HOTFIX (2026-11-09) — $setting dibungkus try/catch.
         // FaceAttendanceSetting::current() sendiri sudah punya fallback,
         // tapi pemanggilnya tetap harus aman supaya halaman TIDAK pernah 500
@@ -46,7 +54,7 @@ class FaceAttendanceSettingController extends Controller
         //   1. Schema::hasTable / hasColumn() dipanggil BERULANG-ULANG
         //      (37x di 2 controller + model ini). Di SQL Server tiap
         //      panggilan = query ke INFORMATION_SCHEMA/ sys.columns
-        //      lewat koneksi remote (CII di 192.168.3.88). Di Laragon
+        //      lewat koneksi remote ke server basis data CII. Di Laragon
         //      yangokoneksi TLS `encrypt=yes` + trust cert ke SQL
         //      Server jauh, tiap query schema itu 50-300ms. 37x = 2-10
         //      detik per halaman load, tersinkron (blocking).
@@ -242,6 +250,31 @@ class FaceAttendanceSettingController extends Controller
             $canteenAllowedLocationIds = [];
         }
 
+        // HRIS v2 — mode verifikasi Portal Karyawan (/v2/karyawan/login).
+        // Pola sama seperti canteenModeTersedia di atas.
+        $hrisV2ModeTersedia = false;
+        try {
+            if ($frSettingsCols !== []) {
+                $hrisV2ModeTersedia = $colExists($frSettingsCols, 'hris_v2_verification_mode');
+            }
+        } catch (\Throwable $e) {
+            $hrisV2ModeTersedia = false;
+        }
+
+        $hrisV2VerificationMode = \App\Models\FaceRecognitionSetting::hrisV2VerificationMode();
+
+        // HRIS v2 — mode verifikasi wajah login STAF (/v2/login).
+        $hrisV2StaffModeTersedia = false;
+        try {
+            if ($frSettingsCols !== []) {
+                $hrisV2StaffModeTersedia = $colExists($frSettingsCols, 'hris_v2_staff_face_mode');
+            }
+        } catch (\Throwable $e) {
+            $hrisV2StaffModeTersedia = false;
+        }
+
+        $hrisV2StaffFaceMode = \App\Models\FaceRecognitionSetting::hrisV2StaffFaceMode();
+
         return view('face_attendance.settings', compact(
             'setting',
             'locations',
@@ -259,7 +292,11 @@ class FaceAttendanceSettingController extends Controller
             'canteenChallengeEnabled',
             'canteenSetting',
             'canteenRequireGeomap',
-            'canteenAllowedLocationIds'
+            'canteenAllowedLocationIds',
+            'hrisV2ModeTersedia',
+            'hrisV2VerificationMode',
+            'hrisV2StaffModeTersedia',
+            'hrisV2StaffFaceMode'
         ));
     }
 
@@ -535,6 +572,111 @@ class FaceAttendanceSettingController extends Controller
     }
 
     /**
+     * HRIS v2: simpan Mode Verifikasi Portal Karyawan.
+     *
+     * Pola sama dengan updateCanteenVerificationMode(): hanya kolom
+     * hris_v2_verification_mode yang ditulis. Nilai:
+     * liveness | random_challenge | none.
+     */
+    public function updateHrisV2VerificationMode(Request $request)
+    {
+        $validated = $request->validate([
+            'hris_v2_verification_mode' => 'required|string|in:liveness,random_challenge,none',
+        ]);
+
+        try {
+            if (\App\Models\FaceRecognitionSetting::cachedColumns('face_recognition_settings') === []) {
+                return redirect()
+                    ->route('face.attendance.settings.index')
+                    ->with('error', 'Tabel face_recognition_settings belum ada. Jalankan "php artisan migrate".');
+            }
+
+            if (! \App\Models\FaceRecognitionSetting::cachedHasColumn('face_recognition_settings', 'hris_v2_verification_mode')) {
+                return redirect()
+                    ->route('face.attendance.settings.index')
+                    ->with('error', 'Kolom hris_v2_verification_mode belum tersedia. Jalankan "php artisan migrate".');
+            }
+
+            $setting = \App\Models\FaceRecognitionSetting::current();
+            $mode = \App\Models\FaceRecognitionSetting::normalizeHrisV2VerificationMode(
+                $validated['hris_v2_verification_mode']
+            );
+
+            $setting->hris_v2_verification_mode = $mode;
+            $setting->save();
+
+            $label = [
+                \App\Models\FaceRecognitionSetting::HRIS_V2_MODE_LIVENESS => 'Liveness',
+                \App\Models\FaceRecognitionSetting::HRIS_V2_MODE_RANDOM => 'Random Challenge',
+                \App\Models\FaceRecognitionSetting::HRIS_V2_MODE_NONE => 'Tanpa Verifikasi Gerakan',
+            ][$mode] ?? $mode;
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('success', 'Mode Verifikasi Portal Karyawan (HRIS v2) berhasil disimpan: ' . $label . '.');
+        } catch (\Throwable $e) {
+            \Log::error('Gagal simpan mode verifikasi portal karyawan HRIS v2: ' . $e->getMessage());
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('error', 'Gagal menyimpan mode verifikasi portal karyawan: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * HRIS v2: simpan Mode Verifikasi Wajah Login STAF (/v2/login).
+     *
+     * Pola sama dengan updateHrisV2VerificationMode(): hanya kolom
+     * hris_v2_staff_face_mode yang ditulis, sehingga setelan portal
+     * karyawan, liveness global, dan mode kantin tidak tersentuh.
+     * Nilai: liveness | random_challenge | none.
+     */
+    public function updateHrisV2StaffFaceMode(Request $request)
+    {
+        $validated = $request->validate([
+            'hris_v2_staff_face_mode' => 'required|string|in:liveness,random_challenge,none',
+        ]);
+
+        try {
+            if (\App\Models\FaceRecognitionSetting::cachedColumns('face_recognition_settings') === []) {
+                return redirect()
+                    ->route('face.attendance.settings.index')
+                    ->with('error', 'Tabel face_recognition_settings belum ada. Jalankan "php artisan migrate".');
+            }
+
+            if (! \App\Models\FaceRecognitionSetting::cachedHasColumn('face_recognition_settings', 'hris_v2_staff_face_mode')) {
+                return redirect()
+                    ->route('face.attendance.settings.index')
+                    ->with('error', 'Kolom hris_v2_staff_face_mode belum tersedia. Jalankan "php artisan migrate".');
+            }
+
+            $setting = \App\Models\FaceRecognitionSetting::current();
+            $mode = \App\Models\FaceRecognitionSetting::normalizeHrisV2StaffFaceMode(
+                $validated['hris_v2_staff_face_mode']
+            );
+
+            $setting->hris_v2_staff_face_mode = $mode;
+            $setting->save();
+
+            $label = [
+                \App\Models\FaceRecognitionSetting::HRIS_V2_MODE_LIVENESS => 'Liveness',
+                \App\Models\FaceRecognitionSetting::HRIS_V2_MODE_RANDOM => 'Random Challenge',
+                \App\Models\FaceRecognitionSetting::HRIS_V2_MODE_NONE => 'Tanpa Verifikasi Gerakan',
+            ][$mode] ?? $mode;
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('success', 'Mode Verifikasi Login Staf (HRIS v2) berhasil disimpan: ' . $label . '.');
+        } catch (\Throwable $e) {
+            \Log::error('Gagal simpan mode verifikasi login staf HRIS v2: ' . $e->getMessage());
+
+            return redirect()
+                ->route('face.attendance.settings.index')
+                ->with('error', 'Gagal menyimpan mode verifikasi login staf: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Simpan pengaturan Random Challenge (anti-kecurangan).
      *
      * TERPISAH dari updateLiveness() dengan sengaja. Random challenge
@@ -661,6 +803,12 @@ class FaceAttendanceSettingController extends Controller
         $wantsJson = $request->expectsJson() || $request->wantsJson();
 
         try {
+            // PERBAIKAN V44 HOTFIX (2026-11-11): bersihkan cache schema
+            // canteen_settings sebelum menyimpan, supaya kolom deprecated
+            // (liveness_canteen_enabled dkk) tidak ikut terkirim ke SQL Server
+            // bila sudah di-drop oleh migrasi.
+            \App\Models\FaceRecognitionSetting::forgetSchemaCache();
+
             // PERBAIKAN V34 HOTFIX: pakai cachedColumns() bukan
             // cachedHasTable() (berat).
             if (\App\Models\CanteenSetting::cachedColumns('canteen_settings') === []) {
@@ -684,6 +832,9 @@ class FaceAttendanceSettingController extends Controller
             $allowedIds = array_values(array_filter(array_map('intval', $allowedIds)));
 
             $setting = CanteenSetting::current();
+            if (!$setting->exists && ($existing = CanteenSetting::query()->first())) {
+                $setting = $existing;
+            }
             $setting->require_geomap = $request->boolean('require_geomap', false);
             $setting->allowed_work_location_ids = $allowedIds;
             $setting->save();

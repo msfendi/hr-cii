@@ -9,6 +9,7 @@ use App\Models\Holiday;
 use App\Models\LeaveBalances;
 use App\Models\LeaveRequest;
 use App\Models\LeaveTypes;
+use App\Services\EmployeeActiveStatusService;
 use App\Services\FaceRecognitionService;
 use App\Services\ApprovalWa\ApprovalWebhookTrigger;
 use App\Services\LeaveDayService;
@@ -201,6 +202,16 @@ class PengajuanCutiController extends Controller
             return redirect()->route('pengajuan-cuti.login');
         }
 
+        // Karyawan yang sudah keluar (PKWT.TKK terisi) tidak boleh membuka form cuti.
+        $statusKaryawan = EmployeeActiveStatusService::check((string) $npk);
+        if (! ($statusKaryawan['active'] ?? true)) {
+            Alert::error('Tidak Dapat Mengakses', EmployeeActiveStatusService::inactiveMessage(
+                $statusKaryawan['nama'] ?? null,
+                $statusKaryawan['tkk'] ?? null
+            ));
+            return redirect()->route('pengajuan-cuti.login');
+        }
+
         $employee = DB::connection('cii')
                 ->table('BIODATA')
                 ->join('DEPT', 'BIODATA.ID_DEPT', '=', 'DEPT.ID_DEPT')
@@ -296,6 +307,16 @@ class PengajuanCutiController extends Controller
             $employee = Biodata::where('NPK', $request->npk)->first();
             if (!$employee) {
                 Alert::error('Error', 'Employee not found.');
+                return back();
+            }
+
+            // Karyawan yang sudah keluar (PKWT.TKK terisi) tidak boleh mengirim pengajuan cuti.
+            $statusKaryawan = EmployeeActiveStatusService::check((string) $request->npk);
+            if (! ($statusKaryawan['active'] ?? true)) {
+                Alert::error('Tidak Dapat Mengakses', EmployeeActiveStatusService::inactiveMessage(
+                    $statusKaryawan['nama'] ?? null,
+                    $statusKaryawan['tkk'] ?? null
+                ));
                 return back();
             }
 

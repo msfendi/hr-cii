@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CardMenuSetting;
 use App\Models\FaceAttendanceLog;
+use App\Models\HrisV2Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1215,7 +1216,10 @@ class FaceAttendanceAdminController extends Controller
 
         $cards = CardMenuSetting::allCards();
 
-        return view('face_attendance.card_menu_settings', compact('cards', 'status'));
+        // Versi halaman awal HRIS (route '/') yang sedang dipakai: v1 atau v2.
+        $versiAwal = HrisV2Setting::landingVersion();
+
+        return view('face_attendance.card_menu_settings', compact('cards', 'status', 'versiAwal'));
     }
 
     /**
@@ -1245,6 +1249,38 @@ class FaceAttendanceAdminController extends Controller
             'message'    => 'Card menu berhasil diperbarui.',
             'key'        => $key,
             'is_visible' => $visible,
+        ]);
+    }
+
+    /**
+     * Simpan versi halaman awal HRIS dari halaman /pengaturan/card-menu-hris.
+     * v1 = resources/views/hris.blade.php, v2 = resources/views/hris_v2/portal.blade.php.
+     */
+    public function updateLandingVersion(Request $request)
+    {
+        $request->validate([
+            'version' => 'required|in:v1,v2',
+        ]);
+
+        $versi = (string) $request->input('version');
+
+        HrisV2Setting::simpan('landing_version', $versi);
+
+        // simpan() menelan error DB (hanya menulis log), jadi hasilnya dibaca ulang
+        // supaya UI tidak pernah menampilkan "berhasil" untuk perubahan yang gagal.
+        $tersimpan = HrisV2Setting::landingVersion();
+
+        if ($tersimpan !== $versi) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengaturan gagal disimpan. Pastikan tabel hris_v2_settings ada (php artisan migrate --force).',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'version' => $tersimpan,
+            'message' => 'Halaman awal HRIS kini memakai HRIS ' . ($tersimpan === 'v2' ? 'v2 (portal v2)' : 'v1 (tampilan lama)') . '.',
         ]);
     }
 

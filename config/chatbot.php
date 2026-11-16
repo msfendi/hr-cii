@@ -17,6 +17,13 @@ return [
     */
     'readonly_connection' => env('CHATBOT_READONLY_DB_CONNECTION', 'sqlsrv_readonly'),
 
+    /*
+    | Provider AI yang dipakai kalau sesi tidak menyimpan ai_provider (sesi
+    | lama) dan yang ditampilkan `php artisan chatbot:diagnose`. Nilai ini
+    | harus cocok dengan kunci di 'providers' bawah.
+    */
+    'default_provider' => env('CHATBOT_DEFAULT_PROVIDER', 'router9'),
+
     // Batas jumlah baris hasil query yang boleh dibawa ke AI (defense in depth,
     // selain TOP/LIMIT yang diminta lewat prompt ke AI).
     'max_rag_rows' => (int) env('CHATBOT_RAG_MAX_ROWS', 200),
@@ -45,6 +52,19 @@ return [
     // menambah/mengubah tabel di database, tunggu cache ini kedaluwarsa
     // atau jalankan `php artisan cache:clear`.
     'schema_cache_minutes' => (int) env('CHATBOT_SCHEMA_CACHE_MINUTES', 30),
+
+    // Cache untuk hasil KOSONG / gagal baca skema. Dulu hasil kosong ikut
+    // di-cache selama `schema_cache_minutes` (30 menit), sehingga setelah
+    // admin memperbaiki koneksi read-only chatbot tetap melaporkan "tidak
+    // ada tabel yang bisa dibaca" sampai cache kedaluwarsa. Sekarang cache
+    // kosong hanya bertahan beberapa detik.
+    'schema_empty_cache_seconds' => (int) env('CHATBOT_SCHEMA_EMPTY_CACHE_SECONDS', 15),
+
+    // Ulangi sekali saat provider AI timeout (ConnectionException), dengan
+    // budget token lebih kecil. Server AI bersama (bottleneck) kadang lambat
+    // pada permintaan pertama; tanpa retry, karyawan menunggu lama hanya
+    // untuk mendapat pesan error.
+    'retry_on_timeout' => (bool) env('CHATBOT_RETRY_ON_TIMEOUT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -147,15 +167,18 @@ return [
     | validasi SQL (AiChatService::validateReadonlySql). SELECT * pada tabel
     | yang punya kolom terblokir juga otomatis ditolak.
     |
-    | Default: employee_contract.salary, allowance, daily_salary, pph_21
-    | (data gaji karyawan). Override lewat CHATBOT_RAG_BLOCKED_COLUMNS di
+    | Default: employees_contract.salary, allowance, daily_salary, pph21,
+    | file_contract (data gaji karyawan). Nama tabel & kolom di sini HARUS
+    | sama persis dengan skema database — kalau salah nama, kolomnya tidak
+    | ikut terhapus dari prompt AI (dan tidak ada peringatan apa pun).
+    | Override lewat CHATBOT_RAG_BLOCKED_COLUMNS di
     | .env dengan format "tabel:kolom1,kolom2;tabel_lain:kolom3,kolom4"
     | (pisahkan tabel dengan titik koma, kolom dengan koma) kalau perlu
     | menambah/mengubah tanpa deploy ulang kode.
     |
     */
     'rag_blocked_columns' => (function () {
-        $raw = env('CHATBOT_RAG_BLOCKED_COLUMNS', 'employee_contract:salary,allowance,daily_salary,pph_21;users:password,email');
+        $raw = env('CHATBOT_RAG_BLOCKED_COLUMNS', 'employees_contract:salary,allowance,daily_salary,pph21,pph_21,file_contract;leave_requests:token;whatsapp_devices:token');
         $result = [];
 
         foreach (array_filter(array_map('trim', explode(';', $raw))) as $group) {

@@ -128,7 +128,18 @@ class LoginController extends Controller
             $request->session()->regenerate();
 
             Alert::success('Login Successfully!', 'Welcome To Chutex HRIS Sistem');
-            return redirect()->intended('/welcome');
+
+            // Portal v2 (/v2/login): password login diarahkan ke /welcome (bukan /home).
+            if ($request->input('redirect_to') === 'welcome') {
+                return redirect()->intended(route('welcome'));
+            }
+
+            // Pemanggil lama yang masih mengirim redirect_to=home tetap dilayani.
+            if ($request->input('redirect_to') === 'home') {
+                return redirect()->intended(route('home'));
+            }
+
+            return redirect()->intended(route('welcome'));
         }
 
         return back()->withErrors([
@@ -136,11 +147,27 @@ class LoginController extends Controller
         ])->onlyInput('email');
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
+        // Hapus seluruh kunci sesi subsistem (Portal Karyawan v2, presensi wajah,
+        // pengajuan cuti). Tanpa ini logout hanya melepas guard 'web', sedangkan
+        // halaman yang membaca kunci sesi tetap menganggap user masih login.
+        $request->session()->forget([
+            'hris_v2_npk', 'hris_v2_nama', 'hris_v2_login_at', 'hris_v2_max_minutes',
+            'hris_v2_pending_npk', 'hris_v2_pending_nama', 'hris_v2_npk_confirmed',
+            'face_attendance_npk', 'cuti_employee_npk',
+        ]);
+
         Auth::logout();
+
+        // Sesi lama harus dibuang dan token CSRF diperbarui, kalau tidak sesi yang
+        // sama masih bisa dipakai ulang setelah logout.
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
         Alert::success('Logout Successfully!', 'See You Next Time');
-        return redirect('/login');
+        // Arahkan ke halaman utama publik, bukan ke /home atau halaman login v2.
+        return redirect('/');
     }
 
     public function qrauth(Request $request)
@@ -246,10 +273,39 @@ class LoginController extends Controller
      */
     public function faceAuth(Request $request)
     {
+        return $this->prosesFaceAuth($request, 'id');
+    }
+
+    /**
+     * Inti login wajah, dipakai dua halaman:
+     *  - v1 /login          -> faceAuth()      (bahasa Indonesia, tanpa NPK)
+     *  - v2 /v2/login       -> staffFaceAuth() (bahasa Inggris, NPK wajib)
+     *
+     * Bila pemanggil mengirim "npk", descriptor HANYA dicocokkan dengan data
+     * wajah milik NPK tersebut (FaceRecognitionService::matchByNpk). Ini jauh
+     * lebih akurat dan tidak mungkin mengambil wajah karyawan lain.
+     *
+     * @param string $bahasa 'id' atau 'en'
+     */
+    public function prosesFaceAuth(Request $request, string $bahasa = 'id')
+    {
+        $en = $bahasa === 'en';
+
+        $pesan = [
+            'disabled'    => $en ? 'Face recognition is disabled by admin. Use password login.' : 'Face recognition sedang dinonaktifkan oleh admin.',
+            'descriptor'  => $en ? 'Invalid face data. Please try again.' : 'Data wajah tidak valid. Silakan coba lagi.',
+            'no_face_npk' => $en ? 'No face data is registered for NPK %s. Register your face first or use password login.' : 'Belum ada data wajah untuk NPK %s. Daftarkan wajah Anda dulu atau gunakan login password.',
+            'not_match'   => $en ? 'Face does not match NPK %s. Make sure the NPK is yours and look straight at the camera.' : 'Wajah tidak cocok dengan NPK %s. Pastikan NPK milik Anda dan hadap lurus ke kamera.',
+            'unknown'     => $en ? 'Face not recognized. Make sure your face is registered in Manage Face Recognition.' : 'Wajah tidak dikenali. Pastikan wajah sudah terdaftar di menu Manage Face Recognition.',
+            'no_login'    => $en ? 'Face login is disabled for your account. Please contact the admin.' : 'Izin login menggunakan wajah dinonaktifkan untuk akun Anda. Harap hubungi admin.',
+            'no_user'     => $en ? 'Face recognized as %s, but that NPK is not registered as an HRIS user.' : 'Wajah dikenali sebagai %s, tetapi NPK tersebut belum terdaftar sebagai user HRIS.',
+            'account_off' => $en ? 'Your account is disabled. Please contact the HRIS admin.' : 'Akun Anda dinonaktifkan. Silakan hubungi admin HRIS.',
+        ];
+
         if (!FaceRecognitionService::isEnabled()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Face recognition sedang dinonaktifkan oleh admin.',
+                'message' => $pesan['disabled'],
             ], 403);
         }
 
@@ -258,25 +314,54 @@ class LoginController extends Controller
         if ($descriptor === null) {
             return response()->json([
                 'success' => false,
-                'message' => 'Data wajah tidak valid. Silakan coba lagi.',
+                'message' => $pesan['descriptor'],
             ], 422);
         }
 
-        $result = FaceRecognitionService::match($descriptor);
+        $npk = strtoupper(trim((string) $request->input('npk', '')));
 
-        if (!FaceRecognitionService::isConfidentMatch($result)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Wajah tidak dikenali. Pastikan wajah sudah terdaftar di menu Manage Face Recognition.',
-            ], 401);
+        if ($npk !== '') {
+            $result = FaceRecognitionService::matchByNpk($descriptor, $npk);
+
+            if (empty($result['face'])) {
+                // Belum ada baris employee_faces untuk NPK ini.
+                return response()->json([
+                    'success' => false,
+                    'message' => sprintf($pesan['no_face_npk'], $npk),
+                ], 404);
+            }
+
+            if (!FaceRecognitionService::isConfidentMatch($result)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => sprintf($pesan['not_match'], $npk),
+                ], 401);
+            }
+        } else {
+            $result = FaceRecognitionService::match($descriptor);
+
+            if (!FaceRecognitionService::isConfidentMatch($result)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $pesan['unknown'],
+                ], 401);
+            }
         }
 
         $face = $result['face'];
 
+        // Pengaman tambahan: kalau NPK dikirim, hasil wajib milik NPK itu.
+        if ($npk !== '' && strtoupper((string) $face->npk) !== $npk) {
+            return response()->json([
+                'success' => false,
+                'message' => sprintf($pesan['not_match'], $npk),
+            ], 401);
+        }
+
         if (isset($face->can_login) && (int) $face->can_login === 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Izin login menggunakan wajah dinonaktifkan untuk akun Anda. Harap hubungi admin.',
+                'message' => $pesan['no_login'],
             ], 403);
         }
 
@@ -285,14 +370,14 @@ class LoginController extends Controller
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Wajah dikenali sebagai ' . $face->npk . ', tetapi NPK tersebut belum terdaftar sebagai user HRIS.',
+                'message' => sprintf($pesan['no_user'], $face->npk),
             ], 403);
         }
 
         if ((int) $user->disabled === 1) {
             return response()->json([
                 'success' => false,
-                'message' => 'Akun Anda dinonaktifkan. Silakan hubungi admin HRIS.',
+                'message' => $pesan['account_off'],
             ], 403);
         }
 
@@ -303,11 +388,15 @@ class LoginController extends Controller
 
         Alert::success('Login Successfully!', 'Welcome To Chutex HRIS');
 
+        // Portal v2: login wajah juga diarahkan ke /welcome (bukan /home), kecuali
+        // pemanggil lama yang secara eksplisit masih meminta /home.
+        $tujuan = $request->input('redirect_to') === 'home' ? route('home') : route('welcome');
+
         return response()->json([
             'success'  => true,
             'npk'      => $user->npk,
             'name'     => $user->name,
-            'redirect' => url('/welcome'),
+            'redirect' => $tujuan,
         ]);
     }
 }

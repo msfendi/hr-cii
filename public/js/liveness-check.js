@@ -210,6 +210,8 @@
         options = options || {};
 
         this.required = options.required !== false;
+        // Bahasa umpan balik: 'id' (default, halaman lama) atau 'en' (portal v2).
+        this.lang = options.lang === 'en' ? 'en' : 'id';
         this.cfg = {
             turnDeadZone: options.turnDeadZone || DEFAULTS.turnDeadZone,
             turnPassThreshold: options.turnPassThreshold || DEFAULTS.turnPassThreshold,
@@ -271,8 +273,10 @@
      */
     LivenessCheck.prototype.hint = function () {
         if (!this.required) return '';
-        if (this.passed()) return 'Liveness terverifikasi';
-        return 'Silakan BERKEDIP atau MENOLEH sedikit ke kiri / kanan';
+        if (this.passed()) return this.lang === 'en' ? 'Liveness verified' : 'Liveness terverifikasi';
+        return this.lang === 'en'
+            ? 'Please BLINK or TURN your head slightly to the left / right'
+            : 'Silakan BERKEDIP atau MENOLEH sedikit ke kiri / kanan';
     };
 
     LivenessCheck.prototype.progress = function () {

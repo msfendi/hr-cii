@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\HrisV2Controller;
+use App\Models\HrisV2Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +17,18 @@ class HomeController extends Controller
      */
     public function index()
     {
+        // Halaman awal ditentukan admin di /pengaturan/card-menu-hris:
+        // v2 -> portal HRIS v2, v1 (default) -> hris.blade.php.
+        if (HrisV2Setting::landingVersion() === HrisV2Setting::LANDING_V2) {
+            try {
+                return app(HrisV2Controller::class)->portal();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error(
+                    'Halaman awal HRIS v2 gagal dirender, dialihkan ke hris.blade.php: ' . $e->getMessage()
+                );
+            }
+        }
+
         return view('hris');
     }
 

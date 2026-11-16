@@ -37,6 +37,16 @@ class FaceRecognitionSetting extends Model
         // random challenge. Nilai: 'liveness' (default, fail-safe),
         // 'random_challenge', atau 'none'.
         'canteen_verification_mode',
+        // HRIS v2 (portal karyawan): mode verifikasi wajah saat login
+        // karyawan di /v2/karyawan/login. Nilai: 'liveness' (default),
+        // 'random_challenge', atau 'none' (tanpa verifikasi gerakan: wajah
+        // tetap dipindai & dicocokkan, hanya tanpa liveness/tantangan acak).
+        'hris_v2_verification_mode',
+        // Mode verifikasi wajah untuk login STAF di /v2/login. Nilai sama
+        // ('liveness' | 'random_challenge' | 'none'), tetapi kolom terpisah
+        // supaya admin bisa menyetel keduanya secara independen dari
+        // /face-attendance/settings.
+        'hris_v2_staff_face_mode',
     ];
 
     protected $casts = [
@@ -586,6 +596,133 @@ class FaceRecognitionSetting extends Model
     public static function isRandomChallengeCanteenEnabled(): bool
     {
         return self::isRandomChallengeCanteenMode();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HRIS v2 — mode verifikasi Portal Karyawan (/v2/karyawan/login)
+    |--------------------------------------------------------------------------
+    | 'liveness' (default, fail-safe), 'random_challenge', atau 'none'
+    | (tanpa verifikasi gerakan). Sama seperti mode canteen: di SEMUA mode
+    | wajah tetap dipindai dan dicocokkan dengan NPK -- mode 'none' hanya
+    | melepas verifikasi gerakan (liveness & tantangan acak), bukan melepas
+    | kamera. Disetting dari /face-attendance/settings dan /v2/admin.
+    */
+
+    public const HRIS_V2_MODE_LIVENESS = 'liveness';
+    public const HRIS_V2_MODE_RANDOM = 'random_challenge';
+    public const HRIS_V2_MODE_NONE = 'none';
+
+    public static function hrisV2VerificationModes(): array
+    {
+        return [self::HRIS_V2_MODE_LIVENESS, self::HRIS_V2_MODE_RANDOM, self::HRIS_V2_MODE_NONE];
+    }
+
+    public static function normalizeHrisV2VerificationMode($value): string
+    {
+        $value = strtolower(trim((string) $value));
+
+        if (in_array($value, [self::HRIS_V2_MODE_RANDOM, 'random', 'challenge', 'random-challenge'], true)) {
+            return self::HRIS_V2_MODE_RANDOM;
+        }
+
+        if (in_array($value, [self::HRIS_V2_MODE_NONE, 'off', 'tanpa_verifikasi', 'disabled'], true)) {
+            return self::HRIS_V2_MODE_NONE;
+        }
+
+        return self::HRIS_V2_MODE_LIVENESS;
+    }
+
+    public static function hrisV2VerificationMode(): string
+    {
+        try {
+            if (static::cachedHasColumn('face_recognition_settings', 'hris_v2_verification_mode')) {
+                $value = static::current()->getRawOriginal('hris_v2_verification_mode');
+
+                if ($value !== null && $value !== '') {
+                    return self::normalizeHrisV2VerificationMode($value);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning(
+                'FaceRecognitionSetting::hrisV2VerificationMode() gagal: ' . $e->getMessage()
+            );
+        }
+
+        // Belum diset -> default fail-safe: liveness.
+        return self::HRIS_V2_MODE_LIVENESS;
+    }
+
+    public static function isHrisV2LivenessMode(): bool
+    {
+        return self::hrisV2VerificationMode() === self::HRIS_V2_MODE_LIVENESS;
+    }
+
+    public static function isHrisV2RandomChallengeMode(): bool
+    {
+        return self::hrisV2VerificationMode() === self::HRIS_V2_MODE_RANDOM;
+    }
+
+    public static function isHrisV2NoneMode(): bool
+    {
+        return self::hrisV2VerificationMode() === self::HRIS_V2_MODE_NONE;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HRIS v2 — mode verifikasi wajah login STAF (/v2/login)
+    |--------------------------------------------------------------------------
+    | Kolom terpisah: hris_v2_staff_face_mode. Nilai sama dengan portal
+    | karyawan ('liveness' | 'random_challenge' | 'none'), tetapi default
+    | fail-safe tetap 'liveness' bila kolom belum ada / belum diset.
+    | Disetting admin di /face-attendance/settings.
+    */
+
+    public static function hrisV2StaffFaceModes(): array
+    {
+        return self::hrisV2VerificationModes();
+    }
+
+    public static function normalizeHrisV2StaffFaceMode($value): string
+    {
+        // Normalisasi identik dengan portal karyawan; konstanta yang sama
+        // dipakai supaya label & validasi tidak bercabang.
+        return self::normalizeHrisV2VerificationMode($value);
+    }
+
+    public static function hrisV2StaffFaceMode(): string
+    {
+        try {
+            if (static::cachedHasColumn('face_recognition_settings', 'hris_v2_staff_face_mode')) {
+                $value = static::current()->getRawOriginal('hris_v2_staff_face_mode');
+
+                if ($value !== null && $value !== '') {
+                    return self::normalizeHrisV2StaffFaceMode($value);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning(
+                'FaceRecognitionSetting::hrisV2StaffFaceMode() gagal: ' . $e->getMessage()
+            );
+        }
+
+        // Belum diset -> default fail-safe: liveness.
+        return self::HRIS_V2_MODE_LIVENESS;
+    }
+
+    public static function isHrisV2StaffLivenessMode(): bool
+    {
+        return self::hrisV2StaffFaceMode() === self::HRIS_V2_MODE_LIVENESS;
+    }
+
+    public static function isHrisV2StaffRandomChallengeMode(): bool
+    {
+        return self::hrisV2StaffFaceMode() === self::HRIS_V2_MODE_RANDOM;
+    }
+
+    public static function isHrisV2StaffNoneMode(): bool
+    {
+        return self::hrisV2StaffFaceMode() === self::HRIS_V2_MODE_NONE;
     }
 
     // PERBAIKAN V33 (2026-11-09) -- isi kolom defaults di current()

@@ -8,6 +8,7 @@ use App\Services\AiChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -218,6 +219,13 @@ class ChatbotController extends Controller
                 'meta' => $result['meta'] ?? null,
             ]);
         } catch (\Throwable $e) {
+            // Tanpa log ini kegagalan provider tidak jejak sama sekali di
+            // storage/logs/laravel.log (dulu hanya disimpan ke meta.message).
+            Log::error('Chatbot gagal menghubungi AI provider: ' . $e->getMessage(), [
+                'session_id' => $chatbotSession->id,
+                'exception' => $e,
+            ]);
+
             $assistantMessage = ChatbotMessage::create([
                 'chatbot_session_id' => $chatbotSession->id,
                 'role' => ChatbotMessage::ROLE_ASSISTANT,
@@ -312,6 +320,31 @@ class ChatbotController extends Controller
         }
 
         return $stored;
+    }
+
+    /**
+     * Unduh file hasil export chatbot (Excel/PDF/HTML/PNG). Tautan di balasan
+     * AI diarahkan ke route ini supaya tetap bekerja walau public/storage
+     * belum di-symlink ke storage/app/public (umum di server Windows/Laragon),
+     * sekaligus membatasi unduhan hanya untuk user yang login.
+     */
+    public function downloadExport(string $filename)
+    {
+        $nama = basename($filename);
+
+        if ($nama === '' || $nama !== $filename
+            || str_contains($nama, '/') || str_contains($nama, '\\') || str_contains($nama, '..')) {
+            abort(404);
+        }
+
+        $disk = config('chatbot.export_disk', 'public');
+        $path = 'chatbot_exports/' . $nama;
+
+        if (! Storage::disk($disk)->exists($path)) {
+            abort(404);
+        }
+
+        return Storage::disk($disk)->download($path, $nama);
     }
 
     protected function attachmentKind(string $extension): string

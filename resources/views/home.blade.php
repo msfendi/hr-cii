@@ -114,6 +114,95 @@
                         </div>
                     </div>
 
+                    <!-- Turn Over Karyawan per Departemen per Bulan -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card shadow mb-4">
+                                <div
+                                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between"
+                                    style="flex-wrap: wrap; row-gap: .5rem;">
+                                    <h6 class="m-0 font-weight-bold text-primary">Turn Over Karyawan per Departemen
+                                    </h6>
+                                    <div class="d-flex align-items-center" style="flex-wrap: wrap; row-gap: .35rem;">
+                                        <input type="month" id="turnoverMonth" value="{{ now()->format('Y-m') }}"
+                                            class="form-control form-control-sm mr-2" style="width: auto;">
+                                        <select id="turnoverSewing" class="form-control form-control-sm mr-2"
+                                            style="width: auto;" title="Pengelompokan line sewing (leader line tidak ikut)">
+                                            <option value="pisah" selected>Pisah per Line</option>
+                                            <option value="global">Global Line (Sewing)</option>
+                                            <option value="factory">Per Factory</option>
+                                        </select>
+                                        <select id="turnoverDept" class="form-control form-control-sm"
+                                            style="width: auto; max-width: 240px;">
+                                            <option value="ALL">Semua Departemen</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Karyawan Aktif</div>
+                                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="tvAwal">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Masuk
+                                                    (TMK)</div>
+                                                <div class="h5 mb-0 font-weight-bold text-success" id="tvMasuk">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Keluar
+                                                    (TKK)</div>
+                                                <div class="h5 mb-0 font-weight-bold text-danger" id="tvKeluar">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Net
+                                                    (Masuk - Keluar)</div>
+                                                <div class="h5 mb-0 font-weight-bold text-primary" id="tvNet">0</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md mb-2">
+                                            <div class="border rounded p-2 h-100">
+                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Turn
+                                                    Over</div>
+                                                <div class="h5 mb-0 font-weight-bold text-primary" id="tvRate">0 %</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="chart-bar" style="height: 300px;">
+                                        <canvas id="turnoverChart"></canvas>
+                                    </div>
+                                    <hr>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered table-hover mb-0"
+                                            id="turnoverTable" width="100%" cellspacing="0">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th>Departemen</th>
+                                                    <th class="text-center">Karyawan Aktif</th>
+                                                    <th class="text-center">Masuk</th>
+                                                    <th class="text-center">Keluar</th>
+                                                    <th class="text-center">Net</th>
+                                                    <th class="text-center">Turn Over (%)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <!-- Diisi lewat fetch /home/turnover -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="small text-muted mt-2" id="turnoverNote"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Charts Row 1 -->
                     <div class="row">
                         <!-- Recruitment Flow & PKWT Trend -->
@@ -216,94 +305,6 @@
                         </div>
                     </div>
 
-                    <!-- Charts Row 3: Turn Over Karyawan per Departemen per Bulan -->
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card shadow mb-4">
-                                <div
-                                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between"
-                                    style="flex-wrap: wrap; row-gap: .5rem;">
-                                    <h6 class="m-0 font-weight-bold text-primary">Turn Over Karyawan per Departemen
-                                    </h6>
-                                    <div class="d-flex align-items-center" style="flex-wrap: wrap; row-gap: .35rem;">
-                                        <input type="month" id="turnoverMonth" value="{{ now()->format('Y-m') }}"
-                                            class="form-control form-control-sm mr-2" style="width: auto;">
-                                        <select id="turnoverSewing" class="form-control form-control-sm mr-2"
-                                            style="width: auto;" title="Pengelompokan line sewing (leader line tidak ikut)">
-                                            <option value="pisah" selected>Pisah per Line</option>
-                                            <option value="global">Global Line (Sewing)</option>
-                                            <option value="factory">Per Factory</option>
-                                        </select>
-                                        <select id="turnoverDept" class="form-control form-control-sm"
-                                            style="width: auto; max-width: 240px;">
-                                            <option value="ALL">Semua Departemen</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="card-body">
-                                    <div class="row mb-3">
-                                        <div class="col-6 col-md mb-2">
-                                            <div class="border rounded p-2 h-100">
-                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Karyawan Aktif</div>
-                                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="tvAwal">0</div>
-                                            </div>
-                                        </div>
-                                        <div class="col-6 col-md mb-2">
-                                            <div class="border rounded p-2 h-100">
-                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Masuk
-                                                    (TMK)</div>
-                                                <div class="h5 mb-0 font-weight-bold text-success" id="tvMasuk">0</div>
-                                            </div>
-                                        </div>
-                                        <div class="col-6 col-md mb-2">
-                                            <div class="border rounded p-2 h-100">
-                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Keluar
-                                                    (TKK)</div>
-                                                <div class="h5 mb-0 font-weight-bold text-danger" id="tvKeluar">0</div>
-                                            </div>
-                                        </div>
-                                        <div class="col-6 col-md mb-2">
-                                            <div class="border rounded p-2 h-100">
-                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Net
-                                                    (Masuk - Keluar)</div>
-                                                <div class="h5 mb-0 font-weight-bold text-primary" id="tvNet">0</div>
-                                            </div>
-                                        </div>
-                                        <div class="col-6 col-md mb-2">
-                                            <div class="border rounded p-2 h-100">
-                                                <div class="text-xs text-uppercase text-muted font-weight-bold">Turn
-                                                    Over</div>
-                                                <div class="h5 mb-0 font-weight-bold text-primary" id="tvRate">0 %</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="chart-bar" style="height: 300px;">
-                                        <canvas id="turnoverChart"></canvas>
-                                    </div>
-                                    <hr>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm table-bordered table-hover mb-0"
-                                            id="turnoverTable" width="100%" cellspacing="0">
-                                            <thead class="thead-light">
-                                                <tr>
-                                                    <th>Departemen</th>
-                                                    <th class="text-center">Karyawan Aktif</th>
-                                                    <th class="text-center">Masuk</th>
-                                                    <th class="text-center">Keluar</th>
-                                                    <th class="text-center">Net</th>
-                                                    <th class="text-center">Turn Over (%)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <!-- Diisi lewat fetch /home/turnover -->
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div class="small text-muted mt-2" id="turnoverNote"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                 </div>
                 <!-- /.container-fluid -->

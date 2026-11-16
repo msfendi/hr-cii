@@ -682,6 +682,179 @@
         </div>
 
         {{-- ============================================================
+             HRIS v2 — MODE VERIFIKASI PORTAL KARYAWAN
+             ============================================================
+             Diminta user: "face camera dibuat bisa liveness atau random
+             challenge atau tidak ada sama sekali, dan konfigurasi bisa
+             disetting di /face-attendance/settings buat seperti Mode
+             Verifikasi Transaksi Kantin".
+
+             Kartu ini mengatur verifikasi wajah saat login karyawan di
+             /v2/karyawan/login. Berdiri sendiri: menyimpan kartu ini
+             TIDAK menimpa setelan liveness / random challenge global
+             maupun mode transaksi kantin.
+             ============================================================ --}}
+        <div class="col-xl-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-id-badge mr-1"></i> Mode Verifikasi Portal Karyawan (HRIS v2)
+                        <span class="text-muted font-weight-normal">(/v2/karyawan/login)</span>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Atur bagaimana wajah karyawan diverifikasi saat <strong>login Portal Karyawan</strong>.
+                        Satu kali login membuka semua menu yang diizinkan: slip gaji, presensi wajah, pengajuan cuti.
+                        Pilih <strong>SALAH SATU</strong> mode di bawah.
+                    </p>
+
+                    @if(!($hrisV2ModeTersedia ?? false))
+                        <div class="alert alert-danger py-2 px-3 small mb-3">
+                            <i class="fas fa-database mr-1"></i>
+                            Kolom <code>hris_v2_verification_mode</code> belum tersedia di
+                            database. Jalankan <code>php artisan migrate</code> lalu muat
+                            ulang halaman ini.
+                        </div>
+                    @else
+                        <form method="POST" action="{{ route('face.attendance.settings.update-hris-v2-verification-mode') }}">
+                            @csrf
+
+                            <div class="border rounded p-3 mb-3 bg-white">
+                                <label class="font-weight-bold d-block mb-2" for="hris_v2_verification_mode">
+                                    Mode Verifikasi Portal Karyawan
+                                </label>
+                                <select name="hris_v2_verification_mode" id="hris_v2_verification_mode"
+                                        class="form-control form-control-sm">
+                                    <option value="liveness" {{ ($hrisV2VerificationMode ?? 'liveness') === 'liveness' ? 'selected' : '' }}>
+                                        Liveness — karyawan diminta berkedip / menoleh
+                                    </option>
+                                    <option value="random_challenge" {{ ($hrisV2VerificationMode ?? '') === 'random_challenge' ? 'selected' : '' }}>
+                                        Random Challenge — tantangan gerakan acak
+                                    </option>
+                                    <option value="none" {{ ($hrisV2VerificationMode ?? '') === 'none' ? 'selected' : '' }}>
+                                        Tanpa Verifikasi Gerakan — scan wajah saja, tanpa liveness &amp; tanpa tantangan acak
+                                    </option>
+                                </select>
+                                <small class="text-muted d-block mt-2">
+                                    Semua mode tetap memindai &amp; mencocokkan wajah karyawan. Mode
+                                    <strong>Tanpa Verifikasi Gerakan</strong> hanya melepas gerakan
+                                    (liveness/tantangan acak), bukan melepas kamera.
+                                    Simpan ke tabel <code>face_recognition_settings</code>
+                                    (kolom <code>hris_v2_verification_mode</code>).
+                                    Menu portal &amp; lama sesi dikelola di
+                                    <a href="{{ url('/v2/admin') }}"><code>/v2/admin</code></a>.
+                                </small>
+                            </div>
+
+                            <div class="border rounded p-2 bg-light mb-3">
+                                <div class="small mb-1"><strong>Mode aktif saat ini</strong></div>
+                                <div class="small">
+                                    @if(($hrisV2VerificationMode ?? '') === 'random_challenge')
+                                        <strong class="text-danger">Random Challenge</strong>
+                                    @elseif(($hrisV2VerificationMode ?? '') === 'none')
+                                        <strong class="text-success">Tanpa Verifikasi Gerakan</strong>
+                                        <span class="text-muted d-block">Scan wajah tetap wajib; liveness &amp; tantangan gerakan dilepas.</span>
+                                    @else
+                                        <strong class="text-primary">Liveness</strong>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-sm mt-2">
+                                <i class="fas fa-save mr-1"></i> Simpan Mode Verifikasi Portal Karyawan
+                            </button>
+                        </form>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        {{-- ============================================================
+             HRIS v2 — MODE VERIFIKASI WAJAH LOGIN STAF (/v2/login)
+             ============================================================
+             Diminta user: "/v2/login tambahkan juga login dengan face id
+             sama seperti di /login" dan "/v2/login bisa dicontroll memakai
+             liveness atau random challenge atau tanpa verifikasi keduanya
+             dan bisa dimanage di /face-attendance/settings".
+
+             Kolom hris_v2_staff_face_mode TERPISAH dari mode portal
+             karyawan: menyimpan kartu ini tidak mengubah mode karyawan.
+             ============================================================ --}}
+        <div class="col-xl-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-user-shield mr-1"></i> Mode Verifikasi Login Staf (HRIS v2)
+                        <span class="text-muted font-weight-normal">(/v2/login)</span>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Atur bagaimana wajah staf/admin diverifikasi saat <strong>login Face ID di /v2/login</strong>.
+                        Pilih <strong>SALAH SATU</strong> mode. Login password tetap berjalan seperti biasa.
+                    </p>
+
+                    @if(!($hrisV2StaffModeTersedia ?? false))
+                        <div class="alert alert-danger py-2 px-3 small mb-3">
+                            <i class="fas fa-database mr-1"></i>
+                            Kolom <code>hris_v2_staff_face_mode</code> belum tersedia di
+                            database. Jalankan <code>php artisan migrate</code> lalu muat
+                            ulang halaman ini.
+                        </div>
+                    @else
+                        <form method="POST" action="{{ route('face.attendance.settings.update-hris-v2-staff-face-mode') }}">
+                            @csrf
+
+                            <div class="border rounded p-3 mb-3 bg-white">
+                                <label class="font-weight-bold d-block mb-2" for="hris_v2_staff_face_mode">
+                                    Mode Verifikasi Login Staf
+                                </label>
+                                <select name="hris_v2_staff_face_mode" id="hris_v2_staff_face_mode"
+                                        class="form-control form-control-sm">
+                                    <option value="liveness" {{ ($hrisV2StaffFaceMode ?? 'liveness') === 'liveness' ? 'selected' : '' }}>
+                                        Liveness — staf diminta berkedip / menoleh
+                                    </option>
+                                    <option value="random_challenge" {{ ($hrisV2StaffFaceMode ?? '') === 'random_challenge' ? 'selected' : '' }}>
+                                        Random Challenge — tantangan gerakan acak
+                                    </option>
+                                    <option value="none" {{ ($hrisV2StaffFaceMode ?? '') === 'none' ? 'selected' : '' }}>
+                                        Tanpa Verifikasi Gerakan — scan wajah saja, tanpa liveness &amp; tanpa tantangan acak
+                                    </option>
+                                </select>
+                                <small class="text-muted d-block mt-2">
+                                    Semua mode tetap memindai &amp; mencocokkan wajah staf. Mode
+                                    <strong>Tanpa Verifikasi Gerakan</strong> hanya melepas gerakan
+                                    (liveness/tantangan acak), bukan melepas kamera.
+                                    Simpan ke tabel <code>face_recognition_settings</code>
+                                    (kolom <code>hris_v2_staff_face_mode</code>).
+                                </small>
+                            </div>
+
+                            <div class="border rounded p-2 bg-light mb-3">
+                                <div class="small mb-1"><strong>Mode aktif saat ini</strong></div>
+                                <div class="small">
+                                    @if(($hrisV2StaffFaceMode ?? '') === 'random_challenge')
+                                        <strong class="text-danger">Random Challenge</strong>
+                                    @elseif(($hrisV2StaffFaceMode ?? '') === 'none')
+                                        <strong class="text-success">Tanpa Verifikasi Gerakan</strong>
+                                        <span class="text-muted d-block">Scan wajah tetap wajib; liveness &amp; tantangan gerakan dilepas.</span>
+                                    @else
+                                        <strong class="text-primary">Liveness</strong>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-sm mt-2">
+                                <i class="fas fa-save mr-1"></i> Simpan Mode Verifikasi Login Staf
+                            </button>
+                        </form>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        {{-- ============================================================
              PERBAIKAN V32 (2026-11-09) -- SETTING GEOMAP TRANSAKSI KANTIN
              ============================================================
              Permintaan user: geomap yang diperbolehkan untuk canteen

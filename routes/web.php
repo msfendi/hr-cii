@@ -1382,6 +1382,9 @@ Route::prefix('event-invitation')->name('event-invitation.')->group(function () 
 
 Route::prefix('chatbot')->name('chatbot.')->middleware(['auth'])->group(function () {
     Route::get('/', [ChatbotController::class, 'index'])->name('index');
+    Route::get('/exports/{filename}', [ChatbotController::class, 'downloadExport'])
+        ->where('filename', '[A-Za-z0-9_\-\.]+')
+        ->name('exports.download');
     Route::post('/sessions', [ChatbotController::class, 'storeSession'])->name('sessions.store');
     Route::get('/sessions/{chatbotSession}/messages', [ChatbotController::class, 'messages'])->name('sessions.messages');
     Route::post('/sessions/{chatbotSession}/send', [ChatbotController::class, 'send'])->name('sessions.send');
@@ -1559,31 +1562,43 @@ Route::prefix('face-attendance')->name('face.attendance.')->group(function () {
     Route::post('/logout-session', [FaceAttendanceController::class, 'logoutSession'])->name('logout-session');
 
     // Manage Geo Map & Lokasi Kerja (HRD/Admin)
-    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map')->middleware(['auth', 'permission']);
-    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store')->middleware(['auth', 'permission'])   ;
-    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show')->middleware(['auth', 'permission']);
-    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations')->middleware(['auth', 'permission']);
-    Route::patch('/location/{id}/toggle-status', [FaceAttendanceController::class, 'toggleLocationStatus'])->name('location.toggle-status')->middleware(['auth', 'permission']);
-    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy')->middleware(['auth', 'permission']);
+    Route::get('/map', [FaceAttendanceController::class, 'map'])->name('map');
+    Route::post('/location/store', [FaceAttendanceController::class, 'saveLocation'])->name('location.store');
+    Route::get('/location/{id}', [FaceAttendanceController::class, 'getLocation'])->name('location.show');
+    Route::get('/locations', [FaceAttendanceController::class, 'locations'])->name('locations');
+    Route::patch('/location/{id}/toggle-status', [FaceAttendanceController::class, 'toggleLocationStatus'])->name('location.toggle-status');
+    Route::delete('/location/{id}', [FaceAttendanceController::class, 'deleteLocation'])->name('location.destroy');
 
     // Pengaturan Window Presensi & Izin Akses Karyawan
-    Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index')->middleware(['auth', 'permission']);
-    Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window')->middleware(['auth', 'permission']);
-    Route::post('/settings/liveness', [FaceAttendanceSettingController::class, 'updateLiveness'])->name('settings.update-liveness')->middleware(['auth', 'permission']);
-    Route::post('/settings/random-challenge', [FaceAttendanceSettingController::class, 'updateRandomChallenge'])->name('settings.update-random-challenge')->middleware(['auth', 'permission']);
-    // PERBAIKAN V32 (2026-11-09): setting geomap untuk canteen transaction.
-    // Disimpan di tabel canteen_settings (kolom require_geomap +
-    // allowed_work_location_ids) -- tabel yang sama dengan /canteen-transaction/admin.
-    Route::post('/settings/canteen-geomap', [FaceAttendanceSettingController::class, 'updateCanteenGeomap'])->name('settings.update-canteen-geomap')->middleware(['auth', 'permission']);
-    // PERBAIKAN V37 (2026-11-09): mode verifikasi transaksi kantin dipisah
-    // dari kartu Liveness Check & Random Challenge -> jadi kartu sendiri.
-    Route::post('/settings/canteen-verification-mode', [FaceAttendanceSettingController::class, 'updateCanteenVerificationMode'])->name('settings.update-canteen-verification-mode')->middleware(['auth', 'permission']);
+    //
+    // PENJAGAAN AKSES (2026-11-13): halaman pengaturan presensi wajah TIDAK
+    // boleh bisa dibuka tanpa login. Dulu route ini tidak punya middleware
+    // sama sekali, sehingga bisa dibuka anonim — dan karena
+    // layouts/app.blade.php hanya merender sidebar + navbar kalau
+    // auth()->check() ATAU sesi presensi wajah ada, halaman tampil tanpa
+    // navbar & sidebar.
+    //   - 'auth'       : tamu tanpa login dipantulkan ke route login.
+    //   - 'permission' : cek hak akses per nama rute (role Admin lolos;
+    //                    permission yang belum di-seed bersifat permissive).
+    Route::middleware(['auth', 'permission'])->group(function () {
+        Route::get('/settings', [FaceAttendanceSettingController::class, 'index'])->name('settings.index');
+        Route::post('/settings/window', [FaceAttendanceSettingController::class, 'updateWindow'])->name('settings.update-window');
+        Route::post('/settings/liveness', [FaceAttendanceSettingController::class, 'updateLiveness'])->name('settings.update-liveness');
+        Route::post('/settings/random-challenge', [FaceAttendanceSettingController::class, 'updateRandomChallenge'])->name('settings.update-random-challenge');
+        // PERBAIKAN V32 (2026-11-09): setting geomap untuk canteen transaction.
+        // Disimpan di tabel canteen_settings (kolom require_geomap +
+        // allowed_work_location_ids) -- tabel yang sama dengan /canteen-transaction/admin.
+        Route::post('/settings/canteen-geomap', [FaceAttendanceSettingController::class, 'updateCanteenGeomap'])->name('settings.update-canteen-geomap');
+        // PERBAIKAN V37 (2026-11-09): mode verifikasi transaksi kantin dipisah
+        // dari kartu Liveness Check & Random Challenge -> jadi kartu sendiri.
+        Route::post('/settings/canteen-verification-mode', [FaceAttendanceSettingController::class, 'updateCanteenVerificationMode'])->name('settings.update-canteen-verification-mode');
 
-    // HRIS v2: Mode Verifikasi Portal Karyawan (liveness | random challenge | none).
-    // Pola & lokasi sama seperti "Mode Verifikasi Transaksi Kantin" di atas.
-    Route::post('/settings/hris-v2-verification-mode', [FaceAttendanceSettingController::class, 'updateHrisV2VerificationMode'])->name('settings.update-hris-v2-verification-mode')->middleware(['auth', 'permission']);
-    Route::post('/settings/hris-v2-staff-face-mode', [FaceAttendanceSettingController::class, 'updateHrisV2StaffFaceMode'])->name('settings.update-hris-v2-staff-face-mode')->middleware(['auth', 'permission']);
-    Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee')->middleware(['auth', 'permission']);
+        // HRIS v2: Mode Verifikasi Portal Karyawan (liveness | random challenge | none).
+        // Pola & lokasi sama seperti "Mode Verifikasi Transaksi Kantin" di atas.
+        Route::post('/settings/hris-v2-verification-mode', [FaceAttendanceSettingController::class, 'updateHrisV2VerificationMode'])->name('settings.update-hris-v2-verification-mode');
+        Route::post('/settings/hris-v2-staff-face-mode', [FaceAttendanceSettingController::class, 'updateHrisV2StaffFaceMode'])->name('settings.update-hris-v2-staff-face-mode');
+        Route::post('/settings/employee/{id}', [FaceAttendanceSettingController::class, 'updateEmployeeAccess'])->name('settings.update-employee');
+    });
 });
 
 // ========================================
@@ -1604,6 +1619,11 @@ Route::middleware(['auth', 'permission'])->group(function () {
         ->name('card-menu-hris.index');
     Route::post('/pengaturan/card-menu-hris', [FaceAttendanceAdminController::class, 'updateCardMenu'])
         ->name('card-menu-hris.update');
+
+    // Permintaan user 2026-11-13: pilih versi halaman awal HRIS.
+    // v1 -> resources/views/hris.blade.php, v2 -> resources/views/hris_v2/portal.blade.php.
+    Route::post('/pengaturan/card-menu-hris/landing-version', [FaceAttendanceAdminController::class, 'updateLandingVersion'])
+        ->name('card-menu-hris.update-landing');
 });
 
 // ========================================

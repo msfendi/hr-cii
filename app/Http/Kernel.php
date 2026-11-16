@@ -71,7 +71,8 @@ class Kernel extends HttpKernel
         'permission' => \App\Http\Middleware\CheckPermission::class, // BARU
         'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         'qr.verified' => \App\Http\Middleware\EnsureQrScanned::class,
-        'face.attendance.auth' => \App\Http\Middleware\FaceAttendanceAuth::class,
-        'approval_api' => \App\Http\Middleware\AuthenticateApprovalApi::class,
+        // Portal Karyawan HRIS v2: sesi karyawan hasil satu kali login
+        // (NPK + verifikasi wajah) di /v2/karyawan/login.
+        'v2.employee' => \App\Http\Middleware\EnsureHrisV2Employee::class,
     ];
 }

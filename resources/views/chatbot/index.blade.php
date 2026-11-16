@@ -903,7 +903,15 @@ body {
         const meta    = msg.meta ?? null;
 
         // Render markdown sederhana → bisa upgrade ke marked.js
-        let bodyHtml = `<div class="message-markdown">${renderMarkdown(content)}</div>`;
+        // Jangan sampai kegagalan renderer menghapus jawaban AI: kalau
+        // renderMarkdown melempar error, tampilkan teksnya apa adanya.
+        let bodyHtml;
+        try {
+            bodyHtml = `<div class="message-markdown">${renderMarkdown(content)}</div>`;
+        } catch (e) {
+            if (window.console && console.warn) console.warn('renderMarkdown gagal:', e);
+            bodyHtml = `<div class="message-plain">${escHtml(content)}</div>`;
+        }
 
         // Export attachment
         let exportHtml = '';
@@ -977,15 +985,24 @@ body {
     /* Markdown sederhana: bold, italic, code, pre, heading, list, link, tabel, br */
     function renderMarkdownTable(h) {
         // Tabel markdown: baris header | a | b |, baris pemisah |---|---|, lalu baris data.
-        return h.replace(/(^|\n)((?:\s*\|[^\n]*\|\s*\n)+?\s*\|(?:[\s:|-]+\|)+\s*\n((?:\s*\|[^\n]*\|\s*\n?)+))/g,
+        // PENTING: jumlah grup kurung di regex harus SAMA dengan jumlah argumen
+        // callback replace(). Sebelumnya baris pemisah memakai grup non-capture,
+        // sehingga callback menerima (m, lead, block, rows-isi, offset) →
+        // argumen "rows" berisi angka offset dan rows.trim() melempar
+        // "rows.trim is not a function", lalu seluruh jawaban AI hilang.
+        return h.replace(/(^|\n)((?:\s*\|[^\n]*\|\s*\n)+?(\s*\|(?:[\s:|-]+\|)+\s*\n)((?:\s*\|[^\n]*\|\s*\n?)+))/g,
             function (m, lead, block, sep, rows) {
+                if (typeof rows !== 'string' || typeof block !== 'string') return m;
                 function cells(line) {
                     return line.trim().replace(/^\|/, '').replace(/\|$/, '')
                         .split('|').map(function (c) { return c.trim(); });
                 }
                 var lines = block.trim().split('\n');
                 var head = cells(lines[0]);
-                var body = rows.trim().split('\n').map(cells);
+                var body = rows.trim().split('\n').filter(function (l) {
+                    return l.trim() !== '';
+                }).map(cells);
+                if (!head.length || !body.length) return m;
                 var html = '<div class="cw-table-wrap"><table class="md-table"><thead><tr>';
                 head.forEach(function (c) { html += '<th>' + c + '</th>'; });
                 html += '</tr></thead><tbody>';

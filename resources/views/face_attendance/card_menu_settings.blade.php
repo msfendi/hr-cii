@@ -51,6 +51,13 @@
     .toggle-switch input:checked + .toggle-slider:before {
         transform: translateX(22px);
     }
+    /* Switch pemilih versi halaman awal: sengaja lebih besar dari switch daftar
+       card (46x24) supaya status v1/v2 langsung terbaca. */
+    .landing-version-switch { width: 58px; height: 30px; }
+    .landing-version-switch .toggle-slider { border-radius: 30px; }
+    .landing-version-switch .toggle-slider:before { width: 24px; height: 24px; left: 3px; bottom: 3px; }
+    .landing-version-switch input:checked + .toggle-slider:before { transform: translateX(28px); }
+    .landing-version-switch input:focus-visible + .toggle-slider { box-shadow: 0 0 0 3px rgba(78,115,223,.35); }
     .card-menu-icon {
         width: 44px;
         height: 44px;
@@ -124,6 +131,59 @@
                     Aktifkan atau nonaktifkan card yang tampil di halaman utama HRIS.
                     Perubahan langsung berlaku pada halaman <a href="{{ url('/') }}" target="_blank">HRIS</a>
                     dan halaman <a href="{{ url('/') }}" target="_blank">Login</a>.
+                </div>
+
+                <!-- Versi halaman awal HRIS (route /) -->
+                <div class="card shadow mb-4 border-left-primary">
+                    <div class="card-header py-3 bg-white d-flex align-items-center justify-content-between">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-exchange-alt mr-1"></i> Halaman Awal HRIS (route /)
+                        </h6>
+                        <span class="badge {{ ($versiAwal ?? 'v1') === 'v2' ? 'badge-primary' : 'badge-dark' }} px-3 py-1 font-weight-bold"
+                              id="landingVersionBadge">
+                            {{ ($versiAwal ?? 'v1') === 'v2' ? 'HRIS v2' : 'HRIS v1' }}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between">
+                            <div class="mr-3 mb-3 mb-md-0" style="max-width:660px;">
+                                <div class="font-weight-bold text-gray-900 mb-1">Gunakan HRIS v2 di halaman awal</div>
+                                <div class="small text-muted">
+                                    <strong>Aktif (v2)</strong> &rarr; route <code>/</code> menampilkan
+                                    <code>hris_v2/portal.blade.php</code> (Portal HRIS v2).<br>
+                                    <strong>Nonaktif (v1)</strong> &rarr; route <code>/</code> menampilkan
+                                    <code>hris.blade.php</code> (tampilan lama).
+                                </div>
+                                <div class="small mt-2">
+                                    <a href="{{ url('/') }}" target="_blank" class="mr-3">
+                                        <i class="fas fa-external-link-alt mr-1"></i>Lihat halaman awal
+                                    </a>
+                                    <span class="text-muted">Blade aktif:
+                                        <code id="landingBladeName">{{ ($versiAwal ?? 'v1') === 'v2' ? 'hris_v2/portal.blade.php' : 'hris.blade.php' }}</code>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-2" style="gap:10px;">
+                                    <span class="small font-weight-bold {{ ($versiAwal ?? 'v1') === 'v2' ? 'text-muted' : 'text-primary' }}"
+                                          id="landingV1Side">v1</span>
+                                    <label class="toggle-switch landing-version-switch mb-0" title="Aktif = HRIS v2, nonaktif = HRIS v1">
+                                        <input type="checkbox" id="landingVersionToggle"
+                                               aria-label="Gunakan HRIS v2 di halaman awal"
+                                               data-original="{{ ($versiAwal ?? 'v1') === 'v2' ? 'true' : 'false' }}"
+                                               {{ ($versiAwal ?? 'v1') === 'v2' ? 'checked' : '' }}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="small font-weight-bold {{ ($versiAwal ?? 'v1') === 'v2' ? 'text-primary' : 'text-muted' }}"
+                                          id="landingV2Side">v2</span>
+                                </div>
+                                <div class="font-weight-bold text-gray-700" id="landingVersionLabel">
+                                    {{ ($versiAwal ?? 'v1') === 'v2' ? 'HRIS v2 aktif' : 'HRIS v1 aktif' }}
+                                </div>
+                                <div class="small text-muted">Berlaku langsung, tanpa perlu klik Simpan</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Card List -->
@@ -446,6 +506,83 @@
             }
         };
     }
+</script>
+
+<script>
+    // ===== Versi halaman awal HRIS (v1 / v2) =====
+    // Toggle ini disimpan langsung (tidak menunggu tombol "Simpan Pengaturan").
+    // Sengaja TIDAK memakai class .card-menu-toggle supaya tidak ikut terbawa
+    // collectChanges() / beforeunload milik daftar card menu.
+    $(document).on('change', '#landingVersionToggle', function () {
+        var $t = $(this);
+        var target = $t.is(':checked') ? 'v2' : 'v1';
+        var nama = target === 'v2' ? 'HRIS v2' : 'HRIS v1';
+        var blade = target === 'v2' ? 'hris_v2/portal.blade.php' : 'hris.blade.php';
+
+        Swal.fire({
+            icon: 'question',
+            title: 'Ubah halaman awal ke ' + nama + '?',
+            html: 'Route <code>/</code> akan memakai <code>' + blade + '</code>.',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, terapkan',
+            cancelButtonText: 'Batal'
+        }).then(function (hasil) {
+            // Swal cadangan (CDN gagal dimuat) tidak mengirim objek hasil:
+            // anggap "lanjutkan" supaya toggle tetap berfungsi tanpa CDN.
+            var lanjut = !hasil || hasil.isConfirmed !== false;
+
+            if (!lanjut) {
+                $t.prop('checked', $t.attr('data-original') === 'true');
+                return;
+            }
+
+            $.ajax({
+                url: "{{ route('card-menu-hris.update-landing') }}",
+                type: 'POST',
+                dataType: 'json',
+                headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
+                data: { version: target },
+                success: function (res) {
+                    if (res && res.success) {
+                        $t.attr('data-original', target === 'v2' ? 'true' : 'false');
+                        $('#landingVersionBadge').text(nama)
+                            .removeClass('badge-primary badge-dark badge-secondary')
+                            .addClass(target === 'v2' ? 'badge-primary' : 'badge-dark');
+                        $('#landingVersionLabel').text(nama + ' aktif');
+                        $('#landingV1Side').toggleClass('text-primary', target === 'v1')
+                            .toggleClass('text-muted', target !== 'v1');
+                        $('#landingV2Side').toggleClass('text-primary', target === 'v2')
+                            .toggleClass('text-muted', target !== 'v2');
+                        $('#landingBladeName').text(blade);
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Tersimpan',
+                            text: res.message || 'Versi halaman awal diperbarui.',
+                            timer: 1300,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Gagal Menyimpan',
+                            text: (res && res.message) || 'Pengaturan tidak tersimpan.'
+                        });
+                        $t.prop('checked', $t.attr('data-original') === 'true');
+                    }
+                },
+                error: function (xhr) {
+                    var pesan = 'Periksa koneksi/database lalu coba lagi.';
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                        pesan = xhr.responseJSON.message;
+                    } else if (xhr && xhr.status === 403) {
+                        pesan = 'Anda tidak memiliki akses untuk mengubah pengaturan ini.';
+                    }
+                    Swal.fire({ icon: 'error', title: 'Gagal Menyimpan', text: pesan });
+                    $t.prop('checked', $t.attr('data-original') === 'true');
+                }
+            });
+        });
+    });
 </script>
 
 </body>

@@ -2,6 +2,7 @@
 <html lang="id">
 @include('layout.header')
 <body id="page-top">
+@include('partials.pwa_splash')
 @include('sweetalert::alert')
 
 <div id="wrapper">
@@ -24,7 +25,10 @@
 </div>
 
 @include('layout.footerscript')
+{{-- @stack('scripts') TIDAK dirender di sini: sudah dirender di dalam
+     layout.footerscript (di akhir file). Merender lagi di sini =
+     double-push -> DataTables warning "Cannot reinitialise DataTable"
+     (datatables.net/tn/3) pada halaman @push('scripts') (mis. log_index). --}}
 @yield('scripts')
-@stack('scripts')
 </body>
 </html>
