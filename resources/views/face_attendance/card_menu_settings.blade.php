@@ -269,6 +269,207 @@
                     </div>
                 </div>
 
+                <!-- Card List HRIS v2 - Portal Karyawan -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 bg-white d-flex align-items-center justify-content-between">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-list-ul mr-1"></i> Daftar Card Menu — HRIS v2 (Portal Karyawan)
+                        </h6>
+                        <span class="badge badge-primary px-3 py-1 font-weight-bold">
+                            {{ count($v2Menus ?? []) }} Card
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-light border small mb-3">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Card ini tampil di <code>/v2/karyawan</code> setelah karyawan login (NPK + wajah).
+                            Sumber data: tabel <code>hris_v2_menus</code> (kolom <code>is_enabled</code>) — sama
+                            dengan yang diatur di <code>/v2/admin</code>, jadi ubah di salah satu tempat saja.
+                            @if(!($statusV2['table_exists'] ?? false))
+                                <strong class="text-danger d-block mt-1">
+                                    Tabel <code>hris_v2_menus</code> belum ada — jalankan
+                                    <code>php artisan migrate --force</code> agar toggle bisa disimpan.
+                                </strong>
+                            @endif
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th width="5%" class="text-center">#</th>
+                                        <th width="8%" class="text-center">Ikon</th>
+                                        <th width="30%">Nama Card</th>
+                                        <th width="32%">Route</th>
+                                        <th width="10%" class="text-center">Urutan</th>
+                                        <th width="15%" class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @php $no = 1; @endphp
+                                    @foreach(($v2Menus ?? []) as $menu)
+                                    <tr>
+                                        <td class="text-center font-weight-bold">{{ $no++ }}</td>
+                                        <td class="text-center">
+                                            <div class="card-menu-icon mx-auto"
+                                                 style="background: {{ $menu['color'] }}22; color: {{ $menu['color'] }};">
+                                                <i class="{{ $menu['icon'] }}"></i>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="font-weight-bold text-gray-900">{{ $menu['label'] }}</span>
+                                            <small class="text-muted d-block">Key: {{ $menu['key'] }}</small>
+                                        </td>
+                                        <td>
+                                            <code class="small">{{ $menu['route_name'] ?: '-' }}</code>
+                                        </td>
+                                        <td class="text-center">{{ $menu['sort_order'] }}</td>
+                                        <td class="text-center">
+                                            <label class="toggle-switch" title="Tampilkan / Sembunyikan">
+                                                <input type="checkbox" class="v2-card-toggle"
+                                                       data-scope="employee"
+                                                       data-key="{{ $menu['key'] }}"
+                                                       data-name="{{ $menu['label'] }}"
+                                                       data-original="{{ $menu['is_enabled'] ? 'true' : 'false' }}"
+                                                       {{ $menu['is_enabled'] ? 'checked' : '' }}>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                            <div class="mt-1">
+                                                @if($menu['is_enabled'])
+                                                    <span class="badge badge-success px-2 py-1"><i class="fas fa-eye mr-1"></i> Tampil</span>
+                                                @else
+                                                    <span class="badge badge-secondary px-2 py-1"><i class="fas fa-eye-slash mr-1"></i> Sembunyi</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card List HRIS v2 - Portal Publik -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 bg-white d-flex align-items-center justify-content-between">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-list-ul mr-1"></i> Daftar Card Menu — HRIS v2 (Portal Publik)
+                        </h6>
+                        <span class="badge badge-primary px-3 py-1 font-weight-bold">
+                            {{ count($v2PublicCards ?? []) }} Card
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-light border small mb-3">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Card ini tampil di <code>/v2/publik</code> tanpa login. Daftar card tetap
+                            (kode), yang diatur di sini hanya tampil/sembunyi; nomor urut di halaman
+                            publik dirapatkan otomatis. Pilihan disimpan di
+                            <code>hris_v2_settings</code> (<code>public_card_*_visible</code>).
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th width="5%" class="text-center">#</th>
+                                        <th width="8%" class="text-center">Ikon</th>
+                                        <th width="30%">Nama Card</th>
+                                        <th width="32%">Route</th>
+                                        <th width="10%" class="text-center">Kategori</th>
+                                        <th width="15%" class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @php $no = 1; @endphp
+                                    @foreach(($v2PublicCards ?? []) as $card)
+                                    <tr>
+                                        <td class="text-center font-weight-bold">{{ $no++ }}</td>
+                                        <td class="text-center">
+                                            <div class="card-menu-icon bg-info-soft mx-auto">
+                                                <i class="{{ $card['icon'] }}"></i>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="font-weight-bold text-gray-900">{{ $card['title'] }}</span>
+                                            <small class="text-muted d-block">Key: {{ $card['key'] }}</small>
+                                        </td>
+                                        <td>
+                                            <code class="small">{{ $card['route_name'] ?: '-' }}</code>
+                                        </td>
+                                        <td class="text-center">{{ $card['kicker'] }}</td>
+                                        <td class="text-center">
+                                            <label class="toggle-switch" title="Tampilkan / Sembunyikan">
+                                                <input type="checkbox" class="v2-card-toggle"
+                                                       data-scope="public"
+                                                       data-key="{{ $card['key'] }}"
+                                                       data-name="{{ $card['title'] }}"
+                                                       data-original="{{ $card['is_visible'] ? 'true' : 'false' }}"
+                                                       {{ $card['is_visible'] ? 'checked' : '' }}>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                            <div class="mt-1">
+                                                @if($card['is_visible'])
+                                                    <span class="badge badge-success px-2 py-1"><i class="fas fa-eye mr-1"></i> Tampil</span>
+                                                @else
+                                                    <span class="badge badge-secondary px-2 py-1"><i class="fas fa-eye-slash mr-1"></i> Sembunyi</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview v2 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 bg-white">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-eye mr-1"></i> Preview Card HRIS v2 yang Sedang Ditampilkan
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="small font-weight-bold text-muted text-uppercase mb-2">Portal Karyawan</h6>
+                        <div class="row mb-4" id="previewCardsV2Employee">
+                            @foreach(($v2Menus ?? []) as $menu)
+                                <div class="col-lg-3 col-md-4 col-6 mb-3 {{ $menu['is_enabled'] ? '' : 'd-none' }}"
+                                     data-preview-key="employee:{{ $menu['key'] }}">
+                                    <div class="card shadow h-100" style="border-left: .25rem solid {{ $menu['color'] }};">
+                                        <div class="card-body text-center py-3">
+                                            <div class="card-menu-icon mx-auto mb-2"
+                                                 style="background: {{ $menu['color'] }}22; color: {{ $menu['color'] }};">
+                                                <i class="{{ $menu['icon'] }}"></i>
+                                            </div>
+                                            <h6 class="mb-0 small font-weight-bold">{{ $menu['label'] }}</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        <h6 class="small font-weight-bold text-muted text-uppercase mb-2">Portal Publik</h6>
+                        <div class="row" id="previewCardsV2Public">
+                            @foreach(($v2PublicCards ?? []) as $card)
+                                <div class="col-lg-3 col-md-4 col-6 mb-3 {{ $card['is_visible'] ? '' : 'd-none' }}"
+                                     data-preview-key="public:{{ $card['key'] }}">
+                                    <div class="card border-left-info shadow h-100">
+                                        <div class="card-body text-center py-3">
+                                            <div class="card-menu-icon bg-info-soft mx-auto mb-2">
+                                                <i class="{{ $card['icon'] }}"></i>
+                                            </div>
+                                            <h6 class="mb-0 small font-weight-bold">{{ $card['title'] }}</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Preview -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 bg-white">
@@ -318,23 +519,55 @@
         updatePreview(key, visible, name, $input);
     });
 
+    // Card HRIS v2 (portal karyawan & portal publik): kelas dan scope terpisah
+    // karena simpanannya berbeda (hris_v2_menus vs hris_v2_settings), tetapi
+    // tetap ikut tombol "Simpan Pengaturan" yang sama.
+    $(document).on('change', '.v2-card-toggle', function() {
+        const $input = $(this);
+        const scope = $input.attr('data-scope');
+        const key = $input.attr('data-key');
+
+        updateDirtyState();
+        updatePreview(scope + ':' + key, $input.is(':checked'), $input.attr('data-name'), $input);
+    });
+
     function collectChanges() {
-        const changes = {};
+        const entries = [];
+
         $('.card-menu-toggle').each(function() {
             const $t = $(this);
-            const key = $t.attr('data-key');
             const now = $t.is(':checked');
             const orig = $t.attr('data-original') === 'true';
             if (now !== orig) {
-                changes[key] = now ? 1 : 0;
+                entries.push({
+                    scope: 'v1',
+                    key: $t.attr('data-key'),
+                    visible: now ? 1 : 0,
+                    name: $t.attr('data-name') || $t.attr('data-key')
+                });
             }
         });
-        return changes;
+
+        $('.v2-card-toggle').each(function() {
+            const $t = $(this);
+            const now = $t.is(':checked');
+            const orig = $t.attr('data-original') === 'true';
+            if (now !== orig) {
+                entries.push({
+                    scope: $t.attr('data-scope'),
+                    key: $t.attr('data-key'),
+                    visible: now ? 1 : 0,
+                    name: $t.attr('data-name') || $t.attr('data-key')
+                });
+            }
+        });
+
+        return entries;
     }
 
     function updateDirtyState() {
         const changes = collectChanges();
-        const count = Object.keys(changes).length;
+        const count = changes.length;
         const $info = $('#cardMenuDirtyText');
         const $save = $('#cardMenuSaveBtn');
         const $reset = $('#cardMenuResetBtn');
@@ -353,8 +586,7 @@
     // Simpan semua perubahan sekaligus
     $(document).on('click', '#cardMenuSaveBtn', function() {
         const changes = collectChanges();
-        const keys = Object.keys(changes);
-        if (keys.length === 0) return;
+        if (changes.length === 0) return;
 
         const $btn = $(this);
         const originalHtml = $btn.html();
@@ -364,18 +596,18 @@
         const failed = [];
 
         function saveNext() {
-            if (idx >= keys.length) {
+            if (idx >= changes.length) {
                 $btn.html(originalHtml).prop('disabled', false);
 
                 if (failed.length === 0) {
-                    $('.card-menu-toggle').each(function() {
+                    $('.card-menu-toggle, .v2-card-toggle').each(function() {
                         const $t = $(this);
                         $t.attr('data-original', String($t.is(':checked')));
                     });
                     Swal.fire({
                         icon: 'success',
                         title: 'Pengaturan Tersimpan',
-                        text: 'Perubahan card menu HRIS berhasil diterapkan.',
+                        text: 'Perubahan card menu HRIS (v1 dan v2) berhasil diterapkan.',
                         timer: 1400,
                         showConfirmButton: false
                     }).then(function() {
@@ -394,24 +626,30 @@
                 return;
             }
 
-            const key = keys[idx];
-            const visible = changes[key];
-            const $input = $('.card-menu-toggle[data-key="' + key + '"]');
-            const name = $input.attr('data-name') || key;
+            const ubah = changes[idx];
+            const url = ubah.scope === 'v1'
+                ? "{{ route('card-menu-hris.update') }}"
+                : "{{ route('card-menu-hris.update-v2') }}";
+            const data = { key: ubah.key, is_visible: ubah.visible };
+
+            // Endpoint v2 butuh scope (employee | public); endpoint v1 tidak.
+            if (ubah.scope !== 'v1') {
+                data.scope = ubah.scope;
+            }
 
             $.ajax({
-                url: "{{ route('card-menu-hris.update') }}",
+                url: url,
                 type: 'POST',
                 dataType: 'json',
                 headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
-                data: { key: key, is_visible: visible },
+                data: data,
                 success: function(res) {
-                    if (!res || !res.success) failed.push(name);
+                    if (!res || !res.success) failed.push(ubah.name);
                     idx++;
                     saveNext();
                 },
                 error: function() {
-                    failed.push(name);
+                    failed.push(ubah.name);
                     idx++;
                     saveNext();
                 }
@@ -430,12 +668,20 @@
             $t.prop('checked', orig);
             updatePreview(key, orig, $t.attr('data-name'), $t);
         });
+
+        $('.v2-card-toggle').each(function() {
+            const $t = $(this);
+            const orig = $t.attr('data-original') === 'true';
+            $t.prop('checked', orig);
+            updatePreview($t.attr('data-scope') + ':' + $t.attr('data-key'), orig, $t.attr('data-name'), $t);
+        });
+
         updateDirtyState();
     });
 
     // Peringatkan bila halaman ditinggal dengan perubahan belum disimpan
     window.addEventListener('beforeunload', function(e) {
-        if (Object.keys(collectChanges()).length > 0) {
+        if (collectChanges().length > 0) {
             e.preventDefault();
             e.returnValue = '';
             return '';
@@ -444,7 +690,7 @@
 
     // Simpan baseline awal setiap toggle agar bisa dideteksi perubahannya
     $(function() {
-        $('.card-menu-toggle').each(function() {
+        $('.card-menu-toggle, .v2-card-toggle').each(function() {
             const $t = $(this);
             $t.attr('data-original', String($t.is(':checked')));
         });

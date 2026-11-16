@@ -4,8 +4,9 @@
 <body>
 @include('sweetalert::alert')
 
-{{-- DataTables untuk response tabel AI --}}
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+{{-- Catatan: tabel jawaban AI sengaja TIDAK memakai DataTables (permintaan
+     user 15 Nov 2026). Tabel AI ditampilkan sebagai tabel biasa; lihat
+     __chatbotStyleTables() di bagian script. --}}
 
 @php
     $exportLabels = [
@@ -954,24 +955,26 @@ body {
             </div>`;
         chatMessages.appendChild(row);
 
-        // Aktifkan DataTable setelah load async selesai; polling di init menangani siap/tidak.
-        if (typeof window.__chatbotActivateTables === 'function') {
-            window.__chatbotActivateTables();
+        // Rapikan tabel jawaban AI (tabel biasa, bukan DataTables).
+        if (typeof window.__chatbotStyleTables === 'function') {
+            window.__chatbotStyleTables();
         }
     }
 
-    /* Aktifkan DataTable pada semua <table> di dalam elemen */
-    function activateDataTables(container) {
-        if (typeof $.fn === 'undefined' || typeof $.fn.DataTable === 'undefined') return;
+    /* Tabel jawaban AI = tabel biasa. Fungsi ini hanya menambahkan kelas
+       Bootstrap (table table-bordered table-sm) supaya rapi; tidak ada
+       pencarian/pagination/sorting dan tidak ada library tambahan. */
+    function stylePlainTables(container) {
+        if (!container || !container.querySelectorAll) return;
         container.querySelectorAll('table').forEach(function (tbl) {
-            if (!tbl.id) tbl.id = 'dt_' + Math.random().toString(36).slice(2, 8);
-            if (!$.fn.DataTable.isDataTable('#' + tbl.id)) {
-                tbl.classList.add('table', 'table-bordered', 'table-sm');
-                $('#' + tbl.id).DataTable({
-                    pageLength: 10,
-                    scrollX: true,
-                    language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json' }
-                });
+            tbl.classList.add('table', 'table-bordered', 'table-sm');
+            tbl.classList.remove('dataTable', 'no-footer', 'dtr-inline');
+            // Bungkus scroll horizontal seperlunya tanpa mengubah struktur DOM tabel.
+            if (!tbl.parentElement || !tbl.parentElement.classList.contains('table-responsive')) {
+                const wrap = document.createElement('div');
+                wrap.className = 'table-responsive';
+                tbl.parentNode.insertBefore(wrap, tbl);
+                wrap.appendChild(tbl);
             }
         });
     }
@@ -1101,40 +1104,19 @@ body {
     if (btnStartChat) btnStartChat.addEventListener('click', () => createNewSession(btnStartChat, newSessionError));
     if (btnNewSession) btnNewSession.addEventListener('click', () => createNewSession(btnNewSession, null));
 
-    /* Tunggu sampai DataTables siap: halaman chatbot tidak memuat jQuery
-       di <head>. Script DataTables sebelumnya ditaruh tepat sebelum
-       layout.footerscript (yang justru memuat jQuery), jadi selalu error
-       "jQuery is not defined". Polling ringan di sini; kalau tetap tak
-       ada, activateDataTables menampilkan tabel polos apa adanya. */
-    window.__chatbotActivateTables = function () {
+    /* Rapikan tabel AI yang sudah ada di halaman (tabel biasa, tanpa
+       library apa pun). Tabel yang baru muncul dipanggil ulang di
+       renderAiMessage(). */
+    window.__chatbotStyleTables = function () {
         if (!chatMessages) return;
-        chatMessages.querySelectorAll('table').forEach(function (tbl) {
-            if (!tbl.id) tbl.id = 'dt_' + Math.random().toString(36).slice(2, 8);
-            if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.DataTable === 'function') {
-                if (!window.jQuery.fn.DataTable.isDataTable('#' + tbl.id)) {
-                    tbl.classList.add('table', 'table-bordered', 'table-sm');
-                    window.jQuery('#' + tbl.id).DataTable({
-                        pageLength: 10,
-                        scrollX: true,
-                        language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json' }
-                    });
-                }
-            } else {
-                // Fallback polos — jangan biarkan tabel AI tanpa style Bootstrap.
-                tbl.classList.add('table', 'table-bordered', 'table-sm');
-            }
-        });
+        stylePlainTables(chatMessages);
     };
-    let _dtWait = 0;
-    const _dtWaitTimer = setInterval(function () {
-        _dtWait += 200;
-        const dtReady = window.jQuery && window.jQuery.fn &&
-            typeof window.jQuery.fn.DataTable === 'function';
-        if (dtReady || _dtWait >= 8000) {
-            if (_dtWaitTimer) clearInterval(_dtWaitTimer);
-            window.__chatbotActivateTables();
-        }
-    }, 200);
+
+    // Jalankan sekali untuk jawaban yang sudah ter-render dari server.
+    window.__chatbotStyleTables();
+    document.addEventListener('DOMContentLoaded', function () {
+        window.__chatbotStyleTables();
+    });
 
     /* ---- Scroll ---- */
     function scrollToBottom() {
@@ -1143,37 +1125,9 @@ body {
     scrollToBottom();
 })();
 
-/* DataTables (jQuery-dependent): dimuat SETELAH jQuery. Halaman chatbot tidak
-   memuat jQuery di <head> — jQuery baru ada di layout.footerscript — jadi
-   tag <script src=jquery.dataTables> yang ditaruh tepat sebelum include itu
-   selalu error "jQuery is not defined". Muat di sini secara berurutan.
-   Sumber: jsDelivr lokal-kan (sudah dipaki layout.header) supaya tidak
-   bergantung CDN datatables; versi 1.13.8 sama dengan versi lain di app. */
-(function () {
-    var DT = [
-        'https://cdn.jsdelivr.net/npm/datatables.net@1.13.8/js/jquery.dataTables.min.js',
-        'https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.8/js/dataTables.bootstrap5.min.js'
-    ];
-    function loadOne(i) {
-        if (i >= DT.length) {
-            if (typeof window.__chatbotActivateTables === 'function') {
-                window.__chatbotActivateTables();
-            }
-            return;
-        }
-        var s = document.createElement('script');
-        s.src = DT[i];
-        s.async = false;
-        s.onerror = function () {
-            if (typeof window.__chatbotActivateTables === 'function') {
-                window.__chatbotActivateTables();
-            }
-        };
-        s.onload = function () { loadOne(i + 1); };
-        document.body.appendChild(s);
-    }
-    loadOne(0);
-})();
+/* Catatan: pemuat DataTables (CDN) sengaja DIHAPUS. Tabel jawaban AI
+   ditampilkan sebagai tabel biasa; tidak ada pencarian, pagination,
+   sorting, atau dependensi jQuery-DataTables di halaman ini. */
 </script>
 @endpush
 

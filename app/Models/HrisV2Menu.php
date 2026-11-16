@@ -90,6 +90,30 @@ class HrisV2Menu extends Model
         return false;
     }
 
+    /**
+     * Simpan status aktif/nonaktif sebuah menu (dipakai halaman pengaturan
+     * /pengaturan/card-menu-hris agar card v2 bisa di-show/hide dari sana,
+     * sama seperti card v1). Mengembalikan true bila baris benar-benar berubah.
+     */
+    public static function setEnabled(string $key, bool $aktif): bool
+    {
+        if (! self::tableSiap()) {
+            return false;
+        }
+
+        try {
+            $terpengaruh = self::query()
+                ->where('key', $key)
+                ->update(['is_enabled' => $aktif, 'updated_at' => now()]);
+
+            return $terpengaruh > 0;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('HrisV2Menu::setEnabled gagal: ' . $e->getMessage());
+
+            return false;
+        }
+    }
+
     protected static function tableSiap(): bool
     {
         try {

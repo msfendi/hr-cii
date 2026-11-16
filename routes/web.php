@@ -716,7 +716,6 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/', [\App\Http\Controllers\AdminLeaveRecapController::class, 'index'])->name('leave-recap.index');
         Route::get('/get-data', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getData'])->name('leave-recap.get-data');
         Route::get('/detail/{token}', [\App\Http\Controllers\AdminLeaveRecapController::class, 'getDetail'])->name('leave-recap.detail');
-        Route::post('/delete/{token}', [\App\Http\Controllers\AdminLeaveRecapController::class, 'destroy'])->name('leave-recap.destroy');
     });
 
     // ========================================
@@ -1620,6 +1619,10 @@ Route::middleware(['auth', 'permission'])->group(function () {
         ->name('card-menu-hris.index');
     Route::post('/pengaturan/card-menu-hris', [FaceAttendanceAdminController::class, 'updateCardMenu'])
         ->name('card-menu-hris.update');
+    // Card menu HRIS v2 (portal karyawan + portal publik) dikontrol dari
+    // halaman pengaturan yang sama; endpoint terpisah karena simpanannya beda.
+    Route::post('/pengaturan/card-menu-hris/v2', [FaceAttendanceAdminController::class, 'updateCardMenuV2'])
+        ->name('card-menu-hris.update-v2');
 
     // Permintaan user 2026-11-13: pilih versi halaman awal HRIS.
     // v1 -> resources/views/hris.blade.php, v2 -> resources/views/hris_v2/portal.blade.php.

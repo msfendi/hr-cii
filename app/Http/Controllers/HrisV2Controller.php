@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Middleware\EnsureHrisV2Employee;
 use App\Models\FaceRecognitionSetting;
 use App\Models\HrisV2Menu;
+use App\Models\HrisV2PublicCard;
 use App\Services\EmployeeActiveStatusService;
 use App\Services\FaceRecognitionService;
 use Illuminate\Http\Request;
@@ -325,6 +326,9 @@ class HrisV2Controller extends Controller
         return view('hris_v2.public_home', [
             'lowongan' => $this->lowonganTerbuka(),
             'jumlahLowongan' => $this->jumlahLowongan(),
+            // Card portal publik yang aktif. Show/hide diatur admin di
+            // /pengaturan/card-menu-hris (scope: publik).
+            'publicCards' => HrisV2PublicCard::aktif(),
         ]);
     }
 

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\CardMenuSetting;
 use App\Models\FaceAttendanceLog;
+use App\Models\HrisV2Menu;
+use App\Models\HrisV2PublicCard;
 use App\Models\HrisV2Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -1219,7 +1221,105 @@ class FaceAttendanceAdminController extends Controller
         // Versi halaman awal HRIS (route '/') yang sedang dipakai: v1 atau v2.
         $versiAwal = HrisV2Setting::landingVersion();
 
-        return view('face_attendance.card_menu_settings', compact('cards', 'status', 'versiAwal'));
+        // ===== Card menu HRIS v2 =====
+        // Portal karyawan: sumbernya tabel hris_v2_menus (kolom is_enabled).
+        // Portal publik   : daftar tetap + visibilitas di hris_v2_settings.
+        // Keduanya dikontrol dari halaman ini supaya admin cukup satu tempat.
+        $v2Menus = [];
+        foreach (HrisV2Menu::semua() as $m) {
+            $ambil = static function ($nama) use ($m) {
+                return is_array($m) ? ($m[$nama] ?? null) : ($m->{$nama} ?? null);
+            };
+
+            $v2Menus[] = [
+                'key'         => (string) $ambil('key'),
+                'label'       => (string) ($ambil('label') ?: $ambil('key')),
+                'description' => (string) ($ambil('description') ?? ''),
+                'route_name'  => (string) ($ambil('route_name') ?? ''),
+                'icon'        => (string) ($ambil('icon') ?: 'fas fa-circle'),
+                'color'       => (string) ($ambil('color') ?: '#4e73df'),
+                'is_enabled'  => (bool) $ambil('is_enabled'),
+                'sort_order'  => (int) ($ambil('sort_order') ?? 0),
+            ];
+        }
+
+        $statusV2 = [
+            'table_exists' => false,
+            'row_count'    => 0,
+            'db_error'     => null,
+        ];
+
+        try {
+            $statusV2['table_exists'] = \Illuminate\Support\Facades\Schema::hasTable('hris_v2_menus');
+
+            if ($statusV2['table_exists']) {
+                $statusV2['row_count'] = DB::table('hris_v2_menus')->count();
+            }
+        } catch (\Throwable $e) {
+            $statusV2['db_error'] = $e->getMessage();
+        }
+
+        // Card publik selalu 3 baris tetap; yang bisa berubah hanya tampil/sembunyi.
+        $v2PublicCards = HrisV2PublicCard::semua();
+        $jumlahCardV2 = count($v2Menus) + count($v2PublicCards);
+
+        return view('face_attendance.card_menu_settings', compact(
+            'cards',
+            'status',
+            'versiAwal',
+            'v2Menus',
+            'v2PublicCards',
+            'statusV2',
+            'jumlahCardV2'
+        ));
+    }
+
+    /**
+     * Toggle show/hide sebuah card menu HRIS v2 dari /pengaturan/card-menu-hris.
+     *
+     * scope = employee -> kolom hris_v2_menus.is_enabled (portal karyawan)
+     * scope = public   -> key hris_v2_settings (portal publik)
+     */
+    public function updateCardMenuV2(Request $request)
+    {
+        $request->validate([
+            'scope'      => 'required|string|in:employee,public',
+            'key'        => 'required|string|max:100',
+            'is_visible' => 'required|boolean',
+        ]);
+
+        $scope   = (string) $request->input('scope');
+        $key     = (string) $request->input('key');
+        $visible = $request->boolean('is_visible');
+
+        if ($scope === 'employee') {
+            $ok = HrisV2Menu::setEnabled($key, $visible);
+
+            $pesanOk  = 'Card portal karyawan "' . $key . '" berhasil diperbarui.';
+            $pesanGagal = 'Gagal menyimpan card portal karyawan "' . $key . '". '
+                . 'Pastikan tabel hris_v2_menus sudah dimigrasi dan menu dengan key tersebut ada.';
+        } else {
+            $ok = HrisV2PublicCard::setVisible($key, $visible);
+
+            $pesanOk  = 'Card portal publik "' . $key . '" berhasil diperbarui.';
+            $pesanGagal = 'Gagal menyimpan card portal publik "' . $key . '". '
+                . 'Pastikan tabel hris_v2_settings sudah dimigrasi.';
+        }
+
+        if (! $ok) {
+            return response()->json([
+                'success' => false,
+                'message' => $pesanGagal,
+            ], 500);
+        }
+
+        return response()->json([
+            'success'    => true,
+            'message'    => $pesanOk,
+            'scope'      => $scope,
+            'key'        => $key,
+            'is_visible' => $visible,
+        ]);
     }
 
     /**

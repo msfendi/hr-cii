@@ -26,50 +26,40 @@
 </section>
 
 <div class="row">
-    {{-- Career card: goes straight to the /lowongan route (job-vacancy.public) --}}
-    <div class="col-12 col-md-4 mb-3">
-        <a href="{{ route('job-vacancy.public') }}" class="v2-menu-card">
-            <div class="v2-card v2-card-hover pub-card p-4 h-100">
-                <div class="d-flex align-items-center justify-content-between mb-4">
-                    <div class="v2-menu-icon pub-icon-a"><i class="fas fa-briefcase"></i></div>
-                    <span class="v2-num">01</span>
+    {{-- Card dibuat dari HrisV2PublicCard::aktif() supaya admin bisa
+         menampilkan / menyembunyikan tiap card di /pengaturan/card-menu-hris.
+         Nomor (01, 02, ...) dihitung ulang agar tetap rapat. --}}
+    @forelse($publicCards as $card)
+        <div class="col-12 col-md-4 mb-3">
+            @if($card['url'])
+                <a href="{{ $card['url'] }}" class="v2-menu-card">
+            @else
+                <div class="v2-menu-card">
+            @endif
+                <div class="v2-card v2-card-hover pub-card p-4 h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <div class="v2-menu-icon {{ $card['icon_class'] }}"><i class="{{ $card['icon'] }}"></i></div>
+                        <span class="v2-num">{{ $card['number'] }}</span>
+                    </div>
+                    <span class="v2-label mb-1">{{ $card['kicker'] }}</span>
+                    <h5 class="v2-card-title mb-2">{{ $card['title'] }}</h5>
+                    <div class="v2-muted" style="font-size:.88rem;">{{ $card['description'] }}</div>
+                    @if($card['url'])
+                        <span class="arrow">{{ $card['cta'] }} <i class="fas fa-arrow-right"></i></span>
+                    @endif
                 </div>
-                <span class="v2-label mb-1">Vacancies</span>
-                <h5 class="v2-card-title mb-2">Careers — Job Openings</h5>
-                <div class="v2-muted" style="font-size:.88rem;">Open positions along with their requirements.</div>
-                <span class="arrow">View openings <i class="fas fa-arrow-right"></i></span>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-12 col-md-4 mb-3">
-        <a href="{{ route('portal.recruitment-status.index') }}" class="v2-menu-card">
-            <div class="v2-card v2-card-hover pub-card p-4 h-100">
-                <div class="d-flex align-items-center justify-content-between mb-4">
-                    <div class="v2-menu-icon pub-icon-b"><i class="fas fa-search"></i></div>
-                    <span class="v2-num">02</span>
+            @if($card['url'])
+                </a>
+            @else
                 </div>
-                <span class="v2-label mb-1">Application</span>
-                <h5 class="v2-card-title mb-2">Check Application Status</h5>
-                <div class="v2-muted" style="font-size:.88rem;">Track your application (registration number / national ID).</div>
-                <span class="arrow">Track status <i class="fas fa-arrow-right"></i></span>
+            @endif
+        </div>
+    @empty
+        <div class="col-12">
+            <div class="v2-card p-4">
+                <div class="v2-muted">No public services are available at the moment. Please check back later.</div>
             </div>
-        </a>
-    </div>
-
-    <div class="col-12 col-md-4 mb-3">
-        <a href="{{ route('satisfaction-survey.create') }}" class="v2-menu-card">
-            <div class="v2-card v2-card-hover pub-card p-4 h-100">
-                <div class="d-flex align-items-center justify-content-between mb-4">
-                    <div class="v2-menu-icon pub-icon-c"><i class="fas fa-clipboard-list"></i></div>
-                    <span class="v2-num">03</span>
-                </div>
-                <span class="v2-label mb-1">Feedback</span>
-                <h5 class="v2-card-title mb-2">Satisfaction Survey</h5>
-                <div class="v2-muted" style="font-size:.88rem;">Fill in the satisfaction survey: 29 scale questions and 6 open questions. No login needed.</div>
-                <span class="arrow">Take the survey <i class="fas fa-arrow-right"></i></span>
-            </div>
-        </a>
-    </div>
+        </div>
+    @endforelse
 </div>
 @endsection
