@@ -6,6 +6,7 @@ use App\Models\WorkAssignmentRequest;
 use App\Services\WorkAssignment\ApprovalChainBuilder;
 use App\Services\WorkAssignment\EmployeeLookupService;
 use App\Services\WorkAssignment\WorkAssignmentAttachment;
+use App\Services\WorkAssignment\WorkAssignmentQr;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -409,6 +410,44 @@ class WorkAssignmentController extends Controller
         $npk = trim((string) ($user->npk ?? ''));
 
         return $npk !== '' ? $npk : null;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // QR code pengajuan (untuk scan security di gate)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Kembalikan QR pengajuan sebagai data URI SVG (dipakai modal riwayat).
+     *
+     * Hanya pemilik pengajuan yang boleh melihat QR miliknya.
+     */
+    public function qr(Request $request, int $id)
+    {
+        $npk = session(self::SESSION_KEY) ?: self::npkFromAuthUser();
+
+        if (!$npk) {
+            return response()->json(['ok' => false, 'message' => 'Sesi berakhir.'], 401);
+        }
+
+        $wa = WorkAssignmentRequest::find($id);
+
+        if (!$wa || (string) $wa->npk !== (string) $npk) {
+            return response()->json(['ok' => false, 'message' => 'Pengajuan tidak ditemukan.'], 404);
+        }
+
+        $uri = WorkAssignmentQr::dataUri($wa, 240);
+
+        if ($uri === null) {
+            return response()->json(['ok' => false, 'message' => 'Gagal membuat QR.'], 500);
+        }
+
+        return response()->json([
+            'ok'      => true,
+            'id'      => $wa->id,
+            'image'   => $uri,
+            'stage'   => $wa->securityStage(),
+            'status'  => $wa->status,
+        ]);
     }
 
     private static function deptIdFor(string $npk): ?string

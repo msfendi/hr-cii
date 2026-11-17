@@ -50,6 +50,7 @@ use App\Http\Controllers\WorkAssignmentApprovalController;
 use App\Http\Controllers\WorkAssignmentController;
 use App\Http\Controllers\WorkAssignmentPdfController;
 use App\Http\Controllers\WorkAssignmentRecapController;
+use App\Http\Controllers\WorkAssignmentSecurityController;
 use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
@@ -1543,6 +1544,9 @@ Route::prefix('work-assignment')->name('work-assignment.')->group(function () {
 
     // Unduh lampiran milik pemohon sendiri
     Route::get('/attachment/{id}/{index}', [WorkAssignmentController::class, 'downloadAttachment'])->name('attachment.download');
+
+    // QR pengajuan (untuk discan security di gate keluar/kembali)
+    Route::get('/qr/{id}', [WorkAssignmentController::class, 'qr'])->name('qr');
 });
 
 // ========================================
@@ -1580,6 +1584,24 @@ Route::prefix('work-assignment/manage')
         // Lampiran: unduh & hapus per file
         Route::get('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'downloadAttachment'])->name('attachment.download');
         Route::post('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'deleteAttachment'])->name('attachment.delete');
+    });
+
+// ========================================
+// WORK ASSIGNMENT REQUEST — SECURITY GATE
+// ========================================
+// Petugas security scan QR pengajuan: scan pertama = karyawan KELUAR,
+// scan berikutnya = karyawan KEMBALI (sekaligus mengisi jam_kembali).
+// Berbasis session seperti halaman pemohon — security login cukup NPK.
+Route::prefix('work-assignment/security')
+    ->name('work-assignment.security.')
+    ->group(function () {
+        Route::get('/login', [WorkAssignmentSecurityController::class, 'login'])->name('login');
+        Route::post('/verify', [WorkAssignmentSecurityController::class, 'verify'])->name('verify');
+        Route::get('/logout', [WorkAssignmentSecurityController::class, 'logout'])->name('logout');
+
+        Route::get('/', [WorkAssignmentSecurityController::class, 'scan'])->name('scan');
+        Route::post('/lookup', [WorkAssignmentSecurityController::class, 'lookup'])->name('lookup');
+        Route::post('/approve', [WorkAssignmentSecurityController::class, 'approve'])->name('approve');
     });
 
 // ========================================

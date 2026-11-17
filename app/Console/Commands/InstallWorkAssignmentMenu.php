@@ -52,6 +52,12 @@ class InstallWorkAssignmentMenu extends Command
                 'group'       => 'Cuti',
                 'description' => 'Approval bertingkat Work Assignment Request',
             ],
+            [
+                'name'        => 'Security Gate Work Assignment',
+                'route_name'  => 'work-assignment.security.scan',
+                'group'       => 'Cuti',
+                'description' => 'Scan QR pengajuan saat karyawan keluar dan kembali',
+            ],
         ];
 
         $permIds = [];
@@ -96,6 +102,14 @@ class InstallWorkAssignmentMenu extends Command
                 'icon'         => 'fas fa-plane-departure',
                 'permission_id' => $permIds['work-assignment.approval.index'],
                 'order'        => 0,
+            ],
+            [
+                'parent_id'    => $approvalParent->id,
+                'name'         => 'Security Gate Work Assignment',
+                'route_name'   => 'work-assignment.security.scan',
+                'icon'         => 'fas fa-qrcode',
+                'permission_id' => $permIds['work-assignment.security.scan'],
+                'order'        => 1,
             ],
         ];
 

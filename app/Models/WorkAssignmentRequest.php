@@ -36,6 +36,7 @@ class WorkAssignmentRequest extends Model
         'attach_files',
         'approval_chain',
         'answers',
+        'security_check',
         'status',
         'current_level',
         'void',
@@ -47,6 +48,7 @@ class WorkAssignmentRequest extends Model
         'attach_files'    => 'array',
         'approval_chain' => 'array',
         'answers'        => 'array',
+        'security_check' => 'array',
         'start_date'     => 'date',
         'end_date'       => 'date',
         'total_days'     => 'integer',
@@ -242,5 +244,44 @@ class WorkAssignmentRequest extends Model
     public function scopeForNpk($query, string $npk)
     {
         return $query->where('npk', $npk);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Security gate check (scan QR saat keluar & kembali)
+    // ─────────────────────────────────────────────────────────────
+
+    /** Tahap gate yang sedang ditunggu: 'out', 'in', atau null kalau selesai. */
+    public function securityStage(): ?string
+    {
+        $check = $this->security_check ?? [];
+
+        if (empty($check['out'])) {
+            return 'out';
+        }
+
+        if (empty($check['in'])) {
+            return 'in';
+        }
+
+        return null;
+    }
+
+    /** Apakah pengajuan sudah boleh diproses security (semua level approved). */
+    public function isReadyForSecurity(): bool
+    {
+        return $this->status === 'approved'
+            && !in_array(strtolower((string) $this->void), ['true', '1'], true);
+    }
+
+    /** Catatan gate keluar, atau null. */
+    public function securityOut(): ?array
+    {
+        return $this->security_check['out'] ?? null;
+    }
+
+    /** Catatan gate kembali, atau null. */
+    public function securityIn(): ?array
+    {
+        return $this->security_check['in'] ?? null;
     }
 }
