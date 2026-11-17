@@ -128,13 +128,17 @@ class EmployeeLookupService
     /**
      * Rentang tanggal yang boleh diajukan.
      *
-     * @return array{0:string,1:string}
+     * `$backDays` / `$forwardDays` = 0 berarti TIDAK ada batas — tanggal
+     * berapa pun boleh dipilih (minDate/maxDate kosong → input tanpa
+     * atribut min/max).
+     *
+     * @return array{0:string,1:string}  [minDate, maxDate]; string kosong = tanpa batas
      */
-    public static function allowedDateRange(int $backDays = 30, int $forwardDays = 90): array
+    public static function allowedDateRange(int $backDays = 0, int $forwardDays = 0): array
     {
         return [
-            now()->subDays($backDays)->format('Y-m-d'),
-            now()->addDays($forwardDays)->format('Y-m-d'),
+            $backDays > 0 ? now()->subDays($backDays)->format('Y-m-d') : '',
+            $forwardDays > 0 ? now()->addDays($forwardDays)->format('Y-m-d') : '',
         ];
     }
 

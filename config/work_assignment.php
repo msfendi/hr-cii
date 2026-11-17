@@ -45,11 +45,12 @@ return [
     |--------------------------------------------------------------------------
     | Batas tanggal pengajuan
     |--------------------------------------------------------------------------
-    | Surat izin dinas boleh diajukan mundur (mis. lupa input) tapi dibatasi,
-    | dan ke depan juga dibatasi supaya tidak salah tanggal jauh.
+    | Tidak ada batas — tanggal dinas boleh di masa lalu maupun ke depan,
+    | jadi pemohon tidak perlu menghafal batas. Validasi batas tetap ada di
+    | level config (`max_dates` untuk jumlah tanggal per pengajuan).
     */
-    'back_days'    => 30,
-    'forward_days' => 90,
+    'back_days'    => 0,
+    'forward_days' => 0,
 
     /** Maksimal jumlah tanggal dinas dalam satu pengajuan. */
     'max_dates' => 31,
