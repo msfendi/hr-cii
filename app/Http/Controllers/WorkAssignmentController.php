@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\WorkAssignmentRequest;
 use App\Services\WorkAssignment\ApprovalChainBuilder;
 use App\Services\WorkAssignment\EmployeeLookupService;
+use App\Services\WorkAssignment\WorkAssignmentAttachment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RealRashid\SweetAlert\Facades\Alert;
 
@@ -91,6 +94,16 @@ class WorkAssignmentController extends Controller
     public function dashboard()
     {
         $npk = session(self::SESSION_KEY);
+
+        // Lihat catatan di form(): sesi pemohon diteruskan dari user Laravel.
+        if (!$npk) {
+            $npk = self::npkFromAuthUser();
+
+            if ($npk) {
+                session([self::SESSION_KEY => $npk]);
+            }
+        }
+
         if (!$npk) {
             return redirect()->route('work-assignment.login');
         }
@@ -119,6 +132,18 @@ class WorkAssignmentController extends Controller
     public function form()
     {
         $npk = session(self::SESSION_KEY);
+
+        // Kalau dibuka dari sidebar (user sudah login Laravel), teruskan sesi
+        // pemohon dengan NPK user tersebut — supaya tak terlempar ke login
+        // pemohon yang minta tanggal lahir.
+        if (!$npk) {
+            $npk = self::npkFromAuthUser();
+
+            if ($npk) {
+                session([self::SESSION_KEY => $npk]);
+            }
+        }
+
         if (!$npk) {
             Alert::error('Error', 'Silakan login terlebih dahulu.');
             return redirect()->route('work-assignment.login');
@@ -133,8 +158,8 @@ class WorkAssignmentController extends Controller
 
         $employee = $lookup['data'];
         [$minDate, $maxDate] = EmployeeLookupService::allowedDateRange(
-            (int) config('work_assignment.back_days', 30),
-            (int) config('work_assignment.forward_days', 90)
+            (int) config('work_assignment.back_days', 0),
+            (int) config('work_assignment.forward_days', 0)
         );
 
         $chain = ApprovalChainBuilder::build(
@@ -153,12 +178,75 @@ class WorkAssignmentController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Progress (untuk auto-refresh halaman pemohon)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Status approval terbaru untuk semua pengajuan milik pemohon.
+     *
+     * Dipakai halaman pemohon untuk refresh otomatis — supaya status
+     * approval terlihat berubah tanpa harus reload halaman.
+     */
+    public function progress(Request $request)
+    {
+        $npk = session(self::SESSION_KEY);
+        if (!$npk) {
+            return response()->json(['ok' => false, 'message' => 'Sesi berakhir.'], 401);
+        }
+
+        $requests = WorkAssignmentRequest::forNpk($npk)
+            ->orderByDesc('id')
+            ->get();
+
+        $items = [];
+
+        foreach ($requests as $req) {
+            $progress = $req->progress();
+
+            $items[] = [
+                'id'            => $req->id,
+                'status'       => $progress['status'],
+                'label'        => $progress['label'],
+                'tone'         => $progress['tone'],
+                'done'         => $progress['done'],
+                'total'        => $progress['total'],
+                'current_level' => (int) $req->current_level,
+                'updated_at'   => $req->updated_at?->format('Y-m-d H:i:s'),
+                'timeline'     => array_map(fn ($s) => [
+                    'level'      => $s['level'],
+                    'name'       => $s['name'],
+                    'role_label' => $s['role_label'],
+                    'decision'   => $s['decision'],
+                    'decided_at' => $s['decided_at'],
+                    'reason'     => $s['reason'],
+                ], $req->timeline()),
+            ];
+        }
+
+        return response()->json([
+            'ok'      => true,
+            'items'   => $items,
+            'checked' => now()->toIso8601String(),
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Submit
     // ─────────────────────────────────────────────────────────────
 
     public function submit(Request $request)
     {
         $npk = session(self::SESSION_KEY);
+
+        // Lihat catatan di form(): sesi pemohon diteruskan dari user Laravel.
+        if (!$npk) {
+            $npk = self::npkFromAuthUser();
+
+            if ($npk) {
+                session([self::SESSION_KEY => $npk]);
+            }
+        }
+
         if (!$npk) {
             Alert::error('Error', 'Sesi berakhir. Silakan login kembali.');
             return redirect()->route('work-assignment.login');
@@ -171,25 +259,42 @@ class WorkAssignmentController extends Controller
         }
 
         [$minDate, $maxDate] = EmployeeLookupService::allowedDateRange(
-            (int) config('work_assignment.back_days', 30),
-            (int) config('work_assignment.forward_days', 90)
+            (int) config('work_assignment.back_days', 0),
+            (int) config('work_assignment.forward_days', 0)
         );
 
         $maxDates = (int) config('work_assignment.max_dates', 31);
 
+        // Batas bawah/atas hanya aktif kalau dikonfigurasi (minDate/maxDate tak kosong).
+        $dateRules = ['required', 'date'];
+
+        if (!empty($minDate)) {
+            $dateRules[] = 'after_or_equal:' . $minDate;
+        }
+
+        if (!empty($maxDate)) {
+            $dateRules[] = 'before_or_equal:' . $maxDate;
+        }
+
         $validated = $request->validate([
             'duty_dates'        => "required|array|min:1|max:$maxDates",
-            'duty_dates.*'      => "required|date|after_or_equal:$minDate|before_or_equal:$maxDate",
+            'duty_dates.*'      => implode('|', $dateRules),
             'dinas_ke'          => 'required|string|max:255',
             'keperluan'         => 'required|string|max:2000',
             'jam_keluar'        => 'required|date_format:H:i',
             'rencana_kembali'   => 'required|date_format:H:i|after:jam_keluar',
+            'attach_files'      => 'nullable|array|max:5',
+            'attach_files.*'    => 'file|mimes:' . implode(',', WorkAssignmentAttachment::ALLOWED)
+                                  . '|max:' . WorkAssignmentAttachment::MAX_KB,
         ], [
             'duty_dates.required' => 'Minimal satu tanggal dinas harus dipilih.',
             'duty_dates.max'      => "Maksimal $maxDates tanggal dalam satu pengajuan.",
             'duty_dates.*.after_or_equal'  => 'Tanggal dinas terlalu jauh ke belakang.',
             'duty_dates.*.before_or_equal' => 'Tanggal dinas terlalu jauh ke depan.',
             'rencana_kembali.after' => 'Rencana kembali harus setelah jam keluar.',
+            'attach_files.max'    => 'Maksimal 5 lampiran per pengajuan.',
+            'attach_files.*.mimes' => 'Format lampiran harus PDF, gambar, Word, atau Excel.',
+            'attach_files.*.max'  => 'Ukuran setiap lampiran maksimal 5 MB.',
         ]);
 
         // Normalisasi tanggal: unik + urut kronologis
@@ -218,6 +323,12 @@ class WorkAssignmentController extends Controller
                 'rencana_kembali' => $validated['rencana_kembali'],
                 'jam_kembali'    => null,   // diisi Security setelah karyawan kembali
 
+                // Lampiran (path relatif + nama asli di disk `public`)
+                'attach_files'   => WorkAssignmentAttachment::storeWithNames(
+                    $request->file('attach_files', []),
+                    $npk
+                ),
+
                 // Chain approval = snapshot; answers mulai kosong
                 'approval_chain' => ApprovalChainBuilder::build($deptId, $sectionId),
                 'answers'        => [],
@@ -241,8 +352,64 @@ class WorkAssignmentController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Lampiran
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Unduh lampiran milik pemohon yang sedang login.
+     *
+     * Otorisasi: pengajuan harus milik NPK pemohon (bukan milik orang lain).
+     */
+    public function downloadAttachment($id, $index)
+    {
+        $npk = session(self::SESSION_KEY);
+
+        if (!$npk) {
+            abort(403, 'Sesi berakhir. Silakan login kembali.');
+        }
+
+        $req = WorkAssignmentRequest::forNpk($npk)->find($id);
+
+        if (!$req) {
+            abort(404, 'Pengajuan tidak ditemukan.');
+        }
+
+        $files = $req->attach_files ?? [];
+        $path  = WorkAssignmentAttachment::pathOf($files[(int) $index] ?? null);
+
+        if (!$path) {
+            abort(404, 'Lampiran tidak ditemukan.');
+        }
+
+        if (!Storage::disk(WorkAssignmentAttachment::DISK)->exists($path)) {
+            abort(404, 'File lampiran sudah tidak ada di storage.');
+        }
+
+        return Storage::disk(WorkAssignmentAttachment::DISK)->download($path);
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Helper
     // ─────────────────────────────────────────────────────────────
+
+    /**
+     * NPK dari user yang login Laravel (kalau ada).
+     *
+     * Dipakai supaya halaman pemohon bisa dibuka langsung dari sidebar
+     * tanpa login pemohon terpisah (NPK + tanggal lahir).
+     */
+    private static function npkFromAuthUser(): ?string
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return null;
+        }
+
+        $npk = trim((string) ($user->npk ?? ''));
+
+        return $npk !== '' ? $npk : null;
+    }
 
     private static function deptIdFor(string $npk): ?string
     {

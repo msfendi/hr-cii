@@ -46,7 +46,11 @@ use App\Http\Controllers\EmployeeExitHistoryController;
 use App\Http\Controllers\EmployeeLateController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
+use App\Http\Controllers\WorkAssignmentApprovalController;
 use App\Http\Controllers\WorkAssignmentController;
+use App\Http\Controllers\WorkAssignmentPdfController;
+use App\Http\Controllers\WorkAssignmentRecapController;
+use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
 use App\Http\Controllers\EmployeeShiftController;
@@ -1533,7 +1537,58 @@ Route::prefix('work-assignment')->name('work-assignment.')->group(function () {
 
     Route::get('/form', [WorkAssignmentController::class, 'form'])->name('form');
     Route::post('/submit', [WorkAssignmentController::class, 'submit'])->name('submit');
+
+    // Status approval terbaru (auto-refresh halaman pemohon)
+    Route::get('/progress', [WorkAssignmentController::class, 'progress'])->name('progress');
+
+    // Unduh lampiran milik pemohon sendiri
+    Route::get('/attachment/{id}/{index}', [WorkAssignmentController::class, 'downloadAttachment'])->name('attachment.download');
 });
+
+// ========================================
+// WORK ASSIGNMENT REQUEST — APPROVAL (Admin / Atasan)
+// ========================================
+// Berbeda dari form pengajuan (session-based), halaman ini memakai auth
+// Laravel + NPK user sebagai identitas approver.
+Route::prefix('work-assignment/approval')
+    ->name('work-assignment.approval.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/', [WorkAssignmentApprovalController::class, 'index'])->name('index');
+        Route::get('/get-data', [WorkAssignmentApprovalController::class, 'getData'])->name('get-data');
+        Route::get('/detail/{id}', [WorkAssignmentApprovalController::class, 'detail'])->name('detail');
+        Route::post('/approve/{id}', [WorkAssignmentApprovalController::class, 'approve'])->name('approve');
+        Route::post('/reject/{id}', [WorkAssignmentApprovalController::class, 'reject'])->name('reject');
+        Route::post('/update/{id}', [WorkAssignmentApprovalController::class, 'updateDecision'])->name('update');
+    });
+
+// ========================================
+// WORK ASSIGNMENT REQUEST — MANAGE RECAP (Admin)
+// ========================================
+// oversee SEMUA pengajuan (semua pemohon) + hapus/batalkan.
+Route::prefix('work-assignment/manage')
+    ->name('work-assignment.manage.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/', [WorkAssignmentRecapController::class, 'index'])->name('index');
+        Route::get('/get-data', [WorkAssignmentRecapController::class, 'getData'])->name('get-data');
+        Route::get('/detail/{id}', [WorkAssignmentRecapController::class, 'detail'])->name('detail');
+        Route::post('/delete/{id}', [WorkAssignmentRecapController::class, 'destroy'])->name('destroy');
+        Route::get('/pdf/{id}', [WorkAssignmentPdfController::class, 'show'])->name('pdf');
+        Route::get('/pdf/{id}/download', [WorkAssignmentPdfController::class, 'download'])->name('pdf.download');
+
+        // Lampiran: unduh & hapus per file
+        Route::get('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'downloadAttachment'])->name('attachment.download');
+        Route::post('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'deleteAttachment'])->name('attachment.delete');
+    });
+
+// ========================================
+// DEV ONLY — login cepat untuk pengujian lokal
+// ========================================
+// Route ini tidak aktif di production (guard di dalam controller).
+if (in_array(config('app.env'), ['local', 'testing'], true) || config('app.debug')) {
+    Route::get('/_dev/login-as', [DevLoginController::class, 'loginAs'])->name('dev.login-as');
+}
 
 // ========================================
 // FACE ATTENDANCE (GPS + FACE RECOGNITION)
