@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Log;
  * menyalin aturan ke dalam kode, supaya aturan bisa diperbarui tim tanpa
  * deploy ulang (cukup edit markdown-nya).
  *
- * Yang dikirim ke prompt hanya BAGIAN YANG RELEVAN (bukan seluruh 4.500
- * baris): ringkasan + R1–R25 + tabel terbatas + batasan SQL Server + format
+ * Yang dikirim ke prompt hanya BAGIAN YANG RELEVAN (bukan seluruh 4.600
+ * baris): ringkasan + R1–R31 + tabel terbatas + batasan SQL Server + format
  * jawaban, ditambah baris peta keputusan yang cocok dengan pertanyaan user.
  * Daftar 167 tabel tidak dikirim dari sini karena sudah dikirim lewat
  * introspeksi skema langsung dari database (lebih akurat).
@@ -185,14 +185,32 @@ class RagRules
             }
         }
 
-        if ($wajib !== []) {
-            $blok .= "\n\n" . implode("\n\n", $wajib);
+        // Bagian 7 (batasan SQL Server) dan Bagian 8 (format jawaban) adalah
+        // bagian yang TIDAK BOLEH hilang. Sebelumnya blok utuh dipotong dari
+        // ekor setelah 7–8 ditambahkan, sehingga begitu Bagian 1 bertambah
+        // (R26–R31) justru format jawaban yang terbuang. Sekarang ruang 7–8
+        // dipesan lebih dulu: yang dipotong adalah inti aturan (0+1+peta).
+        $maks = (int) config('chatbot.rag_rules_max_chars', 24000);
+        $wajibTeks = implode("\n\n", $wajib);
+        $penanda = "\n\n[... aturan dipotong; Bagian 7–8 tetap utuh, lihat dokumen asli untuk sisanya ...]";
+        $anggaranInti = $maks - mb_strlen($wajibTeks) - mb_strlen($penanda);
+
+        if ($anggaranInti > 0 && mb_strlen($blok) > $anggaranInti) {
+            $potongan = mb_substr($blok, 0, $anggaranInti);
+            $akhirBaris = strrpos($potongan, "\n");
+
+            if ($akhirBaris !== false && $akhirBaris > 0) {
+                $potongan = substr($potongan, 0, $akhirBaris);
+            }
+
+            $blok = $potongan . $penanda;
         }
 
-        $blok = $this->potong($blok);
+        if ($wajibTeks !== '') {
+            $blok .= "\n\n" . $wajibTeks;
+        }
 
         // Bagian 6 diisi dengan SISA anggaran karakter saja.
-        $maks = (int) config('chatbot.rag_rules_max_chars', 24000);
         $sisa = $maks - mb_strlen($blok);
         $rujukan = (string) ($dok['bagian']['6'] ?? '');
 
@@ -286,18 +304,6 @@ class RagRules
         $kata = array_filter($kata, fn($k) => mb_strlen($k) >= 3 && ! in_array($k, $stop, true));
 
         return array_values(array_unique($kata));
-    }
-
-    protected function potong(string $teks): string
-    {
-        $maks = (int) config('chatbot.rag_rules_max_chars', 18000);
-
-        if ($maks <= 0 || mb_strlen($teks) <= $maks) {
-            return $teks;
-        }
-
-        return mb_substr($teks, 0, $maks)
-            . "\n\n[... aturan dipotong pada {$maks} karakter; lihat dokumen asli untuk sisanya ...]";
     }
 
     /**

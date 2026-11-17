@@ -18,7 +18,7 @@
             <textarea name="summary" rows="3" maxlength="1000"
                       class="form-control @error('summary') is-invalid @enderror"
                       placeholder="Satu sampai tiga kalimat: apa yang baru dan apa yang perlu dilakukan karyawan.">{{ old('summary', $item->summary) }}</textarea>
-            <small class="text-muted">Maksimal 1000 karakter. Tampil di bawah judul pada slider.</small>
+            <small class="text-muted">Maksimal 1000 karakter. Tampil di bawah judul di dalam modal.</small>
             @error('summary') <div class="invalid-feedback">{{ $message }}</div> @enderror
         </div>
     </div>

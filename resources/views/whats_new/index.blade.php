@@ -18,7 +18,7 @@
                     <div>
                         <h1 class="h3 mb-0 text-gray-800">What's New</h1>
                         <p class="text-muted small mb-0">
-                            Banner slider yang tampil di HRIS v1 dan HRIS v2 setelah karyawan login.
+                            Banner tampil sebagai modal (dialog) di HRIS v1 dan HRIS v2 setelah karyawan login.
                         </p>
                     </div>
                     <a href="{{ route('admin.whats-new.create') }}" class="btn btn-primary btn-sm">

@@ -494,10 +494,12 @@
 })();
 </script>
 
-{{-- What's New (TASK 2): slider banner yang diisi admin lewat
-     /admin/whats-new. Ditempel di akhir navbar supaya tampil di semua
-     halaman v1 yang sudah login tanpa mengubah tiap blade. Gagal senyap
-     bila tabel belum dimigrasi. --}}
+{{-- What's New: TAMPIL DI MODAL SAJA (permintaan 17 Nov 2026).
+     Sebelumnya v1 memakai slider mendatar di atas konten; sekarang v1 ikut
+     mode modal seperti v2 (dialog sekali sehari + floating button), supaya
+     tidak ada dua gaya tampilan untuk data yang sama.
+     Ditempel di akhir navbar supaya ikut di semua halaman v1 yang sudah
+     login tanpa mengubah tiap blade. Gagal senyap bila tabel belum dimigrasi. --}}
 @if (auth()->check())
-    @include('partials.whats_new_slider')
+    @include('partials.whats_new_slider', ['mode' => 'modal'])
 @endif

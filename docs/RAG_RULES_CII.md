@@ -6,8 +6,9 @@
 
 | Atribut | Nilai |
 |---|---|
-| Versi dokumen | 1.1 — dibuat 16 November 2026 |
+| Versi dokumen | 1.2 — dibuat 16 November 2026, diperbarui 17 November 2026 |
 | Perubahan 1.1 | Resep kehadiran berbasis roster shift (R24) menggantikan MIN/MAX tap; tabel audit dilarang dipakai (R25) |
+| Perubahan 1.2 | Batas maksimal lembur (R31): 4 jam/hari dan 18 jam/minggu untuk hari kerja; lembur pada istirahat Sabtu/Minggu dan/atau hari libur resmi tidak dihitung |
 | Sumber skema | dump `CII.sql` (Navicat, 12 Nov 2026 15:30) dari server `MSCHUTEX` |
 | Verifikasi nilai | koneksi read-only langsung ke database CII, 16 Nov 2026 |
 | Versi SQL Server | 12.0.6024.0 (SQL Server 2014) |
@@ -29,6 +30,7 @@
 - Absensi: **`att_log`** (log mentah, join lewat **`pin = BIODATA.BARCODE`**) + **`employee_shifts`** ⋈ **`shifts`** (roster). Jam masuk/keluar = tap terdekat `work_start`/`work_end` (R24), **bukan** MIN/MAX.
 - Tabel audit **dilarang**: `att_log_audit`, `AUDIT`, `overtimes_payroll_audit`, `payroll_run_details_audit` (R25).
 - Lembur: **`overtimes`** (operasional) vs **`overtimes_payroll`** (payroll). Jangan dicampur.
+- Batas lembur: **maksimal 4 jam/hari dan 18 jam/minggu** untuk hari kerja; lembur pada waktu istirahat Sabtu/Minggu dan/atau hari libur resmi **tidak dihitung** (R31).
 - Departemen: **`DEPT`**, kolom nama **`DEPARTEMENT`**, kunci **`ID_DEPT`**.
 - Gaji: **`payroll_run_details`**, kolom karyawan **`employee_npk`** — tetapi **akses read-only ditolak**.
 - 24 tabel **menolak `SELECT *`** (lihat Bagian 6). Penolakan bersifat per kolom: `PKWT` tetap bisa
@@ -38,7 +40,7 @@
 - Turnover = **keluar ÷ aktif × 100** (R27); `AKTIF = 0` → tampil `-`, bukan `0.00`.
 - Line: **LINE 1–42 = Factory 2**, **LINE 43–84 = Factory 1**, non-line = "Lainnya" (R28). Top N = agregasi per unit (R29).
 
-## 1. ATURAN WAJIB (R1–R30)
+## 1. ATURAN WAJIB (R1–R31)
 
 Aturan berikut bersifat mengikat. Bila satu aturan bertentangan dengan kebiasaan umum SQL,
 **aturan di dokumen ini yang menang**, karena disusun dari data nyata database CII.
@@ -245,6 +247,22 @@ Aturan berikut bersifat mengikat. Bila satu aturan bertentangan dengan kebiasaan
 - Kemungkinan penyebab yang harus disebut, bukan ditebak: line sudah ditutup/digabung, seluruh karyawannya keluar pada periode itu, karyawan dipindah ke departemen lain (`employee_mutations`), atau departemen tidak lagi ada di `BIODATA`.
 - Jangan menulis "data tidak ditemukan" kalau yang terjadi hanya penyebut nol atau salah level agregasi.
 
+### R31. Batas maksimal lembur: **4 jam/hari** dan **18 jam/minggu** untuk hari kerja.
+
+**Kenapa:** Ini ketentuan perusahaan yang ditetapkan pengguna (17 Nov 2026). Tanpa aturan ini, AI akan menjumlahkan seluruh jam lembur — termasuk lembur hari istirahat — lalu menyimpulkan pelanggaran yang tidak ada, atau sebaliknya melaporkan "aman" padahal batas harian terlampaui.
+
+**Bunyi ketentuan:** Paling lama **4 jam dalam sehari** dan **18 jam dalam seminggu**, **tidak termasuk** kerja lembur pada waktu istirahat hari Sabtu dan Minggu dan/atau hari libur resmi.
+
+**Yang harus dilakukan:**
+- **Batas harian** = total jam lembur satu NPK pada satu tanggal **hari kerja** ≤ **4 jam**.
+- **Batas mingguan** = total jam lembur satu NPK dalam satu minggu (Senin–Minggu, hanya hari kerja) ≤ **18 jam**.
+- **Dikecualikan dari hitungan batas** (tetap dilaporkan terpisah sebagai "lembur hari istirahat"): tanggal yang jatuh **Sabtu/Minggu**, tanggal yang ada di `holidays.holiday_date`, dan tanggal dengan shift `shifts.is_holiday = '1'` (mis. `SECURITY LIBUR`, lihat R24).
+- **Hari kerja ditentukan dari tanggal, bukan kolom `DAY`** — `overtimes.DAY` campur Inggris/Indonesia (R15). Cara deterministik di SQL Server 2014: `DATEDIFF(day, '19000101', OVERTIME_DATE) % 7` → `0`=Senin … `5`=Sabtu, `6`=Minggu (tidak bergantung `DATEFIRST`/bahasa sesi). Awal minggu = hari Senin: `DATEADD(day, -(DATEDIFF(day,'19000101', OVERTIME_DATE) % 7), OVERTIME_DATE)`.
+- **Hanya angka yang dijumlahkan:** `TRY_CAST(LTRIM(RTRIM(JUMLAH_JAM_LEMBUR)) AS DECIMAL(18,2)) IS NOT NULL` (R10); kode huruf (MA/BR/CT/OUT/P1/SD/PE/H/HD) bukan jam lembur.
+- **Sumber:** `overtimes` untuk lembur operasional; sebutkan tabel yang dipakai di jawaban (R11). Jangan memakai `overtimes_payroll` untuk kepatuhan harian/mingguan, dan jangan menyentuh tabel audit (R25).
+- Saat melaporkan pelanggaran, tampilkan **NPK, tanggal/minggu, jam hari itu, jam minggu itu, dan selisih terhadap batas**. Jangan menyimpulkan sanksi, potongan, atau tindakan disiplin — itu di luar lingkup RAG.
+- Kalau pengguna hanya bertanya "berapa lembur X", **jangan** langsung menilai patuh/tidak patuh; tampilkan jamnya, lalu sebutkan batas R31 sebagai konteks bila relevan.
+
 ## 2. PETA KEPUTUSAN: PERTANYAAN → TABEL → KOLOM → JOIN
 
 Gunakan tabel ini untuk memilih tabel. Kolom join di sini sudah diverifikasi.
@@ -258,6 +276,7 @@ Kalau pertanyaan tidak ada di daftar, cari tabelnya di Bagian 5 berdasarkan doma
 | Absensi harian: jam masuk & jam keluar per karyawan | `BIODATA` (basis) + `employee_shifts` + `shifts` + `att_log` | `employee_shifts.shift_date = @tgl`; `att_log.scan_date` dalam jendela shift | `employee_shifts.npk = BIODATA.NPK`; `employee_shifts.shift_id = shifts.id`; `att_log.pin = BIODATA.BARCODE` | Jam masuk/keluar = tap terdekat `work_start`/`work_end` (R24). Tanpa roster → jadwal normal 08:00-17:00 bertanda `DEFAULT`; shift libur bertanda `LIBUR`. Lihat Resep 3. |
 | Rekap absensi olahan lama (`AUDIT`) | — | — | — | DILARANG (R25). Jangan dipakai sebagai sumber maupun pembanding; hitung ulang dengan Resep 3. |
 | Lembur per karyawan/periode | `overtimes` (operasional) atau `overtimes_payroll` (payroll) | rentang `OVERTIME_DATE` + `TRY_CAST(JUMLAH_JAM_LEMBUR AS DECIMAL) IS NOT NULL` | `overtimes.NPK = BIODATA.NPK` | Wajib buang kode huruf dan baris bertanggal masa depan. |
+| Batas/kepatuhan jam lembur (4 jam/hari, 18 jam/minggu) | `overtimes` + `holidays` | rentang `OVERTIME_DATE`; hanya hari kerja (bukan Sabtu/Minggu, bukan `holidays.holiday_date`) | `overtimes.NPK = BIODATA.NPK`; anti-join `holidays.holiday_date = OVERTIME_DATE` | Butuh dua level: harian (`> 4`) dan mingguan Senin–Minggu (`> 18`). Lembur hari istirahat/libur resmi TIDAK dihitung (R31). |
 | Cuti/izin | `leave_requests` + `leave_types` + `BIODATA` | `status='approved'`, rentang tanggal | `leave_requests.leave_type_id = leave_types.id`; `leave_requests.npk = BIODATA.NPK` | Status huruf kecil. |
 | Gaji/slip per karyawan | `payroll_run_details` + `payroll_runs` + `payroll_periods` | `payroll_run_details.employee_npk`; `payroll_periods.is_closed = 1` | `run_id = payroll_runs.id`; `payroll_runs.period_id = payroll_periods.id` | Akses akun read-only ditolak → sampaikan tidak bisa diakses, jangan mengarang angka. |
 | Departemen & jumlah karyawan per dept | `DEPT` + `BIODATA` | `BIODATA.STATUS='A'` | `BIODATA.ID_DEPT = DEPT.ID_DEPT` | Nama dept di `DEPT.DEPARTEMENT`. `DEPT.SECTION` selalu 'CHUTEX'. |
@@ -499,6 +518,54 @@ WHERE o.OVERTIME_DATE >= '2026-10-01' AND o.OVERTIME_DATE < '2026-11-01'
   AND TRY_CAST(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR)) AS DECIMAL(18,2)) IS NULL
 GROUP BY o.JUMLAH_JAM_LEMBUR ORDER BY JUMLAH_BARIS DESC;
 ```
+
+Pemeriksaan batas lembur (R31) — lembur hari kerja saja, Sabtu/Minggu & hari libur dikecualikan:
+
+```sql
+-- JAM_HARI: total per NPK per tanggal (hari kerja saja)
+WITH kerja AS (
+    SELECT o.NPK, o.OVERTIME_DATE,
+           SUM(TRY_CAST(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR)) AS DECIMAL(18,2))) AS JAM
+    FROM dbo.overtimes o
+    WHERE o.OVERTIME_DATE >= '2026-10-01'
+      AND o.OVERTIME_DATE <  '2026-11-01'
+      AND o.OVERTIME_DATE <= CAST(GETDATE() AS date)                 -- R12
+      AND TRY_CAST(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR)) AS DECIMAL(18,2)) IS NOT NULL  -- R10
+      AND DATEDIFF(day, '19000101', o.OVERTIME_DATE) % 7 NOT IN (5, 6)              -- bukan Sabtu/Minggu
+      AND NOT EXISTS (SELECT 1 FROM dbo.holidays h WHERE h.holiday_date = o.OVERTIME_DATE) -- R31
+    GROUP BY o.NPK, o.OVERTIME_DATE
+)
+SELECT NPK, OVERTIME_DATE, JAM AS JAM_HARI,
+       CASE WHEN JAM > 4 THEN JAM - 4 ELSE 0 END AS LEBIH_HARI
+FROM kerja
+WHERE JAM > 4                                                        -- batas harian R31
+ORDER BY JAM DESC;
+```
+
+```sql
+-- JAM_MINGGU: total per NPK per minggu (Senin–Minggu), batas 18 jam
+WITH kerja AS (
+    SELECT o.NPK,
+           DATEADD(day, -(DATEDIFF(day, '19000101', o.OVERTIME_DATE) % 7), o.OVERTIME_DATE) AS AWAL_MINGGU,
+           SUM(TRY_CAST(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR)) AS DECIMAL(18,2))) AS JAM
+    FROM dbo.overtimes o
+    WHERE o.OVERTIME_DATE >= '2026-10-01'
+      AND o.OVERTIME_DATE <  '2026-11-01'
+      AND o.OVERTIME_DATE <= CAST(GETDATE() AS date)
+      AND TRY_CAST(LTRIM(RTRIM(o.JUMLAH_JAM_LEMBUR)) AS DECIMAL(18,2)) IS NOT NULL
+      AND DATEDIFF(day, '19000101', o.OVERTIME_DATE) % 7 NOT IN (5, 6)
+      AND NOT EXISTS (SELECT 1 FROM dbo.holidays h WHERE h.holiday_date = o.OVERTIME_DATE)
+    GROUP BY o.NPK, DATEADD(day, -(DATEDIFF(day, '19000101', o.OVERTIME_DATE) % 7), o.OVERTIME_DATE)
+)
+SELECT NPK, AWAL_MINGGU, JAM AS JAM_MINGGU,
+       CASE WHEN JAM > 18 THEN JAM - 18 ELSE 0 END AS LEBIH_MINGGU
+FROM kerja
+WHERE JAM > 18                                                       -- batas mingguan R31
+ORDER BY JAM DESC;
+```
+
+Lembur hari istirahat dilaporkan **terpisah** (tidak masuk hitungan batas): pakai filter kebalikannya
+(`DATEDIFF(...) % 7 IN (5, 6)` atau `EXISTS` di `holidays`), jangan dijumlahkan dengan angka di atas.
 
 ### 2.5 RESEP 5 — Cuti / izin
 

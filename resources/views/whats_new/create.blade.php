@@ -16,7 +16,7 @@
                 <div class="d-sm-flex align-items-center justify-content-between mb-3">
                     <div>
                         <h1 class="h3 mb-0 text-gray-800">Tambah Banner What's New</h1>
-                        <p class="text-muted small mb-0">Banner tampil sebagai slider di HRIS v1 dan v2.</p>
+                        <p class="text-muted small mb-0">Banner tampil sebagai modal (dialog) di HRIS v1 dan v2.</p>
                     </div>
                     <a href="{{ route('admin.whats-new.index') }}" class="btn btn-secondary btn-sm">
                         <i class="fas fa-arrow-left"></i> Kembali

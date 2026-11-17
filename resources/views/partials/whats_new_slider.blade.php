@@ -2,14 +2,15 @@
 /**
  * "What's New" — dua mode:
  *
- *   mode = 'slider' (default, HRIS v1)
- *     Banner mendatar di atas konten. Tombol tutup menyimpan sidik isi banner
- *     di localStorage; banner baru/berubah otomatis muncul lagi.
- *
- *   mode = 'modal' (HRIS v2, permintaan 17 Nov 2026)
+ *   mode = 'modal' (default sejak 17 Nov 2026 — HRIS v1 & v2)
  *     Tampil sebagai dialog sekali sehari (localStorage menyimpan tanggal
  *     terakhir dibuka), plus floating button yang bisa membuka ulang kapan
  *     saja. Dialog bisa ditutup lewat tombol X, klik latar, atau Esc.
+ *
+ *   mode = 'slider' (warisan, tidak dipakai halaman mana pun)
+ *     Banner mendatar di atas konten. Tombol tutup menyimpan sidik isi banner
+ *     di localStorage; banner baru/berubah otomatis muncul lagi. Disimpan
+ *     hanya agar bisa dipakai lagi bila suatu saat dibutuhkan.
  *
  * Prinsip umum:
  * - Gagal senyap: DB/tabel bermasalah => tidak merender apa pun.
@@ -21,7 +22,7 @@
 $banners = \App\Support\WhatsNew::aktif();
 $sidik = \App\Support\WhatsNew::sidik($banners);
 $jumlah = $banners->count();
-$mode = $mode ?? 'slider';
+$mode = $mode ?? 'modal';
 $modal = $mode === 'modal';
 ?>
 @if ($jumlah > 0)
@@ -276,6 +277,11 @@ $modal = $mode === 'modal';
         box-shadow: 0 30px 80px rgba(0, 0, 0, .45);
     }
     .wn--modal .wn-slide { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }
+    /* Banner tanpa media: di dalam modal kotak placeholder 16:9 hanya
+       menghasilkan bidang gelap kosong yang mendorong judul ke bawah lipatan.
+       Sembunyikan; judul + ringkasan langsung terlihat. */
+    .wn--modal .wn-media--none,
+    .wn--modal .wn-media--teks { display: none; }
     .wn--modal .wn-tutup { width: 34px; height: 34px; }
     body.wn-terkunci { overflow: hidden; }
 
