@@ -143,6 +143,20 @@
     .sg-msg.err { background: #fdecec; border: 1px solid #f5c2c2; color: #a4302c; }
     .sg-msg.good { background: #e8f7ee; border: 1px solid #b8e3c9; color: #17603a; }
 
+    .sg-note {
+        border-radius: .5rem;
+        padding: .55rem .7rem;
+        font-size: .79rem;
+        line-height: 1.55;
+        margin-bottom: .8rem;
+        background: #fff8e6;
+        border: 1px solid #f0dfae;
+        color: #7a5f10;
+    }
+
+    .sg-note b { color: #6a5208; }
+    .sg-note[hidden] { display: none; }
+
     .sg-empty {
         text-align: center;
         color: #8b98ad;
@@ -258,12 +272,15 @@
         <h5>Scan QR Pengajuan</h5>
         <div class="sub">Arahkan kamera ke QR di halaman riwayat karyawan.</div>
 
+        <div class="sg-note" id="sg-env-note" hidden></div>
+
         <div id="sg-reader"></div>
 
         <div class="sg-or">atau ketik kode manual</div>
 
         <div class="sg-input-row">
-            <input type="text" id="sg-code" placeholder="WA:123:token atau 123" autocomplete="off">
+            <input type="text" id="sg-code" placeholder="WA:123:token atau 123" autocomplete="off"
+                   inputmode="text">
             <button type="button" class="sg-btn" id="sg-search">
                 <i class="fas fa-search mr-1"></i>Cari
             </button>
@@ -282,6 +299,7 @@
             <div class="sg-row"><span class="k">Scan pertama</span><span class="v">Karyawan KELUAR</span></div>
             <div class="sg-row"><span class="k">Scan berikutnya</span><span class="v">Karyawan KEMBALI</span></div>
             <div class="sg-row"><span class="k">Jam kembali</span><span class="v">Terisi otomatis</span></div>
+            <div class="sg-row"><span class="k">Scanner QR USB</span><span class="v">Langsung di kolom kode</span></div>
         </div>
     </div>
 
@@ -494,9 +512,72 @@
     // ── Kamera ──
     const $camToggle = document.getElementById('sg-cam-toggle');
 
+    /**
+     * Kenapa kamera bisa tidak tersedia:
+     *  - 'insecure'  : halaman dibuka lewat http:// di IP LAN. Browser tidak
+     *                  pernah menampilkan prompt izin dan menyembunyikan
+     *                  navigator.mediaDevices — ini penyebab paling sering.
+     *  - 'nomediadevices' : browser lama / WebView tanpa dukungan getUserMedia.
+     *  - 'ok'
+     */
+    function cameraEnv() {
+        if (!window.isSecureContext) {
+            return 'insecure';
+        }
+
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+            return 'nomediadevices';
+        }
+
+        return 'ok';
+    }
+
+    function explainCameraError(e) {
+        const name = (e && (e.name || (e.cause && e.cause.name))) || '';
+
+        switch (name) {
+            case 'NotAllowedError':
+            case 'PermissionDeniedError':
+                return 'Izin kamera ditolak. Klik ikon kunci/kamera di address bar, '
+                    + 'pilih "Izinkan", lalu muat ulang halaman.';
+            case 'NotFoundError':
+            case 'DevicesNotFoundError':
+                return 'Tidak ada kamera terdeteksi di perangkat ini. Gunakan input manual.';
+            case 'NotReadableError':
+            case 'TrackStartError':
+                return 'Kamera sedang dipakai aplikasi lain. Tutup aplikasi tersebut lalu coba lagi.';
+            case 'OverconstrainedError':
+                return 'Kamera tidak mendukung mode yang diminta. Coba input manual.';
+            default:
+                return 'Kamera tidak bisa diakses'
+                    + (e && e.message ? ': ' + e.message : '. Gunakan input manual.')
+                    + ' — detail: ' + (name || 'tidak diketahui');
+        }
+    }
+
     async function startCamera() {
+        const env = cameraEnv();
+
+        if (env === 'insecure') {
+            showMsg('err',
+                'Kamera diblokir browser karena halaman ini dibuka lewat http:// '
+                + '(' + location.host + '). Kamera hanya diizinkan di HTTPS atau localhost. '
+                + 'Gunakan input manual di bawah, atau minta admin mengaktifkan HTTPS.');
+            $code.focus();
+            return;
+        }
+
+        if (env === 'nomediadevices') {
+            showMsg('err',
+                'Browser ini tidak menyediakan akses kamera (getUserMedia). '
+                + 'Gunakan input manual atau scanner QR USB.');
+            $code.focus();
+            return;
+        }
+
         if (typeof Html5Qrcode === 'undefined') {
             showMsg('err', 'Library scanner gagal dimuat. Gunakan input manual.');
+            $code.focus();
             return;
         }
 
@@ -518,7 +599,9 @@
             $camToggle.innerHTML = '<i class="fas fa-camera-slash mr-1"></i>Matikan Kamera';
             showMsg('good', 'Kamera aktif. Arahkan ke QR pengajuan.');
         } catch (e) {
-            showMsg('err', 'Kamera tidak bisa diakses: ' + (e && e.message ? e.message : 'izin ditolak'));
+            scanner = null;
+            showMsg('err', explainCameraError(e));
+            $code.focus();
         }
     }
 
@@ -534,6 +617,28 @@
     $camToggle.addEventListener('click', () => {
         if (scanner) { stopCamera(); } else { startCamera(); }
     });
+
+    // ── Kondisi awal halaman ──
+    (function initEnvNotice() {
+        const env = cameraEnv();
+        const note = document.getElementById('sg-env-note');
+
+        if (env === 'insecure') {
+            note.hidden = false;
+            note.innerHTML = '<b>Kamera tidak tersedia di alamat ini.</b><br>'
+                + 'Halaman dibuka lewat <code>http://' + location.host + '</code>. Browser hanya '
+                + 'mengizinkan kamera pada <b>HTTPS</b> atau <b>localhost</b>, dan pada http biasa '
+                + 'prompt izin memang tidak pernah muncul.<br>'
+                + 'Sementara ini gunakan <b>input manual</b> di bawah (bisa juga scanner QR USB — '
+                + 'alat itu mengetik kode lalu menekan Enter otomatis).';
+
+            $camToggle.innerHTML = '<i class="fas fa-camera-slash mr-1"></i>Kamera tidak tersedia';
+            $camToggle.disabled = true;
+        }
+    })();
+
+    // Fokus input manual: scanner QR USB bekerja seperti keyboard (ketik + Enter).
+    $code.focus();
 })();
 </script>
 
