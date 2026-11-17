@@ -40,11 +40,36 @@ return [
 
     // Batas token output yang diminta ke provider (dikirim sebagai
     // max_tokens & max_completion_tokens untuk provider openai_compatible).
-    // Penting terutama untuk model "reasoning" yang thinking-nya tidak bisa
-    // dimatikan (mis. sebagian model di combo 9 Router) — kalau nilainya
-    // terlalu kecil, seluruh budget bisa habis untuk proses berpikir dan
-    // jawaban akhirnya jadi kosong. Naikkan lewat .env kalau masih terjadi.
-    'max_output_tokens' => (int) env('CHATBOT_MAX_OUTPUT_TOKENS', 4096),
+    // Penting untuk model "reasoning": lewat uji langsung ke router9, model
+    // di balik combo Chutex (gemini-3-8-flash) SELALU mengirim ~2.500
+    // karakter proses berpikir walau thinking diminta dimatikan. Kalau nilai
+    // ini terlalu kecil, budget habis untuk berpikir dan jawaban berhenti di
+    // tengah kalimat (finish_reason=length). Naikkan lewat .env kalau masih
+    // terpotong.
+    'max_output_tokens' => (int) env('CHATBOT_MAX_OUTPUT_TOKENS', 8192),
+
+    // Minta gateway menonaktifkan thinking (`thinking: {type: disabled}`).
+    // CATATAN JUJUR: router9 mengabaikan parameter ini — hasil uji
+    // menunjukkan field reasoning tetap terisi meski dikirim. Jadi parameter
+    // ini hanya "bonus" untuk gateway yang menghormatinya; pengaman
+    // sesungguhnya adalah (a) max_output_tokens yang cukup, (b) deteksi
+    // finish_reason=length + percobaan ulang, dan (c) larangan menampilkan
+    // teks reasoning sebagai jawaban di AiChatService.
+    // Set CHATBOT_DISABLE_THINKING=false untuk tidak mengirim field ini.
+    'disable_thinking' => env('CHATBOT_DISABLE_THINKING', true) !== false
+        && env('CHATBOT_DISABLE_THINKING', '1') !== '0',
+
+    // Budget token cadangan saat provider berhenti karena kehabisan token
+    // (finish_reason = "length") — dipakai untuk satu kali percobaan ulang
+    // supaya jawaban tidak terpotong di tengah kalimat.
+    'max_output_tokens_retry' => (int) env('CHATBOT_MAX_OUTPUT_TOKENS_RETRY', 16384),
+
+    // Grafik jawaban (PNG, digambar server dengan GD).
+    // - chart_auto_min_rows: jumlah baris minimum agar grafik dibuat OTOMATIS
+    //   walau user tidak memintanya ("kalau datanya banyak, tampilkan chart").
+    // - chart_max_bars: batas jumlah batang supaya gambar tetap terbaca.
+    'chart_auto_min_rows' => (int) env('CHATBOT_CHART_AUTO_MIN_ROWS', 8),
+    'chart_max_bars' => (int) env('CHATBOT_CHART_MAX_BARS', 12),
 
     // Berapa lama (menit) hasil introspeksi skema database (daftar tabel &
     // kolom yang dipakai AI di mode RAG) disimpan di cache, supaya tidak
@@ -97,6 +122,34 @@ return [
     // membengkakkan ukuran prompt secara tidak terkendali. Kalau isinya
     // melebihi batas ini, akan dipotong dan diberi penanda di prompt.
     'schema_docs_max_chars' => (int) env('CHATBOT_SCHEMA_DOCS_MAX_CHARS', 6000),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dokumen aturan RAG (dibaca SEBELUM query disusun)
+    |--------------------------------------------------------------------------
+    |
+    | Berkas markdown berisi aturan resmi penulisan query untuk database CII
+    | (R1–R25, peta keputusan pertanyaan→tabel→kolom→join, daftar tabel
+    | terbatas, batasan SQL Server 2014, format jawaban).
+    |
+    | AiChatService::handleRag() membaca berkas ini lebih dulu, lalu
+    | menyisipkan bagian intinya ke prompt penyusun SQL. Kalau berkas tidak
+    | terbaca, mode RAG berhenti (fail-closed) dan user diberi pesan jelas —
+    | supaya chatbot tidak pernah menyusun query tanpa aturan.
+    |
+    | Cukup edit markdown-nya untuk memperbarui aturan: cache memakai
+    | mtime + ukuran berkas, jadi perubahan langsung terbaca tanpa deploy.
+    |
+    */
+    'rag_rules_path' => env('CHATBOT_RAG_RULES_PATH', base_path('docs/RAG_RULES_CII.md')),
+
+    // Batas karakter blok aturan yang dikirim ke prompt (bagian inti +
+    // baris peta keputusan yang relevan). Bukan batas panjang berkas.
+    'rag_rules_max_chars' => (int) env('CHATBOT_RAG_RULES_MAX_CHARS', 22000),
+
+    // R25 melarang empat tabel audit. Kalau true, daftar itu otomatis
+    // ditambahkan ke blocklist runtime (selain CHATBOT_RAG_BLOCKED_TABLES).
+    'rag_rules_enforce_r25' => (bool) env('CHATBOT_RAG_RULES_ENFORCE_R25', true),
 
     /*
     |--------------------------------------------------------------------------

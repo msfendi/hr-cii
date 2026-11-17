@@ -74,5 +74,7 @@ class Kernel extends HttpKernel
         // Portal Karyawan HRIS v2: sesi karyawan hasil satu kali login
         // (NPK + verifikasi wajah) di /v2/karyawan/login.
         'v2.employee' => \App\Http\Middleware\EnsureHrisV2Employee::class,
+        'approval_api' => \App\Http\Middleware\AuthenticateApprovalApi::class,
+        'face.attendance.auth' => \App\Http\Middleware\FaceAttendanceAuth::class,
     ];
 }

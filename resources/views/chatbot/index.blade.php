@@ -35,7 +35,7 @@
     <aside class="chat-sidebar">
         <div class="sidebar-header">
             <div class="sidebar-logo">
-                <i class="fas fa-robot"></i>
+                <img src="{{ asset('img/chutex_ai_assistant.png') }}" alt="AI Assistant Chutex" class="ai-avatar ai-avatar--xs">
                 <span>AI Chat</span>
             </div>
             <button id="btn-new-session" class="btn-new-session" title="Chat Baru">
@@ -72,7 +72,7 @@
         <header class="chat-header">
             <div class="chat-header-left">
                 <div class="chat-avatar">
-                    <i class="fas fa-robot"></i>
+                    <img src="{{ asset('img/chutex_ai_assistant.png') }}" alt="AI Assistant Chutex" class="ai-avatar">
                 </div>
                 <div class="chat-title-block">
                     <h1 class="chat-title">AI Assistant</h1>
@@ -109,7 +109,11 @@
 
                     <div class="message-row {{ $isUser ? 'message-row--user' : 'message-row--ai' }}">
                         <div class="message-avatar {{ $isUser ? 'message-avatar--user' : 'message-avatar--ai' }}">
-                            <i class="fas {{ $isUser ? 'fa-user' : 'fa-robot' }}"></i>
+                            @if ($isUser)
+                                <i class="fas fa-user"></i>
+                            @else
+                                <img src="{{ asset('img/chutex_ai_assistant.png') }}" alt="AI Assistant" class="ai-avatar">
+                            @endif
                         </div>
 
                         <div class="message-bubble-col">
@@ -138,6 +142,25 @@
                                     <div class="message-markdown">
                                         {!! $renderedContent !!}
                                     </div>
+                                @endif
+
+                                @if (! empty($meta['chart']))
+                                    @php $ch = $meta['chart']; @endphp
+                                    <figure class="message-chart">
+                                        <a href="{{ $ch['url'] }}" target="_blank" rel="noopener" title="Buka grafik ukuran penuh">
+                                            <img src="{{ $ch['url'] }}" alt="Grafik {{ $ch['nilai_kolom'] ?? '' }} per {{ $ch['label_kolom'] ?? '' }}" loading="lazy">
+                                        </a>
+                                        <figcaption>
+                                            <i class="fas fa-chart-simple"></i>
+                                            <span>
+                                                Grafik batang &middot; {{ $ch['bar_count'] ?? 0 }} kategori
+                                                @if (! empty($ch['otomatis'])) &middot; dibuat otomatis @endif
+                                            </span>
+                                            <a href="{{ $ch['url'] }}" target="_blank" rel="noopener" class="message-chart-download">
+                                                <i class="fas fa-download"></i> Unduh PNG
+                                            </a>
+                                        </figcaption>
+                                    </figure>
                                 @endif
 
                                 @if (! empty($export) && $export['type'] === 'html_table')
@@ -203,7 +226,7 @@
                 @endforelse
             @else
                 <div class="welcome-state">
-                    <div class="welcome-icon"><i class="fas fa-robot"></i></div>
+                    <div class="welcome-icon"><img src="{{ asset('img/chutex_ai_assistant.png') }}" alt="AI Assistant Chutex" class="ai-avatar"></div>
                     <h2>AI Assistant</h2>
                     <p class="welcome-desc">Tanya apa saja seputar data di sistem ini. AI akan membaca data (read-only) dan langsung menjawab pertanyaan Anda &mdash; hasilnya bisa diunduh saat relevan.</p>
 
@@ -533,6 +556,21 @@ body {
 .message-avatar--ai   { background: linear-gradient(135deg, #1e3a8a, #2563eb); }
 .message-avatar--user { background: #94a3b8; }
 
+/* Foto profil AI Assistant (permintaan 16 Nov 2026): memakai aset
+   img/chutex_ai_assistant.png di semua tempat avatar AI muncul. */
+.ai-avatar {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+}
+.ai-avatar--xs { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; }
+.chat-avatar { padding: 0; overflow: hidden; background: #e8effb; }
+.message-avatar--ai { overflow: hidden; background: #e8effb; box-shadow: 0 0 0 2px #dbeafe; }
+.welcome-icon { overflow: hidden; box-shadow: 0 10px 26px rgba(30,58,138,0.18); }
+.empty-icon { overflow: hidden; }
+
 .message-bubble-col {
     display: flex; flex-direction: column; max-width: 100%;
 }
@@ -565,6 +603,16 @@ body {
 .message-markdown table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
 .message-markdown th, .message-markdown td { border: 1px solid #e2e8f0; padding: 7px 10px; text-align: left; }
 .message-markdown th { background: #f8fafc; font-weight: 600; }
+.message-markdown ul,
+.message-markdown ol {
+    margin: 0 0 10px;
+    padding-left: 22px;
+    list-style-position: outside;
+}
+.message-markdown ul { list-style-type: disc; }
+.message-markdown ol { list-style-type: decimal; }
+.message-markdown li { margin-bottom: 4px; }
+.message-markdown li:last-child { margin-bottom: 0; }
 .cw-table-wrap { overflow-x: auto; margin: 10px -15px; padding: 0 15px 10px; }
 
 /* Attachments */
@@ -588,6 +636,13 @@ body {
 .message-export-name { font-weight: 500; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .message-export-meta { font-size: 11px; color: #64748b; }
 .message-export-download { color: #94a3b8; font-size: 12px; margin-left: auto; }
+/* Grafik jawaban AI (PNG dibuat server) */
+.message-chart { margin: 10px 0 2px; padding: 0; }
+.message-chart img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; }
+.message-chart figcaption { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 11.5px; color: #64748b; flex-wrap: wrap; }
+.message-chart figcaption i.fa-chart-simple { color: #274b8f; }
+.message-chart-download { margin-left: auto; color: #2563eb; text-decoration: none; font-weight: 500; }
+.message-chart-download:hover { text-decoration: underline; }
 .message-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .message-link-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12.5px; font-weight: 500; color: #1d3f86; background: #eef4ff; border: 1px solid #c7d8f5; border-radius: 999px; text-decoration: none; transition: all 0.12s; }
 .message-link-btn:hover { background: #dce9ff; border-color: #9dbdf0; color: #16307a; }
@@ -914,6 +969,23 @@ body {
             bodyHtml = `<div class="message-plain">${escHtml(content)}</div>`;
         }
 
+        // Grafik jawaban AI (gambar PNG dari server)
+        let chartHtml = '';
+        if (meta && meta.chart && meta.chart.url) {
+            const ch = meta.chart;
+            const ket = `Grafik batang · ${ch.bar_count ?? 0} kategori${ch.otomatis ? ' · dibuat otomatis' : ''}`;
+            chartHtml = `<figure class="message-chart">
+                <a href="${escHtml(ch.url)}" target="_blank" rel="noopener" title="Buka grafik ukuran penuh">
+                    <img src="${escHtml(ch.url)}" alt="Grafik ${escHtml(ch.nilai_kolom ?? '')} per ${escHtml(ch.label_kolom ?? '')}" loading="lazy">
+                </a>
+                <figcaption>
+                    <i class="fas fa-chart-simple"></i>
+                    <span>${escHtml(ket)}</span>
+                    <a href="${escHtml(ch.url)}" target="_blank" rel="noopener" class="message-chart-download"><i class="fas fa-download"></i> Unduh PNG</a>
+                </figcaption>
+            </figure>`;
+        }
+
         // Export attachment
         let exportHtml = '';
         if (meta && meta.export) {
@@ -948,9 +1020,9 @@ body {
         }
 
         row.innerHTML = `
-            <div class="message-avatar message-avatar--ai"><i class="fas fa-robot"></i></div>
+            <div class="message-avatar message-avatar--ai"><img src="{{ asset('img/chutex_ai_assistant.png') }}" alt="AI Assistant" class="ai-avatar"></div>
             <div class="message-bubble-col">
-                <div class="message-bubble message-bubble--ai">${bodyHtml}${exportHtml}${linksHtml}${errHtml}</div>
+                <div class="message-bubble message-bubble--ai">${bodyHtml}${chartHtml}${exportHtml}${linksHtml}${errHtml}</div>
                 <span class="message-time">${nowTime()}</span>
             </div>`;
         chatMessages.appendChild(row);
@@ -1019,6 +1091,30 @@ body {
             });
     }
 
+    function renderMarkdownLists(text) {
+        if (!text) return '';
+
+        // Kelompokkan item daftar bernomor (`1. item`, `2. item`) ke dalam <ol>
+        text = text.replace(/(?:^(?:[0-9]+[.)])\s+[^\n]+(?:\n|$))+/gm, function (block) {
+            const items = block.trim().split('\n').map(function (line) {
+                const isi = line.replace(/^[0-9]+[.)]\s+/, '').trim();
+                return '<li>' + isi + '</li>';
+            }).join('');
+            return '<ol>' + items + '</ol>\n';
+        });
+
+        // Kelompokkan item daftar bullet (`* item`, `- item`) ke dalam <ul>
+        text = text.replace(/(?:^(?:[*•\-])\s+[^\n]+(?:\n|$))+/gm, function (block) {
+            const items = block.trim().split('\n').map(function (line) {
+                const isi = line.replace(/^[*•\-]\s+/, '').trim();
+                return '<li>' + isi + '</li>';
+            }).join('');
+            return '<ul>' + items + '</ul>\n';
+        });
+
+        return text;
+    }
+
     function renderMarkdown(text) {
         if (!text) return '';
         let h = escHtml(text);
@@ -1036,11 +1132,12 @@ body {
         h = h.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
         h = h.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
         h = h.replace(/\*(.+?)\*/g,         '<em>$1</em>');
-        // unordered list
-        h = h.replace(/^\* (.+)$/gm, '<li>$1</li>');
-        h = h.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
-        // ordered list
-        h = h.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+        // Daftar (bullet & bernomor). Dulu item bernomor hanya diubah jadi
+        // <li> TANPA pembungkus <ol>, sehingga browser merender tandanya di
+        // luar kotak bubble ("ordering keluar dari card"). Sekarang tiap
+        // kelompok item dibungkus <ul>/<ol> sesuai jenisnya, dan item digabung
+        // tanpa baris baru supaya tidak disisipi <br>.
+        h = renderMarkdownLists(h);
         // link
         h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
         // paragraph
@@ -1141,6 +1238,193 @@ body {
        3) jQuery + Bootstrap tidak termuat -> DataTable & modal error.
      File ini juga memuat @stack('scripts') di baris terakhir, jadi blok
      JS chatbot (yang memakai @push('scripts')) ikut ter-render. --}}
+{{-- ======== TRANSITION PAGE (kunjungan pertama ke /chatbot) ========
+     Permintaan 16 Nov 2026: saat user pertama kali diarahkan ke /chatbot,
+     tampilkan halaman transisi berisi orb 3D yang berkumpul di logo Chutex,
+     lalu menyebar dan baru menampilkan halaman chatbot.
+
+     Aturan main:
+       - hanya sekali per sesi browser (sessionStorage), atau dipaksa ?intro=1
+       - tidak tampil saat membuka sesi lama (/chatbot?session=...)
+       - klik / tombol Esc = lewati; prefers-reduced-motion = langsung lewati
+       - logo memakai aset resmi img/chutex.svg (putih) di atas latar biru tua
+     ================================================================ --}}
+@if (! request()->filled('session'))
+<style>
+#cai-intro {
+    position: fixed; inset: 0; z-index: 99999;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 42%, #274b8f 0%, #17305f 46%, #0a1830 100%);
+    overflow: hidden; opacity: 1; transition: opacity .5s ease;
+}
+#cai-intro.cai-out { opacity: 0; pointer-events: none; }
+.cai-stage { position: relative; width: min(76vw, 460px); aspect-ratio: 1 / 1; }
+.cai-orb {
+    position: absolute; left: 50%; top: 50%; width: var(--s); height: var(--s);
+    margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 26%, #ffffff 0%, #b9e4ff 22%, #38bdf8 50%, #2563eb 76%, #0f2557 100%);
+    box-shadow: 0 0 32px rgba(56, 189, 248, .5), inset -5px -7px 16px rgba(6, 18, 42, .6);
+    will-change: transform, opacity;
+}
+.cai-core {
+    position: absolute; inset: 17%;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, rgba(15, 37, 87, .92) 0%, rgba(10, 24, 48, .72) 62%, rgba(10, 24, 48, 0) 72%);
+    box-shadow: 0 0 60px rgba(34, 211, 238, .28);
+}
+.cai-logo { width: 54%; max-width: 200px; height: auto; filter: drop-shadow(0 6px 20px rgba(0,0,0,.35)); opacity: 0; }
+.cai-ring {
+    position: absolute; inset: 8%; border-radius: 50%;
+    border: 1px solid rgba(148, 197, 255, .35);
+    box-shadow: inset 0 0 40px rgba(56, 189, 248, .16);
+    animation: cai-spin 14s linear infinite;
+}
+.cai-caption {
+    position: absolute; left: 50%; bottom: -46px; transform: translateX(-50%);
+    color: #cfe4ff; font-size: 12.5px; letter-spacing: .16em; text-transform: uppercase;
+    white-space: nowrap; opacity: 0;
+}
+.cai-skip {
+    position: absolute; right: 22px; bottom: 20px;
+    color: #9fc0ea; font-size: 12px; letter-spacing: .04em;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(159,192,234,.35);
+    padding: 6px 12px; border-radius: 20px; cursor: pointer;
+}
+@keyframes cai-spin { to { transform: rotate(360deg); } }
+</style>
+
+<div id="cai-intro" role="status" aria-label="Menyiapkan AI Assistant">
+    <div class="cai-stage">
+        <div class="cai-ring"></div>
+        <div class="cai-core">
+            <img src="{{ asset('img/chutex.svg') }}" alt="Chutex" class="cai-logo">
+        </div>
+        <div class="cai-caption">AI Assistant · Chutex HRIS</div>
+    </div>
+    <button type="button" class="cai-skip" id="cai-skip">Lewati</button>
+</div>
+
+<script>
+(function () {
+    var intro = document.getElementById('cai-intro');
+    if (!intro) return;
+
+    var KUNCI = 'chutex_ai_intro_v1';
+    var paksa = new URLSearchParams(window.location.search).get('intro') === '1';
+    var sudah = false;
+
+    // localStorage dipakai supaya intro tidak terulang di tab baru (floating
+    // button membuka chat di tab baru); sessionStorage hanya cadangan kalau
+    // localStorage diblokir (mode privat ketat).
+    try { sudah = window.localStorage.getItem(KUNCI) === '1'; } catch (e) { /* mode privat */ }
+    if (!sudah) {
+        try { sudah = window.sessionStorage.getItem(KUNCI) === '1'; } catch (e) { /* biarkan */ }
+    }
+    var kurangiGerak = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (kurangiGerak || (sudah && !paksa)) {
+        intro.remove();
+        return;
+    }
+
+    // Buang ?intro=1 dari address bar supaya refresh tidak memaksa intro lagi.
+    if (paksa) {
+        try {
+            var u = new URL(window.location.href);
+            u.searchParams.delete('intro');
+            window.history.replaceState(null, '', u);
+        } catch (e) { /* biarkan */ }
+    }
+
+    try { window.localStorage.setItem(KUNCI, '1'); } catch (e) { /* biarkan */ }
+    try { window.sessionStorage.setItem(KUNCI, '1'); } catch (e) { /* biarkan */ }
+
+    var stage = intro.querySelector('.cai-stage');
+    var orbs = Array.prototype.slice.call(intro.querySelectorAll('.cai-orb'));
+    var logo = intro.querySelector('.cai-logo');
+    var caption = intro.querySelector('.cai-caption');
+    var sudahTutup = false;
+    var bisaAnimasi = stage && typeof stage.animate === 'function';
+
+    var JARAK = Math.min(window.innerWidth, window.innerHeight) * (window.innerWidth < 520 ? 0.44 : 0.52);
+
+    // Orb disiapkan di JS supaya jumlah & sudut sebarannya bisa diatur.
+    var arah = [];
+    var jumlah = window.innerWidth < 520 ? 7 : 9;
+    for (var i = 0; i < jumlah; i++) {
+        var sudut = (Math.PI * 2 / jumlah) * i - Math.PI / 2;
+        var ukuran = 26 + (i % 3) * 14 + (i % 2) * 6;
+        var orb = document.createElement('div');
+        orb.className = 'cai-orb';
+        orb.style.setProperty('--s', ukuran + 'px');
+        orb.style.opacity = '0';
+        stage.appendChild(orb);
+        orbs.push(orb);
+        arah.push({ sudut: sudut, ukuran: ukuran });
+    }
+
+    function tutup(segera) {
+        if (sudahTutup) return;
+        sudahTutup = true;
+        intro.classList.add('cai-out');
+        window.setTimeout(function () { intro.remove(); }, segera ? 0 : 520);
+    }
+
+    document.getElementById('cai-skip').addEventListener('click', function () { tutup(true); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') tutup(true);
+    });
+
+    if (!bisaAnimasi) {
+        window.setTimeout(function () { tutup(false); }, 900);
+        return;
+    }
+
+    // 1) Orb berkumpul dari luar membentuk cincin DI SEKITAR logo (bukan
+    //    menimpanya, supaya logo tetap terbaca), lalu berputar pelan.
+    var rCincin = JARAK * 0.46;
+
+    orbs.forEach(function (orb, i) {
+        var a = arah[i];
+        var r0 = JARAK * (0.95 + (i % 3) * 0.12);
+        var xC = Math.cos(a.sudut) * rCincin;
+        var yC = Math.sin(a.sudut) * rCincin;
+        orb.animate([
+            { transform: 'translate3d(' + (Math.cos(a.sudut) * r0) + 'px,' + (Math.sin(a.sudut) * r0) + 'px,0) scale(.35)', opacity: 0 },
+            { transform: 'translate3d(' + (xC * 1.06) + 'px,' + (yC * 1.06) + 'px,0) scale(1)', opacity: 1, offset: .74 },
+            { transform: 'translate3d(' + xC + 'px,' + yC + 'px,0) scale(.94)', opacity: .95 }
+        ], { duration: 820, delay: i * 55, easing: 'cubic-bezier(.22,.8,.24,1)', fill: 'forwards' });
+    });
+
+    logo.animate([{ opacity: 0, transform: 'scale(.86)' }, { opacity: 1, transform: 'scale(1)' }],
+        { duration: 620, delay: 520, easing: 'ease-out', fill: 'forwards' });
+    caption.animate([{ opacity: 0 }, { opacity: 1 }],
+        { duration: 380, delay: 700, easing: 'ease-out', fill: 'forwards' });
+
+    // 2) Orb menyebar keluar, lalu halaman chatbot ditampilkan.
+    window.setTimeout(function () {
+        orbs.forEach(function (orb, i) {
+            var a = arah[i];
+            var r1 = JARAK * (1.35 + (i % 4) * 0.14);
+            var xC = Math.cos(a.sudut) * rCincin;
+            var yC = Math.sin(a.sudut) * rCincin;
+            orb.animate([
+                { transform: 'translate3d(' + xC + 'px,' + yC + 'px,0) scale(.94)', opacity: .95 },
+                { transform: 'translate3d(' + (Math.cos(a.sudut) * r1) + 'px,' + (Math.sin(a.sudut) * r1) + 'px,0) scale(.16)', opacity: 0 }
+            ], { duration: 620, delay: i * 18, easing: 'cubic-bezier(.4,0,.68,1)', fill: 'forwards' });
+        });
+        logo.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }],
+            { duration: 420, easing: 'ease-in', fill: 'forwards' });
+        caption.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, fill: 'forwards' });
+    }, 1700);
+
+    window.setTimeout(function () { tutup(false); }, 2150);
+})();
+</script>
+@endif
+
 @include('layout.footerscript')
 </body>
 </html>

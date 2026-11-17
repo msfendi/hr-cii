@@ -27,6 +27,17 @@ class AiChatService
     protected $lastSchemaError = null;
 
     /**
+     * Pembaca dokumen aturan RAG (docs/RAG_RULES_CII.md). Disimpan per
+     * instance supaya berkas hanya diurai sekali per request.
+     */
+    protected ?RagRules $aturanRag = null;
+
+    protected function aturanRag(): RagRules
+    {
+        return $this->aturanRag ??= app(RagRules::class);
+    }
+
+    /**
      * Titik masuk utama. Mengembalikan array:
      * ['content' => string, 'meta' => array|null]
      */
@@ -163,6 +174,26 @@ class AiChatService
             ];
         }
 
+        // ATURAN DULU, QUERY KEMUDIAN (permintaan 16 Nov 2026): dokumen
+        // aturan RAG dibaca sebelum skema diintrospeksi dan sebelum AI
+        // menyusun SQL. Kalau berkasnya tidak terbaca, mode RAG berhenti di
+        // sini (fail-closed) — aturan memuat larangan tabel/kolom dan
+        // batasan data pribadi yang tidak boleh dilewati.
+        try {
+            $aturanTeks = $this->aturanRag()->ringkasanPrompt($userMessage);
+            $sidikAturan = $this->aturanRag()->sidik();
+        } catch (\Throwable $e) {
+            Log::error('AiChatService: dokumen aturan RAG gagal dibaca — ' . $e->getMessage());
+
+            return [
+                'content' => 'Mode RAG belum bisa dijalankan karena dokumen aturan RAG ('
+                    . '`docs/RAG_RULES_CII.md`) tidak terbaca. Pertanyaan sengaja tidak diproses '
+                    . 'supaya tidak menghasilkan query yang melanggar aturan. Hubungi IT untuk '
+                    . 'memulihkan berkas tersebut, lalu coba lagi.',
+                'meta' => ['sql' => null, 'rag_rules_error' => $e->getMessage()],
+            ];
+        }
+
         $blockedTables = $this->blockedTables();
         $blockedColumns = $this->blockedColumns();
         $schema = $this->getDatabaseSchema($blockedTables, $blockedColumns);
@@ -219,6 +250,13 @@ class AiChatService
 
         $sqlSystemPrompt = <<<PROMPT
             Kamu adalah generator query {$dialect} READ-ONLY untuk sebuah sistem aplikasi.
+
+            ATURAN RAG RESMI — dibaca LEBIH DULU sebelum menyusun query, dan wajib dipatuhi.
+            Kalau aturan di bawah bertentangan dengan panduan generik mana pun, aturan ini yang menang:
+
+            {$aturanTeks}
+
+            ---- akhir aturan RAG ----
             Berikut daftar SEMUA tabel & kolom yang benar-benar ada di database ini (hasil introspeksi
             otomatis langsung dari katalog database — bukan hafalan/perkiraan), kolom yang ditandai (PK)
             adalah primary key:
@@ -284,6 +322,25 @@ class AiChatService
                 // menjawab dengan kalimat biasa). Jangan tampilkan pesan
                 // keamanan: sampaikan balasan AI itu apa adanya.
                 if (! $this->berbentukQuery($sql)) {
+                    // Kalau isinya ternyata monolog proses berpikir model
+                    // (bahasa Inggris: "Wait, ...", "Notice: ...") atau
+                    // jawaban yang terpotong di tengah, jangan diteruskan ke
+                    // user mentah-mentah — minta jawaban wajar lewat jalur
+                    // tanya-jawab biasa. Ini yang dulu membuat user melihat
+                    // "kenapa responsenya seperti itu dan bukan jawaban
+                    // langsung?".
+                    if ($this->tampakSepertiPenalaran($rawSqlResponse)) {
+                        Log::warning('Chatbot: balasan generator SQL berupa teks penalaran/terpotong — dialihkan ke jawaban biasa.', [
+                            'provider' => $providerKey,
+                            'cuplikan' => Str::limit(trim($rawSqlResponse), 200),
+                        ]);
+
+                        return [
+                            'content' => $this->jawabTanpaSql($providerKey, $userMessage),
+                            'meta' => ['sql' => null],
+                        ];
+                    }
+
                     return [
                         'content' => $this->balasanTanpaQuery($rawSqlResponse),
                         'meta' => ['sql' => null],
@@ -343,12 +400,19 @@ class AiChatService
                 'content' => 'Query yang dibuat AI gagal dijalankan ke database setelah ' . $maxAttempts . ' kali percobaan '
                     . '(kemungkinan nama tabel/kolom tidak cocok dengan skema asli, atau ada perbedaan sintaks). '
                     . 'Silakan coba pertanyaan lain atau perjelas maksudnya.',
-                'meta' => ['sql' => $sql, 'error' => $alasanTerakhir ?: $lastError],
+                'meta' => ['sql' => $sql, 'error' => $alasanTerakhir ?: $lastError, 'rag_rules' => $sidikAturan],
             ];
         }
 
         $rows = array_slice($rows, 0, $maxRows);
         $rowsJson = json_encode($rows, JSON_UNESCAPED_UNICODE);
+
+        // Grafik dibuat LEBIH DULU supaya prompt jawaban tahu bahwa grafiknya
+        // sudah ada. Tanpa ini model bahasa selalu menolak dengan kalimat
+        // "saya belum mendukung visualisasi chart" (persis jawaban yang
+        // dikeluhkan user).
+        $mintaChart = $this->mintaChart($userMessage);
+        $chart = $this->siapkanChart($rows, $userMessage, $mintaChart);
 
         $answerSystemPrompt = 'Kamu adalah AI Assistant HRIS Chutex, asisten data untuk sistem HRIS Chutex. Berdasarkan data JSON hasil query database '
             . 'berikut, jawab pertanyaan user dalam bahasa Indonesia yang natural dan ringkas. Jika data kosong, katakan datanya '
@@ -361,6 +425,37 @@ class AiChatService
             . 'pengajuan/riwayat cuti -> ' . url('/pengajuan-cuti/form') . ' , approval cuti -> ' . url('/pengajuan-cuti/approval') . ' , '
             . 'riwayat cuti -> ' . url('/pengajuan-cuti/riwayat') . ' , slip gaji/payroll -> ' . url('/employee-payroll') . ' . '
             . 'Jangan mengarang URL lain selain pola di atas; kalau tidak yakin, cukup arahkan user membuka menu yang disebutkan.';
+
+        // Bagian 8 dokumen aturan: setiap jawaban berbasis data wajib memuat
+        // sumber tabel.kolom, periode, jumlah baris, filter penting, dan
+        // status verifikasi.
+        $aturanJawaban = '';
+        try {
+            $aturanJawaban = trim($this->aturanRag()->bagian('8'));
+        } catch (\Throwable $e) {
+            Log::warning('AiChatService: bagian format jawaban tidak terbaca — ' . $e->getMessage());
+        }
+
+        if ($aturanJawaban !== '') {
+            $answerSystemPrompt .= "\n\nWAJIB ikuti format jawaban resmi berikut (Bagian 8 dokumen aturan RAG). "
+                . 'Ringkas, tapi jangan hilangkan sumber/periode/jumlah baris/status verifikasi:' . "\n" . $aturanJawaban;
+        }
+
+        // Model bahasa cenderung menolak permintaan grafik. Karena grafiknya
+        // sudah benar-benar dibuat di server, prompt diberi tahu supaya
+        // jawaban tidak lagi berbunyi "belum mendukung visualisasi".
+        if (! empty($chart)) {
+            $answerSystemPrompt .= "\n\nGRAFIK SUDAH DIBUAT DAN DITAMPILKAN OTOMATIS di bawah jawabanmu sebagai gambar PNG "
+                . "(grafik batang: {$chart['nilai_kolom']} per {$chart['label_kolom']}"
+                . ($chart['satuan'] !== '' ? ", satuan {$chart['satuan']}" : '') . '). '
+                . 'JANGAN mengatakan tidak bisa membuat grafik/chart dan JANGAN menyarankan user membuat grafik sendiri. '
+                . 'Sebutkan singkat bahwa grafiknya tampil di bawah jawaban, lalu tetap berikan ringkasan angka '
+                . 'dan sebutkan nilai tertinggi. Jangan mengarang angka di luar data JSON.';
+        } elseif ($mintaChart) {
+            $answerSystemPrompt .= "\n\nCATATAN: user meminta grafik, tetapi hasil query ini tidak punya pasangan kolom "
+                . 'kategori + angka yang bisa diplot (atau barisnya kurang dari 2). Jelaskan singkat bahwa grafik tidak '
+                . 'bisa dibuat untuk data ini, lalu sajikan datanya sebagai tabel. Jangan mengarang grafik.';
+        }
 
         $answer = $this->callProvider($providerKey, $answerSystemPrompt, [
             ['role' => 'user', 'content' => "Pertanyaan user: {$userMessage}\n\nData JSON (maks {$maxRows} baris):\n{$rowsJson}"],
@@ -376,7 +471,9 @@ class AiChatService
                 'sql' => $sql,
                 'row_count' => count($rows),
                 'export' => $export,
+                'chart' => $chart,
                 'links' => $links ?: null,
+                'rag_rules' => $sidikAturan,
             ], fn($value) => $value !== null),
         ];
     }
@@ -445,10 +542,25 @@ class AiChatService
      */
     protected function blockedTables(): array
     {
-        return array_map(
+        $daftar = array_map(
             fn($t) => strtolower(trim($t)),
             config('chatbot.rag_blocked_tables', ['payroll_masters', 'payroll_run_details', 'payroll_run_details_audit'])
         );
+
+        // R25 dokumen aturan: empat tabel audit dilarang dibaca karena
+        // kebijakan data (bukan soal permission). Diambil dari dokumen
+        // aturan supaya daftar ini satu sumber dengan yang dikirim ke prompt.
+        if (config('chatbot.rag_rules_enforce_r25', true)) {
+            try {
+                foreach ($this->aturanRag()->tabelTerlarangR25() as $tabel) {
+                    $daftar[] = strtolower(trim($tabel));
+                }
+            } catch (\Throwable $e) {
+                Log::warning('AiChatService: blocklist R25 tidak terbaca — ' . $e->getMessage());
+            }
+        }
+
+        return array_values(array_unique(array_filter($daftar)));
     }
 
     /**
@@ -1111,6 +1223,50 @@ class AiChatService
     }
 
     /**
+     * Apakah teks balasan provider sebenarnya proses berpikir internal
+     * (chain-of-thought) atau jawaban yang terpotong di tengah?
+     *
+     * Model reasoning di balik gateway kadang menulis seluruh proses
+     * berpikirnya ke isi jawaban (bahasa Inggris, "Wait, ...", "Notice: ..."),
+     * dan kalau budget token habis jawabannya berhenti di tengah kalimat.
+     * Teks seperti itu tidak layak ditampilkan sebagai jawaban HRIS.
+     */
+    protected function tampakSepertiPenalaran(string $teks): bool
+    {
+        $bersih = trim($teks);
+
+        if ($bersih === '') {
+            return false;
+        }
+
+        $lower = mb_strtolower($bersih);
+
+        $penanda = [
+            'wait,', 'wait.', 'notice:', "i'm now", 'i am now', 'let me think',
+            'let me reconsider', 'let me check', 'thinking process',
+            'chain of thought', 'the user is asking', 'the user wants',
+            'so the ranking', 'i need to', 'i should', 'maybe we can',
+            'hmm,', 'step 1:', 'step 2:', 'let me analyze', 'my reasoning',
+        ];
+
+        foreach ($penanda as $p) {
+            if (str_contains($lower, $p)) {
+                return true;
+            }
+        }
+
+        // Tanpa blok kode dan berakhir tanpa tanda akhir kalimat → hampir pasti
+        // jawaban terpotong karena kehabisan token.
+        if (mb_strlen($bersih) > 200
+            && ! str_contains($bersih, '```')
+            && ! preg_match('/[.!?:)\]]\s*$/', $bersih)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Balasan AI yang ternyata bukan query tetap disampaikan ke user apa
      * adanya (tanpa pagar kode), bukan diganti pesan error keamanan.
      */
@@ -1583,6 +1739,426 @@ class AiChatService
         return $teks === '' ? '-' : $teks;
     }
 
+    /* ---------------------------------------------------------------------
+     | Chart / grafik jawaban
+     |---------------------------------------------------------------------
+     | User sering minta data "dalam bentuk chart" dan model bahasa selalu
+     | menolak ("belum mendukung visualisasi"). Karena itu grafik dibuat di
+     | sisi server dengan GD (tanpa wkhtmltoimage/Chrome/Chart.js), lalu
+     | dikirim sebagai gambar PNG yang tampil di dalam bubble jawaban.
+     */
+
+    /**
+     * Apakah user meminta tampilan grafik/chart?
+     */
+    protected function mintaChart(string $userMessage): bool
+    {
+        $teks = mb_strtolower($userMessage);
+
+        $kata = [
+            'chart', 'charts', 'grafik', 'grafiknya', 'diagram', 'visualisasi',
+            'visualize', 'visualise', 'plot', 'pie', 'donut', 'batang',
+            'lingkaran', 'bar chart', 'trend', 'tren',
+        ];
+
+        foreach ($kata as $k) {
+            if (str_contains($teks, $k)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Tentukan kolom label (kategori) dan kolom nilai (angka) yang layak
+     * diplot dari hasil query.
+     *
+     * @return array{label: string, nilai: string, satuan: string}|null
+     */
+    protected function pilihKolomChart(array $rows): ?array
+    {
+        $sampel = array_slice($rows, 0, 30);
+
+        if (empty($sampel)) {
+            return null;
+        }
+
+        $headers = array_keys((array) $sampel[0]);
+        $kandidatNilai = [];
+        $kandidatLabel = [];
+
+        // Kolom identitas tidak layak dijadikan sumbu nilai.
+        $bukanNilai = ['id', 'npk', 'nik', 'nopeg', 'no', 'nomor', 'urut', 'bulan_ke'];
+
+        foreach ($headers as $header) {
+            $nama = mb_strtolower((string) $header);
+            $angka = 0;
+            $teks = 0;
+            $unik = [];
+
+            foreach ($sampel as $row) {
+                $nilai = ((array) $row)[$header] ?? null;
+
+                if ($nilai === null || $nilai === '') {
+                    continue;
+                }
+
+                if (is_numeric($nilai)) {
+                    $angka++;
+                } else {
+                    $teks++;
+                    $unik[(string) $nilai] = true;
+                }
+            }
+
+            $total = $angka + $teks;
+            if ($total === 0) {
+                continue;
+            }
+
+            if ($angka > $teks) {
+                if (in_array($nama, $bukanNilai, true)) {
+                    continue;
+                }
+
+                $skor = $angka;
+
+                if (str_contains($nama, 'persen') || str_contains($nama, 'percent')
+                    || str_contains($nama, 'rate') || str_contains($nama, '%')
+                    || str_contains($nama, 'turnover') || str_contains($nama, 'ratio')) {
+                    $skor += 60;
+                } elseif (str_contains($nama, 'total') || str_contains($nama, 'jumlah')
+                    || str_contains($nama, 'jml') || str_contains($nama, 'count')
+                    || str_contains($nama, 'qty') || str_contains($nama, 'banyak')) {
+                    $skor += 40;
+                } elseif (str_contains($nama, 'nilai') || str_contains($nama, 'value')
+                    || str_contains($nama, 'amount') || str_contains($nama, 'nominal')) {
+                    $skor += 20;
+                }
+
+                $kandidatNilai[$header] = $skor;
+                continue;
+            }
+
+            // Kolom teks: makin beragam isinya, makin cocok jadi label.
+            $skor = count($unik) + $teks;
+
+            if (str_contains($nama, 'dept') || str_contains($nama, 'departemen')
+                || str_contains($nama, 'bagian') || str_contains($nama, 'section')
+                || str_contains($nama, 'divisi') || str_contains($nama, 'line')
+                || str_contains($nama, 'nama') || str_contains($nama, 'status')
+                || str_contains($nama, 'bulan') || str_contains($nama, 'kategori')
+                || str_contains($nama, 'area')) {
+                $skor += 50;
+            }
+
+            $kandidatLabel[$header] = $skor;
+        }
+
+        if (empty($kandidatNilai)) {
+            return null;
+        }
+
+        arsort($kandidatNilai);
+        $kolomNilai = (string) array_key_first($kandidatNilai);
+
+        if (empty($kandidatLabel)) {
+            return null;
+        }
+
+        arsort($kandidatLabel);
+        $kolomLabel = (string) array_key_first($kandidatLabel);
+
+        $namaNilai = mb_strtolower($kolomNilai);
+        $satuan = '';
+
+        if (str_contains($namaNilai, 'persen') || str_contains($namaNilai, 'percent')
+            || str_contains($namaNilai, 'rate') || str_contains($namaNilai, '%')
+            || str_contains($namaNilai, 'turnover') || str_contains($namaNilai, 'ratio')) {
+            $satuan = '%';
+        }
+
+        return ['label' => $kolomLabel, 'nilai' => $kolomNilai, 'satuan' => $satuan];
+    }
+
+    /**
+     * Perlu membuat grafik? Diminta user, atau datanya banyak (melewati
+     * ambang `chatbot.chart_auto_min_rows`).
+     */
+    protected function perluChart(array $rows, bool $diminta): bool
+    {
+        if (count($rows) < 2) {
+            return false;
+        }
+
+        if ($this->pilihKolomChart($rows) === null) {
+            return false;
+        }
+
+        if ($diminta) {
+            return true;
+        }
+
+        return count($rows) >= max(3, (int) config('chatbot.chart_auto_min_rows', 8));
+    }
+
+    /**
+     * Buat file grafik PNG dari hasil query dan kembalikan info file untuk
+     * disimpan di meta pesan (ditampilkan sebagai gambar di bubble).
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function siapkanChart(array $rows, string $userMessage, bool $diminta): ?array
+    {
+        if (! $this->perluChart($rows, $diminta)) {
+            return null;
+        }
+
+        $kolom = $this->pilihKolomChart($rows);
+
+        if ($kolom === null) {
+            return null;
+        }
+
+        $judul = $this->judulChart($kolom, $userMessage);
+        $png = $this->renderChartPng($rows, $kolom['label'], $kolom['nilai'], $kolom['satuan'], $judul);
+
+        if ($png === null) {
+            // GD / font TTF tidak tersedia: jangan gagalkan jawaban, cukup
+            // lewati grafik (tabel & export tetap ada).
+            Log::warning('AiChatService: grafik tidak dibuat (GD/font tidak tersedia).');
+
+            return null;
+        }
+
+        $disk = config('chatbot.export_disk', 'public');
+        $timestamp = now()->format('Ymd_His');
+        $slug = Str::slug(str($userMessage)->limit(30), '_');
+        $filename = "chatbot_chart_{$timestamp}_{$slug}.png";
+        $path = "chatbot_exports/{$filename}";
+
+        Storage::disk($disk)->put($path, $png);
+
+        $dipakai = array_slice($rows, 0, max(3, (int) config('chatbot.chart_max_bars', 12)));
+
+        return [
+            'type' => 'bar',
+            'filename' => $filename,
+            'url' => $this->urlExport($disk, $path, $filename),
+            'row_count' => count($rows),
+            'bar_count' => count($dipakai),
+            'label_kolom' => $kolom['label'],
+            'nilai_kolom' => $kolom['nilai'],
+            'satuan' => $kolom['satuan'],
+            'otomatis' => ! $diminta,
+        ];
+    }
+
+    /**
+     * Judul grafik: pakai nama metrik yang diplot, bukan pertanyaan mentah.
+     */
+    protected function judulChart(array $kolom, string $userMessage): string
+    {
+        $rapikan = function (string $nama): string {
+            $teks = str_replace(['_', '.'], ' ', $nama);
+            $teks = $this->gantiPola('/\s+/', ' ', $teks);
+
+            return trim(Str::title(mb_strtolower($teks)));
+        };
+
+        $metrik = $rapikan($kolom['nilai']);
+        $kategori = $rapikan($kolom['label']);
+
+        $judul = $metrik . ' per ' . $kategori;
+
+        // Hindari judul kikuk untuk nama kolom teknis yang panjang.
+        if (mb_strlen($judul) > 70) {
+            $judul = mb_substr($judul, 0, 67) . '...';
+        }
+
+        return $judul;
+    }
+
+    /**
+     * Gambar grafik batang horizontal (PNG) memakai GD.
+     * Mengembalikan null kalau GD atau font TTF tidak tersedia.
+     *
+     * @param  array<int, mixed>  $rows
+     */
+    protected function renderChartPng(array $rows, string $kolomLabel, string $kolomNilai, string $satuan, string $judul): ?string
+    {
+        if (! function_exists('imagecreatetruecolor') || ! function_exists('imagettftext')) {
+            return null;
+        }
+
+        $font = $this->fontTabel();
+
+        if ($font === null) {
+            return null;
+        }
+
+        // Kumpulkan pasangan label → nilai (hanya baris yang nilainya angka).
+        $data = [];
+        foreach ($rows as $row) {
+            $baris = (array) $row;
+            $nilaiMentah = $baris[$kolomNilai] ?? null;
+
+            if (! is_numeric($nilaiMentah)) {
+                continue;
+            }
+
+            $label = $this->teksTabel($baris[$kolomLabel] ?? '-');
+            if (mb_strlen($label) > 30) {
+                $label = mb_substr($label, 0, 27) . '...';
+            }
+
+            $data[] = ['label' => $label, 'nilai' => (float) $nilaiMentah];
+        }
+
+        if (empty($data)) {
+            return null;
+        }
+
+        usort($data, fn ($a, $b) => $b['nilai'] <=> $a['nilai']);
+
+        $maksBar = max(3, (int) config('chatbot.chart_max_bars', 12));
+        $data = array_slice($data, 0, $maksBar);
+
+        $nilaiMaks = 0.0;
+        foreach ($data as $d) {
+            $nilaiMaks = max($nilaiMaks, $d['nilai']);
+        }
+
+        if ($nilaiMaks <= 0) {
+            $nilaiMaks = 1.0;
+        }
+
+        // Geometri
+        $padX = 26;
+        $padAtas = 22;
+        $judulTinggi = 46;
+        $lebarLabel = 250;
+        $lebarBar = 470;
+        $ruangNilai = 78;
+        $tinggiBaris = 34;
+        $celahBaris = 8;
+        $footer = 34;
+
+        $jumlahBar = count($data);
+        $tinggi = $padAtas + $judulTinggi + ($jumlahBar * ($tinggiBaris + $celahBaris)) + $footer;
+        $lebar = $padX * 2 + $lebarLabel + 14 + $lebarBar + $ruangNilai;
+
+        $gambar = imagecreatetruecolor($lebar, $tinggi);
+        if ($gambar === false) {
+            return null;
+        }
+
+        imagealphablending($gambar, true);
+        imagesavealpha($gambar, true);
+
+        $warna = [
+            'bg' => imagecolorallocate($gambar, 255, 255, 255),
+            'judul' => imagecolorallocate($gambar, 29, 63, 134),
+            'subjudul' => imagecolorallocate($gambar, 100, 116, 139),
+            'label' => imagecolorallocate($gambar, 51, 65, 85),
+            'bar' => imagecolorallocate($gambar, 39, 75, 143),
+            'trek' => imagecolorallocate($gambar, 241, 245, 249),
+            'nilai' => imagecolorallocate($gambar, 15, 23, 42),
+            'garis' => imagecolorallocate($gambar, 226, 232, 240),
+        ];
+
+        imagefilledrectangle($gambar, 0, 0, $lebar, $tinggi, $warna['bg']);
+
+        // Judul + subjudul
+        imagettftext($gambar, 14, 0, $padX, $padAtas + 14, $warna['judul'], $font, $judul);
+
+        $subjudul = 'Sumber: hasil query Chatbot HRIS'
+            . ' | ' . $jumlahBar . ' kategori teratas'
+            . ' | dibuat ' . now()->format('d/m/Y H:i');
+
+        imagettftext($gambar, 9, 0, $padX, $padAtas + 32, $warna['subjudul'], $font, $subjudul);
+
+        $y = $padAtas + $judulTinggi;
+
+        // Garis bantu vertikal (25/50/75/100% dari nilai tertinggi) digambar
+        // lebih dulu supaya berada di belakang batang. Tanpa ini pembaca
+        // hanya bisa menebak perbandingan panjang batang.
+        $yGarisBantu = $y;
+        $yGarisBantuBawah = $y + ($jumlahBar * ($tinggiBaris + $celahBaris)) - $celahBaris;
+        $xBarAwal = $padX + $lebarLabel + 14;
+
+        for ($g = 1; $g <= 4; $g++) {
+            $xGaris = $xBarAwal + (int) round(($g / 4) * $lebarBar);
+            imageline($gambar, $xGaris, $yGarisBantu - 4, $xGaris, $yGarisBantuBawah, $warna['garis']);
+        }
+
+        foreach ($data as $d) {
+            $panjang = (int) round(($d['nilai'] / $nilaiMaks) * $lebarBar);
+            $panjang = max(3, $panjang);
+
+            // Label kategori (rata kanan, dekat bar)
+            $lebarTeksLabel = $this->lebarTeks($font, 11, $d['label']);
+            $xLabel = $padX + $lebarLabel - min($lebarLabel, $lebarTeksLabel);
+            $yLabel = $y + (int) (($tinggiBaris + 11) / 2) - 2;
+            imagettftext($gambar, 11, 0, $xLabel, $yLabel, $warna['label'], $font, $d['label']);
+
+            $xBar = $xBarAwal;
+
+            // Jalur bar (track) supaya perbandingan panjang terbaca
+            imagefilledrectangle($gambar, $xBar, $y, $xBar + $lebarBar, $y + $tinggiBaris, $warna['trek']);
+
+            // Semua batang memakai warna yang sama: perbedaan warna per
+            // peringkat dulu disalahartikan sebagai kategori berbeda.
+            imagefilledrectangle($gambar, $xBar, $y, $xBar + $panjang, $y + $tinggiBaris, $warna['bar']);
+
+            // Nilai di ujung bar. Persentase HARUS dua desimal (8,19%),
+            // bukan dibulatkan jadi 8% seperti sebelumnya.
+            if ($satuan === '%') {
+                $teksNilai = number_format($d['nilai'], 2, ',', '.') . '%';
+            } elseif ($d['nilai'] != floor($d['nilai'])) {
+                $teksNilai = number_format($d['nilai'], 2, ',', '.');
+            } else {
+                $teksNilai = number_format($d['nilai'], 0, ',', '.');
+            }
+
+            imagettftext(
+                $gambar,
+                10,
+                0,
+                $xBar + $panjang + 8,
+                $y + (int) (($tinggiBaris + 10) / 2),
+                $warna['nilai'],
+                $font,
+                $teksNilai
+            );
+
+            $y += $tinggiBaris + $celahBaris;
+        }
+
+        // Garis penutup + catatan kecil
+        $yGaris = $tinggi - $footer;
+        imageline($gambar, $padX, $yGaris, $lebar - $padX, $yGaris, $warna['garis']);
+
+        imagettftext(
+            $gambar,
+            8,
+            0,
+            $padX,
+            $yGaris + 18,
+            $warna['subjudul'],
+            $font,
+            'Grafik dibuat otomatis oleh AI Assistant Chutex HRIS. Angka mengikuti hasil query, bukan perkiraan.'
+        );
+
+        ob_start();
+        imagepng($gambar);
+        $png = (string) ob_get_clean();
+        imagedestroy($gambar);
+
+        return $png === '' ? null : $png;
+    }
+
     protected function exportHtmlTable(array $rows, string $disk, string $timestamp, string $slug): array
     {
         $headers = array_keys((array) $rows[0]);
@@ -1634,10 +2210,18 @@ class AiChatService
             'temperature' => $cfg['temperature'] ?? 0.2,
             'max_tokens' => $cfg['max_tokens'] ?? config('chatbot.max_output_tokens', 4096),
             'max_completion_tokens' => $cfg['max_completion_tokens'] ?? config('chatbot.max_output_tokens', 4096),
+            // Matikan thinking/reasoning internal model (kalau didukung oleh
+            // gateway). Tanpa ini, seluruh proses berpikir model ikut terbaca
+            // sebagai jawaban dan budget token habis sebelum jawaban jadi.
+            'thinking' => ['type' => 'disabled'],
             // Minta jawaban utuh (bukan potongan SSE) — dulu field ini tidak
             // dikirim, dan sebagian model di balik gateway membalas streaming.
             'stream' => false,
         ];
+
+        if (! config('chatbot.disable_thinking', true)) {
+            unset($payload['thinking']);
+        }
 
         $timeout = (int) config('chatbot.request_timeout', 120);
 
@@ -1718,6 +2302,50 @@ class AiChatService
             throw new RuntimeException('Provider AI menolak permintaan: ' . Str::limit($pesanError, 300));
         }
 
+        // Jawaban terpotong: provider berhenti karena kehabisan budget token
+        // (finish_reason = "length"). Dulu teks yang terpotong di tengah
+        // kalimat ini tetap dikirim ke user, dan pada model reasoning isinya
+        // justru potongan proses berpikir. Sekarang diulang SEKALI dengan
+        // budget token lebih besar supaya jawaban akhirnya utuh.
+        if (is_array($data) && $this->jawabanTerpotong($data)) {
+            Log::warning('Chatbot: jawaban provider terpotong (finish_reason=length), mencoba ulang dengan budget token lebih besar.', [
+                'provider' => $cfg['base_url'] ?? ($cfg['name'] ?? $providerKey ?? null),
+                'model' => $cfg['model'] ?? null,
+            ]);
+
+            $bodyUlang = $payload;
+            $budgetUlang = max(
+                (int) ($payload['max_completion_tokens'] ?? 0),
+                (int) config('chatbot.max_output_tokens_retry', 16384)
+            );
+            $bodyUlang['max_tokens'] = $budgetUlang;
+            $bodyUlang['max_completion_tokens'] = $budgetUlang;
+            unset($bodyUlang['thinking']);
+
+            if (config('chatbot.disable_thinking', true)) {
+                $bodyUlang['thinking'] = ['type' => 'disabled'];
+            }
+
+            try {
+                $ulang = Http::timeout($timeout)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . ($cfg['api_key'] ?? ''),
+                    ])
+                    ->post($cfg['base_url'], $bodyUlang);
+
+                if ($ulang->successful()) {
+                    $dataUlang = $ulang->json();
+
+                    if (is_array($dataUlang) && $this->resolveProviderMessage($dataUlang) !== '') {
+                        $data = $dataUlang;
+                        $response = $ulang;
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Chatbot: percobaan ulang setelah jawaban terpotong gagal: ' . $e->getMessage());
+            }
+        }
+
         $answer = $this->resolveProviderMessage($data);
 
         // Guard bubble kosong: model reasoning (mis. Chutex 65536 tokens) bisa
@@ -1727,6 +2355,9 @@ class AiChatService
         if (trim((string) $answer) === '') {
             Log::warning('Chatbot: provider mengembalikan jawaban kosong.', [
                 'provider' => $cfg['base_url'] ?? ($cfg['name'] ?? $providerKey ?? null),
+                // Cuplikan proses berpikir (kalau ada) untuk diagnosa — model
+                // reasoning bisa menghabiskan seluruh budget token untuk ini.
+                'reasoning' => Str::limit($this->resolveProviderReasoning($data), 300),
                 'body' => Str::limit((string) $response->body(), 500),
             ]);
             $answer = 'Maaf, jawaban AI kosong. Coba kirim ulang pertanyaan Anda.';
@@ -1752,9 +2383,12 @@ class AiChatService
 
     /**
      * Satukan potongan SSE (`data: {...}` per baris) jadi satu teks jawaban.
-     * Dipakai kalau provider membalas streaming tanpa diminta. Kalau teks
-     * kosong tapi ada potongan "thinking" (reasoning_content), pakai itu
-     * supaya user tetap dapat jawaban, bukan bubble kosong.
+     * Dipakai kalau provider membalas streaming tanpa diminta.
+     *
+     * Potongan "thinking" (reasoning_content) TIDAK dipakai sebagai jawaban
+     * walau teks utamanya kosong — isinya proses berpikir internal model, dan
+     * dulu inilah yang membuat user melihat monolog bahasa Inggris di bubble
+     * chat. Bubble kosong ditangani pemanggil dengan pesan yang jelas.
      */
     protected function bacaStreamProvider(string $body): string
     {
@@ -1814,17 +2448,19 @@ class AiChatService
 
         $teks = trim($teks);
 
-        if ($teks === '' && trim($penalaran) !== '') {
-            return trim($penalaran);
-        }
-
+        // Jangan pernah kembalikan $penalaran jika $teks kosong.
+        // Teks penalaran adalah proses berpikir internal model ("Wait, ...",
+        // "Notice: ...") dan tidak boleh sampai bocor ke bubble chat user.
         return $teks;
     }
 
     /**
-     * Ambil teks jawaban dari respons provider OpenAI-compatible dengan fallback
-     * berlapis: urutan ideas: content string -> content array (parts) -> text ->
-     * reasoning_content -> reasoning -> reply -> yang lain.
+     * Ambil teks jawaban dari respons provider OpenAI-compatible dengan
+     * fallback berlapis: content (string) -> content (array parts) -> text ->
+     * reply -> output.
+     *
+     * Field reasoning_content/reasoning SENGAJA tidak diikutkan: itu proses
+     * berpikir internal model, bukan jawaban untuk user.
      */
     protected function resolveProviderMessage(?array $data): string
     {
@@ -1859,7 +2495,12 @@ class AiChatService
             }
         }
 
-        foreach (['text', 'reasoning_content', 'reasoning', 'reply', 'output'] as $key) {
+        // Sisa kandidat isi jawaban. `reasoning_content` dan `reasoning`
+        // SENGAJA tidak dipakai di sini: keduanya berisi proses berpikir
+        // internal model, dan dulu dipakai sebagai jawaban cadangan sehingga
+        // user melihat monolog bahasa Inggris ("Wait, ...", "Notice: ...")
+        // alih-alih jawaban. Teks penalaran hanya dipakai untuk log.
+        foreach (['text', 'reply', 'output'] as $key) {
             $val = $message[$key] ?? null;
             if (is_string($val) && $val !== '') {
                 return $val;
@@ -1876,13 +2517,65 @@ class AiChatService
             }
         }
 
-        // Fallback: reasoning_content bisa juga ada di level data (bukan di message)
-        $reasoning = $data['reasoning_content'] ?? $data['reasoning'] ?? null;
-        if (is_string($reasoning) && $reasoning !== '') {
-            return $reasoning;
+        // Tidak ada isi jawaban yang layak dipakai. Teks penalaran TIDAK
+        // dikembalikan di sini — pemanggil akan menampilkan pesan yang jelas.
+        return '';
+    }
+
+    /**
+     * Ambil teks proses berpikir (reasoning/thinking) kalau provider
+     * mengirimnya terpisah. HANYA untuk log internal — jangan pernah
+     * ditampilkan ke user sebagai jawaban.
+     */
+    protected function resolveProviderReasoning(?array $data): string
+    {
+        if (! is_array($data)) {
+            return '';
+        }
+
+        $message = $data['choices'][0]['message'] ?? null;
+        $kandidat = [];
+
+        if (is_array($message)) {
+            $kandidat[] = $message['reasoning_content'] ?? null;
+            $kandidat[] = $message['reasoning'] ?? null;
+        }
+
+        $kandidat[] = $data['reasoning_content'] ?? null;
+        $kandidat[] = $data['reasoning'] ?? null;
+
+        foreach ($kandidat as $val) {
+            if (is_string($val) && trim($val) !== '') {
+                return trim($val);
+            }
+            if (is_array($val)) {
+                $joined = implode('', array_filter(array_map(function ($part) {
+                    if (is_string($part)) return $part;
+                    if (is_array($part)) return $part['text'] ?? ($part['content'] ?? '');
+                    return '';
+                }, $val)));
+                if (trim($joined) !== '') {
+                    return trim($joined);
+                }
+            }
         }
 
         return '';
+    }
+
+    /**
+     * Apakah provider berhenti karena kehabisan budget token?
+     * (finish_reason = "length" → jawaban terpotong, bukan jawaban utuh.)
+     */
+    protected function jawabanTerpotong(array $data): bool
+    {
+        foreach ((array) ($data['choices'] ?? []) as $choice) {
+            if (is_array($choice) && ($choice['finish_reason'] ?? null) === 'length') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function callAnthropic(array $cfg, string $systemPrompt, array $messages): string

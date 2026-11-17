@@ -661,6 +661,7 @@
     });
 })();
 </script>
+@include('hris_v2._ai_button')
 @stack('scripts')
 </body>
 </html>

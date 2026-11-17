@@ -487,7 +487,15 @@ class DocumentVisionExtractor
         $text = (string) ($response->json('choices.0.message.content') ?? '');
 
         if ($text === '') {
-            $text = (string) ($response->json('choices.0.message.reasoning_content') ?? '');
+            // Cadangan ke reasoning_content hanya kalau isinya benar-benar
+            // memuat JSON. Teks reasoning adalah proses berpikir model, dan
+            // tanpa pengecekan ini hasil berpikirnya ikut di-parse seolah-olah
+            // data dokumen (menghasilkan ekstraksi palsu).
+            $penalaran = (string) ($response->json('choices.0.message.reasoning_content') ?? '');
+
+            if ($penalaran !== '' && (str_contains($penalaran, '{') || str_contains($penalaran, '['))) {
+                $text = $penalaran;
+            }
         }
 
         if ($text === '') {
