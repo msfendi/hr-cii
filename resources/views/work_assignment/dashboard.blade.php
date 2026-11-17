@@ -251,12 +251,18 @@
     .wa-badge.danger  { background: #fde2e1; color: #a12622; }
     .wa-badge.secondary { background: #eef1f7; color: #6b7688; }
 
-    /* ── Toggle detail ── */
-    .wa-toggle {
-        flex: 0 0 auto;
+    /* ── Aksi per baris (QR + Detail) ── */
+    .wa-head-actions {
         grid-column: 7;
         justify-self: end;
         margin-left: -.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .32rem;
+    }
+
+    .wa-toggle {
+        flex: 0 0 auto;
         display: inline-flex;
         align-items: center;
         gap: .3rem;
@@ -269,6 +275,125 @@
         border-radius: 2rem;
         cursor: pointer;
         transition: background .12s, border-color .12s;
+    }
+
+    .wa-qr-btn {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        border: 1px solid #cfdcef;
+        background: #f3f7fe;
+        color: #1b3a6b;
+        font-size: .74rem;
+        font-weight: 700;
+        padding: .28rem .6rem;
+        border-radius: 2rem;
+        cursor: pointer;
+        transition: background .12s, border-color .12s;
+    }
+
+    .wa-qr-btn:hover {
+        background: #e6effc;
+        border-color: #a9c3e6;
+    }
+
+    .wa-qr-btn i { font-size: .72rem; }
+
+    /* ── Modal QR ── */
+    .wa-qr-modal[hidden] { display: none; }
+
+    .wa-qr-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1080;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.1rem;
+    }
+
+    .wa-qr-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(14, 26, 43, .62);
+    }
+
+    .wa-qr-dialog {
+        position: relative;
+        background: #fff;
+        border-radius: .9rem;
+        box-shadow: 0 1.2rem 3rem rgba(10, 22, 40, .32);
+        width: 100%;
+        max-width: 360px;
+        padding: 1.2rem 1.2rem 1.1rem;
+        text-align: center;
+    }
+
+    .wa-qr-x {
+        position: absolute;
+        top: .45rem;
+        right: .6rem;
+        border: 0;
+        background: transparent;
+        font-size: 1.5rem;
+        line-height: 1;
+        color: #8b98ad;
+        cursor: pointer;
+        padding: .1rem .3rem;
+    }
+
+    .wa-qr-x:hover { color: #22344d; }
+
+    .wa-qr-head h6 {
+        font-size: .95rem;
+        font-weight: 700;
+        color: #1b3a6b;
+        margin: 0 0 .2rem;
+    }
+
+    .wa-qr-head .wa-qr-sub {
+        font-size: .76rem;
+        color: #71809a;
+        line-height: 1.5;
+        margin-bottom: .9rem;
+    }
+
+    .wa-qr-img {
+        width: 240px;
+        height: 240px;
+        max-width: 100%;
+        margin: 0 auto .7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #e3eaf5;
+        border-radius: .6rem;
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .wa-qr-img img { width: 100%; height: 100%; display: block; }
+
+    .wa-qr-load { font-size: .8rem; color: #8b98ad; }
+
+    .wa-qr-id {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #22344d;
+        letter-spacing: .02em;
+    }
+
+    .wa-qr-stage {
+        font-size: .76rem;
+        color: #71809a;
+        margin-top: .25rem;
+        line-height: 1.5;
+    }
+
+    @media (max-width: 420px) {
+        .wa-qr-img { width: 200px; height: 200px; }
+        .wa-qr-dialog { padding: 1rem; }
     }
 
     .wa-toggle:hover {
@@ -302,7 +427,7 @@
         .wa-item-meta.meta-c3 { grid-column: 2; grid-row: 2; }
         .wa-item-meta.meta-c4 { grid-column: 1; grid-row: 3; }
         .wa-item-status { grid-column: 2; grid-row: 3; }
-        .wa-toggle { grid-column: 1; grid-row: 4; }
+        .wa-head-actions { grid-column: 1 / -1; grid-row: 4; justify-self: start; margin-left: 0; }
     }
 
     /* ── Timeline approval ── */
@@ -507,11 +632,17 @@
         .wa-item-status { grid-column: 3; grid-row: 3; justify-self: start; }
 
         /* Tombol di pojok kanan atas baris 1, kolom 3 */
-        .wa-toggle {
+        .wa-head-actions {
             grid-column: 3;
             grid-row: 1;
             justify-self: end;
             align-self: start;
+            margin-left: 0;
+            gap: .24rem;
+        }
+
+        .wa-toggle,
+        .wa-qr-btn {
             padding: .2rem .42rem;
             margin-left: 0;
         }
@@ -561,11 +692,13 @@
         }
 
         /* Tombol jadi ikon ringkas supaya tak makan kolom */
-        .wa-toggle .tx {
+        .wa-toggle .tx,
+        .wa-qr-btn .tx {
             display: none;
         }
 
-        .wa-toggle i {
+        .wa-toggle i,
+        .wa-qr-btn i {
             font-size: .85rem;
         }
 
@@ -784,11 +917,19 @@
                                         </span>
                                     </div>
 
-                                    <button type="button" class="wa-toggle" data-wa-toggle aria-expanded="false"
-                                            aria-label="Lihat detail pengajuan">
-                                        <span class="tx">Detail</span>
-                                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                                    </button>
+                                    <div class="wa-head-actions">
+                                        <button type="button" class="wa-qr-btn" data-wa-qr="{{ $req->id }}"
+                                                aria-label="Tampilkan QR pengajuan">
+                                            <i class="fas fa-qrcode" aria-hidden="true"></i>
+                                            <span class="tx">QR</span>
+                                        </button>
+
+                                        <button type="button" class="wa-toggle" data-wa-toggle aria-expanded="false"
+                                                aria-label="Lihat detail pengajuan">
+                                            <span class="tx">Detail</span>
+                                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {{-- Isi detail (disembunyikan sampai diklik) --}}
@@ -924,6 +1065,29 @@
                 @endif
             </div>
         </div>
+    </div>
+</div>
+
+{{-- Modal QR pengajuan — discan security di gate keluar & kembali --}}
+<div class="wa-qr-modal" id="wa-qr-modal" hidden>
+    <div class="wa-qr-backdrop" data-wa-qr-close></div>
+
+    <div class="wa-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="wa-qr-title">
+        <button type="button" class="wa-qr-x" data-wa-qr-close aria-label="Tutup">&times;</button>
+
+        <div class="wa-qr-head">
+            <h6 id="wa-qr-title">QR Pengajuan</h6>
+            <div class="wa-qr-sub">
+                Tunjukkan QR ini ke petugas security saat keluar dan saat kembali.
+            </div>
+        </div>
+
+        <div class="wa-qr-img" id="wa-qr-img">
+            <span class="wa-qr-load">Memuat&hellip;</span>
+        </div>
+
+        <div class="wa-qr-id">#<span id="wa-qr-id">-</span></div>
+        <div class="wa-qr-stage" id="wa-qr-stage"></div>
     </div>
 </div>
 
@@ -1075,6 +1239,95 @@
 
     // Refresh sekali saat halaman dibuka (status mungkin berubah sejak load).
     setTimeout(function () { refresh(true); }, 2000);
+})();
+</script>
+
+<script>
+// ── Modal QR pengajuan (untuk scan security) ──
+(function () {
+    'use strict';
+
+    var modal  = document.getElementById('wa-qr-modal');
+    var imgBox = document.getElementById('wa-qr-img');
+    var idBox  = document.getElementById('wa-qr-id');
+    var stageBox = document.getElementById('wa-qr-stage');
+
+    if (!modal) { return; }
+
+    var urlTemplate = @json(route('work-assignment.qr', ['id' => '__ID__']));
+    var lastFocus = null;
+
+    function stageText(stage, status) {
+        if (status !== 'approved') {
+            return 'Belum disetujui semua level — security belum bisa memproses.';
+        }
+
+        if (stage === 'out') { return 'Menunggu scan security: karyawan KELUAR.'; }
+        if (stage === 'in')  { return 'Sudah keluar. Menunggu scan security saat KEMBALI.'; }
+
+        return 'Selesai — keluar dan kembali sudah tercatat.';
+    }
+
+    function open(id, trigger) {
+        lastFocus = trigger || null;
+
+        imgBox.innerHTML = '<span class="wa-qr-load">Memuat&hellip;</span>';
+        idBox.textContent = id;
+        stageBox.textContent = '';
+        modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+
+        fetch(urlTemplate.replace('__ID__', id), {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data.ok) {
+                    imgBox.innerHTML = '<span class="wa-qr-load">' + (data.message || 'Gagal memuat QR.') + '</span>';
+                    return;
+                }
+
+                var img = document.createElement('img');
+                img.alt = 'QR pengajuan #' + data.id;
+                img.src = data.image;
+                imgBox.innerHTML = '';
+                imgBox.appendChild(img);
+
+                stageBox.textContent = stageText(data.stage, data.status);
+            })
+            .catch(function () {
+                imgBox.innerHTML = '<span class="wa-qr-load">Gagal memuat QR.</span>';
+            });
+    }
+
+    function close() {
+        modal.hidden = true;
+        document.body.style.overflow = '';
+
+        if (lastFocus && typeof lastFocus.focus === 'function') {
+            lastFocus.focus();
+        }
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-wa-qr]');
+
+        if (btn) {
+            e.preventDefault();
+            open(btn.getAttribute('data-wa-qr'), btn);
+            return;
+        }
+
+        if (e.target.closest('[data-wa-qr-close]')) {
+            e.preventDefault();
+            close();
+        }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !modal.hidden) { close(); }
+    });
 })();
 </script>
 
