@@ -13,12 +13,18 @@ curl -s -c "$JAR" -o /tmp/wa_login.html -w "   HTTP %{http_code}  %{time_total}s
 TOKEN=$(grep -oE 'name="_token" value="[^"]+"' /tmp/wa_login.html | head -1 | sed 's/.*value="//;s/"//')
 echo "   csrf: ${TOKEN:0:10}..."
 
-echo "2. POST verify-manual (NPK C-00825)"
+NPK="C-00825"
+# Password login manual = tanggal lahir format ymd (lihat WorkAssignmentController::verifyManual).
+# Ambil dari DB supaya tidak ada kredensial yang tersimpan di repo.
+PASS=$(php8.3 artisan tinker --execute="
+echo date('ymd', strtotime(DB::connection('cii')->table('PKWT')->where('NPK','$NPK')->value('TGLLAHIR')));" 2>/dev/null | tail -1)
+
+echo "2. POST verify-manual (NPK $NPK)"
 curl -s -b "$JAR" -c "$JAR" -o /dev/null -w "   HTTP %{http_code} -> %{redirect_url}  %{time_total}s\n" -m 120 \
   -X POST "$BASE/work-assignment/verify-manual" \
   --data-urlencode "_token=$TOKEN" \
-  --data-urlencode "npk=C-00825" \
-  --data-urlencode "password=050113"
+  --data-urlencode "npk=$NPK" \
+  --data-urlencode "password=$PASS"
 
 echo "3. GET dashboard"
 curl -s -b "$JAR" -c "$JAR" -o /tmp/wa_dash.html -w "   HTTP %{http_code}  %{size_download} bytes  %{time_total}s\n" -m 120 "$BASE/work-assignment"
