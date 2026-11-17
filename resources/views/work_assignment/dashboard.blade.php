@@ -51,6 +51,56 @@
         color: #fff;
     }
 
+    /* ── Mobile ── */
+    @media (max-width: 640px) {
+        .dash-hero {
+            gap: .6rem;
+            padding: .7rem .75rem;
+            margin-bottom: .9rem;
+        }
+
+        .dash-hero .emp-card {
+            gap: .5rem;
+        }
+
+        .dash-hero .emp-avatar {
+            width: 2.1rem;
+            height: 2.1rem;
+            font-size: .85rem;
+        }
+
+        .dash-hero .emp-name {
+            font-size: .82rem;
+        }
+
+        .dash-hero .emp-npk {
+            font-size: .66rem;
+        }
+
+        .dash-hero .emp-chip {
+            font-size: .62rem;
+            padding: .14rem .4rem;
+        }
+
+        .dash-hero .btn-new {
+            font-size: .76rem;
+            padding: .45rem 1rem;
+            width: 100%;
+        }
+
+        .wa-list {
+            gap: .7rem;
+        }
+
+        .wa-item {
+            border-radius: .55rem;
+        }
+
+        .wa-item-head {
+            padding: .7rem .75rem;
+        }
+    }
+
     /* ── List pengajuan ── */
     .wa-list {
         display: flex;
@@ -72,11 +122,18 @@
     }
 
     .wa-item-head {
-        display: flex;
+        display: grid;
+        grid-template-columns: 74px 150px minmax(130px, 1fr) 100px 108px 106px auto;
         align-items: center;
-        gap: .75rem;
-        padding: .8rem 1rem;
-        flex-wrap: wrap;
+        gap: .7rem;
+        padding: .8rem .9rem;
+    }
+
+    .wa-item-meta {
+        display: flex;
+        flex-direction: column;
+        gap: .05rem;
+        min-width: 0;
     }
 
     .wa-item-id {
@@ -86,28 +143,107 @@
         white-space: nowrap;
     }
 
-    .wa-item-meta {
-        font-size: .76rem;
-        color: var(--wa-muted);
+    .wa-item-ident {
         display: flex;
-        gap: .9rem;
-        flex-wrap: wrap;
-        flex: 1 1 auto;
+        flex-direction: column;
+        gap: .05rem;
+        flex: 0 0 auto;
+        grid-column: 1;
     }
 
-    .wa-item-meta i {
+    .wa-item-id-label,
+    .wa-item-status .ml {
+        font-size: .62rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--wa-muted);
+    }
+
+    .wa-item-status {
+        display: flex;
+        flex-direction: column;
+        gap: .2rem;
+        align-items: flex-start;
+        flex: 0 0 auto;
+        grid-column: 6;
+        justify-self: end;
+    }
+
+    .wa-item-meta {
+        display: flex;
+        flex-direction: column;
+        gap: .2rem;
+        min-width: 0;
+    }
+
+    .wa-item-meta.meta-c1 { grid-column: 2; }
+    .wa-item-meta.meta-c2 { grid-column: 3; }
+    .wa-item-meta.meta-c3 { grid-column: 4; }
+    .wa-item-meta.meta-c4 { grid-column: 5; }
+
+    .wa-item-meta .ml .short {
+        display: none;
+    }
+
+    .wa-item-meta .ml {
+        font-size: .56rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .01em;
+        color: var(--wa-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.15;
+    }
+
+    .wa-item-meta .mv {
+        font-size: .8rem;
+        color: var(--wa-text);
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.25;
+    }
+
+    .wa-item-meta .mv i {
         margin-right: .2rem;
-        opacity: .7;
+        opacity: .65;
+    }
+
+    .wa-item-meta .meta-date {
+        font-weight: 800;
+        font-size: .84rem;
+        color: var(--wa-text);
+    }
+
+    .wa-item-meta .meta-date .cnt {
+        font-weight: 600;
+        font-size: .72rem;
+        color: var(--wa-muted);
+        margin-left: .15rem;
+    }
+
+    .wa-item-meta .meta-date i {
+        color: var(--wa-primary);
+        opacity: 1;
     }
 
     .wa-badge {
-        font-size: .68rem;
+        font-size: .58rem;
         font-weight: 800;
         border-radius: 2rem;
-        padding: .2rem .65rem;
+        padding: .2rem .5rem;
         white-space: nowrap;
         text-transform: uppercase;
-        letter-spacing: .03em;
+        letter-spacing: .02em;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .25rem;
+        min-width: 82px;
     }
 
     .wa-badge.warning { background: #fff4d6; color: #8a6100; }
@@ -115,35 +251,92 @@
     .wa-badge.danger  { background: #fde2e1; color: #a12622; }
     .wa-badge.secondary { background: #eef1f7; color: #6b7688; }
 
-    /* Progress bar */
-    .wa-progress {
-        height: 4px;
-        background: #edf0f7;
+    /* ── Toggle detail ── */
+    .wa-toggle {
+        flex: 0 0 auto;
+        grid-column: 7;
+        justify-self: end;
+        margin-left: -.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        border: 1px solid var(--wa-border);
+        background: #fff;
+        color: var(--wa-primary);
+        font-size: .74rem;
+        font-weight: 700;
+        padding: .28rem .6rem;
         border-radius: 2rem;
-        overflow: hidden;
+        cursor: pointer;
+        transition: background .12s, border-color .12s;
     }
 
-    .wa-progress > span {
-        display: block;
-        height: 100%;
-        background: linear-gradient(90deg, #4e73df, #6ea8fe);
-        border-radius: 2rem;
-        transition: width .25s;
+    .wa-toggle:hover {
+        background: #f2f6ff;
+        border-color: #c6d2e8;
     }
 
-    .wa-progress.done > span { background: linear-gradient(90deg, #16a34a, #4ade80); }
-    .wa-progress.fail > span { background: linear-gradient(90deg, #dc2626, #f87171); }
+    .wa-toggle i {
+        font-size: .62rem;
+        transition: transform .18s ease;
+    }
+
+    .wa-toggle[aria-expanded="true"] i {
+        transform: rotate(180deg);
+    }
+
+    .wa-collapse[hidden] {
+        display: none;
+    }
+
+    /* Layar sempit: meta turun ke baris sendiri, tetap sejajar. */
+    @media (max-width: 992px) {
+        .wa-item-head {
+            grid-template-columns: 1fr 1fr;
+            gap: .7rem .9rem;
+        }
+
+        .wa-item-ident { grid-column: 1; }
+        .wa-item-meta.meta-c1 { grid-column: 2; grid-row: 1; }
+        .wa-item-meta.meta-c2 { grid-column: 1; grid-row: 2; }
+        .wa-item-meta.meta-c3 { grid-column: 2; grid-row: 2; }
+        .wa-item-meta.meta-c4 { grid-column: 1; grid-row: 3; }
+        .wa-item-status { grid-column: 2; grid-row: 3; }
+        .wa-toggle { grid-column: 1; grid-row: 4; }
+    }
 
     /* ── Timeline approval ── */
     .tl {
-        padding: .3rem 1rem 1rem;
+        padding: .45rem 1rem 1.1rem;
         border-top: 1px solid #f0f3f9;
+    }
+
+    .tl-head {
+        display: flex;
+        align-items: baseline;
+        gap: .5rem;
+        flex-wrap: wrap;
+        padding: .7rem 0 .45rem;
+    }
+
+    .tl-head-title {
+        font-size: .66rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--wa-muted);
+    }
+
+    .tl-head-hint {
+        font-size: .7rem;
+        color: var(--wa-muted);
+        font-style: italic;
     }
 
     .tl-step {
         display: flex;
         gap: .7rem;
-        padding: .55rem 0;
+        padding: .65rem 0;
         position: relative;
     }
 
@@ -188,6 +381,12 @@
         font-weight: 800;
         color: var(--wa-text);
         line-height: 1.25;
+    }
+
+    .tl-title .nm {
+        font-weight: 800;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     .tl-title .role {
@@ -269,8 +468,8 @@
     .wa-detail {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: .7rem 1.2rem;
-        padding: .7rem 1rem;
+        gap: .8rem 1.3rem;
+        padding: .85rem 1rem;
         background: #fbfcfe;
         border-top: 1px solid #f0f3f9;
     }
@@ -289,6 +488,172 @@
         font-weight: 600;
         margin-top: .1rem;
     }
+
+    /* Mobile: dua kolom, teks boleh wrap. */
+    @media (max-width: 640px) {
+        .wa-item-head {
+            position: relative;
+            grid-template-columns: 1fr 1fr auto;
+            gap: .65rem .8rem;
+            align-items: start;
+            padding: .95rem .9rem;
+        }
+
+        .wa-item-ident { grid-column: 1; grid-row: 1; }
+        .wa-item-meta.meta-c1 { grid-column: 2; grid-row: 1; }
+        .wa-item-meta.meta-c2 { grid-column: 1 / -1; grid-row: 2; }
+        .wa-item-meta.meta-c3 { grid-column: 1; grid-row: 3; }
+        .wa-item-meta.meta-c4 { grid-column: 2; grid-row: 3; }
+        .wa-item-status { grid-column: 3; grid-row: 3; justify-self: start; }
+
+        /* Tombol di pojok kanan atas baris 1, kolom 3 */
+        .wa-toggle {
+            grid-column: 3;
+            grid-row: 1;
+            justify-self: end;
+            align-self: start;
+            padding: .2rem .42rem;
+            margin-left: 0;
+        }
+
+        .wa-item-meta .mv {
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        /* Badge status & tombol lebih kecil */
+        .wa-item-meta {
+            gap: .24rem;
+        }
+
+        .wa-item-meta .ml {
+            font-size: .56rem;
+        }
+
+        .wa-item-meta .ml .long {
+            display: none;
+        }
+
+        .wa-item-meta .ml .short {
+            display: inline;
+        }
+
+        .wa-item-meta .mv,
+        .wa-item-meta .meta-date {
+            font-size: .7rem;
+        }
+
+        .wa-item-status {
+            gap: .24rem;
+        }
+
+        .wa-badge {
+            font-size: .52rem;
+            min-width: 70px;
+            padding: .14rem .38rem;
+            letter-spacing: .01em;
+        }
+
+        .wa-toggle {
+            font-size: .68rem;
+            padding: .24rem .5rem;
+            margin-left: 0;
+        }
+
+        /* Tombol jadi ikon ringkas supaya tak makan kolom */
+        .wa-toggle .tx {
+            display: none;
+        }
+
+        .wa-toggle i {
+            font-size: .85rem;
+        }
+
+        .wa-item-id {
+            font-size: .8rem;
+        }
+
+        .wa-item-id-label {
+            font-size: .58rem;
+        }
+
+        /* Detail di dalam accordion lebih rapat */
+        .wa-detail {
+            gap: .7rem 1rem;
+            padding: 1rem .9rem;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        }
+
+        .wa-detail .k {
+            font-size: .56rem;
+            letter-spacing: .02em;
+            line-height: 1.2;
+        }
+
+        .wa-detail .v {
+            font-size: .7rem;
+            line-height: 1.3;
+            margin-top: .08rem;
+        }
+
+        .tl {
+            padding: .55rem .9rem 1rem;
+        }
+
+        .tl-head {
+            padding: .7rem 0 .45rem;
+            gap: .4rem;
+        }
+
+        .tl-head-title { font-size: .56rem; }
+        .tl-head-hint { font-size: .6rem; }
+
+        .tl-step { gap: .55rem; padding: .65rem 0; }
+
+        /* Nama approver dapat baris sendiri di mobile */
+        .tl-body {
+            display: flex;
+            flex-direction: column;
+            gap: .12rem;
+            padding-top: 0;
+        }
+
+        .tl-title {
+            display: flex;
+            flex-direction: column;
+            gap: .05rem;
+            font-size: .72rem;
+            line-height: 1.25;
+        }
+
+        .tl-title .nm {
+            font-size: .74rem;
+        }
+
+        .tl-title .role {
+            font-size: .52rem;
+            margin-right: 0;
+        }
+
+        .tl-sub {
+            font-size: .62rem;
+            margin-top: 0;
+        }
+
+        .tl-dot {
+            width: 18px;
+            height: 18px;
+            flex: 0 0 18px;
+            font-size: .54rem;
+        }
+
+        .tl-title { font-size: .72rem; }
+        .tl-title .role { font-size: .54rem; }
+        .tl-sub { font-size: .62rem; margin-top: .05rem; }
+        .tl-status { font-size: .58rem; }
+        .tl-reason { font-size: .62rem; margin-top: .2rem; padding: .25rem .4rem; }
+    }
+
 </style>
 
 <body>
@@ -301,7 +666,7 @@
             <img src="{{ asset('img/chutex.svg') }}" alt="Chutex">
             <div>
                 <div class="t1">PT. Chutex International Indonesia</div>
-                <div class="t2">Work Assignment Request &middot; CII.FM.HR.02.08</div>
+                <div class="t2">Work Assignment Request</div>
             </div>
         </div>
         <div class="wa-head-actions">
@@ -309,6 +674,9 @@
                 <b>{{ $employee['nama'] ?? '-' }}</b><br>
                 <span>NPK {{ $employee['npk'] ?? '-' }}</span>
             </div>
+            <button type="button" id="btn-refresh" class="btn btn-outline-light" title="Refresh status approval">
+                <i class="fas fa-sync-alt mr-1"></i> Refresh
+            </button>
             <a href="{{ route('work-assignment.logout') }}" class="btn btn-outline-light">
                 <i class="fas fa-sign-out-alt mr-1"></i> Keluar
             </a>
@@ -324,8 +692,7 @@
                     <h4>Pengajuan Dinas Luar Saya</h4>
                     <div class="sub">Pantau status persetujuan setiap pengajuan Anda.</div>
                 </div>
-                <span class="doc-ref">FORM CII.FM.HR.02.08 &middot; REV 00</span>
-            </div>
+                </div>
         </div>
 
         <div class="wa-card-body">
@@ -372,37 +739,60 @@
                                 $timeline = $req->timeline();
                             @endphp
 
-                            <div class="wa-item">
+                            <div class="wa-item" data-wa-item="{{ $req->id }}">
                                 <div class="wa-item-head">
-                                    <span class="wa-item-id">#{{ $req->id }}</span>
+                                    <div class="wa-item-ident">
+                                        <span class="wa-item-id">#{{ $req->id }}</span>
+                                        <span class="wa-item-id-label">No. Pengajuan</span>
+                                    </div>
 
-                                    <div class="wa-item-meta">
-                                        <span><i class="fas fa-calendar-day"></i>
-                                            {{ $req->start_date ? $req->start_date->format('d/m/Y') : '-' }}
-                                            @if ($req->total_days > 1)
-                                                &ndash; {{ $req->end_date ? $req->end_date->format('d/m/Y') : '-' }}
-                                                ({{ $req->total_days }} hari)
-                                            @endif
+                                    <div class="wa-item-meta meta-c1">
+                                        <span class="ml">Tanggal Dinas</span>
+                                        <span class="mv meta-date" title="{{ $req->start_date ? $req->start_date->format('d-m-Y') : '-' }}{{ $req->total_days > 1 ? ',' . ($req->end_date ? $req->end_date->format('d-m-Y') : '-') . ' (' . $req->total_days . ' hari)' : '' }}">
+                                            <i class="fas fa-calendar-day"></i>
+                                            {{ $req->start_date ? $req->start_date->format('d-m-Y') : '-' }}
                                         </span>
-                                        <span><i class="fas fa-map-marker-alt"></i> {{ $req->dinas_ke ?: '-' }}</span>
-                                        <span><i class="fas fa-clock"></i>
+                                        @if ($req->total_days > 1)
+                                            <span class="mv meta-date">
+                                                <i class="fas fa-calendar-day"></i>
+                                                {{ $req->end_date ? $req->end_date->format('d-m-Y') : '-' }}
+                                                <span class="cnt">({{ $req->total_days }} hari)</span>
+                                            </span>
+                                        @endif
+                                    </div>
+                                    <div class="wa-item-meta meta-c2">
+                                        <span class="ml">Tujuan</span>
+                                        <span class="mv" title="{{ $req->dinas_ke ?: '-' }}"><i class="fas fa-map-marker-alt"></i> {{ $req->dinas_ke ?: '-' }}</span>
+                                    </div>
+                                    <div class="wa-item-meta meta-c3">
+                                        <span class="ml">Jam Keluar</span>
+                                        <span class="mv"><i class="fas fa-clock"></i>
                                             {{ $req->jam_keluar ? substr($req->jam_keluar, 0, 5) : '--:--' }}
-                                            &ndash;
+                                        </span>
+                                    </div>
+                                    <div class="wa-item-meta meta-c4">
+                                        <span class="ml" title="Jam Rencana Kembali"><span class="long">Jam Rencana Kembali</span><span class="short">Rencana Kembali</span></span>
+                                        <span class="mv"><i class="fas fa-undo-alt"></i>
                                             {{ $req->rencana_kembali ? substr($req->rencana_kembali, 0, 5) : '--:--' }}
                                         </span>
                                     </div>
 
-                                    <span class="wa-badge {{ $progress['tone'] }}">{{ $progress['label'] }}</span>
+                                    <div class="wa-item-status">
+                                        <span class="ml">Status</span>
+                                        <span class="wa-badge {{ $progress['tone'] }}" data-wa-badge>
+                                            <span data-wa-label>{{ $progress['label'] }}</span>
+                                        </span>
+                                    </div>
+
+                                    <button type="button" class="wa-toggle" data-wa-toggle aria-expanded="false"
+                                            aria-label="Lihat detail pengajuan">
+                                        <span class="tx">Detail</span>
+                                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                                    </button>
                                 </div>
 
-                                {{-- Progress bar --}}
-                                @if ($progress['total'] > 0)
-                                    @php $pct = round($progress['done'] / $progress['total'] * 100); @endphp
-                                    <div class="wa-progress {{ $progress['status'] === 'approved' ? 'done' : ($progress['status'] === 'rejected' ? 'fail' : '') }}"
-                                         style="margin: 0 1rem .55rem;">
-                                        <span style="width: {{ $pct }}%"></span>
-                                    </div>
-                                @endif
+                                {{-- Isi detail (disembunyikan sampai diklik) --}}
+                                <div class="wa-collapse" data-wa-collapse hidden>
 
                                 {{-- Detail isi surat --}}
                                 <div class="wa-detail">
@@ -411,12 +801,19 @@
                                         <div class="v">{{ \Illuminate\Support\Str::limit($req->keperluan, 90) }}</div>
                                     </div>
                                     <div>
-                                        <div class="k">Diajukan</div>
-                                        <div class="v">{{ $req->created_at ? $req->created_at->format('d/m/Y H:i') : '-' }}</div>
+                                        <div class="k">Tanggal Pengajuan</div>
+                                        <div class="v">{{ $req->created_at ? $req->created_at->format('d-m-Y H:i') : '-' }}</div>
                                     </div>
                                     <div>
-                                        <div class="k">Progress Approval</div>
-                                        <div class="v">{{ $progress['done'] }} dari {{ $progress['total'] }} level</div>
+                                        <div class="k">Level Approval</div>
+                                        <div class="v" data-wa-progress-text>
+                                            @if ($progress['total'] > 0)
+                                                Level {{ $req->current_level }} dari {{ $progress['total'] }}
+                                                &middot; {{ $progress['done'] }} selesai
+                                            @else
+                                                Belum ada alur persetujuan
+                                            @endif
+                                        </div>
                                     </div>
                                     <div>
                                         <div class="k">Jam Kembali</div>
@@ -430,9 +827,44 @@
                                     </div>
                                 </div>
 
+                                {{-- Lampiran --}}
+                                @if (!empty($req->attach_files))
+                                    <div class="wa-detail" style="grid-template-columns: 1fr;">
+                                        <div>
+                                            <div class="k">Lampiran</div>
+                                            <div class="v">
+                                                @foreach ($req->attach_files as $att)
+                                                    @php
+                                                        $attPath = \App\Services\WorkAssignment\WorkAssignmentAttachment::pathOf($att);
+                                                        $attName = is_array($att) ? ($att['original_name'] ?? basename((string) $attPath)) : basename((string) $attPath);
+                                                        $attExt  = strtolower(pathinfo((string) $attPath, PATHINFO_EXTENSION));
+                                                        $attIcon = match ($attExt) {
+                                                            'pdf' => 'fa-file-pdf',
+                                                            'jpg', 'jpeg', 'png', 'webp' => 'fa-file-image',
+                                                            'doc', 'docx' => 'fa-file-word',
+                                                            'xls', 'xlsx' => 'fa-file-excel',
+                                                            default => 'fa-file',
+                                                        };
+                                                    @endphp
+                                                    <a href="{{ route('work-assignment.attachment.download', ['id' => $req->id, 'index' => $loop->index]) }}"
+                                                       class="badge badge-light border text-primary mr-1 mb-1"
+                                                       style="font-size:.7rem;padding:.25rem .5rem;">
+                                                        <i class="fas {{ $attIcon }} mr-1"></i>{{ $attName }}
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+
                                 {{-- Timeline approval --}}
                                 @if (!empty($timeline))
                                     <div class="tl">
+                                        <div class="tl-head">
+                                            <span class="tl-head-title">Alur Persetujuan</span>
+                                            <span class="tl-head-hint">Nama approver &amp; hasil keputusan tiap level</span>
+                                        </div>
+                                        <div data-wa-timeline>
                                         @foreach ($timeline as $step)
                                             @php
                                                 $icon = match ($step['decision']) {
@@ -450,30 +882,32 @@
                                                     default    => 'Belum Aktif',
                                                 };
                                             @endphp
-                                            <div class="tl-step">
-                                                <div class="tl-dot {{ $step['decision'] }}">
-                                                    <i class="fas {{ $icon }}"></i>
+                                            <div class="tl-step" data-level="{{ $step['level'] }}">
+                                                <div class="tl-dot {{ $step['decision'] }}" data-tl-dot>
+                                                    <i class="fas {{ $icon }}" data-tl-icon></i>
                                                 </div>
                                                 <div class="tl-body">
                                                     <div class="tl-title">
                                                         <span class="role">L{{ $step['level'] }} &middot; {{ $step['role_label'] }}</span>
-                                                        {{ $step['name'] ?: '—' }}
+                                                        <span class="nm">{{ $step['name'] ?: '—' }}</span>
                                                     </div>
                                                     <div class="tl-sub">
                                                         {{ $step['npk'] ?: 'NPK belum diset' }}
                                                         @if (!empty($step['jabatan']) && $step['jabatan'] !== $step['name'])
                                                             &middot; <span class="jab">{{ $step['jabatan'] }}</span>
                                                         @endif
+                                                        <span data-tl-time>@if (!empty($step['decided_at'])) &middot; {{ $step['decided_at'] }} @endif</span>
                                                     </div>
-                                                    @if (!empty($step['reason']))
-                                                        <div class="tl-reason">
+                                                    <div class="tl-reason" data-tl-reason @if (empty($step['reason'])) style="display:none" @endif>
+                                                        @if (!empty($step['reason']))
                                                             <b>Alasan:</b> {{ $step['reason'] }}
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
-                                                <div class="tl-status {{ $step['decision'] }}">{{ $label }}</div>
+                                                <div class="tl-status {{ $step['decision'] }}" data-tl-status>{{ $label }}</div>
                                             </div>
                                         @endforeach
+                                        </div>
                                     </div>
                                 @else
                                     <div class="tl">
@@ -483,6 +917,7 @@
                                         </div>
                                     </div>
                                 @endif
+                                </div>{{-- /.wa-collapse --}}
                             </div>
                         @endforeach
                     </div>
@@ -493,6 +928,155 @@
 </div>
 
 @include('layout.footerscript')
+
+<script>
+(function () {
+    const urlProgress = @json(route('work-assignment.progress'));
+
+    const ICONS = {
+        approved: 'fa-check',
+        rejected: 'fa-times',
+        waiting: 'fa-clock',
+        skipped: 'fa-minus'
+    };
+
+    const LABELS = {
+        approved: 'Disetujui',
+        rejected: 'Ditolak',
+        waiting: 'Menunggu',
+        skipped: 'Dilewati'
+    };
+
+    const btn = document.getElementById('btn-refresh');
+    let timer = null;
+    let busy = false;
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : s;
+        return d.innerHTML;
+    }
+
+    /** Update satu item pengajuan dengan data terbaru dari server. */
+    function applyItem(item) {
+        const el = document.querySelector('[data-wa-item="' + item.id + '"]');
+        if (!el) return;
+
+        // Badge status
+        const badge = el.querySelector('[data-wa-badge]');
+        if (badge) {
+            badge.className = 'wa-badge ' + item.tone;
+
+            const label = badge.querySelector('[data-wa-label]');
+            if (label) label.textContent = item.label;
+        }
+
+        // Teks level approval (di dalam detail)
+        const txt = el.querySelector('[data-wa-progress-text]');
+        if (txt) {
+            txt.textContent = item.total > 0
+                ? 'Level ' + item.current_level + ' dari ' + item.total + ' · ' + item.done + ' selesai'
+                : 'Belum ada alur persetujuan';
+        }
+
+        // Timeline per level
+        const tl = el.querySelector('[data-wa-timeline]');
+        if (tl && item.timeline) {
+            item.timeline.forEach(function (step) {
+                const row = tl.querySelector('.tl-step[data-level="' + step.level + '"]');
+                if (!row) return;
+
+                const dot = row.querySelector('[data-tl-dot]');
+                if (dot) {
+                    dot.className = 'tl-dot ' + step.decision;
+                    const icon = dot.querySelector('[data-tl-icon]');
+                    if (icon) icon.className = 'fas ' + (ICONS[step.decision] || 'fa-circle');
+                }
+
+                const status = row.querySelector('[data-tl-status]');
+                if (status) {
+                    status.className = 'tl-status ' + step.decision;
+                    status.textContent = LABELS[step.decision] || 'Belum Aktif';
+                }
+
+                const time = row.querySelector('[data-tl-time]');
+                if (time) time.innerHTML = step.decided_at ? ' &middot; ' + escapeHtml(step.decided_at) : '';
+
+                const reason = row.querySelector('[data-tl-reason]');
+                if (reason) {
+                    if (step.reason) {
+                        reason.style.display = '';
+                        reason.innerHTML = '<b>Alasan:</b> ' + escapeHtml(step.reason);
+                    } else {
+                        reason.style.display = 'none';
+                        reason.innerHTML = '';
+                    }
+                }
+            });
+        }
+    }
+
+    async function refresh(silent) {
+        if (busy) return;
+        busy = true;
+
+        if (!silent && btn) btn.classList.add('is-loading');
+
+        try {
+            const res = await fetch(urlProgress, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin'
+            });
+
+            if (!res.ok) return;
+
+            const data = await res.json();
+
+            if (data.ok && Array.isArray(data.items)) {
+                data.items.forEach(applyItem);
+            }
+        } catch (e) {
+            // diamkan saja — refresh berikutnya akan mencoba lagi
+        } finally {
+            busy = false;
+            if (btn) btn.classList.remove('is-loading');
+        }
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () { refresh(false); });
+    }
+
+    // ── Toggle detail per pengajuan ──
+    document.addEventListener('click', function (e) {
+        var toggle = e.target.closest('[data-wa-toggle]');
+        if (!toggle) return;
+
+        var item = toggle.closest('[data-wa-item]');
+        if (!item) return;
+
+        var panel = item.querySelector('[data-wa-collapse]');
+        if (!panel) return;
+
+        var open = toggle.getAttribute('aria-expanded') === 'true';
+
+        toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+        panel.hidden = open;
+
+        var tx = toggle.querySelector('.tx');
+        if (tx) tx.textContent = open ? 'Detail' : 'Sembunyikan';
+    });
+
+    // Auto-refresh tiap 30 detik — status approval berubah tanpa reload halaman.
+    timer = setInterval(function () {
+        if (document.hidden) return;
+        refresh(true);
+    }, 30000);
+
+    // Refresh sekali saat halaman dibuka (status mungkin berubah sejak load).
+    setTimeout(function () { refresh(true); }, 2000);
+})();
+</script>
 
 </body>
 </html>

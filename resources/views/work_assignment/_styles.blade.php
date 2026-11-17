@@ -370,6 +370,8 @@
         margin-top: .5rem;
     }
 
+    /* ── Lampiran (gaya di _uploader.blade.php) ── */
+
     .auto-badge {
         display: inline-block;
         font-size: .62rem;
@@ -510,5 +512,177 @@
     .is-loading {
         opacity: .6;
         pointer-events: none;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       MOBILE (≤ 640px) — perkecil font, rapatkan card, skalakan button
+       ───────────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+        .wa-shell {
+            padding: 1.25rem .8rem 1.5rem;
+        }
+
+        /* Header */
+        .wa-head {
+            margin-bottom: 1rem;
+            gap: .6rem;
+        }
+
+        .wa-head .brand img {
+            height: 30px;
+        }
+
+        .wa-head .brand .t1 {
+            font-size: .8rem;
+        }
+
+        .wa-head .brand .t2 {
+            font-size: .64rem;
+        }
+
+        .wa-head-user {
+            font-size: .72rem;
+        }
+
+        .wa-head-actions {
+            gap: .35rem;
+        }
+
+        .wa-head-actions .btn {
+            font-size: .72rem;
+            padding: .35rem .7rem;
+        }
+
+        /* Card */
+        .wa-card {
+            border-radius: .6rem;
+        }
+
+        .wa-card-head {
+            padding: .95rem .9rem;
+        }
+
+        .wa-card-head h4 {
+            font-size: .92rem;
+        }
+
+        .wa-card-head .sub {
+            font-size: .7rem;
+        }
+
+        .wa-card-head .doc-ref {
+            font-size: .6rem;
+        }
+
+        .wa-card-body {
+            padding: 1.15rem .95rem 1.3rem;
+        }
+
+        /* Section */
+        .wa-section {
+            margin-bottom: 1rem;
+        }
+
+        .wa-section-title {
+            font-size: .76rem;
+            gap: .4rem;
+        }
+
+        .wa-section-title .step {
+            width: 1.5rem;
+            height: 1.5rem;
+            font-size: .66rem;
+        }
+
+        /* Input & tombol */
+        .wa-input,
+        .wa-textarea {
+            font-size: .8rem;
+            padding: .45rem .55rem;
+        }
+
+        .wa-label {
+            font-size: .72rem;
+            margin-bottom: .3rem;
+        }
+
+        .wa-label .hint {
+            font-size: .64rem;
+        }
+
+        .wa-row .btn {
+            font-size: .74rem;
+            padding: .42rem .75rem;
+        }
+
+        /* Card karyawan */
+        .emp-card {
+            padding: .7rem .8rem;
+            gap: .6rem;
+        }
+
+        .emp-avatar {
+            width: 2.3rem;
+            height: 2.3rem;
+            font-size: .95rem;
+        }
+
+        .emp-name {
+            font-size: .84rem;
+        }
+
+        .emp-npk {
+            font-size: .68rem;
+        }
+
+        .emp-chips {
+            gap: .3rem;
+        }
+
+        .emp-chip {
+            font-size: .64rem;
+            padding: .15rem .45rem;
+        }
+
+        /* Timeline alur persetujuan */
+        .flow {
+            gap: .35rem;
+        }
+
+        .flow-step {
+            padding: .5rem .55rem;
+        }
+
+        .flow-step .role,
+        .flow-step .who,
+        .flow-step .npk {
+            font-size: .68rem;
+        }
+
+        .wa-tl {
+            font-size: .74rem;
+        }
+
+        /* Aksi */
+        .wa-actions {
+            gap: .6rem;
+            padding: .8rem 0 .2rem;
+        }
+
+        .wa-actions .btn {
+            font-size: .78rem;
+            padding: .5rem 1.1rem;
+            width: 100%;
+        }
+
+        .wa-actions .summary {
+            font-size: .7rem;
+        }
+
+        /* Catatan */
+        .wa-note {
+            font-size: .7rem;
+            padding: .5rem .6rem;
+        }
     }
 </style>

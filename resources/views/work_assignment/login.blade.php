@@ -44,7 +44,7 @@
     <div class="text-center mb-1">
         <strong style="font-size:.88rem">PT. Chutex International Indonesia</strong>
     </div>
-    <div class="wa-doc">Work Assignment Request &middot; CII.FM.HR.02.08</div>
+    <div class="wa-doc">Work Assignment Request</div>
 
     @include('sweetalert::alert')
 

@@ -3,6 +3,7 @@
 @include('layout.header')
 
 @include('work_assignment._styles')
+@include('work_assignment._uploader')
 
 <body>
 
@@ -14,7 +15,7 @@
             <img src="{{ asset('img/chutex.svg') }}" alt="Chutex">
             <div>
                 <div class="t1">PT. Chutex International Indonesia</div>
-                <div class="t2">Work Assignment Request &middot; CII.FM.HR.02.08</div>
+                <div class="t2">Work Assignment Request</div>
             </div>
         </div>
         <div class="wa-head-actions">
@@ -29,7 +30,7 @@
 
     @include('sweetalert::alert')
 
-    <form id="form-wa" method="POST" action="{{ route('work-assignment.submit') }}">
+    <form id="form-wa" method="POST" action="{{ route('work-assignment.submit') }}" enctype="multipart/form-data">
         @csrf
 
         <div class="wa-card">
@@ -39,7 +40,6 @@
                         <h4>Work Assignment Request</h4>
                         <div class="sub">Surat Ijin Dinas Luar &mdash; isi data dinas, sisanya otomatis dari data karyawan.</div>
                     </div>
-                    <span class="doc-ref">FORM CII.FM.HR.02.08 &middot; REV 00</span>
                 </div>
             </div>
 
@@ -90,7 +90,8 @@
 
                         <div class="wa-row">
                             <input type="date" id="f-date" class="wa-input"
-                                   min="{{ $minDate }}" max="{{ $maxDate }}"
+                                   @if (!empty($minDate)) min="{{ $minDate }}" @endif
+                                   @if (!empty($maxDate)) max="{{ $maxDate }}" @endif
                                    value="{{ old('duty_dates.0', now()->format('Y-m-d')) }}">
                             <button type="button" id="btn-add-date" class="btn btn-primary">
                                 <i class="fas fa-plus mr-1"></i> Tambah Tanggal
@@ -100,12 +101,13 @@
                         <div class="date-chips" id="date-chips"></div>
                         <div class="date-empty" id="date-empty">Belum ada tanggal dipilih.</div>
 
-                        <small class="text-muted d-block mt-1">
-                            Periode pengajuan:
-                            {{ \Carbon\Carbon::parse($minDate)->format('d/m/Y') }}
-                            s/d {{ \Carbon\Carbon::parse($maxDate)->format('d/m/Y') }}
-                            &middot; maksimal {{ $maxDates }} tanggal
-                        </small>
+                        @if (!empty($minDate) || !empty($maxDate))
+                            <small class="text-muted d-block mt-1">
+                                Periode pengajuan:
+                                @if (!empty($minDate)){{ \Carbon\Carbon::parse($minDate)->format('d-m-Y') }} s/d @endif
+                                @if (!empty($maxDate)){{ \Carbon\Carbon::parse($maxDate)->format('d-m-Y') }}@endif
+                            </small>
+                        @endif
                         @error('duty_dates') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                         @error('duty_dates.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                     </div>
@@ -185,6 +187,36 @@
                         Jam keluar &amp; rencana kembali diisi pemohon &mdash; diverifikasi Departemen.
                         Jam kembali diisi Security setelah karyawan benar-benar kembali (manual, atau check-in/out GPS karyawan).
                     </div>
+                </div>
+
+                {{-- ══ Lampiran ══ --}}
+                <div class="wa-section">
+                    <div class="wa-section-title">
+                        <span class="step"><i class="fas fa-paperclip"></i></span>
+                        Lampiran
+                        <span class="hint">Opsional</span>
+                    </div>
+
+                    <label class="wa-label" for="f-attach">
+                        Dokumen pendukung
+                        <span class="hint">PDF, gambar, Word, atau Excel &mdash; maks 5 MB per file, 5 file per pengajuan.</span>
+                    </label>
+
+                    <input type="file" id="f-attach" name="attach_files[]" class="d-none"
+                           multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx">
+
+                    <div class="wa-dropzone" id="attach-zone" tabindex="0" role="button"
+                         aria-label="Pilih atau seret file lampiran ke sini">
+                        <div class="dz-ico"><i class="fas fa-cloud-upload-alt"></i></div>
+                        <div class="dz-title">Tarik file ke sini atau <u>pilih file</u></div>
+                        <div class="dz-hint">PDF, JPG, PNG, DOC, XLS &mdash; maksimal 5 MB per file</div>
+                    </div>
+
+                    <div class="wa-files" id="attach-list"></div>
+                    <div class="date-empty" id="attach-empty">Belum ada file dipilih.</div>
+
+                    @error('attach_files') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                    @error('attach_files.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                 </div>
 
                 {{-- ══ Alur Persetujuan ══ --}}
@@ -348,6 +380,16 @@
     $dateInput.addEventListener('change', function () { addDate(); });
     document.getElementById('f-jam-keluar').addEventListener('change', updateRingkasan);
     document.getElementById('f-rencana-kembali').addEventListener('change', updateRingkasan);
+
+    // ── Preview lampiran (drag & drop) ──
+    waInitUploader({
+        inputId: 'f-attach',
+        zoneId: 'attach-zone',
+        listId: 'attach-list',
+        emptyId: 'attach-empty',
+        maxFiles: 5,
+        maxKb: 5120
+    });
 
     // ── Submit: kirim duty_dates sebagai array ke server ──
     const form = document.getElementById('form-wa');
