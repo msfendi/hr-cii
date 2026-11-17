@@ -29,9 +29,16 @@ return [
     'max_rag_rows' => (int) env('CHATBOT_RAG_MAX_ROWS', 200),
 
     // Berapa banyak pesan riwayat terakhir yang disertakan sebagai konteks
-    // saat mode 'global'. Mode 'rag' sengaja tidak memakai riwayat panjang
-    // supaya generasi query SQL tetap fokus ke pertanyaan terakhir.
+    // saat mode 'global'. Mode 'rag' memakai 'rag_history_limit' di bawah.
     'history_limit' => (int) env('CHATBOT_HISTORY_LIMIT', 20),
+
+    // Jumlah pesan terakhir (user+AI) yang dikirim ulang ke model pada mode
+    // RAG sebagai konteks percakapan. Tanpa ini pertanyaan lanjutan seperti
+    // "kenapa LINE 66 aktifnya 0?" tidak punya rujukan ke tabel yang baru
+    // saja ditampilkan, dan AI menjawab seolah lupa. 8 pesan = 4 giliran;
+    // naikkan kalau percakapan analitis butuh konteks lebih panjang, tapi
+    // ingat prompt sudah membawa aturan RAG + skema penuh.
+    'rag_history_limit' => (int) env('CHATBOT_RAG_HISTORY_LIMIT', 8),
 
     // Batas waktu tunggu (detik) saat memanggil API provider AI.
     // Naikkan kalau sering timeout, terutama untuk model gratis/tier rendah
@@ -145,7 +152,7 @@ return [
 
     // Batas karakter blok aturan yang dikirim ke prompt (bagian inti +
     // baris peta keputusan yang relevan). Bukan batas panjang berkas.
-    'rag_rules_max_chars' => (int) env('CHATBOT_RAG_RULES_MAX_CHARS', 22000),
+    'rag_rules_max_chars' => (int) env('CHATBOT_RAG_RULES_MAX_CHARS', 24000),
 
     // R25 melarang empat tabel audit. Kalau true, daftar itu otomatis
     // ditambahkan ke blocklist runtime (selain CHATBOT_RAG_BLOCKED_TABLES).

@@ -38,6 +38,126 @@ class AiChatService
     }
 
     /**
+     * Riwayat percakapan sesi ini (lama → baru), siap dikirim ke provider.
+     *
+     * Pesan user yang BARU dibuat oleh controller sebelum reply() dipanggil
+     * tidak ikut dikirim (kalau ikut, pertanyaan yang sama muncul dua kali:
+     * sekali sebagai riwayat, sekali sebagai pesan terakhir).
+     *
+     * @return array<int,array{role:string,content:string}>
+     */
+    protected function pesanRiwayat(ChatbotSession $session): array
+    {
+        $pesan = $this->barisRiwayat($session);
+        $hasil = [];
+
+        foreach ($pesan as $p) {
+            $isi = $this->ringkasPesan((string) $p->content, 1800);
+
+            if ($p->role === ChatbotMessage::ROLE_ASSISTANT) {
+                $sql = trim((string) ($p->meta['sql'] ?? ''));
+
+                if ($sql !== '') {
+                    $isi .= "\n[query yang dipakai jawaban ini]\n" . $this->ringkasPesan($sql, 1200);
+                }
+
+                $jumlah = $p->meta['row_count'] ?? null;
+
+                if ($jumlah !== null) {
+                    $isi .= "\n[jumlah baris hasil query: {$jumlah}]";
+                }
+            }
+
+            if ($isi === '') {
+                continue;
+            }
+
+            $hasil[] = [
+                'role' => $p->role === ChatbotMessage::ROLE_ASSISTANT ? 'assistant' : 'user',
+                'content' => $isi,
+            ];
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Blok teks riwayat untuk system prompt generator SQL.
+     *
+     * Generator SQL butuh ini secara EKSPLISIT: pertanyaan lanjutan seperti
+     * "kenapa LINE 66 aktifnya 0?" tidak memuat satupun nama tabel/periode,
+     * jadi tanpa riwayat (dan tanpa query terakhir) model hanya bisa menebak
+     * atau menolak. Query terakhir ditampilkan utuh supaya bisa dipakai
+     * sebagai dasar (diubah filtornya), bukan ditulis dari nol.
+     */
+    protected function blokRiwayatPercakapan(ChatbotSession $session): string
+    {
+        $pesan = $this->barisRiwayat($session);
+
+        if ($pesan->isEmpty()) {
+            return "\nRIWAYAT PERCAKAPAN SESI INI: (belum ada — ini pertanyaan pertama di sesi ini)\n";
+        }
+
+        $baris = [];
+
+        foreach ($pesan as $p) {
+            $peran = $p->role === ChatbotMessage::ROLE_ASSISTANT ? 'AI' : 'USER';
+            $isi = $this->ringkasPesan((string) $p->content, 900);
+            $baris[] = "{$peran}: {$isi}";
+
+            if ($p->role !== ChatbotMessage::ROLE_ASSISTANT) {
+                continue;
+            }
+
+            $sql = trim((string) ($p->meta['sql'] ?? ''));
+
+            if ($sql !== '') {
+                $baris[] = '  QUERY TERAKHIR YANG BERHASIL: ' . $this->ringkasPesan($sql, 1500);
+            }
+        }
+
+        return "\nRIWAYAT PERCAKAPAN SESI INI (lama → baru; ini konteks resmi, bukan karangan user):\n"
+            . implode("\n", $baris)
+            . "\n";
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int,ChatbotMessage>
+     */
+    protected function barisRiwayat(ChatbotSession $session)
+    {
+        // Mode test / pemanggil yang sudah menyiapkan relasi: pakai apa adanya.
+        $pesan = $session->relationLoaded('messages')
+            ? $session->messages->sortBy('id')->values()
+            : $session->messages()->reorder()->orderBy('id')->get();
+
+        // Pesan user pada giliran SEKARANG sudah tersimpan sebelum reply()
+        // dipanggil — keluarkan dari riwayat supaya tidak dobel.
+        if ($pesan->isNotEmpty() && $pesan->last()->role === ChatbotMessage::ROLE_USER) {
+            $pesan = $pesan->slice(0, $pesan->count() - 1)->values();
+        }
+
+        $limit = max(0, (int) config('chatbot.rag_history_limit', 8));
+
+        if ($limit > 0 && $pesan->count() > $limit) {
+            $pesan = $pesan->slice($pesan->count() - $limit)->values();
+        }
+
+        return $pesan;
+    }
+
+    protected function ringkasPesan(string $teks, int $maks): string
+    {
+        $teks = trim(preg_replace('/\s+/u', ' ', $teks) ?? $teks);
+
+        if (mb_strlen($teks) <= $maks) {
+            return $teks;
+        }
+
+        return mb_substr($teks, 0, $maks) . ' …';
+    }
+
+    /**
      * Titik masuk utama. Mengembalikan array:
      * ['content' => string, 'meta' => array|null]
      */
@@ -169,7 +289,7 @@ class AiChatService
         // diminta user.
         if (! $adaLampiran && $this->adalahSapaan($userMessage)) {
             return [
-                'content' => $this->jawabTanpaSql($providerKey, $userMessage),
+                'content' => $this->jawabTanpaSql($providerKey, $userMessage, $session),
                 'meta' => ['sql' => null],
             ];
         }
@@ -193,6 +313,13 @@ class AiChatService
                 'meta' => ['sql' => null, 'rag_rules_error' => $e->getMessage()],
             ];
         }
+
+        // KONTEKS PERCAKAPAN (permintaan 17 Nov 2026): model harus melihat
+        // giliran-giliran sebelumnya di sesi ini. Tanpa ini, pertanyaan
+        // lanjutan ("kenapa LINE 66 aktifnya 0?") tidak punya rujukan sama
+        // sekali dan AI menjawab seolah lupa hasil yang baru saja ia tampilkan.
+        $riwayatBlok = $this->blokRiwayatPercakapan($session);
+        $riwayatPesan = $this->pesanRiwayat($session);
 
         $blockedTables = $this->blockedTables();
         $blockedColumns = $this->blockedColumns();
@@ -257,6 +384,7 @@ class AiChatService
             {$aturanTeks}
 
             ---- akhir aturan RAG ----
+            {$riwayatBlok}
             Berikut daftar SEMUA tabel & kolom yang benar-benar ada di database ini (hasil introspeksi
             otomatis langsung dari katalog database — bukan hafalan/perkiraan), kolom yang ditandai (PK)
             adalah primary key:
@@ -281,13 +409,25 @@ class AiChatService
                (mis. "data lengkap karyawan X"), ambil hanya kolom yang diizinkan dan jangan sertakan kolom
                terlarang — bukan membalas NO_QUERY.
 
+            10. KONTEKS PERCAKAPAN: blok "RIWAYAT PERCAKAPAN SESI INI" di atas adalah konteks resmi.
+                Kalau pertanyaan user adalah LANJUTAN dari jawaban sebelumnya (memakai kata rujukan seperti
+                "itu", "nya", "tersebut", "tadi", "yang tadi", atau hanya menyebut satu nilai dari tabel yang
+                barusan ditampilkan, mis. "kenapa LINE 66 aktifnya 0?"), maka:
+                - JANGAN menulis query dari nol dan JANGAN menjawab bahwa kamu tidak punya konteks/riwayat.
+                - Ambil "QUERY TERAKHIR YANG BERHASIL" sebagai DASAR, lalu pertahankan tabel, JOIN, filter
+                  periode, dan pengelompokan yang sama; ubah seminimal mungkin supaya fokus ke objek yang
+                  ditanyakan (mis. tambahkan filter LINE 66 atau pecah per LINE/DEPARTEMENT).
+                - Kalau pertanyaan lanjutan tidak butuh query baru sama sekali, tetap balas satu query
+                  ringkas yang memverifikasi angka yang ditanyakan (bukan NO_QUERY), supaya jawaban punya bukti.
+
             Jika pertanyaan user hanya bisa dijawab lewat tabel/kolom yang terlarang di atas, atau tidak bisa dijawab
             dari skema yang tersedia sama sekali, balas persis: NO_QUERY
             PROMPT;
 
-        $rawSqlResponse = $this->callProvider($providerKey, $sqlSystemPrompt, [
-            ['role' => 'user', 'content' => $userMessage],
-        ]);
+        $pesanSql = $riwayatPesan;
+        $pesanSql[] = ['role' => 'user', 'content' => $userMessage];
+
+        $rawSqlResponse = $this->callProvider($providerKey, $sqlSystemPrompt, $pesanSql);
 
         if (trim($rawSqlResponse) === 'NO_QUERY') {
             // Pertanyaan tidak bisa/ tidak perlu dijawab lewat query. Jangan
@@ -296,7 +436,7 @@ class AiChatService
             // jadi harus dijawab wajar. Permintaan data yang dibatasi pun
             // lebih baik dijelaskan + ditawari alternatif oleh AI.
             return [
-                'content' => $this->jawabTanpaSql($providerKey, $userMessage),
+                'content' => $this->jawabTanpaSql($providerKey, $userMessage, $session),
                 'meta' => ['sql' => null],
             ];
         }
@@ -336,7 +476,7 @@ class AiChatService
                         ]);
 
                         return [
-                            'content' => $this->jawabTanpaSql($providerKey, $userMessage),
+                            'content' => $this->jawabTanpaSql($providerKey, $userMessage, $session),
                             'meta' => ['sql' => null],
                         ];
                     }
@@ -457,9 +597,20 @@ class AiChatService
                 . 'bisa dibuat untuk data ini, lalu sajikan datanya sebagai tabel. Jangan mengarang grafik.';
         }
 
-        $answer = $this->callProvider($providerKey, $answerSystemPrompt, [
+        // Riwayat juga dikirim ke penjawab. Tanpa ini, pertanyaan lanjutan
+        // seperti "kenapa LINE 66 aktifnya 0?" dijawab dari nol — model tidak
+        // tahu baris mana yang dimaksud dan menjawab seolah lupa.
+        if ($riwayatPesan !== []) {
+            $answerSystemPrompt .= "\n\nKONTEKS PERCAKAPAN SESI INI (lama → baru):" . $riwayatBlok
+                . "\nPertanyaan user berikutnya adalah LANJUTAN percakapan di atas. Rujuk hasil yang sudah "
+                . 'ditampilkan (mis. baris LINE 66 pada tabel sebelumnya) tanpa meminta user mengulang '
+                . 'pertanyaan atau menyebutkan ulang periodenya. DILARANG menjawab bahwa kamu tidak punya '
+                . 'riwayat/konteks percakapan.';
+        }
+
+        $answer = $this->callProvider($providerKey, $answerSystemPrompt, array_merge($riwayatPesan, [
             ['role' => 'user', 'content' => "Pertanyaan user: {$userMessage}\n\nData JSON (maks {$maxRows} baris):\n{$rowsJson}"],
-        ]);
+        ]));
 
         $format = $this->detectExportFormat($userMessage);
         $export = $this->exportRows($rows, $format, $userMessage);
@@ -1180,7 +1331,7 @@ class AiChatService
      * sistem rusak. Di sini AI diminta menjawab sebagai asisten (tanpa akses
      * database) dan menawarkan pertanyaan lain yang diizinkan.
      */
-    protected function jawabTanpaSql(string $providerKey, string $userMessage): string
+    protected function jawabTanpaSql(string $providerKey, string $userMessage, ?ChatbotSession $session = null): string
     {
         $default = 'Halo! Saya AI Assistant HRIS PT Chutex International Indonesia. '
             . 'Saya bisa membantu menampilkan data karyawan (nama, NPK, departemen, jabatan, status), '
@@ -1206,10 +1357,19 @@ class AiChatService
             4. Bahasa Indonesia, ringkas, maksimal 5 kalimat, tanpa tabel dan tanpa blok kode.
             PROMPT;
 
+        $riwayatTanpaSql = $session ? $this->pesanRiwayat($session) : [];
+
+        if ($riwayatTanpaSql !== [] && $session) {
+            $systemPrompt .= "\n\n" . trim($this->blokRiwayatPercakapan($session))
+                . "\nPesan terakhir user adalah LANJUTAN percakapan di atas. Kalau jawaban sebelumnya sudah "
+                . 'menampilkan data (mis. tabel turnover), rujuk data itu — jangan menjawab bahwa kamu tidak '
+                . 'punya riwayat/konteks. Jangan mengarang angka baru.';
+        }
+
         try {
-            $jawab = trim($this->callProvider($providerKey, $systemPrompt, [
+            $jawab = trim($this->callProvider($providerKey, $systemPrompt, array_merge($riwayatTanpaSql, [
                 ['role' => 'user', 'content' => $userMessage],
-            ]));
+            ])));
         } catch (\Throwable $e) {
             $jawab = '';
         }
@@ -1448,7 +1608,12 @@ class AiChatService
     protected function urlExport(string $disk, string $path, string $filename): string
     {
         try {
-            return route('chatbot.exports.download', ['filename' => $filename]);
+            // URL RELATIF (tanpa host). Kalau memakai URL absolut dari APP_URL,
+            // gambar bisa gagal dimuat ketika user membuka aplikasi dari host
+            // lain (localhost vs 192.168.x.x) karena cookie sesi tidak ikut
+            // terkirim -> permintaan gambar dialihkan ke /login dan grafik
+            // tampak "tidak ada" di bubble.
+            return route('chatbot.exports.download', ['filename' => $filename], false);
         } catch (\Throwable $e) {
             return Storage::disk($disk)->url($path);
         }

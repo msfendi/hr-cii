@@ -34,8 +34,11 @@
 - 24 tabel **menolak `SELECT *`** (lihat Bagian 6). Penolakan bersifat per kolom: `PKWT` tetap bisa
   dibaca dengan kolom eksplisit. Itu batas akses, bukan tabel hilang.
 - SQL Server 2014: **tanpa** `TRIM`, `STRING_SPLIT`, `CONCAT_WS`, `OPENJSON`.
+- Riwayat percakapan sesi WAJIB dipakai untuk pertanyaan lanjutan (R26) — jangan menjawab "tidak punya konteks".
+- Turnover = **keluar ÷ aktif × 100** (R27); `AKTIF = 0` → tampil `-`, bukan `0.00`.
+- Line: **LINE 1–42 = Factory 2**, **LINE 43–84 = Factory 1**, non-line = "Lainnya" (R28). Top N = agregasi per unit (R29).
 
-## 1. ATURAN WAJIB (R1–R25)
+## 1. ATURAN WAJIB (R1–R30)
 
 Aturan berikut bersifat mengikat. Bila satu aturan bertentangan dengan kebiasaan umum SQL,
 **aturan di dokumen ini yang menang**, karena disusun dari data nyata database CII.
@@ -190,6 +193,58 @@ Aturan berikut bersifat mengikat. Bila satu aturan bertentangan dengan kebiasaan
 
 **Yang harus dilakukan:** Jangan SELECT keempat tabel itu, termasuk sebagai pembanding atau validasi. Kehadiran → R24; lembur → `overtimes`/`overtimes_payroll`; gaji → `payroll_run_details`. Kalau diminta, jelaskan larangannya dan tawarkan sumber pengganti.
 
+### R26. WAJIB memakai riwayat percakapan: pertanyaan lanjutan merujuk jawaban sebelumnya.
+
+**Kenapa:** Pengguna bertanya lanjutan tanpa mengulang periode/departemen, contoh nyata: setelah tabel turnover Oktober ditampilkan, user bertanya **"kenapa line 66 aktifnya 0?"**. Pertanyaan itu tidak memuat nama tabel, periode, atau definisi apa pun. Kalau riwayat diabaikan, model menjawab seolah tidak pernah menampilkan tabel tersebut ("saya tidak punya konteks") — ini keluhan langsung pengguna (17 Nov 2026).
+
+**Yang harus dilakukan:**
+- Riwayat percakapan sesi (pesan user + jawaban AI sebelumnya, termasuk query yang dipakai) DIKIRIM ke model dan dianggap konteks resmi. Jangan menyatakan tidak punya riwayat.
+- Kalau pertanyaan memakai rujukan ("itu", "nya", "tersebut", "tadi", "barusan", "kenapa X 0?") → ambil pertanyaan sebelumnya yang dirujuk, pertahankan tabel/JOIN/filter periode yang sama, lalu ubah seminimal mungkin untuk menjawab.
+- Kalau yang ditanyakan adalah satu angka dari tabel sebelumnya, jalankan query verifikasi untuk objek itu (bukan NO_QUERY), lalu jelaskan angka tersebut dengan membandingkan ke baris yang sudah tampil.
+- Kalau rujukannya benar-benar tidak jelas (ada dua kandidat), tanya satu hal: "maksudnya LINE 66 pada tabel turnover Oktober?" — jangan menebak dan jangan mengulang semua data.
+
+### R27. Turnover = karyawan keluar ÷ karyawan aktif × 100 (penyebut aktif, bukan headcount awal).
+
+**Kenapa:** Ini formula yang dipakai laporan HR yang sudah diterima pengguna. Verifikasi dari laporan Oktober 2026: QC 21/119 = 17,65%; PACKING 14/55 = 25,45%; IRONING 12/37 = 32,43%; LINE 41 5/16 = 31,25%. Semua cocok dengan `keluar / aktif × 100`. Formula lain (mis. rata-rata awal+akhir) akan menghasilkan angka berbeda dan dianggap salah.
+
+**Yang harus dilakukan:**
+- Kolom hasil: `MASUK` (jumlah karyawan dengan `PKWT.TMK` di dalam periode), `KELUAR` (`PKWT.TKK` di dalam periode), `AKTIF` (karyawan yang ada di `BIODATA` pada unit itu), `TURNOVER_PCT`.
+- `TURNOVER_PCT = 100.0 * KELUAR / AKTIF`, dibulatkan 2 desimal (`DECIMAL(10,2)`), pembagian memakai `100.0 *` supaya tidak integer division.
+- **Kalau `AKTIF = 0`: JANGAN tulis `0.00` atau `.00`.** Penyebut nol berarti turnover tidak terdefinisi, bukan nol persen. Pakai `NULL`/`-` dan jelaskan di kalimat: "LINE 66 tidak punya karyawan aktif pada saat data diambil, jadi turnover tidak bisa dihitung (penyebut 0)".
+- `AKTIF` adalah snapshot **hari ini** (`BIODATA` hanya berisi karyawan aktif), bukan posisi akhir periode lampau. Sebutkan asumsi ini sekali di catatan kaki jawaban.
+- Jangan menghitung `MASUK` dari `BIODATA.TMK` (kolom itu tidak menjamin periode masuk) dan jangan memakai `PKWT_OUT` (arsip lama).
+
+### R28. Pemetaan LINE → Factory: LINE 1–42 = **Factory 2**, LINE 43–84 = **Factory 1**, sisanya "Lainnya".
+
+**Kenapa:** Pabrik memakai dua gedung: nomor line rendah di Factory 2, nomor line tinggi di Factory 1. Pengguna menetapkan batas ini secara eksplisit (17 Nov 2026). Tanpa aturan ini, laporan per factory tidak bisa dibuat dan AI cenderung menebak atau mengabaikan factory sama sekali.
+
+**Yang harus dilakukan:**
+- Nomor line diambil dari teks departemen `DEPT.DEPARTEMENT` yang memuat pola `LINE <nomor>` (contoh nyata: `SEWING LINE 66`, `LEADER SEWING LINE 18`). Ekstraksi aman di SQL Server 2014: `TRY_CAST(SUBSTRING(DEPARTEMENT, PATINDEX('%LINE %', DEPARTEMENT) + 5, 3) AS int)`.
+- `NO_LINE BETWEEN 1 AND 42` → `'Factory 2'`; `NO_LINE BETWEEN 43 AND 84` → `'Factory 1'`.
+- Departemen yang BUKAN line (QC, PACKING, IRONING, CUTTING, SNAP, ACCOUNTING, dst.) dan line di luar 1–84 → `'Lainnya'` (non-line). Ini bukan kesalahan data: departemen penunjang memang tidak punya nomor line.
+- Nomor line yang sama bisa muncul di beberapa departemen (mis. `SEWING LINE 66` dan `LEADER SEWING LINE 66`) — **gabungkan menjadi satu baris `LINE 66`**, jangan tampilkan per sebutan departemen.
+- Factory adalah atribut turunan. Jangan menambah tabel/kolom baru, dan jangan menyimpannya ke database (koneksi read-only).
+
+### R29. "Top N per departemen" = agregasi per unit, bukan deretan baris LINE mentah.
+
+**Kenapa:** Pada jawaban 17 Nov 2026, permintaan "top 10 departement" dijawab dengan baris `LINE 38`, `LINE 66`, `LINE 65`, `LINE 84` — itu unit line, bukan departemen, dan departemen non-line (QC, PACKING, IRONING, CUTTING, SNAP) tercampur tanpa penjelasan. Pengguna langsung mempertanyakan dasar "top 10"-nya.
+
+**Yang harus dilakukan:**
+- Tentukan level agregasi dari pertanyaan: **per departemen** → `DEPT.DEPARTEMENT` (dengan line digabung per nomor sesuai R28); **per factory** → hanya 3 baris (`Factory 1`, `Factory 2`, `Lainnya`); **per line** → hanya kalau user menyebut line.
+- `TOP n` harus dihitung dari hasil agregasi (`TOP 10` → 10 baris kelompok), lalu `ORDER BY` kolom angka yang diminta. Kalau user tidak menyebut kolom urut, urutkan `KELUAR DESC` lalu `AKTIF DESC`.
+- Sertakan kolom `FACTORY` di samping nama unit supaya jelas baris itu milik factory mana.
+- Jangan pernah memakai `TOP 10` pada tabel mentah karyawan lalu mengelompokkan sesudahnya — hasilnya bukan top 10 kelompok.
+- Sebutkan di jawaban: level agregasi yang dipakai, kolom pengurut, dan periode.
+
+### R30. Angka 0 / kosong wajib diverifikasi dan dijelaskan, bukan dicetak mentah.
+
+**Kenapa:** Baris `LINE 66 — masuk 22, keluar 6, aktif 0, turnover .00` adalah angka yang benar secara aritmetika tetapi menyesatkan tanpa penjelasan; pengguna menanyakannya dan AI tidak bisa menjawab karena tidak memeriksa ulang.
+
+**Yang harus dilakukan:**
+- Kalau satu unit menunjukkan `AKTIF = 0` padahal ada `MASUK`/`KELUAR` pada periode itu, jalankan satu query pemeriksa (mis. hitung karyawan `BIODATA` di semua departemen yang mengandung `LINE 66`, plus hitung yang keluar) sebelum menyimpulkan.
+- Kemungkinan penyebab yang harus disebut, bukan ditebak: line sudah ditutup/digabung, seluruh karyawannya keluar pada periode itu, karyawan dipindah ke departemen lain (`employee_mutations`), atau departemen tidak lagi ada di `BIODATA`.
+- Jangan menulis "data tidak ditemukan" kalau yang terjadi hanya penyebut nol atau salah level agregasi.
+
 ## 2. PETA KEPUTUSAN: PERTANYAAN → TABEL → KOLOM → JOIN
 
 Gunakan tabel ini untuk memilih tabel. Kolom join di sini sudah diverifikasi.
@@ -206,6 +261,9 @@ Kalau pertanyaan tidak ada di daftar, cari tabelnya di Bagian 5 berdasarkan doma
 | Cuti/izin | `leave_requests` + `leave_types` + `BIODATA` | `status='approved'`, rentang tanggal | `leave_requests.leave_type_id = leave_types.id`; `leave_requests.npk = BIODATA.NPK` | Status huruf kecil. |
 | Gaji/slip per karyawan | `payroll_run_details` + `payroll_runs` + `payroll_periods` | `payroll_run_details.employee_npk`; `payroll_periods.is_closed = 1` | `run_id = payroll_runs.id`; `payroll_runs.period_id = payroll_periods.id` | Akses akun read-only ditolak → sampaikan tidak bisa diakses, jangan mengarang angka. |
 | Departemen & jumlah karyawan per dept | `DEPT` + `BIODATA` | `BIODATA.STATUS='A'` | `BIODATA.ID_DEPT = DEPT.ID_DEPT` | Nama dept di `DEPT.DEPARTEMENT`. `DEPT.SECTION` selalu 'CHUTEX'. |
+| Turnover karyawan per departemen/line/factory per periode | `PKWT` + `BIODATA` + `BIODATA_KELUAR` + `DEPT` | `PKWT.TMK` (masuk) / `PKWT.TKK` (keluar) dalam periode; aktif `BIODATA.STATUS='A'` | `PKWT.NPK = BIODATA.NPK` atau `= BIODATA_KELUAR.NPK`; `ID_DEPT = DEPT.ID_DEPT` | Turnover % = keluar/aktif×100 (R27). Factory dari nomor line di `DEPARTEMENT` (R28). Top N = agregasi per unit (R29). Resep 6. |
+| Turnover per factory (LINE 1–42 vs 43–84) | sama seperti turnover | sama | sama | Hanya 3 baris: Factory 1, Factory 2, Lainnya (R28). Jangan tampilkan baris LINE mentah kalau yang diminta per departemen (R29). |
+| Kenapa nilai 0 / kosong pada baris yang sudah ditampilkan | tabel penyebab | verifikasi ulang objek yang ditanya | sesuai pertanyaan sebelumnya | Pertanyaan lanjutan → pakai riwayat + query terakhir sebagai dasar (R26), lalu jelaskan penyebabnya (R30). |
 | Mutasi antar departemen | `employee_mutations` | rentang `date` | `from_dept`/`to_dept` → `DEPT.ID_DEPT` | `from_dept` NULL = karyawan baru; `to_dept` NULL = keluar. |
 | Order produksi / status order | `mon_orders` + `mon_work_orders` | filter tanggal/status order | `mon_orders.id = mon_work_orders.order_id` (verifikasi nama kolom di Bagian 5) | Banyak kolom; pilih eksplisit, jangan SELECT *. |
 | PO pembelian / supplier | `mon_purchase_orders` + `mon_ms_suppliers` | rentang tanggal PO | `po_id` header-detail; supplier via kode/nama | Kata kunci item bisa ada di dua kolom (uraian & spesifikasi). |
@@ -455,7 +513,97 @@ WHERE lr.status = 'approved'                 -- huruf kecil (R8 pada kamus nilai
 ORDER BY lr.start_date;
 ```
 
-### 2.6 Yang tidak boleh dilakukan (anti-pola)
+### 2.6 RESEP 6 — Turnover per departemen / line / factory (R27–R30)
+
+**Jawaban singkat:** `MASUK` = `PKWT.TMK` dalam periode, `KELUAR` = `PKWT.TKK` dalam periode,
+`AKTIF` = karyawan di `BIODATA` (snapshot hari ini), `TURNOVER %` = `100.0 * KELUAR / AKTIF`.
+Nomor line diekstrak dari `DEPT.DEPARTEMENT`, lalu dipetakan: 1–42 → Factory 2, 43–84 → Factory 1,
+selain itu → Lainnya (R28).
+
+> **Status uji:** resep ini disusun dari skema terdokumentasi Bagian 5 dan angka pembanding laporan
+> Oktober 2026 (QC 21/119, PACKING 14/55, IRONING 12/37, LINE 41 5/16 — semuanya cocok dengan formula
+> R27). **Belum dijalankan dari VM pengembangan** karena DB CII `192.168.3.88:1433` tidak terjangkau dari
+> sana; kalau ada error kolom, laporkan nama kolomnya — jangan mengarang angka pengganti.
+
+```sql
+WITH orang AS (                             -- semua orang + departemennya (aktif & keluar)
+    SELECT b.NPK, b.ID_DEPT FROM dbo.BIODATA b
+    UNION
+    SELECT k.NPK, k.ID_DEPT FROM dbo.BIODATA_KELUAR k
+),
+dim AS (                                    -- normalisasi unit: nomor line dari nama departemen
+    SELECT DISTINCT
+           d.ID_DEPT,
+           CASE WHEN l.NO_LINE BETWEEN 1 AND 84
+                THEN 'LINE ' + CAST(l.NO_LINE AS varchar(3))
+                ELSE d.DEPARTEMENT END                        AS UNIT,
+           CASE WHEN l.NO_LINE BETWEEN 1 AND 42 THEN 'Factory 2'
+                WHEN l.NO_LINE BETWEEN 43 AND 84 THEN 'Factory 1'
+                ELSE 'Lainnya' END                            AS FACTORY
+    FROM dbo.DEPT d
+    CROSS APPLY (SELECT TRY_CAST(SUBSTRING(d.DEPARTEMENT,
+                     PATINDEX('%LINE %', d.DEPARTEMENT) + 5, 3) AS int) AS NO_LINE) l
+),
+unit_orang AS (
+    SELECT o.NPK, x.UNIT, x.FACTORY
+    FROM orang o JOIN dim x ON x.ID_DEPT = o.ID_DEPT
+),
+masuk AS (
+    SELECT u.UNIT, COUNT(DISTINCT p.NPK) AS MASUK
+    FROM dbo.PKWT p JOIN unit_orang u ON u.NPK = p.NPK
+    WHERE p.TMK >= '2026-10-01' AND p.TMK < '2026-11-01'
+    GROUP BY u.UNIT
+),
+keluar AS (
+    SELECT u.UNIT, COUNT(DISTINCT p.NPK) AS KELUAR
+    FROM dbo.PKWT p JOIN unit_orang u ON u.NPK = p.NPK
+    WHERE p.TKK >= '2026-10-01' AND p.TKK < '2026-11-01'
+    GROUP BY u.UNIT
+),
+aktif AS (
+    SELECT u.UNIT, COUNT(DISTINCT u.NPK) AS AKTIF
+    FROM unit_orang u JOIN dbo.BIODATA b ON b.NPK = u.NPK
+    GROUP BY u.UNIT
+)
+SELECT TOP 10 f.FACTORY, f.UNIT AS DEPARTEMENT,
+       ISNULL(m.MASUK, 0)  AS MASUK,
+       ISNULL(k.KELUAR, 0) AS KELUAR,
+       ISNULL(a.AKTIF, 0)  AS AKTIF,
+       CASE WHEN ISNULL(a.AKTIF, 0) = 0 THEN NULL        -- penyebut 0 → NULL, BUKAN 0.00 (R27)
+            ELSE CAST(100.0 * ISNULL(k.KELUAR, 0) / a.AKTIF AS DECIMAL(10,2)) END AS TURNOVER_PCT
+FROM aktif a
+JOIN (SELECT DISTINCT UNIT, FACTORY FROM dim) f ON f.UNIT = a.UNIT
+LEFT JOIN masuk  m ON m.UNIT = a.UNIT
+LEFT JOIN keluar k ON k.UNIT = a.UNIT
+WHERE ISNULL(m.MASUK, 0) + ISNULL(k.KELUAR, 0) > 0
+ORDER BY KELUAR DESC, AKTIF DESC;
+```
+
+**Varian per factory** (kalau user minta "gabungkan jadi 2 factory"): sama seperti di atas, tetapi
+`aktif`/`masuk`/`keluar` dikelompokkan `GROUP BY u.FACTORY` dan hasilnya hanya 3 baris
+(`Factory 1`, `Factory 2`, `Lainnya`) — bukan baris per line.
+
+**Pemeriksa satu line** (dipakai untuk pertanyaan lanjutan "kenapa LINE 66 aktifnya 0?" — R26/R30):
+
+```sql
+SELECT d.DEPARTEMENT,
+       SUM(CASE WHEN b.NPK IS NULL THEN 0 ELSE 1 END) AS KARYAWAN_AKTIF,
+       (SELECT COUNT(DISTINCT p.NPK) FROM dbo.PKWT p
+         WHERE p.TKK >= '2026-10-01' AND p.TKK < '2026-11-01'
+           AND EXISTS (SELECT 1 FROM dbo.BIODATA_KELUAR k
+                        WHERE k.NPK = p.NPK AND k.ID_DEPT = d.ID_DEPT)) AS KELUAR_PERIODE
+FROM dbo.DEPT d
+LEFT JOIN dbo.BIODATA b ON b.ID_DEPT = d.ID_DEPT AND b.STATUS = 'A'
+WHERE d.DEPARTEMENT LIKE '%LINE 66%'
+GROUP BY d.ID_DEPT, d.DEPARTEMENT
+ORDER BY KARYAWAN_AKTIF DESC;
+```
+
+Kalau semua baris `KARYAWAN_AKTIF = 0`, jawabannya: tidak ada karyawan aktif pada line tersebut
+(line ditutup/digabung atau seluruh karyawannya keluar/dipindah) → turnover **tidak terdefinisi**,
+bukan 0%. Sebutkan `employee_mutations` kalau perlu memastikan ada perpindahan.
+
+### 2.7 Yang tidak boleh dilakukan (anti-pola)
 
 | Anti-pola | Akibat | Benar |
 |---|---|---|
@@ -471,6 +619,10 @@ ORDER BY lr.start_date;
 | `WHERE DAY='Senin'` | melewatkan 118 ribu baris berbahasa Inggris | jangan filter hari, atau pakai `DATEPART` |
 | `WHERE status='APPROVED'` | 0 baris (data huruf kecil) | `status='approved'` |
 | Menyimpulkan 'tabel tidak ada' saat error 229/230 | salah diagnosa | sampaikan 'akses dibatasi' |
+| `TURNOVER = 0.00` saat `AKTIF = 0` | penyebut nol dilaporkan sebagai 0% — menyesatkan | `NULL`/`-` + penjelasan (R27) |
+| `TOP 10` diambil dari baris LINE mentah lalu disebut "top 10 departemen" | level agregasi salah; pengguna mempertanyakan dasarnya | agregasi per departemen/factory dulu, baru `TOP 10` (R29) |
+| Menjawab "saya tidak punya riwayat/konteks" pada pertanyaan lanjutan | mengulang pekerjaan user; jawaban tidak nyambung | pakai riwayat + query terakhir (R26) |
+| Menyebut QC/PACKING/IRONING sebagai "Factory 1/2" | departemen non-line bukan bagian dari line | `Lainnya` (R28) |
 
 ## 3. KAMUS NILAI (arti kode yang tersimpan)
 
@@ -4501,3 +4653,14 @@ bahwa penyamaran dilakukan (R19).
 Dokumen ini dibuat dari dump skema 12 Nov 2026 dan diverifikasi ulang ke database pada 16 Nov 2026.
 Bila struktur tabel berubah setelah tanggal tersebut, dokumen ini harus diperbarui — jangan
 menganggapnya berlaku selamanya.
+### 9.1 Verifikasi perubahan 17 Nov 2026 (R26–R30 + konteks percakapan)
+
+| Yang diperiksa | Metode | Hasil |
+|---|---|---|
+| Jumlah aturan terbaca | `RagRules::sidik()` | 30 aturan (R1–R30), dokumen 4.700+ baris |
+| R26–R30 masuk prompt | cetak `ringkasanPrompt('turnover ...')` | R26, R27, R28, R29, R30 ADA; prompt 23.994 karakter |
+| Bagian 7–8 tidak terpotong | periksa ekor prompt | `BATASAN` dan `FORMAT JAWABAN` ADA (sebelum perbaikan urutan keduanya hilang) |
+| Riwayat masuk prompt SQL | test `handleRag` dengan provider tiruan | prompt memuat `RIWAYAT PERCAKAPAN SESI INI` + `QUERY TERAKHIR YANG BERHASIL`; pesan provider = user, assistant, user |
+| Pertanyaan lanjutan dijawab | provider sungguhan, 2 percobaan | dengan riwayat: menyebut LINE 66 dan menjelaskan pembagi 0; tanpa riwayat: hanya minta detail |
+| Unit test chatbot | `php vendor/bin/phpunit --testsuite Unit` | 66 test lulus (9 di antaranya `ChatbotConversationContextTest`) |
+| Resep 6 dijalankan ke DB | — | **BELUM** — DB CII tidak terjangkau dari VM pengembangan; wajib diuji di server aplikasi |

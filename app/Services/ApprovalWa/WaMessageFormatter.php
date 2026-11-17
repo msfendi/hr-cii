@@ -76,7 +76,7 @@ class WaMessageFormatter
         Yth. *$approverName*,
         mohon berikan keputusan Anda:
 
-        ✅ *Setujui* → $approveLink
+        ✅ *Approve* → $approveLink
         ❌ *Tolak* → $rejectLink
 
         Atau balas langsung ke chat ini:

@@ -172,18 +172,44 @@ class RagRules
                 . $relevan;
         }
 
-        $penutup = [];
-        foreach (['6', '7', '8'] as $nomor) {
+        // Bagian 7 (batasan SQL Server) dan Bagian 8 (format jawaban) WAJIB ikut
+        // SEBELUM Bagian 6. Sebelumnya urutannya 6 → 7 → 8, dan begitu isi
+        // Bagian 1 bertambah (R26–R30), pemotongan jatuh di tengah Bagian 6
+        // sehingga Bagian 7–8 hilang tanpa jejak. Bagian 6 hanyalah tabel
+        // rujukan tabel yang menolak SELECT * — larangan itu tetap ditegakkan
+        // di runtime lewat blockedTables()/blockedColumns().
+        $wajib = [];
+        foreach (['7', '8'] as $nomor) {
             if (! empty($dok['bagian'][$nomor])) {
-                $penutup[] = $dok['bagian'][$nomor];
+                $wajib[] = $dok['bagian'][$nomor];
             }
         }
 
-        if ($penutup !== []) {
-            $blok .= "\n\n" . implode("\n\n", $penutup);
+        if ($wajib !== []) {
+            $blok .= "\n\n" . implode("\n\n", $wajib);
         }
 
-        return $this->potong($blok);
+        $blok = $this->potong($blok);
+
+        // Bagian 6 diisi dengan SISA anggaran karakter saja.
+        $maks = (int) config('chatbot.rag_rules_max_chars', 24000);
+        $sisa = $maks - mb_strlen($blok);
+        $rujukan = (string) ($dok['bagian']['6'] ?? '');
+
+        if ($rujukan !== '' && $sisa > 400) {
+            $potongan = mb_substr($rujukan, 0, $sisa - 80);
+            // Potong di batas baris supaya prompt tidak berakhir di tengah kalimat.
+            $akhirBaris = strrpos($potongan, "\n");
+
+            if ($akhirBaris !== false) {
+                $potongan = substr($potongan, 0, $akhirBaris);
+            }
+
+            $blok .= "\n\n" . $potongan
+                . "\n[... Bagian 6 dipotong; larangan tetap berlaku, lihat dokumen asli ...]";
+        }
+
+        return $blok;
     }
 
     /**
