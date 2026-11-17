@@ -33,6 +33,7 @@ class WorkAssignmentRequest extends Model
         'jam_keluar',
         'rencana_kembali',
         'jam_kembali',
+        'attach_files',
         'approval_chain',
         'answers',
         'status',
@@ -43,6 +44,7 @@ class WorkAssignmentRequest extends Model
 
     protected $casts = [
         'duty_dates'      => 'array',
+        'attach_files'    => 'array',
         'approval_chain' => 'array',
         'answers'        => 'array',
         'start_date'     => 'date',
@@ -202,7 +204,7 @@ class WorkAssignmentRequest extends Model
             $tone   = 'secondary';
         } else {
             $status = 'pending';
-            $label  = 'Menunggu Persetujuan';
+            $label  = 'Menunggu';
             $tone   = 'warning';
         }
 
