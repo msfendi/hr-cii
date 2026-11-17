@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#040a16">
+    <script>
+        /* Tema terang/gelap HRIS v2.
+           Nilai disimpan di localStorage browser (permintaan 17 Nov 2026) dan
+           dipasang sebagai atribut di <html> SEBELUM CSS dimuat, supaya tidak
+           ada kedipan warna saat halaman dibuka. Bawaan: TERANG. */
+        (function () {
+            var tema = 'light';
+            try {
+                var tersimpan = window.localStorage.getItem('chutex_v2_theme');
+                if (tersimpan === 'dark' || tersimpan === 'light') {
+                    tema = tersimpan;
+                }
+            } catch (e) { /* localStorage diblokir: pakai bawaan */ }
+            document.documentElement.setAttribute('data-v2-theme', tema);
+        })();
+    </script>
     <title>@yield('judul', 'Portal HRIS v2') — Chutex International Indonesia</title>
 
     <link href="{{ asset('vendor/fontawesome-free/css/all.min.css') }}" rel="stylesheet">
@@ -119,11 +135,21 @@
             display: flex; align-items: center; justify-content: space-between; gap: 14px;
         }
         .v2-brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none !important; min-width: 0; }
+        /* Logo memakai SVG resmi sebagai mask: bentuknya tetap, warnanya
+           diatur CSS — biru di tema terang, putih di tema gelap. */
+        .v2-logo-mask {
+            display: block;
+            flex: 0 0 auto;
+            background-image: linear-gradient(135deg, #1d3f86, #3a6fa8);
+            -webkit-mask: url("/img/logo-chutex.svg") no-repeat center / contain;
+            mask: url("/img/logo-chutex.svg") no-repeat center / contain;
+        }
+        html[data-v2-theme="dark"] .v2-logo-mask {
+            background-image: linear-gradient(135deg, #ffffff, #eaf1ff);
+        }
         .v2-brand-logo {
-            height: 26px; width: auto; display: block;
-            /* logo asli biru-di-transparan -> siluet putih agar kontras di navy */
-            filter: brightness(0) invert(1);
-            opacity: .96;
+            height: 26px;
+            width: 37px; /* rasio asli 378 x 264 */
         }
         .v2-brand-text { display: flex; flex-direction: column; line-height: 1.12; min-width: 0; }
         .v2-brand-title { color: #fff; font-size: .95rem; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
@@ -186,10 +212,16 @@
             background: linear-gradient(90deg, transparent, var(--v2-info));
         }
 
-        /* Logo hero: PNG biru -> siluet putih, tanpa mix-blend-mode */
+        /* Logo hero: memakai mask SVG resmi (warna mengikuti tema).
+           .v2-hero-head memaksa susunan satu kolom supaya logo selalu DI ATAS
+           tulisan "Human Resource Information System", bukan di sampingnya. */
+        .v2-hero-head {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 14px; margin-bottom: 15px;
+        }
+        .v2-hero-head .v2-kicker { margin-bottom: 0; }
         .v2-logo-hero {
-            display: block; height: 104px; width: auto; margin: 0 auto 18px;
-            filter: brightness(0) invert(1); opacity: .96;
+            height: 104px; width: 149px; margin: 0 auto 18px;
         }
         .v2-hero-logo { display: flex; justify-content: center; }
         .v2-hero-logo img {
@@ -197,7 +229,8 @@
             filter: brightness(0) invert(1); opacity: .96;
         }
         @media (max-width: 575.98px) {
-            .v2-logo-hero, .v2-hero-logo img { height: 76px; }
+            .v2-logo-hero { height: 76px; width: 109px; }
+            .v2-hero-logo img { height: 76px; }
         }
 
         /* Typing line */
@@ -298,7 +331,7 @@
         .v2-menu-icon {
             width: 52px; height: 52px; border-radius: 14px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.15rem; color: #bfe0ff; font-weight: 600;
+            font-size: 1.15rem; color: #ffffff; font-weight: 600;
             background: rgba(255, 255, 255, .06);
             border: 1px solid rgba(255, 255, 255, .12);
             transition: transform .3s ease, filter .3s ease;
@@ -369,8 +402,13 @@
             color: var(--v2-heading); font-weight: 600;
         }
         .v2 .card-footer { background: rgba(255, 255, 255, .03); border-top: 1px solid var(--v2-line); }
-        .v2 a:not(.btn):not(.v2-btn):not(.v2-menu-card):not(.v2-brand):not(.v2-nav a) { color: #7cc4ff; }
-        .v2 a:not(.btn):not(.v2-btn):not(.v2-menu-card):not(.v2-brand):not(.v2-nav a):hover { color: #a8d6ff; }
+        .v2 a:not(.btn):not(.v2-btn):not(.v2-menu-card):not(.v2-brand):not(.v2-nav a):not(.nav-link) { color: #7cc4ff; }
+        .v2 a:not(.btn):not(.v2-btn):not(.v2-menu-card):not(.v2-brand):not(.v2-nav a):not(.nav-link):hover { color: #a8d6ff; }
+        /* Tab pil: warna diatur khusus di blok .nav-pills, bukan oleh aturan
+           tautan umum (yang spesifisitasnya lebih tinggi dari .nav-link.active). */
+        .v2 .nav-pills .nav-item a.nav-link.active,
+        .v2 .nav-pills .nav-item a.nav-link.active:hover,
+        .v2 .nav-pills .nav-item a.nav-link.active i { color: #ffffff !important; }
         .v2 code {
             color: #7dd3fc; background: rgba(255, 255, 255, .06);
             padding: 2px 6px; border-radius: 6px; border: 1px solid var(--v2-line);
@@ -546,6 +584,227 @@
             .v2-wrap > * { animation: none; }
             #v2-canvas { animation: none; opacity: 1; }
         }
+
+        /* ================================================================
+           TEMA TERANG (bawaan) — HTML[data-v2-theme="light"]
+           ----------------------------------------------------------------
+           Tema asli v2 dirancang gelap (kaca transparan di atas navy), jadi
+           mode terang TIDAK cukup membalik warna latar: permukaan kaca harus
+           jadi putih solid, teks aksen yang tadinya terang harus jadi biru
+           tua, dan tabel/form yang memakai rgba putih harus punya border.
+           Semua aturan di bawah hanya berlaku saat tema terang aktif.
+           ================================================================ */
+        html[data-v2-theme="light"] body.v2 {
+            background:
+                radial-gradient(1100px 620px at 84% -12%, rgba(34, 211, 238, .16), transparent 62%),
+                radial-gradient(820px 520px at 4% 4%, rgba(59, 140, 255, .14), transparent 64%),
+                linear-gradient(180deg, #f7fafe 0%, #eef3fb 58%, #f8fbfe 100%);
+            background-color: #f4f8fd;
+            color: #334155;
+        }
+        html[data-v2-theme="light"] body.v2 h1,
+        html[data-v2-theme="light"] body.v2 h2,
+        html[data-v2-theme="light"] body.v2 h3,
+        html[data-v2-theme="light"] body.v2 h4,
+        html[data-v2-theme="light"] body.v2 h5,
+        html[data-v2-theme="light"] body.v2 h6 { color: #0f172a; }
+
+        /* Latar 3D dirancang untuk kanvas gelap; di mode terang partikelnya
+           tidak terlihat (aditif di atas putih) dan hanya menambah beban. */
+        html[data-v2-theme="light"] .v2-scene,
+        html[data-v2-theme="light"] .v2-vignette { display: none; }
+        html[data-v2-theme="light"] .v2-grid-glow {
+            background: linear-gradient(180deg, transparent, rgba(59, 140, 255, .07));
+        }
+
+        /* Topbar */
+        html[data-v2-theme="light"] .v2-topbar {
+            background: rgba(255, 255, 255, .88);
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, .05);
+        }
+        html[data-v2-theme="light"] .v2-brand-title { color: #0f172a; }
+        html[data-v2-theme="light"] .v2-brand-sub { color: #64748b; }
+        html[data-v2-theme="light"] .v2-nav a { color: #475569 !important; }
+        html[data-v2-theme="light"] .v2-nav a:hover,
+        html[data-v2-theme="light"] .v2-nav a.aktif { color: #1d4ed8 !important; }
+        html[data-v2-theme="light"] .v2-chip {
+            background: #e8f1ff; border: 1px solid #cfe0fb; color: #1d4ed8;
+        }
+
+        /* Hero & tipografi */
+        html[data-v2-theme="light"] .v2-hero h1,
+        html[data-v2-theme="light"] .v2-hero h2,
+        html[data-v2-theme="light"] .v2-hero h3 { color: #0f172a; }
+        html[data-v2-theme="light"] .v2-hero p { color: #475569; }
+        html[data-v2-theme="light"] .v2-kicker { color: #1d4ed8; }
+        html[data-v2-theme="light"] .v2-type-text { color: #334155; }
+
+        /* Kartu */
+        html[data-v2-theme="light"] .v2-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, .07);
+            color: #334155;
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+        html[data-v2-theme="light"] .v2-card::before { opacity: .9; }
+        html[data-v2-theme="light"] .v2-card:hover.v2-card-hover {
+            border-color: #bfd8fb;
+            box-shadow: 0 20px 44px rgba(15, 23, 42, .13), 0 0 0 1px rgba(59, 140, 255, .12);
+        }
+        html[data-v2-theme="light"] .v2-card-title { color: #0f172a; }
+        html[data-v2-theme="light"] .v2-menu-card,
+        html[data-v2-theme="light"] .v2-menu-card:hover { color: #334155; }
+        html[data-v2-theme="light"] .v2-menu-icon {
+            background: #e8f0fd; border-color: #cfdff8; color: #1d3f86;
+        }
+
+        /* Teks data */
+        html[data-v2-theme="light"] .v2-muted { color: #5b6b7f !important; }
+        html[data-v2-theme="light"] .v2-footnote { color: #5b6b7f; }
+        html[data-v2-theme="light"] .v2-divider { background: #e2e8f0; }
+        html[data-v2-theme="light"] .v2-label,
+        html[data-v2-theme="light"] .v2-kv-label { color: #1d4ed8; }
+        html[data-v2-theme="light"] .v2-value,
+        html[data-v2-theme="light"] .v2-kv-value { color: #0f172a; }
+
+        /* Badge */
+        html[data-v2-theme="light"] .v2-badge-navy { background: #e8f1ff; color: #1d4ed8; border-color: #cfe0fb; }
+        html[data-v2-theme="light"] .v2-badge-cyan { background: #e6fbff; color: #0e7490; border-color: #bff0fa; }
+        html[data-v2-theme="light"] .v2-badge-green { background: #e9fbf2; color: #047857; border-color: #bdf0d8; }
+        html[data-v2-theme="light"] .v2-badge-grey { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+        html[data-v2-theme="light"] .v2-badge-violet { background: #f3eeff; color: #6d28d9; border-color: #e2d8ff; }
+
+        /* Tombol selain primary (primary sudah kontras di dua tema) */
+        html[data-v2-theme="light"] .v2-btn-ghost {
+            background: #ffffff; border-color: #cbd5e1; color: #334155;
+        }
+        html[data-v2-theme="light"] .v2-btn-ghost:hover,
+        html[data-v2-theme="light"] .v2-btn-ghost:focus {
+            background: #f1f5f9; border-color: #94a3b8; color: #0f172a;
+        }
+        html[data-v2-theme="light"] .v2-btn-outline-primary { color: #1d4ed8; }
+        html[data-v2-theme="light"] .v2-btn-outline-primary:hover { background: rgba(59, 140, 255, .1); color: #0b3ba0; }
+
+        /* Tabel */
+        html[data-v2-theme="light"] .v2 .table { color: #334155; background: transparent; }
+        html[data-v2-theme="light"] .v2 .table thead th {
+            background: #f1f5f9; color: #0f172a; border-color: #e2e8f0;
+        }
+        html[data-v2-theme="light"] .v2 .table td,
+        html[data-v2-theme="light"] .v2 .table th { border-color: #e2e8f0; color: #334155; }
+        html[data-v2-theme="light"] .v2 .table thead th { color: #0f172a; }
+        /* Tautan di dalam .v2 memakai rantai :not() yang panjang (spesifisitas
+           (0,6,1)), jadi override tema terang harus menyalin rantai itu —
+           kalau tidak, tautan tetap biru muda di atas latar putih. */
+        html[data-v2-theme="light"] .v2 a:not(.btn):not(.v2-btn):not(.v2-menu-card):not(.v2-brand):not(.v2-nav a):not(.nav-link) { color: #1d4ed8; }
+        html[data-v2-theme="light"] .v2 a:not(.btn):not(.v2-btn):not(.v2-menu-card):not(.v2-brand):not(.v2-nav a):not(.nav-link):hover { color: #0b3ba0; }
+
+        /* Tab pil (Password / Face ID) di tema terang: tab terpilih berlatar
+           biru, jadi teks + ikonnya harus putih — bukan biru tua. */
+        html[data-v2-theme="light"] .v2 .nav-pills {
+            background: #eff6ff; border-color: #dbeafe;
+        }
+        html[data-v2-theme="light"] .v2 .nav-pills .nav-item a.nav-link { color: #1d4ed8; }
+        html[data-v2-theme="light"] .v2 .nav-pills .nav-item a.nav-link:hover { background: #dbeafe; color: #12326e; }
+        html[data-v2-theme="light"] .v2 .nav-pills .nav-item a.nav-link.active,
+        html[data-v2-theme="light"] .v2 .nav-pills .nav-item a.nav-link.active:hover,
+        html[data-v2-theme="light"] .v2 .nav-pills .nav-item a.nav-link.active i { color: #ffffff !important; }
+        html[data-v2-theme="light"] .v2 .nav-pills .nav-item a.nav-link.disabled { color: #94a3b8; }
+        html[data-v2-theme="light"] .v2 .table-striped tbody tr:nth-of-type(odd) { background: #f8fafc; }
+        html[data-v2-theme="light"] .v2 .table-hover tbody tr:hover { background: #eff6ff; }
+
+        /* Form */
+        html[data-v2-theme="light"] .v2 .form-control,
+        html[data-v2-theme="light"] .v2 .custom-select,
+        html[data-v2-theme="light"] .v2 .form-control-plaintext {
+            background: #ffffff; border: 1px solid #cbd5e1; color: #0f172a;
+        }
+        html[data-v2-theme="light"] .v2 .form-control::placeholder { color: #94a3b8; }
+        html[data-v2-theme="light"] .v2 .form-control:disabled,
+        html[data-v2-theme="light"] .v2 .form-control[readonly] { background: #f1f5f9; color: #64748b; }
+        html[data-v2-theme="light"] .v2 .input-group-text {
+            background: #f1f5f9; border-color: #cbd5e1; color: #475569;
+        }
+        html[data-v2-theme="light"] .v2 label,
+        html[data-v2-theme="light"] .v2 .col-form-label { color: #334155; }
+
+        /* Alert & tombol bawaan Bootstrap */
+        html[data-v2-theme="light"] .v2 .alert {
+            background: #ffffff; border-color: #e2e8f0; color: #334155;
+        }
+        html[data-v2-theme="light"] .v2 .alert-success { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+        html[data-v2-theme="light"] .v2 .alert-danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+        html[data-v2-theme="light"] .v2 .alert-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+        html[data-v2-theme="light"] .v2 .alert-info { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+        html[data-v2-theme="light"] .v2 .alert a { color: #1d4ed8; }
+        html[data-v2-theme="light"] .v2 .btn-secondary { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+        html[data-v2-theme="light"] .v2 .btn-outline-secondary { color: #475569; border-color: #cbd5e1; }
+        html[data-v2-theme="light"] .v2 .btn-link { color: #1d4ed8; }
+
+        /* Dropdown, modal, list, pagination */
+        html[data-v2-theme="light"] .v2 .dropdown-menu {
+            background-color: #ffffff; border-color: #e2e8f0;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, .14);
+        }
+        html[data-v2-theme="light"] .v2 .dropdown-item { color: #475569; }
+        html[data-v2-theme="light"] .v2 .dropdown-item:hover,
+        html[data-v2-theme="light"] .v2 .dropdown-item:focus { background-color: #eff6ff; color: #0f172a; }
+        html[data-v2-theme="light"] .v2 .modal-content {
+            background: #ffffff; border-color: #e2e8f0; color: #334155;
+            box-shadow: 0 26px 70px rgba(15, 23, 42, .2);
+        }
+        html[data-v2-theme="light"] .v2 .modal-title { color: #0f172a; }
+        html[data-v2-theme="light"] .v2 .list-group-item { color: #334155; border-color: #e2e8f0; }
+        html[data-v2-theme="light"] .v2 .page-link {
+            background-color: #ffffff; border-color: #e2e8f0; color: #1d4ed8;
+        }
+
+        /* Footer & scrollbar */
+        html[data-v2-theme="light"] .v2-footer {
+            background: rgba(255, 255, 255, .82);
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+        }
+        html[data-v2-theme="light"] .v2-footer strong { color: #0f172a; }
+        html[data-v2-theme="light"] .v2 ::-webkit-scrollbar-track { background: rgba(15, 23, 42, .04); }
+        html[data-v2-theme="light"] .v2 ::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .18); }
+
+        /* Kartu statistik biodata (kelas dipakai hris_v2/employee_biodata) */
+        html[data-v2-theme="light"] .bio-stat-val { color: #0f172a; }
+        html[data-v2-theme="light"] .bio-stat-row,
+        html[data-v2-theme="light"] .bio-stat { background: #f8fafc; }
+
+        /* Tombol ganti tema di topbar */
+        .v2-theme-toggle {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 6px 12px; border-radius: 999px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .18);
+            color: #dbe7f7; font-size: .74rem; font-weight: 600;
+            letter-spacing: .03em; cursor: pointer;
+            transition: background .22s ease, border-color .22s ease, color .22s ease;
+        }
+        .v2-theme-toggle i { font-size: .82rem; }
+        .v2-theme-toggle:hover, .v2-theme-toggle:focus {
+            background: rgba(59, 140, 255, .2);
+            border-color: rgba(59, 140, 255, .45);
+            color: #fff;
+        }
+        html[data-v2-theme="light"] .v2-theme-toggle {
+            background: #ffffff; border-color: #dbe4f0; color: #334155;
+        }
+        html[data-v2-theme="light"] .v2-theme-toggle:hover,
+        html[data-v2-theme="light"] .v2-theme-toggle:focus {
+            background: #eff6ff; border-color: #bfd8fb; color: #1d4ed8;
+        }
+        @media (max-width: 767.98px) {
+            html[data-v2-theme="light"] .v2-card { background: #ffffff; }
+            .v2-theme-toggle-label { display: none; }
+            .v2-theme-toggle { padding: 6px 9px; }
+        }
     </style>
     @stack('styles')
 </head>
@@ -557,7 +816,7 @@
 <header class="v2-topbar">
     <div class="v2-topbar-inner">
         <a href="{{ route('v2.portal') }}" class="v2-brand">
-            <img src="{{ asset('img/chutex_logo.png') }}" alt="PT Chutex International Indonesia" class="v2-brand-logo">
+            <span class="v2-logo-mask v2-brand-logo" role="img" aria-label="PT Chutex International Indonesia"></span>
             <span class="v2-brand-text">
                 <span class="v2-brand-title">Chutex HRIS</span>
                 <span class="v2-brand-sub">Human Resource Information System</span>
@@ -571,6 +830,12 @@
         </nav>
 
         <span class="v2-chip"><i class="fas fa-circle"></i> v2 · AI Integrated</span>
+
+        <button type="button" class="v2-theme-toggle" id="v2-theme-toggle"
+                aria-label="Ganti tema terang/gelap" title="Ganti tema terang/gelap">
+            <i class="fas fa-moon" id="v2-theme-icon" aria-hidden="true"></i>
+            <span class="v2-theme-toggle-label" id="v2-theme-label">Gelap</span>
+        </button>
     </div>
 </header>
 
@@ -584,6 +849,15 @@
 
     @yield('content')
 </main>
+
+{{-- What's New (TASK 2): modal sekali sehari + floating button pembuka.
+     Diletakkan SETELAH </main> supaya tidak terkurung stacking context
+     .v2-wrap (z-index:2) dan tidak tertutup .v2-footer. Halaman login
+     dikecualikan supaya modal tidak menutupi form.
+     Elemennya position:fixed, jadi tidak memengaruhi tata letak. --}}
+@unless (in_array(request()->route()?->getName(), ['v2.login', 'v2.employee.login'], true))
+    @include('partials.whats_new_slider', ['mode' => 'modal'])
+@endunless
 
 <div class="v2-footer">
     <strong>Chutex HRIS v2</strong> · AI Integrated · PT Chutex International Indonesia
@@ -662,6 +936,53 @@
 })();
 </script>
 @include('hris_v2._ai_button')
+<script>
+/* Tombol ganti tema: menyimpan pilihan ke localStorage dan memasang atribut
+   di <html> (bukan body) supaya semua aturan html[data-v2-theme="..."]
+   langsung berlaku tanpa memuat ulang halaman. */
+(function () {
+    'use strict';
+
+    var root = document.documentElement;
+    var tombol = document.getElementById('v2-theme-toggle');
+    var ikon = document.getElementById('v2-theme-icon');
+    var label = document.getElementById('v2-theme-label');
+
+    if (!tombol) { return; }
+
+    function temaAktif() {
+        return root.getAttribute('data-v2-theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    function perbarui() {
+        var tema = temaAktif();
+        var keGelap = tema === 'light';
+
+        if (ikon) {
+            ikon.className = keGelap ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        if (label) {
+            label.textContent = keGelap ? 'Gelap' : 'Terang';
+        }
+        tombol.setAttribute('aria-pressed', tema === 'dark' ? 'true' : 'false');
+        tombol.setAttribute('title', keGelap ? 'Ubah ke tema gelap' : 'Ubah ke tema terang');
+    }
+
+    tombol.addEventListener('click', function () {
+        var berikutnya = temaAktif() === 'light' ? 'dark' : 'light';
+
+        root.setAttribute('data-v2-theme', berikutnya);
+
+        try {
+            window.localStorage.setItem('chutex_v2_theme', berikutnya);
+        } catch (e) { /* mode privat: tema tetap berlaku untuk halaman ini */ }
+
+        perbarui();
+    });
+
+    perbarui();
+})();
+</script>
 @stack('scripts')
 </body>
 </html>

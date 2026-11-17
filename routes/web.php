@@ -87,6 +87,7 @@ use App\Http\Controllers\ThrProcessController;
 use App\Http\Controllers\WhatsappDeviceController;
 use App\Http\Controllers\WhatsappSendController;
 use App\Http\Controllers\WhatsappTemplateController;
+use App\Http\Controllers\WhatsNewController;
 use App\Models\PayrollComponent;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotificationsContractController;
@@ -1357,6 +1358,29 @@ Route::get('/employee-payroll/view-audit/{run_id}/{npk}', [EmployeePayrollContro
 Route::get('/employee-payroll/view', [EmployeePayrollController::class, 'verifyPassword'])->name('employee-payroll.verify-password');
 Route::get('/employee-payroll/api/period', [EmployeePayrollController::class, 'apiPeriods'])->name('employee-payroll-api.period');
 
+// ========================================
+// WHAT'S NEW — banner slider HRIS v1 & v2 (TASK 2)
+// Satu data dipakai kedua tampilan: judul, penjelasan singkat, gambar /
+// video, dan tombol opsional ke route atau URL. Didaftarkan sebelum grup
+// /admin lain supaya tidak tertangkap route berparameter.
+// ========================================
+// Penyaji berkas media banner (pengganti symlink public/storage yang tidak
+// dipakai proyek ini). Nama berkas dibatasi: tanpa garis miring / "..".
+Route::get('/whats-new/media/{berkas}', [WhatsNewController::class, 'media'])
+    ->where('berkas', '[A-Za-z0-9_\-\.]+')
+    ->name('whats-new.media');
+
+Route::prefix('admin/whats-new')->name('admin.whats-new.')
+    ->middleware(['auth', 'permission'])->group(function () {
+        Route::get('/', [WhatsNewController::class, 'index'])->name('index');
+        Route::get('/create', [WhatsNewController::class, 'create'])->name('create');
+        Route::post('/', [WhatsNewController::class, 'store'])->name('store');
+        Route::get('/{id}/edit', [WhatsNewController::class, 'edit'])->whereNumber('id')->name('edit');
+        Route::put('/{id}', [WhatsNewController::class, 'update'])->whereNumber('id')->name('update');
+        Route::delete('/{id}', [WhatsNewController::class, 'destroy'])->whereNumber('id')->name('destroy');
+        Route::post('/{id}/toggle', [WhatsNewController::class, 'toggle'])->whereNumber('id')->name('toggle');
+    });
+
 
 
 Route::prefix('event-invitation')->name('event-invitation.')->group(function () {
@@ -1776,6 +1800,10 @@ Route::prefix('v2')->name('v2.')->group(function () {
     // 2) Portal KARYAWAN — satu kali login (NPK + wajah).
     Route::get('/karyawan/login', [HrisV2Controller::class, 'employeeLogin'])->name('employee.login');
     Route::post('/karyawan/check-npk', [HrisV2Controller::class, 'employeeCheckNpk'])->name('employee.check-npk');
+    // Login tanpa kamera: NPK + tanggal lahir YYMMDD (PKWT.TGLLAHIR).
+    Route::post('/karyawan/login-tanggal-lahir', [HrisV2Controller::class, 'employeeLoginByBirth'])
+        ->middleware('throttle:10,1')
+        ->name('employee.login-lahir');
     Route::post('/karyawan/challenge', [HrisV2Controller::class, 'employeeChallenge'])->name('employee.challenge');
     Route::post('/karyawan/verify', [HrisV2Controller::class, 'employeeVerify'])->name('employee.verify');
     Route::post('/karyawan/logout', [HrisV2Controller::class, 'employeeLogout'])->name('employee.logout');

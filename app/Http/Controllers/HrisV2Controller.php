@@ -169,6 +169,126 @@ class HrisV2Controller extends Controller
     }
 
     /**
+     * Login karyawan TANPA kamera: NPK + tanggal lahir (format YYMMDD) yang
+     * diambil dari PKWT.TGLLAHIR (fallback BIODATA.TGL_LAHIR).
+     *
+     * Alur ini setara dengan login wajah: validasi NPK -> status karyawan
+     * aktif -> cocokkan tanggal lahir -> buat sesi lewat mulaiSesiKaryawan().
+     * Pesan gagal sengaja digabung (NPK salah dan tanggal salah memberi pesan
+     * yang sama) supaya tidak bisa dipakai menebak NPK mana yang terdaftar.
+     */
+    public function employeeLoginByBirth(Request $request)
+    {
+        if ($request->session()->get(EnsureHrisV2Employee::SESSION_NPK)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'You are already signed in.',
+                'redirect_url' => route('v2.employee.home'),
+            ]);
+        }
+
+        $validated = $request->validate([
+            'npk' => ['required', 'string', 'max:20'],
+            'tgl_lahir' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
+        ], [
+            'npk.required' => 'NPK is required.',
+            'tgl_lahir.required' => 'Birth date is required.',
+            'tgl_lahir.regex' => 'Birth date must be 6 digits in YYMMDD format (example: 980512).',
+        ]);
+
+        $npk = strtoupper(trim((string) $validated['npk']));
+        $inputLahir = (string) $validated['tgl_lahir'];
+        $pesanGagal = 'NPK and birth date do not match our records. Check the data on your PKWT and try again.';
+
+        // Gerbang pertama: karyawan yang sudah keluar langsung ditolak.
+        try {
+            $status = EmployeeActiveStatusService::check($npk);
+            if (($status['found'] ?? false) && ! ($status['active'] ?? false)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $this->pesanKaryawanNonaktif($status),
+                ], 403);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('HrisV2 login tanggal lahir gagal cek status aktif: ' . $e->getMessage());
+        }
+
+        $nama = '';
+        $tglLahirDb = null;
+
+        try {
+            $pkwt = DB::connection('cii')->table('PKWT')
+                ->where('NPK', $npk)
+                ->orderByDesc('TMK')
+                ->first(['NPK', 'NAMA', 'TGLLAHIR']);
+
+            if ($pkwt) {
+                $nama = (string) ($pkwt->NAMA ?? '');
+                $tglLahirDb = $pkwt->TGLLAHIR ?? null;
+            }
+
+            // NPK bisa ada di BIODATA walau belum punya baris PKWT.
+            if ($tglLahirDb === null) {
+                $biodata = DB::table('BIODATA')->where('NPK', $npk)->first();
+                if ($biodata) {
+                    $nama = $nama !== '' ? $nama : (string) ($biodata->NAMA_KARYAWAN ?? '');
+                    $tglLahirDb = $biodata->TGL_LAHIR ?? null;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('HrisV2 login tanggal lahir gagal baca data karyawan: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load employee data. Please try again.',
+            ], 500);
+        }
+
+        $yyyymmdd = null;
+        if ($tglLahirDb !== null && $tglLahirDb !== '') {
+            $ts = strtotime((string) $tglLahirDb);
+            if ($ts !== false) {
+                $yyyymmdd = date('ymd', $ts);
+            }
+        }
+
+        if ($yyyymmdd === null || ! hash_equals($yyyymmdd, $inputLahir)) {
+            Log::info('HRIS v2: login tanggal lahir ditolak', ['npk' => $npk]);
+
+            return response()->json(['success' => false, 'message' => $pesanGagal], 422);
+        }
+
+        if ($nama === '') {
+            $nama = $npk;
+        }
+
+        $this->mulaiSesiKaryawan($request, $npk, $nama, 'birthdate');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login successful. Opening the employee portal...',
+            'npk' => $npk,
+            'name' => $nama,
+            'redirect_url' => route('v2.employee.home'),
+        ]);
+    }
+
+    /** Pesan "karyawan sudah keluar" dalam bahasa Inggris untuk portal v2. */
+    protected function pesanKaryawanNonaktif(array $status): string
+    {
+        $pesan = 'You are not an active employee';
+        if (! empty($status['nama'])) {
+            $pesan .= ' (' . $status['nama'] . ')';
+        }
+        $pesan .= '. Your employment record shows you have left the company';
+        if (! empty($status['tkk'])) {
+            $pesan .= ' on ' . $this->formatTanggalPanjang($status['tkk']);
+        }
+
+        return $pesan . '. Please contact HRD for more information.';
+    }
+
+    /**
      * Terbitkan tantangan baru (mode random challenge) — mis. saat masa
      * berlaku tantangan habis sebelum karyawan selesai.
      */
@@ -394,20 +514,10 @@ class HrisV2Controller extends Controller
         try {
             $status = EmployeeActiveStatusService::check($npk);
             if (($status['found'] ?? false) && ! ($status['active'] ?? false)) {
-                // Pesan dari service dipakai juga oleh v1 (berbahasa Indonesia).
-                // Untuk portal v2 disusun ulang dalam bahasa Inggris tanpa
+                // Pesan dari service dipakai juga oleh v1 (berbahasa Indonesia);
+                // untuk portal v2 disusun ulang dalam bahasa Inggris tanpa
                 // mengubah isi service-nya.
-                $pesanNonaktif = 'You are not an active employee';
-                if (! empty($status['nama'])) {
-                    $pesanNonaktif .= ' (' . $status['nama'] . ')';
-                }
-                $pesanNonaktif .= '. Your employment record shows you have left the company';
-                if (! empty($status['tkk'])) {
-                    $pesanNonaktif .= ' on ' . $this->formatTanggalPanjang($status['tkk']);
-                }
-                $pesanNonaktif .= '. Please contact HRD for more information.';
-
-                return ['ok' => false, 'status' => 403, 'npk' => $npk, 'name' => $name, 'has_face' => false, 'message' => $pesanNonaktif];
+                return ['ok' => false, 'status' => 403, 'npk' => $npk, 'name' => $name, 'has_face' => false, 'message' => $this->pesanKaryawanNonaktif($status)];
             }
         } catch (\Throwable $e) {
             Log::warning('HrisV2 validateNpk gagal cek status aktif: ' . $e->getMessage());

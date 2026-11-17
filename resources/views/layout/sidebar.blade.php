@@ -312,4 +312,52 @@ window.Echo.channel('notification-channel')
 
 });
 }
+
+/*
+=====================================
+SIDEBAR: HANYA SATU PARENT TERBUKA
+=====================================
+Bootstrap 4 hanya menutup parent lain kalau elemen collapse-nya punya
+data-toggle="collapse" DAN data-parent sekaligus. Di sidebar ini
+data-parent ada di <div class="collapse">, sedangkan data-toggle ada di
+<a class="nav-link">, jadi syarat itu tidak pernah terpenuhi dan
+child beberapa parent bisa terbuka bersamaan (dilaporkan user 17 Nov 2026).
+
+Penutupan dilakukan sendiri di fase capture: sebelum Bootstrap membuka
+menu yang diklik, semua submenu lain di sidebar sudah ditutup.
+*/
+document.addEventListener('click', function (ev) {
+    const pemicu = ev.target.closest('#accordionSidebar a.nav-link[data-toggle="collapse"]');
+
+    if (!pemicu) {
+        return;
+    }
+
+    const selectorTarget = pemicu.getAttribute('data-target') || pemicu.getAttribute('href');
+    let target = null;
+
+    try {
+        target = selectorTarget ? document.querySelector(selectorTarget) : null;
+    } catch (e) {
+        target = null;
+    }
+
+    document.querySelectorAll('#accordionSidebar .collapse.show').forEach(function (terbuka) {
+        if (terbuka === target) {
+            return;
+        }
+
+        if (window.jQuery && window.jQuery.fn && window.jQuery.fn.collapse) {
+            window.jQuery(terbuka).collapse('hide');
+        } else {
+            terbuka.classList.remove('show');
+            terbuka.setAttribute('aria-expanded', 'false');
+            const link = document.querySelector('#accordionSidebar [data-target="#' + terbuka.id + '"]');
+            if (link) {
+                link.classList.add('collapsed');
+                link.setAttribute('aria-expanded', 'false');
+            }
+        }
+    });
+}, true);
 </script>

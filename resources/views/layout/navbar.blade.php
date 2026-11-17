@@ -493,3 +493,11 @@
     document.addEventListener('ajaxComplete', initNavbarHandlers);
 })();
 </script>
+
+{{-- What's New (TASK 2): slider banner yang diisi admin lewat
+     /admin/whats-new. Ditempel di akhir navbar supaya tampil di semua
+     halaman v1 yang sudah login tanpa mengubah tiap blade. Gagal senyap
+     bila tabel belum dimigrasi. --}}
+@if (auth()->check())
+    @include('partials.whats_new_slider')
+@endif

@@ -17,8 +17,8 @@
 @section('content')
 <section class="v2-hero auth-hero">
     <span class="v2-kicker">Employee portal</span>
-    <h1>Sign in with your face.</h1>
-    <p>NPK first, then face verification — no password to remember.</p>
+    <h1>Sign in with your face — or your birth date.</h1>
+    <p>Scan your face, or enter your NPK with the date of birth printed on your PKWT. No password to remember.</p>
 </section>
 
 <div class="row justify-content-center">
@@ -34,6 +34,22 @@
                     </div>
                 </div>
             </div>
+
+            {{-- TAB: scan wajah / NPK + tanggal lahir --}}
+            <ul class="nav nav-pills nav-justified mb-3" role="tablist" id="tabsLoginKaryawan">
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link active font-weight-bold" href="#panelWajah" data-tab="wajah" role="tab" aria-selected="true">
+                        <i class="fas fa-camera mr-1"></i> Face scan
+                    </a>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link font-weight-bold" href="#panelLahir" data-tab="lahir" role="tab" aria-selected="false">
+                        <i class="fas fa-keyboard mr-1"></i> NPK + Birth date
+                    </a>
+                </li>
+            </ul>
+
+            <div id="panelWajah">
 
             {{-- LANGKAH 1: NPK --}}
             <div class="v2-step aktif" id="stepNpk">
@@ -79,10 +95,33 @@
                 </div>
             </div>
 
+            </div>{{-- /panelWajah --}}
+
+            {{-- TAB 2: NPK + TANGGAL LAHIR (tanpa kamera) --}}
+            <div id="panelLahir" class="d-none">
+                <div class="form-group">
+                    <label class="font-weight-bold" for="inputNpkLahir">Employee NPK</label>
+                    <input type="text" id="inputNpkLahir" class="form-control form-control-lg"
+                           placeholder="Example: C-00827" autocomplete="off">
+                </div>
+                <div class="form-group mb-2">
+                    <label class="font-weight-bold" for="inputTglLahir">Date of birth</label>
+                    <input type="text" id="inputTglLahir" class="form-control form-control-lg"
+                           placeholder="Example: 980512" inputmode="numeric" maxlength="6" autocomplete="off">
+                    <small class="v2-footnote">6 digits in <strong>YYMMDD</strong> order (year, month, day) as recorded on your PKWT. Example: born 12 May 1998 → <strong>980512</strong>.</small>
+                </div>
+
+                <div id="lahirAlert" class="alert alert-danger d-none mb-3"></div>
+
+                <button class="btn v2-btn v2-btn-primary btn-block btn-lg" id="btnMasukLahir">
+                    <i class="fas fa-sign-in-alt mr-1"></i> Sign in
+                </button>
+            </div>
+
             <hr>
             <div class="d-flex justify-content-between">
                 <a href="{{ route('v2.portal') }}" class="v2-footnote"><i class="fas fa-arrow-left mr-1"></i>Back to Portal</a>
-                <span class="v2-footnote">Face not registered yet? Use the card <strong>Self Register Face</strong> below.</span>
+                <span class="v2-footnote">No face registered yet? Use the <strong>NPK + Birth date</strong> tab above, or the card <strong>Self Register Face</strong> below.</span>
             </div>
         </div>
 
@@ -99,8 +138,7 @@
                             <div class="v2-footnote">Register your own face through Self Register Face so you can log in and check in with Face ID.</div>
                         </div>
                     </div>
-                    <i class="fas fa-arrow-right v2-muted ml-3 mt-2 mt-md-0"></i>
-                </div>
+                    </div>
             </div>
         </a>
 
@@ -129,6 +167,7 @@
         checkNpk: @json(route('v2.employee.check-npk')),
         challenge: @json(route('v2.employee.challenge')),
         verify: @json(route('v2.employee.verify')),
+        loginLahir: @json(route('v2.employee.login-lahir')),
     };
     const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
@@ -429,11 +468,101 @@
         }
     }
 
+    // ---------------- TAB: face scan / NPK + tanggal lahir ----------------
+    function pilihTab(nama) {
+        document.querySelectorAll('#tabsLoginKaryawan .nav-link').forEach(function (a) {
+            const aktif = a.getAttribute('data-tab') === nama;
+            a.classList.toggle('active', aktif);
+            a.setAttribute('aria-selected', aktif ? 'true' : 'false');
+        });
+
+        el('panelWajah').classList.toggle('d-none', nama !== 'wajah');
+        el('panelLahir').classList.toggle('d-none', nama !== 'lahir');
+
+        if (nama === 'lahir') {
+            // Kamera harus dilepas selama tab tanggal lahir dipakai.
+            hentikanKamera();
+            el('inputNpkLahir').focus();
+        } else {
+            hideAlert('lahirAlert');
+        }
+    }
+
+    async function masukDenganTanggalLahir() {
+        const npk = (el('inputNpkLahir').value || '').trim().toUpperCase();
+        const tgl = (el('inputTglLahir').value || '').replace(/[^0-9]/g, '');
+        hideAlert('lahirAlert');
+
+        if (!npk) {
+            return showAlert('lahirAlert', 'NPK is required.');
+        }
+
+        if (tgl.length !== 6) {
+            return showAlert('lahirAlert', 'Birth date must be 6 digits in YYMMDD format (example: 980512).');
+        }
+
+        const btn = el('btnMasukLahir');
+        const labelAwal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Signing in...';
+
+        try {
+            const res = await fetch(ROUTES.loginLahir, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                body: JSON.stringify({ npk: npk, tgl_lahir: tgl }),
+            });
+            const data = await res.json().catch(function () { return {}; });
+
+            if (res.ok && data.success) {
+                window.location.href = data.redirect_url || @json(route('v2.employee.home'));
+                return;
+            }
+
+            if (res.status === 429) {
+                return showAlert('lahirAlert', 'Too many attempts. Please wait a minute and try again.');
+            }
+
+            if (res.status === 422 && data.errors) {
+                const pertama = Object.keys(data.errors)[0];
+                const isi = data.errors[pertama];
+                return showAlert('lahirAlert', Array.isArray(isi) ? isi[0] : isi);
+            }
+
+            showAlert('lahirAlert', data.message || 'Sign in failed. Please try again.');
+        } catch (e) {
+            showAlert('lahirAlert', 'Failed to reach the server. Check your connection and try again.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = labelAwal;
+        }
+    }
+
     // ---------------- Bindings ----------------
     el('btnLanjut').addEventListener('click', lanjutNpk);
     el('inputNpk').addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); lanjutNpk(); }
     });
+    // Tab + login pakai tanggal lahir
+    document.querySelectorAll('#tabsLoginKaryawan .nav-link').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            pilihTab(a.getAttribute('data-tab'));
+        });
+    });
+    el('inputNpkLahir').addEventListener('input', function () {
+        this.value = this.value.toUpperCase();
+    });
+    el('inputTglLahir').addEventListener('input', function () {
+        this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
+    });
+    ['inputNpkLahir', 'inputTglLahir'].forEach(function (id) {
+        el(id).addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); masukDenganTanggalLahir(); }
+        });
+    });
+    el('btnMasukLahir').addEventListener('click', masukDenganTanggalLahir);
+
     el('btnGantiNpk').addEventListener('click', function () {
         hentikanKamera();
         isSubmitting = false;

@@ -8,6 +8,8 @@
         </h1>
         <div>
             <span class="badge badge-info">{{ $modeLabel }}</span>
+            <a href="{{ route('admin.whats-new.index') }}" class="btn btn-sm btn-outline-secondary ml-1">
+                <i class="fas fa-bullhorn mr-1"></i>What's New</a>
             <a href="{{ url('/v2') }}" target="_blank" class="btn btn-sm btn-outline-primary">
                 <i class="fas fa-external-link-alt mr-1"></i>View Portal</a>
         </div>

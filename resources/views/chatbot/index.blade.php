@@ -146,10 +146,18 @@
 
                                 @if (! empty($meta['chart']))
                                     @php $ch = $meta['chart']; @endphp
-                                    <figure class="message-chart">
-                                        <a href="{{ $ch['url'] }}" target="_blank" rel="noopener" title="Buka grafik ukuran penuh">
-                                            <img src="{{ $ch['url'] }}" alt="Grafik {{ $ch['nilai_kolom'] ?? '' }} per {{ $ch['label_kolom'] ?? '' }}" loading="lazy">
-                                        </a>
+                                    <figure class="message-chart" id="chart-{{ $message->id }}">
+                                        <button type="button" class="message-chart-zoom" data-chart-zoom
+                                                data-chart-src="{{ $ch['url'] }}"
+                                                data-chart-alt="Grafik {{ $ch['nilai_kolom'] ?? '' }} per {{ $ch['label_kolom'] ?? '' }}"
+                                                title="Klik untuk memperbesar grafik">
+                                            <img src="{{ $ch['url'] }}" alt="Grafik {{ $ch['nilai_kolom'] ?? '' }} per {{ $ch['label_kolom'] ?? '' }}" loading="lazy"
+                                                 onerror="this.closest('.message-chart').classList.add('message-chart--gagal')">
+                                        </button>
+                                        <p class="message-chart-gagal">
+                                            <i class="fas fa-triangle-exclamation"></i>
+                                            Grafik gagal dimuat di browser. Klik <strong>Unduh PNG</strong> untuk membuka gambarnya.
+                                        </p>
                                         <figcaption>
                                             <i class="fas fa-chart-simple"></i>
                                             <span>
@@ -582,6 +590,9 @@ body {
     font-size: 14px; line-height: 1.65;
     box-shadow: 0 1px 3px rgba(15,23,42,0.07);
     word-wrap: break-word;
+    /* Isi panjang (SQL/pre/tabel) tidak boleh menyeret lebar bubble:
+       batas lebar + pemenggalan kata menjaga bubble tetap di kolomnya. */
+    max-width: 100%; min-width: 0; overflow-wrap: anywhere;
 }
 .message-bubble--user {
     background: #2563eb; color: #fff;
@@ -638,9 +649,17 @@ body {
 .message-export-download { color: #94a3b8; font-size: 12px; margin-left: auto; }
 /* Grafik jawaban AI (PNG dibuat server) */
 .message-chart { margin: 10px 0 2px; padding: 0; }
-.message-chart img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; }
+.message-chart img { display: block; width: auto; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; }
+/* Klik grafik = perbesar di layar (lightbox), bukan unduh. Unduhan tetap
+   lewat tombol "Unduh PNG" di caption. */
+.message-chart-zoom { display: block; max-width: 100%; margin: 0; padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
+.message-chart-zoom:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; border-radius: 11px; }
+.message-chart-zoom:hover img { border-color: #93b4ea; box-shadow: 0 4px 16px rgba(37, 99, 235, .14); }
 .message-chart figcaption { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 11.5px; color: #64748b; flex-wrap: wrap; }
 .message-chart figcaption i.fa-chart-simple { color: #274b8f; }
+.message-chart-gagal { display: none; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; font-size: 11.5px; }
+.message-chart--gagal img { display: none; }
+.message-chart--gagal .message-chart-gagal { display: block; }
 .message-chart-download { margin-left: auto; color: #2563eb; text-decoration: none; font-weight: 500; }
 .message-chart-download:hover { text-decoration: underline; }
 .message-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -652,12 +671,53 @@ body {
 .md-table thead th { background: #f1f5f9; font-weight: 600; }
 
 /* Details / Error */
+/* SQL panjang: sebelumnya <pre> tanpa CSS sama sekali, sehingga satu baris
+   SQL (~2.000 karakter) memaksa bubble melebar ke samping dan gambar grafik
+   di bawahnya ikut melar. Sekarang dipatahkan per karakter + scroll internal. */
+.message-sql { margin-top: 9px; max-width: 100%; min-width: 0; }
+.message-sql summary { cursor: pointer; font-size: 11.5px; color: #64748b; padding: 3px 0; }
+.message-sql summary:hover { color: #1d3f86; }
+.message-sql pre {
+    margin: 6px 0 0; padding: 10px 11px;
+    max-width: 100%; max-height: 260px; overflow: auto;
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    background: #0f172a; color: #dbe4f0; border-radius: 8px;
+    font-size: 11px; line-height: 1.55;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.message-markdown pre, .message-details pre { max-width: 100%; }
 .message-details { margin-top: 9px; }
 .message-details summary { cursor: pointer; font-size: 11.5px; color: #64748b; padding: 3px 0; }
 .message-details pre { background: #1e293b; color: #e2e8f0; padding: 9px; border-radius: 6px; overflow-x: auto; font-size: 11px; margin-top: 5px; }
 .message-error { margin-top: 7px; padding: 7px 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 7px; color: #dc2626; font-size: 11.5px; display: flex; align-items: center; gap: 5px; }
 .message-time { font-size: 10px; color: #94a3b8; margin-top: 4px; padding: 0 2px; }
 .message-row--user .message-time { text-align: right; }
+
+/* ---- LIGHTBOX GRAFIK (klik gambar = zoom) ---- */
+.chart-lightbox {
+    position: fixed; inset: 0; z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 30px 24px 48px;
+    background: rgba(8, 14, 26, .84);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.chart-lightbox[hidden] { display: none; }
+.chart-lightbox img {
+    max-width: 94vw; max-height: 84vh; width: auto; height: auto;
+    border-radius: 10px; background: #fff; box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+}
+.chart-lightbox-tutup {
+    position: absolute; top: 16px; right: 18px;
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.14);
+    color: #fff; font-size: 16px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: background .15s;
+}
+.chart-lightbox-tutup:hover { background: rgba(255,255,255,.26); }
+.chart-lightbox-hint {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    color: #c9d6e8; font-size: 12px; letter-spacing: .01em;
+}
 
 /* ---- COMPOSER ---- */
 .chat-composer {
@@ -975,9 +1035,14 @@ body {
             const ch = meta.chart;
             const ket = `Grafik batang · ${ch.bar_count ?? 0} kategori${ch.otomatis ? ' · dibuat otomatis' : ''}`;
             chartHtml = `<figure class="message-chart">
-                <a href="${escHtml(ch.url)}" target="_blank" rel="noopener" title="Buka grafik ukuran penuh">
-                    <img src="${escHtml(ch.url)}" alt="Grafik ${escHtml(ch.nilai_kolom ?? '')} per ${escHtml(ch.label_kolom ?? '')}" loading="lazy">
-                </a>
+                <button type="button" class="message-chart-zoom" data-chart-zoom
+                        data-chart-src="${escHtml(ch.url)}"
+                        data-chart-alt="Grafik ${escHtml(ch.nilai_kolom ?? '')} per ${escHtml(ch.label_kolom ?? '')}"
+                        title="Klik untuk memperbesar grafik">
+                    <img src="${escHtml(ch.url)}" alt="Grafik ${escHtml(ch.nilai_kolom ?? '')} per ${escHtml(ch.label_kolom ?? '')}" loading="lazy"
+                         onerror="this.closest('.message-chart').classList.add('message-chart--gagal')">
+                </button>
+                <p class="message-chart-gagal"><i class="fas fa-triangle-exclamation"></i> Grafik gagal dimuat di browser. Klik <strong>Unduh PNG</strong> untuk membuka gambarnya.</p>
                 <figcaption>
                     <i class="fas fa-chart-simple"></i>
                     <span>${escHtml(ket)}</span>
@@ -1424,6 +1489,63 @@ body {
 })();
 </script>
 @endif
+
+<div class="chart-lightbox" id="chart-lightbox" hidden role="dialog" aria-modal="true" aria-label="Pratinjau grafik">
+    <button type="button" class="chart-lightbox-tutup" id="chart-lightbox-tutup" aria-label="Tutup pratinjau grafik">
+        <i class="fas fa-times" aria-hidden="true"></i>
+    </button>
+    <img id="chart-lightbox-img" src="" alt="">
+    <span class="chart-lightbox-hint">Klik di luar gambar atau tekan Esc untuk menutup</span>
+</div>
+
+<script>
+(function () {
+    var kotak = document.getElementById('chart-lightbox');
+    var gambar = document.getElementById('chart-lightbox-img');
+    if (!kotak || !gambar) { return; }
+    var pemicuTerakhir = null;
+
+    function buka(src, alt, pemicu) {
+        if (!src) { return; }
+        gambar.src = src;
+        gambar.alt = alt || 'Grafik';
+        kotak.hidden = false;
+        pemicuTerakhir = pemicu || null;
+        document.body.style.overflow = 'hidden';
+        var tombol = document.getElementById('chart-lightbox-tutup');
+        if (tombol) { tombol.focus(); }
+    }
+
+    function tutup() {
+        kotak.hidden = true;
+        gambar.removeAttribute('src');
+        document.body.style.overflow = '';
+        if (pemicuTerakhir && pemicuTerakhir.focus) { pemicuTerakhir.focus(); }
+        pemicuTerakhir = null;
+    }
+
+    /* Delegasi: berlaku untuk bubble lama (server) maupun bubble baru (JS). */
+    document.addEventListener('click', function (e) {
+        var tombol = e.target.closest ? e.target.closest('[data-chart-zoom]') : null;
+        if (!tombol) { return; }
+        e.preventDefault();
+        buka(tombol.getAttribute('data-chart-src'), tombol.getAttribute('data-chart-alt'), tombol);
+    });
+
+    kotak.addEventListener('click', function (e) {
+        /* Klik pada gambar sendiri tidak menutup. */
+        if (e.target === gambar) { return; }
+        tutup();
+    });
+
+    var tombolTutup = document.getElementById('chart-lightbox-tutup');
+    if (tombolTutup) { tombolTutup.addEventListener('click', tutup); }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !kotak.hidden) { tutup(); }
+    });
+})();
+</script>
 
 @include('layout.footerscript')
 </body>

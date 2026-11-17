@@ -344,6 +344,17 @@ class ChatbotController extends Controller
             abort(404);
         }
 
+        $berkas = Storage::disk($disk)->path($path);
+
+        // Gambar disajikan inline supaya bisa dipakai langsung sebagai
+        // <img src> di bubble chat; berkas lain tetap diunduh.
+        if (str_starts_with((string) mime_content_type($berkas), 'image/')) {
+            return response()->file($berkas, [
+                'Content-Type' => mime_content_type($berkas),
+                'Cache-Control' => 'private, max-age=86400',
+            ]);
+        }
+
         return Storage::disk($disk)->download($path, $nama);
     }
 

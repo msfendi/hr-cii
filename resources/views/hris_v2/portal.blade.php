@@ -16,8 +16,10 @@
 
 @section('content')
 <section class="v2-hero">
-    <img src="{{ asset('img/chutex_logo.png') }}" alt="PT Chutex International Indonesia" class="v2-logo-hero">
-    <span class="v2-kicker">Human Resource Information System</span>
+    <div class="v2-hero-head">
+        <span class="v2-logo-mask v2-logo-hero" role="img" aria-label="PT Chutex International Indonesia"></span>
+        <span class="v2-kicker">Human Resource Information System</span>
+    </div>
     <h1>One portal for people,<br>payroll and presence.</h1>
     @include('hris_v2._typewriter', ['kalimat' => [
         'Payslip, face attendance, and leave in a single portal',

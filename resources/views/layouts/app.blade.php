@@ -25,6 +25,13 @@
 </div>
 
 @include('layout.footerscript')
+
+{{-- Floating button AI Assistant (permintaan 17 Nov 2026): tombol yang sama
+     dengan HRIS v2. Hanya untuk user yang sudah login, karena /chatbot
+     butuh sesi login. --}}
+@if (auth()->check())
+    @include('partials.ai_fab')
+@endif
 {{-- @stack('scripts') TIDAK dirender di sini: sudah dirender di dalam
      layout.footerscript (di akhir file). Merender lagi di sini =
      double-push -> DataTables warning "Cannot reinitialise DataTable"
