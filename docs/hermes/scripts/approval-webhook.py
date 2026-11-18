@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-Hermes webhook handler — dipanggil saat Laravel trigger notifikasi.
+Hermes webhook handler — dipanggil saat Laravel memicu notifikasi approval.
+
+Menangani DUA jenis dokumen, dibedakan oleh field `doc`:
+
+  cuti        → pengajuan cuti          (tabel leave_requests)
+  izin-dinas  → Surat Ijin Dinas Luar   (tabel work_assignment_requests)
 
 Hermes Webhook platform memanggil script ini dengan payload JSON di stdin:
-  { "token": "abc123", "trigger": "submit" | "approve" }
+  { "token": "abc123", "trigger": "submit" | "approve", "doc": "cuti" }
 
-Script ini ambil payload notifikasi dari Laravel, lalu kirim ke WA approver
-lewat WA bridge. Throttle anti-ban diterapkan di sini.
+`doc` WAJIB diteruskan ke /api/approval/trigger. Tanpa itu Laravel menganggap
+permintaan itu cuti, sehingga token Izin Dinas tidak ditemukan di
+leave_requests → status "not_eligible" → pesan tidak pernah terkirim dan
+tidak ada error yang terlihat.
 
 Output ke stdout = payload baru (replaces payload untuk prompt templating).
 Kosong / [SILENT] / exit != 0 → webhook diabaikan.
@@ -45,6 +52,7 @@ except ImportError:
         digits = normalize_phone(value)
         return f"{digits}@s.whatsapp.net" if digits else ""
 
+
 API_URL = os.environ.get("HR_CII_API_URL", "").rstrip("/")
 API_TOKEN = os.environ.get("APPROVAL_API_TOKEN", "")
 BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://127.0.0.1:3000").rstrip("/")
@@ -53,12 +61,30 @@ JITTER = float(os.environ.get("WA_JITTER_SECONDS", "15"))
 MIN_GAP = float(os.environ.get("WA_MIN_GAP_SECONDS", "15"))
 MAX_PER_MINUTE = int(os.environ.get("WA_MAX_PER_MINUTE", "6"))
 
+# Label untuk log — supaya operator langsung tahu ini pesan dokumen yang mana.
+DOC_LABELS = {
+    "cuti": "CUTI",
+    "izin-dinas": "IZIN DINAS",
+}
+
+DEFAULT_DOC = "cuti"
+
 _last_send = 0.0
 _recent = []
 
 
 def log(msg):
     print(f"[approval-webhook] {msg}", file=sys.stderr, flush=True)
+
+
+def normalize_doc(value):
+    """Samakan penulisan doctype; tidak dikenal → cuti (perilaku lama)."""
+    doc = str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
+    return doc if doc in DOC_LABELS else DEFAULT_DOC
+
+
+def doc_label(doc):
+    return DOC_LABELS.get(doc, doc.upper())
 
 
 def _http(method, url, payload=None, headers=None, timeout=60):
@@ -129,8 +155,11 @@ def send_wa(phone, message):
     return False
 
 
-def fetch_items(token):
-    """Ambil payload notifikasi untuk 1 token dari Laravel."""
+def fetch_items(token, doc):
+    """Ambil payload notifikasi untuk 1 token dari Laravel.
+
+    `doc` menentukan Laravel memakai notifier yang mana (cuti vs izin dinas).
+    """
     if not API_URL or not API_TOKEN:
         log("ERROR: HR_CII_API_URL dan APPROVAL_API_TOKEN wajib diset")
         return []
@@ -138,19 +167,19 @@ def fetch_items(token):
     status, body = _http(
         "POST",
         f"{API_URL}/api/approval/trigger",
-        payload={"token": token},
+        payload={"token": token, "doc": doc},
         headers={"Authorization": f"Bearer {API_TOKEN}"},
     )
     if status != 200:
         detail = body.get("message") if isinstance(body, dict) else str(body)
-        log(f"ERROR: POST trigger HTTP {status}: {str(detail)[:300]}")
+        log(f"ERROR: POST trigger ({doc}) HTTP {status}: {str(detail)[:300]}")
         return []
 
     if not isinstance(body, dict):
         return []
 
     if body.get("status") == "not_eligible":
-        log(f"token {token} not eligible: {body.get('reason')}")
+        log(f"[{doc_label(doc)}] token {token} not eligible: {body.get('reason')}")
         return []
 
     return body.get("items", [])
@@ -178,9 +207,19 @@ def main():
         log("no token in payload — ignoring")
         return 10
 
-    log(f"trigger={trigger} token={token}")
+    raw_doc = payload.get("doc")
+    doc = normalize_doc(raw_doc)
 
-    items = fetch_items(token)
+    if not raw_doc:
+        # Laravel versi lama belum mengirim `doc`. Dianggap cuti supaya perilaku
+        # lama tidak berubah, tapi dicatat lewat peringatan agar ketahuan kalau
+        # ini sebenarnya pengajuan Izin Dinas.
+        log("PERINGATAN: payload tanpa 'doc' → dianggap CUTI. "
+            "Pastikan Laravel sudah diperbarui untuk dokumen izin-dinas.")
+
+    log(f"[{doc_label(doc)}] trigger={trigger} token={token}")
+
+    items = fetch_items(token, doc)
     if not items:
         return 10
 
@@ -196,7 +235,7 @@ def main():
             log(f"skip #{request_id}: incomplete payload")
             continue
 
-        log(f"#{request_id} → {approver} ({phone}) level={level}")
+        log(f"[{doc_label(doc)}] #{request_id} → {approver} ({phone}) level={level}")
         throttle()
         if send_wa(phone, message):
             sent += 1

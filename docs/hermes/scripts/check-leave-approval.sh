@@ -1,5 +1,10 @@
 #!/bin/bash
-# Hermes cron script: cek pending leave approval dan kirim notif WA
+# Hermes cron script: cek pending approval CUTI dan kirim notif WA.
+#
+# Dokumen: pengajuan cuti (tabel leave_requests).
+# Keputusan via WA memakai command /approve-cuti<ID> dan /tolak-cuti<ID>.
+# Untuk dokumen Izin Dinas pakai script terpisah:
+#   check-izin-dinas-approval.sh
 #
 # Deploy: cp docs/hermes/scripts/check-leave-approval.sh ~/.hermes/scripts/
 #         chmod +x ~/.hermes/scripts/check-leave-approval.sh
