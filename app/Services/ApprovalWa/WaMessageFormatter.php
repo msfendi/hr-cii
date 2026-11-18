@@ -48,10 +48,13 @@ class WaMessageFormatter
             $levelLabel = (string) $level;
         }
 
+        $approveCmd = '/approve-cuti' . $id;
+        $rejectCmd  = '/tolak-cuti' . $id . ' <alasan>';
+
         // Deep link WhatsApp: buka chat bot dengan teks command sudah terisi.
         $botNumber   = (string) config('services.wa_gateway.bot_number', '6287731665679');
-        $approveLink = "https://wa.me/$botNumber?text=" . urlencode("/approve $id");
-        $rejectLink  = "https://wa.me/$botNumber?text=" . urlencode("/tolak $id <alasan>");
+        $approveLink = "https://wa.me/$botNumber?text=" . urlencode($approveCmd);
+        $rejectLink  = "https://wa.me/$botNumber?text=" . urlencode($rejectCmd);
 
         return <<<MSG
         ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -80,8 +83,8 @@ class WaMessageFormatter
         ❌ *Tolak* → $rejectLink
 
         Atau balas langsung ke chat ini:
-        • `/approve $id`
-        • `/tolak $id <alasan>`
+        • `$approveCmd`
+        • `$rejectCmd`
 
         ⚠️ Mohon pastikan *No. Pengajuan* sudah sesuai.
         MSG;

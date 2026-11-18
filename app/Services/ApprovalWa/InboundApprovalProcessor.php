@@ -17,36 +17,20 @@ class InboundApprovalProcessor
      */
     public static function parse(string $message): ?array
     {
-        $message = trim($message);
+        // Grammar dipusatkan di ApprovalCommandParser supaya cuti dan izin
+        // dinas tidak pernah berbeda tafsir. Method ini tetap ada dengan
+        // bentuk lama (tanpa `doc`) untuk pemanggil yang sudah terlanjur ada.
+        $parsed = ApprovalCommandParser::parse($message);
 
-        // APPROVE / /approve
-        if (preg_match('/^(?:APPROVE|\/approve)\s+#?(\d+)$/i', $message, $m)) {
-            return [
-                'decision' => 'approve',
-                'id'       => (int) $m[1],
-                'reason'   => null,
-            ];
+        if ($parsed === null || $parsed['doc'] !== ApprovalCommandParser::DOC_CUTI) {
+            return null;
         }
 
-        // REJECT / /tolak with optional reason
-        if (preg_match('/^(?:REJECT|\/tolak)\s+#?(\d+)(?:\s+(.+))?$/i', $message, $m)) {
-            return [
-                'decision' => 'reject',
-                'id'       => (int) $m[1],
-                'reason'   => isset($m[2]) ? trim($m[2]) : null,
-            ];
-        }
-
-        // BATAL / /batal — membatalkan keputusan yang sudah approved
-        if (preg_match('/^(?:BATAL|\/batal)\s+#?(\d+)(?:\s+(.+))?$/i', $message, $m)) {
-            return [
-                'decision' => 'revert',
-                'id'       => (int) $m[1],
-                'reason'   => isset($m[2]) ? trim($m[2]) : 'Dibatalkan via WhatsApp',
-            ];
-        }
-
-        return null;
+        return [
+            'decision' => $parsed['decision'],
+            'id'       => $parsed['id'],
+            'reason'   => $parsed['reason'],
+        ];
     }
 
     /**
@@ -62,7 +46,7 @@ class InboundApprovalProcessor
     {
         $parsed = self::parse($message);
         if (!$parsed) {
-            return "⚠️ Format tidak dikenali.\n\nGunakan:\n- /approve <ID>\n- /tolak <ID> <alasan>\n- /batal <ID> <alasan>";
+            return ApprovalCommandParser::helpText();
         }
 
         $requestId = $parsed['id'];

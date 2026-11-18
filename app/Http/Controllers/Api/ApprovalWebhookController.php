@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\ApprovalWa\InboundApprovalProcessor;
+use App\Services\ApprovalWa\ApprovalInboundDispatcher;
 use App\Services\ApprovalWa\PhoneFormatter;
 use App\Services\ApprovalWa\WaGateway;
 use Illuminate\Http\Request;
@@ -48,8 +48,8 @@ class ApprovalWebhookController extends Controller
 
         Log::info("[ApprovalWebhook] Inbound from $phone: $message");
 
-        // Process the decision
-        $reply = InboundApprovalProcessor::handle($phone, $message);
+        // Process the decision — dispatcher memilih processor sesuai doctype.
+        $reply = ApprovalInboundDispatcher::handle($phone, $message);
 
         // Send reply back via gateway
         WaGateway::send($phone, $reply);

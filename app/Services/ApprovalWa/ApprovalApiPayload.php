@@ -2,6 +2,7 @@
 
 namespace App\Services\ApprovalWa;
 
+use App\Models\WorkAssignmentRequest;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -41,9 +42,29 @@ class ApprovalApiPayload
     /**
      * Build list pending pengajuan yang siap dikabari (sudah lewat filter sequential).
      *
+     * @param  string  $doc  doctype: cuti | izin-dinas
      * @return array
      */
-    public static function pendingPayload(): array
+    public static function pendingPayload(string $doc = ApprovalCommandParser::DOC_CUTI): array
+    {
+        $items = $doc === ApprovalCommandParser::DOC_IZIN_DINAS
+            ? self::izinDinasItems()
+            : self::cutiItems();
+
+        return [
+            'generated_at' => now()->setTimezone('Asia/Jakarta')->toIso8601String(),
+            'doc'          => $doc,
+            'count'        => count($items),
+            'items'        => $items,
+        ];
+    }
+
+    /**
+     * Item pending untuk pengajuan cuti.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function cutiItems(): array
     {
         $requests = LeaveApprovalQuery::getPendingForNotification();
         $items    = [];
@@ -55,11 +76,39 @@ class ApprovalApiPayload
             }
         }
 
-        return [
-            'generated_at' => now()->setTimezone('Asia/Jakarta')->toIso8601String(),
-            'count'        => count($items),
-            'items'        => $items,
-        ];
+        return $items;
+    }
+
+    /**
+     * Item pending untuk Izin Dinas.
+     *
+     * Rantai approval Izin Dinas berupa JSON, jadi "level yang giliran" tidak
+     * bisa diambil dengan query SQL sederhana seperti cuti. Penyaringan
+     * diserahkan ke IzinDinasNotifier (yang membaca approval_chain + answers).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function izinDinasItems(): array
+    {
+        $requests = WorkAssignmentRequest::query()
+            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->whereNull('void')->orWhereNotIn('void', ['true', '1']);
+            })
+            ->orderBy('id')
+            ->get(['id', 'token']);
+
+        $items = [];
+
+        foreach ($requests as $request) {
+            $item = IzinDinasNotifier::buildPayloadForToken((string) $request->token);
+
+            if ($item !== null) {
+                $items[] = $item;
+            }
+        }
+
+        return $items;
     }
 
     /**
@@ -83,6 +132,7 @@ class ApprovalApiPayload
         $id      = (int) $request->id;
 
         return [
+            'doc'             => ApprovalCommandParser::DOC_CUTI,
             'request_id'      => $id,
             'token'           => $request->token,
             'level'           => (int) $request->approval_level,
@@ -101,8 +151,8 @@ class ApprovalApiPayload
             'duration_days'   => (int) $request->total_days,
             'reason'          => $request->reason,
             'message'         => $message,
-            'approve_command' => "/approve $id",
-            'reject_command'  => "/tolak $id <alasan>",
+            'approve_command' => "/approve-cuti$id",
+            'reject_command'  => "/tolak-cuti$id <alasan>",
         ];
     }
 

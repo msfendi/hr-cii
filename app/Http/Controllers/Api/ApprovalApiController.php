@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\ApprovalWa\ApprovalApiPayload;
-use App\Services\ApprovalWa\InboundApprovalProcessor;
+use App\Services\ApprovalWa\ApprovalCommandParser;
+use App\Services\ApprovalWa\ApprovalInboundDispatcher;
+use App\Services\ApprovalWa\IzinDinasNotifier;
 use App\Services\ApprovalWa\LeaveApprovalNotifier;
 use App\Services\ApprovalWa\PhoneFormatter;
 use Illuminate\Http\Request;
@@ -40,9 +42,11 @@ class ApprovalApiController extends Controller
      */
     public function pending(Request $request): \Illuminate\Http\JsonResponse
     {
-        $payload = ApprovalApiPayload::pendingPayload();
+        $doc = trim((string) $request->input('doc', ApprovalCommandParser::DOC_CUTI));
 
-        Log::info("[ApprovalApi] pending requested by {$request->ip()} — {$payload['count']} item(s)");
+        $payload = ApprovalApiPayload::pendingPayload($doc);
+
+        Log::info("[ApprovalApi] pending ($doc) requested by {$request->ip()} — {$payload['count']} item(s)");
 
         return response()->json($payload);
     }
@@ -75,11 +79,18 @@ class ApprovalApiController extends Controller
         $decision = trim((string) $request->input('decision', ''));
         $requestId = (int) $request->input('request_id', 0);
         $reason    = $request->input('reason');
+        $doc       = trim((string) $request->input('doc', ''));
 
         if ($decision !== '' && $requestId > 0) {
-            $message = $decision === 'approve'
-                ? "/approve $requestId"
-                : ($decision === 'revert' ? "/batal $requestId" : "/tolak $requestId");
+            // Bangun ulang jadi command supaya jalurnya sama dengan pesan teks
+            // asli dari approver — termasuk jenis dokumennya.
+            $slug = $doc === ApprovalCommandParser::DOC_IZIN_DINAS ? 'izin-dinas' : 'cuti';
+            $verb = $decision === 'approve'
+                ? 'approve'
+                : ($decision === 'revert' ? 'batal' : 'tolak');
+
+            $message = "/{$verb}-{$slug}{$requestId}";
+
             if (!empty($reason)) {
                 $message .= ' ' . $reason;
             }
@@ -103,7 +114,7 @@ class ApprovalApiController extends Controller
 
         Log::info("[ApprovalApi] decision from $phone: $message");
 
-        $reply = InboundApprovalProcessor::handle($phone, $message);
+        $reply = ApprovalInboundDispatcher::handle($phone, $message);
 
         // Bedakan sukses vs penolakan berdasarkan isi reply
         $status = 'ok';
@@ -122,7 +133,7 @@ class ApprovalApiController extends Controller
      * level berikutnya langsung dikabari tanpa menunggu cron.
      *
      * Body:
-     *   { "token": "abc123" }
+     *   { "token": "abc123", "doc": "izin-dinas" }   // doc default: cuti
      *
      * Response: payload item siap kirim (Hermes tinggal POST ke bridge).
      */
@@ -133,21 +144,27 @@ class ApprovalApiController extends Controller
             return response()->json(['status' => 'error', 'error' => 'Missing token'], 422);
         }
 
-        Log::info("[ApprovalApi] trigger for token $token from {$request->ip()}");
+        $doc = trim((string) $request->input('doc', ApprovalCommandParser::DOC_CUTI));
+
+        Log::info("[ApprovalApi] trigger for $doc token $token from {$request->ip()}");
 
         // Dry-run build payload — tidak kirim. Pengiriman dilakukan messaging layer.
-        $result = LeaveApprovalNotifier::buildPayloadForToken($token);
+        $result = $doc === ApprovalCommandParser::DOC_IZIN_DINAS
+            ? IzinDinasNotifier::buildPayloadForToken($token)
+            : LeaveApprovalNotifier::buildPayloadForToken($token);
 
         if ($result === null) {
             return response()->json([
                 'status' => 'not_eligible',
                 'reason' => 'Tidak ada level yang eligible untuk token ini (sudah diproses / ditolak).',
                 'token'  => $token,
+                'doc'    => $doc,
             ]);
         }
 
         return response()->json([
             'status' => 'ok',
+            'doc'    => $doc,
             'token'  => $token,
             'items'  => [$result],
         ]);

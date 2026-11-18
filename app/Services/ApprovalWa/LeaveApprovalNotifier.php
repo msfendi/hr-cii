@@ -145,8 +145,8 @@ class LeaveApprovalNotifier
             'duration_days'   => (int) $row->total_days,
             'reason'          => $row->reason,
             'message'         => $message,
-            'approve_command' => "/approve $id",
-            'reject_command'  => "/tolak $id <alasan>",
+            'approve_command' => "/approve-cuti$id",
+            'reject_command'  => "/tolak-cuti$id <alasan>",
         ];
     }
 
