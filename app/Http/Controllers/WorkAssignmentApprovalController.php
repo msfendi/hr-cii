@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\WorkAssignmentRequest;
+use App\Services\ApprovalWa\ApprovalCommandParser;
+use App\Services\ApprovalWa\ApprovalWebhookTrigger;
 use App\Services\WorkAssignment\EmployeeLookupService;
 use App\Services\WorkAssignment\WorkAssignmentApproval;
 use App\Services\WorkAssignment\WorkAssignmentAttachment;
@@ -297,14 +299,24 @@ class WorkAssignmentApprovalController extends Controller
         if ($result['ok']) {
             Log::info("[WorkAssignment] #{$id} disetujui oleh {$npk} pada level {$level}");
 
-            // Notifikasi ke level berikutnya (kalau ada) — belum ada integrasi
-            // WA untuk fitur ini, jadi dicatat di log saja.
             $next = WorkAssignmentApproval::describeNext(
                 WorkAssignmentRequest::find($id)
             );
 
             if ($next) {
                 Log::info("[WorkAssignment] #{$id} lanjut ke level {$next['level']} — {$next['name']} ({$next['npk']})");
+            }
+
+            // Kabari approver level berikutnya lewat WhatsApp. Kegagalan kirim
+            // tidak membatalkan keputusan yang sudah tersimpan.
+            try {
+                ApprovalWebhookTrigger::notify(
+                    (string) $workAssignment->token,
+                    'approve',
+                    ApprovalCommandParser::DOC_IZIN_DINAS
+                );
+            } catch (\Throwable $e) {
+                Log::error("[WorkAssignment] #{$id} gagal trigger notifikasi: " . $e->getMessage());
             }
         }
 

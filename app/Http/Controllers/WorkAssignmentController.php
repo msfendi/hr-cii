@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\WorkAssignmentRequest;
+use App\Services\ApprovalWa\ApprovalCommandParser;
+use App\Services\ApprovalWa\ApprovalWebhookTrigger;
+use App\Services\ApprovalWa\IzinDinasApprovalQuery;
 use App\Services\WorkAssignment\ApprovalChainBuilder;
 use App\Services\WorkAssignment\EmployeeLookupService;
 use App\Services\WorkAssignment\WorkAssignmentAttachment;
@@ -306,6 +309,38 @@ class WorkAssignmentController extends Controller
         $deptId   = self::deptIdFor($npk);
         $sectionId = self::sectionIdFor($npk);
 
+        // Chain approval = snapshot, dibangun sekali di sini supaya bisa
+        // divalidasi sebelum ada row yang tersimpan.
+        $chain = ApprovalChainBuilder::build($deptId, $sectionId);
+
+        if (empty($chain)) {
+            Alert::error(
+                'Error',
+                'Rantai approval untuk departemen Anda belum disetel. Hubungi HR.'
+            );
+
+            return back()->withInput();
+        }
+
+        // Approver tanpa nomor WhatsApp membuat pengajuan macet diam-diam:
+        // pesan tidak pernah sampai, pemohon menunggu tanpa kepastian.
+        // Lebih baik ditolak sekarang dengan nama approver yang perlu dilengkapi.
+        $missingPhones = IzinDinasApprovalQuery::approversWithoutPhone($chain);
+
+        if (!empty($missingPhones)) {
+            $list = collect($missingPhones)
+                ->map(fn ($a) => 'Level ' . $a['level'] . ': ' . $a['name'] . ' (' . $a['npk'] . ')')
+                ->implode('; ');
+
+            Alert::error(
+                'Data Approver Belum Lengkap',
+                'Nomor WhatsApp approver berikut belum terdaftar, sehingga pengajuan tidak bisa diproses: '
+                . $list . '. Hubungi HR untuk melengkapi nomor HP.'
+            );
+
+            return back()->withInput();
+        }
+
         try {
             $record = WorkAssignmentRequest::create([
                 'token'   => Str::random(32),
@@ -331,7 +366,7 @@ class WorkAssignmentController extends Controller
                 ),
 
                 // Chain approval = snapshot; answers mulai kosong
-                'approval_chain' => ApprovalChainBuilder::build($deptId, $sectionId),
+                'approval_chain' => $chain,
                 'answers'        => [],
 
                 'status'        => 'pending',
@@ -342,6 +377,21 @@ class WorkAssignmentController extends Controller
         } catch (\Throwable $e) {
             Alert::error('Error', 'Gagal menyimpan pengajuan: ' . $e->getMessage());
             return back()->withInput();
+        }
+
+        // Kabari approver level pertama lewat messaging layer (WhatsApp).
+        // Kegagalan di sini tidak boleh membatalkan pengajuan yang sudah sah —
+        // cukup dicatat, dan bisa diulang lewat command/cron.
+        try {
+            ApprovalWebhookTrigger::notify(
+                (string) $record->token,
+                'submit',
+                ApprovalCommandParser::DOC_IZIN_DINAS
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error(
+                '[WorkAssignment] gagal trigger notifikasi #' . $record->id . ': ' . $e->getMessage()
+            );
         }
 
         Alert::success(

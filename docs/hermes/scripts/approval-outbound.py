@@ -142,25 +142,29 @@ def send_wa(phone, message):
     return False
 
 
-def fetch_pending():
-    """Ambil list pengajuan yang siap dikabari dari Laravel."""
+def fetch_pending(doc="cuti"):
+    """Ambil list pengajuan yang siap dikabari dari Laravel.
+
+    `doc` memilih jenis dokumen: cuti atau izin-dinas. Keduanya punya
+    struktur data berbeda, jadi Laravel yang menyiapkan payload-nya.
+    """
     if not API_URL or not API_TOKEN:
         log("ERROR: HR_CII_API_URL dan APPROVAL_API_TOKEN wajib diset")
         sys.exit(2)
     status, body = _http(
         "GET",
-        f"{API_URL}/api/approval/pending",
+        f"{API_URL}/api/approval/pending?doc={doc}",
         headers={"Authorization": f"Bearer {API_TOKEN}"},
         timeout=60,
     )
     if status != 200:
         detail = body.get("message") if isinstance(body, dict) else str(body)
-        log(f"ERROR: GET pending returned HTTP {status}: {str(detail)[:300]}")
+        log(f"ERROR: GET pending ({doc}) returned HTTP {status}: {str(detail)[:300]}")
         return []
     return body.get("items", []) if isinstance(body, dict) else []
 
 
-def fetch_trigger(token):
+def fetch_trigger(token, doc="cuti"):
     """Ambil payload 1 pengajuan (by token)."""
     if not API_URL or not API_TOKEN:
         log("ERROR: HR_CII_API_URL dan APPROVAL_API_TOKEN wajib diset")
@@ -168,7 +172,7 @@ def fetch_trigger(token):
     status, body = _http(
         "POST",
         f"{API_URL}/api/approval/trigger",
-        payload={"token": token},
+        payload={"token": token, "doc": doc},
         headers={"Authorization": f"Bearer {API_TOKEN}"},
         timeout=60,
     )
@@ -182,13 +186,25 @@ def main():
     args = sys.argv[1:]
     dry_run = "--dry-run" in args
     token = None
+    doc = "cuti"          # default: cuti — menjaga perilaku lama tetap jalan
+    doc_was_given = False
+
     if "--token" in args:
         token = args[args.index("--token") + 1]
+    if "--doc" in args:
+        doc = args[args.index("--doc") + 1]
+        doc_was_given = True
 
     if token:
-        items = fetch_trigger(token)
+        items = fetch_trigger(token, doc)
+    elif doc_was_given:
+        items = fetch_pending(doc)
     else:
-        items = fetch_pending()
+        # Tanpa --doc: sapu semua jenis dokumen, supaya Izin Dinas tidak
+        # terlewat hanya karena cron belum diubah.
+        items = []
+        for _doc in ("cuti", "izin-dinas"):
+            items.extend(fetch_pending(_doc))
 
     if not items:
         log("no pending requests eligible for notification")
