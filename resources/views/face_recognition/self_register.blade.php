@@ -474,10 +474,7 @@
     async function detectOnce(videoEl) {
         if (!videoEl || videoEl.readyState < 2) return null;
         try {
-            const det = await faceapi.detectSingleFace(
-                videoEl, 
-                new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 })
-            )
+            const det = await faceapi.detectSingleFace(videoEl, new faceapi.TinyFaceDetectorOptions())
             .withFaceLandmarks(true)
             .withFaceDescriptor();
             return det || null;
@@ -872,10 +869,18 @@
 
         try {
             verStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
                 audio: false
-            });
-            document.getElementById('verVideo').srcObject = verStream;
+            }).catch(() => navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user' },
+                audio: false
+            })).catch(() => navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false
+            }));
+            const video = document.getElementById('verVideo');
+            video.srcObject = verStream;
+            try { await video.play(); } catch (e) { /* autoplay may be blocked; camera stream remains available */ }
         } catch (err) {
             st.innerHTML = '<span class="text-danger font-weight-bold">Gagal membuka kamera: ' + err.message + '</span>';
             return;
@@ -888,6 +893,8 @@
         // verifikasi dibuka ulang, supaya gerakan menoleh dari percobaan
         // sebelumnya tidak dihitung sebagai bukti pada percobaan ini.
         livenessStep4 = null;
+        let detectMissCount = 0;
+        const DETECT_MISS_TOLERANCE = 12;
         let isVerifying = false;
 
         // Munculkan tombol Ambil Ulang Foto jika setelah 8 detik belum cocok
@@ -912,12 +919,22 @@
             try {
                 const det = await detectOnce(video);
                 if (!det || !det.descriptor) {
-                    verGuide.classList.remove('success');
-                    st.innerHTML = '<span class="text-muted"><i class="fas fa-user mr-1"></i> Mendeteksi wajah... Hadapkan wajah lurus ke kamera.</span>';
+                    detectMissCount += 1;
+                    if (randomChallengeStep4) randomChallengeStep4.update(null);
+                    if (livenessStep4) livenessStep4.update(null);
+
+                    // Sama seperti /face-attendance/login: beberapa frame tanpa
+                    // wajah saat berkedip/menoleh tidak langsung mengubah status
+                    // atau membatalkan progres liveness/challenge.
+                    if (detectMissCount > DETECT_MISS_TOLERANCE) {
+                        verGuide.classList.remove('success');
+                        st.innerHTML = '<span class="text-muted"><i class="fas fa-user mr-1"></i> Wajah belum terdeteksi. Hadapkan wajah lurus ke kamera.</span>';
+                    }
                     isVerifying = false;
                     return;
                 }
 
+                detectMissCount = 0;
                 const liveDesc = Array.from(det.descriptor);
 
                 // --- GERBANG RANDOM CHALLENGE (V1, 2026-11-09) ---
@@ -1043,7 +1060,7 @@
             } catch (e) {
                 isVerifying = false;
             }
-        }, 250);
+        }, 150);
     }
 
     document.getElementById('btnRetake').onclick = async function () {

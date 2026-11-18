@@ -677,6 +677,18 @@
         html[data-v2-theme="light"] .v2-badge-grey { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
         html[data-v2-theme="light"] .v2-badge-violet { background: #f3eeff; color: #6d28d9; border-color: #e2d8ff; }
 
+        /* Badge bawaan Bootstrap (badge-success, badge-secondary, dst). Aturan
+           dasarnya di atas memakai teks mint/pucat untuk latar gelap; di kartu
+           putih nilai itu nyaris tak terlihat (mis. status kontrak). Warna di
+           bawah menjaga rasio kontras >= 4.5 pada latar kartu terang. */
+        html[data-v2-theme="light"] .v2 .badge-primary { background-color: #e8f1ff; color: #1d4ed8; }
+        html[data-v2-theme="light"] .v2 .badge-info { background-color: #e6fbff; color: #0e7490; }
+        html[data-v2-theme="light"] .v2 .badge-success { background-color: #d1fae5; color: #065f46; }
+        html[data-v2-theme="light"] .v2 .badge-warning { background-color: #fffbeb; color: #92400e; }
+        html[data-v2-theme="light"] .v2 .badge-danger { background-color: #fef2f2; color: #991b1b; }
+        html[data-v2-theme="light"] .v2 .badge-secondary { background-color: #eef2f7; color: #3f4d63; }
+        html[data-v2-theme="light"] .v2 .badge-light { background-color: #f1f5f9; color: #334155; }
+
         /* Tombol selain primary (primary sudah kontras di dua tema) */
         html[data-v2-theme="light"] .v2-btn-ghost {
             background: #ffffff; border-color: #cbd5e1; color: #334155;

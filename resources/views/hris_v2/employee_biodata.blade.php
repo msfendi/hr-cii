@@ -111,6 +111,42 @@
     .bio-footnote { color: var(--v2-muted); font-size: .85rem; }
     .bio-tel { color: #e6edf9; text-decoration: none; }
 
+    /* Override tema terang: teks data karyawan gelap kontras (bukan abu-abu terang) */
+    html[data-v2-theme="light"] .bio-name { color: #0f172a; }
+    html[data-v2-theme="light"] .bio-role { color: #1d4ed8; }
+    html[data-v2-theme="light"] .bio-sec-title { color: #0f172a; }
+    html[data-v2-theme="light"] .bio-count {
+        color: #1e293b; background: #e2e8f0; border-color: #cbd5e1;
+    }
+    html[data-v2-theme="light"] .bio-stat-lbl,
+    html[data-v2-theme="light"] .bio-lbl,
+    html[data-v2-theme="light"] .bio-kv dt {
+        color: #1d4ed8;
+    }
+    html[data-v2-theme="light"] .bio-stat-val,
+    html[data-v2-theme="light"] .bio-val,
+    html[data-v2-theme="light"] .bio-kv dd,
+    html[data-v2-theme="light"] .bio-tel {
+        color: #0f172a;
+    }
+    html[data-v2-theme="light"] .bio-sub { color: #1e293b; }
+    html[data-v2-theme="light"] .bio-sub i { color: #1d4ed8; }
+    html[data-v2-theme="light"] .bio-rec-item {
+        background: #f8fafc; border-color: #e2e8f0;
+    }
+    html[data-v2-theme="light"] .bio-rec-no {
+        color: #1d4ed8; background: #e0edff; border-color: #bad5ff;
+    }
+    html[data-v2-theme="light"] .bio-rec-name { color: #0f172a; }
+    html[data-v2-theme="light"] .bio-empty {
+        border-color: #cbd5e1; color: #64748b; background: #f8fafc;
+    }
+    html[data-v2-theme="light"] .bio-avatar,
+    html[data-v2-theme="light"] .bio-avatar-fallback {
+        border-color: #e2e8f0;
+        box-shadow: 0 0 0 4px rgba(59, 140, 255, .15), 0 10px 24px rgba(15, 23, 42, .12);
+    }
+
     @media (max-width: 767.98px) {
         .bio-hero-in { padding: 18px 16px; gap: 14px; flex-wrap: wrap; }
         .bio-avatar, .bio-avatar-fallback { width: 68px; height: 68px; flex-basis: 68px; font-size: 1.5rem; }
