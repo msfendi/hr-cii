@@ -1590,7 +1590,7 @@ Route::prefix('work-assignment/manage')
 // ========================================
 // GATE SECURITY — pemeriksaan dokumen lewat scan QR
 // ========================================
-// Generik untuk semua jenis dokumen (lihat App\GateSecurity\GateRegistry).
+// Generik untuk semua jenis dokumen (lihat App\Services\GateSecurity\GateRegistry).
 // Petugas login cukup NPK; sesi terpisah dari auth Laravel.
 Route::prefix('gate-security')
     ->name('gate-security.')

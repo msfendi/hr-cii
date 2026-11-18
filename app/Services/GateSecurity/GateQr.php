@@ -1,6 +1,6 @@
 <?php
 
-namespace App\GateSecurity;
+namespace App\Services\GateSecurity;
 
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;

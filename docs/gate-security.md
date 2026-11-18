@@ -46,15 +46,19 @@ Aturan yang dipegang:
 
 | File | Peran |
 |------|-------|
-| `app/GateSecurity/GateDocument.php` | kontrak dokumen (interface) |
-| `app/GateSecurity/GateRegistry.php` | daftar doctype yang didukung — **satu-satunya tempat yang tahu jenis dokumen** |
-| `app/GateSecurity/GateQr.php` | tulis/baca payload QR |
-| `app/GateSecurity/GateOfficer.php` | verifikasi NPK petugas |
+| `app/Services/GateSecurity/GateDocument.php` | kontrak dokumen (interface) |
+| `app/Services/GateSecurity/GateRegistry.php` | daftar doctype yang didukung — **satu-satunya tempat yang tahu jenis dokumen** |
+| `app/Services/GateSecurity/GateQr.php` | tulis/baca payload QR |
+| `app/Services/GateSecurity/GateOfficer.php` | verifikasi NPK petugas |
 | `app/Http/Controllers/GateSecurityController.php` | halaman + endpoint (generik, tak tahu dokumen) |
 | `resources/views/gate_security/login.blade.php` | login petugas |
 | `resources/views/gate_security/scan.blade.php` | halaman scan (generik) |
 | `app/Services/WorkAssignment/WorkAssignmentGateAdapter.php` | adapter untuk Izin Dinas |
 | `app/Services/WorkAssignment/WorkAssignmentQr.php` | QR yang ditampilkan ke pemohon |
+
+Logika gate sengaja diletakkan di `app/Services/GateSecurity/` mengikuti pola
+repo ini (`app/Services/ApprovalWa/`, `app/Services/WorkAssignment/`), bukan
+folder baru langsung di bawah `app/`.
 
 Catatan penyimpanan: hasil gate disimpan di kolom milik dokumennya
 (`work_assignment_requests.security_check`), bukan tabel bersama — tiap
@@ -75,7 +79,7 @@ sudah terbuka di HP karyawan tidak langsung hangus.
 
 ## Menambah jenis dokumen baru
 
-1. Buat adapter: `implements App\GateSecurity\GateDocument`, isi `docType()`,
+1. Buat adapter: `implements App\Services\GateSecurity\GateDocument`, isi `docType()`,
    `label()`, `find()`, `isReady()`, `stage()`, `summary()`, `gates()`,
    `recordGate()`.
 2. Daftarkan di `GateRegistry::DOCUMENTS` — satu baris.

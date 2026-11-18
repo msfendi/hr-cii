@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\GateSecurity\GateDocument;
-use App\GateSecurity\GateOfficer;
-use App\GateSecurity\GateQr;
-use App\GateSecurity\GateRegistry;
+use App\Services\GateSecurity\GateDocument;
+use App\Services\GateSecurity\GateOfficer;
+use App\Services\GateSecurity\GateQr;
+use App\Services\GateSecurity\GateRegistry;
 use Illuminate\Http\Request;
 use Throwable;
 

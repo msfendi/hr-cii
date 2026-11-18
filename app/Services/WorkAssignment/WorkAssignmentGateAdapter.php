@@ -2,7 +2,7 @@
 
 namespace App\Services\WorkAssignment;
 
-use App\GateSecurity\GateDocument;
+use App\Services\GateSecurity\GateDocument;
 use App\Models\WorkAssignmentRequest;
 
 /**

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\GateSecurity;
+namespace App\Services\GateSecurity;
 
 use Illuminate\Support\Facades\DB;
 use Throwable;

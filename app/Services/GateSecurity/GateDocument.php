@@ -1,6 +1,6 @@
 <?php
 
-namespace App\GateSecurity;
+namespace App\Services\GateSecurity;
 
 /**
  * Kontrak dokumen yang diperiksa di pos security (scan QR saat keluar/kembali).
