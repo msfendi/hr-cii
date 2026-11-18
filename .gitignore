@@ -17,3 +17,7 @@ yarn-error.log
 /.idea
 /.vscode
 storage/app/ga4-service-account.json
+# Python bytecode + PHPUnit cache
+__pycache__/
+*.pyc
+.phpunit.result.cache

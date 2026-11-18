@@ -42,6 +42,18 @@ try:
 except ImportError:
     pass
 
+# Normalisasi nomor WA — harus sinkron dengan PhoneFormatter.php (Laravel).
+try:
+    from approval_phone import normalize_phone, to_chat_id
+except ImportError:
+    def normalize_phone(value):
+        digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+        return digits
+
+    def to_chat_id(value):
+        digits = normalize_phone(value)
+        return f"{digits}@s.whatsapp.net" if digits else ""
+
 API_URL = os.environ.get("HR_CII_API_URL", "").rstrip("/")
 API_TOKEN = os.environ.get("APPROVAL_API_TOKEN", "")
 BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "http://127.0.0.1:3000").rstrip("/")
@@ -118,12 +130,15 @@ def throttle():
 
 def send_wa(phone, message):
     """Kirim pesan ke WA bridge. Returns True on success."""
-    chat_id = f"{phone}@s.whatsapp.net"
+    chat_id = to_chat_id(phone)
+    if not chat_id:
+        log(f"FAILED send: nomor tidak bisa dinormalisasi ({phone})")
+        return False
     status, body = _http("POST", f"{BRIDGE_URL}/send", {"chatId": chat_id, "message": message})
     if status == 200 and isinstance(body, dict) and body.get("success"):
-        log(f"sent to {phone} (messageId={body.get('messageId')})")
+        log(f"sent to {chat_id} (messageId={body.get('messageId')})")
         return True
-    log(f"FAILED send to {phone}: HTTP {status} {body}")
+    log(f"FAILED send to {chat_id}: HTTP {status} {body}")
     return False
 
 

@@ -189,6 +189,7 @@ class LeaveController extends Controller
                     'void'              => 'false',
                     'attach_files'      => !empty($attachPaths) ? $attachPaths : null,
                     'custom_dates'      => $dateMode === 'custom' ? json_encode($customDates) : null,
+                    'rules_id'          => $selectedGroup?->id,
                 ]);
             }
 

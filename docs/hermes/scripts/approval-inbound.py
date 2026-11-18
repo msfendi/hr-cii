@@ -25,6 +25,19 @@ import sys
 import urllib.error
 import urllib.request
 
+# Normalisasi nomor WA — harus sinkron dengan PhoneFormatter.php (Laravel).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from approval_phone import normalize_phone, to_chat_id
+except ImportError:
+    def normalize_phone(value):
+        digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+        return digits
+
+    def to_chat_id(value):
+        digits = normalize_phone(value)
+        return f"{digits}@s.whatsapp.net" if digits else ""
+
 # Load config dari ~/.hermes/approval-wa.env (portable lintas server)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -98,12 +111,15 @@ def send_wa(phone, message):
     if not message:
         log("no reply text — nothing to send")
         return False
-    chat_id = f"{phone}@s.whatsapp.net"
+    chat_id = to_chat_id(phone)
+    if not chat_id:
+        log(f"FAILED reply: nomor tidak bisa dinormalisasi ({phone})")
+        return False
     status, body = _http("POST", f"{BRIDGE_URL}/send", {"chatId": chat_id, "message": message}, timeout=30)
     if status == 200 and isinstance(body, dict) and body.get("success"):
-        log(f"reply sent to {phone}")
+        log(f"reply sent to {chat_id}")
         return True
-    log(f"FAILED reply to {phone}: HTTP {status} {body}")
+    log(f"FAILED reply to {chat_id}: HTTP {status} {body}")
     return False
 
 
@@ -121,8 +137,14 @@ def main():
         log("ERROR: butuh --message atau (--decision + --request-id)")
         return 2
 
+    # Normalisasi nomor pengirim dulu (bisa "+6012…", "0812…", atau JID).
+    sender = normalize_phone(args.phone)
+    if not sender:
+        log(f"ERROR: nomor pengirim tidak bisa dinormalisasi: {args.phone!r}")
+        return 2
+
     status, body = post_decision(
-        args.phone,
+        sender,
         message=args.message,
         decision=args.decision,
         request_id=args.request_id,
@@ -147,7 +169,7 @@ def main():
         return 0
 
     if reply:
-        send_wa(args.phone, reply)
+        send_wa(sender, reply)
 
     return 0 if decision_status == "ok" else 1
 

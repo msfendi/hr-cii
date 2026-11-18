@@ -56,54 +56,64 @@ class LeaveApprovalQuery
             $byToken[$row->token][] = $row;
         }
 
-        // Ambil semua approved rows untuk token yang ada (cek prerequisite)
+        // Ambil semua row yang sudah diputuskan untuk token yang ada.
+        // Baris void/cancelled diabaikan supaya celah level (akibat level
+        // dihapus dari Manage Approval) tidak memblokir rantai.
         $tokens = array_keys($byToken);
         $placeholders = implode(',', array_fill(0, count($tokens), '?'));
-        $approvedRows = DB::connection('cii')->select("
+        $decidedRows = DB::connection('cii')->select("
             SELECT token, approval_level, status
             FROM leave_requests
             WHERE token IN ($placeholders)
               AND status IN ('approved', 'rejected')
+              AND (void IS NULL OR void = 'false' OR void = '')
         ", $tokens);
 
         // Build lookup: token -> level -> status
         $statusMap = [];
-        foreach ($approvedRows as $r) {
+        foreach ($decidedRows as $r) {
             $statusMap[$r->token][(int)$r->approval_level] = $r->status;
         }
 
         // Filter: hanya row yang giliran notifikasi sekarang
         $toNotify = [];
         foreach ($byToken as $token => $pendingRows) {
+            // Semua level yang benar-benar ada di token ini (untuk cek prerequisite).
+            $allLevels = [];
+            foreach ($pendingRows as $row) {
+                $allLevels[] = (int) $row->approval_level;
+            }
+            foreach ($statusMap[$token] ?? [] as $lv => $st) {
+                $allLevels[] = (int) $lv;
+            }
+            $allLevels = array_values(array_unique($allLevels));
+
             foreach ($pendingRows as $row) {
                 $level = (int) $row->approval_level;
 
-                if ($level === 1) {
-                    // Level 1: langsung eligible
+                // Ada yang menolak di token ini → seluruh rantai berhenti.
+                $anyRejected = in_array('rejected', $statusMap[$token] ?? [], true);
+                if ($anyRejected) {
+                    continue;
+                }
+
+                // Semua level lain yang LEBIH RENDAH dari level ini harus sudah
+                // approved. Dicek per level yang ada — bukan 1..N-1 — supaya
+                // celah level tidak membuat rantai macet.
+                $allPrevApproved = true;
+                foreach ($allLevels as $otherLevel) {
+                    if ($otherLevel >= $level) {
+                        continue;
+                    }
+
+                    if (($statusMap[$token][$otherLevel] ?? null) !== 'approved') {
+                        $allPrevApproved = false;
+                        break;
+                    }
+                }
+
+                if ($allPrevApproved) {
                     $toNotify[] = $row;
-                } else {
-                    // Level N: cek semua level 1..N-1 sudah 'approved'
-                    $allPrevApproved = true;
-                    for ($prevLevel = 1; $prevLevel < $level; $prevLevel++) {
-                        $prevStatus = $statusMap[$token][$prevLevel] ?? null;
-                        if ($prevStatus !== 'approved') {
-                            $allPrevApproved = false;
-                            break;
-                        }
-                    }
-
-                    // Jika ada yang 'rejected' di level sebelumnya, skip seluruh chain
-                    $anyRejected = false;
-                    foreach ($statusMap[$token] ?? [] as $st) {
-                        if ($st === 'rejected') {
-                            $anyRejected = true;
-                            break;
-                        }
-                    }
-
-                    if ($allPrevApproved && !$anyRejected) {
-                        $toNotify[] = $row;
-                    }
                 }
             }
         }
@@ -165,19 +175,34 @@ class LeaveApprovalQuery
 
         // 4. Check all previous levels approved (sequential enforcement)
         $level = (int) $req->approval_level;
-        if ($level > 1) {
-            $prevApproved = DB::connection('cii')->select("
-                SELECT COUNT(*) as cnt
-                FROM leave_requests
-                WHERE token = ?
-                  AND approval_level < ?
-                  AND status = 'approved'
-            ", [$req->token, $level]);
 
-            $approvedCount = (int)($prevApproved[0]->cnt ?? 0);
-            if ($approvedCount < $level - 1) {
-                return ['valid' => false, 'reason' => "Belum semua level sebelumnya menyetujui pengajuan #$requestId."];
-            }
+        // Ada level lain yang menolak → rantai berhenti, jangan lanjut.
+        $anyRejected = DB::connection('cii')->select("
+            SELECT COUNT(*) as cnt
+            FROM leave_requests
+            WHERE token = ?
+              AND status = 'rejected'
+              AND (void IS NULL OR void = 'false' OR void = '')
+        ", [$req->token]);
+
+        if ((int)($anyRejected[0]->cnt ?? 0) > 0) {
+            return ['valid' => false, 'reason' => "Pengajuan #$requestId sudah ditolak pada level lain."];
+        }
+
+        // Semua level yang lebih rendah dari level ini harus sudah approved.
+        // Dicek berdasarkan level yang benar-benar ada — bukan 1..N-1 — supaya
+        // celah level (mis. level dihapus dari Manage Approval) tidak memblokir.
+        $unapprovedPrev = DB::connection('cii')->select("
+            SELECT COUNT(*) as cnt
+            FROM leave_requests
+            WHERE token = ?
+              AND approval_level < ?
+              AND status <> 'approved'
+              AND (void IS NULL OR void = 'false' OR void = '')
+        ", [$req->token, $level]);
+
+        if ((int)($unapprovedPrev[0]->cnt ?? 0) > 0) {
+            return ['valid' => false, 'reason' => "Belum semua level sebelumnya menyetujui pengajuan #$requestId."];
         }
 
         return ['valid' => true, 'request' => $req, 'approver' => $approver];
@@ -315,6 +340,31 @@ class LeaveApprovalQuery
     }
 
     /**
+     * Ringkasan satu pengajuan cuti (untuk pesan konfirmasi keputusan).
+     *
+     * formatConfirmation() hanya menerima nomor pengajuan, sedangkan pesan
+     * konfirmasi perlu menyebut pemohon, jenis cuti, periode, dan durasi.
+     * Query di sini sengaja ramping (kolom seperlunya, TOP 1 by primary key)
+     * supaya tetap cepat saat dipanggil dari jalur webhook WhatsApp.
+     *
+     * @return object|null  {id, NPK, leave_type_id, start_date, end_date, total_days}
+     */
+    public static function getRequestSummary(int $requestId): ?object
+    {
+        if ($requestId <= 0) {
+            return null;
+        }
+
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 id, NPK, leave_type_id, start_date, end_date, total_days
+            FROM leave_requests
+            WHERE id = ?
+        ", [$requestId]);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
      * Nama jenis cuti dari leave_types (mis. "Cuti Tahunan", "Cuti Menikah").
      */
     public static function getLeaveTypeName(int $leaveTypeId): ?string
@@ -330,7 +380,50 @@ class LeaveApprovalQuery
     }
 
     /**
+     * Jenis cuti lengkap (name + code) untuk menentukan apakah memakai saldo.
+     *
+     * @return object|null  {id, name, code}
+     */
+    public static function getLeaveType(int $leaveTypeId): ?object
+    {
+        if ($leaveTypeId <= 0) {
+            return null;
+        }
+
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 id, name, code FROM leave_types WHERE id = ?
+        ", [$leaveTypeId]);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
+     * Saldo cuti karyawan untuk satu jenis cuti pada tahun tertentu.
+     *
+     * `leave_balances` menyimpan saldo per NPK + jenis cuti + tahun.
+     *
+     * @return object|null  {remained_days, used_days, negative_leave}
+     */
+    public static function getLeaveBalance(string $npk, int $leaveTypeId, int $year): ?object
+    {
+        if ($npk === '' || $leaveTypeId <= 0 || $year <= 0) {
+            return null;
+        }
+
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 remained_days, used_days, negative_leave
+            FROM leave_balances
+            WHERE NPK = ? AND leave_type_id = ? AND year = ?
+        ", [$npk, $leaveTypeId, $year]);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
      * Hitung jumlah level dalam satu token (total chain approval).
+     *
+     * Row yang sudah dibatalkan (void/cancelled — mis. levelnya dihapus dari
+     * Manage Approval) tidak dihitung, supaya "level N dari M" tetap benar.
      */
     public static function countTokenLevels(string $token): int
     {
@@ -338,6 +431,8 @@ class LeaveApprovalQuery
             SELECT COUNT(DISTINCT approval_level) as cnt
             FROM leave_requests
             WHERE token = ?
+              AND status <> 'cancelled'
+              AND (void IS NULL OR void = 'false' OR void = '')
         ", [$token]);
 
         return (int)($rows[0]->cnt ?? 0);
@@ -345,28 +440,42 @@ class LeaveApprovalQuery
 
     /**
      * Find approver by normalized phone number.
-     * Looks up all approver NPKs from approval_rules, then checks PKWT.HP one by one.
-     * Returns NPK + NAMA if found.
+     *
+     * Semua NPK approver diambil dalam SATU query, lalu dicocokkan di PHP
+     * dengan PhoneFormatter::normalize(). Hasilnya harus sama persis dengan
+     * nomor yang dipakai WhatsApp (digit saja, tanpa "+").
+     *
+     * Catatan: nomor non-Indonesia di PKWT boleh ditulis "+<kode negara>"
+     * (mis. "+84913662215" Vietnam) — kode negaranya dipertahankan.
+     * Nomor tanpa "+" yang tidak cocok pola seluler Indonesia juga
+     * dipertahankan, bukan dipaksa jadi 62.
+     *
+     * @return object|null  baris PKWT (NPK, NAMA, HP)
      */
     public static function findApproverByPhone(string $senderPhone): ?object
     {
-        // Get distinct approver NPKs from approval_rules
-        $npks = DB::connection('cii')->select("
-            SELECT DISTINCT approval_id FROM approval_rules
+        $senderPhone = trim($senderPhone);
+
+        if ($senderPhone === '') {
+            return null;
+        }
+
+        // Satu query: seluruh approver + nomor HP-nya.
+        $rows = DB::connection('cii')->select("
+            SELECT DISTINCT p.NPK, p.NAMA, p.HP
+            FROM approval_rules r
+            INNER JOIN PKWT p ON p.NPK = r.approval_id
+            WHERE r.approval_id IS NOT NULL
+              AND r.approval_id <> ''
+              AND p.HP IS NOT NULL
+              AND LTRIM(RTRIM(p.HP)) <> ''
         ");
 
-        foreach ($npks as $row) {
-            $pkwt = DB::connection('cii')->select("
-                SELECT TOP 1 NPK, NAMA, HP FROM PKWT WHERE NPK = ?
-            ", [$row->approval_id]);
+        foreach ($rows as $row) {
+            $normalized = PhoneFormatter::normalize($row->HP);
 
-            if (empty($pkwt) || empty($pkwt[0]->HP)) {
-                continue;
-            }
-
-            $normalized = PhoneFormatter::normalize($pkwt[0]->HP);
-            if ($normalized === $senderPhone) {
-                return $pkwt[0];
+            if ($normalized !== null && $normalized === $senderPhone) {
+                return $row;
             }
         }
 
