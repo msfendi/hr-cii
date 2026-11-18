@@ -47,10 +47,10 @@ share `token` yang sama.
 | `app/Services/ApprovalWa/ApprovalWebhookTrigger.php` | **trigger Hermes via webhook** (HMAC V2) |
 | `app/Services/ApprovalWa/ApprovalApiPayload.php` | payload JSON untuk messaging layer |
 | `app/Services/ApprovalWa/PhoneFormatter.php` | normalisasi HP (`08xxx`/`+62xxx` → `62xxx`) |
-| `app/Services/ApprovalWa/WaMessageFormatter.php` | format pesan + deep link |
+| `app/Services/ApprovalWa/LeaveMessageFormatter.php` | format pesan cuti + deep link |
 | `app/Services/ApprovalWa/WaGateway.php` | kirim ke bridge (fallback mode) |
 | `app/Services/ApprovalWa/WaSendThrottle.php` | jitter + rate limit (fallback mode) |
-| `app/Services/ApprovalWa/InboundApprovalProcessor.php` | parse, validasi, transaksi, cascade |
+| `app/Services/ApprovalWa/LeaveInboundProcessor.php` | parse, validasi, transaksi, cascade (cuti) |
 | `app/Http/Controllers/Api/ApprovalApiController.php` | `pending` / `trigger` / `decision` |
 | `app/Http/Middleware/AuthenticateApprovalApi.php` | bearer token + IP allowlist |
 | `app/Console/Commands/CheckPendingLeaveApproval.php` | `approval:check-pending` (sweep) |
@@ -62,7 +62,7 @@ share `token` yang sama.
 |-------|------|------|
 | Submit pengajuan | `PengajuanCutiController::store()` | trigger Hermes → notif level 1 |
 | Approve web portal | `LeaveApprovalController::approve()` | trigger Hermes → notif level N+1 |
-| Approve via WA | `InboundApprovalProcessor::handle()` | trigger Hermes → notif level N+1 |
+| Approve via WA | `LeaveInboundProcessor::handle()` | trigger Hermes → notif level N+1 |
 | Cron 5 jam | `approval:check-pending` / `approval-outbound.py` | safety net |
 
 Semua setelah `DB::commit()` — tidak ada notif untuk data yang gagal disimpan.
@@ -83,24 +83,35 @@ php8.3 artisan approval:notify-token <token>
 
 ## Inbound — Diterima
 
+Command dikelompokkan per jenis dokumen:
+
 ```
-/approve 849        APPROVE 849        /approve #849
-/tolak 849 alasan   REJECT 849 alasan
-/batal 849 alasan   BATAL 849 alasan
+/approve-cuti909              /approve-izin-dinas10009
+/tolak-cuti909 alasan         /tolak-izin-dinas10009 alasan
+/batal-cuti909 alasan
 ```
 
-| Command | Status sebelum | Hasil |
-|---------|---------------|-------|
-| `/approve <ID>` | pending | approved, progress maju, notif level berikutnya |
-| `/tolak <ID> <alasan>` | pending | rejected, sibling rows void |
-| `/batal <ID> <alasan>` | approved | rejected, **saldo dikembalikan** |
+| Command | Dokumen | Status sebelum | Hasil |
+|---------|---------|---------------|-------|
+| `/approve-cuti<ID>` | Cuti | pending | approved, progress maju, notif level berikutnya |
+| `/tolak-cuti<ID> <alasan>` | Cuti | pending | rejected, sibling rows void |
+| `/batal-cuti<ID> <alasan>` | Cuti | approved | rejected, **saldo dikembalikan** |
+| `/approve-izin-dinas<ID>` | Izin Dinas | pending | approved di level itu, notif level berikutnya |
+| `/tolak-izin-dinas<ID> <alasan>` | Izin Dinas | pending | rejected (alasan wajib) |
 
-`/batal` ditolak kalau level berikutnya sudah bertindak.
+`/batal` ditolak kalau level berikutnya sudah bertindak. Format lama tanpa
+doctype (`/approve 909`) tetap diterima dan dianggap cuti.
 
 ## Keamanan & Konsistensi
 
-1. **Otorisasi 2 lapis** — HP → `PKWT.HP` → NPK ada di `approval_rules.approval_id`
-2. **Anti salah-ID** — NPK approver harus match `leave_requests.approval_id` row itu
+1. **Otorisasi 2 lapis** — HP → `PKWT.HP` → NPK.
+   Untuk **cuti**: NPK harus ada di `approval_rules.approval_id`.
+   Untuk **izin dinas**: NPK harus ada di `approval_chain` pengajuan itu
+   (snapshot JSON), bukan di master — rantai bisa memuat approver yang sudah
+   tidak ada di `approval_rules`.
+2. **Anti salah-ID** — untuk cuti, NPK approver harus match
+   `leave_requests.approval_id` row itu. Untuk izin dinas, nomor pengirim
+   harus cocok dengan salah satu NPK di rantai pengajuan tersebut.
 3. **Sequential enforcement** — tidak bisa skip level
 4. **Atomic** — conditional UPDATE (`WHERE status='pending'`) + transaction,
    mencegah dobel potong saldo saat double-tap/retry

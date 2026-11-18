@@ -128,7 +128,7 @@ class ApprovalApiPayload
             return null;
         }
 
-        $message = WaMessageFormatter::formatApprovalRequest($request, $approverInfo);
+        $message = LeaveMessageFormatter::formatApprovalRequest($request, $approverInfo);
         $id      = (int) $request->id;
 
         return [

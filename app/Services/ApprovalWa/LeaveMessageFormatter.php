@@ -5,7 +5,14 @@ namespace App\Services\ApprovalWa;
 use Carbon\Carbon;
 use Throwable;
 
-class WaMessageFormatter
+/**
+ * Format pesan WhatsApp untuk pengajuan CUTI.
+ *
+ * Untuk Surat Ijin Dinas Luar dipakai IzinDinasMessageFormatter. Keduanya
+ * sengaja dibiarkan sejajar (bukan diwariskan) karena isi pesannya berbeda:
+ * cuti memuat jenis cuti + saldo, izin dinas memuat tujuan + jam keluar.
+ */
+class LeaveMessageFormatter
 {
     /** Cache lookup per-request supaya tidak query berulang dalam satu run. */
     private static array $cache = [];

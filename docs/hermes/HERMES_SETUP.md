@@ -190,19 +190,29 @@ Script ini:
 3. Laravel update DB dalam transaksi + trigger notif level berikutnya
 4. Script kirim `reply` dari response ke approver via WA bridge
 
-Format yang diterima approver:
+Format yang diterima approver (dikelompokkan per jenis dokumen):
 
-| Command | Status sebelum | Hasil |
-|---------|---------------|-------|
-| `/approve <ID>` | pending | approved, progress maju, notif level berikutnya |
-| `/tolak <ID> <alasan>` | pending | rejected, sibling rows void (chain berhenti) |
-| `/batal <ID> <alasan>` | approved | rejected, **saldo cuti dikembalikan** |
+| Command | Dokumen | Status sebelum | Hasil |
+|---------|---------|---------------|-------|
+| `/approve-cuti<ID>` | Cuti | pending | approved, progress maju, notif level berikutnya |
+| `/tolak-cuti<ID> <alasan>` | Cuti | pending | rejected, sibling rows void (chain berhenti) |
+| `/batal-cuti<ID> <alasan>` | Cuti | approved | rejected, **saldo cuti dikembalikan** |
+| `/approve-izin-dinas<ID>` | Izin Dinas | pending | approved di level itu, notif level berikutnya |
+| `/tolak-izin-dinas<ID> <alasan>` | Izin Dinas | pending | rejected (alasan wajib), chain berhenti |
+
+Catatan:
+- Spasi sebelum nomor opsional: `/approve-izin-dinas10009` = `/approve-izin-dinas 10009`.
+- Format lama `/approve <ID>` masih diterima dan dianggap **cuti**, karena pesan
+  yang sudah terkirim ke approver memakai format itu.
+- Izin Dinas **tidak punya** `/batal` — tidak memakai saldo, jadi keputusan
+  tidak bisa dibatalkan.
 
 ---
 
 ## Bagian D — Format Pesan Notifikasi
 
-Template dirender di **Laravel** (`App\Services\ApprovalWa\WaMessageFormatter`)
+Template dirender di **Laravel** — `App\Services\ApprovalWa\LeaveMessageFormatter`
+untuk cuti, `App\Services\ApprovalWa\IzinDinasMessageFormatter` untuk Izin Dinas —
 dan dikirim sebagai field `message` di payload. Messaging layer hanya
 mengirimkan teks apa adanya.
 
@@ -229,12 +239,12 @@ mengirimkan teks apa adanya.
 Yth. *RAKHMAT BUDIYONO*,
 mohon berikan keputusan Anda:
 
-✅ *Setujui* → https://wa.me/6287731665679?text=%2Fapprove+837
-❌ *Tolak* → https://wa.me/6287731665679?text=%2Ftolak+837+%3Calasan%3E
+✅ *Setujui* → https://wa.me/6287731665679?text=%2Fapprove-cuti837
+❌ *Tolak* → https://wa.me/6287731665679?text=%2Ftolak-cuti837+%3Calasan%3E
 
 Atau balas langsung ke chat ini:
-• `/approve 837`
-• `/tolak 837 <alasan>`
+• `/approve-cuti837`
+• `/tolak-cuti837 <alasan>`
 
 ⚠️ Mohon pastikan *No. Pengajuan* sudah sesuai.
 ```

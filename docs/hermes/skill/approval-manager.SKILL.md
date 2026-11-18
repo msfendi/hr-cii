@@ -107,7 +107,7 @@ Laravel POSTs to the Hermes webhook route when a leave is submitted or a level
 is approved. The webhook runs `approval-webhook.py`, which fetches the payload
 from `/api/approval/trigger` and sends the WhatsApp message.
 
-**The message text is rendered by Laravel** (`WaMessageFormatter` untuk cuti,
+**The message text is rendered by Laravel** (`LeaveMessageFormatter` untuk cuti,
 `IzinDinasMessageFormatter` untuk izin dinas) and delivered in the payload's
 `message` field — the messaging layer sends it verbatim. For cuti it contains:
 nama pemohon, NPK, jenis cuti, tanggal pengajuan, periode, durasi, alasan,

@@ -24,6 +24,6 @@ class ApprovalInboundDispatcher
 
         return $parsed['doc'] === ApprovalCommandParser::DOC_IZIN_DINAS
             ? IzinDinasInboundProcessor::handle($phone, $message)
-            : InboundApprovalProcessor::handle($phone, $message);
+            : LeaveInboundProcessor::handle($phone, $message);
     }
 }

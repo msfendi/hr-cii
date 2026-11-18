@@ -8,7 +8,7 @@
  * Jalankan: php8.3 artisan tinker --execute="require 'tests/manual/wa_balance_message_check.php';"
  */
 
-use App\Services\ApprovalWa\WaMessageFormatter;
+use App\Services\ApprovalWa\LeaveMessageFormatter;
 use Illuminate\Support\Facades\DB;
 
 $fail = 0;
@@ -58,7 +58,7 @@ $makeRequest = function (int $typeId, int $days) use ($npk, $year) {
 $approver = (object) ['NPK' => 'TDL-A', 'NAMA' => 'APPROVER UJI'];
 
 $render = function (int $typeId, int $days) use ($makeRequest, $approver) {
-    return WaMessageFormatter::formatApprovalRequest($makeRequest($typeId, $days), $approver);
+    return LeaveMessageFormatter::formatApprovalRequest($makeRequest($typeId, $days), $approver);
 };
 
 echo PHP_EOL . '═══ 1. Cuti Tahunan, saldo CUKUP (' . ($remained - 1) . ' dari ' . $remained . ') ═══' . PHP_EOL;
@@ -89,7 +89,7 @@ $assert('pesan inti tetap lengkap', str_contains($msg3, 'PENGAJUAN CUTI — BUTU
 echo PHP_EOL . '═══ 4. Cuti Tahunan tapi NPK tanpa saldo tahun ini ═══' . PHP_EOL;
 $req4 = $makeRequest(5, 2);
 $req4->NPK = 'TIDAK-ADA-NPK';
-$msg4 = WaMessageFormatter::formatApprovalRequest($req4, $approver);
+$msg4 = LeaveMessageFormatter::formatApprovalRequest($req4, $approver);
 echo $msg4 . PHP_EOL;
 
 $assert('blok muncul dengan pesan data belum tersedia', str_contains($msg4, 'data belum tersedia'));

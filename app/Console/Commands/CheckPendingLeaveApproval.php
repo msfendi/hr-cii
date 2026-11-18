@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Services\ApprovalWa\LeaveApprovalQuery;
 use App\Services\ApprovalWa\PhoneFormatter;
 use App\Services\ApprovalWa\WaGateway;
-use App\Services\ApprovalWa\WaMessageFormatter;
+use App\Services\ApprovalWa\LeaveMessageFormatter;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -65,7 +65,7 @@ class CheckPendingLeaveApproval extends Command
         }
 
         // Format message with WA deep links for approve/reject
-        $message = WaMessageFormatter::formatApprovalRequest($request, $approverInfo);
+        $message = LeaveMessageFormatter::formatApprovalRequest($request, $approverInfo);
 
         $this->line("  [#$id] → {$approverInfo->NAMA} ($phone) level=$level");
 
