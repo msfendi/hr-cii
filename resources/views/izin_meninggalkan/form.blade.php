@@ -65,9 +65,9 @@
 
         <div class="wa-head">
             <div class="wa-head-user">
-                <div class="emp-avatar">{{ strtoupper(substr($employee['name'] ?? '?', 0, 1)) }}</div>
+                <div class="emp-avatar">{{ strtoupper(substr($employee['nama'] ?? '?', 0, 1)) }}</div>
                 <div>
-                    <div class="emp-name">{{ $employee['name'] }}</div>
+                    <div class="emp-name">{{ $employee['nama'] }}</div>
                     <div class="emp-npk">{{ $employee['npk'] }}</div>
                 </div>
             </div>
@@ -90,7 +90,7 @@
             {{-- Data karyawan (otomatis) --}}
             <div class="emp-chips" style="margin-bottom:1.15rem;">
                 <span class="emp-chip">Bagian: <strong>{{ $employee['bagian'] ?: '-' }}</strong></span>
-                <span class="emp-chip">Departemen: <strong>{{ $employee['jabatan'] ?: '-' }}</strong></span>
+                <span class="emp-chip">Departemen: <strong>{{ $employee['departemen'] ?: '-' }}</strong></span>
                 <span class="emp-chip">Section: <strong>{{ $employee['section'] ?: '-' }}</strong></span>
             </div>
 
