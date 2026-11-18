@@ -124,15 +124,28 @@ karena tidak memakai saldo. Saldo dibaca dari `leave_balances`
 ### Via cron (safety net — sweeps all pending)
 
 ```bash
-python3 ~/.hermes/scripts/approval-outbound.py --dry-run   # preview, NO send
-python3 ~/.hermes/scripts/approval-outbound.py              # live send, semua doctype
-python3 ~/.hermes/scripts/approval-outbound.py --token <token>            # one pengajuan (cuti)
-python3 ~/.hermes/scripts/approval-outbound.py --doc izin-dinas            # sweep izin dinas saja
-python3 ~/.hermes/scripts/approval-outbound.py --token <token> --doc izin-dinas
+# Dry-run: susun + cetak pesan, TIDAK mengirim
+python3 ~/.hermes/scripts/approval-outbound.py --doc cuti --dry-run
+python3 ~/.hermes/scripts/approval-outbound.py --doc izin-dinas --dry-run
+
+# Kirim sungguhan — selalu lewat wrapper, satu job per dokumen
+bash ~/.hermes/scripts/check-leave-approval.sh             # cuti
+bash ~/.hermes/scripts/check-work-assignment-approval.sh   # izin dinas
 ```
 
-Tanpa `--doc`, script menyapu **cuti dan izin-dinas** — supaya dokumen baru
-tidak terlewat hanya karena cron belum diubah.
+Selalu pakai wrapper (`check-*.sh`) untuk job terjadwal, **jangan**
+`approval-outbound.py` polos: tanpa `--doc` script menyapu **kedua** doctype,
+sehingga bisa tumpang tindih dengan job dokumen lain dan approver menerima
+pesan yang sama dua kali.
+
+```bash
+hermes cron create "every 5h" --name "work-assignment-approval-check" \
+  --script "check-work-assignment-approval.sh" --no-agent --deliver local
+```
+
+Jangan pula menjadwalkan `php artisan approval:check-pending` /
+`approval:notify-izin-dinas` bersamaan dengan job di atas — itu jalur Laravel
+langsung dan akan mengirim pesan kedua.
 
 ### Payload untuk Izin Dinas
 

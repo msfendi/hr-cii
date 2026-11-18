@@ -1,28 +1,23 @@
 #!/bin/bash
-# Hermes cron script: cek pending approval CUTI dan kirim notif WA.
+# Hermes cron script: sweep approval CUTI dan kirim notif WA ke approver.
 #
 # Dokumen: pengajuan cuti (tabel leave_requests).
-# Keputusan via WA memakai command /approve-cuti<ID> dan /tolak-cuti<ID>.
-# Untuk dokumen Izin Dinas pakai script terpisah:
-#   check-izin-dinas-approval.sh
+# Jalur: approval-outbound.py --doc cuti  → payload disiapkan Laravel,
+#        pesan dikirim oleh messaging layer (bukan Laravel).
 #
 # Deploy: cp docs/hermes/scripts/check-leave-approval.sh ~/.hermes/scripts/
 #         chmod +x ~/.hermes/scripts/check-leave-approval.sh
-#         lalu edit HR_CII_PATH di bawah sesuai lokasi repo di server ini.
 #
-# Catatan: command ini LANGSUNG mengirim pesan WhatsApp (bukan dry-run).
-#         Untuk preview: php8.3 artisan approval:check-pending --dry-run
+# Catatan:
+# - Script ini LANGSUNG mengirim WhatsApp (bukan dry-run).
+# - Aman diulang: Laravel hanya menyiapkan payload untuk level yang sedang
+#   giliran, jadi approver yang sudah lewat tidak dikirimi lagi.
+# - JANGAN menjadwalkan ini bersamaan dengan `php artisan approval:check-pending`
+#   (jalur Laravel langsung) — approver bisa menerima pesan yang sama dua kali.
 
 set -uo pipefail
 
-HR_CII_PATH="${HR_CII_PATH:-/home/hermes/workspace/hr-cii}"
-PHP_BIN="${PHP_BIN:-php8.3}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY_BIN="${PY_BIN:-python3}"
 
-if [ ! -d "$HR_CII_PATH" ]; then
-    echo "[approval-wa] ERROR: HR_CII_PATH not found: $HR_CII_PATH"
-    exit 1
-fi
-
-cd "$HR_CII_PATH" || exit 1
-
-exec "$PHP_BIN" artisan approval:check-pending 2>&1
+exec "$PY_BIN" "$SCRIPT_DIR/approval-outbound.py" --doc cuti

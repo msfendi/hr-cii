@@ -154,18 +154,26 @@ Catat URL + secret yang dikembalikan → masukkan ke `.env` Laravel
 ```bash
 hermes cron create "every 5h" \
   --name "leave-approval-sweep" \
-  --script "approval-outbound.py" \
+  --script "check-leave-approval.sh" \
   --no-agent \
   --deliver local
 ```
 
 `--no-agent` → script stdout dikirim langsung, tanpa LLM.
 
+Wrapper `check-leave-approval.sh` memanggil `approval-outbound.py --doc cuti`.
+Selalu pakai wrapper, **jangan** `approval-outbound.py` polos: tanpa `--doc`
+script menyapu cuti **dan** izin dinas, sehingga bisa tumpang tindih dengan job
+Izin Dinas (approver menerima pesan yang sama dua kali).
+
+Untuk modul Izin Dinas (Work Assignment) lihat
+[`WORK_ASSIGNMENT_SETUP.md`](WORK_ASSIGNMENT_SETUP.md).
+
 ### B6. Verifikasi
 
 ```bash
 # Tanpa kirim WA
-python3 ~/.hermes/scripts/approval-outbound.py --dry-run
+python3 ~/.hermes/scripts/approval-outbound.py --doc cuti --dry-run
 
 # Health bridge WA
 curl -s http://127.0.0.1:3000/health
