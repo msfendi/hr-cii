@@ -142,6 +142,28 @@ class EmployeeLookupService
         ];
     }
 
+    /**
+     * ID departemen karyawan (BIODATA.ID_DEPT) — dipakai menyusun rantai approval.
+     *
+     * Null kalau tidak ada; pemanggil memperlakukan itu sebagai "belum disetel".
+     */
+    public static function deptIdFor(string $npk): ?string
+    {
+        $value = DB::connection('cii')->table('BIODATA')->where('NPK', $npk)->value('ID_DEPT');
+
+        return $value === null ? null : (string) $value;
+    }
+
+    /**
+     * ID section karyawan (BIODATA.SECTION) — dipakai menyusun rantai approval.
+     */
+    public static function sectionIdFor(string $npk): ?string
+    {
+        $value = DB::connection('cii')->table('BIODATA')->where('NPK', $npk)->value('SECTION');
+
+        return $value === null ? null : (string) $value;
+    }
+
     private static function clean(mixed $value): ?string
     {
         if ($value === null || !is_scalar($value)) {

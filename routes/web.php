@@ -47,6 +47,9 @@ use App\Http\Controllers\EmployeeLateController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\GateSecurityController;
+use App\Http\Controllers\IjinMeninggalkanApprovalController;
+use App\Http\Controllers\IjinMeninggalkanController;
+use App\Http\Controllers\IjinMeninggalkanRecapController;
 use App\Http\Controllers\WorkAssignmentApprovalController;
 use App\Http\Controllers\WorkAssignmentController;
 use App\Http\Controllers\WorkAssignmentPdfController;
@@ -1585,6 +1588,43 @@ Route::prefix('work-assignment/manage')
         // Lampiran: unduh & hapus per file
         Route::get('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'downloadAttachment'])->name('attachment.download');
         Route::post('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'deleteAttachment'])->name('attachment.delete');
+    });
+
+// ========================================
+// IZIN MENINGGALKAN TUGAS / PEKERJAAN (CII.FM.HR.02.06)
+// ========================================
+// Pemohon: berbasis session (login NPK + tanggal lahir), sama seperti Izin Dinas.
+Route::prefix('izin-meninggalkan')->name('izin-meninggalkan.')->group(function () {
+    Route::get('/login', [IjinMeninggalkanController::class, 'login'])->name('login');
+    Route::post('/verify-manual', [IjinMeninggalkanController::class, 'verifyManual'])->name('verify-manual');
+    Route::get('/logout', [IjinMeninggalkanController::class, 'logout'])->name('logout');
+
+    Route::get('/', [IjinMeninggalkanController::class, 'dashboard'])->name('dashboard');
+    Route::get('/form', [IjinMeninggalkanController::class, 'form'])->name('form');
+    Route::post('/submit', [IjinMeninggalkanController::class, 'submit'])->name('submit');
+});
+
+// Admin: approval bertingkat (auth Laravel, NPK user = approver).
+Route::prefix('izin-meninggalkan/approval')
+    ->name('izin-meninggalkan.approval.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/', [IjinMeninggalkanApprovalController::class, 'index'])->name('index');
+        Route::get('/get-data', [IjinMeninggalkanApprovalController::class, 'getData'])->name('get-data');
+        Route::get('/detail/{id}', [IjinMeninggalkanApprovalController::class, 'detail'])->name('detail');
+        Route::post('/approve/{id}', [IjinMeninggalkanApprovalController::class, 'approve'])->name('approve');
+        Route::post('/reject/{id}', [IjinMeninggalkanApprovalController::class, 'reject'])->name('reject');
+    });
+
+// Admin: rekap semua pengajuan.
+Route::prefix('izin-meninggalkan/recap')
+    ->name('izin-meninggalkan.recap.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/', [IjinMeninggalkanRecapController::class, 'index'])->name('index');
+        Route::get('/get-data', [IjinMeninggalkanRecapController::class, 'getData'])->name('get-data');
+        Route::get('/detail/{id}', [IjinMeninggalkanRecapController::class, 'detail'])->name('detail');
+        Route::post('/delete/{id}', [IjinMeninggalkanRecapController::class, 'destroy'])->name('delete');
     });
 
 // ========================================
