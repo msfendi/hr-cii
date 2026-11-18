@@ -1941,7 +1941,7 @@ class AiChatService
      *
      * @return array{label: string, nilai: string, satuan: string}|null
      */
-    protected function pilihKolomChart(array $rows): ?array
+    protected function pilihKolomChart(array $rows, ?string $userMessage = null): ?array
     {
         $sampel = array_slice($rows, 0, 30);
 
@@ -1953,8 +1953,34 @@ class AiChatService
         $kandidatNilai = [];
         $kandidatLabel = [];
 
-        // Kolom identitas tidak layak dijadikan sumbu nilai.
-        $bukanNilai = ['id', 'npk', 'nik', 'nopeg', 'no', 'nomor', 'urut', 'bulan_ke'];
+        // Kolom identitas, temporal/kalender, dan non-metrik tidak layak
+        // dijadikan sumbu nilai grafik batang.
+        $bukanNilai = [
+            'id', 'npk', 'nik', 'nopeg', 'no', 'nomor', 'urut', 'bulan_ke',
+            'tahun', 'year', 'yr', 'thn',
+            'bulan', 'month', 'bln',
+            'hari', 'day', 'tgl', 'tanggal', 'date', 'scan_date', 'overtime_date',
+            'awal_minggu', 'akhir_minggu', 'minggu_ke', 'week',
+            'is_holiday', 'status', 'keterangan', 'remark',
+        ];
+
+        // Hitung variasi nilai unik per kolom di sampel untuk mendeteksi
+        // kolom angka konstan (misalnya TAHUN=2026 di seluruh baris).
+        $nilaiUnikPerKolom = [];
+        foreach ($headers as $h) {
+            $nilaiUnikPerKolom[$h] = [];
+        }
+
+        foreach ($sampel as $row) {
+            foreach ($headers as $h) {
+                $val = ((array) $row)[$h] ?? null;
+                if ($val !== null && $val !== '') {
+                    $nilaiUnikPerKolom[$h][(string) $val] = true;
+                }
+            }
+        }
+
+        $pesanLower = mb_strtolower((string) $userMessage);
 
         foreach ($headers as $header) {
             $nama = mb_strtolower((string) $header);
@@ -1983,13 +2009,27 @@ class AiChatService
             }
 
             if ($angka > $teks) {
+                // Lewati kolom non-metrik (identitas/kalender)
                 if (in_array($nama, $bukanNilai, true)) {
+                    continue;
+                }
+
+                // Lewati kolom angka yang nilainya konstan / seragam di semua
+                // baris sampel bila ada baris >= 2 (misal TAHUN=2026, IS_ACTIVE=1).
+                // Kolom konstan tidak informatif untuk dijadikan panjang grafik batang.
+                $jumlahVariasi = count($nilaiUnikPerKolom[$header] ?? []);
+                if (count($sampel) >= 2 && $jumlahVariasi <= 1) {
                     continue;
                 }
 
                 $skor = $angka;
 
-                if (str_contains($nama, 'persen') || str_contains($nama, 'percent')
+                // Prioritas metrik lembur, jam kerja, dan durasi
+                if (str_contains($nama, 'lembur') || str_contains($nama, 'overtime')
+                    || str_contains($nama, 'jam') || str_contains($nama, 'hour')
+                    || str_contains($nama, 'durasi') || str_contains($nama, 'duration')) {
+                    $skor += 80;
+                } elseif (str_contains($nama, 'persen') || str_contains($nama, 'percent')
                     || str_contains($nama, 'rate') || str_contains($nama, '%')
                     || str_contains($nama, 'turnover') || str_contains($nama, 'ratio')) {
                     $skor += 60;
@@ -2002,6 +2042,11 @@ class AiChatService
                     $skor += 20;
                 }
 
+                // Bonus jika nama kolom angka disebut dalam pertanyaan user
+                if ($pesanLower !== '' && str_contains($pesanLower, $nama)) {
+                    $skor += 35;
+                }
+
                 $kandidatNilai[$header] = $skor;
                 continue;
             }
@@ -2012,9 +2057,9 @@ class AiChatService
             if (str_contains($nama, 'dept') || str_contains($nama, 'departemen')
                 || str_contains($nama, 'bagian') || str_contains($nama, 'section')
                 || str_contains($nama, 'divisi') || str_contains($nama, 'line')
-                || str_contains($nama, 'nama') || str_contains($nama, 'status')
-                || str_contains($nama, 'bulan') || str_contains($nama, 'kategori')
-                || str_contains($nama, 'area')) {
+                || str_contains($nama, 'nama') || str_contains($nama, 'karyawan')
+                || str_contains($nama, 'status') || str_contains($nama, 'bulan')
+                || str_contains($nama, 'kategori') || str_contains($nama, 'area')) {
                 $skor += 50;
             }
 
@@ -2042,6 +2087,8 @@ class AiChatService
             || str_contains($namaNilai, 'rate') || str_contains($namaNilai, '%')
             || str_contains($namaNilai, 'turnover') || str_contains($namaNilai, 'ratio')) {
             $satuan = '%';
+        } elseif (str_contains($namaNilai, 'jam') || str_contains($namaNilai, 'hour')) {
+            $satuan = 'jam';
         }
 
         return ['label' => $kolomLabel, 'nilai' => $kolomNilai, 'satuan' => $satuan];
@@ -2051,13 +2098,13 @@ class AiChatService
      * Perlu membuat grafik? Diminta user, atau datanya banyak (melewati
      * ambang `chatbot.chart_auto_min_rows`).
      */
-    protected function perluChart(array $rows, bool $diminta): bool
+    protected function perluChart(array $rows, bool $diminta, ?string $userMessage = null): bool
     {
         if (count($rows) < 2) {
             return false;
         }
 
-        if ($this->pilihKolomChart($rows) === null) {
+        if ($this->pilihKolomChart($rows, $userMessage) === null) {
             return false;
         }
 
@@ -2076,11 +2123,11 @@ class AiChatService
      */
     protected function siapkanChart(array $rows, string $userMessage, bool $diminta): ?array
     {
-        if (! $this->perluChart($rows, $diminta)) {
+        if (! $this->perluChart($rows, $diminta, $userMessage)) {
             return null;
         }
 
-        $kolom = $this->pilihKolomChart($rows);
+        $kolom = $this->pilihKolomChart($rows, $userMessage);
 
         if ($kolom === null) {
             return null;
@@ -2164,7 +2211,10 @@ class AiChatService
         }
 
         // Kumpulkan pasangan label → nilai (hanya baris yang nilainya angka).
-        $data = [];
+        // Jika ada label yang berulang (misal nama karyawan muncul di beberapa
+        // tanggal/kejadian), agregasikan (jumlahkan nilai metriknya) agar
+        // setiap batang mewakili 1 entitas unik dan tidak terduplikasi.
+        $agregat = [];
         foreach ($rows as $row) {
             $baris = (array) $row;
             $nilaiMentah = $baris[$kolomNilai] ?? null;
@@ -2178,11 +2228,36 @@ class AiChatService
                 $label = mb_substr($label, 0, 27) . '...';
             }
 
-            $data[] = ['label' => $label, 'nilai' => (float) $nilaiMentah];
+            $nilai = (float) $nilaiMentah;
+
+            if (! isset($agregat[$label])) {
+                $agregat[$label] = [
+                    'label' => $label,
+                    'nilai' => $nilai,
+                    'count' => 1,
+                ];
+            } else {
+                // Untuk persentase / rasio gunakan rata-rata, untuk metrik lain (jam, jumlah) gunakan SUM
+                if ($satuan === '%') {
+                    $agregat[$label]['nilai'] += $nilai;
+                    $agregat[$label]['count']++;
+                } else {
+                    $agregat[$label]['nilai'] += $nilai;
+                    $agregat[$label]['count']++;
+                }
+            }
         }
 
-        if (empty($data)) {
+        if (empty($agregat)) {
             return null;
+        }
+
+        $data = [];
+        foreach ($agregat as $item) {
+            if ($satuan === '%' && $item['count'] > 1) {
+                $item['nilai'] = round($item['nilai'] / $item['count'], 2);
+            }
+            $data[] = ['label' => $item['label'], 'nilai' => $item['nilai']];
         }
 
         usort($data, fn ($a, $b) => $b['nilai'] <=> $a['nilai']);

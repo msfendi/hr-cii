@@ -408,6 +408,14 @@
 
 </div>
 
+{{-- What's New & AI Assistant — floating button & modal juga tampil di landing HRIS v1.
+     hris.blade.php tidak memakai layout.navbar (halaman ini berdiri sendiri),
+     jadi partial dipasang langsung di sini. Ditaruh di luar container konten
+     supaya position:fixed milik modal/FAB tidak terkunci stacking context. --}}
+@if (auth()->check())
+    @include('partials.whats_new_slider', ['mode' => 'modal'])
+@endif
+
 @include('layout.footerscript')
 
 {{-- ==========================================================

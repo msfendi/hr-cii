@@ -141,3 +141,8 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 @stack('scripts')
+
+{{-- Floating button AI Assistant (halaman yang memuat footerscript langsung) --}}
+@if (auth()->check())
+    @include('partials.ai_fab')
+@endif

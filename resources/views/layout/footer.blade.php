@@ -327,3 +327,8 @@
         Notification.requestPermission();
     }
 </script>
+
+{{-- Floating button AI Assistant (semua blade yang memuat footer/layout) --}}
+@if (auth()->check())
+    @include('partials.ai_fab')
+@endif

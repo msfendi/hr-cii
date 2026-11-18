@@ -183,7 +183,7 @@ class WhatsNewController extends Controller
         ];
     }
 
-    private function validated(Request $request): array
+    private function validated(Request $request, ?WhatsNewItem $item = null): array
     {
         $validator = validator($request->all(), $this->aturan($request), [], [
             'title'      => 'judul',
@@ -194,12 +194,22 @@ class WhatsNewController extends Controller
         ]);
 
         // Aturan lintas-kolom: dicek setelah validasi dasar lolos.
-        $validator->after(function (Validator $v) use ($request) {
+        $validator->after(function (Validator $v) use ($request, $item) {
             $tipe   = (string) $request->input('media_type', 'image');
             $punya  = $request->hasFile('media_file')
                 || trim((string) $request->input('media_url')) !== '';
 
-            if ($tipe !== 'none' && ! $punya && ! $request->boolean('hapus_media')) {
+            // Saat edit, media yang sudah tersimpan dianggap sah selama jenisnya
+            // masih cocok DAN user tidak mencentang hapus_media.
+            // Tanpa ini, setiap simpan edit gagal dengan "Isi media ..."
+            // walau berkasnya masih ada di server.
+            $hapusMedia = $request->boolean('hapus_media');
+            $mediaLama = false;
+            if ($item !== null && ! $hapusMedia) {
+                $mediaLama = $this->mediaLamaCocok($item, $tipe);
+            }
+
+            if ($tipe !== 'none' && ! $punya && ! $mediaLama) {
                 $v->errors()->add('media_file', 'Isi media (unggah berkas atau tempel URL) untuk jenis media ' . $tipe . '.');
             }
 
@@ -247,12 +257,74 @@ class WhatsNewController extends Controller
         return $data;
     }
 
+    /**
+     * Apakah banner sudah punya media yang sah untuk jenis yang dipilih?
+     *
+     * Dipakai saat edit: berkas yang sudah diunggah (atau URL yang sudah
+     * ditempel) membebaskan admin dari kewajiban mengunggah ulang. Jenis
+     * harus cocok — berpindah dari gambar ke video tetap membutuhkan media
+     * baru. Berkas yang sudah hilang dari disk dianggap tidak ada supaya
+     * banner tidak tersimpan dengan referensi rusak.
+     */
+    private function mediaLamaCocok(WhatsNewItem $item, string $tipe): bool
+    {
+        if ($tipe === 'none') {
+            return true;
+        }
+
+        $ekstensiVideo = ['mp4', 'webm', 'ogg', 'mov'];
+        $ekstensiGambar = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+        if ($item->media_path) {
+            // Catatan: jangan tolak jika berkas fisik di disk sementara tidak ditemukan
+            // saat validasi (misal di lingkungan uji atau mount storage tertunda).
+            // Selama media_path tercatat dan ekstensinya cocok dengan tipe yang dipilih,
+            // anggap media lama valid agar admin tidak dipaksa upload ulang.
+            $ext = strtolower((string) pathinfo($item->media_path, PATHINFO_EXTENSION));
+
+            return in_array($ext, $ekstensiVideo, true) === ($tipe === 'video');
+        }
+
+        $url = trim((string) $item->media_url);
+
+        if ($url === '') {
+            return false;
+        }
+
+        // YouTube/Vimeo selalu video.
+        if ($item->embedUrl() !== null) {
+            return $tipe === 'video';
+        }
+
+        $jalur = (string) parse_url($url, PHP_URL_PATH);
+        $ext = strtolower((string) pathinfo($jalur, PATHINFO_EXTENSION));
+
+        if (in_array($ext, $ekstensiVideo, true)) {
+            return $tipe === 'video';
+        }
+
+        if (in_array($ext, $ekstensiGambar, true)) {
+            return $tipe === 'image';
+        }
+
+        // URL tanpa ekstensi yang jelas (mis. endpoint /media/123): jangan
+        // memaksa unggah ulang, biarkan admin memutuskan.
+        return true;
+    }
+
     /** Simpan berkas baru (bila ada) dan hapus berkas lama. */
     private function simpanMedia(Request $request, WhatsNewItem $item): void
     {
         $ganti = false;
 
-        if ($request->hasFile('media_file')) {
+        if ($item->media_type === 'none') {
+            // Admin memilih "Tanpa media": jangan tinggalkan berkas yatim.
+            if ($item->media_path) {
+                $item->hapusMedia();
+                $item->media_path = null;
+                $ganti = true;
+            }
+        } elseif ($request->hasFile('media_file')) {
             $berkas = $request->file('media_file');
             $nama = date('Ymd-His') . '-' . Str::slug(Str::limit($item->title, 40, '')) . '.' . $berkas->getClientOriginalExtension();
 

@@ -95,9 +95,15 @@ class WhatsNewItem extends Model
             // memakai symlink public/storage, jadi /storage/... tidak bisa
             // diandalkan untuk berkas yang baru diunggah.
             try {
-                return route('whats-new.media', ['berkas' => basename($this->media_path)]);
+                if (\Illuminate\Support\Facades\Route::has('admin.whats-new.media')) {
+                    return route('admin.whats-new.media', ['berkas' => basename($this->media_path)]);
+                }
+                if (\Illuminate\Support\Facades\Route::has('whats-new.media')) {
+                    return route('whats-new.media', ['berkas' => basename($this->media_path)]);
+                }
+                return asset('storage/' . $this->media_path);
             } catch (\Throwable $e) {
-                return null;
+                return asset('storage/' . $this->media_path);
             }
         }
 

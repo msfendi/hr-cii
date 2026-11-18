@@ -6,10 +6,18 @@
      user ke /chatbot yang butuh login (lingkaran tanpa guna).
      Permintaan 17 Nov 2026: teks tombol TIDAK boleh bergaris bawah saat hover. --}}
 @php
-    $fabSembunyi = in_array(request()->route()?->getName(), ['v2.login', 'v2.employee.login'], true);
+    // Disembunyikan di halaman login (tombol hanya mengantar ke /chatbot yang
+    // butuh login) dan di halaman chatbot itu sendiri (tujuan tombol ini sudah
+    // sedang dibuka — tombol jadi lingkaran tanpa guna).
+    $fabSembunyi = in_array(request()->route()?->getName(), [
+        'v2.login',
+        'v2.employee.login',
+        'chatbot.index',
+    ], true);
 @endphp
 
 @unless ($fabSembunyi)
+@once('v2-ai-fab-markup')
 <a href="{{ url('/chatbot') }}" target="_blank" rel="noopener"
    class="v2-ai-fab" id="v2-ai-fab"
    aria-label="Buka AI Assistant Chutex" title="AI Assistant — tanya data HRIS">
@@ -85,4 +93,5 @@
     .v2-ai-fab-ring { animation: none; opacity: .35; }
 }
 </style>
+@endonce
 @endunless

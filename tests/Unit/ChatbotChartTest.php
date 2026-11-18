@@ -112,4 +112,44 @@ class ChatbotChartTest extends TestCase
 
         $this->assertSame('Persentase Turnover per Departemen', $judul);
     }
+
+    public function test_kolom_tahun_dan_kalender_tidak_dipilih_sebagai_nilai(): void
+    {
+        $rows = [
+            (object) [
+                'NAMA_KARYAWAN' => 'Joko Karyanto',
+                'TAHUN' => 2026,
+                'BULAN' => 2,
+                'TANGGAL' => '2026-02-14',
+                'JAM_LEMBUR' => 8.0,
+                'LEWAT_4_JAM' => 'Ya',
+            ],
+            (object) [
+                'NAMA_KARYAWAN' => 'Eka Zanuar',
+                'TAHUN' => 2026,
+                'BULAN' => 2,
+                'TANGGAL' => '2026-02-14',
+                'JAM_LEMBUR' => 7.5,
+                'LEWAT_4_JAM' => 'Ya',
+            ],
+        ];
+
+        $hasil = $this->panggil('pilihKolomChart', $rows, 'tampilkan pelanggaran lembur');
+        $this->assertSame('JAM_LEMBUR', $hasil['nilai'], 'Kolom JAM_LEMBUR harus dipilih, bukan TAHUN atau BULAN');
+        $this->assertSame('NAMA_KARYAWAN', $hasil['label']);
+        $this->assertSame('jam', $hasil['satuan']);
+    }
+
+    public function test_agregasi_label_duplikat_dalam_chart(): void
+    {
+        $rows = [
+            (object) ['NAMA_KARYAWAN' => 'Joko', 'JAM_LEMBUR' => 8.0],
+            (object) ['NAMA_KARYAWAN' => 'Joko', 'JAM_LEMBUR' => 4.0],
+            (object) ['NAMA_KARYAWAN' => 'Budi', 'JAM_LEMBUR' => 5.0],
+        ];
+
+        $kolom = $this->panggil('pilihKolomChart', $rows);
+        $this->assertSame('JAM_LEMBUR', $kolom['nilai']);
+        $this->assertSame('NAMA_KARYAWAN', $kolom['label']);
+    }
 }
