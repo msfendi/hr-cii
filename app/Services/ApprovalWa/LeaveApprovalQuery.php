@@ -340,6 +340,31 @@ class LeaveApprovalQuery
     }
 
     /**
+     * Ringkasan satu pengajuan cuti (untuk pesan konfirmasi keputusan).
+     *
+     * formatConfirmation() hanya menerima nomor pengajuan, sedangkan pesan
+     * konfirmasi perlu menyebut pemohon, jenis cuti, periode, dan durasi.
+     * Query di sini sengaja ramping (kolom seperlunya, TOP 1 by primary key)
+     * supaya tetap cepat saat dipanggil dari jalur webhook WhatsApp.
+     *
+     * @return object|null  {id, NPK, leave_type_id, start_date, end_date, total_days}
+     */
+    public static function getRequestSummary(int $requestId): ?object
+    {
+        if ($requestId <= 0) {
+            return null;
+        }
+
+        $rows = DB::connection('cii')->select("
+            SELECT TOP 1 id, NPK, leave_type_id, start_date, end_date, total_days
+            FROM leave_requests
+            WHERE id = ?
+        ", [$requestId]);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
      * Nama jenis cuti dari leave_types (mis. "Cuti Tahunan", "Cuti Menikah").
      */
     public static function getLeaveTypeName(int $leaveTypeId): ?string

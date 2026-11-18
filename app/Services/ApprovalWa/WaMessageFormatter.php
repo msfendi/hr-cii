@@ -175,11 +175,41 @@ class WaMessageFormatter
 
     /**
      * Konfirmasi setelah keputusan diproses.
+     *
+     * Memuat ulang ringkasan pengajuan karena pemanggil hanya mengirim nomor
+     * pengajuan: approver perlu tahu pengajuan mana yang baru ia putuskan —
+     * atas nama siapa, jenis cuti apa, periode, dan durasinya. Tanpa ini
+     * pesan hanya berisi nomor sehingga sulit dicocokkan saat menangani
+     * banyak pengajuan.
      */
     public static function formatConfirmation(int $requestId, string $decision, string $approverName): string
     {
         $status    = strtolower($decision) === 'approve' ? '✅ DISETUJUI' : '❌ DITOLAK';
         $timestamp = now()->setTimezone('Asia/Jakarta')->format('d/m/Y H:i');
+
+        $summary = self::requestSummary($requestId);
+
+        if ($summary === null) {
+            // Data pengajuan tak terbaca (DB bermasalah / sudah dihapus):
+            // tetap kirim konfirmasi, jangan sampai approver tidak dapat balasan.
+            return <<<MSG
+            ✔️ *Konfirmasi Keputusan*
+
+            Pengajuan cuti *#$requestId* telah *$status*.
+            Oleh: $approverName
+            Waktu: $timestamp WIB
+
+            ⚠️ Detail pengajuan tidak dapat dimuat saat ini.
+
+            Terima kasih.
+            MSG;
+        }
+
+        $npk         = (string) ($summary->NPK ?? '-');
+        $pemohonNama = self::employeeName($npk);
+        $leaveType   = self::leaveTypeName((int) ($summary->leave_type_id ?? 0));
+        $periode     = self::period((string) ($summary->start_date ?? ''), (string) ($summary->end_date ?? ''));
+        $durasi      = ((int) ($summary->total_days ?? 0)) . ' hari';
 
         return <<<MSG
         ✔️ *Konfirmasi Keputusan*
@@ -187,6 +217,15 @@ class WaMessageFormatter
         Pengajuan cuti *#$requestId* telah *$status*.
         Oleh: $approverName
         Waktu: $timestamp WIB
+
+        *DATA PEMOHON*
+        👤 $pemohonNama
+        🆔 $npk
+
+        *DETAIL CUTI*
+        📌 Jenis cuti: $leaveType
+        🗓️ Periode: $periode
+        ⏳ Durasi: $durasi
 
         Terima kasih.
         MSG;
@@ -241,6 +280,33 @@ class WaMessageFormatter
         }
 
         return (string) (self::$cache["emp:$npk"] ?? $npk);
+    }
+
+    /**
+     * Ringkasan pengajuan (NPK, jenis cuti, periode, durasi) — cache per id.
+     *
+     * Dipakai formatConfirmation(). Null kalau pengajuan tak ditemukan atau
+     * query gagal; pemanggil menampilkan pesan apa adanya.
+     */
+    private static function requestSummary(int $requestId): ?object
+    {
+        if ($requestId <= 0) {
+            return null;
+        }
+
+        $key = "req:$requestId";
+
+        if (!array_key_exists($key, self::$cache)) {
+            $summary = null;
+            try {
+                $summary = LeaveApprovalQuery::getRequestSummary($requestId);
+            } catch (Throwable) {
+                // biarkan null — pesan konfirmasi tetap dikirim tanpa detail
+            }
+            self::$cache[$key] = $summary;
+        }
+
+        return self::$cache[$key];
     }
 
     /**
