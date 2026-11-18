@@ -53,10 +53,10 @@ class InstallWorkAssignmentMenu extends Command
                 'description' => 'Approval bertingkat Work Assignment Request',
             ],
             [
-                'name'        => 'Security Gate Work Assignment',
-                'route_name'  => 'work-assignment.security.scan',
+                'name'        => 'Security Gate',
+                'route_name'  => 'gate-security.scan',
                 'group'       => 'Cuti',
-                'description' => 'Scan QR pengajuan saat karyawan keluar dan kembali',
+                'description' => 'Pemeriksaan dokumen keluar dan kembali lewat scan QR',
             ],
         ];
 
@@ -105,10 +105,10 @@ class InstallWorkAssignmentMenu extends Command
             ],
             [
                 'parent_id'    => $approvalParent->id,
-                'name'         => 'Security Gate Work Assignment',
-                'route_name'   => 'work-assignment.security.scan',
+                'name'         => 'Security Gate',
+                'route_name'   => 'gate-security.scan',
                 'icon'         => 'fas fa-qrcode',
-                'permission_id' => $permIds['work-assignment.security.scan'],
+                'permission_id' => $permIds['gate-security.scan'],
                 'order'        => 1,
             ],
         ];
@@ -134,6 +134,20 @@ class InstallWorkAssignmentMenu extends Command
 
             $menu = Menu::create($data + ['is_active' => true]);
             $this->info("  menu dibuat: {$data['name']} (#{$menu->id})");
+        }
+
+        // ── 2b. Pensiunkan entri lama ──
+        // Halaman gate dulu menempel di Work Assignment (work-assignment.security.*).
+        // Sekarang berdiri sendiri sebagai gate-security.*. Menu lama dinonaktifkan
+        // supaya tidak muncul dobel di sidebar; permission-nya dibiarkan karena
+        // masih tertaut ke role dan tidak mengganggu kalau tidak punya menu.
+        foreach (['work-assignment.security.scan'] as $legacyRoute) {
+            foreach (Menu::where('route_name', $legacyRoute)->get() as $legacyMenu) {
+                if ($legacyMenu->is_active) {
+                    $legacyMenu->update(['is_active' => false]);
+                    $this->line("  menu lama dinonaktifkan: {$legacyMenu->name} (#{$legacyMenu->id})");
+                }
+            }
         }
 
         // ── 3. Role ──

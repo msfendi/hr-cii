@@ -46,11 +46,11 @@ use App\Http\Controllers\EmployeeExitHistoryController;
 use App\Http\Controllers\EmployeeLateController;
 use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
+use App\Http\Controllers\GateSecurityController;
 use App\Http\Controllers\WorkAssignmentApprovalController;
 use App\Http\Controllers\WorkAssignmentController;
 use App\Http\Controllers\WorkAssignmentPdfController;
 use App\Http\Controllers\WorkAssignmentRecapController;
-use App\Http\Controllers\WorkAssignmentSecurityController;
 use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
@@ -1588,22 +1588,27 @@ Route::prefix('work-assignment/manage')
     });
 
 // ========================================
-// WORK ASSIGNMENT REQUEST — SECURITY GATE
+// GATE SECURITY — pemeriksaan dokumen lewat scan QR
 // ========================================
-// Petugas security scan QR pengajuan: scan pertama = karyawan KELUAR,
-// scan berikutnya = karyawan KEMBALI (sekaligus mengisi jam_kembali).
-// Berbasis session seperti halaman pemohon — security login cukup NPK.
-Route::prefix('work-assignment/security')
-    ->name('work-assignment.security.')
+// Generik untuk semua jenis dokumen (lihat App\GateSecurity\GateRegistry).
+// Petugas login cukup NPK; sesi terpisah dari auth Laravel.
+Route::prefix('gate-security')
+    ->name('gate-security.')
     ->group(function () {
-        Route::get('/login', [WorkAssignmentSecurityController::class, 'login'])->name('login');
-        Route::post('/verify', [WorkAssignmentSecurityController::class, 'verify'])->name('verify');
-        Route::get('/logout', [WorkAssignmentSecurityController::class, 'logout'])->name('logout');
+        Route::get('/login', [GateSecurityController::class, 'login'])->name('login');
+        Route::post('/verify', [GateSecurityController::class, 'verify'])->name('verify');
+        Route::get('/logout', [GateSecurityController::class, 'logout'])->name('logout');
 
-        Route::get('/', [WorkAssignmentSecurityController::class, 'scan'])->name('scan');
-        Route::post('/lookup', [WorkAssignmentSecurityController::class, 'lookup'])->name('lookup');
-        Route::post('/approve', [WorkAssignmentSecurityController::class, 'approve'])->name('approve');
+        Route::get('/', [GateSecurityController::class, 'scan'])->name('scan');
+        Route::post('/lookup', [GateSecurityController::class, 'lookup'])->name('lookup');
+        Route::post('/approve', [GateSecurityController::class, 'approve'])->name('approve');
     });
+
+// Jalur lama (sebelum gate dipisah dari Work Assignment). Halaman gate dulu
+// hanya melayani Izin Dinas di bawah /work-assignment/security. Bookmark dan
+// tautan yang sudah beredar tetap diarahkan ke halaman barunya.
+Route::get('/work-assignment/security', fn () => redirect()->route('gate-security.scan', [], 301));
+Route::get('/work-assignment/security/login', fn () => redirect()->route('gate-security.login', [], 301));
 
 // ========================================
 // DEV ONLY — login cepat untuk pengujian lokal

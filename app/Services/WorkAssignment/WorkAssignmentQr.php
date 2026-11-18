@@ -2,55 +2,38 @@
 
 namespace App\Services\WorkAssignment;
 
+use App\GateSecurity\GateQr;
 use App\Models\WorkAssignmentRequest;
-use BaconQrCode\Renderer\Image\SvgImageBackEnd;
-use BaconQrCode\Renderer\ImageRenderer;
-use BaconQrCode\Renderer\RendererStyle\RendererStyle;
-use BaconQrCode\Writer;
-use Throwable;
 
 /**
- * QR code untuk pengajuan Work Assignment.
+ * QR pengajuan Izin Dinas untuk discan petugas di pos security.
  *
- * Isi QR: `WA:<id>:<token>` — id saja tidak cukup karena mudah ditebak,
- * jadi token pengajuan ikut dibawa supaya kode tak bisa dipalsukan dengan
- * menebak nomor urut.
- *
- * Dirender sebagai SVG: server ini tidak punya ext-imagick (PNG butuh itu),
- * sedangkan SVG jalan murni di PHP dan tetap tajam di layar maupun cetak.
+ * Isi dan render QR-nya diserahkan ke GateQr supaya semua dokumen memakai
+ * format payload yang sama (`GATE:<doctype>:<id>:<token>`). Sebelumnya di sini
+ * dipakai awalan `WA:` yang berarti Work Assignment — padahal di folder yang
+ * sama `Wa` juga dipakai untuk WhatsApp, dan awalan itu tidak menyebut jenis
+ * dokumen sehingga tidak bisa dipakai dokumen lain.
  */
 class WorkAssignmentQr
 {
-    /** Bangun payload QR untuk satu pengajuan. */
+    /** Doctype dokumen ini, sesuai GateRegistry. */
+    private const DOC_TYPE = WorkAssignmentGateAdapter::DOC_TYPE;
+
+    /** Payload QR untuk satu pengajuan. */
     public static function payload(WorkAssignmentRequest $request): string
     {
-        return 'WA:' . $request->id . ':' . (string) $request->token;
+        return GateQr::payload(self::DOC_TYPE, (int) $request->id, (string) $request->token);
     }
 
-    /**
-     * Render QR sebagai string SVG.
-     *
-     * @param  int  $size  sisi QR dalam px
-     */
+    /** Render QR sebagai string SVG. */
     public static function svg(WorkAssignmentRequest $request, int $size = 260): string
     {
-        $renderer = new ImageRenderer(
-            new RendererStyle($size, 1),
-            new SvgImageBackEnd()
-        );
-
-        return (new Writer($renderer))->writeString(self::payload($request));
+        return GateQr::svg(self::payload($request), $size);
     }
 
-    /**
-     * Render QR sebagai data URI, siap dipakai di atribut src / CSS.
-     */
+    /** Render QR sebagai data URI, siap dipakai di atribut src / CSS. */
     public static function dataUri(WorkAssignmentRequest $request, int $size = 260): ?string
     {
-        try {
-            return 'data:image/svg+xml;base64,' . base64_encode(self::svg($request, $size));
-        } catch (Throwable) {
-            return null;
-        }
+        return GateQr::dataUri(self::payload($request), $size);
     }
 }

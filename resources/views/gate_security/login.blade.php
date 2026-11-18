@@ -13,7 +13,7 @@
         padding: 1.5rem;
     }
 
-    .wa-login {
+    .gs-login {
         background: #fff;
         border-radius: .9rem;
         box-shadow: 0 .9rem 2.4rem rgba(10, 25, 60, .38);
@@ -22,21 +22,7 @@
         padding: 1.9rem;
     }
 
-    .wa-logo {
-        height: 46px;
-        width: auto;
-        display: block;
-        margin: 0 auto .7rem;
-    }
-
-    .wa-doc {
-        font-size: .72rem;
-        color: #6b7688;
-        text-align: center;
-        margin-bottom: 1.4rem;
-    }
-
-    .wa-shield {
+    .gs-shield {
         width: 52px;
         height: 52px;
         border-radius: 50%;
@@ -49,7 +35,14 @@
         margin: 0 auto .7rem;
     }
 
-    .wa-alert {
+    .gs-doc {
+        font-size: .72rem;
+        color: #6b7688;
+        text-align: center;
+        margin-bottom: 1.4rem;
+    }
+
+    .gs-alert {
         background: #fdecec;
         border: 1px solid #f5c2c2;
         color: #a4302c;
@@ -59,7 +52,7 @@
         margin-bottom: 1rem;
     }
 
-    .wa-hint {
+    .gs-hint {
         background: #f6f9ff;
         border: 1px solid #dbe6f7;
         border-radius: .5rem;
@@ -72,27 +65,27 @@
 
 <body>
 
-<div class="wa-login">
-    <div class="wa-shield"><i class="fas fa-user-shield"></i></div>
+<div class="gs-login">
+    <div class="gs-shield"><i class="fas fa-user-shield"></i></div>
 
     <div class="text-center mb-1">
         <strong style="font-size:.9rem">Security Gate</strong>
     </div>
-    <div class="wa-doc">Surat Ijin Dinas Luar &mdash; PT. Chutex International Indonesia</div>
+    <div class="gs-doc">Pemeriksaan dokumen keluar &amp; kembali &mdash; PT. Chutex International Indonesia</div>
 
-    @if (session('wa_error'))
-        <div class="wa-alert">
-            <i class="fas fa-exclamation-circle mr-1"></i> {{ session('wa_error') }}
+    @if (session('gate_error'))
+        <div class="gs-alert">
+            <i class="fas fa-exclamation-circle mr-1"></i> {{ session('gate_error') }}
         </div>
     @endif
 
     @if ($errors->any())
-        <div class="wa-alert">
+        <div class="gs-alert">
             <i class="fas fa-exclamation-circle mr-1"></i> {{ $errors->first() }}
         </div>
     @endif
 
-    <form method="POST" action="{{ route('work-assignment.security.verify') }}">
+    <form method="POST" action="{{ route('gate-security.verify') }}">
         @csrf
 
         <div class="form-group">
@@ -110,10 +103,10 @@
         </button>
     </form>
 
-    <div class="wa-hint">
+    <div class="gs-hint">
         <i class="fas fa-info-circle mr-1"></i>
         Nama petugas diambil otomatis dari NPK. Identitas ini yang tercatat
-        saat Anda menyetujui karyawan keluar atau kembali.
+        saat Anda menyetujui dokumen keluar atau kembali.
     </div>
 </div>
 
